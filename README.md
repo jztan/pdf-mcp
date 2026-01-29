@@ -1,6 +1,6 @@
 # pdf-mcp 📄
 
-[![PyPI version](https://badge.fury.io/py/pdf-mcp.svg)](https://badge.fury.io/py/pdf-mcp)
+[![PyPI version](https://img.shields.io/pypi/v/pdf-mcp)](https://pypi.org/project/pdf-mcp/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

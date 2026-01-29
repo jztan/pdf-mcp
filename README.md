@@ -26,16 +26,33 @@ pip install pdf-mcp
 
 ## 🚀 Quick Start
 
-### Claude Desktop Configuration
+### Claude Code
+
+```bash
+claude mcp add pdf-mcp -- pdf-mcp
+```
+
+Or add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "pdf-mcp": {
+      "command": "pdf-mcp"
+    }
+  }
+}
+```
+
+### Claude Desktop
 
 Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "pdf": {
-      "command": "python",
-      "args": ["-m", "pdf_mcp.server"]
+    "pdf-mcp": {
+      "command": "pdf-mcp"
     }
   }
 }
@@ -44,8 +61,6 @@ Add to your `claude_desktop_config.json`:
 **Location of config file:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-### Restart Claude Desktop
 
 After updating the config, restart Claude Desktop to load the MCP server.
 

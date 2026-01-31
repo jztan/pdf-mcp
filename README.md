@@ -225,7 +225,5 @@ MIT License - see [LICENSE](LICENSE) file.
 - [PyPI Package](https://pypi.org/project/pdf-mcp/)
 - [MCP Documentation](https://modelcontextprotocol.io/)
 - [GitHub Repository](https://github.com/jztan/pdf-mcp)
+- [Blog Post: How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/)
 
----
-
-**Built with ❤️ for the AI agent ecosystem**

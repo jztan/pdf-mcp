@@ -118,3 +118,53 @@ def mock_url_to_pdf(sample_pdf):
     with patch.object(URLFetcher, 'is_url', return_value=True):
         with patch.object(URLFetcher, 'fetch', return_value=sample_pdf):
             yield sample_pdf
+
+
+@pytest.fixture
+def sample_pdf_grayscale():
+    """Create a PDF with a grayscale image."""
+    from PIL import Image
+    import io
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+
+        # Create grayscale image with PIL
+        img = Image.new("L", (50, 50), color=128)  # "L" = grayscale
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+
+        page.insert_image(pymupdf.Rect(50, 50, 100, 100), stream=img_bytes.read())
+
+        doc.save(f.name)
+        doc.close()
+
+        yield f.name
+        os.unlink(f.name)
+
+
+@pytest.fixture
+def sample_pdf_rgba():
+    """Create a PDF with an RGBA image (transparency)."""
+    from PIL import Image
+    import io
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+
+        # Create RGBA image with PIL
+        img = Image.new("RGBA", (50, 50), color=(255, 0, 0, 128))  # Semi-transparent red
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+
+        page.insert_image(pymupdf.Rect(50, 50, 100, 100), stream=img_bytes.read())
+
+        doc.save(f.name)
+        doc.close()
+
+        yield f.name
+        os.unlink(f.name)

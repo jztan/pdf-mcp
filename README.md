@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Issues](https://img.shields.io/github/issues/jztan/pdf-mcp)](https://github.com/jztan/pdf-mcp/issues)
 [![CI](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/jztan/pdf-mcp/graph/badge.svg)](https://codecov.io/gh/jztan/pdf-mcp)
 [![Downloads](https://pepy.tech/badge/pdf-mcp)](https://pepy.tech/project/pdf-mcp)
 
 **Production-ready MCP server for PDF processing with intelligent caching.**
@@ -225,7 +226,5 @@ MIT License - see [LICENSE](LICENSE) file.
 - [PyPI Package](https://pypi.org/project/pdf-mcp/)
 - [MCP Documentation](https://modelcontextprotocol.io/)
 - [GitHub Repository](https://github.com/jztan/pdf-mcp)
+- [Blog Post: How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/)
 
----
-
-**Built with ❤️ for the AI agent ecosystem**

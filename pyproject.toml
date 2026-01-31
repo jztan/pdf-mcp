@@ -1,6 +1,6 @@
 [project]
 name = "pdf-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "Production-ready MCP server for PDF processing with intelligent caching. Extract text, search, and analyze PDFs with AI agents."
 readme = "README.md"
 license = { text = "MIT" }
@@ -50,6 +50,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0",
     "mypy>=1.8.0",
     "ruff>=0.2.0",
 ]

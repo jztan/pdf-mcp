@@ -2,14 +2,9 @@
 Tests for pdf-mcp server.
 """
 
-import os
-import tempfile
-from pathlib import Path
-
 import pymupdf
 import pytest
 
-from pdf_mcp.cache import PDFCache
 from pdf_mcp.extractor import (
     estimate_tokens,
     extract_metadata,
@@ -17,44 +12,6 @@ from pdf_mcp.extractor import (
     extract_toc,
     parse_page_range,
 )
-
-
-# ============================================================================
-# Fixtures
-# ============================================================================
-
-@pytest.fixture
-def temp_cache_dir():
-    """Create a temporary cache directory."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
-
-
-@pytest.fixture
-def cache(temp_cache_dir):
-    """Create a cache instance with temporary directory."""
-    return PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
-
-
-@pytest.fixture
-def sample_pdf():
-    """Create a sample PDF for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-        doc = pymupdf.open()
-        
-        # Add pages with content
-        for i in range(5):
-            page = doc.new_page()
-            text = f"This is page {i + 1} content.\n\nSome sample text for testing."
-            page.insert_text((50, 50), text)
-        
-        doc.save(f.name)
-        doc.close()
-        
-        yield f.name
-        
-        # Cleanup
-        os.unlink(f.name)
 
 
 # ============================================================================

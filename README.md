@@ -30,7 +30,8 @@ pip install pdf-mcp
 
 ## 🚀 Quick Start
 
-### Claude Code
+<details open>
+<summary><strong>Claude Code</strong></summary>
 
 ```bash
 claude mcp add pdf-mcp -- pdf-mcp
@@ -48,7 +49,10 @@ Or add to `~/.claude.json`:
 }
 ```
 
-### Claude Desktop
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
 
 Add to your `claude_desktop_config.json`:
 
@@ -67,6 +71,123 @@ Add to your `claude_desktop_config.json`:
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 After updating the config, restart Claude Desktop to load the MCP server.
+
+</details>
+
+<details>
+<summary><strong>Visual Studio Code (Native MCP Support)</strong></summary>
+
+VS Code has built-in MCP support via GitHub Copilot (requires VS Code 1.102+).
+
+**Using CLI (Quickest):**
+```bash
+code --add-mcp '{"name":"pdf-mcp","command":"pdf-mcp"}'
+```
+
+**Using Command Palette:**
+1. Open Command Palette (`Cmd/Ctrl+Shift+P`)
+2. Run `MCP: Open User Configuration` (for global) or `MCP: Open Workspace Folder Configuration` (for project-specific)
+3. Add the configuration:
+   ```json
+   {
+     "servers": {
+       "pdf-mcp": {
+         "command": "pdf-mcp"
+       }
+     }
+   }
+   ```
+4. Save the file. VS Code will automatically load the MCP server.
+
+**Manual Configuration:**
+Create `.vscode/mcp.json` in your workspace:
+```json
+{
+  "servers": {
+    "pdf-mcp": {
+      "command": "pdf-mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Codex CLI</strong></summary>
+
+Add to Codex CLI using the command:
+
+```bash
+codex mcp add pdf-mcp -- pdf-mcp
+```
+
+Or configure manually in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.pdf-mcp]
+command = "pdf-mcp"
+```
+
+</details>
+
+<details>
+<summary><strong>Kiro</strong></summary>
+
+Create or edit `.kiro/settings/mcp.json` in your workspace:
+
+```json
+{
+  "mcpServers": {
+    "pdf-mcp": {
+      "command": "pdf-mcp",
+      "args": [],
+      "disabled": false
+    }
+  }
+}
+```
+
+Save the file and restart Kiro. The PDF tools will appear in the MCP panel.
+
+</details>
+
+<details>
+<summary><strong>Generic MCP Clients</strong></summary>
+
+Most MCP clients use a standard configuration format:
+
+```json
+{
+  "mcpServers": {
+    "pdf-mcp": {
+      "command": "pdf-mcp"
+    }
+  }
+}
+```
+
+If using `uvx` (recommended for isolated environments):
+
+```json
+{
+  "mcpServers": {
+    "pdf-mcp": {
+      "command": "uvx",
+      "args": ["pdf-mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+### Testing Your Setup
+
+```bash
+# Verify pdf-mcp is installed and working
+pdf-mcp --help
+```
 
 ## 🛠️ Tools
 

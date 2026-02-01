@@ -74,3 +74,7 @@ venv.bak/
 
 # Claude
 CLAUDE.md
+
+# MCP Registry
+.mcpregistry_github_token
+.mcpregistry_registry_token

@@ -12,6 +12,8 @@
 
 A Python implementation of the Model Context Protocol (MCP) server that enables AI agents like Claude to read, search, and extract content from PDF files efficiently.
 
+**mcp-name: io.github.jztan/pdf-mcp**
+
 ## ✨ Features
 
 - 🚀 **8 Specialized Tools** - Purpose-built tools for different PDF operations

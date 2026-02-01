@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.jztan/pdf-mcp",
+  "description": "Production-ready MCP server for PDF processing with intelligent caching.",
+  "repository": {
+    "url": "https://github.com/jztan/pdf-mcp",
+    "source": "github"
+  },
+  "version": "1.1.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "pdf-mcp",
+      "version": "1.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Directory for storing PDF cache (default: ~/.cache/pdf-mcp)",
+          "format": "string",
+          "name": "PDF_MCP_CACHE_DIR"
+        },
+        {
+          "description": "Cache time-to-live in hours (default: 24)",
+          "format": "number",
+          "name": "PDF_MCP_CACHE_TTL"
+        }
+      ]
+    }
+  ]
+}

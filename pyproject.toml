@@ -1,6 +1,6 @@
 [project]
 name = "pdf-mcp"
-version = "1.1.1"
+version = "1.1.2"
 description = "Production-ready MCP server for PDF processing with intelligent caching. Extract text, search, and analyze PDFs with AI agents."
 readme = "README.md"
 license = { text = "MIT" }

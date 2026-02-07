@@ -223,6 +223,24 @@ def update_server_json(project_root: Path, new_version: str, dry_run: bool) -> N
         print("  ✓ Updated server.json")
 
 
+def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
+    """Update __version__ in __init__.py."""
+    init_py = project_root / "src" / "pdf_mcp" / "__init__.py"
+    content = init_py.read_text()
+    new_content = re.sub(
+        r'^(__version__\s*=\s*)"[^"]+"',
+        f'\\1"{new_version}"',
+        content,
+        flags=re.MULTILINE,
+    )
+
+    if dry_run:
+        print(f"  [DRY-RUN] Would update __init__.py version to {new_version}")
+    else:
+        init_py.write_text(new_content)
+        print("  ✓ Updated __init__.py")
+
+
 def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update CHANGELOG.md: add new version header with today's date."""
     changelog = project_root / "CHANGELOG.md"
@@ -284,6 +302,7 @@ def bump_version(config: ReleaseConfig) -> tuple[str, str]:
 
     update_pyproject_toml(config.project_root, new_version, config.dry_run)
     update_server_json(config.project_root, new_version, config.dry_run)
+    update_init_py(config.project_root, new_version, config.dry_run)
     update_changelog(config.project_root, new_version, config.dry_run)
 
     return current_version, new_version
@@ -294,7 +313,7 @@ def commit_version_bump(config: ReleaseConfig, new_version: str) -> None:
     print("\n=== Commit Version Bump ===\n")
 
     # Stage changes
-    files = ["pyproject.toml", "server.json", "CHANGELOG.md"]
+    files = ["pyproject.toml", "server.json", "src/pdf_mcp/__init__.py", "CHANGELOG.md"]
     for f in files:
         run_command(
             ["git", "add", f],
@@ -527,6 +546,7 @@ Gitflow:
     print()
     update_pyproject_toml(config.project_root, new_version, config.dry_run)
     update_server_json(config.project_root, new_version, config.dry_run)
+    update_init_py(config.project_root, new_version, config.dry_run)
     update_changelog(config.project_root, new_version, config.dry_run)
 
     # Step 5: Commit version bump on release branch

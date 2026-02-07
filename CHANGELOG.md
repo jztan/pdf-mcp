@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.2] - 2026-02-07
 
-### Changed
-- Version bump
+### Fixed
+- `pdf_cache_clear` now returns actual cleared file count instead of `-1` sentinel value
+- URL fetch errors now return clear, actionable error messages for LLMs instead of raw httpx exceptions
+- Release script now bumps `__init__.py` version alongside other version files
 
 ## [1.1.1] - 2025-02-01
 

@@ -377,12 +377,16 @@ class PDFCache:
             
             return len(expired_paths)
     
-    def clear_all(self) -> None:
-        """Clear entire cache."""
+    def clear_all(self) -> int:
+        """Clear entire cache. Returns number of files cleared."""
         with sqlite3.connect(self.db_path) as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM pdf_metadata"
+            ).fetchone()[0]
             conn.execute("DELETE FROM pdf_metadata")
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
+            return count
     
     def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""

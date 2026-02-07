@@ -547,8 +547,7 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
     if expired_only:
         cleared = cache.clear_expired()
     else:
-        cache.clear_all()
-        cleared = -1  # Unknown, cleared all
+        cleared = cache.clear_all()
         url_fetcher.clear_cache()
     
     return {

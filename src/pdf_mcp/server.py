@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pymupdf
 from mcp.server.fastmcp import FastMCP
 
@@ -47,8 +48,23 @@ def _resolve_path(source: str) -> str:
     - URLs (downloads to local cache)
     """
     if url_fetcher.is_url(source):
-        local_path = url_fetcher.fetch(source)
-        return str(local_path)
+        try:
+            local_path = url_fetcher.fetch(source)
+            return str(local_path)
+        except httpx.HTTPStatusError as e:
+            raise ConnectionError(
+                f"Failed to download PDF from URL: HTTP {e.response.status_code}. "
+                f"URL: {source}. Try a direct download link that doesn't redirect."
+            ) from e
+        except httpx.HTTPError as e:
+            raise ConnectionError(
+                f"Failed to download PDF from URL: {type(e).__name__}. "
+                f"URL: {source}. Check that the URL is accessible and points to a valid PDF."
+            ) from e
+        except ValueError as e:
+            raise ValueError(
+                f"URL does not point to a valid PDF file: {source}. {e}"
+            ) from e
     
     # Local path - resolve to absolute
     path = Path(source)

@@ -80,15 +80,17 @@ class URLFetcher:
         """
         parsed = urlparse(url)
 
-        if parsed.scheme not in ('http', 'https'):
-            raise ValueError(f"Only HTTP and HTTPS URLs are allowed, got: {parsed.scheme}")
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"Only HTTP and HTTPS URLs are allowed, got: {parsed.scheme}"
+            )
 
         hostname = parsed.hostname
         if not hostname:
             raise ValueError(f"Could not extract hostname from URL: {url}")
 
         # Block obvious localhost references
-        if hostname in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
             raise ValueError(f"URLs targeting localhost are not allowed: {url}")
 
         # Resolve hostname and check if it points to private/reserved IPs
@@ -100,30 +102,30 @@ class URLFetcher:
     def _get_cache_filename(self, url: str) -> str:
         """Generate cache filename from URL."""
         url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
-        
+
         # Try to extract original filename from URL
         parsed = urlparse(url)
         path = parsed.path
-        
-        if path.endswith('.pdf'):
+
+        if path.endswith(".pdf"):
             original_name = os.path.basename(path)
             # Sanitize filename
-            safe_name = "".join(c for c in original_name if c.isalnum() or c in '._-')
+            safe_name = "".join(c for c in original_name if c.isalnum() or c in "._-")
             return f"{url_hash}_{safe_name}"
-        
+
         return f"{url_hash}.pdf"
-    
+
     def is_url(self, source: str) -> bool:
         """Check if source is a URL."""
-        return source.startswith(('http://', 'https://'))
-    
+        return source.startswith(("http://", "https://"))
+
     def get_local_path(self, url: str) -> Path | None:
         """
         Get local path for a URL if already downloaded.
-        
+
         Args:
             url: URL to check
-            
+
         Returns:
             Local path if cached, None otherwise
         """
@@ -131,17 +133,17 @@ class URLFetcher:
             path = self._url_to_path[url]
             if path.exists():
                 return path
-        
+
         # Check disk cache
         filename = self._get_cache_filename(url)
         path = self.cache_dir / filename
-        
+
         if path.exists():
             self._url_to_path[url] = path
             return path
-        
+
         return None
-    
+
     def fetch(self, url: str, force_refresh: bool = False) -> Path:
         """
         Fetch PDF from URL and return local path.
@@ -181,7 +183,7 @@ class URLFetcher:
                     response.raise_for_status()
 
                     # Check Content-Length header if available
-                    content_length = response.headers.get('content-length')
+                    content_length = response.headers.get("content-length")
                     if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
                         raise ValueError(
                             f"PDF file too large: {int(content_length)} bytes "
@@ -203,10 +205,12 @@ class URLFetcher:
                     content = b"".join(chunks)
 
                     # Verify content type
-                    content_type = response.headers.get('content-type', '')
-                    if 'pdf' not in content_type.lower() and not url.lower().endswith('.pdf'):
+                    content_type = response.headers.get("content-type", "")
+                    if "pdf" not in content_type.lower() and not url.lower().endswith(
+                        ".pdf"
+                    ):
                         # Check magic bytes
-                        if not content.startswith(b'%PDF'):
+                        if not content.startswith(b"%PDF"):
                             raise ValueError(f"URL does not appear to be a PDF: {url}")
                     break
             else:
@@ -225,11 +229,11 @@ class URLFetcher:
         self._url_to_path[url] = local_path
 
         return local_path
-    
+
     def clear_cache(self) -> int:
         """
         Clear all downloaded PDFs.
-        
+
         Returns:
             Number of files deleted
         """
@@ -240,15 +244,15 @@ class URLFetcher:
                 count += 1
             except OSError:
                 pass
-        
+
         self._url_to_path.clear()
         return count
-    
+
     def get_cache_stats(self) -> dict[str, Any]:
         """Get statistics about URL cache."""
         files = list(self.cache_dir.glob("*.pdf"))
         total_size = sum(f.stat().st_size for f in files)
-        
+
         return {
             "cached_files": len(files),
             "total_size_bytes": total_size,

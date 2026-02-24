@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Migrate from `mcp` SDK (FastMCP v2) to standalone `fastmcp` v3 package (`fastmcp>=3.0.0`)
+- Switch code quality tooling from `ruff` to `flake8` + `black` (line-length 88)
+- Remove unused `extract_text_with_coordinates` import from `server.py`
+- Remove unused local variables in `extractor.py` image extraction
 
 ## [1.2.0] - 2026-02-24
 ### Added

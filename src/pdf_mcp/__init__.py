@@ -22,5 +22,5 @@ Usage with Claude Desktop:
 from .cache import PDFCache
 from .server import mcp
 
-__version__ = "1.1.2"
+__version__ = "1.2.0"
 __all__ = ["mcp", "PDFCache", "__version__"]

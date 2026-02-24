@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.2.0",
+    "fastmcp>=3.0.0",
     "pymupdf>=1.24.0",
     "pydantic>=2.0",
     "httpx>=0.27.0",
@@ -53,7 +53,8 @@ dev = [
     "pytest-cov>=4.0",
     "pillow>=10.0",
     "mypy>=1.8.0",
-    "ruff>=0.2.0",
+    "flake8>=7.0",
+    "black>=25.0,<26",
 ]
 
 [project.urls]
@@ -70,15 +71,21 @@ pdf-mcp = "pdf_mcp.server:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+[tool.black]
+line-length = 88
+target-version = ["py310"]
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "pymupdf"
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["pdf_mcp.extractor", "pdf_mcp.server"]
+disallow_untyped_calls = false
+warn_unused_ignores = false

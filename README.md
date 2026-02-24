@@ -324,7 +324,10 @@ pytest tests/ -v
 mypy src/
 
 # Linting
-ruff check src/
+flake8 src/
+
+# Formatting
+black src/
 ```
 
 ## 📊 Comparison

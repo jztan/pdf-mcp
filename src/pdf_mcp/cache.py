@@ -193,7 +193,7 @@ class PDFCache:
             if not self._is_cache_valid(path, row[1]):
                 return None
 
-            return row[0]
+            return str(row[0])
 
     def get_pages_text(self, path: str, page_nums: list[int]) -> dict[int, str]:
         """
@@ -406,7 +406,7 @@ class PDFCache:
             conn.execute("DELETE FROM pdf_metadata")
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
-            return count
+            return int(count)
 
     def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""

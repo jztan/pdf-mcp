@@ -175,7 +175,10 @@ class URLFetcher:
             for _ in range(MAX_REDIRECTS):
                 with client.stream("GET", current_url) as response:
                     if response.is_redirect:
-                        redirect_url = str(response.next_request.url)
+                        next_req = response.next_request
+                        if next_req is None:
+                            raise ValueError("Redirect with no target URL")
+                        redirect_url = str(next_req.url)
                         self._validate_url(redirect_url)
                         current_url = redirect_url
                         continue

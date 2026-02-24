@@ -80,3 +80,12 @@ python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "pymupdf"
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["pdf_mcp.extractor", "pdf_mcp.server"]
+disallow_untyped_calls = false
+warn_unused_ignores = false

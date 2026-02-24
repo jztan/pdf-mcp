@@ -79,7 +79,7 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
     return unique_result
 
 
-def extract_text_from_page(page: pymupdf.Page, sort_by_position: bool = True) -> str:
+def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     Extract text from a PDF page.
 
@@ -100,10 +100,10 @@ def extract_text_from_page(page: pymupdf.Page, sort_by_position: bool = True) ->
 
         return "\n\n".join(text_blocks)
     else:
-        return page.get_text()
+        return str(page.get_text())
 
 
-def extract_text_with_coordinates(page: pymupdf.Page) -> list[dict[str, Any]]:
+def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
     """
     Extract text with Y-coordinate information for content ordering.
 

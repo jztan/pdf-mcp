@@ -278,7 +278,9 @@ def pdf_read_pages(
             ),
             "pages": results,
             "total_chars": total_chars,
-            "estimated_tokens": estimate_tokens("".join(r["text"] for r in results)),
+            "estimated_tokens": estimate_tokens(
+                "".join(str(r["text"]) for r in results)
+            ),
             "cache_hits": cache_hits,
             "cache_misses": len(page_nums) - cache_hits,
         }
@@ -414,7 +416,7 @@ def pdf_search(
     doc = pymupdf.open(local_path)
 
     try:
-        matches = []
+        matches: list[dict[str, Any]] = []
         pages_with_matches: set[int] = set()
         total_matches = 0
         query_lower = query.lower()
@@ -665,7 +667,7 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
 # ============================================================================
 
 
-def main():
+def main() -> None:
     """
     Run the MCP server using STDIO transport.
 

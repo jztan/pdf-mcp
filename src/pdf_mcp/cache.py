@@ -349,8 +349,8 @@ class PDFCache:
         Returns:
             Number of files cleared
         """
-        cutoff = datetime.now() - timedelta(hours=self.ttl_hours)
-        
+        cutoff = (datetime.now() - timedelta(hours=self.ttl_hours)).isoformat()
+
         with sqlite3.connect(self.db_path) as conn:
             # Get expired file paths
             expired = conn.execute(

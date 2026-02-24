@@ -26,12 +26,12 @@ class TestPdfInfo:
 
         assert result["page_count"] == 5
         assert result["from_cache"] is False
-        assert "file_path" in result
         assert "metadata" in result
         assert "toc" in result
         assert "file_size_bytes" in result
         assert "file_size_mb" in result
         assert "estimated_tokens" in result
+        assert "content_warning" in result
 
     def test_pdf_info_cached(self, sample_pdf, isolated_server):
         """Second call returns from_cache=True."""
@@ -75,7 +75,7 @@ class TestPdfInfo:
         result = pdf_info("https://example.com/test.pdf")
 
         assert result["page_count"] == 5
-        assert "file_path" in result
+        assert "content_warning" in result
 
 
 class TestPdfReadPages:
@@ -473,3 +473,82 @@ class TestErrorCases:
                 pdf_info(corrupt_path)
         finally:
             os.unlink(corrupt_path)
+
+
+class TestSecurityMitigations:
+    """Tests for security hardening measures."""
+
+    def test_non_pdf_extension_rejected(self, isolated_server):
+        """Non-PDF file extensions are rejected."""
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
+            f.write(b"not a pdf")
+            txt_path = f.name
+
+        try:
+            with pytest.raises(ValueError, match="Only PDF files"):
+                pdf_info(txt_path)
+        finally:
+            os.unlink(txt_path)
+
+    def test_content_warning_in_read_pages(self, sample_pdf, isolated_server):
+        """Read pages includes content warning."""
+        result = pdf_read_pages(sample_pdf, "1")
+        assert "content_warning" in result
+
+    def test_content_warning_in_read_all(self, sample_pdf, isolated_server):
+        """Read all includes content warning."""
+        result = pdf_read_all(sample_pdf)
+        assert "content_warning" in result
+
+    def test_content_warning_in_search(self, sample_pdf, isolated_server):
+        """Search includes content warning."""
+        result = pdf_search(sample_pdf, "page")
+        assert "content_warning" in result
+
+    def test_content_warning_in_info(self, sample_pdf, isolated_server):
+        """Info includes content warning."""
+        result = pdf_info(sample_pdf)
+        assert "content_warning" in result
+
+    def test_max_pages_clamped(self, sample_pdf, isolated_server):
+        """Excessively large max_pages is clamped."""
+        # Should not raise or OOM - clamped to MAX_PAGES_LIMIT
+        result = pdf_read_all(sample_pdf, max_pages=999999)
+        assert result["page_count"] == 5  # Only 5 pages in the sample
+
+    def test_max_results_clamped(self, sample_pdf, isolated_server):
+        """Excessively large max_results is clamped to 100."""
+        result = pdf_search(sample_pdf, "page", max_results=999999)
+        # Should not crash, results limited
+        assert isinstance(result["matches"], list)
+
+    def test_file_path_not_leaked_in_info(self, sample_pdf, isolated_server):
+        """Local file paths are not exposed in cached info responses."""
+        pdf_info(sample_pdf)
+        result = pdf_info(sample_pdf)  # Second call hits cache
+        assert result["from_cache"] is True
+        # file_path key should not be in the response
+        assert "file_path" not in result
+
+    def test_content_warning_in_get_toc(self, sample_pdf, isolated_server):
+        """Get TOC includes content warning."""
+        result = pdf_get_toc(sample_pdf)
+        assert "content_warning" in result
+
+    def test_content_warning_in_extract_images(self, sample_pdf, isolated_server):
+        """Extract images includes content warning."""
+        result = pdf_extract_images(sample_pdf)
+        assert "content_warning" in result
+
+    def test_file_size_bytes_in_cached_info(self, sample_pdf, isolated_server):
+        """Cached pdf_info response includes file_size_bytes."""
+        result1 = pdf_info(sample_pdf)
+        assert "file_size_bytes" in result1
+
+        result2 = pdf_info(sample_pdf)
+        assert result2["from_cache"] is True
+        assert "file_size_bytes" in result2
+        assert result2["file_size_bytes"] == result1["file_size_bytes"]

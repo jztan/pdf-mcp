@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- SSRF prevention: block private/reserved IPs, localhost, and link-local addresses in URL fetcher with DNS resolution validation
+- Prompt injection mitigation: `content_warning` fields on all tool responses returning untrusted PDF content
+- Input validation: clamp `max_pages` (500), `max_results` (100), `context_chars` (2000), `max_images` (50) to prevent resource exhaustion
+- Download size limit: 100MB max enforced via streaming downloads
+- `.pdf` extension validation on local file paths
+- Secure file permissions: `0o700` on cache directory, `0o600` on downloaded files
+
+### Fixed
+- SSRF TOCTOU vulnerability: redirects are now validated per-hop before connecting, preventing redirects to private/internal IPs
+- `file_size_bytes` missing from cached `pdf_info` responses (schema mismatch between cached and uncached)
+- sqlite3 `DeprecationWarning` on Python 3.12+ in `cache.clear_expired()` datetime handling
+- Overly broad `except Exception` in image extraction narrowed to specific exception types with logging
+- Local file path disclosure removed from `pdf_info` responses and error messages
+
+### Changed
+- URL cache filenames now use SHA-256 instead of MD5
+- HTTP downloads use streaming with manual redirect handling instead of buffered response
+
 ## [1.1.2] - 2026-02-07
 
 ### Fixed

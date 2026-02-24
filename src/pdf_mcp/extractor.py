@@ -3,11 +3,13 @@ PDF extraction utilities using PyMuPDF.
 """
 
 import base64
+import logging
 import re
-from io import BytesIO
 from typing import Any
 
 import pymupdf
+
+logger = logging.getLogger(__name__)
 
 
 def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[int]:
@@ -204,8 +206,9 @@ def extract_images_from_page(doc: pymupdf.Document, page_num: int) -> list[dict[
                     "data": base64.b64encode(png_bytes).decode("ascii"),
                 })
                 
-        except Exception as e:
-            # Skip problematic images
+        except (ValueError, RuntimeError, KeyError) as e:
+            # Skip problematic images but log the issue
+            logger.warning("Failed to extract image %d from page %d: %s", img_index, page_num, e)
             continue
     
     return images

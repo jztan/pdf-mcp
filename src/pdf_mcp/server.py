@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 import pymupdf
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from .cache import PDFCache
 from .extractor import (

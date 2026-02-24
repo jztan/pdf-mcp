@@ -54,7 +54,7 @@ dev = [
     "pillow>=10.0",
     "mypy>=1.8.0",
     "flake8>=7.0",
-    "black>=24.0",
+    "black>=25.0,<26",
 ]
 
 [project.urls]

@@ -99,6 +99,89 @@ class TestFetch:
             # httpx.Client().stream should be called twice
             assert mock_client.return_value.stream.call_count == 2
 
+    @patch.object(URLFetcher, '_validate_url')
+    def test_pdf_url_with_html_content_rejected(self, mock_validate, url_fetcher):
+        """URL ending in .pdf but returning HTML content is rejected."""
+        url = "https://example.com/malicious.pdf"
+
+        mock_response = _mock_stream_response(
+            b"<html><body>Not a PDF</body></html>", {"content-type": "text/html"}
+        )
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(return_value=mock_client.return_value)
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = mock_response
+
+            with pytest.raises(ValueError, match="does not appear to be a PDF"):
+                url_fetcher.fetch(url)
+
+    @patch.object(URLFetcher, '_validate_url')
+    def test_pdf_url_redirect_to_html_rejected(self, mock_validate, url_fetcher):
+        """Redirect from .pdf URL to HTML content is rejected."""
+        url = "https://example.com/document.pdf"
+        redirect_url = "https://example.com/login.html"
+
+        redirect_response = _mock_stream_response(
+            b"",
+            is_redirect=True,
+            redirect_url=redirect_url,
+        )
+        final_response = _mock_stream_response(
+            b"<html><body>Please login</body></html>", {"content-type": "text/html"}
+        )
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(return_value=mock_client.return_value)
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.side_effect = [
+                redirect_response,
+                final_response,
+            ]
+
+            with pytest.raises(ValueError, match="does not appear to be a PDF"):
+                url_fetcher.fetch(url)
+
+    @patch.object(URLFetcher, '_validate_url')
+    def test_pdf_url_wrong_content_type_but_valid_magic_bytes_accepted(
+        self, mock_validate, url_fetcher, valid_pdf_bytes
+    ):
+        """URL with non-PDF Content-Type but valid %PDF magic bytes is accepted."""
+        url = "https://example.com/paper.pdf"
+
+        mock_response = _mock_stream_response(
+            valid_pdf_bytes, {"content-type": "application/octet-stream"}
+        )
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(return_value=mock_client.return_value)
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = mock_response
+
+            result = url_fetcher.fetch(url)
+
+        assert result.exists()
+        assert result.read_bytes() == valid_pdf_bytes
+
+    @patch.object(URLFetcher, '_validate_url')
+    def test_pdf_url_no_content_type_but_valid_magic_bytes_accepted(
+        self, mock_validate, url_fetcher, valid_pdf_bytes
+    ):
+        """URL with no Content-Type header but valid %PDF magic bytes is accepted."""
+        url = "https://example.com/download?id=123"
+
+        mock_response = _mock_stream_response(valid_pdf_bytes, {})
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(return_value=mock_client.return_value)
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = mock_response
+
+            result = url_fetcher.fetch(url)
+
+        assert result.exists()
+        assert result.read_bytes() == valid_pdf_bytes
+
 
 class TestGetCacheFilename:
     """Tests for URLFetcher._get_cache_filename() method."""

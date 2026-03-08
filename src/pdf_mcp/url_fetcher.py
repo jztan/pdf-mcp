@@ -209,10 +209,8 @@ class URLFetcher:
 
                     # Verify content type
                     content_type = response.headers.get("content-type", "")
-                    if "pdf" not in content_type.lower() and not url.lower().endswith(
-                        ".pdf"
-                    ):
-                        # Check magic bytes
+                    if "pdf" not in content_type.lower():
+                        # Check magic bytes when Content-Type is not PDF
                         if not content.startswith(b"%PDF"):
                             raise ValueError(f"URL does not appear to be a PDF: {url}")
                     break

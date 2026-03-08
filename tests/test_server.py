@@ -1,11 +1,18 @@
 # tests/test_server.py
 """Tests for MCP server tools."""
 
+import os
+import tempfile
+
 import pytest
 
 import base64
+from unittest.mock import patch, Mock
+
+import httpx
 
 from pdf_mcp.server import (
+    _resolve_path,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -15,6 +22,7 @@ from pdf_mcp.server import (
     pdf_cache_stats,
     pdf_cache_clear,
 )
+from pdf_mcp.url_fetcher import URLFetcher
 
 
 class TestPdfInfo:
@@ -552,3 +560,114 @@ class TestSecurityMitigations:
         assert result2["from_cache"] is True
         assert "file_size_bytes" in result2
         assert result2["file_size_bytes"] == result1["file_size_bytes"]
+
+
+class TestResolvePath:
+    """Tests for _resolve_path helper."""
+
+    def test_relative_path_resolved(self, sample_pdf, isolated_server):
+        """Relative path is resolved to absolute."""
+        # Use just the filename relative to cwd
+        rel_path = os.path.relpath(sample_pdf)
+        result = _resolve_path(rel_path)
+        assert os.path.isabs(result)
+
+    def test_url_http_status_error(self, isolated_server):
+        """HTTPStatusError from URL fetch raises ConnectionError."""
+        mock_response = Mock()
+        mock_response.status_code = 404
+        error = httpx.HTTPStatusError(
+            "Not Found", request=Mock(), response=mock_response
+        )
+
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(URLFetcher, "fetch", side_effect=error):
+                with pytest.raises(ConnectionError, match="HTTP 404"):
+                    _resolve_path("https://example.com/missing.pdf")
+
+    def test_url_http_error(self, isolated_server):
+        """Generic HTTPError from URL fetch raises ConnectionError."""
+        error = httpx.ConnectError("Connection refused")
+
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(URLFetcher, "fetch", side_effect=error):
+                with pytest.raises(ConnectionError, match="ConnectError"):
+                    _resolve_path("https://example.com/unreachable.pdf")
+
+    def test_url_value_error(self, isolated_server):
+        """ValueError from URL fetch (e.g. not a PDF) re-raises."""
+        error = ValueError("URL does not appear to be a PDF")
+
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(URLFetcher, "fetch", side_effect=error):
+                with pytest.raises(ValueError, match="valid PDF file"):
+                    _resolve_path("https://example.com/fake.pdf")
+
+
+class TestSearchWordBoundaryAndEllipsis:
+    """Tests for search excerpt word-boundary adjustment and ellipsis."""
+
+    @pytest.fixture
+    def long_text_pdf(self):
+        """Create a PDF with long text to trigger word-boundary logic."""
+        import pymupdf
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc = pymupdf.open()
+            page = doc.new_page()
+
+            # Build text with target in the middle
+            prefix = " ".join(f"word{i}" for i in range(50))
+            suffix = " ".join(f"word{i}" for i in range(50, 100))
+            target = "UNIQUETARGET"
+            long_text = f"{prefix} {target} {suffix}"
+
+            # Use textwriter to insert long text with wrapping
+            tw = pymupdf.TextWriter(page.rect)
+            tw.fill_textbox(
+                pymupdf.Rect(50, 50, 550, 750),
+                long_text,
+                fontsize=10,
+            )
+            tw.write_text(page)
+
+            doc.save(f.name)
+            doc.close()
+
+            yield f.name
+
+            os.unlink(f.name)
+
+    def test_search_excerpt_has_ellipsis(self, long_text_pdf, isolated_server):
+        """Search match in middle of long text gets ellipsis on both sides."""
+        result = pdf_search(long_text_pdf, "UNIQUETARGET", context_chars=50)
+
+        assert result["total_matches"] >= 1
+        match = result["matches"][0]
+        excerpt = match["excerpt"]
+        # Match is in the middle of long text, so excerpt should have ellipsis
+        assert "..." in excerpt
+        assert "UNIQUETARGET" in excerpt
+
+
+class TestReadPagesCachedImages:
+    """Tests for cached image retrieval in pdf_read_pages."""
+
+    def test_images_served_from_cache(
+        self, sample_pdf_with_images, isolated_server
+    ):
+        """Second call with include_images returns cached images."""
+        # First call populates cache
+        result1 = pdf_read_pages(
+            sample_pdf_with_images, "1", include_images=True
+        )
+        images1 = result1.get("images", [])
+
+        # Second call should hit cache
+        result2 = pdf_read_pages(
+            sample_pdf_with_images, "1", include_images=True
+        )
+        images2 = result2.get("images", [])
+
+        assert len(images1) > 0
+        assert len(images2) == len(images1)

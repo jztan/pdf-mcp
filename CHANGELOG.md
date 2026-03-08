@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove unused `extract_text_with_coordinates` import from `server.py`
 - Remove unused local variables in `extractor.py` image extraction
 
+### Performance
+- Remove redundant `doc.extract_image()` call in `extract_images_from_page()` that decoded every image twice; `Pixmap` constructor handles errors via existing try/except
+
+### Tests
+- Replace weak `TestExtractImagesColorFormats` with comprehensive `TestExtractImagesFromPage` covering output structure, CMYK→RGB conversion, error handling with logging, and multi-image indexing
+
 ## [1.2.0] - 2026-02-24
 ### Added
 - SSRF prevention: block private/reserved IPs, localhost, and link-local addresses in URL fetcher with DNS resolution validation

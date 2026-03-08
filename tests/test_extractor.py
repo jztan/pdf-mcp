@@ -1,7 +1,9 @@
 # tests/test_extractor.py
 """Tests for pdf_mcp.extractor module - edge cases and uncovered functions."""
 
-import pytest
+import base64
+from unittest.mock import patch
+
 import pymupdf
 
 from pdf_mcp.extractor import (
@@ -99,13 +101,19 @@ class TestChunkText:
     def test_sentence_boundary_breaking(self):
         """Chunks prefer to break at sentence boundaries."""
         # Create text with clear sentence boundaries
-        sentences = ["This is sentence one. ", "This is sentence two. ", "This is sentence three."]
+        sentences = [
+            "This is sentence one. ",
+            "This is sentence two. ",
+            "This is sentence three.",
+        ]
         text = "".join(sentences * 10)
 
         result = chunk_text(text, max_tokens=50, overlap_tokens=5)
 
         # Check that at least some chunks end with sentence-ending punctuation
-        sentence_endings = sum(1 for c in result if c["text"].rstrip().endswith(('.', '!', '?')))
+        sentence_endings = sum(
+            1 for c in result if c["text"].rstrip().endswith((".", "!", "?"))
+        )
         assert sentence_endings > 0
 
 
@@ -183,70 +191,115 @@ class TestExtractTextWithCoordinates:
         doc.close()
 
 
-class TestExtractImagesColorFormats:
-    """Tests for extract_images_from_page color format handling."""
+class TestExtractImagesFromPage:
+    """Tests for extract_images_from_page."""
 
-    def test_rgb_format(self, sample_pdf_with_images):
-        """RGB images report 'rgb' format."""
+    def test_rgb_image_output_structure(self, sample_pdf_with_images):
+        """Extracted images have all required fields with correct types."""
         doc = pymupdf.open(sample_pdf_with_images)
-
         images = extract_images_from_page(doc, 0)
-
-        # The fixture uses a standard RGB PNG
-        if images:
-            assert images[0]["format"] in ("rgb", "rgba", "grayscale")
-
         doc.close()
+
+        assert len(images) >= 1
+        img = images[0]
+        assert img["page"] == 1  # 1-indexed
+        assert img["index"] == 0
+        assert isinstance(img["width"], int)
+        assert isinstance(img["height"], int)
+        assert img["width"] > 0
+        assert img["height"] > 0
+        assert img["format"] in ("rgb", "rgba", "grayscale")
+        # Valid base64 PNG
+        decoded = base64.b64decode(img["data"])
+        assert decoded[:4] == b"\x89PNG"
 
     def test_grayscale_format(self, sample_pdf_grayscale):
         """Grayscale images report 'grayscale' format."""
         doc = pymupdf.open(sample_pdf_grayscale)
-
         images = extract_images_from_page(doc, 0)
-
-        if images:
-            # Grayscale has pix.n == 1
-            assert images[0]["format"] == "grayscale"
-
         doc.close()
+
+        assert len(images) >= 1
+        assert images[0]["format"] == "grayscale"
 
     def test_rgba_format(self, sample_pdf_rgba):
         """RGBA images report 'rgba' format."""
         doc = pymupdf.open(sample_pdf_rgba)
-
         images = extract_images_from_page(doc, 0)
-
-        if images:
-            # RGBA has pix.n == 4
-            assert images[0]["format"] in ("rgba", "rgb")  # May be converted
-
         doc.close()
 
-    def test_image_extraction_returns_base64(self, sample_pdf_with_images):
-        """Extracted images have valid base64 data."""
-        import base64
+        assert len(images) >= 1
+        assert images[0]["format"] in ("rgba", "rgb")
 
-        doc = pymupdf.open(sample_pdf_with_images)
-        images = extract_images_from_page(doc, 0)
-
-        for img in images:
-            # Should not raise
-            decoded = base64.b64decode(img["data"])
-            # PNG magic bytes
-            assert decoded[:4] == b"\x89PNG"
-
-        doc.close()
-
-    def test_exception_handling_skips_bad_images(self, sample_pdf):
-        """Problematic images are skipped without raising."""
+    def test_no_images_returns_empty_list(self, sample_pdf):
+        """PDF with no images returns an empty list."""
         doc = pymupdf.open(sample_pdf)
-
-        # This PDF has no images, so nothing to extract
-        # Just verify no exception
         images = extract_images_from_page(doc, 0)
-        assert isinstance(images, list)
+        doc.close()
+
+        assert images == []
+
+    def test_cmyk_image_converted_to_rgb(self):
+        """CMYK images are converted to RGB colorspace."""
+        from PIL import Image
+        import io
+
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+
+            # Create a CMYK image
+            img = Image.new("CMYK", (20, 20), color=(0, 100, 200, 50))
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format="TIFF")
+            img_bytes.seek(0)
+
+            page.insert_image(pymupdf.Rect(50, 50, 100, 100), stream=img_bytes.read())
+
+            images = extract_images_from_page(doc, 0)
+
+        assert len(images) >= 1
+        # After CMYK→RGB conversion, pix.n should be 3 → "rgb"
+        assert images[0]["format"] == "rgb"
+
+    def test_bad_xref_skipped_with_warning(self, sample_pdf_with_images, caplog):
+        """Images that raise exceptions are skipped and logged."""
+        doc = pymupdf.open(sample_pdf_with_images)
+
+        with patch("pymupdf.Pixmap", side_effect=RuntimeError("corrupt")):
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="pdf_mcp.extractor"):
+                images = extract_images_from_page(doc, 0)
 
         doc.close()
+
+        assert images == []
+        assert "Failed to extract image" in caplog.text
+
+    def test_multiple_images_indexed(self):
+        """Multiple images on one page get sequential indices."""
+        from PIL import Image
+        import io
+
+        with pymupdf.open() as doc:
+            page = doc.new_page()
+
+            for i in range(3):
+                img = Image.new("RGB", (10, 10), color=(i * 80, 0, 0))
+                img_bytes = io.BytesIO()
+                img.save(img_bytes, format="PNG")
+                img_bytes.seek(0)
+                x = 50 + i * 40
+                page.insert_image(
+                    pymupdf.Rect(x, 50, x + 30, 80), stream=img_bytes.read()
+                )
+
+            images = extract_images_from_page(doc, 0)
+
+        assert len(images) == 3
+        for i, img in enumerate(images):
+            assert img["index"] == i
+            assert img["page"] == 1
 
 
 class TestExtractTextFromPageOptions:

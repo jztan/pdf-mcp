@@ -173,40 +173,36 @@ def extract_images_from_page(
         xref = img_info[0]
 
         try:
-            # Extract image
-            base_image = doc.extract_image(xref)
+            # Extract image as Pixmap
+            pix = pymupdf.Pixmap(doc, xref)
 
-            if base_image:
-                # Convert to PNG if needed for consistency
-                pix = pymupdf.Pixmap(doc, xref)
+            # Handle CMYK images
+            if pix.n - pix.alpha > 3:
+                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
 
-                # Handle CMYK images
-                if pix.n - pix.alpha > 3:
-                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+            # Determine color format
+            if pix.n == 1:
+                color_format = "grayscale"
+            elif pix.n == 3:
+                color_format = "rgb"
+            elif pix.n == 4:
+                color_format = "rgba"
+            else:
+                color_format = "unknown"
 
-                # Determine color format
-                if pix.n == 1:
-                    color_format = "grayscale"
-                elif pix.n == 3:
-                    color_format = "rgb"
-                elif pix.n == 4:
-                    color_format = "rgba"
-                else:
-                    color_format = "unknown"
+            # Convert to PNG bytes
+            png_bytes = pix.tobytes("png")
 
-                # Convert to PNG bytes
-                png_bytes = pix.tobytes("png")
-
-                images.append(
-                    {
-                        "page": page_num + 1,  # 1-indexed for output
-                        "index": img_index,
-                        "width": pix.width,
-                        "height": pix.height,
-                        "format": color_format,
-                        "data": base64.b64encode(png_bytes).decode("ascii"),
-                    }
-                )
+            images.append(
+                {
+                    "page": page_num + 1,  # 1-indexed for output
+                    "index": img_index,
+                    "width": pix.width,
+                    "height": pix.height,
+                    "format": color_format,
+                    "data": base64.b64encode(png_bytes).decode("ascii"),
+                }
+            )
 
         except (ValueError, RuntimeError, KeyError) as e:
             # Skip problematic images but log the issue

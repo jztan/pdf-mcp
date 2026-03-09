@@ -101,7 +101,8 @@ def sample_pdf_with_images():
         # Insert actual image (create minimal PNG)
         # 1x1 red PNG
         png_data = base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
         )
         page.insert_image(pymupdf.Rect(50, 50, 80, 80), stream=png_data)
 

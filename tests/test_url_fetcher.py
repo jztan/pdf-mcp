@@ -1,8 +1,6 @@
 # tests/test_url_fetcher.py
 """Tests for pdf_mcp.url_fetcher module."""
 
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
@@ -105,13 +103,39 @@ class TestFetch:
             mock_client.return_value.stream.return_value = mock_response
 
             # First fetch
-            path1 = url_fetcher.fetch(url)
+            url_fetcher.fetch(url)
 
             # Second fetch with force_refresh - should stream again
-            path2 = url_fetcher.fetch(url, force_refresh=True)
+            url_fetcher.fetch(url, force_refresh=True)
 
             # httpx.Client().stream should be called twice
             assert mock_client.return_value.stream.call_count == 2
+
+    @patch.object(URLFetcher, "_validate_url")
+    def test_fetch_cache_hit(self, mock_validate, url_fetcher, valid_pdf_bytes):
+        """Second fetch without force_refresh returns cached path without streaming."""
+        url = "https://example.com/cached.pdf"
+
+        mock_response = _mock_stream_response(
+            valid_pdf_bytes, {"content-type": "application/pdf"}
+        )
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = mock_response
+
+            # First fetch - downloads
+            path1 = url_fetcher.fetch(url)
+
+            # Second fetch - should hit cache
+            path2 = url_fetcher.fetch(url)
+
+        assert path1 == path2
+        assert path2.exists()
+        assert mock_client.return_value.stream.call_count == 1
 
     @patch.object(URLFetcher, "_validate_url")
     def test_pdf_url_with_html_content_rejected(self, mock_validate, url_fetcher):
@@ -291,6 +315,16 @@ class TestGetLocalPath:
 class TestClearCache:
     """Tests for URLFetcher.clear_cache() method."""
 
+    def test_successful_clear_cache(self, url_fetcher):
+        """Successful clear_cache deletes files and returns count."""
+        test_file = url_fetcher.cache_dir / "test.pdf"
+        test_file.write_bytes(b"%PDF")
+
+        count = url_fetcher.clear_cache()
+
+        assert count == 1
+        assert not test_file.exists()
+
     def test_oserror_handling(self, url_fetcher):
         """OSError during deletion is handled gracefully."""
         # Create a file
@@ -323,6 +357,11 @@ class TestSSRFProtection:
         with patch.object(URLFetcher, "_is_private_ip", return_value=True):
             with pytest.raises(ValueError, match="private/reserved"):
                 url_fetcher._validate_url("https://internal-server.corp/secret.pdf")
+
+    def test_no_hostname_blocked(self, url_fetcher):
+        """URL with no hostname raises ValueError."""
+        with pytest.raises(ValueError, match="Could not extract hostname"):
+            url_fetcher._validate_url("https://")
 
     def test_non_http_scheme_blocked(self, url_fetcher):
         """Non-HTTP(S) schemes are blocked."""
@@ -406,6 +445,27 @@ class TestDownloadSizeLimit:
             with pytest.raises(ValueError, match="too large"):
                 url_fetcher.fetch(url)
 
+    @patch("pdf_mcp.url_fetcher.MAX_DOWNLOAD_SIZE", 10)
+    @patch.object(URLFetcher, "_validate_url")
+    def test_streaming_size_exceeded(self, mock_validate, url_fetcher):
+        """Streaming download exceeding MAX_DOWNLOAD_SIZE raises ValueError."""
+        url = "https://example.com/sneaky-large.pdf"
+
+        mock_response = _mock_stream_response(
+            b"x" * 20,
+            {"content-type": "application/pdf"},
+        )
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = mock_response
+
+            with pytest.raises(ValueError, match="exceeded maximum size"):
+                url_fetcher.fetch(url)
+
 
 class TestRedirectSSRFValidation:
     """Tests for SSRF validation on redirects."""
@@ -474,6 +534,24 @@ class TestRedirectSSRFValidation:
         assert result.read_bytes() == valid_pdf_bytes
         # validate_url called for initial URL + redirect target
         assert mock_validate.call_count == 2
+
+    @patch.object(URLFetcher, "_validate_url")
+    def test_redirect_with_no_target_url(self, mock_validate, url_fetcher):
+        """Redirect response with next_request=None raises ValueError."""
+        url = "https://example.com/redirect.pdf"
+
+        redirect_response = _mock_stream_response(b"", is_redirect=True)
+        redirect_response.next_request = None
+
+        with patch("httpx.Client") as mock_client:
+            mock_client.return_value.__enter__ = Mock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__exit__ = Mock(return_value=False)
+            mock_client.return_value.stream.return_value = redirect_response
+
+            with pytest.raises(ValueError, match="Redirect with no target URL"):
+                url_fetcher.fetch(url)
 
     @patch.object(URLFetcher, "_validate_url")
     def test_too_many_redirects_raises(self, mock_validate, url_fetcher):

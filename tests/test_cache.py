@@ -285,7 +285,9 @@ class TestCacheInvalidation:
         png.write_bytes(b"\x89PNG")
 
         # Create sample PDF for metadata
-        import pymupdf, tempfile
+        import tempfile
+
+        import pymupdf
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc = pymupdf.open()
@@ -472,3 +474,191 @@ class TestCacheSentinel:
 
         # Old PNG cleaned up from disk
         assert not img_file.exists()
+
+
+class TestCacheCoverageEdgeCases:
+    """Tests for uncovered edge-case lines in cache.py."""
+
+    def test_db_migration_drops_old_page_images_with_data_column(self, tmp_path):
+        """L56: Old schema with 'data' column triggers DROP TABLE and re-creation."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+
+        # Create an old-schema page_images table with a 'data' BLOB column
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """CREATE TABLE page_images (
+                    file_path TEXT NOT NULL,
+                    page_num INTEGER NOT NULL,
+                    image_index INTEGER NOT NULL,
+                    file_mtime REAL NOT NULL,
+                    width INTEGER NOT NULL,
+                    height INTEGER NOT NULL,
+                    format TEXT NOT NULL,
+                    data BLOB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num, image_index)
+                )"""
+            )
+
+        # Instantiate PDFCache — should detect old schema and recreate
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+
+        # Verify new schema has file_path_on_disk and no data column
+        with sqlite3.connect(cache.db_path) as conn:
+            cursor = conn.execute("PRAGMA table_info(page_images)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+        assert "file_path_on_disk" in columns
+        assert "data" not in columns
+
+    def test_sentinel_save_handles_already_deleted_file(
+        self, cache, sample_pdf, tmp_path
+    ):
+        """L369-370: save_page_images(path, 0, []) handles FileNotFoundError
+        when old image file is already deleted from disk."""
+        # Save an initial image whose file_path_on_disk doesn't exist on disk
+        nonexistent = str(tmp_path / "already_deleted.png")
+        cache.save_page_images(
+            sample_pdf,
+            0,
+            [
+                {
+                    "index": 0,
+                    "width": 100,
+                    "height": 100,
+                    "format": "rgb",
+                    "path": nonexistent,
+                    "size_bytes": 100,
+                }
+            ],
+        )
+
+        # Now save empty list — cleanup loop tries to unlink nonexistent file
+        cache.save_page_images(sample_pdf, 0, [])
+
+        # Verify sentinel was inserted successfully
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            rows = conn.execute(
+                "SELECT image_index, file_path_on_disk FROM page_images"
+                " WHERE file_path = ? AND page_num = ?",
+                (sample_pdf, 0),
+            ).fetchall()
+        assert len(rows) == 1
+        assert rows[0][0] == -1  # sentinel
+        assert rows[0][1] == "__sentinel__"
+
+    def test_orphan_cleanup_handles_already_deleted_file(
+        self, cache, sample_pdf, tmp_path
+    ):
+        """L400-401: save_page_images with new images handles FileNotFoundError
+        when orphan file is already deleted from disk."""
+        # Save an initial image whose file_path_on_disk doesn't exist on disk
+        nonexistent = str(tmp_path / "orphan_gone.png")
+        cache.save_page_images(
+            sample_pdf,
+            0,
+            [
+                {
+                    "index": 0,
+                    "width": 100,
+                    "height": 100,
+                    "format": "rgb",
+                    "path": nonexistent,
+                    "size_bytes": 100,
+                }
+            ],
+        )
+
+        # Save a different set of images — orphan cleanup tries to unlink
+        # nonexistent, which raises FileNotFoundError (caught silently)
+        new_img = tmp_path / "new_image.png"
+        new_img.write_bytes(b"\x89PNG new data")
+        cache.save_page_images(
+            sample_pdf,
+            0,
+            [
+                {
+                    "index": 0,
+                    "width": 200,
+                    "height": 200,
+                    "format": "rgb",
+                    "path": str(new_img),
+                    "size_bytes": 13,
+                }
+            ],
+        )
+
+        # Verify new image was saved correctly
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            rows = conn.execute(
+                "SELECT file_path_on_disk, width, size_bytes FROM page_images"
+                " WHERE file_path = ? AND page_num = ?",
+                (sample_pdf, 0),
+            ).fetchall()
+        assert len(rows) == 1
+        assert rows[0][0] == str(new_img)
+        assert rows[0][1] == 200
+        assert rows[0][2] == 13
+
+    def test_clear_expired_handles_already_deleted_image_file(
+        self, cache, sample_pdf, tmp_path
+    ):
+        """L483-484: clear_expired() handles FileNotFoundError when image file
+        referenced in DB is already deleted from disk."""
+        import sqlite3
+
+        # Save metadata so there's an entry to expire
+        cache.save_metadata(sample_pdf, 1, {}, [])
+
+        # Save page images with a non-existent file path
+        nonexistent = str(tmp_path / "expired_gone.png")
+        cache.save_page_images(
+            sample_pdf,
+            0,
+            [
+                {
+                    "index": 0,
+                    "width": 50,
+                    "height": 50,
+                    "format": "rgb",
+                    "path": nonexistent,
+                    "size_bytes": 100,
+                }
+            ],
+        )
+
+        # Backdate accessed_at to force expiration
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("UPDATE pdf_metadata SET accessed_at = '2020-01-01T00:00:00'")
+
+        # clear_expired tries to unlink nonexistent — should not raise
+        cleared = cache.clear_expired()
+        assert cleared == 1
+
+        # Verify entries are cleaned up
+        with sqlite3.connect(cache.db_path) as conn:
+            meta_count = conn.execute("SELECT COUNT(*) FROM pdf_metadata").fetchone()[0]
+            img_count = conn.execute("SELECT COUNT(*) FROM page_images").fetchone()[0]
+        assert meta_count == 0
+        assert img_count == 0
+
+    def test_get_stats_with_missing_images_dir(self, cache):
+        """L544-545: get_stats() handles FileNotFoundError from images_dir."""
+        from unittest.mock import MagicMock
+
+        # Replace images_dir with a mock that raises on glob
+        # (simulates race condition: dir deleted between check and glob)
+        mock_dir = MagicMock()
+        mock_dir.glob.side_effect = FileNotFoundError("gone")
+        cache.images_dir = mock_dir
+
+        stats = cache.get_stats()
+
+        expected_db_size = os.path.getsize(cache.db_path)
+        assert stats["cache_size_bytes"] == expected_db_size

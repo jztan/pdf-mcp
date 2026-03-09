@@ -134,6 +134,17 @@ class TestPdfReadPages:
         expected_chars = sum(p["chars"] for p in result["pages"])
         assert result["total_chars"] == expected_chars
 
+    def test_read_pages_max_pages_limit_truncation(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        """Requesting more pages than MAX_PAGES_LIMIT truncates to the limit."""
+        import pdf_mcp.server
+
+        monkeypatch.setattr(pdf_mcp.server, "MAX_PAGES_LIMIT", 2)
+        result = pdf_read_pages(sample_pdf, "1-5")
+
+        assert len(result["pages"]) == 2
+
     def test_read_pages_with_images(self, sample_pdf_with_images, isolated_server):
         """Pages with images include per-page images with file paths."""
         result = pdf_read_pages(sample_pdf_with_images, "1")
@@ -179,6 +190,15 @@ class TestPdfReadAll:
         # Second call via pdf_read_pages should hit cache
         result = pdf_read_pages(sample_pdf, "1-5")
         assert result["cache_hits"] == 5
+
+    def test_read_all_cache_hit_path(self, sample_pdf, isolated_server):
+        """Second pdf_read_all call hits cached text path and returns correct data."""
+        result1 = pdf_read_all(sample_pdf)
+        result2 = pdf_read_all(sample_pdf)
+
+        assert result2["page_count"] == 5
+        assert "full_text" in result2
+        assert result2["full_text"] == result1["full_text"]
 
     def test_read_all_file_not_found(self, isolated_server):
         """Invalid path raises error."""

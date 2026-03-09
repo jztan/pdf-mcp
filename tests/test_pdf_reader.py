@@ -2,11 +2,15 @@
 Tests for pdf-mcp server.
 """
 
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pymupdf
 import pytest
 
 from pdf_mcp.extractor import (
     estimate_tokens,
+    extract_images_from_page,
     extract_metadata,
     extract_text_from_page,
     extract_toc,
@@ -46,6 +50,10 @@ class TestParsePageRange:
 
     def test_duplicates_removed(self):
         result = parse_page_range("1,1,2,2", 10)
+        assert result == [0, 1]
+
+    def test_trailing_comma_skips_empty(self):
+        result = parse_page_range("1,2,", 10)
         assert result == [0, 1]
 
 
@@ -153,6 +161,60 @@ class TestExtractor:
 
         # ~4 chars per token
         assert 5 <= tokens <= 10
+
+    def test_extract_images_rgba_format(self, sample_pdf_with_images, tmp_path):
+        """RGBA format detected when pix.n == 4."""
+        mock_pix = MagicMock()
+        mock_pix.n = 4
+        mock_pix.alpha = 1
+        mock_pix.width = 10
+        mock_pix.height = 10
+        mock_pix.save = MagicMock(
+            side_effect=lambda path: Path(path).write_bytes(b"\x89PNG")
+        )
+
+        with patch("pdf_mcp.extractor.pymupdf.Pixmap", return_value=mock_pix):
+            doc = pymupdf.open(sample_pdf_with_images)
+            images = extract_images_from_page(
+                doc, 0, output_dir=tmp_path, pdf_hash="test"
+            )
+            doc.close()
+
+        assert len(images) >= 1
+        assert images[0]["format"] == "rgba"
+
+    def test_extract_images_unknown_format(self, sample_pdf_with_images, tmp_path):
+        """Unknown format detected when pix.n is not 1, 3, or 4."""
+        mock_pix = MagicMock()
+        mock_pix.n = 2
+        mock_pix.alpha = 0
+        mock_pix.width = 10
+        mock_pix.height = 10
+        mock_pix.save = MagicMock(
+            side_effect=lambda path: Path(path).write_bytes(b"\x89PNG")
+        )
+
+        with patch("pdf_mcp.extractor.pymupdf.Pixmap", return_value=mock_pix):
+            doc = pymupdf.open(sample_pdf_with_images)
+            images = extract_images_from_page(
+                doc, 0, output_dir=tmp_path, pdf_hash="test"
+            )
+            doc.close()
+
+        assert len(images) >= 1
+        assert images[0]["format"] == "unknown"
+
+    def test_extract_images_save_fail_cleanup_fail(
+        self, sample_pdf_with_images, tmp_path
+    ):
+        fake_dir = tmp_path / "not_a_dir"
+        fake_dir.write_bytes(b"I am a file")
+
+        doc = pymupdf.open(sample_pdf_with_images)
+        images = extract_images_from_page(doc, 0, output_dir=fake_dir, pdf_hash="test")
+        doc.close()
+
+        assert images == []
 
 
 # ============================================================================

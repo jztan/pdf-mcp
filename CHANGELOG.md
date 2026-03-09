@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image files are now properly cleaned up on cache clear, expiration, and invalidation
 - Expired cache entries are automatically pruned on server startup
 
+### Tests
+- Increase test coverage from 96% to 99% (184 tests)
+- Add sentinel caching edge-case tests (DB migration, FileNotFoundError handling)
+- Add extractor tests for RGBA format, unknown format, and save failure paths
+- Add url_fetcher tests for cache hit, clear, SSRF, streaming size limit, and redirect edge cases
+- Add server tests for `MAX_PAGES_LIMIT` truncation and `pdf_read_all` cache hit
+- Add `parse_page_range` trailing comma test
+
 ## [1.3.0] - 2026-03-08
 ### Fixed
 - PDF validation bypass: `.pdf` URL extension no longer skips magic-bytes (`%PDF`) verification when Content-Type is non-PDF

@@ -10,10 +10,16 @@ Usage:
 
 import hashlib
 import os
+import warnings
 from pathlib import Path
 from typing import Any
 
 import httpx
+warnings.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="builtin type swigvarlink has no __module__ attribute",
+)
 import pymupdf
 from fastmcp import FastMCP
 

@@ -331,6 +331,52 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
+def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
+    """
+    Extract tables from a PDF page using PyMuPDF's table detection.
+
+    Args:
+        page: PyMuPDF page object
+
+    Returns:
+        List of table dicts with headers, rows, bbox, row_count, col_count
+    """
+    try:
+        finder = page.find_tables()
+    except Exception as e:
+        logger.warning("Table detection failed on page: %s", e)
+        return []
+
+    tables = []
+    for i, table in enumerate(finder.tables):
+        try:
+            extracted = table.extract()
+        except Exception as e:
+            logger.warning("Failed to extract table %d: %s", i, e)
+            continue
+
+        if not extracted:
+            continue
+
+        # First row is treated as header if it looks like one
+        # (non-empty, non-numeric cells)
+        header = extracted[0]
+        rows = extracted[1:] if len(extracted) > 1 else []
+
+        tables.append(
+            {
+                "index": i,
+                "bbox": list(table.bbox),
+                "row_count": len(extracted),
+                "col_count": len(header) if header else 0,
+                "header": header,
+                "rows": rows,
+            }
+        )
+
+    return tables
+
+
 def chunk_text(
     text: str, max_tokens: int = 4000, overlap_tokens: int = 200
 ) -> list[dict[str, Any]]:

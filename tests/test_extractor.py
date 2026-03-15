@@ -11,6 +11,7 @@ from pdf_mcp.extractor import (
     extract_text_from_page,
     extract_text_with_coordinates,
     extract_images_from_page,
+    extract_tables_from_page,
     chunk_text,
 )
 
@@ -397,5 +398,69 @@ class TestExtractTextFromPageOptions:
         assert len(text) > 0
         # Content should still be present
         assert "page" in text.lower()
+
+        doc.close()
+
+
+class TestExtractTablesFromPage:
+    """Tests for extract_tables_from_page function."""
+
+    def test_extract_tables_returns_list(self, sample_pdf_with_table):
+        """Returns a list of table dicts."""
+        doc = pymupdf.open(sample_pdf_with_table)
+        page = doc[0]
+
+        tables = extract_tables_from_page(page)
+
+        assert isinstance(tables, list)
+        assert len(tables) >= 1
+        doc.close()
+
+    def test_extract_tables_structure(self, sample_pdf_with_table):
+        """Each table has required keys."""
+        doc = pymupdf.open(sample_pdf_with_table)
+        page = doc[0]
+
+        tables = extract_tables_from_page(page)
+        table = tables[0]
+
+        assert "index" in table
+        assert "bbox" in table
+        assert "row_count" in table
+        assert "col_count" in table
+        assert "header" in table
+        assert "rows" in table
+        doc.close()
+
+    def test_extract_tables_no_tables(self, sample_pdf):
+        """Page without tables returns empty list."""
+        doc = pymupdf.open(sample_pdf)
+        page = doc[0]
+
+        tables = extract_tables_from_page(page)
+
+        assert tables == []
+        doc.close()
+
+    def test_extract_tables_bbox_is_list(self, sample_pdf_with_table):
+        """bbox is a list of 4 numbers."""
+        doc = pymupdf.open(sample_pdf_with_table)
+        page = doc[0]
+
+        tables = extract_tables_from_page(page)
+        bbox = tables[0]["bbox"]
+
+        assert isinstance(bbox, list)
+        assert len(bbox) == 4
+        doc.close()
+
+    def test_extract_tables_error_handling(self):
+        """Handles find_tables failure gracefully."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+
+        with patch.object(page, "find_tables", side_effect=RuntimeError("fail")):
+            tables = extract_tables_from_page(page)
+            assert tables == []
 
         doc.close()

@@ -95,11 +95,24 @@ class PDFCache:
                     PRIMARY KEY (file_path, page_num, image_index)
                 );
 
+                -- Page tables cache
+                CREATE TABLE IF NOT EXISTS page_tables (
+                    file_path TEXT NOT NULL,
+                    page_num INTEGER NOT NULL,
+                    file_mtime REAL NOT NULL,
+                    tables_json TEXT NOT NULL,
+                    table_count INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num)
+                );
+
                 -- Indexes for faster lookups
                 CREATE INDEX IF NOT EXISTS idx_page_text_path
                     ON page_text(file_path);
                 CREATE INDEX IF NOT EXISTS idx_page_images_path
                     ON page_images(file_path);
+                CREATE INDEX IF NOT EXISTS idx_page_tables_path
+                    ON page_tables(file_path);
                 CREATE INDEX IF NOT EXISTS idx_metadata_accessed
                     ON pdf_metadata(accessed_at);
             """
@@ -429,6 +442,57 @@ class PDFCache:
                 ],
             )
 
+    # ==================== Table Operations ====================
+
+    def get_page_tables(self, path: str, page_num: int) -> list[dict[str, Any]] | None:
+        """
+        Get cached tables for a specific page.
+
+        Args:
+            path: Path to PDF file
+            page_num: Page number (0-indexed)
+
+        Returns:
+            List of table dicts or None if not cached/invalid
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT tables_json, file_mtime FROM page_tables
+                   WHERE file_path = ? AND page_num = ?""",
+                (path, page_num),
+            ).fetchone()
+
+            if row is None:
+                return None
+
+            if not self._is_cache_valid(path, row[1]):
+                return None
+
+            result: list[dict[str, Any]] = json.loads(row[0])
+            return result
+
+    def save_page_tables(
+        self, path: str, page_num: int, tables: list[dict[str, Any]]
+    ) -> None:
+        """
+        Save page tables to cache.
+
+        Args:
+            path: Path to PDF file
+            page_num: Page number (0-indexed)
+            tables: List of table dicts
+        """
+        mtime, _ = self._get_file_info(path)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO page_tables
+                   (file_path, page_num, file_mtime,
+                    tables_json, table_count)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (path, page_num, mtime, json.dumps(tables), len(tables)),
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:
@@ -449,6 +513,7 @@ class PDFCache:
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
 
     def clear_expired(self) -> int:
         """
@@ -495,6 +560,10 @@ class PDFCache:
                     f"DELETE FROM page_images WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
 
             return len(expired_paths)
 
@@ -510,6 +579,7 @@ class PDFCache:
             conn.execute("DELETE FROM pdf_metadata")
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
+            conn.execute("DELETE FROM page_tables")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:
@@ -530,6 +600,11 @@ class PDFCache:
             # Count images (exclude sentinel rows)
             stats["total_images"] = conn.execute(
                 "SELECT COUNT(*) FROM page_images WHERE image_index >= 0"
+            ).fetchone()[0]
+
+            # Count cached tables
+            stats["total_tables"] = conn.execute(
+                "SELECT COALESCE(SUM(table_count), 0) FROM page_tables"
             ).fetchone()[0]
 
             # Total text size

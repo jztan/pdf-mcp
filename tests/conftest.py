@@ -114,6 +114,35 @@ def sample_pdf_with_images():
 
 
 @pytest.fixture
+def sample_pdf_with_table():
+    """Create a PDF with a structured table."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+
+        # Draw a table with borders so PyMuPDF can detect it
+        headers = ["Name", "Age", "City"]
+        data = [["Alice", "30", "NYC"], ["Bob", "25", "LA"]]
+        y_start = 100
+        row_height = 20
+        col_width = 100
+
+        for row_idx, row_data in enumerate([headers] + data):
+            y = y_start + row_idx * row_height
+            for col_idx, cell in enumerate(row_data):
+                x = 50 + col_idx * col_width
+                rect = pymupdf.Rect(x, y, x + col_width, y + row_height)
+                page.draw_rect(rect, color=(0, 0, 0), width=0.5)
+                page.insert_text((x + 5, y + 15), cell, fontsize=10)
+
+        doc.save(f.name)
+        doc.close()
+
+        yield f.name
+        os.unlink(f.name)
+
+
+@pytest.fixture
 def mock_url_to_pdf(sample_pdf):
     """Mock URL fetcher to return sample_pdf for any URL."""
     with patch.object(URLFetcher, "is_url", return_value=True):

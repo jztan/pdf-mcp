@@ -18,6 +18,7 @@ from pdf_mcp.server import (
     pdf_read_all,
     pdf_search,
     pdf_get_toc,
+    pdf_extract_tables,
     pdf_cache_stats,
     pdf_cache_clear,
 )
@@ -755,3 +756,95 @@ class TestReadPagesInlineImages:
         import pdf_mcp.server as mod
 
         assert not hasattr(mod, "pdf_extract_images")
+
+
+class TestPdfExtractTables:
+    """Tests for pdf_extract_tables tool."""
+
+    def test_extract_tables_basic(self, sample_pdf_with_table, isolated_server):
+        """Extracts a table with correct structure."""
+        result = pdf_extract_tables(sample_pdf_with_table)
+
+        assert "tables" in result
+        assert result["total_tables"] >= 1
+        assert "content_warning" in result
+
+        table = result["tables"][0]
+        assert table["page"] == 1
+        assert table["col_count"] == 3
+        assert table["row_count"] >= 2
+        assert "header" in table
+        assert "rows" in table
+        assert "bbox" in table
+
+    def test_extract_tables_header_content(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """Extracted table has correct header values."""
+        result = pdf_extract_tables(sample_pdf_with_table)
+
+        table = result["tables"][0]
+        assert "Name" in table["header"]
+        assert "Age" in table["header"]
+        assert "City" in table["header"]
+
+    def test_extract_tables_row_content(self, sample_pdf_with_table, isolated_server):
+        """Extracted table has correct row data."""
+        result = pdf_extract_tables(sample_pdf_with_table)
+
+        table = result["tables"][0]
+        # Flatten all row values
+        all_values = [cell for row in table["rows"] for cell in row]
+        assert "Alice" in all_values
+        assert "Bob" in all_values
+
+    def test_extract_tables_no_tables(self, sample_pdf, isolated_server):
+        """PDF without tables returns empty list."""
+        result = pdf_extract_tables(sample_pdf)
+
+        assert result["total_tables"] == 0
+        assert result["tables"] == []
+        assert result["pages_with_tables"] == []
+
+    def test_extract_tables_specific_pages(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """Page filter limits which pages are scanned."""
+        result = pdf_extract_tables(sample_pdf_with_table, pages="1")
+
+        assert result["pages_scanned"] == 1
+        assert result["total_tables"] >= 1
+
+    def test_extract_tables_invalid_pages(self, sample_pdf_with_table, isolated_server):
+        """Invalid page range returns error."""
+        result = pdf_extract_tables(sample_pdf_with_table, pages="99")
+
+        assert "error" in result
+
+    def test_extract_tables_cached(self, sample_pdf_with_table, isolated_server):
+        """Second call returns from cache."""
+        result1 = pdf_extract_tables(sample_pdf_with_table)
+        assert result1["cache_hits"] == 0
+
+        result2 = pdf_extract_tables(sample_pdf_with_table)
+        assert result2["cache_hits"] > 0
+        assert result2["total_tables"] == result1["total_tables"]
+
+    def test_extract_tables_pages_with_tables(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """pages_with_tables lists correct page numbers."""
+        result = pdf_extract_tables(sample_pdf_with_table)
+
+        assert 1 in result["pages_with_tables"]
+
+    def test_extract_tables_file_not_found(self, isolated_server):
+        """Invalid path raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            pdf_extract_tables("/nonexistent/path.pdf")
+
+    def test_extract_tables_from_url(self, mock_url_to_pdf, isolated_server):
+        """Table extraction works with URL source."""
+        result = pdf_extract_tables("https://example.com/test.pdf")
+        # mock_url_to_pdf points to sample_pdf (no tables)
+        assert result["total_tables"] == 0

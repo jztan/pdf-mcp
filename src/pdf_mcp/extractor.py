@@ -5,10 +5,41 @@ PDF extraction utilities using PyMuPDF.
 import logging
 import os
 import re
+import sys
+import typing
+import warnings
 from pathlib import Path
 from typing import Any
 
-import pymupdf
+# Suppress PyMuPDF/SWIG DeprecationWarnings (upstream issue, not actionable).
+# Python-level filter handles import-time warnings.
+warnings.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="builtin type.*[Ss]wig.*has no __module__ attribute",
+)
+
+
+# C-level SWIG warnings emitted during interpreter shutdown bypass Python's
+# warning filters and write directly to stderr. Wrap stderr to catch those.
+class _StderrSwigFilter:
+    __slots__ = ("_stream",)
+
+    def __init__(self, stream: typing.TextIO) -> None:
+        self._stream = stream
+
+    def write(self, msg: str) -> int:
+        if "DeprecationWarning" in msg and "swig" in msg.lower():
+            return len(msg)
+        return self._stream.write(msg)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._stream, name)
+
+
+sys.stderr = _StderrSwigFilter(sys.stderr)  # type: ignore[assignment]
+
+import pymupdf  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

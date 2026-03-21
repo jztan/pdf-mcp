@@ -328,6 +328,10 @@ black src/
 | Repeated access | Re-parse every time | SQLite cache |
 | Tool design | Single monolithic tool | 7 specialized tools |
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features and release history.
+
 ## Contributing
 
 Contributions are welcome. Please submit a pull request.

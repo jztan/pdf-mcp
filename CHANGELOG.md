@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `pdf_read_pages` now always includes per-page `tables` and `table_count` fields in each page dict, mirroring the existing `images`/`image_count` pattern
+- New `total_tables` field in `pdf_read_pages` response (sum of `table_count` across all pages)
+- Table extraction uses PyMuPDF's `find_tables()` with visible-line detection; pages without detectable borders return `tables: []`
+- Table cache layer in SQLite (`page_tables` table) with the same mtime-based invalidation as text and image caches; empty-list sentinel prevents redundant re-extraction on tableless pages
+
 ### Fixed
 - Suppress PyMuPDF/SWIG `DeprecationWarning` (`builtin type swigvarlink has no __module__ attribute`) that leaked noisy output to MCP clients on every server start and shutdown
 

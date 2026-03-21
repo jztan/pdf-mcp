@@ -755,3 +755,81 @@ class TestReadPagesInlineImages:
         import pdf_mcp.server as mod
 
         assert not hasattr(mod, "pdf_extract_images")
+
+
+class TestReadPagesInlineTables:
+    """Tests for always-inline per-page tables in pdf_read_pages."""
+
+    def test_read_pages_always_includes_tables_field(self, sample_pdf, isolated_server):
+        """Every page dict has 'tables' (list) and 'table_count' (int), even with no tables."""
+        result = pdf_read_pages(sample_pdf, "1")
+        page = result["pages"][0]
+        assert "tables" in page
+        assert "table_count" in page
+        assert isinstance(page["tables"], list)
+        assert isinstance(page["table_count"], int)
+        assert page["tables"] == []
+        assert page["table_count"] == 0
+
+    def test_read_pages_tables_nested_per_page(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """Tables are nested inside each page dict, not at top level; top-level has total_tables."""
+        result = pdf_read_pages(sample_pdf_with_table, "1")
+        assert "tables" not in result  # no top-level 'tables' key
+        assert "total_tables" in result
+        page = result["pages"][0]
+        assert "tables" in page
+        assert isinstance(page["tables"], list)
+        assert page["table_count"] == len(page["tables"])
+
+    def test_read_pages_tables_structure(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """Each table dict has required keys; row_count == 1 + len(rows); no 'page' key."""
+        result = pdf_read_pages(sample_pdf_with_table, "1")
+        page = result["pages"][0]
+        assert page["table_count"] > 0
+        table = page["tables"][0]
+        assert "index" in table
+        assert "bbox" in table
+        assert "row_count" in table
+        assert "col_count" in table
+        assert "header" in table
+        assert "rows" in table
+        assert "page" not in table
+        assert isinstance(table["bbox"], list)
+        assert len(table["bbox"]) == 4
+        assert isinstance(table["header"], list)
+        assert isinstance(table["rows"], list)
+        assert table["row_count"] == 1 + len(table["rows"])
+
+    def test_read_pages_tables_cached(self, sample_pdf_with_table, isolated_server):
+        """Second call returns identical table data from cache."""
+        result1 = pdf_read_pages(sample_pdf_with_table, "1")
+        tables1 = result1["pages"][0]["tables"]
+
+        result2 = pdf_read_pages(sample_pdf_with_table, "1")
+        tables2 = result2["pages"][0]["tables"]
+
+        assert len(tables1) > 0
+        assert tables1 == tables2
+
+    def test_read_pages_total_tables_count(
+        self, sample_pdf_with_table, isolated_server
+    ):
+        """Top-level total_tables equals sum of table_count across all page dicts."""
+        result = pdf_read_pages(sample_pdf_with_table, "1")
+        expected = sum(p["table_count"] for p in result["pages"])
+        assert result["total_tables"] == expected
+
+    def test_tableless_page_cached(self, sample_pdf, isolated_server):
+        """extract_tables_from_page called only once for tableless page — [] is cached as sentinel."""
+        with patch(
+            "pdf_mcp.server.extract_tables_from_page", return_value=[]
+        ) as mock_extract:
+            pdf_read_pages(sample_pdf, "1")
+            assert mock_extract.call_count == 1
+
+            pdf_read_pages(sample_pdf, "1")
+            assert mock_extract.call_count == 1  # not called again

@@ -171,3 +171,32 @@ def sample_pdf_rgba():
 
         yield f.name
         os.unlink(f.name)
+
+
+@pytest.fixture
+def sample_pdf_with_table():
+    """Create a PDF with a detectable table (explicit borders required for find_tables)."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+
+        # Outer border (2 cols × 3 rows)
+        page.draw_rect(pymupdf.Rect(50, 50, 250, 150), color=(0, 0, 0))
+        # Column divider
+        page.draw_line(pymupdf.Point(150, 50), pymupdf.Point(150, 150), color=(0, 0, 0))
+        # Row dividers
+        page.draw_line(pymupdf.Point(50, 83), pymupdf.Point(250, 83), color=(0, 0, 0))
+        page.draw_line(pymupdf.Point(50, 116), pymupdf.Point(250, 116), color=(0, 0, 0))
+
+        # Cell text
+        page.insert_text((55, 75), "Name")
+        page.insert_text((155, 75), "Value")
+        page.insert_text((55, 108), "Alpha")
+        page.insert_text((155, 108), "1")
+        page.insert_text((55, 141), "Beta")
+        page.insert_text((155, 141), "2")
+
+        doc.save(f.name)
+        doc.close()
+        yield f.name
+        os.unlink(f.name)

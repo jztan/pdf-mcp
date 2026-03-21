@@ -321,8 +321,11 @@ black src/
 | | Without pdf-mcp | With pdf-mcp |
 |---|---|---|
 | Large PDFs | Context overflow | Chunked reading |
-| Repeated access | Re-parse every time | SQLite cache |
+| Token budgeting | Guess and overflow | Estimated tokens before reading |
 | Finding content | Load everything | Search first |
+| Tables | Lost in raw text | Extracted and inlined per page |
+| Images | Ignored | Extracted as PNG files |
+| Repeated access | Re-parse every time | SQLite cache |
 | Tool design | Single monolithic tool | 7 specialized tools |
 
 ## Contributing

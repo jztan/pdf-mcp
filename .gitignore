@@ -78,9 +78,8 @@ venv.bak/
 CLAUDE.md
 .claude/
 
-# Test PDFs and reports
-*.pdf
-mcp-tools-test-report.md
+# Internal docs
+docs_internal/
 
 # MCP Registry
 .mcpregistry_github_token

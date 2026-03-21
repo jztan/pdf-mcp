@@ -73,13 +73,21 @@ claude
 
 1. **Pick a test** from the categories below
 2. **Obtain the required PDF** (see `pdf_requirements` in each test)
-3. **Run without pdf-mcp first**: Start Claude Code without pdf-mcp configured, send the prompt
-4. **Run with pdf-mcp second**: Restart Claude Code with pdf-mcp, send the same prompt
-5. **Record results** using the benchmark runner:
+3. **Run without pdf-mcp first**:
    ```bash
-   python tests/benchmark/run_benchmark.py --test 1.1 --pdf /path/to/report.pdf --mode both
+   # Make sure pdf-mcp is NOT in your MCP config
+   claude mcp remove pdf-mcp  # if previously added
+   claude
    ```
-6. **Export for blog**: `python tests/benchmark/run_benchmark.py --export-md results.md`
+   Then paste the exact prompt from the test case.
+4. **Run with pdf-mcp second**:
+   ```bash
+   claude mcp add pdf-mcp -- pdf-mcp
+   claude
+   ```
+   Then paste the **exact same prompt**.
+5. **Record results** in the results template below after each test
+6. **Tip**: Use `/cost` in Claude Code to check token usage after each response
 
 ### Metrics to Capture Per Test
 | Metric | How to Measure |

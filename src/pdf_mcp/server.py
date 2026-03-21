@@ -22,6 +22,7 @@ from .extractor import (
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
+    extract_tables_from_page,
     extract_text_from_page,
     extract_toc,
     parse_page_range,
@@ -207,11 +208,12 @@ def pdf_read_pages(
             - "1-5,10,15-20": Combination of ranges and individual pages
 
     Returns:
-        - pages: List of {page, text, images, image_count} objects
+        - pages: List of {page, text, chars, images, image_count, tables, table_count} objects  # noqa: E501
         - total_chars: Total characters extracted
         - estimated_tokens: Estimated token count
         - cache_hits: Number of pages served from cache
         - total_images: Total number of images across all pages
+        - total_tables: Total number of tables across all pages
     """
     local_path = _resolve_path(path)
 
@@ -240,6 +242,7 @@ def pdf_read_pages(
         cache_hits = 0
         total_chars = 0
         total_images = 0
+        total_tables = 0
 
         for page_num in page_nums:
             # Check text cache
@@ -268,8 +271,17 @@ def pdf_read_pages(
             for img in page_images:
                 img.pop("page", None)
 
+            # Extract tables per-page (bundled like images)
+            cached_tables = cache.get_page_tables(local_path, page_num)
+            if cached_tables is not None:
+                page_tables = cached_tables
+            else:
+                page_tables = extract_tables_from_page(doc[page_num])
+                cache.save_page_tables(local_path, page_num, page_tables)
+
             total_chars += len(text)
             total_images += len(page_images)
+            total_tables += len(page_tables)
             results.append(
                 {
                     "page": page_num + 1,
@@ -277,6 +289,8 @@ def pdf_read_pages(
                     "chars": len(text),
                     "images": page_images,
                     "image_count": len(page_images),
+                    "tables": page_tables,
+                    "table_count": len(page_tables),
                 }
             )
 
@@ -293,6 +307,7 @@ def pdf_read_pages(
             "cache_hits": cache_hits,
             "cache_misses": len(page_nums) - cache_hits,
             "total_images": total_images,
+            "total_tables": total_tables,
         }
 
     finally:

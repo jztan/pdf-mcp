@@ -268,6 +268,52 @@ def extract_images_from_page(
     return images
 
 
+def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
+    """
+    Extract tables from a PDF page using PyMuPDF's table finder.
+
+    Requires visible line borders to detect table structure.
+    Pages without detectable tables return an empty list.
+
+    Args:
+        page: PyMuPDF page object
+
+    Returns:
+        List of table dicts, each with:
+        - index: 0-based table index on this page
+        - bbox: [x0, y0, x1, y1] bounding box
+        - row_count: total rows including header (equals 1 + len(rows))
+        - col_count: number of columns
+        - header: list of header cell strings (first row)
+        - rows: list of data rows (excludes header); each row is a list of cell strings
+    """
+    tables = []
+    try:
+        found = page.find_tables()
+        for i, table in enumerate(found.tables):
+            extracted = table.extract()
+            if not extracted:
+                continue
+            header = [str(cell) if cell is not None else "" for cell in extracted[0]]
+            rows = [
+                [str(cell) if cell is not None else "" for cell in row]
+                for row in extracted[1:]
+            ]
+            tables.append(
+                {
+                    "index": i,
+                    "bbox": list(table.bbox),
+                    "row_count": len(extracted),
+                    "col_count": len(extracted[0]),
+                    "header": header,
+                    "rows": rows,
+                }
+            )
+    except Exception as e:
+        logger.warning("Failed to extract tables from page: %s", e)
+    return tables
+
+
 def extract_metadata(doc: pymupdf.Document) -> dict[str, Any]:
     """
     Extract metadata from PDF document.

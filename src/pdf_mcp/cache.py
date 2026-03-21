@@ -102,6 +102,18 @@ class PDFCache:
                     ON page_images(file_path);
                 CREATE INDEX IF NOT EXISTS idx_metadata_accessed
                     ON pdf_metadata(accessed_at);
+
+                -- Page tables cache
+                CREATE TABLE IF NOT EXISTS page_tables (
+                    file_path  TEXT    NOT NULL,
+                    page_num   INTEGER NOT NULL,
+                    file_mtime REAL    NOT NULL,
+                    data       TEXT    NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_tables_path
+                    ON page_tables(file_path);
             """
             )
 
@@ -429,6 +441,34 @@ class PDFCache:
                 ],
             )
 
+    # ==================== Table Operations ====================
+
+    def get_page_tables(self, path: str, page_num: int) -> list[dict[str, Any]] | None:
+        """Get cached tables for a specific page. Returns None if not cached/invalid."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT data, file_mtime FROM page_tables"
+                " WHERE file_path = ? AND page_num = ?",
+                (path, page_num),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row[1]):
+                return None
+            return json.loads(row[0])
+
+    def save_page_tables(
+        self, path: str, page_num: int, tables: list[dict[str, Any]]
+    ) -> None:
+        """Save page tables to cache. Stores empty list [] as sentinel for tableless pages."""  # noqa: E501
+        mtime, _ = self._get_file_info(path)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO page_tables"
+                " (file_path, page_num, file_mtime, data) VALUES (?, ?, ?, ?)",
+                (path, page_num, mtime, json.dumps(tables)),
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:
@@ -449,6 +489,7 @@ class PDFCache:
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
 
     def clear_expired(self) -> int:
         """
@@ -495,6 +536,10 @@ class PDFCache:
                     f"DELETE FROM page_images WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
 
             return len(expired_paths)
 
@@ -510,6 +555,7 @@ class PDFCache:
             conn.execute("DELETE FROM pdf_metadata")
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
+            conn.execute("DELETE FROM page_tables")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:
@@ -530,6 +576,10 @@ class PDFCache:
             # Count images (exclude sentinel rows)
             stats["total_images"] = conn.execute(
                 "SELECT COUNT(*) FROM page_images WHERE image_index >= 0"
+            ).fetchone()[0]
+
+            stats["total_tables"] = conn.execute(
+                "SELECT COALESCE(SUM(json_array_length(data)), 0) FROM page_tables"
             ).fetchone()[0]
 
             # Total text size

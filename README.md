@@ -14,11 +14,12 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 ## Features
 
-- **8 specialized tools** for different PDF operations
+- **7 specialized tools** for different PDF operations
 - **SQLite caching** — persistent cache survives server restarts (essential for STDIO transport)
 - **Paginated reading** — read large PDFs in manageable chunks
 - **Full-text search** — find content without loading the entire document
-- **Image extraction** — extract images as base64 PNG
+- **Image extraction** — per-page images returned as PNG file paths alongside text
+- **Table extraction** — per-page tables with header and row data, detected via visible borders
 - **URL support** — read PDFs from HTTP/HTTPS URLs
 
 ## Installation
@@ -196,7 +197,7 @@ Returns page count, metadata, table of contents, file size, and estimated token 
 
 ### `pdf_read_pages` — Read Specific Pages
 
-Read selected pages to manage context size.
+Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`.
 
 ```
 "Read pages 1-10 of the PDF"
@@ -223,12 +224,6 @@ Find relevant pages before loading content.
 
 ```
 "Show me the table of contents"
-```
-
-### `pdf_extract_images` — Extract Images
-
-```
-"Extract images from pages 1-5"
 ```
 
 ### `pdf_cache_stats` — View Cache Statistics
@@ -279,6 +274,7 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 | Metadata | Avoid re-parsing document info |
 | Page text | Skip re-extraction |
 | Images | Skip re-encoding |
+| Tables | Skip re-detection |
 | TOC | Skip re-parsing |
 
 **Cache invalidation:**
@@ -327,7 +323,7 @@ black src/
 | Large PDFs | Context overflow | Chunked reading |
 | Repeated access | Re-parse every time | SQLite cache |
 | Finding content | Load everything | Search first |
-| Tool design | Single monolithic tool | 8 specialized tools |
+| Tool design | Single monolithic tool | 7 specialized tools |
 
 ## Contributing
 

@@ -197,7 +197,7 @@ Returns page count, metadata, table of contents, file size, and estimated token 
 
 ### `pdf_read_pages` — Read Specific Pages
 
-Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`.
+Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly in the page response — no separate tool call needed. Table detection requires visible borders in the PDF.
 
 ```
 "Read pages 1-10 of the PDF"

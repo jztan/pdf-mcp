@@ -10,6 +10,32 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+# FTS5 virtual table schema for full-text search with Porter stemmer.
+# Must be created in a separate conn.execute() call (not inside executescript)
+# so that FTS5 unavailability can be caught in isolation.
+_FTS5_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_search_fts USING fts5("
+    "file_path UNINDEXED, "
+    "page_num UNINDEXED, "
+    "text, "
+    "tokenize='porter unicode61'"
+    ")"
+)
+
+
+def _escape_fts5_query(query: str) -> str:
+    """
+    Escape a user-supplied query for FTS5 MATCH expressions.
+
+    Wraps the query in double-quotes to make it a phrase query,
+    preventing FTS5 reserved operators (AND, OR, NOT, NEAR) and
+    special characters from being interpreted as query syntax.
+    Internal double-quote characters are replaced with spaces
+    (NOT escaped as "" — FTS5 does not define "" inside phrases).
+    Porter stemming still applies to each token in the phrase.
+    """
+    return '"' + query.replace('"', " ") + '"'
+
 
 class PDFCache:
     """
@@ -47,7 +73,12 @@ class PDFCache:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Initialize database schema."""
+        """
+        Initialize database schema.
+
+        Side effect: sets self.fts_available (bool) indicating whether
+        the SQLite build supports FTS5 virtual tables.
+        """
         with sqlite3.connect(self.db_path) as conn:
             # Check if page_images needs migration (old schema has 'data' column)
             cursor = conn.execute("PRAGMA table_info(page_images)")
@@ -116,6 +147,14 @@ class PDFCache:
                     ON page_tables(file_path);
             """
             )
+
+            # FTS5 virtual table must be in a separate execute() call so that
+            # OperationalError from missing FTS5 support can be caught in isolation.
+            try:
+                conn.execute(_FTS5_TABLE_SCHEMA)
+                self.fts_available = True
+            except sqlite3.OperationalError:
+                self.fts_available = False
 
         self.clear_expired()
 
@@ -279,6 +318,19 @@ class PDFCache:
                 (path, page_num, mtime, text, len(text)),
             )
 
+            if self.fts_available:
+                # DELETE + INSERT for de-duplication (FTS5 has no PRIMARY KEY)
+                conn.execute(
+                    "DELETE FROM pdf_search_fts"
+                    " WHERE file_path = ? AND page_num = ?",
+                    (path, page_num),
+                )
+                conn.execute(
+                    "INSERT INTO pdf_search_fts (file_path, page_num, text)"
+                    " VALUES (?, ?, ?)",
+                    (path, page_num, text),
+                )
+
     def save_pages_text(self, path: str, pages: dict[int, str]) -> None:
         """
         Save multiple page texts to cache.
@@ -303,6 +355,20 @@ class PDFCache:
                     for page_num, text in pages.items()
                 ],
             )
+
+            if self.fts_available:
+                page_nums = list(pages.keys())
+                placeholders = ",".join("?" * len(page_nums))
+                conn.execute(
+                    f"DELETE FROM pdf_search_fts"
+                    f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                    (path, *page_nums),
+                )
+                conn.executemany(
+                    "INSERT INTO pdf_search_fts (file_path, page_num, text)"
+                    " VALUES (?, ?, ?)",
+                    [(path, pn, txt) for pn, txt in pages.items()],
+                )
 
     # ==================== Image Operations ====================
 
@@ -490,6 +556,8 @@ class PDFCache:
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
+            if self.fts_available:
+                conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
 
     def clear_expired(self) -> int:
         """
@@ -540,6 +608,12 @@ class PDFCache:
                     f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                if self.fts_available:
+                    conn.execute(
+                        f"DELETE FROM pdf_search_fts"
+                        f" WHERE file_path IN ({placeholders})",
+                        expired_paths,
+                    )
 
             return len(expired_paths)
 
@@ -556,6 +630,8 @@ class PDFCache:
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
+            if self.fts_available:
+                conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:
@@ -582,6 +658,14 @@ class PDFCache:
                 "SELECT COALESCE(SUM(json_array_length(data)), 0) FROM page_tables"
             ).fetchone()[0]
 
+            # FTS5 indexed page count
+            if self.fts_available:
+                stats["fts_indexed_pages"] = conn.execute(
+                    "SELECT COUNT(*) FROM pdf_search_fts"
+                ).fetchone()[0]
+            else:
+                stats["fts_indexed_pages"] = 0
+
             # Total text size
             row = conn.execute("SELECT SUM(text_length) FROM page_text").fetchone()
             stats["total_text_chars"] = row[0] or 0
@@ -597,3 +681,115 @@ class PDFCache:
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats
+
+    # ==================== FTS5 Search Operations ====================
+
+    def search_fts(
+        self,
+        path: str,
+        query: str,
+        max_results: int,
+        context_chars: int,
+    ) -> list[dict[str, Any]]:
+        """
+        Search the FTS5 index for pages matching query.
+
+        Returns at most max_results results sorted by descending BM25 relevance.
+        Each result has keys: page (1-indexed), excerpt (str), score (float >= 0).
+        Returns [] when fts_available is False or no matches found.
+
+        Args:
+            path: Path to PDF file (must match the value stored at index time)
+            query: Search query (Porter stemming applied; FTS5 operators escaped)
+            max_results: Maximum number of results to return
+            context_chars: Approximate characters of context in excerpts
+        """
+        if not self.fts_available:
+            return []
+
+        escaped = _escape_fts5_query(query)
+        # Map context_chars to FTS5 snippet token count (approximate)
+        num_tokens = max(4, min(64, context_chars // 5))
+
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT page_num,"
+                    " snippet(pdf_search_fts, 2, '', '', '...', ?),"
+                    " -bm25(pdf_search_fts)"
+                    " FROM pdf_search_fts"
+                    " WHERE pdf_search_fts MATCH ? AND file_path = ?"
+                    " ORDER BY bm25(pdf_search_fts)"
+                    " LIMIT ?",
+                    (num_tokens, escaped, path, max_results),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+
+        return [
+            {
+                "page": int(page_num) + 1,
+                "excerpt": excerpt or "",
+                "score": float(score),
+            }
+            for page_num, excerpt, score in rows
+        ]
+
+    def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:
+        """
+        Return literal (case-insensitive) occurrence counts per page for query.
+
+        Queries the FTS5 index for ALL matching pages (no LIMIT) and counts
+        literal occurrences in the stored text. Used to compute total_matches
+        and page_match_counts in pdf_search without early-exit truncation.
+
+        Returns a dict mapping 0-indexed page_num to occurrence count.
+        Returns {} when fts_available is False or no matches found.
+        """
+        if not self.fts_available:
+            return {}
+
+        escaped = _escape_fts5_query(query)
+        query_lower = query.lower()
+
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT page_num, text"
+                    " FROM pdf_search_fts"
+                    " WHERE pdf_search_fts MATCH ? AND file_path = ?",
+                    (escaped, path),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return {}
+
+        result: dict[int, int] = {}
+        for page_num, text in rows:
+            count = text.lower().count(query_lower)
+            if count > 0:
+                result[int(page_num)] = count
+        return result
+
+    def get_fts_index_coverage(self, path: str) -> tuple[int, int]:
+        """
+        Return (fts_indexed_pages, total_cached_pages) for path.
+
+        When fts_available is False, returns (0, page_text_count) so that
+        the FTS eligibility check (indexed == total > 0) never fires
+        on a file that has cached page_text rows but no FTS rows.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM page_text WHERE file_path = ?",
+                (path,),
+            ).fetchone()[0]
+
+            if not self.fts_available:
+                return (0, int(total))
+
+            indexed = conn.execute(
+                "SELECT COUNT(*) FROM pdf_search_fts WHERE file_path = ?",
+                (path,),
+            ).fetchone()[0]
+
+        return (int(indexed), int(total))

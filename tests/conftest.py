@@ -42,9 +42,11 @@ def sample_pdf():
         doc.save(f.name)
         doc.close()
 
-        yield f.name
+        # Resolve symlinks so paths match what _resolve_path() returns
+        resolved = str(Path(f.name).resolve())
+        yield resolved
 
-        os.unlink(f.name)
+        os.unlink(resolved)
 
 
 @pytest.fixture
@@ -175,7 +177,10 @@ def sample_pdf_rgba():
 
 @pytest.fixture
 def sample_pdf_with_table():
-    """Create a PDF with a detectable table (explicit borders required for find_tables)."""
+    """Create a PDF with a detectable table.
+
+    Explicit borders are required for find_tables() to detect it.
+    """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         doc = pymupdf.open()
         page = doc.new_page()

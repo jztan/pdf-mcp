@@ -736,6 +736,68 @@ class TestFTS5Cache:
             ).fetchone()[0]
         assert count == 0
 
+    # --- FTS fallback and error paths ---
+
+    def test_get_page_tables_stale_mtime_returns_none(self, cache, sample_pdf):
+        """get_page_tables returns None when the file mtime has changed since caching."""
+        import os
+        import time
+
+        cache.save_page_tables(sample_pdf, 0, [{"header": ["Col"], "rows": [["v"]]}])
+        future = time.time() + 100
+        os.utime(sample_pdf, (future, future))
+        assert cache.get_page_tables(sample_pdf, 0) is None
+
+    def test_get_stats_fts_indexed_pages_zero_when_unavailable(
+        self, cache, sample_pdf
+    ):
+        """get_stats returns fts_indexed_pages=0 when fts_available is False."""
+        cache.fts_available = False
+        stats = cache.get_stats()
+        assert stats["fts_indexed_pages"] == 0
+
+    def test_search_fts_returns_empty_when_fts_unavailable(self, cache, sample_pdf):
+        """search_fts returns [] immediately when fts_available is False."""
+        cache.fts_available = False
+        result = cache.search_fts(sample_pdf, "query", max_results=5, context_chars=80)
+        assert result == []
+
+    def test_search_fts_returns_empty_on_operational_error(self, cache, sample_pdf):
+        """search_fts returns [] when the FTS table is missing (OperationalError)."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
+
+        result = cache.search_fts(sample_pdf, "anything", max_results=5, context_chars=80)
+        assert result == []
+
+    def test_get_fts_page_counts_returns_empty_when_fts_unavailable(
+        self, cache, sample_pdf
+    ):
+        """get_fts_page_counts returns {} immediately when fts_available is False."""
+        cache.fts_available = False
+        result = cache.get_fts_page_counts(sample_pdf, "query")
+        assert result == {}
+
+    def test_get_fts_page_counts_returns_empty_on_operational_error(
+        self, cache, sample_pdf
+    ):
+        """get_fts_page_counts returns {} when the FTS table is missing (OperationalError)."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
+
+        result = cache.get_fts_page_counts(sample_pdf, "query")
+        assert result == {}
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

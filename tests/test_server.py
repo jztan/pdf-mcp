@@ -13,6 +13,7 @@ import httpx
 
 from pdf_mcp.server import (
     _resolve_path,
+    _python_search,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -1049,3 +1050,42 @@ class TestPdfSearchFTS5:
         assert result["total_matches"] >= 1
         assert len(result["matches"]) >= 1
         assert result["matches"][0]["excerpt"]
+
+
+class TestPythonSearch:
+    """Tests for _python_search word-boundary snapping and ellipsis logic."""
+
+    def test_word_boundary_and_ellipsis(self):
+        """Match in the middle of a long text triggers word-boundary snapping and ellipsis."""
+        prefix = "word " * 20  # 100 chars, many spaces for rfind
+        suffix = "word " * 20
+        text = prefix + "TARGET" + suffix
+        matches, _ = _python_search(
+            {0: text}, "TARGET", max_results=5, context_chars=20
+        )
+        assert len(matches) == 1
+        excerpt = matches[0]["excerpt"]
+        assert excerpt.startswith("...")  # ellipsis prepended (ctx_start > 0)
+        assert excerpt.endswith("...")    # ellipsis appended (ctx_end < len(text))
+
+
+class TestSearchScanCacheHit:
+    """Test that the scan path reuses already-cached page text (server.py:528)."""
+
+    def test_scan_uses_cached_text_for_partially_indexed_file(
+        self, sample_pdf, isolated_server
+    ):
+        """Scan path hits the cached-text branch when FTS is only partially indexed."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        # Pre-cache page 0 → FTS has 1 of 5 pages (partial coverage → scan path taken)
+        cache_instance.save_page_text(sample_pdf, 0, "pre-cached page zero content")
+
+        result = pdf_search(sample_pdf, "page")
+
+        assert "matches" in result
+        # After scan, all pages should be indexed
+        indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
+        assert indexed == total

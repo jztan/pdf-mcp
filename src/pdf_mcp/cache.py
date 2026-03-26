@@ -8,7 +8,7 @@ import shutil
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # FTS5 virtual table schema for full-text search with Porter stemmer.
 # Must be created in a separate conn.execute() call (not inside executescript)
@@ -519,7 +519,7 @@ class PDFCache:
                 return None
             if not self._is_cache_valid(path, row[1]):
                 return None
-            return json.loads(row[0])
+            return cast(list[dict[str, Any]], json.loads(row[0]))
 
     def save_page_tables(
         self, path: str, page_num: int, tables: list[dict[str, Any]]

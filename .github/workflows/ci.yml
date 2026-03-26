@@ -34,7 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
       - name: Audit dependencies for known vulnerabilities
-        run: pip audit
+        run: pip-audit
       - name: Run linter
         run: flake8 src/
       - name: Check formatting

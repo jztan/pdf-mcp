@@ -228,6 +228,7 @@ def extract_images_from_page(
                 color_format = "unknown"
 
             # Save to disk
+            assert output_dir is not None
             file_name = f"{pdf_hash}_p{page_num}_i{img_index}.png"
             file_path = output_dir / file_name
             try:

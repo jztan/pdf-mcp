@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Security
+- Pin all GitHub Actions to exact commit SHAs to prevent tag-hijacking supply-chain attacks
+- Add `pip audit` step to CI and publish workflows to catch known CVEs on every build
+- Add `dependency-review.yml` workflow to block high-severity dependencies and denied licenses on PRs
+- Add `permissions: contents: read` to all workflows (least-privilege)
+- Add `pip-audit` to dev dependencies
+- Commit `uv.lock` for reproducible builds (removed from `.gitignore`)
+
 ### Changed
 - `pdf_search` now uses a SQLite FTS5 full-text index with Porter stemming and BM25 relevance ranking
 - First search builds the FTS5 index (same cost as before); every subsequent search is O(log N) instead of O(N) page scan

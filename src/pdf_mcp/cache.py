@@ -8,7 +8,7 @@ import shutil
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # FTS5 virtual table schema for full-text search with Porter stemmer.
 # Must be created in a separate conn.execute() call (not inside executescript)
@@ -86,8 +86,7 @@ class PDFCache:
             if "data" in columns or (columns and "file_path_on_disk" not in columns):
                 conn.execute("DROP TABLE IF EXISTS page_images")
 
-            conn.executescript(
-                """
+            conn.executescript("""
                 -- PDF metadata cache
                 CREATE TABLE IF NOT EXISTS pdf_metadata (
                     file_path TEXT PRIMARY KEY,
@@ -145,8 +144,7 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_tables_path
                     ON page_tables(file_path);
-            """
-            )
+            """)
 
             # FTS5 virtual table must be in a separate execute() call so that
             # OperationalError from missing FTS5 support can be caught in isolation.
@@ -521,7 +519,7 @@ class PDFCache:
                 return None
             if not self._is_cache_valid(path, row[1]):
                 return None
-            return json.loads(row[0])
+            return cast(list[dict[str, Any]], json.loads(row[0]))
 
     def save_page_tables(
         self, path: str, page_num: int, tables: list[dict[str, Any]]

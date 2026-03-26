@@ -42,7 +42,7 @@
 - SQLite `page_tables` cache with empty-list sentinel for tableless pages
 - Suppress PyMuPDF/SWIG `DeprecationWarning` noise on server start/shutdown
 
-### v1.6.0 — Smarter Search (FTS5) ← current
+### v1.6.0 — Smarter Search (FTS5) & Supply-Chain Hardening ← current
 - `pdf_search` upgraded to SQLite FTS5 with Porter stemming and BM25 relevance ranking
 - Results ordered by relevance score, not page number
 - First search builds the index; subsequent searches are O(log N) instead of O(N) page scan
@@ -50,6 +50,13 @@
 - Graceful fallback to Python scan on SQLite builds without FTS5
 - `fts_indexed_pages` field added to `pdf_cache_stats` response
 - No new dependencies
+
+#### Supply-Chain Hardening
+- GitHub Actions pinned to exact commit SHAs (prevents tag-hijacking)
+- `pip-audit` runs on every CI build and dependency-changing PRs
+- `uv.lock` committed for reproducible builds
+- Least-privilege `permissions` blocks on all workflows
+- `black` upgraded to 26.3.1 (CVE-2026-32274 fix)
 
 ---
 

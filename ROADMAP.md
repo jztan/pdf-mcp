@@ -50,8 +50,6 @@
 - Graceful fallback to Python scan on SQLite builds without FTS5
 - `fts_indexed_pages` field added to `pdf_cache_stats` response
 - No new dependencies
-
-#### Supply-Chain Hardening
 - GitHub Actions pinned to exact commit SHAs (prevents tag-hijacking)
 - `pip-audit` runs on every CI build and dependency-changing PRs
 - `uv.lock` committed for reproducible builds

@@ -13,6 +13,7 @@ import httpx
 
 from pdf_mcp.server import (
     _resolve_path,
+    _python_search,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -246,22 +247,23 @@ class TestPdfSearch:
         assert len(result["matches"]) <= 2
 
     def test_search_multiple_pages(self, sample_pdf, isolated_server):
-        """Finds across pages."""
+        """Finds across pages — use page_match_counts instead of pages_with_matches."""
         result = pdf_search(sample_pdf, "content")
 
         # "content" appears on all 5 pages
-        assert len(result["pages_with_matches"]) >= 2
+        assert len(result["page_match_counts"]) >= 2
 
     def test_search_context_chars(self, sample_pdf, isolated_server):
-        """Custom context size works."""
+        """Custom context size works; score field present."""
         result_small = pdf_search(sample_pdf, "page", context_chars=20)
         result_large = pdf_search(sample_pdf, "page", context_chars=100)
 
         if result_small["matches"] and result_large["matches"]:
-            # Larger context should have longer excerpts (usually)
             assert len(result_large["matches"][0]["excerpt"]) >= len(
                 result_small["matches"][0]["excerpt"]
             )
+        if result_small["matches"]:
+            assert "score" in result_small["matches"][0]
 
 
 class TestPdfGetToc:
@@ -334,19 +336,41 @@ class TestPdfCacheStats:
         assert "cached_files" in result["url_cache"]
 
     def test_cache_stats_structure(self, isolated_server):
-        """All expected keys present."""
+        """All expected keys present, including fts_indexed_pages."""
         result = pdf_cache_stats()
 
         expected_keys = [
             "total_files",
             "total_pages",
             "total_images",
+            "fts_indexed_pages",
             "cache_size_bytes",
             "cache_size_mb",
             "url_cache",
         ]
         for key in expected_keys:
             assert key in result
+
+    def test_cache_stats_includes_fts_indexed_pages(self, isolated_server):
+        """pdf_cache_stats response includes fts_indexed_pages."""
+        result = pdf_cache_stats()
+
+        assert "fts_indexed_pages" in result
+        assert isinstance(result["fts_indexed_pages"], int)
+        assert result["fts_indexed_pages"] == 0  # empty cache
+
+    def test_cache_stats_fts_pages_nonzero_after_search(
+        self, sample_pdf, isolated_server
+    ):
+        """fts_indexed_pages > 0 after pdf_search builds the FTS index."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        pdf_search(sample_pdf, "page")
+        result = pdf_cache_stats()
+
+        assert result["fts_indexed_pages"] > 0
 
 
 class TestPdfCacheClear:
@@ -407,11 +431,11 @@ class TestToolIntegration:
         assert result2["cache_hits"] == 1
 
     def test_search_then_read_workflow(self, sample_pdf, isolated_server):
-        """Search -> read pattern."""
+        """Search → read pattern — updated for page_match_counts."""
         search_result = pdf_search(sample_pdf, "page 3")
 
-        if search_result["pages_with_matches"]:
-            page_num = search_result["pages_with_matches"][0]
+        if search_result["page_match_counts"]:
+            page_num = int(list(search_result["page_match_counts"].keys())[0])
             read_result = pdf_read_pages(sample_pdf, str(page_num))
 
             assert len(read_result["pages"]) == 1
@@ -761,7 +785,7 @@ class TestReadPagesInlineTables:
     """Tests for always-inline per-page tables in pdf_read_pages."""
 
     def test_read_pages_always_includes_tables_field(self, sample_pdf, isolated_server):
-        """Every page dict has 'tables' (list) and 'table_count' (int), even with no tables."""
+        """Every page dict has 'tables' (list) and 'table_count' (int)."""
         result = pdf_read_pages(sample_pdf, "1")
         page = result["pages"][0]
         assert "tables" in page
@@ -774,7 +798,7 @@ class TestReadPagesInlineTables:
     def test_read_pages_tables_nested_per_page(
         self, sample_pdf_with_table, isolated_server
     ):
-        """Tables are nested inside each page dict, not at top level; top-level has total_tables."""
+        """Tables are nested per-page; total_tables is at the top level."""
         result = pdf_read_pages(sample_pdf_with_table, "1")
         assert "tables" not in result  # no top-level 'tables' key
         assert "total_tables" in result
@@ -783,10 +807,8 @@ class TestReadPagesInlineTables:
         assert isinstance(page["tables"], list)
         assert page["table_count"] == len(page["tables"])
 
-    def test_read_pages_tables_structure(
-        self, sample_pdf_with_table, isolated_server
-    ):
-        """Each table dict has required keys; row_count == 1 + len(rows); no 'page' key."""
+    def test_read_pages_tables_structure(self, sample_pdf_with_table, isolated_server):
+        """Each table dict has required keys; row_count == 1 + len(rows)."""
         result = pdf_read_pages(sample_pdf_with_table, "1")
         page = result["pages"][0]
         assert page["table_count"] > 0
@@ -824,7 +846,7 @@ class TestReadPagesInlineTables:
         assert result["total_tables"] == expected
 
     def test_tableless_page_cached(self, sample_pdf, isolated_server):
-        """extract_tables_from_page called only once for tableless page — [] is cached as sentinel."""
+        """extract_tables_from_page called once; [] cached as sentinel."""
         with patch(
             "pdf_mcp.server.extract_tables_from_page", return_value=[]
         ) as mock_extract:
@@ -833,3 +855,237 @@ class TestReadPagesInlineTables:
 
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1  # not called again
+
+
+class TestPdfSearchFTS5:
+    """Tests for FTS5-upgraded pdf_search tool."""
+
+    def test_search_empty_query_returns_error(self, sample_pdf, isolated_server):
+        """Empty string query returns error dict without opening the PDF."""
+        result = pdf_search(sample_pdf, "")
+
+        assert "error" in result
+        assert "query" in result
+        assert result["query"] == ""
+        assert "matches" not in result
+
+    def test_search_whitespace_only_query_returns_error(
+        self, sample_pdf, isolated_server
+    ):
+        """Whitespace-only query is rejected as empty."""
+        result = pdf_search(sample_pdf, "   ")
+
+        assert "error" in result
+
+    def test_search_result_has_score_field(self, sample_pdf, isolated_server):
+        """Each match dict includes a 'score' field."""
+        result = pdf_search(sample_pdf, "page")
+
+        assert "matches" in result
+        if result["matches"]:
+            match = result["matches"][0]
+            assert "score" in match
+            assert isinstance(match["score"], float)
+            assert match["score"] >= 0.0
+
+    def test_search_result_has_index_used_field(self, sample_pdf, isolated_server):
+        """Response includes 'index_used' boolean field."""
+        result = pdf_search(sample_pdf, "page")
+
+        assert "index_used" in result
+        assert isinstance(result["index_used"], bool)
+
+    def test_search_uses_fts_after_read_pages(self, sample_pdf, isolated_server):
+        """After pdf_read_pages populates page text cache, pdf_search uses FTS index."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        pdf_read_pages(sample_pdf, "1-5")
+        result = pdf_search(sample_pdf, "content")
+
+        assert result["index_used"] is True
+
+    def test_search_fallback_when_not_indexed(self, sample_pdf, isolated_server):
+        """Without prior pdf_read_pages, pdf_search still returns results via scan."""
+        result = pdf_search(sample_pdf, "page")
+
+        assert "matches" in result
+        assert result["total_matches"] >= 1
+        assert "index_used" in result
+
+    def test_search_indexes_pages_during_scan(self, sample_pdf, isolated_server):
+        """After pdf_search completes a scan, FTS index is populated for that file."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        pdf_search(sample_pdf, "page")
+
+        indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
+        assert indexed == total
+        assert total == 5  # sample_pdf has 5 pages
+
+    def test_search_second_call_uses_fts(self, sample_pdf, isolated_server):
+        """Second pdf_search (after first scan builds index) sets index_used=True."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        pdf_search(sample_pdf, "page")  # First call — builds index
+        result2 = pdf_search(sample_pdf, "content")  # Second call — should use FTS
+
+        assert result2["index_used"] is True
+
+    def test_search_page_match_counts_returned(self, sample_pdf, isolated_server):
+        """Response has 'page_match_counts' dict, not 'pages_with_matches' list."""
+        result = pdf_search(sample_pdf, "page")
+
+        assert "page_match_counts" in result
+        assert "pages_with_matches" not in result
+        assert isinstance(result["page_match_counts"], dict)
+
+    def test_search_page_match_counts_keys_are_page_numbers(
+        self, sample_pdf, isolated_server
+    ):
+        """page_match_counts keys are strings of 1-indexed page numbers."""
+        result = pdf_search(sample_pdf, "page")
+
+        for key in result["page_match_counts"]:
+            assert isinstance(key, str)
+            assert int(key) >= 1
+
+    def test_search_total_matches_accurate_no_early_exit(
+        self, sample_pdf, isolated_server
+    ):
+        """total_matches reflects all pages, not truncated by max_results."""
+        result_limited = pdf_search(sample_pdf, "page", max_results=1)
+        result_full = pdf_search(sample_pdf, "page", max_results=100)
+
+        assert result_limited["total_matches"] == result_full["total_matches"]
+        assert len(result_limited["matches"]) == 1
+        assert len(result_full["matches"]) >= 5
+
+    def test_search_stemming_via_fts(self, isolated_server, tmp_path):
+        """FTS5 stemming: query 'search' finds pages with 'searching'."""
+        import pymupdf
+
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        pdf_path = str(tmp_path / "stemming_test.pdf")
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "We are searching for the document")
+        doc.save(pdf_path)
+        doc.close()
+
+        pdf_read_pages(pdf_path, "1")
+        result = pdf_search(pdf_path, "search")
+
+        assert result["total_matches"] >= 1, (
+            "Porter stemmer should match 'searching'; also 'search' is a literal "
+            "substring of 'searching' ensuring total_matches > 0"
+        )
+        assert result["index_used"] is True
+        assert len(result["matches"]) >= 1
+
+    def test_search_no_matches_empty_page_match_counts(
+        self, sample_pdf, isolated_server
+    ):
+        """No matches: total_matches=0, page_match_counts={}, matches=[]."""
+        result = pdf_search(sample_pdf, "xyznonexistent")
+
+        assert result["total_matches"] == 0
+        assert result["page_match_counts"] == {}
+        assert result["matches"] == []
+
+    def test_search_max_results_clamped_to_100(self, sample_pdf, isolated_server):
+        """max_results=999999 is clamped to 100."""
+        result = pdf_search(sample_pdf, "page", max_results=999999)
+        assert len(result["matches"]) <= 100
+
+    def test_search_content_warning_present(self, sample_pdf, isolated_server):
+        """Response always includes content_warning."""
+        result = pdf_search(sample_pdf, "page")
+        assert "content_warning" in result
+
+    def test_search_query_in_response(self, sample_pdf, isolated_server):
+        """Response echoes back the query string."""
+        result = pdf_search(sample_pdf, "some text")
+        assert result["query"] == "some text"
+
+    def test_search_searched_pages_equals_document_length(
+        self, sample_pdf, isolated_server
+    ):
+        """searched_pages reflects total page count of document."""
+        result = pdf_search(sample_pdf, "page")
+        assert result["searched_pages"] == 5  # sample_pdf has 5 pages
+
+    def test_search_returns_matches_when_fts_unavailable(self, tmp_path):
+        """F3: pdf_search returns non-empty matches even when fts_available=False."""
+        import pymupdf
+        import pdf_mcp.server as server_module
+        from pdf_mcp.cache import PDFCache
+
+        pdf_path = str(tmp_path / "fts_off_test.pdf")
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The quick brown fox jumps over the lazy dog")
+        doc.save(pdf_path)
+        doc.close()
+
+        no_fts_cache = PDFCache(cache_dir=tmp_path / "cache_no_fts", ttl_hours=1)
+        no_fts_cache.fts_available = False
+
+        original_cache = server_module.cache
+        server_module.cache = no_fts_cache
+        try:
+            result = pdf_search(pdf_path, "fox")
+        finally:
+            server_module.cache = original_cache
+
+        assert result["index_used"] is False
+        assert result["total_matches"] >= 1
+        assert len(result["matches"]) >= 1
+        assert result["matches"][0]["excerpt"]
+
+
+class TestPythonSearch:
+    """Tests for _python_search word-boundary snapping and ellipsis logic."""
+
+    def test_word_boundary_and_ellipsis(self):
+        """Match in the middle of a long text triggers word-boundary snapping and ellipsis."""
+        prefix = "word " * 20  # 100 chars, many spaces for rfind
+        suffix = "word " * 20
+        text = prefix + "TARGET" + suffix
+        matches, _ = _python_search(
+            {0: text}, "TARGET", max_results=5, context_chars=20
+        )
+        assert len(matches) == 1
+        excerpt = matches[0]["excerpt"]
+        assert excerpt.startswith("...")  # ellipsis prepended (ctx_start > 0)
+        assert excerpt.endswith("...")    # ellipsis appended (ctx_end < len(text))
+
+
+class TestSearchScanCacheHit:
+    """Test that the scan path reuses already-cached page text (server.py:528)."""
+
+    def test_scan_uses_cached_text_for_partially_indexed_file(
+        self, sample_pdf, isolated_server
+    ):
+        """Scan path hits the cached-text branch when FTS is only partially indexed."""
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        # Pre-cache page 0 → FTS has 1 of 5 pages (partial coverage → scan path taken)
+        cache_instance.save_page_text(sample_pdf, 0, "pre-cached page zero content")
+
+        result = pdf_search(sample_pdf, "page")
+
+        assert "matches" in result
+        # After scan, all pages should be indexed
+        indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
+        assert indexed == total

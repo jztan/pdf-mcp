@@ -2,7 +2,7 @@
 """Tests for pdf_mcp.extractor module - edge cases and uncovered functions."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pymupdf
 
@@ -11,6 +11,7 @@ from pdf_mcp.extractor import (
     extract_text_from_page,
     extract_text_with_coordinates,
     extract_images_from_page,
+    extract_tables_from_page,
     chunk_text,
 )
 
@@ -399,3 +400,30 @@ class TestExtractTextFromPageOptions:
         assert "page" in text.lower()
 
         doc.close()
+
+
+class TestExtractTablesFromPage:
+    """Edge case tests for extract_tables_from_page."""
+
+    def test_skips_table_with_empty_extraction(self):
+        """Tables where extract() returns [] are silently skipped."""
+        mock_page = MagicMock()
+        mock_table = MagicMock()
+        mock_table.extract.return_value = []
+        mock_page.find_tables.return_value.tables = [mock_table]
+
+        result = extract_tables_from_page(mock_page)
+        assert result == []
+
+    def test_handles_find_tables_exception(self, caplog):
+        """Exception from find_tables() is caught and logged; returns []."""
+        import logging
+
+        mock_page = MagicMock()
+        mock_page.find_tables.side_effect = RuntimeError("PyMuPDF internal error")
+
+        with caplog.at_level(logging.WARNING, logger="pdf_mcp.extractor"):
+            result = extract_tables_from_page(mock_page)
+
+        assert result == []
+        assert "Failed to extract tables" in caplog.text

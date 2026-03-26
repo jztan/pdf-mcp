@@ -214,7 +214,7 @@ Read a complete document in one call. Subject to a safety limit on page count.
 
 ### `pdf_search` — Search Within PDF
 
-Find relevant pages before loading content.
+Find relevant pages before loading content. Uses a SQLite FTS5 index with Porter stemming and BM25 relevance ranking — results are ordered by relevance, not page number. Morphological variants are matched automatically (e.g. searching "managing" finds pages containing "management"). Falls back to a linear scan on SQLite builds without FTS5 support.
 
 ```
 "Search for 'quarterly revenue' in the PDF"
@@ -276,6 +276,7 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 | Images | Skip re-encoding |
 | Tables | Skip re-detection |
 | TOC | Skip re-parsing |
+| FTS5 index | O(log N) search with BM25 ranking after first query |
 
 **Cache invalidation:**
 - Automatic when file modification time changes
@@ -322,7 +323,7 @@ black src/
 |---|---|---|
 | Large PDFs | Context overflow | Chunked reading |
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Search first |
+| Finding content | Load everything | Search first (FTS5 + BM25 ranking) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |

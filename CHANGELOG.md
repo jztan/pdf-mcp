@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+- `pdf_search` now uses a SQLite FTS5 full-text index with Porter stemming and BM25 relevance ranking
+- First search builds the FTS5 index (same cost as before); every subsequent search is O(log N) instead of O(N) page scan
+- Results are ordered by BM25 relevance score rather than page number
+- Response schema: `page_match_counts` replaces `pages_with_matches`; each match now includes a `score` field; new `index_used` flag; `total_matches` is always accurate (no early-exit truncation)
+- Graceful fallback to Python scan when FTS5 is unavailable (older SQLite builds)
+
+### Added
+- `fts_indexed_pages` field in `pdf_cache_stats` response
+- Empty/whitespace query validation in `pdf_search` (returns error before opening PDF)
+
+### Tests
+- 35 new cache unit tests (`TestFTS5Cache`) covering FTS5 index population, deduplication, invalidation, and fallback behaviour
+- 18 new server integration tests (`TestPdfSearchFTS5`) covering fully-indexed, cold/partial, and Python-fallback search paths
+- `scripts/compare_search.py`: standalone comparison report proving BM25 ranking, Porter stemming, and ≥3× performance improvement over Python scan
+
 ## [1.5.0] - 2026-03-21
 ### Added
 - `pdf_read_pages` now always includes per-page `tables` and `table_count` fields in each page dict, mirroring the existing `images`/`image_count` pattern

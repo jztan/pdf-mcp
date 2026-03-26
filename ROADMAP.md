@@ -35,20 +35,25 @@
 - Images saved as PNG files to `~/.cache/pdf-mcp/images/` instead of inline base64
 - `total_images` field added to `pdf_read_pages` response
 
-### v1.5.0 — Table Extraction (2026-03-21) ← current
+### v1.5.0 — Table Extraction (2026-03-21)
 - Table extraction via PyMuPDF `find_tables()` with visible-line detection
 - `tables` and `table_count` always included per-page in `pdf_read_pages`
 - `total_tables` field added to `pdf_read_pages` response
 - SQLite `page_tables` cache with empty-list sentinel for tableless pages
 - Suppress PyMuPDF/SWIG `DeprecationWarning` noise on server start/shutdown
 
+### v1.6.0 — Smarter Search (FTS5) ← current
+- `pdf_search` upgraded to SQLite FTS5 with Porter stemming and BM25 relevance ranking
+- Results ordered by relevance score, not page number
+- First search builds the index; subsequent searches are O(log N) instead of O(N) page scan
+- Response schema: `page_match_counts`, per-match `score`, `index_used` flag, accurate `total_matches`
+- Graceful fallback to Python scan on SQLite builds without FTS5
+- `fts_indexed_pages` field added to `pdf_cache_stats` response
+- No new dependencies
+
 ---
 
 ## Planned
-
-### v1.6.0 — Smarter Search (FTS5)
-
-Upgrade `pdf_search` with SQLite FTS5 — relevance-ranked results, stemming, and indexed lookup instead of a full page scan. No new dependencies.
 
 ### v1.7.0 — Semantic Search
 

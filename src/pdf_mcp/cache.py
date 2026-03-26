@@ -86,8 +86,7 @@ class PDFCache:
             if "data" in columns or (columns and "file_path_on_disk" not in columns):
                 conn.execute("DROP TABLE IF EXISTS page_images")
 
-            conn.executescript(
-                """
+            conn.executescript("""
                 -- PDF metadata cache
                 CREATE TABLE IF NOT EXISTS pdf_metadata (
                     file_path TEXT PRIMARY KEY,
@@ -145,8 +144,7 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_tables_path
                     ON page_tables(file_path);
-            """
-            )
+            """)
 
             # FTS5 virtual table must be in a separate execute() call so that
             # OperationalError from missing FTS5 support can be caught in isolation.

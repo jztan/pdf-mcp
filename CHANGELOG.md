@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-03-27
 ### Security
 - Pin all GitHub Actions to exact commit SHAs to prevent tag-hijacking supply-chain attacks
 - Add `pip audit` step to CI and publish workflows to catch known CVEs on every build

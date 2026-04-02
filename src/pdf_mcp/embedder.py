@@ -5,6 +5,7 @@ The embedding model is loaded once per process (singleton). fastembed is an
 optional dependency; calling encode() when it is not installed raises
 ImportError with an actionable install hint.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -32,7 +33,7 @@ def check_available() -> None:
 
 
 def _get_model() -> Any:
-    """Load the embedding model on first call; return cached model on subsequent calls."""
+    """Load embedding model on first call; return cached model on later calls."""
     global _model
     if _model is None:
         try:

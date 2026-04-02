@@ -79,6 +79,7 @@ CLAUDE.md
 
 # Internal docs
 docs_internal/
+docs/superpowers/
 
 # MCP Registry
 .mcpregistry_github_token

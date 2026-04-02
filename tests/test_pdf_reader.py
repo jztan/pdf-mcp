@@ -19,7 +19,6 @@ from pdf_mcp.extractor import (
     parse_page_range,
 )
 
-
 # ============================================================================
 # Page Range Parser Tests
 # ============================================================================
@@ -749,9 +748,7 @@ class TestFTS5Cache:
         os.utime(sample_pdf, (future, future))
         assert cache.get_page_tables(sample_pdf, 0) is None
 
-    def test_get_stats_fts_indexed_pages_zero_when_unavailable(
-        self, cache, sample_pdf
-    ):
+    def test_get_stats_fts_indexed_pages_zero_when_unavailable(self, cache, sample_pdf):
         """get_stats returns fts_indexed_pages=0 when fts_available is False."""
         cache.fts_available = False
         stats = cache.get_stats()
@@ -773,7 +770,9 @@ class TestFTS5Cache:
         with sqlite3.connect(cache.db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
 
-        result = cache.search_fts(sample_pdf, "anything", max_results=5, context_chars=80)
+        result = cache.search_fts(
+            sample_pdf, "anything", max_results=5, context_chars=80
+        )
         assert result == []
 
     def test_get_fts_page_counts_returns_empty_when_fts_unavailable(

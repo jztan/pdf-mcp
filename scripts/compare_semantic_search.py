@@ -168,8 +168,8 @@ def run_meaning_matching(tmpdir: Path) -> bool:
         return False
 
     print()
-    print(f"  {'Case':<52} {'FTS5':>6} {'Semantic':>10}")
-    print(f"  {'-' * 52} {'-' * 6} {'-' * 10}")
+    print(f"  {'Case':<58} {'FTS5':>6} {'Semantic':>10}")
+    print(f"  {'-' * 58} {'-' * 6} {'-' * 10}")
 
     all_ok = True
     for desc, target_text, query, target_page in _MEANING_CASES:
@@ -191,7 +191,7 @@ def run_meaning_matching(tmpdir: Path) -> bool:
         all_ok = all_ok and ok
         marker = green("✓") if ok else red("✗")
 
-        print(f"  {desc:<52} {fts_str}  {sem_str}  {marker}")
+        print(f"  {desc:<58} {fts_str}  {sem_str}  {marker}")
 
         os.unlink(pdf_path)
 
@@ -253,8 +253,8 @@ def run_exact_term(tmpdir: Path) -> bool:
         return False
 
     print()
-    print(f"  {'Case':<46} {'FTS5 top-1':>10} {'Semantic top-1':>15}")
-    print(f"  {'-' * 46} {'-' * 10} {'-' * 15}")
+    print(f"  {'Case':<60} {'FTS5 top-1':>10} {'Semantic top-1':>15}")
+    print(f"  {'-' * 60} {'-' * 10} {'-' * 15}")
 
     all_ok = True
     for desc, query, planted_text, planted_page in _EXACT_CASES:
@@ -279,7 +279,7 @@ def run_exact_term(tmpdir: Path) -> bool:
         fts_str = green(f"page {fts_top} ✓") if fts_ok else red(f"page {fts_top} ✗")
         sem_str = f"page {sem_top}" if sem_top else yellow("none")
 
-        print(f"  {desc:<46} {fts_str:>10}  {sem_str:>14}")
+        print(f"  {desc:<60} {fts_str:>10}  {sem_str:>14}")
 
         os.unlink(pdf_path)
 

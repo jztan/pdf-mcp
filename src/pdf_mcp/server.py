@@ -630,8 +630,7 @@ def pdf_semantic_search(
         # Load cached embeddings (raw bytes → numpy arrays)
         raw_cached = cache.get_page_embeddings(local_path, all_page_nums)
         cached_embeddings: dict[int, Any] = {
-            k: np.frombuffer(v, dtype=np.float32).copy()
-            for k, v in raw_cached.items()
+            k: np.frombuffer(v, dtype=np.float32).copy() for k, v in raw_cached.items()
         }
 
         uncached_nums = [p for p in all_page_nums if p not in cached_embeddings]
@@ -646,9 +645,7 @@ def pdf_semantic_search(
                 if page_num in cached_texts:
                     page_texts[page_num] = cached_texts[page_num]
                 else:
-                    text = extract_text_from_page(
-                        doc[page_num], sort_by_position=True
-                    )
+                    text = extract_text_from_page(doc[page_num], sort_by_position=True)
                     cache.save_page_text(local_path, page_num, text)
                     page_texts[page_num] = text
 
@@ -659,8 +656,7 @@ def pdf_semantic_search(
                 texts_list = [non_empty[pn] for pn in sorted_nums]
                 vecs: Any = embedder.encode(texts_list)  # (N, 384) float32
                 raw_new = {
-                    sorted_nums[i]: vecs[i].tobytes()
-                    for i in range(len(sorted_nums))
+                    sorted_nums[i]: vecs[i].tobytes() for i in range(len(sorted_nums))
                 }
                 cache.save_page_embeddings(local_path, raw_new)
                 for i, pn in enumerate(sorted_nums):

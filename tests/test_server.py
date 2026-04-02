@@ -1068,7 +1068,7 @@ class TestPythonSearch:
         assert len(matches) == 1
         excerpt = matches[0]["excerpt"]
         assert excerpt.startswith("...")  # ellipsis prepended (ctx_start > 0)
-        assert excerpt.endswith("...")    # ellipsis appended (ctx_end < len(text))
+        assert excerpt.endswith("...")  # ellipsis appended (ctx_end < len(text))
 
 
 class TestSearchScanCacheHit:
@@ -1142,15 +1142,21 @@ class TestPdfSemanticSearch:
         """Response always contains the expected top-level fields."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "revenue growth")
 
         for field in (
-            "content_warning", "query", "results",
-            "total_pages_searched", "embedding_cache_hits",
-            "embedding_cache_misses", "model",
+            "content_warning",
+            "query",
+            "results",
+            "total_pages_searched",
+            "embedding_cache_hits",
+            "embedding_cache_misses",
+            "model",
         ):
             assert field in result, f"Missing field: {field}"
 
@@ -1158,9 +1164,11 @@ class TestPdfSemanticSearch:
         """Each result contains page (int), score (float), and snippet (str)."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "test")
 
         assert len(result["results"]) > 0
@@ -1173,9 +1181,11 @@ class TestPdfSemanticSearch:
         """Results are ordered from highest to lowest score."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "test", top_k=5)
 
         scores = [r["score"] for r in result["results"]]
@@ -1185,9 +1195,11 @@ class TestPdfSemanticSearch:
         """top_k=999 is clamped; never more than 20 results."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "test", top_k=999)
 
         assert len(result["results"]) <= 20
@@ -1196,9 +1208,11 @@ class TestPdfSemanticSearch:
         """First call generates embeddings (misses); second call uses cache (hits)."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             r1 = pdf_semantic_search(sample_pdf, "test", top_k=3)
             r2 = pdf_semantic_search(sample_pdf, "test", top_k=3)
 
@@ -1212,9 +1226,11 @@ class TestPdfSemanticSearch:
         """model field reports BAAI/bge-small-en-v1.5."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "test")
 
         assert result["model"] == "BAAI/bge-small-en-v1.5"
@@ -1223,9 +1239,11 @@ class TestPdfSemanticSearch:
         """total_pages_searched equals the document page count."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             result = pdf_semantic_search(sample_pdf, "test")
 
         assert result["total_pages_searched"] == 5  # sample_pdf has 5 pages
@@ -1254,9 +1272,11 @@ class TestPdfSemanticSearch:
             return encode(texts)
 
         try:
-            with patch("pdf_mcp.embedder.check_available"), \
-                 patch("pdf_mcp.embedder.encode", counting_encode), \
-                 patch("pdf_mcp.embedder.encode_query", encode_query):
+            with (
+                patch("pdf_mcp.embedder.check_available"),
+                patch("pdf_mcp.embedder.encode", counting_encode),
+                patch("pdf_mcp.embedder.encode_query", encode_query),
+            ):
                 result = pdf_semantic_search(pdf_path, "revenue")
 
             # Only 1 page has text; encode called with 1 text, not 2
@@ -1270,9 +1290,11 @@ class TestPdfSemanticSearch:
         """pdf_cache_stats reports embedding_pages after a successful search."""
         encode, encode_query = self._make_encode()
 
-        with patch("pdf_mcp.embedder.check_available"), \
-             patch("pdf_mcp.embedder.encode", encode), \
-             patch("pdf_mcp.embedder.encode_query", encode_query):
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
             pdf_semantic_search(sample_pdf, "test")
 
         stats = pdf_cache_stats()

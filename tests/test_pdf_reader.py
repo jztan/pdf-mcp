@@ -2,6 +2,7 @@
 Tests for pdf-mcp server.
 """
 
+import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -797,6 +798,34 @@ class TestFTS5Cache:
 
         result = cache.get_fts_page_counts(sample_pdf, "query")
         assert result == {}
+
+
+class TestPageEmbeddingsTable:
+    """page_embeddings table and index are created by PDFCache.__init__."""
+
+    def test_page_embeddings_table_exists(self, temp_cache_dir):
+        """PDFCache creates page_embeddings table on init."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(cache.db_path) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "page_embeddings" in tables
+
+    def test_page_embeddings_index_exists(self, temp_cache_dir):
+        """idx_page_embeddings_path index is created alongside the table."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(cache.db_path) as conn:
+            indexes = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+        assert "idx_page_embeddings_path" in indexes
 
 
 if __name__ == "__main__":

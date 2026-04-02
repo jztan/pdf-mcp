@@ -144,6 +144,19 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_tables_path
                     ON page_tables(file_path);
+
+                -- Page embeddings cache (raw float32 BLOBs for semantic search)
+                CREATE TABLE IF NOT EXISTS page_embeddings (
+                    file_path   TEXT    NOT NULL,
+                    page_num    INTEGER NOT NULL,
+                    file_mtime  REAL    NOT NULL,
+                    embedding   BLOB    NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
+                    ON page_embeddings(file_path);
             """)
 
             # FTS5 virtual table must be in a separate execute() call so that

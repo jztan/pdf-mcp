@@ -624,9 +624,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
-            conn.execute(
-                "DELETE FROM page_embeddings WHERE file_path = ?", (path,)
-            )
+            conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
 

@@ -487,8 +487,7 @@ class TestCacheCoverageEdgeCases:
 
         # Create an old-schema page_images table with a 'data' BLOB column
         with sqlite3.connect(db_path) as conn:
-            conn.execute(
-                """CREATE TABLE page_images (
+            conn.execute("""CREATE TABLE page_images (
                     file_path TEXT NOT NULL,
                     page_num INTEGER NOT NULL,
                     image_index INTEGER NOT NULL,
@@ -499,8 +498,7 @@ class TestCacheCoverageEdgeCases:
                     data BLOB NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (file_path, page_num, image_index)
-                )"""
-            )
+                )""")
 
         # Instantiate PDFCache — should detect old schema and recreate
         cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
@@ -694,9 +692,7 @@ class TestPageEmbeddingsLifecycle:
     def test_stats_embedding_pages_counts_rows(self, temp_cache_dir, sample_pdf):
         """get_stats() counts all cached embedding rows."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(
-            sample_pdf, {0: b"\x00" * 1536, 1: b"\x01" * 1536}
-        )
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536, 1: b"\x01" * 1536})
         assert cache.get_stats()["embedding_pages"] == 2
 
     def test_clear_expired_removes_stale_embeddings(self, temp_cache_dir, sample_pdf):

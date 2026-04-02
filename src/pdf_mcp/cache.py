@@ -624,6 +624,9 @@ class PDFCache:
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
+            conn.execute(
+                "DELETE FROM page_embeddings WHERE file_path = ?", (path,)
+            )
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
 
@@ -676,6 +679,11 @@ class PDFCache:
                     f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_embeddings"
+                    f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
                 if self.fts_available:
                     conn.execute(
                         f"DELETE FROM pdf_search_fts"
@@ -698,6 +706,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
+            conn.execute("DELETE FROM page_embeddings")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -724,6 +733,10 @@ class PDFCache:
 
             stats["total_tables"] = conn.execute(
                 "SELECT COALESCE(SUM(json_array_length(data)), 0) FROM page_tables"
+            ).fetchone()[0]
+
+            stats["embedding_pages"] = conn.execute(
+                "SELECT COUNT(*) FROM page_embeddings"
             ).fetchone()[0]
 
             # FTS5 indexed page count

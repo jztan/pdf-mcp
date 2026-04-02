@@ -662,3 +662,50 @@ class TestCacheCoverageEdgeCases:
 
         expected_db_size = os.path.getsize(cache.db_path)
         assert stats["cache_size_bytes"] == expected_db_size
+
+
+class TestPageEmbeddingsLifecycle:
+    """Embedding rows are removed during invalidation, clearing, and expiry."""
+
+    def test_invalidate_file_removes_embeddings(self, temp_cache_dir, sample_pdf):
+        """_invalidate_file() deletes all embeddings for the given file."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cache._invalidate_file(sample_pdf)
+
+        assert cache.get_page_embeddings(sample_pdf, [0]) == {}
+
+    def test_clear_all_removes_embeddings(self, temp_cache_dir, sample_pdf):
+        """clear_all() removes all embedding rows."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cache.clear_all()
+
+        assert cache.get_stats()["embedding_pages"] == 0
+
+    def test_stats_embedding_pages_zero_initially(self, temp_cache_dir):
+        """get_stats() returns embedding_pages=0 on a fresh cache."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_stats()["embedding_pages"] == 0
+
+    def test_stats_embedding_pages_counts_rows(self, temp_cache_dir, sample_pdf):
+        """get_stats() counts all cached embedding rows."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(
+            sample_pdf, {0: b"\x00" * 1536, 1: b"\x01" * 1536}
+        )
+        assert cache.get_stats()["embedding_pages"] == 2
+
+    def test_clear_expired_removes_stale_embeddings(self, temp_cache_dir, sample_pdf):
+        """clear_expired() removes embedding rows for expired files."""
+        cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=0)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cleared = cache.clear_expired()
+
+        assert cleared >= 1
+        assert cache.get_stats()["embedding_pages"] == 0

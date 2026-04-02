@@ -1,4 +1,5 @@
 """Unit tests for pdf_mcp.embedder. All tests mock fastembed — no model download."""
+
 import sys
 from unittest.mock import MagicMock, patch
 

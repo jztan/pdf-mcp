@@ -869,9 +869,7 @@ class TestPageEmbeddingsCRUD:
     def test_get_only_returns_requested_pages(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings only returns the pages in page_nums."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(
-            sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536}
-        )
+        cache.save_page_embeddings(sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536})
         result = cache.get_page_embeddings(sample_pdf, [0])
 
         assert 0 in result

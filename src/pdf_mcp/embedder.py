@@ -24,7 +24,7 @@ def check_available() -> None:
     before any expensive PDF work begins.
     """
     try:
-        import fastembed  # type: ignore[import-untyped]  # noqa: F401
+        import fastembed  # type: ignore[import-untyped,import-not-found]  # noqa: F401
     except ImportError as exc:
         raise ImportError(
             "pdf_semantic_search requires the 'fastembed' package. "
@@ -37,7 +37,7 @@ def _get_model() -> Any:
     global _model
     if _model is None:
         try:
-            from fastembed import TextEmbedding  # type: ignore[import-untyped]
+            from fastembed import TextEmbedding  # type: ignore
         except ImportError as exc:
             raise ImportError(
                 "pdf_semantic_search requires the 'fastembed' package. "

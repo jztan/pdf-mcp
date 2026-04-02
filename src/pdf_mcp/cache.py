@@ -548,9 +548,7 @@ class PDFCache:
 
     # ==================== Embedding Operations ====================
 
-    def get_page_embeddings(
-        self, path: str, page_nums: list[int]
-    ) -> dict[int, bytes]:
+    def get_page_embeddings(self, path: str, page_nums: list[int]) -> dict[int, bytes]:
         """
         Get cached raw embedding bytes for multiple pages.
 
@@ -581,9 +579,7 @@ class PDFCache:
                 result[int(page_num)] = bytes(blob)
         return result
 
-    def save_page_embeddings(
-        self, path: str, embeddings: dict[int, bytes]
-    ) -> None:
+    def save_page_embeddings(self, path: str, embeddings: dict[int, bytes]) -> None:
         """
         Save raw embedding bytes to cache.
 

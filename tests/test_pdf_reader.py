@@ -827,5 +827,70 @@ class TestPageEmbeddingsTable:
         assert "idx_page_embeddings_path" in indexes
 
 
+class TestPageEmbeddingsCRUD:
+    """get/save page embeddings round-trip and mtime invalidation."""
+
+    def test_save_and_get_round_trip(self, temp_cache_dir, sample_pdf):
+        """save_page_embeddings → get_page_embeddings returns identical bytes."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw = bytes(range(256)) * 6  # 1536 bytes = 384 float32s
+
+        cache.save_page_embeddings(sample_pdf, {0: raw})
+        result = cache.get_page_embeddings(sample_pdf, [0])
+
+        assert 0 in result
+        assert result[0] == raw
+
+    def test_get_returns_empty_when_nothing_saved(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings returns {} when no embeddings are cached."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_page_embeddings(sample_pdf, [0, 1, 2]) == {}
+
+    def test_get_empty_page_nums_returns_empty(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings([]) returns {} without hitting the database."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_page_embeddings(sample_pdf, []) == {}
+
+    def test_get_multiple_pages(self, temp_cache_dir, sample_pdf):
+        """Multiple pages saved and retrieved correctly."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw0 = b"\x00" * 1536
+        raw1 = b"\xff" * 1536
+        raw2 = b"\x80" * 1536
+
+        cache.save_page_embeddings(sample_pdf, {0: raw0, 1: raw1, 2: raw2})
+        result = cache.get_page_embeddings(sample_pdf, [0, 1, 2])
+
+        assert set(result.keys()) == {0, 1, 2}
+        assert result[0] == raw0
+        assert result[1] == raw1
+        assert result[2] == raw2
+
+    def test_get_only_returns_requested_pages(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings only returns the pages in page_nums."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(
+            sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536}
+        )
+        result = cache.get_page_embeddings(sample_pdf, [0])
+
+        assert 0 in result
+        assert 1 not in result
+
+    def test_mtime_invalidation(self, temp_cache_dir, sample_pdf):
+        """Embeddings are stale after the PDF's mtime changes."""
+        import os
+        import time
+
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        time.sleep(0.01)
+        os.utime(sample_pdf, None)  # bump mtime
+
+        result = cache.get_page_embeddings(sample_pdf, [0])
+        assert result == {}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

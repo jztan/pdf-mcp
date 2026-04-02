@@ -546,6 +546,67 @@ class PDFCache:
                 (path, page_num, mtime, json.dumps(tables)),
             )
 
+    # ==================== Embedding Operations ====================
+
+    def get_page_embeddings(
+        self, path: str, page_nums: list[int]
+    ) -> dict[int, bytes]:
+        """
+        Get cached raw embedding bytes for multiple pages.
+
+        Returns a dict mapping 0-indexed page_num to the raw float32 bytes
+        (1536 bytes = 384 × 4 bytes) for each page whose mtime is still valid.
+        Pages not in cache or with a stale mtime are omitted.
+
+        The caller is responsible for converting bytes to a numpy array:
+            np.frombuffer(blob, dtype=np.float32).copy()
+
+        Returns {} when page_nums is empty.
+        """
+        if not page_nums:
+            return {}
+
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, embedding, file_mtime"
+                f" FROM page_embeddings"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+
+        result: dict[int, bytes] = {}
+        for page_num, blob, mtime in rows:
+            if self._is_cache_valid(path, mtime):
+                result[int(page_num)] = bytes(blob)
+        return result
+
+    def save_page_embeddings(
+        self, path: str, embeddings: dict[int, bytes]
+    ) -> None:
+        """
+        Save raw embedding bytes to cache.
+
+        Args:
+            path: Path to PDF file
+            embeddings: Dict mapping 0-indexed page_num to raw float32 bytes.
+                        Use ndarray.tobytes() to convert from numpy.
+        """
+        if not embeddings:
+            return
+
+        mtime, _ = self._get_file_info(path)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO page_embeddings"
+                " (file_path, page_num, file_mtime, embedding)"
+                " VALUES (?, ?, ?, ?)",
+                [
+                    (path, page_num, mtime, blob)
+                    for page_num, blob in embeddings.items()
+                ],
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:

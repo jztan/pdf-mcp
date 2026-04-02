@@ -211,7 +211,189 @@ def run_meaning_matching(tmpdir: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Main (stub — replaced in Task 2)
+# Section 2: Exact-term search (FTS5 wins)
+# ---------------------------------------------------------------------------
+
+_EXACT_FILLER = (
+    "The quarterly business report summarizes financial performance across divisions. "
+    "Revenue targets were reviewed and expenditure budgets approved for the period. "
+    "The executive team discussed strategic priorities and operational efficiency."
+)
+
+_EXACT_CASES = [
+    (
+        "query 'QX-7749-BRAVO'    (product code, planted on page 3)",
+        "QX-7749-BRAVO",
+        "The inventory system flagged product code QX-7749-BRAVO for urgent reorder.",
+        3,  # 1-indexed target page
+    ),
+    (
+        "query 'INV-2024-00847'   (invoice ref, planted on page 2)",
+        "INV-2024-00847",
+        "Payment for invoice INV-2024-00847 was processed and reconciled on the 15th.",
+        2,
+    ),
+    (
+        "query 'Amendment 7B'     (clause ref, planted on page 4)",
+        "Amendment 7B",
+        "Under the terms of Amendment 7B the liability cap is revised upward.",
+        4,
+    ),
+]
+
+
+def run_exact_term(tmpdir: Path) -> bool:
+    _section("2. Exact-Term Search  (FTS5 wins)")
+
+    cache = PDFCache(cache_dir=tmpdir, ttl_hours=1)
+    server_module.cache = cache
+
+    if not cache.fts_available:
+        print(red("  FTS5 not available — skipping section"))
+        return False
+
+    print()
+    print(f"  {'Case':<46} {'FTS5 top-1':>10} {'Semantic top-1':>15}")
+    print(f"  {'-' * 46} {'-' * 10} {'-' * 15}")
+
+    all_ok = True
+    for desc, query, planted_text, planted_page in _EXACT_CASES:
+        # 5 pages all with identical filler; planted_page has the unique identifier
+        page_texts = {i: _EXACT_FILLER for i in range(5)}
+        page_texts[planted_page - 1] = planted_text + " " + _EXACT_FILLER
+
+        pdf_path = _build_pdf(page_texts)
+
+        fts_result = pdf_search(pdf_path, query, max_results=5, context_chars=80)
+        sem_result = pdf_semantic_search(pdf_path, query, top_k=5)
+
+        fts_matches = fts_result.get("matches", [])
+        sem_results = sem_result.get("results", [])
+
+        fts_top = fts_matches[0]["page"] if fts_matches else None
+        sem_top = sem_results[0]["page"] if sem_results else None
+
+        fts_ok = fts_top == planted_page
+        all_ok = all_ok and fts_ok
+
+        fts_str = green(f"page {fts_top} ✓") if fts_ok else red(f"page {fts_top} ✗")
+        sem_str = f"page {sem_top}" if sem_top else yellow("none")
+
+        print(f"  {desc:<46} {fts_str:>10}  {sem_str:>14}")
+
+        os.unlink(pdf_path)
+
+    print()
+    print(bold("  Verdict"))
+    _row(
+        "FTS5 finds exact identifier at rank 1",
+        green("3/3") if all_ok else red("not all"),
+        all_ok,
+    )
+    _row(
+        "Semantic top-1 (informational — not scored)",
+        "shown above",
+        None,
+    )
+    return all_ok
+
+
+# ---------------------------------------------------------------------------
+# Section 3: Performance (cold start vs warm)
+# ---------------------------------------------------------------------------
+
+_PERF_PAGES = 200
+_PERF_WARM_REPS = 5
+_PERF_RARE_PAGE = 99  # 0-indexed
+_PERF_RARE_WORD = "zyxuventa"  # invented word with no semantic meaning
+_PERF_FILLER = (
+    "The quarterly business review covered operational metrics and financial targets. "
+    "Management approved budget allocations and reviewed headcount planning. "
+    "Strategic objectives were discussed with a focus on market expansion."
+) * 8
+
+
+def run_performance(tmpdir: Path) -> bool:
+    _section("3. Performance  (cold start vs warm queries)")
+
+    cache = PDFCache(cache_dir=tmpdir, ttl_hours=1)
+    server_module.cache = cache
+
+    print(f"\n  Building {_PERF_PAGES}-page PDF…", end="", flush=True)
+    page_texts: dict[int, str] = {}
+    for i in range(_PERF_PAGES):
+        if i == _PERF_RARE_PAGE:
+            page_texts[i] = f"The term {_PERF_RARE_WORD} appears here. " + _PERF_FILLER
+        else:
+            page_texts[i] = _PERF_FILLER
+    pdf_path = _build_pdf(page_texts)
+    print(" done")
+
+    # --- Cold start ---
+    print("\n  Cold start (no cache) — this may take 30–90 s on CPU…")
+
+    t0 = time.perf_counter()
+    pdf_search(pdf_path, _PERF_RARE_WORD, max_results=5, context_chars=80)
+    fts_cold = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    pdf_semantic_search(pdf_path, "unusual invented terminology", top_k=5)
+    sem_cold = time.perf_counter() - t0
+
+    print()
+    print(f"  {'Method':<20} {'Cold start':>12}")
+    print(f"  {'-' * 20} {'-' * 12}")
+    print(f"  {'FTS5':<20} {fts_cold * 1000:>10.0f}ms")
+    print(
+        f"  {'Semantic':<20} {sem_cold * 1000:>10.0f}ms"
+        f"  (embeds {_PERF_PAGES} pages)"
+    )
+
+    # --- Warm queries ---
+    print(f"\n  Warm queries (avg over {_PERF_WARM_REPS} reps)…")
+
+    t0 = time.perf_counter()
+    for _ in range(_PERF_WARM_REPS):
+        pdf_search(pdf_path, _PERF_RARE_WORD, max_results=5, context_chars=80)
+    fts_warm = (time.perf_counter() - t0) / _PERF_WARM_REPS
+
+    t0 = time.perf_counter()
+    for _ in range(_PERF_WARM_REPS):
+        pdf_semantic_search(pdf_path, "unusual invented terminology", top_k=5)
+    sem_warm = (time.perf_counter() - t0) / _PERF_WARM_REPS
+
+    print()
+    print(f"  {'Method':<20} {'Warm query':>12}")
+    print(f"  {'-' * 20} {'-' * 12}")
+
+    fts_warm_ok = fts_warm < 0.050
+    sem_warm_ok = sem_warm < 0.050
+
+    print(
+        f"  {'FTS5':<20} {fts_warm * 1000:>10.1f}ms"
+        + (green("  < 50 ms ✓") if fts_warm_ok else red("  ≥ 50 ms ✗"))
+    )
+    print(
+        f"  {'Semantic':<20} {sem_warm * 1000:>10.1f}ms"
+        + (green("  < 50 ms ✓") if sem_warm_ok else red("  ≥ 50 ms ✗"))
+    )
+
+    all_ok = fts_warm_ok and sem_warm_ok
+
+    print()
+    print(bold("  Verdict"))
+    _row(
+        "Both warm queries < 50 ms",
+        green("yes") if all_ok else red("no"),
+        all_ok,
+    )
+
+    os.unlink(pdf_path)
+    return all_ok
+
+
+# ---------------------------------------------------------------------------
+# Main
 # ---------------------------------------------------------------------------
 
 
@@ -224,16 +406,34 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         r1 = run_meaning_matching(tmp / "meaning")
+        r2 = run_exact_term(tmp / "exact")
+        r3 = run_performance(tmp / "perf")
 
     _section("Summary")
     print()
     _row(
-        "1. Meaning-based matching (semantic wins)",
+        "1. Meaning-based matching (semantic wins 3/3)",
         green("PASS") if r1 else red("FAIL"),
         r1,
     )
+    _row(
+        "2. Exact-term search (FTS5 correct 3/3)",
+        green("PASS") if r2 else red("FAIL"),
+        r2,
+    )
+    _row(
+        "3. Performance (warm queries < 50 ms)",
+        green("PASS") if r3 else red("FAIL"),
+        r3,
+    )
     print()
-    sys.exit(0 if r1 else 1)
+
+    if r1 and r2 and r3:
+        print(bold(green("  All comparisons passed — choose your tool wisely.")))
+    else:
+        print(bold(red("  Some comparisons failed — review output above.")))
+    print()
+    sys.exit(0 if (r1 and r2 and r3) else 1)
 
 
 if __name__ == "__main__":

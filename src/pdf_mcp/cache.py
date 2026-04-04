@@ -37,6 +37,12 @@ def _escape_fts5_query(query: str) -> str:
     return '"' + query.replace('"', " ") + '"'
 
 
+def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    """Return column names for a table, or empty set if the table does not exist."""
+    cursor = conn.execute(f"PRAGMA table_info({table_name})")
+    return {row[1] for row in cursor.fetchall()}
+
+
 class PDFCache:
     """
     SQLite-based cache for PDF metadata and page text.

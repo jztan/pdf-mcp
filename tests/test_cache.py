@@ -662,6 +662,26 @@ class TestCacheCoverageEdgeCases:
         assert stats["cache_size_bytes"] == expected_db_size
 
 
+class TestGetColumns:
+    """Tests for _get_columns helper."""
+
+    def test_returns_column_names_for_existing_table(self, tmp_path):
+        import sqlite3
+        db = tmp_path / "test.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("CREATE TABLE foo (id INTEGER, name TEXT)")
+        with sqlite3.connect(db) as conn:
+            from pdf_mcp.cache import _get_columns
+            assert _get_columns(conn, "foo") == {"id", "name"}
+
+    def test_returns_empty_set_for_missing_table(self, tmp_path):
+        import sqlite3
+        db = tmp_path / "test.db"
+        with sqlite3.connect(db) as conn:
+            from pdf_mcp.cache import _get_columns
+            assert _get_columns(conn, "nonexistent") == set()
+
+
 class TestPageEmbeddingsLifecycle:
     """Embedding rows are removed during invalidation, clearing, and expiry."""
 

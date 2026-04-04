@@ -585,7 +585,8 @@ def pdf_semantic_search(
     "financial performance."
 
     Embeddings are generated once per page and cached in SQLite. The first call
-    for a document may take 8-15 seconds on CPU; subsequent queries are instant.
+    for a document embeds all pages (e.g. ~291ms for a 200-page PDF); subsequent
+    queries are instant.
 
     Requires: pip install 'pdf-mcp[semantic]'
 

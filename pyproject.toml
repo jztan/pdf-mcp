@@ -56,6 +56,12 @@ dev = [
     "flake8>=7.0",
     "black>=26.3.1",
     "pip-audit>=2.7.0",
+    "numpy>=1.24",
+]
+
+semantic = [
+    "fastembed>=0.7,<1.0",
+    "numpy>=1.24",
 ]
 
 [project.urls]
@@ -94,6 +100,6 @@ module = "pymupdf"
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
-module = ["pdf_mcp.extractor", "pdf_mcp.server"]
+module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]
 disallow_untyped_calls = false
 warn_unused_ignores = false

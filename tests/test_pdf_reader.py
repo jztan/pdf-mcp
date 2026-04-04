@@ -2,6 +2,7 @@
 Tests for pdf-mcp server.
 """
 
+import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,7 +18,6 @@ from pdf_mcp.extractor import (
     extract_toc,
     parse_page_range,
 )
-
 
 # ============================================================================
 # Page Range Parser Tests
@@ -748,9 +748,7 @@ class TestFTS5Cache:
         os.utime(sample_pdf, (future, future))
         assert cache.get_page_tables(sample_pdf, 0) is None
 
-    def test_get_stats_fts_indexed_pages_zero_when_unavailable(
-        self, cache, sample_pdf
-    ):
+    def test_get_stats_fts_indexed_pages_zero_when_unavailable(self, cache, sample_pdf):
         """get_stats returns fts_indexed_pages=0 when fts_available is False."""
         cache.fts_available = False
         stats = cache.get_stats()
@@ -772,7 +770,9 @@ class TestFTS5Cache:
         with sqlite3.connect(cache.db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
 
-        result = cache.search_fts(sample_pdf, "anything", max_results=5, context_chars=80)
+        result = cache.search_fts(
+            sample_pdf, "anything", max_results=5, context_chars=80
+        )
         assert result == []
 
     def test_get_fts_page_counts_returns_empty_when_fts_unavailable(
@@ -796,6 +796,97 @@ class TestFTS5Cache:
             conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
 
         result = cache.get_fts_page_counts(sample_pdf, "query")
+        assert result == {}
+
+
+class TestPageEmbeddingsTable:
+    """page_embeddings table and index are created by PDFCache.__init__."""
+
+    def test_page_embeddings_table_exists(self, temp_cache_dir):
+        """PDFCache creates page_embeddings table on init."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(cache.db_path) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "page_embeddings" in tables
+
+    def test_page_embeddings_index_exists(self, temp_cache_dir):
+        """idx_page_embeddings_path index is created alongside the table."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(cache.db_path) as conn:
+            indexes = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+        assert "idx_page_embeddings_path" in indexes
+
+
+class TestPageEmbeddingsCRUD:
+    """get/save page embeddings round-trip and mtime invalidation."""
+
+    def test_save_and_get_round_trip(self, temp_cache_dir, sample_pdf):
+        """save_page_embeddings → get_page_embeddings returns identical bytes."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw = bytes(range(256)) * 6  # 1536 bytes = 384 float32s
+
+        cache.save_page_embeddings(sample_pdf, {0: raw})
+        result = cache.get_page_embeddings(sample_pdf, [0])
+
+        assert 0 in result
+        assert result[0] == raw
+
+    def test_get_returns_empty_when_nothing_saved(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings returns {} when no embeddings are cached."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_page_embeddings(sample_pdf, [0, 1, 2]) == {}
+
+    def test_get_empty_page_nums_returns_empty(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings([]) returns {} without hitting the database."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_page_embeddings(sample_pdf, []) == {}
+
+    def test_get_multiple_pages(self, temp_cache_dir, sample_pdf):
+        """Multiple pages saved and retrieved correctly."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw0 = b"\x00" * 1536
+        raw1 = b"\xff" * 1536
+        raw2 = b"\x80" * 1536
+
+        cache.save_page_embeddings(sample_pdf, {0: raw0, 1: raw1, 2: raw2})
+        result = cache.get_page_embeddings(sample_pdf, [0, 1, 2])
+
+        assert set(result.keys()) == {0, 1, 2}
+        assert result[0] == raw0
+        assert result[1] == raw1
+        assert result[2] == raw2
+
+    def test_get_only_returns_requested_pages(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings only returns the pages in page_nums."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536})
+        result = cache.get_page_embeddings(sample_pdf, [0])
+
+        assert 0 in result
+        assert 1 not in result
+
+    def test_mtime_invalidation(self, temp_cache_dir, sample_pdf):
+        """Embeddings are stale after the PDF's mtime changes."""
+        import os
+        import time
+
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        time.sleep(0.01)
+        os.utime(sample_pdf, None)  # bump mtime
+
+        result = cache.get_page_embeddings(sample_pdf, [0])
         assert result == {}
 
 

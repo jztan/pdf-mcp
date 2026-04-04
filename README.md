@@ -14,10 +14,11 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 ## Features
 
-- **7 specialized tools** for different PDF operations
+- **8 specialized tools** for different PDF operations
 - **SQLite caching** — persistent cache survives server restarts (essential for STDIO transport)
 - **Paginated reading** — read large PDFs in manageable chunks
-- **Full-text search** — find content without loading the entire document
+- **Full-text search** — FTS5 index with BM25 ranking and Porter stemming
+- **Semantic search** — find pages by meaning using local embeddings (no external API)
 - **Image extraction** — per-page images returned as PNG file paths alongside text
 - **Table extraction** — per-page tables with header and row data, detected via visible borders
 - **URL support** — read PDFs from HTTP/HTTPS URLs
@@ -26,6 +27,12 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 ```bash
 pip install pdf-mcp
+```
+
+For semantic search (adds `fastembed` and `numpy`, ~67 MB model download on first use):
+
+```bash
+pip install 'pdf-mcp[semantic]'
 ```
 
 ## Quick Start
@@ -189,7 +196,7 @@ pdf-mcp --help
 
 ### `pdf_info` — Get Document Information
 
-Returns page count, metadata, table of contents, file size, and estimated token count. **Call this first** to understand a document before reading it.
+Returns page count, metadata, file size, and estimated token count. **Call this first** to understand a document before reading it. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs (e.g. slide decks) return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
 
 ```
 "Read the PDF at /path/to/document.pdf"
@@ -218,6 +225,19 @@ Find relevant pages before loading content. Uses a SQLite FTS5 index with Porter
 
 ```
 "Search for 'quarterly revenue' in the PDF"
+```
+
+### `pdf_semantic_search` — Search by Meaning
+
+Find pages by conceptual similarity rather than exact keywords. Searching "revenue growth" matches pages about "sales increase" or "financial performance" even without literal keyword overlap. Uses `BAAI/bge-small-en-v1.5` embeddings (384-dim, local ONNX Runtime — no external API, no GPU required).
+
+Embeddings are generated once per page and cached in SQLite. The first call for a document takes ~8–15 s on CPU; subsequent queries are instant.
+
+Requires: `pip install 'pdf-mcp[semantic]'`
+
+```
+"Find pages about revenue growth in the PDF"
+"Which pages discuss supply chain risks?"
 ```
 
 ### `pdf_get_toc` — Get Table of Contents
@@ -277,6 +297,7 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 | Tables | Skip re-detection |
 | TOC | Skip re-parsing |
 | FTS5 index | O(log N) search with BM25 ranking after first query |
+| Embeddings | Instant semantic search after first indexing run |
 
 **Cache invalidation:**
 - Automatic when file modification time changes
@@ -323,7 +344,7 @@ black src/
 |---|---|---|
 | Large PDFs | Context overflow | Chunked reading |
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Search first (FTS5 + BM25 ranking) |
+| Finding content | Load everything | Keyword search (FTS5 + BM25) or semantic search (local embeddings) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |

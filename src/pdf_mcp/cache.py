@@ -37,6 +37,12 @@ def _escape_fts5_query(query: str) -> str:
     return '"' + query.replace('"', " ") + '"'
 
 
+def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    """Return column names for a table, or empty set if the table does not exist."""
+    cursor = conn.execute(f"PRAGMA table_info({table_name})")
+    return {row[1] for row in cursor.fetchall()}
+
+
 class PDFCache:
     """
     SQLite-based cache for PDF metadata and page text.
@@ -80,11 +86,31 @@ class PDFCache:
         the SQLite build supports FTS5 virtual tables.
         """
         with sqlite3.connect(self.db_path) as conn:
-            # Check if page_images needs migration (old schema has 'data' column)
-            cursor = conn.execute("PRAGMA table_info(page_images)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "data" in columns or (columns and "file_path_on_disk" not in columns):
+            # page_images: old schema stored binary data instead of file path
+            cols = _get_columns(conn, "page_images")
+            if "data" in cols or (cols and "file_path_on_disk" not in cols):
                 conn.execute("DROP TABLE IF EXISTS page_images")
+
+            # page_tables: introduced in v1.5.0 — older caches may lack 'data' column
+            cols = _get_columns(conn, "page_tables")
+            if cols and "data" not in cols:
+                conn.execute("DROP TABLE IF EXISTS page_tables")
+
+            # pdf_metadata: drop if missing any required column
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and not {"file_path", "page_count", "file_mtime"}.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS pdf_metadata")
+
+            # page_text: drop if missing any required column
+            cols = _get_columns(conn, "page_text")
+            if cols and not {"file_path", "page_num", "text"}.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS page_text")
+
+            # page_embeddings: only drop if schema is actually broken — preserve
+            # existing embeddings (expensive to regenerate) whenever possible
+            cols = _get_columns(conn, "page_embeddings")
+            if cols and "embedding" not in cols:
+                conn.execute("DROP TABLE IF EXISTS page_embeddings")
 
             conn.executescript("""
                 -- PDF metadata cache
@@ -144,6 +170,19 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_tables_path
                     ON page_tables(file_path);
+
+                -- Page embeddings cache (raw float32 BLOBs for semantic search)
+                CREATE TABLE IF NOT EXISTS page_embeddings (
+                    file_path   TEXT    NOT NULL,
+                    page_num    INTEGER NOT NULL,
+                    file_mtime  REAL    NOT NULL,
+                    embedding   BLOB    NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
+                    ON page_embeddings(file_path);
             """)
 
             # FTS5 virtual table must be in a separate execute() call so that
@@ -533,6 +572,63 @@ class PDFCache:
                 (path, page_num, mtime, json.dumps(tables)),
             )
 
+    # ==================== Embedding Operations ====================
+
+    def get_page_embeddings(self, path: str, page_nums: list[int]) -> dict[int, bytes]:
+        """
+        Get cached raw embedding bytes for multiple pages.
+
+        Returns a dict mapping 0-indexed page_num to the raw float32 bytes
+        (1536 bytes = 384 × 4 bytes) for each page whose mtime is still valid.
+        Pages not in cache or with a stale mtime are omitted.
+
+        The caller is responsible for converting bytes to a numpy array:
+            np.frombuffer(blob, dtype=np.float32).copy()
+
+        Returns {} when page_nums is empty.
+        """
+        if not page_nums:
+            return {}
+
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, embedding, file_mtime"
+                f" FROM page_embeddings"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+
+        result: dict[int, bytes] = {}
+        for page_num, blob, mtime in rows:
+            if self._is_cache_valid(path, mtime):
+                result[int(page_num)] = bytes(blob)
+        return result
+
+    def save_page_embeddings(self, path: str, embeddings: dict[int, bytes]) -> None:
+        """
+        Save raw embedding bytes to cache.
+
+        Args:
+            path: Path to PDF file
+            embeddings: Dict mapping 0-indexed page_num to raw float32 bytes.
+                        Use ndarray.tobytes() to convert from numpy.
+        """
+        if not embeddings:
+            return
+
+        mtime, _ = self._get_file_info(path)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO page_embeddings"
+                " (file_path, page_num, file_mtime, embedding)"
+                " VALUES (?, ?, ?, ?)",
+                [
+                    (path, page_num, mtime, blob)
+                    for page_num, blob in embeddings.items()
+                ],
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:
@@ -554,6 +650,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
 
@@ -606,6 +703,11 @@ class PDFCache:
                     f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_embeddings"
+                    f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
                 if self.fts_available:
                     conn.execute(
                         f"DELETE FROM pdf_search_fts"
@@ -628,6 +730,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_text")
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
+            conn.execute("DELETE FROM page_embeddings")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -654,6 +757,10 @@ class PDFCache:
 
             stats["total_tables"] = conn.execute(
                 "SELECT COALESCE(SUM(json_array_length(data)), 0) FROM page_tables"
+            ).fetchone()[0]
+
+            stats["embedding_pages"] = conn.execute(
+                "SELECT COUNT(*) FROM page_embeddings"
             ).fetchone()[0]
 
             # FTS5 indexed page count

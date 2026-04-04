@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pdf_mcp.cache import PDFCache
+from pdf_mcp.cache import PDFCache, _get_columns
 
 
 @pytest.fixture
@@ -487,8 +487,7 @@ class TestCacheCoverageEdgeCases:
 
         # Create an old-schema page_images table with a 'data' BLOB column
         with sqlite3.connect(db_path) as conn:
-            conn.execute(
-                """CREATE TABLE page_images (
+            conn.execute("""CREATE TABLE page_images (
                     file_path TEXT NOT NULL,
                     page_num INTEGER NOT NULL,
                     image_index INTEGER NOT NULL,
@@ -499,8 +498,7 @@ class TestCacheCoverageEdgeCases:
                     data BLOB NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (file_path, page_num, image_index)
-                )"""
-            )
+                )""")
 
         # Instantiate PDFCache — should detect old schema and recreate
         cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
@@ -662,3 +660,187 @@ class TestCacheCoverageEdgeCases:
 
         expected_db_size = os.path.getsize(cache.db_path)
         assert stats["cache_size_bytes"] == expected_db_size
+
+
+class TestGetColumns:
+    """Tests for _get_columns helper."""
+
+    def test_returns_column_names_for_existing_table(self, tmp_path):
+        import sqlite3
+
+        db = tmp_path / "test.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("CREATE TABLE foo (id INTEGER, name TEXT)")
+        with sqlite3.connect(db) as conn:
+            assert _get_columns(conn, "foo") == {"id", "name"}
+
+    def test_returns_empty_set_for_missing_table(self, tmp_path):
+        import sqlite3
+
+        db = tmp_path / "test.db"
+        with sqlite3.connect(db) as conn:
+            assert _get_columns(conn, "nonexistent") == set()
+
+
+class TestSchemaMigration:
+    """Tests for automatic schema migration in _init_db."""
+
+    def test_stale_page_tables_schema_is_migrated(self, tmp_path):
+        """page_tables missing 'data' column is dropped and recreated."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_tables (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(page_tables)")}
+        assert "data" in cols
+
+    def test_stale_pdf_metadata_schema_is_migrated(self, tmp_path):
+        """pdf_metadata missing 'page_count' column is dropped and recreated."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE pdf_metadata (
+                    file_path TEXT PRIMARY KEY
+                )
+            """)
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(pdf_metadata)")}
+        assert {"file_path", "page_count", "file_mtime"}.issubset(cols)
+
+    def test_stale_page_text_schema_is_migrated(self, tmp_path):
+        """page_text missing 'text' column is dropped and recreated."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_text (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(page_text)")}
+        assert {"file_path", "page_num", "text"}.issubset(cols)
+
+    def test_valid_page_embeddings_not_dropped_during_migration(self, tmp_path):
+        """page_embeddings with correct schema survives migration of stale tables."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            # Stale page_tables (will be migrated)
+            conn.execute("""
+                CREATE TABLE page_tables (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+            # Valid page_embeddings with a row
+            conn.execute("""
+                CREATE TABLE page_embeddings (
+                    file_path  TEXT    NOT NULL,
+                    page_num   INTEGER NOT NULL,
+                    file_mtime REAL    NOT NULL,
+                    embedding  BLOB    NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+            conn.execute(
+                "INSERT INTO page_embeddings VALUES (?, ?, ?, ?)",
+                ("/fake.pdf", 0, 1234567890.0, b"\x00" * 1536),
+            )
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM page_embeddings").fetchone()[0]
+        assert count == 1, "page_embeddings rows must survive migration"
+
+    def test_broken_page_embeddings_schema_is_dropped_and_recreated(self, tmp_path):
+        """page_embeddings missing 'embedding' column is dropped and recreated."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_embeddings (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {
+                row[1] for row in conn.execute("PRAGMA table_info(page_embeddings)")
+            }
+        assert "embedding" in cols
+
+
+class TestPageEmbeddingsLifecycle:
+    """Embedding rows are removed during invalidation, clearing, and expiry."""
+
+    def test_invalidate_file_removes_embeddings(self, temp_cache_dir, sample_pdf):
+        """_invalidate_file() deletes all embeddings for the given file."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cache._invalidate_file(sample_pdf)
+
+        assert cache.get_page_embeddings(sample_pdf, [0]) == {}
+
+    def test_clear_all_removes_embeddings(self, temp_cache_dir, sample_pdf):
+        """clear_all() removes all embedding rows."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cache.clear_all()
+
+        assert cache.get_stats()["embedding_pages"] == 0
+
+    def test_stats_embedding_pages_zero_initially(self, temp_cache_dir):
+        """get_stats() returns embedding_pages=0 on a fresh cache."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        assert cache.get_stats()["embedding_pages"] == 0
+
+    def test_stats_embedding_pages_counts_rows(self, temp_cache_dir, sample_pdf):
+        """get_stats() counts all cached embedding rows."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536, 1: b"\x01" * 1536})
+        assert cache.get_stats()["embedding_pages"] == 2
+
+    def test_clear_expired_removes_stale_embeddings(self, temp_cache_dir, sample_pdf):
+        """clear_expired() removes embedding rows for expired files."""
+        cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=0)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+
+        cleared = cache.clear_expired()
+
+        assert cleared >= 1
+        assert cache.get_stats()["embedding_pages"] == 0

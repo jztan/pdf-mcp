@@ -696,7 +696,7 @@ class TestSchemaMigration:
                 )
             """)
 
-        cache = PDFCache(cache_dir=tmp_path)
+        PDFCache(cache_dir=tmp_path)
 
         with sqlite3.connect(db_path) as conn:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(page_tables)")}
@@ -713,7 +713,7 @@ class TestSchemaMigration:
                 )
             """)
 
-        cache = PDFCache(cache_dir=tmp_path)
+        PDFCache(cache_dir=tmp_path)
 
         with sqlite3.connect(db_path) as conn:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(pdf_metadata)")}
@@ -732,7 +732,7 @@ class TestSchemaMigration:
                 )
             """)
 
-        cache = PDFCache(cache_dir=tmp_path)
+        PDFCache(cache_dir=tmp_path)
 
         with sqlite3.connect(db_path) as conn:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(page_text)")}

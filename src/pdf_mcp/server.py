@@ -34,6 +34,9 @@ MAX_PAGES_LIMIT = 500
 MAX_RESULTS_LIMIT = 100
 MAX_CONTEXT_CHARS_LIMIT = 2000
 
+# Maximum TOC entries to inline in pdf_info (~1000 token budget)
+TOC_INLINE_LIMIT = 50
+
 # Initialize MCP server
 mcp = FastMCP(
     name="pdf-mcp",
@@ -114,6 +117,16 @@ def _pdf_hash(path: str) -> str:
 # ============================================================================
 
 
+def _toc_fields(toc: list) -> dict:
+    """Return toc-related fields for pdf_info, applying the inline limit."""
+    fields: dict = {"toc_entry_count": len(toc)}
+    if len(toc) <= TOC_INLINE_LIMIT:
+        fields["toc"] = toc
+    else:
+        fields["toc_truncated"] = True
+    return fields
+
+
 @mcp.tool()
 def pdf_info(path: str) -> dict[str, Any]:
     """
@@ -134,7 +147,9 @@ def pdf_info(path: str) -> dict[str, Any]:
         Document info including:
         - page_count: Total number of pages
         - metadata: Author, title, creation date, etc.
-        - toc: Table of contents (if available)
+        - toc_entry_count: Total number of TOC entries
+        - toc: TOC entries (only when toc_entry_count <= 50)
+        - toc_truncated: True when TOC was omitted due to size (use pdf_get_toc)
         - file_size_mb: File size in megabytes
         - estimated_tokens: Rough estimate of total tokens
         - from_cache: Whether result was served from cache
@@ -147,7 +162,7 @@ def pdf_info(path: str) -> dict[str, Any]:
         return {
             "page_count": cached["page_count"],
             "metadata": cached.get("metadata", {}),
-            "toc": cached.get("toc", []),
+            **_toc_fields(cached.get("toc", [])),
             "from_cache": True,
             "estimated_tokens": cached["page_count"] * 800,  # Rough estimate
             "file_size_bytes": cached["file_size"],
@@ -170,7 +185,7 @@ def pdf_info(path: str) -> dict[str, Any]:
         return {
             "page_count": page_count,
             "metadata": metadata,
-            "toc": toc,
+            **_toc_fields(toc),
             "file_size_bytes": file_size,
             "file_size_mb": round(file_size / (1024 * 1024), 2),
             "estimated_tokens": page_count * 800,

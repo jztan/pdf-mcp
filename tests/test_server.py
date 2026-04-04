@@ -38,6 +38,7 @@ class TestPdfInfo:
         assert result["from_cache"] is False
         assert "metadata" in result
         assert "toc" in result
+        assert "toc_entry_count" in result
         assert "file_size_bytes" in result
         assert "file_size_mb" in result
         assert "estimated_tokens" in result
@@ -74,11 +75,43 @@ class TestPdfInfo:
         assert result["estimated_tokens"] == 5 * 800
 
     def test_pdf_info_with_toc(self, sample_pdf_with_toc, isolated_server):
-        """PDF with bookmarks returns toc."""
+        """PDF with bookmarks returns toc inline when within limit."""
         result = pdf_info(sample_pdf_with_toc)
 
+        assert result["toc_entry_count"] == 3
         assert len(result["toc"]) == 3
         assert result["toc"][0]["title"] == "Chapter 1"
+        assert "toc_truncated" not in result
+
+    def test_pdf_info_with_toc_entry_count(self, sample_pdf_with_toc, isolated_server):
+        """Small TOC includes toc_entry_count."""
+        result = pdf_info(sample_pdf_with_toc)
+
+        assert result["toc_entry_count"] == 3
+        assert "toc" in result
+        assert "toc_truncated" not in result
+
+    def test_pdf_info_large_toc_truncated(
+        self, sample_pdf_with_large_toc, isolated_server
+    ):
+        """TOC with >50 entries is omitted; toc_truncated and toc_entry_count set."""
+        result = pdf_info(sample_pdf_with_large_toc)
+
+        assert result["toc_entry_count"] == 60
+        assert result["toc_truncated"] is True
+        assert "toc" not in result
+
+    def test_pdf_info_large_toc_truncated_cached(
+        self, sample_pdf_with_large_toc, isolated_server
+    ):
+        """Truncation logic applies on cache-hit path too."""
+        pdf_info(sample_pdf_with_large_toc)  # populate cache
+        result = pdf_info(sample_pdf_with_large_toc)  # cache hit
+
+        assert result["from_cache"] is True
+        assert result["toc_entry_count"] == 60
+        assert result["toc_truncated"] is True
+        assert "toc" not in result
 
     def test_pdf_info_from_url(self, mock_url_to_pdf, isolated_server):
         """URL source works (mocked)."""

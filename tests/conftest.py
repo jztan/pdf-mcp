@@ -90,6 +90,26 @@ def sample_pdf_with_toc():
 
 
 @pytest.fixture
+def sample_pdf_with_large_toc():
+    """Create a PDF with more than 50 TOC entries (triggers truncation)."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+
+        for i in range(60):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Slide {i + 1} content")
+
+        toc = [[1, f"Slide {i + 1}: Topic", i + 1] for i in range(60)]
+        doc.set_toc(toc)
+
+        doc.save(f.name)
+        doc.close()
+
+        yield f.name
+        os.unlink(f.name)
+
+
+@pytest.fixture
 def sample_pdf_with_images():
     """Create a PDF with embedded images."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:

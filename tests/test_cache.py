@@ -738,6 +738,42 @@ class TestSchemaMigration:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(page_text)")}
         assert {"file_path", "page_num", "text"}.issubset(cols)
 
+    def test_valid_page_embeddings_not_dropped_during_migration(self, tmp_path):
+        """page_embeddings with correct schema survives migration of other stale tables."""
+        import sqlite3
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            # Stale page_tables (will be migrated)
+            conn.execute("""
+                CREATE TABLE page_tables (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+            # Valid page_embeddings with a row
+            conn.execute("""
+                CREATE TABLE page_embeddings (
+                    file_path  TEXT    NOT NULL,
+                    page_num   INTEGER NOT NULL,
+                    file_mtime REAL    NOT NULL,
+                    embedding  BLOB    NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+            conn.execute(
+                "INSERT INTO page_embeddings VALUES (?, ?, ?, ?)",
+                ("/fake.pdf", 0, 1234567890.0, b"\x00" * 1536),
+            )
+
+        PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM page_embeddings"
+            ).fetchone()[0]
+        assert count == 1, "page_embeddings rows must survive migration"
+
 
 class TestPageEmbeddingsLifecycle:
     """Embedding rows are removed during invalidation, clearing, and expiry."""

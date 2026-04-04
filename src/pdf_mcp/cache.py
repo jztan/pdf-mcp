@@ -106,6 +106,12 @@ class PDFCache:
             if cols and not {"file_path", "page_num", "text"}.issubset(cols):
                 conn.execute("DROP TABLE IF EXISTS page_text")
 
+            # page_embeddings: only drop if schema is actually broken — preserve
+            # existing embeddings (expensive to regenerate) whenever possible
+            cols = _get_columns(conn, "page_embeddings")
+            if cols and "embedding" not in cols:
+                conn.execute("DROP TABLE IF EXISTS page_embeddings")
+
             conn.executescript("""
                 -- PDF metadata cache
                 CREATE TABLE IF NOT EXISTS pdf_metadata (

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- `pdf_info` no longer returns the full `toc` array when a document has more than 50 TOC entries (~1000 token budget); instead returns `toc_entry_count` and `toc_truncated: true` — call `pdf_get_toc` to retrieve the full outline. PDFs with ≤50 entries continue to include `toc` inline. This prevents PowerPoint-exported PDFs (one bookmark per slide) from producing 10k+ token responses.
+
 ### Added
 - `pdf_semantic_search(path, query, top_k=5)` — new MCP tool that finds the most relevant PDF pages by meaning, not keywords; searching "revenue growth" matches pages about "sales increase" or "financial performance"
 - Embeddings generated locally using `BAAI/bge-small-en-v1.5` (384-dim, ONNX Runtime via `fastembed`) — no external API or GPU required

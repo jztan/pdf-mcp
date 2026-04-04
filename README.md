@@ -196,7 +196,7 @@ pdf-mcp --help
 
 ### `pdf_info` — Get Document Information
 
-Returns page count, metadata, table of contents, file size, and estimated token count. **Call this first** to understand a document before reading it.
+Returns page count, metadata, file size, and estimated token count. **Call this first** to understand a document before reading it. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs (e.g. slide decks) return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
 
 ```
 "Read the PDF at /path/to/document.pdf"

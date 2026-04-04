@@ -117,9 +117,9 @@ def _pdf_hash(path: str) -> str:
 # ============================================================================
 
 
-def _toc_fields(toc: list) -> dict:
+def _toc_fields(toc: list[Any]) -> dict[str, Any]:
     """Return toc-related fields for pdf_info, applying the inline limit."""
-    fields: dict = {"toc_entry_count": len(toc)}
+    fields: dict[str, Any] = {"toc_entry_count": len(toc)}
     if len(toc) <= TOC_INLINE_LIMIT:
         fields["toc"] = toc
     else:

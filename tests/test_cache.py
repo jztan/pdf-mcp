@@ -667,6 +667,7 @@ class TestGetColumns:
 
     def test_returns_column_names_for_existing_table(self, tmp_path):
         import sqlite3
+
         db = tmp_path / "test.db"
         with sqlite3.connect(db) as conn:
             conn.execute("CREATE TABLE foo (id INTEGER, name TEXT)")
@@ -675,6 +676,7 @@ class TestGetColumns:
 
     def test_returns_empty_set_for_missing_table(self, tmp_path):
         import sqlite3
+
         db = tmp_path / "test.db"
         with sqlite3.connect(db) as conn:
             assert _get_columns(conn, "nonexistent") == set()
@@ -686,6 +688,7 @@ class TestSchemaMigration:
     def test_stale_page_tables_schema_is_migrated(self, tmp_path):
         """page_tables missing 'data' column is dropped and recreated."""
         import sqlite3
+
         db_path = tmp_path / "cache.db"
         with sqlite3.connect(db_path) as conn:
             conn.execute("""
@@ -705,6 +708,7 @@ class TestSchemaMigration:
     def test_stale_pdf_metadata_schema_is_migrated(self, tmp_path):
         """pdf_metadata missing 'page_count' column is dropped and recreated."""
         import sqlite3
+
         db_path = tmp_path / "cache.db"
         with sqlite3.connect(db_path) as conn:
             conn.execute("""
@@ -722,6 +726,7 @@ class TestSchemaMigration:
     def test_stale_page_text_schema_is_migrated(self, tmp_path):
         """page_text missing 'text' column is dropped and recreated."""
         import sqlite3
+
         db_path = tmp_path / "cache.db"
         with sqlite3.connect(db_path) as conn:
             conn.execute("""
@@ -741,6 +746,7 @@ class TestSchemaMigration:
     def test_valid_page_embeddings_not_dropped_during_migration(self, tmp_path):
         """page_embeddings with correct schema survives migration of stale tables."""
         import sqlite3
+
         db_path = tmp_path / "cache.db"
         with sqlite3.connect(db_path) as conn:
             # Stale page_tables (will be migrated)
@@ -769,14 +775,13 @@ class TestSchemaMigration:
         PDFCache(cache_dir=tmp_path)
 
         with sqlite3.connect(db_path) as conn:
-            count = conn.execute(
-                "SELECT COUNT(*) FROM page_embeddings"
-            ).fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM page_embeddings").fetchone()[0]
         assert count == 1, "page_embeddings rows must survive migration"
 
     def test_broken_page_embeddings_schema_is_dropped_and_recreated(self, tmp_path):
         """page_embeddings missing 'embedding' column is dropped and recreated."""
         import sqlite3
+
         db_path = tmp_path / "cache.db"
         with sqlite3.connect(db_path) as conn:
             conn.execute("""
@@ -791,8 +796,7 @@ class TestSchemaMigration:
 
         with sqlite3.connect(db_path) as conn:
             cols = {
-                row[1]
-                for row in conn.execute("PRAGMA table_info(page_embeddings)")
+                row[1] for row in conn.execute("PRAGMA table_info(page_embeddings)")
             }
         assert "embedding" in cols
 

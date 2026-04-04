@@ -86,11 +86,25 @@ class PDFCache:
         the SQLite build supports FTS5 virtual tables.
         """
         with sqlite3.connect(self.db_path) as conn:
-            # Check if page_images needs migration (old schema has 'data' column)
-            cursor = conn.execute("PRAGMA table_info(page_images)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "data" in columns or (columns and "file_path_on_disk" not in columns):
+            # page_images: old schema stored binary data instead of file path
+            cols = _get_columns(conn, "page_images")
+            if "data" in cols or (cols and "file_path_on_disk" not in cols):
                 conn.execute("DROP TABLE IF EXISTS page_images")
+
+            # page_tables: introduced in v1.5.0 — older caches may lack 'data' column
+            cols = _get_columns(conn, "page_tables")
+            if cols and "data" not in cols:
+                conn.execute("DROP TABLE IF EXISTS page_tables")
+
+            # pdf_metadata: drop if missing any required column
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and not {"file_path", "page_count", "file_mtime"}.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS pdf_metadata")
+
+            # page_text: drop if missing any required column
+            cols = _get_columns(conn, "page_text")
+            if cols and not {"file_path", "page_num", "text"}.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS page_text")
 
             conn.executescript("""
                 -- PDF metadata cache

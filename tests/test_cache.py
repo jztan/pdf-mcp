@@ -680,6 +680,65 @@ class TestGetColumns:
             assert _get_columns(conn, "nonexistent") == set()
 
 
+class TestSchemaMigration:
+    """Tests for automatic schema migration in _init_db."""
+
+    def test_stale_page_tables_schema_is_migrated(self, tmp_path):
+        """page_tables missing 'data' column is dropped and recreated."""
+        import sqlite3
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_tables (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+
+        cache = PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(page_tables)")}
+        assert "data" in cols
+
+    def test_stale_pdf_metadata_schema_is_migrated(self, tmp_path):
+        """pdf_metadata missing 'page_count' column is dropped and recreated."""
+        import sqlite3
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE pdf_metadata (
+                    file_path TEXT PRIMARY KEY
+                )
+            """)
+
+        cache = PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(pdf_metadata)")}
+        assert {"file_path", "page_count", "file_mtime"}.issubset(cols)
+
+    def test_stale_page_text_schema_is_migrated(self, tmp_path):
+        """page_text missing 'text' column is dropped and recreated."""
+        import sqlite3
+        db_path = tmp_path / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_text (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+
+        cache = PDFCache(cache_dir=tmp_path)
+
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(page_text)")}
+        assert {"file_path", "page_num", "text"}.issubset(cols)
+
+
 class TestPageEmbeddingsLifecycle:
     """Embedding rows are removed during invalidation, clearing, and expiry."""
 

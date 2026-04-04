@@ -9,17 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `pdf_semantic_search(path, query, top_k=5)` — new MCP tool that finds the most relevant PDF pages by meaning, not keywords; searching "revenue growth" matches pages about "sales increase" or "financial performance"
 - Embeddings generated locally using `BAAI/bge-small-en-v1.5` (384-dim, ONNX Runtime via `fastembed`) — no external API or GPU required
-- Embeddings cached in SQLite as raw `float32` BLOBs; first call for a document indexes all pages (~8–15 s on CPU); subsequent queries rank in under 1 ms
+- Embeddings cached in SQLite as raw `float32` BLOBs; first call for a document indexes all pages (e.g. ~291 ms for a 200-page PDF); subsequent queries rank in under 5 ms
 - Response includes `results` (page, score, snippet), `total_pages_searched`, `embedding_cache_hits`, `embedding_cache_misses`, and `model` fields
 - `embedding_pages` field in `pdf_cache_stats` response
 - `[semantic]` optional install extra: `pip install 'pdf-mcp[semantic]'`; server starts and all existing tools work without it
 - Clear `ImportError` with install hint returned from `pdf_semantic_search` when `fastembed` is not installed
+
+### Fixed
+- Automatic SQLite schema migration on startup: stale `page_tables`, `pdf_metadata`, and `page_text` tables (created by versions before v1.5.0) are silently dropped and recreated, preventing `no such column: data` errors for users upgrading from v1.4.0 or earlier
+- `page_embeddings` is protected from unnecessary drops during migration — only dropped if its own schema is broken, preserving cached embeddings across upgrades
 
 ### Changed
 - Cache invalidation, `clear_all()`, and `clear_expired()` now also remove stale `page_embeddings` rows
 
 ### Tests
 - 22 new tests: 4 unit tests for `embedder.py` (all mocked — no model download), 8 cache tests (`TestPageEmbeddingsTable`, `TestPageEmbeddingsCRUD`, `TestPageEmbeddingsLifecycle`), 11 server integration tests (`TestPdfSemanticSearch`) covering cache miss/hit lifecycle, empty-page exclusion, score ordering, `top_k` clamping, and missing-dependency error path
+- 7 new migration tests: `TestGetColumns` (2) verifying the `_get_columns` helper; `TestSchemaMigration` (5) covering stale-schema drop-and-recreate for `page_tables`, `pdf_metadata`, `page_text`, and both paths of the `page_embeddings` guard (preserve valid, recreate broken)
 
 ## [1.6.0] - 2026-03-27
 ### Security

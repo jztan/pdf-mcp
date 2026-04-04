@@ -54,6 +54,21 @@ def test_encode_query_returns_1d_vector_of_384():
     assert result.dtype == np.float32
 
 
+def test_encode_raises_when_fastembed_missing():
+    """encode() raises ImportError with install hint when fastembed absent."""
+    import pdf_mcp.embedder as emb
+
+    emb._model = None  # force _get_model() to attempt import
+    try:
+        with patch.dict(sys.modules, {"fastembed": None}):
+            with pytest.raises(
+                ImportError, match="pip install 'pdf-mcp\\[semantic\\]'"
+            ):
+                emb.encode(["hello"])
+    finally:
+        emb._model = None
+
+
 def test_singleton_model_constructed_once():
     """TextEmbedding constructor is called only once across multiple encode() calls."""
     import pdf_mcp.embedder as emb

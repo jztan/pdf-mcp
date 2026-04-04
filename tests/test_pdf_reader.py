@@ -739,7 +739,7 @@ class TestFTS5Cache:
     # --- FTS fallback and error paths ---
 
     def test_get_page_tables_stale_mtime_returns_none(self, cache, sample_pdf):
-        """get_page_tables returns None when the file mtime has changed since caching."""
+        """get_page_tables returns None when file mtime has changed since caching."""
         import os
         import time
 
@@ -786,7 +786,7 @@ class TestFTS5Cache:
     def test_get_fts_page_counts_returns_empty_on_operational_error(
         self, cache, sample_pdf
     ):
-        """get_fts_page_counts returns {} when the FTS table is missing (OperationalError)."""
+        """get_fts_page_counts returns {} when FTS table is missing."""
         if not cache.fts_available:
             pytest.skip("FTS5 not available in this SQLite build")
 

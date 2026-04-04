@@ -332,10 +332,10 @@ pytest tests/ -v
 mypy src/
 
 # Linting
-flake8 src/
+flake8 src/ tests/
 
 # Formatting
-black src/
+black src/ tests/
 ```
 
 ## Why pdf-mcp?

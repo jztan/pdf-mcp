@@ -1091,7 +1091,7 @@ class TestPythonSearch:
     """Tests for _python_search word-boundary snapping and ellipsis logic."""
 
     def test_word_boundary_and_ellipsis(self):
-        """Match in the middle of a long text triggers word-boundary snapping and ellipsis."""
+        """Match in long text triggers word-boundary snapping and ellipsis."""
         prefix = "word " * 20  # 100 chars, many spaces for rfind
         suffix = "word " * 20
         text = prefix + "TARGET" + suffix

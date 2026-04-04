@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pdf_mcp.cache import PDFCache
+from pdf_mcp.cache import PDFCache, _get_columns
 
 
 @pytest.fixture
@@ -671,14 +671,12 @@ class TestGetColumns:
         with sqlite3.connect(db) as conn:
             conn.execute("CREATE TABLE foo (id INTEGER, name TEXT)")
         with sqlite3.connect(db) as conn:
-            from pdf_mcp.cache import _get_columns
             assert _get_columns(conn, "foo") == {"id", "name"}
 
     def test_returns_empty_set_for_missing_table(self, tmp_path):
         import sqlite3
         db = tmp_path / "test.db"
         with sqlite3.connect(db) as conn:
-            from pdf_mcp.cache import _get_columns
             assert _get_columns(conn, "nonexistent") == set()
 
 

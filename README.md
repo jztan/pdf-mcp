@@ -364,8 +364,8 @@ MIT — see [LICENSE](LICENSE).
 
 ## Links
 
-- [PyPI](https://pypi.org/project/pdf-mcp/)
-- [GitHub](https://github.com/jztan/pdf-mcp)
-- [MCP Documentation](https://modelcontextprotocol.io/)
-- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/) — The story behind this project
-- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/) — Security lessons from building MCP servers
+- [pdf-mcp on PyPI](https://pypi.org/project/pdf-mcp/)
+- [pdf-mcp on GitHub](https://github.com/jztan/pdf-mcp)
+- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/) — The problem with large PDFs in AI agents and a working solution
+- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/) — What we found when we audited an MCP server for security holes
+- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/) — How chunked reading, FTS5, and SQLite caching work together

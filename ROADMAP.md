@@ -42,7 +42,7 @@
 - SQLite `page_tables` cache with empty-list sentinel for tableless pages
 - Suppress PyMuPDF/SWIG `DeprecationWarning` noise on server start/shutdown
 
-### v1.6.0 — Smarter Search (FTS5) & Supply-Chain Hardening ← current
+### v1.6.0 — Smarter Search (FTS5) & Supply-Chain Hardening
 - `pdf_search` upgraded to SQLite FTS5 with Porter stemming and BM25 relevance ranking
 - Results ordered by relevance score, not page number
 - First search builds the index; subsequent searches are O(log N) instead of O(N) page scan
@@ -56,13 +56,19 @@
 - Least-privilege `permissions` blocks on all workflows
 - `black` upgraded to 26.3.1 (CVE-2026-32274 fix)
 
+### v1.7.0 — Semantic Search ← current
+- New `pdf_semantic_search` tool: finds pages by meaning, not keywords ("revenue growth" matches "sales increase", "financial performance")
+- Powered by `BAAI/bge-small-en-v1.5` (384-dim) via `fastembed` — fully local, no external API
+- Optional `[semantic]` install extra (`fastembed>=0.7`, `numpy>=1.24`); all existing tools work without it
+- SQLite `page_embeddings` table caches raw float32 BLOBs; first search embeds all pages, subsequent queries rank in <5 ms
+- Response includes per-result `score` (cosine similarity), `snippet`, `embedding_cache_hits`/`misses`, and `model` fields
+- `embedding_pages` field added to `pdf_cache_stats` response
+- Graceful error with install hint when `fastembed` is not installed
+- Automatic schema migration: `page_embeddings` table preserved across upgrades
+
 ---
 
 ## Planned
-
-### v1.7.0 — Semantic Search
-
-New `pdf_semantic_search` tool that finds pages by meaning, not keywords. "Revenue growth" finds pages about "sales increase" and "financial performance." Powered by local embeddings with no external API. Optional dependency.
 
 ---
 

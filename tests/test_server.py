@@ -1537,4 +1537,3 @@ class TestSearchScanCacheHit:
         # After scan, all pages should be indexed
         indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
         assert indexed == total
-

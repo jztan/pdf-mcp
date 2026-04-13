@@ -745,7 +745,7 @@ def pdf_search(
 
         all_page_nums = list(range(doc_pages))
         raw_cached = cache.get_page_embeddings(local_path, all_page_nums)
-        cached_embeddings: dict[int, Any] = {
+        cached_embeddings = {
             k: np.frombuffer(v, dtype=np.float32).copy()
             for k, v in raw_cached.items()
         }
@@ -767,7 +767,7 @@ def pdf_search(
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())
                 texts_list = [non_empty[pn] for pn in sorted_nums]
-                vecs: Any = _embedder.encode(texts_list)
+                vecs = _embedder.encode(texts_list)
                 raw_new = {
                     sorted_nums[i]: vecs[i].tobytes()
                     for i in range(len(sorted_nums))
@@ -777,12 +777,12 @@ def pdf_search(
                     cached_embeddings[pn] = vecs[i]
 
         if cached_embeddings:
-            query_vec: Any = _embedder.encode_query(query)
+            query_vec = _embedder.encode_query(query)
             page_nums_list = sorted(cached_embeddings.keys())
-            matrix: Any = np.stack([cached_embeddings[p] for p in page_nums_list])
-            sem_scores: Any = matrix @ query_vec
+            matrix = np.stack([cached_embeddings[p] for p in page_nums_list])
+            sem_scores = matrix @ query_vec
             sem_top_k = min(kw_limit, len(page_nums_list))
-            top_idx: Any = np.argpartition(sem_scores, -sem_top_k)[-sem_top_k:]
+            top_idx = np.argpartition(sem_scores, -sem_top_k)[-sem_top_k:]
             top_idx = top_idx[np.argsort(sem_scores[top_idx])[::-1]]
             semantic_pages_0idx = [page_nums_list[int(i)] for i in top_idx]
         else:

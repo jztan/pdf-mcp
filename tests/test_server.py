@@ -15,6 +15,7 @@ import httpx
 from pdf_mcp.server import (
     _resolve_path,
     _python_search,
+    _rrf_fuse,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -25,6 +26,60 @@ from pdf_mcp.server import (
     pdf_cache_clear,
 )
 from pdf_mcp.url_fetcher import URLFetcher
+
+
+class TestRrfFuse:
+    """Unit tests for _rrf_fuse() — pure RRF math, no PDF required."""
+
+    def test_scores_both_lists(self):
+        """Page in both lists accumulates both RRF terms."""
+        # page 5: kw_rank=1 → 1/61; sem_rank=2 → 1/62
+        # page 10: kw_rank=2 → 1/62; sem_rank=1 → 1/61
+        # Both equal → tie broken by ascending page: [5, 10]
+        result = _rrf_fuse([5, 10], [10, 5], max_results=10)
+        scores = dict(result)
+        assert abs(scores[5] - (1 / 61 + 1 / 62)) < 1e-6
+        assert abs(scores[10] - (1 / 62 + 1 / 61)) < 1e-6
+        pages = [p for p, _ in result]
+        assert pages == [5, 10]  # tie broken by ascending page
+
+    def test_keyword_only_page(self):
+        """Page in keyword list only gets 1/(60+rank), semantic term = 0."""
+        result = _rrf_fuse([3], [], max_results=10)
+        assert len(result) == 1
+        page, score = result[0]
+        assert page == 3
+        assert abs(score - 1 / 61) < 1e-6
+
+    def test_semantic_only_page(self):
+        """Page in semantic list only gets 1/(60+rank), keyword term = 0."""
+        result = _rrf_fuse([], [7], max_results=10)
+        assert len(result) == 1
+        page, score = result[0]
+        assert page == 7
+        assert abs(score - 1 / 61) < 1e-6
+
+    def test_tie_breaking_ascending_page(self):
+        """Equal RRF scores (both rank 1 in different lists) → ascending page wins."""
+        result = _rrf_fuse([20], [5], max_results=10)
+        pages = [p for p, _ in result]
+        assert pages == [5, 20]
+
+    def test_max_results_honored(self):
+        """Result truncated to max_results even with many candidates."""
+        result = _rrf_fuse(list(range(20)), list(range(20, 40)), max_results=5)
+        assert len(result) == 5
+
+    def test_sorted_descending_score(self):
+        """Pages that appear in both lists rank above pages in only one."""
+        # Pages 1,2,3 appear in both lists — higher RRF score
+        # Pages 4,5,6 appear only in keyword list — lower RRF score
+        result = _rrf_fuse([1, 2, 3, 4, 5, 6], [1, 2, 3], max_results=10)
+        scores = [s for _, s in result]
+        assert scores == sorted(scores, reverse=True)
+        # First 3 results should be pages 1, 2, 3
+        top_pages = [p for p, _ in result[:3]]
+        assert set(top_pages) == {1, 2, 3}
 
 
 class TestPdfInfo:

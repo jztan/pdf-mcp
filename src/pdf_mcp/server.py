@@ -107,6 +107,41 @@ def _clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
 
+_RRF_K = 60
+
+
+def _rrf_fuse(
+    keyword_pages: list[int],
+    semantic_pages: list[int],
+    max_results: int,
+) -> list[tuple[int, float]]:
+    """
+    Reciprocal Rank Fusion of two ranked page lists.
+
+    score(page) = 1/(k+keyword_rank) + 1/(k+semantic_rank)
+    Missing rank contributes 0. Ties broken by ascending page number.
+
+    Args:
+        keyword_pages: 0-indexed page numbers ranked by keyword relevance
+        semantic_pages: 0-indexed page numbers ranked by semantic relevance
+        max_results: Maximum entries to return
+
+    Returns:
+        List of (page_num, rrf_score) sorted by (-score, page_num),
+        truncated to max_results.
+    """
+    scores: dict[int, float] = {}
+
+    for rank, page in enumerate(keyword_pages, start=1):
+        scores[page] = scores.get(page, 0.0) + 1.0 / (_RRF_K + rank)
+
+    for rank, page in enumerate(semantic_pages, start=1):
+        scores[page] = scores.get(page, 0.0) + 1.0 / (_RRF_K + rank)
+
+    ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
+    return ranked[:max_results]
+
+
 def _pdf_hash(path: str) -> str:
     """Generate a short hash from a file path for deterministic image filenames."""
     return hashlib.sha256(path.encode()).hexdigest()[:16]

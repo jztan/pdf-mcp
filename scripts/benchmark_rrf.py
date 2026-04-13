@@ -230,9 +230,83 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
         _p(f"  {mode:<10} {recall_str:<12} {rank_str:<10} {top}{suffix}")
 
 
+def run_scenario_1() -> dict:
+    """
+    Scenario 1: Keyword strength.
+    Claim: Hybrid preserves exact-match ranking regardless of what semantic does.
+
+    10-page PDF. Page 3 contains the rare token ZXQVP-7821.
+    Pages 1-2, 4-10: filler (nature text, no tech/finance vocabulary).
+    Query: "ZXQVP-7821"   K=3   Relevant: {3}
+
+    Assertions:
+      hybrid rank_first_hit == 1  (keyword contribution via RRF keeps page 3 at top)
+      keyword rank_first_hit == 1  (direct BM25 exact match)
+      semantic rank: reported as observed data only — no pass/fail
+    """
+    page_texts = {i: FILLER for i in range(10)}
+    page_texts[2] = "The project identifier ZXQVP-7821 is the primary key."  # page 3 (0-indexed=2)
+    query = "ZXQVP-7821"
+    relevant_pages = {3}  # 1-indexed
+    k = 3
+
+    pdf_path = _build_pdf(page_texts)
+    try:
+        result = _run_scenario("Keyword strength", pdf_path, query, relevant_pages, k)
+    finally:
+        os.unlink(pdf_path)
+
+    kw_rank = result["modes"]["keyword"]["rank_first_hit"]
+    hy_rank = result["modes"]["hybrid"]["rank_first_hit"]
+    assertions = {
+        "hybrid_rank_first_hit_eq_1": hy_rank == 1,
+        "keyword_rank_first_hit_eq_1": kw_rank == 1,
+    }
+    result["assertions"] = assertions
+
+    _section("Scenario 1: Keyword strength")
+    _p("  PDF: 10 pages — page 3 has exact token ZXQVP-7821")
+    _print_scenario_table(result, assertions)
+    sem_rank = result["modes"]["semantic"]["rank_first_hit"]
+    sem_rank_str = str(sem_rank) if sem_rank is not None else "∞"
+    _p()
+    _p(f"  {bold('Verdict')}")
+    _row("hybrid rank = 1", green("✓") if hy_rank == 1 else red(f"rank {hy_rank}"), hy_rank == 1)
+    _row("keyword rank = 1", green("✓") if kw_rank == 1 else red(f"rank {kw_rank}"), kw_rank == 1)
+    _row("semantic rank (observed)", f"[rank {sem_rank_str}]", None)
+
+    return result
+
+
+def run_synthetic_scenarios() -> list[dict]:
+    """
+    Run all synthetic scenarios inside an isolated temp cache.
+
+    server_module.cache is swapped with a fresh PDFCache backed by a temp
+    directory for the duration of all synthetic runs, then restored.
+    This prevents synthetic PDFs from polluting ~/.cache/pdf-mcp/cache.db.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        original_cache = server_module.cache
+        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        try:
+            s1 = run_scenario_1()
+        finally:
+            server_module.cache = original_cache
+    return [s1]
+
+
 def main() -> None:
     _p(bold("\npdf-mcp RRF Hybrid Search — Benchmark Report"))
     _p("─" * 68)
+
+    if not _FASTEMBED_AVAILABLE:
+        _p(yellow(
+            "  Note: fastembed not installed — "
+            "semantic and hybrid running in keyword-fallback mode"
+        ))
+
+    scenario_results = run_synthetic_scenarios()
     sys.exit(0)
 
 

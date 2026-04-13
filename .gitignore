@@ -73,6 +73,9 @@ venv.bak/
 # Project specific
 *.db
 
+# Benchmark run artifacts
+benchmark_results/
+
 # Claude
 CLAUDE.md
 .claude/

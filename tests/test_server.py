@@ -165,7 +165,7 @@ class TestPdfSearchModes:
     def test_semantic_mode_no_fastembed_check_before_path(
         self, isolated_server, tmp_path
     ):
-        """mode='semantic' fastembed check happens before path resolution (no download)."""
+        """mode='semantic' fastembed check happens before path resolution."""
         with patch(
             "pdf_mcp.embedder.check_available",
             side_effect=ImportError("fastembed not installed"),
@@ -249,6 +249,196 @@ class TestPdfSearchModes:
         lens_50 = [len(m["excerpt"]) for m in result_50["matches"]]
         lens_200 = [len(m["excerpt"]) for m in result_200["matches"]]
         assert max(lens_50) <= max(lens_200)
+
+    # ── mode="auto" hybrid ───────────────────────────────────────────────
+
+    def test_auto_mode_no_fastembed_returns_keyword(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' without fastembed falls back to search_mode='keyword'."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_auto_mode_with_fastembed_returns_hybrid(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' with fastembed available returns search_mode='hybrid'."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "hybrid"
+
+    def test_hybrid_has_total_matches(self, sample_pdf, isolated_server):
+        """Hybrid mode includes total_matches and page_match_counts (keyword counts)."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_hybrid_max_results_honored(self, sample_pdf, isolated_server):
+        """Hybrid mode returns at most max_results matches."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto", max_results=2)
+
+        assert len(result["matches"]) <= 2
+
+    def test_hybrid_semantic_only_pages_appear(
+        self, isolated_server, tmp_path
+    ):
+        """Pages with no keyword match but high semantic score appear in results."""
+        import pymupdf as _pymupdf
+
+        # Page 1: has keyword "banana"; page 2: unrelated text, wins semantically
+        pdf_path = str(tmp_path / "hybrid_test.pdf")
+        doc = _pymupdf.open()
+        p1 = doc.new_page()
+        p1.insert_text((50, 50), "banana is a yellow fruit")
+        p2 = doc.new_page()
+        p2.insert_text((50, 50), "unrelated filler text here for page two content")
+        doc.save(pdf_path)
+        doc.close()
+
+        dim = 384
+
+        def encode(texts):
+            # Page 0 (banana page): unit vec at dim 1
+            # Page 1 (filler page): unit vec at dim 0
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            result[0, 1] = 1.0
+            if len(texts) > 1:
+                result[1, 0] = 1.0
+            return result
+
+        def encode_query(text):
+            # Query matches dim 0 → page 1 (filler) wins semantically
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_path, "banana", mode="auto", max_results=5)
+
+        assert result["search_mode"] == "hybrid"
+        pages_returned = {m["page"] for m in result["matches"]}
+        # Page 2 (1-indexed) should appear even though it has no "banana" keyword
+        assert 2 in pages_returned
+
+    def test_hybrid_excerpt_source(self, isolated_server, tmp_path):
+        """Keyword-hit pages use FTS snippet; semantic-only pages use truncated text."""
+        import pymupdf as _pymupdf
+
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        # Page 1 has keyword; page 2 is semantic-only
+        pdf_path = str(tmp_path / "excerpt_test.pdf")
+        keyword_text = "the quick brown fox jumps over the lazy dog"
+        filler_text = "unrelated content fills this second page entirely"
+        doc = _pymupdf.open()
+        p1 = doc.new_page()
+        p1.insert_text((50, 50), keyword_text)
+        p2 = doc.new_page()
+        p2.insert_text((50, 50), filler_text)
+        doc.save(pdf_path)
+        doc.close()
+
+        dim = 384
+
+        def encode(texts):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            result[0, 1] = 1.0  # page 0: dim 1
+            if len(texts) > 1:
+                result[1, 0] = 1.0  # page 1: dim 0 → wins query
+            return result
+
+        def encode_query(text):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        # Pre-populate FTS index
+        pdf_read_pages(pdf_path, "1-2")
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_path, "fox", mode="auto", max_results=5)
+
+        assert result["search_mode"] == "hybrid"
+        by_page = {m["page"]: m for m in result["matches"]}
+
+        # Page 1 (keyword hit) — FTS snippet should contain the matched word
+        assert 1 in by_page, "Page 1 (keyword hit) must appear in hybrid results"
+        assert "fox" in by_page[1]["excerpt"].lower()
+
+        # Page 2 (semantic only) — excerpt is raw page text prefix, not FTS snippet
+        assert 2 in by_page, "Page 2 (semantic-only) must appear in hybrid results"
+        assert by_page[2]["excerpt"].startswith(filler_text[:20])
+
+    def test_hybrid_embedding_cache_used_on_second_call(
+        self, sample_pdf, isolated_server
+    ):
+        """Second hybrid call hits embedding cache (encode not called again)."""
+        encode, encode_query = self._make_encode()
+        encode_mock = Mock(side_effect=encode)
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode_mock),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            pdf_search(sample_pdf, "page", mode="auto")   # first call — encodes
+            call_count_after_first = encode_mock.call_count
+
+            pdf_search(sample_pdf, "content", mode="auto")  # second call — cache hit
+            call_count_after_second = encode_mock.call_count
+
+        # encode() for page texts should not be called again on second query
+        assert call_count_after_second == call_count_after_first
+
+    def test_default_mode_is_auto(self, sample_pdf, isolated_server):
+        """Calling pdf_search without mode defaults to 'auto' behaviour."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("no fastembed"),
+        ):
+            result = pdf_search(sample_pdf, "page")
+
+        # auto + no fastembed → keyword
+        assert result.get("search_mode") == "keyword"
 
 
 class TestPdfInfo:
@@ -487,8 +677,8 @@ class TestPdfSearch:
         assert "position" in match
 
     def test_search_not_found(self, sample_pdf, isolated_server):
-        """Empty matches, total_matches=0."""
-        result = pdf_search(sample_pdf, "xyznonexistent")
+        """Keyword mode: no keyword match returns empty matches."""
+        result = pdf_search(sample_pdf, "xyznonexistent", mode="keyword")
 
         assert result["total_matches"] == 0
         assert len(result["matches"]) == 0
@@ -1186,7 +1376,7 @@ class TestPdfSearchFTS5:
         assert total == 5  # sample_pdf has 5 pages
 
     def test_search_second_call_uses_fts(self, sample_pdf, isolated_server):
-        """Second pdf_search (after first scan builds index) returns keyword or hybrid mode."""
+        """Second pdf_search after first scan returns keyword or hybrid mode."""
         cache_instance, _ = isolated_server
         if not cache_instance.fts_available:
             pytest.skip("FTS5 not available in this SQLite build")
@@ -1253,8 +1443,8 @@ class TestPdfSearchFTS5:
     def test_search_no_matches_empty_page_match_counts(
         self, sample_pdf, isolated_server
     ):
-        """No matches: total_matches=0, page_match_counts={}, matches=[]."""
-        result = pdf_search(sample_pdf, "xyznonexistent")
+        """No keyword matches: total_matches=0, page_match_counts={}, matches=[]."""
+        result = pdf_search(sample_pdf, "xyznonexistent", mode="keyword")
 
         assert result["total_matches"] == 0
         assert result["page_match_counts"] == {}
@@ -1305,7 +1495,7 @@ class TestPdfSearchFTS5:
         finally:
             server_module.cache = original_cache
 
-        assert result["search_mode"] == "keyword"
+        assert result["search_mode"] in ("keyword", "hybrid")
         assert result["total_matches"] >= 1
         assert len(result["matches"]) >= 1
         assert result["matches"][0]["excerpt"]

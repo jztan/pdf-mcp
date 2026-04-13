@@ -82,6 +82,175 @@ class TestRrfFuse:
         assert set(top_pages) == {1, 2, 3}
 
 
+class TestPdfSearchModes:
+    """Tests for pdf_search mode parameter routing."""
+
+    # ── helpers ─────────────────────────────────────────────────────────
+
+    def _make_encode(self, dim: int = 384):
+        """
+        Return (encode, encode_query) mocks with deterministic vectors.
+        Page i gets a unit vector at dimension (i % dim).
+        Query gets a unit vector at dimension 0 → page 0 scores highest.
+        """
+
+        def encode(texts):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            for i in range(len(texts)):
+                result[i, i % dim] = 1.0
+            return result
+
+        def encode_query(text):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        return encode, encode_query
+
+    # ── mode validation ──────────────────────────────────────────────────
+
+    def test_invalid_mode_returns_error(self, sample_pdf, isolated_server):
+        """Unknown mode string returns error dict before opening the PDF."""
+        result = pdf_search(sample_pdf, "page", mode="fuzzy")
+
+        assert "error" in result
+        assert "fuzzy" in result["error"]
+        assert "auto" in result["error"]
+        assert "keyword" in result["error"]
+        assert "semantic" in result["error"]
+
+    def test_invalid_mode_includes_query(self, sample_pdf, isolated_server):
+        """Error response includes the original query for context."""
+        result = pdf_search(sample_pdf, "hello", mode="bad")
+        assert result.get("query") == "hello"
+
+    # ── mode="keyword" ───────────────────────────────────────────────────
+
+    def test_keyword_mode_returns_search_mode_keyword(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='keyword' always returns search_mode='keyword'."""
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+
+        assert result.get("search_mode") == "keyword"
+
+    def test_keyword_mode_has_total_matches(self, sample_pdf, isolated_server):
+        """mode='keyword' response includes total_matches and page_match_counts."""
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_keyword_mode_ignores_fastembed(self, sample_pdf, isolated_server):
+        """mode='keyword' never calls embedder even when fastembed is installed."""
+        with patch("pdf_mcp.embedder.encode") as mock_encode:
+            pdf_search(sample_pdf, "page", mode="keyword")
+            mock_encode.assert_not_called()
+
+    # ── mode="semantic", no fastembed ────────────────────────────────────
+
+    def test_semantic_mode_no_fastembed_returns_error(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' without fastembed returns error + install_hint."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "query", mode="semantic")
+
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_semantic_mode_no_fastembed_check_before_path(
+        self, isolated_server, tmp_path
+    ):
+        """mode='semantic' fastembed check happens before path resolution (no download)."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            # Non-existent path — should still return error, not FileNotFoundError
+            result = pdf_search("/nonexistent/file.pdf", "query", mode="semantic")
+
+        assert "error" in result
+        assert "install_hint" in result
+
+    # ── mode="semantic", fastembed available ─────────────────────────────
+
+    def test_semantic_mode_returns_search_mode_semantic(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' with fastembed returns search_mode='semantic'."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert result.get("search_mode") == "semantic"
+
+    def test_semantic_mode_omits_keyword_fields(self, sample_pdf, isolated_server):
+        """mode='semantic' response omits total_matches and page_match_counts."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert "total_matches" not in result
+        assert "page_match_counts" not in result
+
+    def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
+        """mode='semantic' matches have page, excerpt, score, position."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert "matches" in result
+        assert len(result["matches"]) > 0
+        for m in result["matches"]:
+            assert "page" in m
+            assert "excerpt" in m
+            assert "score" in m
+            assert "position" in m
+            assert m["position"] == 0
+
+    def test_semantic_mode_excerpt_uses_context_chars(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' excerpt is first context_chars chars of page text."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result_50 = pdf_search(
+                sample_pdf, "test", mode="semantic", context_chars=50
+            )
+            result_200 = pdf_search(
+                sample_pdf, "test", mode="semantic", context_chars=200
+            )
+
+        # Shorter context produces shorter excerpts
+        lens_50 = [len(m["excerpt"]) for m in result_50["matches"]]
+        lens_200 = [len(m["excerpt"]) for m in result_200["matches"]]
+        assert max(lens_50) <= max(lens_200)
+
+
 class TestPdfInfo:
     """Tests for pdf_info tool."""
 
@@ -978,12 +1147,12 @@ class TestPdfSearchFTS5:
             assert isinstance(match["score"], float)
             assert match["score"] >= 0.0
 
-    def test_search_result_has_index_used_field(self, sample_pdf, isolated_server):
-        """Response includes 'index_used' boolean field."""
+    def test_search_result_has_search_mode_field(self, sample_pdf, isolated_server):
+        """Response includes 'search_mode' string field."""
         result = pdf_search(sample_pdf, "page")
 
-        assert "index_used" in result
-        assert isinstance(result["index_used"], bool)
+        assert "search_mode" in result
+        assert result["search_mode"] in ("keyword", "hybrid", "semantic")
 
     def test_search_uses_fts_after_read_pages(self, sample_pdf, isolated_server):
         """After pdf_read_pages populates page text cache, pdf_search uses FTS index."""
@@ -994,7 +1163,7 @@ class TestPdfSearchFTS5:
         pdf_read_pages(sample_pdf, "1-5")
         result = pdf_search(sample_pdf, "content")
 
-        assert result["index_used"] is True
+        assert result["search_mode"] in ("keyword", "hybrid")
 
     def test_search_fallback_when_not_indexed(self, sample_pdf, isolated_server):
         """Without prior pdf_read_pages, pdf_search still returns results via scan."""
@@ -1002,7 +1171,7 @@ class TestPdfSearchFTS5:
 
         assert "matches" in result
         assert result["total_matches"] >= 1
-        assert "index_used" in result
+        assert "search_mode" in result
 
     def test_search_indexes_pages_during_scan(self, sample_pdf, isolated_server):
         """After pdf_search completes a scan, FTS index is populated for that file."""
@@ -1017,7 +1186,7 @@ class TestPdfSearchFTS5:
         assert total == 5  # sample_pdf has 5 pages
 
     def test_search_second_call_uses_fts(self, sample_pdf, isolated_server):
-        """Second pdf_search (after first scan builds index) sets index_used=True."""
+        """Second pdf_search (after first scan builds index) returns keyword or hybrid mode."""
         cache_instance, _ = isolated_server
         if not cache_instance.fts_available:
             pytest.skip("FTS5 not available in this SQLite build")
@@ -1025,7 +1194,7 @@ class TestPdfSearchFTS5:
         pdf_search(sample_pdf, "page")  # First call — builds index
         result2 = pdf_search(sample_pdf, "content")  # Second call — should use FTS
 
-        assert result2["index_used"] is True
+        assert result2["search_mode"] in ("keyword", "hybrid")
 
     def test_search_page_match_counts_returned(self, sample_pdf, isolated_server):
         """Response has 'page_match_counts' dict, not 'pages_with_matches' list."""
@@ -1078,7 +1247,7 @@ class TestPdfSearchFTS5:
             "Porter stemmer should match 'searching'; also 'search' is a literal "
             "substring of 'searching' ensuring total_matches > 0"
         )
-        assert result["index_used"] is True
+        assert result["search_mode"] in ("keyword", "hybrid")
         assert len(result["matches"]) >= 1
 
     def test_search_no_matches_empty_page_match_counts(
@@ -1136,7 +1305,7 @@ class TestPdfSearchFTS5:
         finally:
             server_module.cache = original_cache
 
-        assert result["index_used"] is False
+        assert result["search_mode"] == "keyword"
         assert result["total_matches"] >= 1
         assert len(result["matches"]) >= 1
         assert result["matches"][0]["excerpt"]

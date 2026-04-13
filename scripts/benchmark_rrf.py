@@ -126,6 +126,8 @@ def _compute_metrics(
         recall = |relevant ∩ top_k| / |relevant|
         rank_first_hit = 1-indexed position of first relevant page, or None
     """
+    if not relevant_pages:
+        return {"recall": 0.0, "rank_first_hit": None}
     top_k_pages = [m["page"] for m in matches[:k]]
     recall = len(set(top_k_pages) & relevant_pages) / len(relevant_pages)
     rank_first_hit = None
@@ -199,8 +201,7 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
     assertions: {key: bool | None}  — None means N/A (fastembed absent)
     """
     k = result["k"]
-    relevant = set(result["relevant_pages"])
-    n_relevant = len(relevant)
+    n_relevant = len(result["relevant_pages"])
 
     _p()
     _p(f"  Query: {bold(repr(result['query']))}   K={k}")

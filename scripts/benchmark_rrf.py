@@ -38,6 +38,26 @@ try:
 except ImportError:
     _FASTEMBED_AVAILABLE = False
 
+
+def load_ground_truth(path: str = "benchmark_data/ground_truth.json") -> dict:
+    """Load ground truth annotations from JSON. Raises FileNotFoundError if missing."""
+    gt_path = Path(path)
+    if not gt_path.exists():
+        raise FileNotFoundError(
+            f"Ground truth file not found: {path}\n"
+            "Run Task 1 to create benchmark_data/ground_truth.json"
+        )
+    with open(gt_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+_ROUTER_RE = re.compile(r"[A-Z0-9\-]{4,}")
+
+
+def _router_api_mode(query: str) -> str:
+    """Return the api_mode the regex router would choose for this query."""
+    return "keyword" if _ROUTER_RE.search(query) else "semantic"
+
 # Accumulated output lines (with ANSI) for saving to files.
 _OUTPUT: list[str] = []
 
@@ -166,7 +186,7 @@ def _run_scenario(
     k: int,
 ) -> dict:
     """
-    Run keyword, semantic, and hybrid search on pdf_path and return metrics.
+    Run keyword, semantic, hybrid, and router search on pdf_path and return metrics.
 
     relevant_pages: 1-indexed page numbers that are ground-truth relevant
     k: recall cutoff (passed as max_results to pdf_search)
@@ -188,6 +208,19 @@ def _run_scenario(
             "rank_first_hit": metrics["rank_first_hit"],
             "top_pages": [m["page"] for m in matches[:k]],
         }
+
+    # Router: pick one mode via regex, run it, record which mode was selected
+    router_api = _router_api_mode(query)
+    router_matches = _run_mode(pdf_path, query, router_api, max_results=k)
+    router_metrics = _compute_metrics(router_matches, relevant_pages, k)
+    mode_data["router"] = {
+        "recall": router_metrics["recall"],
+        "rr": router_metrics["rr"],
+        "rank_first_hit": router_metrics["rank_first_hit"],
+        "top_pages": [m["page"] for m in router_matches[:k]],
+        "selected_mode": router_api,
+    }
+
     return {
         "name": name,
         "query": query,

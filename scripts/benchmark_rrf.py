@@ -364,6 +364,77 @@ def run_qa_group(gt: dict) -> list[dict]:
     return results
 
 
+def run_context_group(gt: dict) -> list[dict]:
+    """
+    Task Group 2: Context Building — agent gathers ALL relevant pages on a topic.
+    Primary metric: Recall@K (agent needs completeness, not just first hit).
+
+    Scenarios:
+      2a — single topic, relevant pages clustered (keyword sufficiency baseline)
+      2b — broad theme, relevant pages scattered (TRUE FUSION scenario)
+    """
+    pdf_data = gt["pdfs"]["gpt3"]
+    pdf_path = _resolve_path(pdf_data["url"])
+    k = 10
+
+    _section("Task Group 2: Context Building")
+    _p(f"  PDF: {pdf_data['title']}")
+    _p("  Metric: Recall@K")
+    _p("  Agent behavior: issues query, reads all K results, synthesizes")
+
+    results = []
+    for scenario_id, label in [
+        ("2a", "2a — Clustered pages"),
+        ("2b", "2b — Scattered pages (true fusion)"),
+    ]:
+        s = pdf_data["scenarios"][scenario_id]
+        relevant = set(s["relevant_pages"])
+        result = _run_scenario(label, pdf_path, s["query"], relevant, k)
+
+        kw_recall = result["modes"]["keyword"]["recall"]
+        sem_recall = result["modes"]["semantic"]["recall"]
+        hy_recall = result["modes"]["hybrid"]["recall"]
+        router_recall = result["modes"]["router"]["recall"]
+
+        assertion_result: bool | None = (
+            hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
+        )
+        result["assertions"] = {"hybrid_recall_gte_best_single": assertion_result}
+        results.append(result)
+
+        _p()
+        _p(f"  {bold('Scenario ' + label)}")
+        _p(f"  Relevant pages: {sorted(relevant)}")
+        _print_scenario_table(result, result["assertions"])
+        _p()
+        _p(f"  {bold('Verdict')}")
+        if assertion_result is None:
+            _row(
+                "hybrid recall >= best single (N/A: fastembed absent)",
+                yellow("N/A"),
+                None,
+            )
+        else:
+            hy_pct = f"{hy_recall * 100:.0f}%"
+            best_pct = f"{max(kw_recall, sem_recall) * 100:.0f}%"
+            _row(
+                f"hybrid recall ({hy_pct}) >= best single ({best_pct})",
+                green("✓") if assertion_result else red("✗"),
+            )
+        router_sel = result["modes"]["router"]["selected_mode"]
+        _p(
+            f"  router recall: {router_recall * 100:.0f}%"
+            f"  (routed to {router_sel})"
+        )
+
+    # Latency on 2b (scattered query — more representative)
+    s2b = pdf_data["scenarios"]["2b"]
+    latency = run_latency_timing(pdf_path, s2b["query"], k=k)
+    _print_latency_table(latency, "Task Group 2: Context Building")
+
+    return results
+
+
 def _run_scenario(
     name: str,
     pdf_path: str,

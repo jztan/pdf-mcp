@@ -206,7 +206,8 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
     _p()
     _p(f"  Query: {bold(repr(result['query']))}   K={k}")
     _p()
-    _p(f"  {'Mode':<10} {'Recall@' + str(k):<12} {'Rank-1st':<10} {'Top-' + str(k) + ' pages'}")
+    top_col = "Top-" + str(k) + " pages"
+    _p(f"  {'Mode':<10} {'Recall@' + str(k):<12} {'Rank-1st':<10} {top_col}")
     _p(f"  {'─' * 9}  {'─' * 10}  {'─' * 8}  {'─' * 20}")
 
     for mode in ("keyword", "semantic", "hybrid"):
@@ -245,7 +246,8 @@ def run_scenario_1() -> dict:
       semantic rank: reported as observed data only — no pass/fail
     """
     page_texts = {i: FILLER for i in range(10)}
-    page_texts[2] = "The project identifier ZXQVP-7821 is the primary key."  # page 3 (0-indexed=2)
+    # page 3 (0-indexed=2): rare token for exact keyword match
+    page_texts[2] = "The project identifier ZXQVP-7821 is the primary key."
     query = "ZXQVP-7821"
     relevant_pages = {3}  # 1-indexed
     k = 3
@@ -301,7 +303,8 @@ def run_scenario_2() -> dict:
     making 0.0 > 0.0 an unfair test — skipped, not failed).
     """
     page_texts = {i: FILLER for i in range(10)}
-    page_texts[6] = "Sales surged and profit margins expanded dramatically."  # page 7 (0-indexed=6)
+    # page 7 (0-indexed=6): conceptual match for "revenue growth"
+    page_texts[6] = "Sales surged and profit margins expanded dramatically."
     query = "revenue growth"
     relevant_pages = {7}  # 1-indexed
     k = 5
@@ -356,8 +359,10 @@ def run_scenario_3() -> dict:
     When fastembed absent: assertion is N/A.
     """
     page_texts = {i: FILLER for i in range(12)}
-    page_texts[1] = "The component identifier XKCD-9001 is required for initialization."  # page 2
-    page_texts[7] = "Operational efficiency improved across all business units."            # page 8
+    # page 2 (0-indexed=1): keyword-findable exact code
+    page_texts[1] = "The component identifier XKCD-9001 is required for initialization."
+    # page 8 (0-indexed=7): conceptual match for "productivity gains"
+    page_texts[7] = "Operational efficiency improved across all business units."
     query = "XKCD-9001 productivity gains"
     relevant_pages = {2, 8}  # 1-indexed
     k = 5

@@ -572,7 +572,10 @@ def main() -> None:
     # Optional real PDF section — requires all three flags; skipped otherwise
     real_pdf_result: dict | None = None
     if args.pdf and not args.relevant_pages:
-        _p(yellow("  Note: --pdf supplied but --relevant-pages missing — real PDF section skipped"))
+        _p(yellow(
+            "  Note: --pdf supplied but --relevant-pages missing"
+            " — real PDF section skipped"
+        ))
     if args.pdf and args.query and args.relevant_pages:
         try:
             relevant = {int(p.strip()) for p in args.relevant_pages.split(",")}

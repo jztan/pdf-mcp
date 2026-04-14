@@ -435,6 +435,97 @@ def run_context_group(gt: dict) -> list[dict]:
     return results
 
 
+def run_navigation_group(gt: dict) -> list[dict]:
+    """
+    Task Group 3: Navigation — agent follows a reference to a specific location.
+    Primary metric: Recall@1 (exact page), secondary: RR.
+
+    Scenarios:
+      3a — exact section heading (keyword wins; academic headings don't trigger
+            the router regex, so router picks semantic — which also finds it)
+      3b — cross-reference by concept (semantic needed; keyword finds nothing)
+    """
+    pdf_data = gt["pdfs"]["attention"]
+    pdf_path = _resolve_path(pdf_data["url"])
+    k = 3  # Navigation: agent expects to land on the right page fast
+
+    _section("Task Group 3: Navigation")
+    _p(f"  PDF: {pdf_data['title']}")
+    _p("  Metric: Recall@1 and RR")
+    _p("  Agent behavior: follows a reference, needs exact location")
+
+    results = []
+    for scenario_id, label in [
+        ("3a", "3a — Exact section heading"),
+        ("3b", "3b — Cross-reference by concept"),
+    ]:
+        s = pdf_data["scenarios"][scenario_id]
+        relevant = set(s["relevant_pages"])
+        result = _run_scenario(label, pdf_path, s["query"], relevant, k)
+
+        hy_rank = result["modes"]["hybrid"]["rank_first_hit"]
+        kw_rank = result["modes"]["keyword"]["rank_first_hit"]
+        router_rank = result["modes"]["router"]["rank_first_hit"]
+        hy_recall = result["modes"]["hybrid"]["recall"]
+        kw_recall = result["modes"]["keyword"]["recall"]
+
+        hy_r1 = 1.0 if hy_rank == 1 else 0.0
+        kw_r1 = 1.0 if kw_rank == 1 else 0.0
+
+        # 3a: compare Recall@1 (exact navigation hit)
+        # 3b: compare Recall@K (keyword misses entirely; hybrid finds via semantic)
+        if scenario_id == "3a":
+            assertion_result: bool | None = (
+                hy_r1 >= kw_r1 if _FASTEMBED_AVAILABLE else None
+            )
+            assertion_key = "hybrid_recall_at_1_gte_keyword"
+        else:
+            assertion_result = (
+                hy_recall > kw_recall if _FASTEMBED_AVAILABLE else None
+            )
+            assertion_key = "hybrid_recall_gt_keyword"
+        result["assertions"] = {assertion_key: assertion_result}
+        results.append(result)
+
+        _p()
+        _p(f"  {bold('Scenario ' + label)}")
+        _print_scenario_table(result, result["assertions"])
+        _p()
+        _p(f"  {bold('Verdict')}")
+        if assertion_result is None:
+            metric_label = (
+                "hybrid Recall@1 >= keyword"
+                if scenario_id == "3a"
+                else "hybrid recall > keyword"
+            )
+            _row(f"{metric_label} (N/A: fastembed absent)", yellow("N/A"), None)
+        elif scenario_id == "3a":
+            _row(
+                f"hybrid Recall@1 ({hy_r1:.0f}) >= keyword ({kw_r1:.0f})",
+                green("✓") if assertion_result else red("✗"),
+            )
+        else:
+            hy_pct = f"{hy_recall * 100:.0f}%"
+            kw_pct = f"{kw_recall * 100:.0f}%"
+            _row(
+                f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
+                green("✓") if assertion_result else red("✗"),
+            )
+        router_sel = result["modes"]["router"]["selected_mode"]
+        router_r1 = 1.0 if router_rank == 1 else 0.0
+        _p(
+            f"  router Recall@1: {router_r1:.0f}"
+            f"  (routed to {router_sel})"
+        )
+
+    # Latency on 3a (section heading — short, representative)
+    s3a = pdf_data["scenarios"]["3a"]
+    latency = run_latency_timing(pdf_path, s3a["query"], k=k)
+    _print_latency_table(latency, "Task Group 3: Navigation")
+
+    return results
+
+
 def _run_scenario(
     name: str,
     pdf_path: str,

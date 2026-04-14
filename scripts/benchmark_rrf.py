@@ -350,63 +350,72 @@ def run_scenario_2() -> dict:
 
 def run_scenario_3() -> dict:
     """
-    Scenario 3: Hybrid outperforms both.
-    Claim: When relevant pages need different search modes, hybrid gets both.
+    Scenario 3: Semantic preservation.
+    Claim: When keyword contributes nothing (FTS5 phrase query matches no page),
+    hybrid recall is still >= semantic recall. RRF fusion with a dead keyword
+    leg does not degrade the result.
 
-    12-page PDF.
-    Page 2: "The component identifier XKCD-9001 is required for initialization."
-    Page 8: "Operational efficiency improved across all business units."
-    Pages 1, 3-7, 9-12: filler (nature text).
-    Query: "XKCD-9001 productivity gains"  (mixed: exact code + conceptual term)
-    K=5   Relevant: {2, 8}
+    Why keyword fails here: pdf-mcp wraps all queries in FTS5 double-quote
+    phrase syntax, requiring ALL query tokens in sequence. No page in this PDF
+    contains the full phrase "QXJM-4419 performance degradation" verbatim, so
+    keyword returns 0% recall.
 
-    Assertion: hybrid recall@5 >= max(keyword recall@5, semantic recall@5)
-    When fastembed absent: assertion is N/A.
+    10-page PDF.
+    Page 7: "Memory consumption spiked and throughput degraded under sustained load."
+            (conceptual match for "performance degradation" part of query)
+    Pages 1-6, 8-10: nature filler (FILLER constant).
+    Query: "QXJM-4419 performance degradation"
+    K=5   Relevant: {7}
+
+    Assertion: hybrid_recall_gte_semantic_recall
+    When fastembed absent: N/A (hybrid == keyword without fastembed, making
+    hybrid >= semantic trivially True but meaningless).
     """
-    page_texts = {i: FILLER for i in range(12)}
-    # page 2 (0-indexed=1): keyword-findable exact code
-    page_texts[1] = "The component identifier XKCD-9001 is required for initialization."
-    # page 8 (0-indexed=7): conceptual match for "productivity gains"
-    page_texts[7] = "Operational efficiency improved across all business units."
-    query = "XKCD-9001 productivity gains"
-    relevant_pages = {2, 8}  # 1-indexed
+    page_texts = {i: FILLER for i in range(10)}
+    # page 7 (0-indexed=6): conceptual match for "performance degradation"
+    page_texts[6] = (
+        "Memory consumption spiked and throughput degraded under sustained load."
+    )
+    query = "QXJM-4419 performance degradation"
+    relevant_pages = {7}  # 1-indexed
     k = 5
 
     pdf_path = _build_pdf(page_texts)
     try:
         result = _run_scenario(
-            "Hybrid outperforms both", pdf_path, query, relevant_pages, k
+            "Semantic preservation", pdf_path, query, relevant_pages, k
         )
     finally:
         os.unlink(pdf_path)
 
-    kw_recall = result["modes"]["keyword"]["recall"]
     sem_recall = result["modes"]["semantic"]["recall"]
     hy_recall = result["modes"]["hybrid"]["recall"]
 
-    assertion_result = (
-        hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
+    assertion_result: bool | None = (
+        hy_recall >= sem_recall if _FASTEMBED_AVAILABLE else None
     )
-    assertions = {"hybrid_recall_gte_max_kw_sem": assertion_result}
+    assertions = {"hybrid_recall_gte_semantic_recall": assertion_result}
     result["assertions"] = assertions
 
-    _section("Scenario 3: Hybrid outperforms both")
-    _p("  PDF: 12 pages — page 2 (exact code), page 8 (conceptual match)")
+    _section("Scenario 3: Semantic preservation")
+    _p(
+        "  PDF: 10 pages — page 7 (conceptual match); "
+        "keyword finds nothing (phrase query)"
+    )
     _print_scenario_table(result, assertions)
     _p()
     _p(f"  {bold('Verdict')}")
     if assertion_result is None:
         _row(
-            "hybrid recall >= max(keyword, semantic) (N/A: fastembed absent)",
+            "hybrid recall >= semantic (N/A: fastembed absent)",
             yellow("N/A"),
             None,
         )
     else:
         hy_pct = f"{hy_recall * 100:.0f}%"
-        kw_pct = f"{kw_recall * 100:.0f}%"
         sem_pct = f"{sem_recall * 100:.0f}%"
         _row(
-            f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
+            f"hybrid recall ({hy_pct}) >= semantic ({sem_pct})",
             green("✓") if assertion_result else red("✗"),
         )
 

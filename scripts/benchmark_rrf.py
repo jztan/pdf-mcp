@@ -382,7 +382,7 @@ def run_scenario_3() -> dict:
     assertion_result = (
         hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
     )
-    assertions = {"hybrid_recall_gte_max_keyword_semantic": assertion_result}
+    assertions = {"hybrid_recall_gte_max_kw_sem": assertion_result}
     result["assertions"] = assertions
 
     _section("Scenario 3: Hybrid outperforms both")

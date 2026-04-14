@@ -115,19 +115,21 @@ def _compute_metrics(
     matches: list[dict], relevant_pages: set[int], k: int
 ) -> dict:
     """
-    Compute recall@K and rank-of-first-hit from a matches list.
+    Compute recall@K, RR (Reciprocal Rank), and rank-of-first-hit.
 
     matches: list of {"page": N, ...} from pdf_search (page is 1-indexed)
     relevant_pages: 1-indexed page numbers that are ground-truth relevant
     k: cutoff — only the first k entries in matches are considered
 
     Returns:
-        {"recall": float, "rank_first_hit": int | None}
+        {"recall": float, "rr": float, "rank_first_hit": int | None}
         recall = |relevant ∩ top_k| / |relevant|
+        rr = 1/rank_first_hit if a relevant page is found, else 0.0
+             (RR per-scenario; aggregates to MRR across multiple queries)
         rank_first_hit = 1-indexed position of first relevant page, or None
     """
     if not relevant_pages:
-        return {"recall": 0.0, "rank_first_hit": None}
+        return {"recall": 0.0, "rr": 0.0, "rank_first_hit": None}
     top_k_pages = [m["page"] for m in matches[:k]]
     recall = len(set(top_k_pages) & relevant_pages) / len(relevant_pages)
     rank_first_hit = None
@@ -135,7 +137,8 @@ def _compute_metrics(
         if page in relevant_pages:
             rank_first_hit = i
             break
-    return {"recall": recall, "rank_first_hit": rank_first_hit}
+    rr = 1.0 / rank_first_hit if rank_first_hit is not None else 0.0
+    return {"recall": recall, "rr": rr, "rank_first_hit": rank_first_hit}
 
 
 def _run_mode(
@@ -181,6 +184,7 @@ def _run_scenario(
         metrics = _compute_metrics(matches, relevant_pages, k)
         mode_data[mode] = {
             "recall": metrics["recall"],
+            "rr": metrics["rr"],
             "rank_first_hit": metrics["rank_first_hit"],
             "top_pages": [m["page"] for m in matches[:k]],
         }
@@ -207,28 +211,32 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
     _p(f"  Query: {bold(repr(result['query']))}   K={k}")
     _p()
     top_col = "Top-" + str(k) + " pages"
-    _p(f"  {'Mode':<10} {'Recall@' + str(k):<12} {'Rank-1st':<10} {top_col}")
-    _p(f"  {'─' * 9}  {'─' * 10}  {'─' * 8}  {'─' * 20}")
+    _p(f"  {'Mode':<10} {'Recall@' + str(k):<12} {'RR':<8} {'Rank-1st':<10} {top_col}")
+    _p(f"  {'─' * 9}  {'─' * 10}  {'─' * 6}  {'─' * 8}  {'─' * 20}")
 
     for mode in ("keyword", "semantic", "hybrid"):
         d = result["modes"][mode]
         recall = d["recall"]
+        rr = d["rr"]
         rank = d["rank_first_hit"]
         top = ", ".join(str(p) for p in d["top_pages"]) or "(none)"
 
         hits = int(round(recall * n_relevant))
         recall_str = f"{hits}/{n_relevant}  {recall * 100:.0f}%"
+        rr_str = f"{rr:.2f}"
         rank_str = f"rank {rank}" if rank is not None else "∞"
 
         suffix = ""
         if mode == "hybrid":
-            hybrid_key = next(
-                (key for key in assertions if "hybrid" in key), None
-            )
-            if hybrid_key and assertions[hybrid_key] is True:
+            hybrid_assertions = {
+                key: val for key, val in assertions.items() if "hybrid" in key
+            }
+            if hybrid_assertions and all(
+                v is True for v in hybrid_assertions.values()
+            ):
                 suffix = f"  {green('✓')}"
 
-        _p(f"  {mode:<10} {recall_str:<12} {rank_str:<10} {top}{suffix}")
+        _p(f"  {mode:<10} {recall_str:<12} {rr_str:<8} {rank_str:<10} {top}{suffix}")
 
 
 def run_scenario_1() -> dict:

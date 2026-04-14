@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `pdf_search` gains a `mode` parameter: `"keyword"` (default, existing behaviour), `"semantic"` (embedding-based), or `"auto"` (hybrid RRF — runs both and fuses results)
+- In hybrid mode (`mode="auto"`), keyword and semantic results are fused via Reciprocal Rank Fusion (RRF, k=60); `search_mode` field in the response reflects which path ran (`"keyword"`, `"semantic"`, or `"hybrid"`)
+- `index_used` boolean replaced by `search_mode` string across all `pdf_search` response shapes
+- Semantic-only and hybrid responses omit `total_matches`/`page_match_counts` (FTS5 counts are not meaningful for embedding-ranked results)
+- `pdf_semantic_search` tool removed — all search modes are now available through `pdf_search`; tool count is 7
+
+### Added
+- `_rrf_fuse()` helper in `server.py` — merges two ranked lists using RRF scoring; covered by unit tests
+- Hybrid mode falls back to keyword-only when `fastembed` is not installed, with `search_mode: "keyword"` in the response
+- `scripts/benchmark_rrf.py` — synthetic benchmark verifying hybrid search quality across four scenarios: Keyword strength (S1), Semantic strength (S2), Semantic preservation (S3 — hybrid recall ≥ semantic when keyword contributes nothing), Distractor tolerance (S4 — hybrid finds relevant page despite keyword false positive); outputs JSON + plain-text reports to `benchmark_results/`
+
+### Tests
+- 204 new server tests covering `mode="keyword"`, `mode="semantic"`, `mode="auto"` paths, RRF fusion correctness, fastembed-absent fallback, and `_rrf_fuse()` unit tests
+- `pdf_semantic_search` test class removed (functionality now tested via `pdf_search` mode tests)
+
+---
+
 ## [1.7.0] - 2026-04-05
 ### Changed
 - `pdf_info` no longer returns the full `toc` array when a document has more than 50 TOC entries (~1000 token budget); instead returns `toc_entry_count` and `toc_truncated: true` — call `pdf_get_toc` to retrieve the full outline. PDFs with ≤50 entries continue to include `toc` inline. This prevents PowerPoint-exported PDFs (one bookmark per slide) from producing 10k+ token responses.

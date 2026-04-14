@@ -286,22 +286,137 @@ def run_scenario_1() -> dict:
     return result
 
 
-def run_synthetic_scenarios() -> list[dict]:
+def run_scenario_2() -> dict:
     """
-    Run all synthetic scenarios inside an isolated temp cache.
+    Scenario 2: Semantic strength.
+    Claim: Hybrid preserves conceptual recall when keyword search misses.
 
-    server_module.cache is swapped with a fresh PDFCache backed by a temp
-    directory for the duration of all synthetic runs, then restored.
-    This prevents synthetic PDFs from polluting ~/.cache/pdf-mcp/cache.db.
+    10-page PDF. Page 7: "Sales surged and profit margins expanded dramatically."
+    Pages 1-6, 8-10: filler (nature text).
+    Query: "revenue growth" (no literal word overlap with page 7)
+    K=5   Relevant: {7}
+
+    Assertion: hybrid recall@5 > keyword recall@5  (expected 1.0 > 0.0)
+    When fastembed absent: assertion is N/A (both modes fall back to keyword,
+    making 0.0 > 0.0 an unfair test — skipped, not failed).
     """
+    page_texts = {i: FILLER for i in range(10)}
+    page_texts[6] = "Sales surged and profit margins expanded dramatically."  # page 7 (0-indexed=6)
+    query = "revenue growth"
+    relevant_pages = {7}  # 1-indexed
+    k = 5
+
+    pdf_path = _build_pdf(page_texts)
+    try:
+        result = _run_scenario("Semantic strength", pdf_path, query, relevant_pages, k)
+    finally:
+        os.unlink(pdf_path)
+
+    kw_recall = result["modes"]["keyword"]["recall"]
+    hy_recall = result["modes"]["hybrid"]["recall"]
+
+    assertion_result: bool | None = (
+        hy_recall > kw_recall if _FASTEMBED_AVAILABLE else None
+    )
+    assertions = {"hybrid_recall_gt_keyword_recall": assertion_result}
+    result["assertions"] = assertions
+
+    _section("Scenario 2: Semantic strength")
+    _p("  PDF: 10 pages — page 7 has conceptual match (no literal overlap with query)")
+    _print_scenario_table(result, assertions)
+    _p()
+    _p(f"  {bold('Verdict')}")
+    if assertion_result is None:
+        _row("hybrid recall > keyword (N/A: fastembed absent)", yellow("N/A"), None)
+    else:
+        hy_pct = f"{hy_recall * 100:.0f}%"
+        kw_pct = f"{kw_recall * 100:.0f}%"
+        _row(
+            f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
+            green("✓") if assertion_result else red("✗"),
+            assertion_result,
+        )
+
+    return result
+
+
+def run_scenario_3() -> dict:
+    """
+    Scenario 3: Hybrid outperforms both.
+    Claim: When relevant pages need different search modes, hybrid gets both.
+
+    12-page PDF.
+    Page 2: "The component identifier XKCD-9001 is required for initialization."
+    Page 8: "Operational efficiency improved across all business units."
+    Pages 1, 3-7, 9-12: filler (nature text).
+    Query: "XKCD-9001 productivity gains"  (mixed: exact code + conceptual term)
+    K=5   Relevant: {2, 8}
+
+    Assertion: hybrid recall@5 >= max(keyword recall@5, semantic recall@5)
+    When fastembed absent: assertion is N/A.
+    """
+    page_texts = {i: FILLER for i in range(12)}
+    page_texts[1] = "The component identifier XKCD-9001 is required for initialization."  # page 2
+    page_texts[7] = "Operational efficiency improved across all business units."            # page 8
+    query = "XKCD-9001 productivity gains"
+    relevant_pages = {2, 8}  # 1-indexed
+    k = 5
+
+    pdf_path = _build_pdf(page_texts)
+    try:
+        result = _run_scenario(
+            "Hybrid outperforms both", pdf_path, query, relevant_pages, k
+        )
+    finally:
+        os.unlink(pdf_path)
+
+    kw_recall = result["modes"]["keyword"]["recall"]
+    sem_recall = result["modes"]["semantic"]["recall"]
+    hy_recall = result["modes"]["hybrid"]["recall"]
+
+    assertion_result = (
+        hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
+    )
+    assertions = {"hybrid_recall_gte_max_keyword_semantic": assertion_result}
+    result["assertions"] = assertions
+
+    _section("Scenario 3: Hybrid outperforms both")
+    _p("  PDF: 12 pages — page 2 (exact code), page 8 (conceptual match)")
+    _print_scenario_table(result, assertions)
+    _p()
+    _p(f"  {bold('Verdict')}")
+    if assertion_result is None:
+        _row(
+            "hybrid recall >= max(keyword, semantic) (N/A: fastembed absent)",
+            yellow("N/A"),
+            None,
+        )
+    else:
+        hy_pct = f"{hy_recall * 100:.0f}%"
+        kw_pct = f"{kw_recall * 100:.0f}%"
+        sem_pct = f"{sem_recall * 100:.0f}%"
+        _row(
+            f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
+            green("✓") if assertion_result else red("✗"),
+            assertion_result,
+        )
+
+    return result
+
+
+def run_synthetic_scenarios() -> list[dict]:
+    """Run all three synthetic scenarios inside an isolated temp cache."""
     with tempfile.TemporaryDirectory() as tmp:
         original_cache = server_module.cache
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         try:
-            s1 = run_scenario_1()
+            results = []
+            results.append(run_scenario_1())
+            results.append(run_scenario_2())
+            results.append(run_scenario_3())
         finally:
             server_module.cache = original_cache
-    return [s1]
+    return results
 
 
 def main() -> None:

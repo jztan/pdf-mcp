@@ -276,12 +276,10 @@ def run_scenario_1() -> dict:
     _row(
         "hybrid rank = 1",
         green("✓") if hy_rank == 1 else red(f"rank {hy_rank}"),
-        hy_rank == 1,
     )
     _row(
         "keyword rank = 1",
         green("✓") if kw_rank == 1 else red(f"rank {kw_rank}"),
-        kw_rank == 1,
     )
     _row("semantic rank (observed)", f"[rank {sem_rank_str}]", None)
 
@@ -337,7 +335,6 @@ def run_scenario_2() -> dict:
         _row(
             f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
             green("✓") if assertion_result else red("✗"),
-            assertion_result,
         )
 
     return result
@@ -403,7 +400,6 @@ def run_scenario_3() -> dict:
         _row(
             f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
             green("✓") if assertion_result else red("✗"),
-            assertion_result,
         )
 
     return result
@@ -535,7 +531,6 @@ def run_real_pdf_scenario(pdf_arg: str, query: str, relevant_pages: set[int]) ->
         _row(
             f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
             green("✓") if assertion_result else red("✗"),
-            assertion_result,
         )
 
     return result

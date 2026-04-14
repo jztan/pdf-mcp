@@ -488,7 +488,72 @@ def _save_results(
     )
 
 
+def run_real_pdf_scenario(pdf_arg: str, query: str, relevant_pages: set[int]) -> dict:
+    """
+    Run the optional real-PDF section.
+
+    Uses the normal global cache (no isolation) — this is the user's own document.
+    pdf_arg may be a local path or a URL; _resolve_path handles both.
+    K=10 by default (same as pdf_search default max_results).
+    """
+    pdf_path = _resolve_path(pdf_arg)
+    k = 10
+
+    result = _run_scenario(
+        f"Real PDF: {Path(pdf_arg).name}",
+        pdf_path,
+        query,
+        relevant_pages,
+        k,
+    )
+
+    kw_recall = result["modes"]["keyword"]["recall"]
+    sem_recall = result["modes"]["semantic"]["recall"]
+    hy_recall = result["modes"]["hybrid"]["recall"]
+
+    assertion_result: bool | None = (
+        hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
+    )
+    assertions = {"hybrid_recall_gte_max_kw_sem": assertion_result}
+    result["assertions"] = assertions
+
+    _section(f"Real PDF: {Path(pdf_arg).name}")
+    _p(f"  Relevant pages: {sorted(relevant_pages)}")
+    _print_scenario_table(result, assertions)
+    _p()
+    _p(f"  {bold('Verdict')}")
+    if assertion_result is None:
+        _row(
+            "hybrid recall >= max(keyword, semantic) (N/A: fastembed absent)",
+            yellow("N/A"),
+            None,
+        )
+    else:
+        hy_pct = f"{hy_recall * 100:.0f}%"
+        kw_pct = f"{kw_recall * 100:.0f}%"
+        sem_pct = f"{sem_recall * 100:.0f}%"
+        _row(
+            f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
+            green("✓") if assertion_result else red("✗"),
+            assertion_result,
+        )
+
+    return result
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Benchmark RRF hybrid search vs keyword-only vs semantic-only."
+    )
+    parser.add_argument("--pdf", help="Path or URL to a real PDF (optional)")
+    parser.add_argument("--query", help="Search query for the real PDF")
+    parser.add_argument(
+        "--relevant-pages",
+        metavar="PAGES",
+        help='Comma-separated 1-indexed relevant page numbers, e.g. "1,3,5"',
+    )
+    args = parser.parse_args()
+
     now = datetime.now()
     file_ts = now.strftime("%Y%m%d_%H%M%S")
     iso_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
@@ -504,8 +569,21 @@ def main() -> None:
 
     scenario_results = run_synthetic_scenarios()
 
-    _print_summary(scenario_results, file_ts)
-    _save_results(scenario_results, file_ts, iso_ts)
+    # Optional real PDF section — silently skipped if --relevant-pages not supplied
+    real_pdf_result: dict | None = None
+    if args.pdf and args.query and args.relevant_pages:
+        try:
+            relevant = {int(p.strip()) for p in args.relevant_pages.split(",")}
+            real_pdf_result = run_real_pdf_scenario(args.pdf, args.query, relevant)
+        except Exception as exc:
+            _p(red(f"\n  Real PDF error: {exc}"))
+
+    all_results = scenario_results[:]
+    if real_pdf_result is not None:
+        all_results.append(real_pdf_result)
+
+    _print_summary(all_results, file_ts)
+    _save_results(all_results, file_ts, iso_ts)
 
     sys.exit(0)
 

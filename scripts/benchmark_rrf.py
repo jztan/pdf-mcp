@@ -933,37 +933,50 @@ def run_synthetic_scenarios() -> list[dict]:
     return results
 
 
-def _print_summary(all_results: list[dict], file_timestamp: str) -> None:
-    """Print the summary table and saved-files notice."""
+def _print_summary(
+    qa_results: list[dict],
+    context_results: list[dict],
+    nav_results: list[dict],
+    file_timestamp: str,
+) -> None:
+    """Print the summary table across all three task groups."""
     _section("Summary")
     _p()
-    _p(f"  {'Scenario':<34} {'Assertion':<34} {'Result'}")
-    _p(f"  {'─' * 34} {'─' * 34} {'─' * 10}")
 
-    for result in all_results:
-        name = result["name"]
-        assertions = result.get("assertions", {})
-        prefix = f"  {name:<34}"
+    # Q&A group — MRR per mode
+    _p(f"  {bold('Task Group 1: Q&A')}  (primary metric: MRR)")
+    mrr = qa_results[0].get("group_mrr", {})
+    for mode in ("keyword", "semantic", "hybrid", "router"):
+        val = mrr.get(mode)
+        label = f"  MRR {mode}"
+        _p(f"  {label:<20} {val:.2f}" if val is not None else f"  {label:<20} N/A")
 
-        first = True
-        for key, val in assertions.items():
-            label = key.replace("_", " ")
-            if val is None:
-                val_str = yellow("N/A")
-            elif val:
-                val_str = green("✓")
-            else:
-                val_str = red("✗")
+    _p()
 
-            indent = prefix if first else f"  {'':34}"
-            _p(f"{indent} {label:<34} {val_str}")
-            first = False
+    # Context building — Recall@K per scenario and mode
+    _p(f"  {bold('Task Group 2: Context Building')}  (primary metric: Recall@K)")
+    _p(f"  {'Scenario':<32} {'kw':<8} {'sem':<8} {'hybrid':<8} {'router'}")
+    for r in context_results:
+        modes = r["modes"]
+        row = f"  {r['name']:<32}"
+        for mode in ("keyword", "semantic", "hybrid", "router"):
+            pct = f"{modes[mode]['recall'] * 100:.0f}%"
+            row += f" {pct:<8}"
+        _p(row)
 
-        # Scenario 1: also report observed semantic rank
-        if result["name"] == "Keyword strength":
-            sem_rank = result["modes"]["semantic"]["rank_first_hit"]
-            sem_rank_str = str(sem_rank) if sem_rank is not None else "∞"
-            _p(f"  {'':34} {'semantic rank (observed)':<34} [rank {sem_rank_str}]")
+    _p()
+
+    # Navigation — Recall@1 per scenario and mode
+    _p(f"  {bold('Task Group 3: Navigation')}  (primary metric: Recall@1)")
+    _p(f"  {'Scenario':<32} {'kw R@1':<8} {'sem R@1':<8} {'hyb R@1':<8} {'rtr R@1'}")
+    for r in nav_results:
+        modes = r["modes"]
+        row = f"  {r['name']:<32}"
+        for mode in ("keyword", "semantic", "hybrid", "router"):
+            rank = modes[mode]["rank_first_hit"]
+            r1 = green("✓") if rank == 1 else "✗"
+            row += f" {r1:<8}"
+        _p(row)
 
     _p()
     base = f"rrf_{file_timestamp}"
@@ -1051,14 +1064,16 @@ def run_real_pdf_scenario(pdf_arg: str, query: str, relevant_pages: set[int]) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark RRF hybrid search vs keyword-only vs semantic-only."
+        description=(
+            "Benchmark RRF hybrid search vs keyword-only, semantic-only, and router. "
+            "Runs 3 agentic task groups (Q&A, Context Building, Navigation) on real "
+            "public PDFs using ground truth from benchmark_data/ground_truth.json."
+        )
     )
-    parser.add_argument("--pdf", help="Path or URL to a real PDF (optional)")
-    parser.add_argument("--query", help="Search query for the real PDF")
     parser.add_argument(
-        "--relevant-pages",
-        metavar="PAGES",
-        help='Comma-separated 1-indexed relevant page numbers, e.g. "1,3,5"',
+        "--ground-truth",
+        default="benchmark_data/ground_truth.json",
+        help="Path to ground truth JSON (default: benchmark_data/ground_truth.json)",
     )
     args = parser.parse_args()
 
@@ -1066,7 +1081,7 @@ def main() -> None:
     file_ts = now.strftime("%Y%m%d_%H%M%S")
     iso_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
 
-    _p(bold("\npdf-mcp RRF Hybrid Search — Benchmark Report"))
+    _p(bold("\npdf-mcp RRF Hybrid Search — Agentic Benchmark Report"))
     _p("─" * 68)
 
     if not _FASTEMBED_AVAILABLE:
@@ -1075,27 +1090,21 @@ def main() -> None:
             "semantic and hybrid running in keyword-fallback mode"
         ))
 
-    scenario_results = run_synthetic_scenarios()
+    gt = load_ground_truth(args.ground_truth)
 
-    # Optional real PDF section — requires all three flags; skipped otherwise
-    real_pdf_result: dict | None = None
-    if args.pdf and not args.relevant_pages:
-        _p(yellow(
-            "  Note: --pdf supplied but --relevant-pages missing"
-            " — real PDF section skipped"
-        ))
-    if args.pdf and args.query and args.relevant_pages:
+    with tempfile.TemporaryDirectory() as tmp:
+        original_cache = server_module.cache
+        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         try:
-            relevant = {int(p.strip()) for p in args.relevant_pages.split(",")}
-            real_pdf_result = run_real_pdf_scenario(args.pdf, args.query, relevant)
-        except Exception as exc:
-            _p(red(f"\n  Real PDF error: {exc}"))
+            qa_results = run_qa_group(gt)
+            context_results = run_context_group(gt)
+            nav_results = run_navigation_group(gt)
+        finally:
+            server_module.cache = original_cache
 
-    all_results = scenario_results[:]
-    if real_pdf_result is not None:
-        all_results.append(real_pdf_result)
+    all_results = qa_results + context_results + nav_results
 
-    _print_summary(all_results, file_ts)
+    _print_summary(qa_results, context_results, nav_results, file_ts)
     _save_results(all_results, file_ts, iso_ts)
 
     sys.exit(0)

@@ -271,8 +271,16 @@ def run_scenario_1() -> dict:
     sem_rank_str = str(sem_rank) if sem_rank is not None else "∞"
     _p()
     _p(f"  {bold('Verdict')}")
-    _row("hybrid rank = 1", green("✓") if hy_rank == 1 else red(f"rank {hy_rank}"), hy_rank == 1)
-    _row("keyword rank = 1", green("✓") if kw_rank == 1 else red(f"rank {kw_rank}"), kw_rank == 1)
+    _row(
+        "hybrid rank = 1",
+        green("✓") if hy_rank == 1 else red(f"rank {hy_rank}"),
+        hy_rank == 1,
+    )
+    _row(
+        "keyword rank = 1",
+        green("✓") if kw_rank == 1 else red(f"rank {kw_rank}"),
+        kw_rank == 1,
+    )
     _row("semantic rank (observed)", f"[rank {sem_rank_str}]", None)
 
     return result

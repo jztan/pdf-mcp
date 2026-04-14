@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -176,6 +177,57 @@ def _run_mode(
     if "error" in result:
         return []
     return result.get("matches", [])
+
+
+def _run_mode_timed(
+    pdf_path: str, query: str, api_mode: str, max_results: int
+) -> tuple[list[dict], float]:
+    """Like _run_mode but also returns elapsed wall-clock time in milliseconds."""
+    t0 = time.perf_counter()
+    matches = _run_mode(pdf_path, query, api_mode, max_results)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    return matches, elapsed_ms
+
+
+def run_latency_timing(
+    pdf_path: str, query: str, k: int, n_runs: int = 3
+) -> dict[str, float]:
+    """
+    Run all four modes n_runs times on a warm cache and return median latency (ms).
+
+    Modes: keyword, semantic, hybrid, router.
+    Router latency = latency of the single mode it selects for this query.
+    Cache must already be warm before calling this.
+    """
+    samples: dict[str, list[float]] = {
+        "keyword": [], "semantic": [], "hybrid": [], "router": []
+    }
+    router_api = _router_api_mode(query)
+
+    for _ in range(n_runs):
+        for mode, api_mode in [
+            ("keyword", "keyword"),
+            ("semantic", "semantic"),
+            ("hybrid", "auto"),
+        ]:
+            _, ms = _run_mode_timed(pdf_path, query, api_mode, k)
+            samples[mode].append(ms)
+        _, ms = _run_mode_timed(pdf_path, query, router_api, k)
+        samples["router"].append(ms)
+
+    return {
+        mode: sorted(times)[len(times) // 2]
+        for mode, times in samples.items()
+    }
+
+
+def _print_latency_table(latency: dict[str, float], label: str) -> None:
+    """Print the latency summary for one task group."""
+    _p()
+    _p(f"  {bold('Latency')} (median over 3 warm-cache runs — {label})")
+    for mode in ("keyword", "semantic", "hybrid", "router"):
+        ms = latency[mode]
+        _p(f"  {mode:<12} {ms:.1f}ms")
 
 
 def _run_scenario(

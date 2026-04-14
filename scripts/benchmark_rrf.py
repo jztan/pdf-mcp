@@ -424,7 +424,75 @@ def run_synthetic_scenarios() -> list[dict]:
     return results
 
 
+def _print_summary(all_results: list[dict], file_timestamp: str) -> None:
+    """Print the summary table and saved-files notice."""
+    _section("Summary")
+    _p()
+    _p(f"  {'Scenario':<34} {'Assertion':<34} {'Result'}")
+    _p(f"  {'─' * 34} {'─' * 34} {'─' * 10}")
+
+    for result in all_results:
+        name = result["name"]
+        assertions = result.get("assertions", {})
+        prefix = f"  {name:<34}"
+
+        first = True
+        for key, val in assertions.items():
+            label = key.replace("_", " ")
+            if val is None:
+                val_str = yellow("N/A")
+            elif val:
+                val_str = green("✓")
+            else:
+                val_str = red("✗")
+
+            indent = prefix if first else f"  {'':34}"
+            _p(f"{indent} {label:<34} {val_str}")
+            first = False
+
+        # Scenario 1: also report observed semantic rank
+        if result["name"] == "Keyword strength":
+            sem_rank = result["modes"]["semantic"]["rank_first_hit"]
+            sem_rank_str = str(sem_rank) if sem_rank is not None else "∞"
+            _p(f"  {'':34} {'semantic rank (observed)':<34} [rank {sem_rank_str}]")
+
+    _p()
+    base = f"rrf_{file_timestamp}"
+    _p(f"  Results saved to benchmark_results/{base}.txt")
+    _p(f"               benchmark_results/{base}.json")
+    _p()
+
+
+def _save_results(
+    all_results: list[dict],
+    file_timestamp: str,
+    iso_timestamp: str,
+) -> None:
+    """Save .txt (ANSI-stripped) and .json to benchmark_results/."""
+    out_dir = Path("benchmark_results")
+    out_dir.mkdir(exist_ok=True)
+    base = out_dir / f"rrf_{file_timestamp}"
+
+    # .txt — plain text, same content as terminal (ANSI stripped)
+    txt_content = _strip_ansi("\n".join(_OUTPUT))
+    base.with_suffix(".txt").write_text(txt_content, encoding="utf-8")
+
+    # .json — structured data
+    data = {
+        "timestamp": iso_timestamp,
+        "fastembed_available": _FASTEMBED_AVAILABLE,
+        "scenarios": all_results,
+    }
+    base.with_suffix(".json").write_text(
+        json.dumps(data, indent=2), encoding="utf-8"
+    )
+
+
 def main() -> None:
+    now = datetime.now()
+    file_ts = now.strftime("%Y%m%d_%H%M%S")
+    iso_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
+
     _p(bold("\npdf-mcp RRF Hybrid Search — Benchmark Report"))
     _p("─" * 68)
 
@@ -435,6 +503,10 @@ def main() -> None:
         ))
 
     scenario_results = run_synthetic_scenarios()
+
+    _print_summary(scenario_results, file_ts)
+    _save_results(scenario_results, file_ts, iso_ts)
+
     sys.exit(0)
 
 

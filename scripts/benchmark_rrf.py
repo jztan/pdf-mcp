@@ -269,6 +269,101 @@ def _print_k_sensitivity_table(results: list[dict]) -> None:
         _p(f"  {k:<6} {kw:<12} {sem:<12} {hyb:<14} {rtr}")
 
 
+def run_qa_group(gt: dict) -> list[dict]:
+    """
+    Task Group 1: Q&A — agent issues a query, reads the first hit, answers.
+    Primary metric: RR (did agent get the right page fast?). MRR reported across group.
+
+    Scenarios:
+      1a — precise factual query (keyword-friendly)
+      1b — conceptual query (semantic-friendly)
+      1c — mixed query with codes (router misroutes to keyword, hybrid recovers)
+    """
+    pdf_data = gt["pdfs"]["attention"]
+    pdf_path = _resolve_path(pdf_data["url"])
+    k = 5
+
+    _section("Task Group 1: Q&A")
+    _p(f"  PDF: {pdf_data['title']}")
+    _p("  Metric: RR per scenario, MRR across group")
+    _p("  Agent behavior: issues query, acts on first hit")
+
+    results = []
+    for scenario_id, label in [
+        ("1a", "1a — Precise factual"),
+        ("1b", "1b — Conceptual"),
+        ("1c", "1c — Mixed (router trap)"),
+    ]:
+        s = pdf_data["scenarios"][scenario_id]
+        relevant = set(s["relevant_pages"])
+        result = _run_scenario(label, pdf_path, s["query"], relevant, k)
+
+        kw_rr = result["modes"]["keyword"]["rr"]
+        sem_rr = result["modes"]["semantic"]["rr"]
+        hy_rr = result["modes"]["hybrid"]["rr"]
+        router_rr = result["modes"]["router"]["rr"]
+
+        assertion_result: bool | None = (
+            hy_rr >= max(kw_rr, sem_rr) if _FASTEMBED_AVAILABLE else None
+        )
+        result["assertions"] = {"hybrid_rr_gte_best_single": assertion_result}
+        results.append(result)
+
+        _p()
+        _p(f"  {bold('Scenario ' + label)}")
+        _print_scenario_table(result, result["assertions"])
+        _p()
+        _p(f"  {bold('Verdict')}")
+        if assertion_result is None:
+            _row(
+                "hybrid RR >= best single (N/A: fastembed absent)",
+                yellow("N/A"),
+                None,
+            )
+        else:
+            _row(
+                f"hybrid RR ({hy_rr:.2f}) >= best single ({max(kw_rr, sem_rr):.2f})",
+                green("✓") if assertion_result else red("✗"),
+            )
+        router_sel = result["modes"]["router"]["selected_mode"]
+        _p(f"  router RR: {router_rr:.2f}  (routed to {router_sel})")
+
+    # MRR across group
+    mrr_hybrid = sum(r["modes"]["hybrid"]["rr"] for r in results) / len(results)
+    mrr_keyword = sum(r["modes"]["keyword"]["rr"] for r in results) / len(results)
+    mrr_semantic = sum(r["modes"]["semantic"]["rr"] for r in results) / len(results)
+    mrr_router = sum(r["modes"]["router"]["rr"] for r in results) / len(results)
+    _p()
+    _p(f"  {bold('MRR Summary (Task Group 1)')}")
+    _row("keyword MRR", f"{mrr_keyword:.2f}")
+    _row("semantic MRR", f"{mrr_semantic:.2f}")
+    _row("hybrid MRR", f"{mrr_hybrid:.2f}")
+    _row("router MRR", f"{mrr_router:.2f}")
+
+    # Latency (use 1b — representative conceptual query)
+    s1b = pdf_data["scenarios"]["1b"]
+    latency = run_latency_timing(pdf_path, s1b["query"], k=k)
+    _print_latency_table(latency, "Task Group 1: Q&A")
+
+    # k-sensitivity on 1b
+    _p()
+    _p(f"  {bold('k-Sensitivity (Scenario 1b — conceptual query)')}")
+    k_results = run_k_sensitivity(
+        pdf_path, s1b["query"], set(pdf_data["scenarios"]["1b"]["relevant_pages"])
+    )
+    _print_k_sensitivity_table(k_results)
+
+    # Store group MRR in first result for summary table
+    results[0]["group_mrr"] = {
+        "hybrid": mrr_hybrid,
+        "keyword": mrr_keyword,
+        "semantic": mrr_semantic,
+        "router": mrr_router,
+    }
+
+    return results
+
+
 def _run_scenario(
     name: str,
     pdf_path: str,

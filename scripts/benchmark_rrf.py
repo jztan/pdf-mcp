@@ -230,6 +230,45 @@ def _print_latency_table(latency: dict[str, float], label: str) -> None:
         _p(f"  {mode:<12} {ms:.1f}ms")
 
 
+def run_k_sensitivity(
+    pdf_path: str,
+    query: str,
+    relevant_pages: set[int],
+    k_values: list[int] | None = None,
+) -> list[dict]:
+    """
+    Sweep k values and return per-k scenario results for all modes.
+
+    Returns list of result dicts (one per k), suitable for printing a table.
+    """
+    if k_values is None:
+        k_values = [10, 30, 60, 120]
+    return [
+        _run_scenario(f"k={k}", pdf_path, query, relevant_pages, k)
+        for k in k_values
+    ]
+
+
+def _print_k_sensitivity_table(results: list[dict]) -> None:
+    """Print the k-sensitivity sweep table."""
+    _p()
+    _p(f"  {bold('k-Sensitivity Sweep')} (Scenario 1b — conceptual Q&A)")
+    _p()
+    _p(
+        f"  {'k':<6} {'kw recall':<12} {'sem recall':<12} "
+        f"{'hybrid recall':<14} {'router recall'}"
+    )
+    _p(f"  {'─' * 5}  {'─' * 10}  {'─' * 10}  {'─' * 12}  {'─' * 12}")
+    for r in results:
+        k = r["k"]
+        modes = r["modes"]
+        kw = f"{modes['keyword']['recall'] * 100:.0f}%"
+        sem = f"{modes['semantic']['recall'] * 100:.0f}%"
+        hyb = f"{modes['hybrid']['recall'] * 100:.0f}%"
+        rtr = f"{modes['router']['recall'] * 100:.0f}%"
+        _p(f"  {k:<6} {kw:<12} {sem:<12} {hyb:<14} {rtr}")
+
+
 def _run_scenario(
     name: str,
     pdf_path: str,

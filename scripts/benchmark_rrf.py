@@ -232,7 +232,7 @@ def _run_scenario(
 
 def _print_scenario_table(result: dict, assertions: dict) -> None:
     """
-    Print the mode comparison table for one scenario.
+    Print the mode comparison table for one scenario, including router column.
 
     result: dict from _run_scenario
     assertions: {key: bool | None}  — None means N/A (fastembed absent)
@@ -244,10 +244,13 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
     _p(f"  Query: {bold(repr(result['query']))}   K={k}")
     _p()
     top_col = "Top-" + str(k) + " pages"
-    _p(f"  {'Mode':<10} {'Recall@' + str(k):<12} {'RR':<8} {'Rank-1st':<10} {top_col}")
-    _p(f"  {'─' * 9}  {'─' * 10}  {'─' * 6}  {'─' * 8}  {'─' * 20}")
+    _p(
+        f"  {'Mode':<14} {'Recall@' + str(k):<12} {'RR':<8} "
+        f"{'Rank-1st':<10} {top_col}"
+    )
+    _p(f"  {'─' * 13}  {'─' * 10}  {'─' * 6}  {'─' * 8}  {'─' * 20}")
 
-    for mode in ("keyword", "semantic", "hybrid"):
+    for mode in ("keyword", "semantic", "hybrid", "router"):
         d = result["modes"][mode]
         recall = d["recall"]
         rr = d["rr"]
@@ -259,6 +262,11 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
         rr_str = f"{rr:.2f}"
         rank_str = f"rank {rank}" if rank is not None else "∞"
 
+        # Show which mode the router selected, in parentheses
+        mode_label = mode
+        if mode == "router":
+            mode_label = f"router({d.get('selected_mode', '?')[:3]})"
+
         suffix = ""
         if mode == "hybrid":
             hybrid_assertions = {
@@ -269,7 +277,10 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
             ):
                 suffix = f"  {green('✓')}"
 
-        _p(f"  {mode:<10} {recall_str:<12} {rr_str:<8} {rank_str:<10} {top}{suffix}")
+        _p(
+            f"  {mode_label:<14} {recall_str:<12} {rr_str:<8} "
+            f"{rank_str:<10} {top}{suffix}"
+        )
 
 
 def run_scenario_1() -> dict:

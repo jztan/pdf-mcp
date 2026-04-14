@@ -422,8 +422,111 @@ def run_scenario_3() -> dict:
     return result
 
 
+def run_scenario_4() -> dict:
+    """
+    Scenario 4: Distractor tolerance.
+    Claim: When keyword returns a false positive (same phrase, wrong domain),
+    hybrid still finds the truly relevant page — keyword's misfire doesn't
+    crowd it out of the top-K.
+
+    Why "demotion" is the wrong frame for RRF: RRF is a summation. When keyword
+    ranks the distractor at rank 1 AND semantic also finds it at rank 2, the
+    distractor's combined score always exceeds the relevant page's semantic-only
+    score. Hybrid does not demote distractors; it ADDS coverage. The relevant
+    page appears in hybrid top-K even though keyword never found it.
+
+    10-page PDF.
+    Page 3: "memory leak" 3x in retail/sales context (high BM25, wrong domain).
+    Page 8: "The application heap size grew indefinitely causing out-of-memory
+             crashes." (semantic match for software memory leak, no literal phrase).
+    Pages 1-2, 4-7, 9-10: nature filler (FILLER constant).
+    Query: "memory leak"
+    K=5   Relevant: {8}
+
+    Expected:
+    - keyword: page 3 (distractor) at rank 1; page 8 not found → recall 0%
+    - semantic: page 8 at rank 1 (software heap/OOM); page 3 lower (retail)
+    - hybrid: distractor at rank 1 (keyword+semantic signal), relevant at rank 2
+              → recall 100% despite distractor occupying rank 1
+
+    Assertions:
+      hybrid_recall_gt_keyword_recall: hybrid recall > keyword recall  (100% > 0%)
+      hybrid_rr_gt_keyword_rr: hybrid rr > keyword rr  (soft: hybrid ranks relevant
+                               higher than keyword does — keyword never finds it)
+    When fastembed absent: both assertions are N/A.
+    """
+    page_texts = {i: FILLER for i in range(10)}
+    # page 3 (0-indexed=2): distractor — "memory leak" 3x in retail context
+    page_texts[2] = (
+        "Memory Leak! Don't miss our Memory Leak sale. "
+        "Memory Leak is the name of our memory foam mattress."
+    )
+    # page 8 (0-indexed=7): semantic match — software heap / OOM context
+    page_texts[7] = (
+        "The application heap size grew indefinitely "
+        "causing eventual out-of-memory crashes."
+    )
+    query = "memory leak"
+    relevant_pages = {8}  # 1-indexed
+    k = 5
+
+    pdf_path = _build_pdf(page_texts)
+    try:
+        result = _run_scenario(
+            "Distractor tolerance", pdf_path, query, relevant_pages, k
+        )
+    finally:
+        os.unlink(pdf_path)
+
+    kw_recall = result["modes"]["keyword"]["recall"]
+    kw_rr = result["modes"]["keyword"]["rr"]
+    hy_recall = result["modes"]["hybrid"]["recall"]
+    hy_rr = result["modes"]["hybrid"]["rr"]
+
+    if _FASTEMBED_AVAILABLE:
+        recall_gt_kw: bool | None = hy_recall > kw_recall
+        rr_gt_kw: bool | None = hy_rr > kw_rr
+    else:
+        recall_gt_kw = None
+        rr_gt_kw = None
+
+    assertions = {
+        "hybrid_recall_gt_keyword_recall": recall_gt_kw,
+        "hybrid_rr_gt_keyword_rr": rr_gt_kw,
+    }
+    result["assertions"] = assertions
+
+    _section("Scenario 4: Distractor tolerance")
+    _p("  PDF: 10 pages — page 3 (BM25 distractor), page 8 (semantic match)")
+    _print_scenario_table(result, assertions)
+    _p()
+    _p(f"  {bold('Verdict')}")
+    if recall_gt_kw is None:
+        _row(
+            "hybrid recall > keyword (N/A: fastembed absent)",
+            yellow("N/A"),
+            None,
+        )
+        _row("hybrid rr > keyword rr (N/A: fastembed absent)", yellow("N/A"), None)
+    else:
+        hy_pct = f"{hy_recall * 100:.0f}%"
+        kw_pct = f"{kw_recall * 100:.0f}%"
+        kw_rr_str = f"{kw_rr:.2f}"
+        hy_rr_str = f"{hy_rr:.2f}"
+        _row(
+            f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
+            green("✓") if recall_gt_kw else red("✗"),
+        )
+        _row(
+            f"hybrid rr ({hy_rr_str}) > keyword rr ({kw_rr_str})",
+            green("✓") if rr_gt_kw else red("✗"),
+        )
+
+    return result
+
+
 def run_synthetic_scenarios() -> list[dict]:
-    """Run all three synthetic scenarios inside an isolated temp cache."""
+    """Run all four synthetic scenarios inside an isolated temp cache."""
     with tempfile.TemporaryDirectory() as tmp:
         original_cache = server_module.cache
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
@@ -432,6 +535,7 @@ def run_synthetic_scenarios() -> list[dict]:
             results.append(run_scenario_1())
             results.append(run_scenario_2())
             results.append(run_scenario_3())
+            results.append(run_scenario_4())
         finally:
             server_module.cache = original_cache
     return results

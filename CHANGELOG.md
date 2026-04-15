@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `_rrf_fuse()` helper in `server.py` — merges two ranked lists using RRF scoring; covered by unit tests
 - Hybrid mode falls back to keyword-only when `fastembed` is not installed, with `search_mode: "keyword"` in the response
-- `scripts/benchmark_rrf.py` — synthetic benchmark verifying hybrid search quality across four scenarios: Keyword strength (S1), Semantic strength (S2), Semantic preservation (S3 — hybrid recall ≥ semantic when keyword contributes nothing), Distractor tolerance (S4 — hybrid finds relevant page despite keyword false positive); outputs JSON + plain-text reports to `benchmark_results/`
+- `scripts/benchmark_rrf.py` — agentic benchmark verifying hybrid search quality on real public PDFs (arXiv 1706.03762, 2005.14165), organized into 3 task groups mirroring how AI agents use search: Q&A (metric: MRR; scenarios 1a precise factual, 1b conceptual, 1c mixed/router-trap), Context Building (metric: Recall@K; scenarios 2a clustered pages, 2b scattered pages / true fusion), and Navigation (metric: Recall@1; scenarios 3a exact section heading, 3b cross-reference by concept); every scenario includes a router comparison column; latency measured per task group (3 warm-cache runs, median); k-sensitivity sweep on scenario 1b (k=10,30,60,120); outputs JSON + plain-text reports to `benchmark_results/`
+- `benchmark_data/ground_truth.json` — manually annotated ground truth (PDF URLs, queries, relevant page sets) for all 7 benchmark scenarios; stable across runs
 
 ### Tests
 - 204 new server tests covering `mode="keyword"`, `mode="semantic"`, `mode="auto"` paths, RRF fusion correctness, fastembed-absent fallback, and `_rrf_fuse()` unit tests

@@ -17,7 +17,6 @@ Always exits 0 (informational report, no CI gate).
 
 import argparse
 import json
-import os
 import re
 import sys
 import tempfile
@@ -27,7 +26,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import pymupdf  # noqa: E402
 import pdf_mcp.server as server_module  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
@@ -58,6 +56,7 @@ _ROUTER_RE = re.compile(r"[A-Z0-9\-]{4,}")
 def _router_api_mode(query: str) -> str:
     """Return the api_mode the regex router would choose for this query."""
     return "keyword" if _ROUTER_RE.search(query) else "semantic"
+
 
 # Accumulated output lines (with ANSI) for saving to files.
 _OUTPUT: list[str] = []
@@ -110,21 +109,6 @@ def _row(label: str, value: str, ok: bool | None = None) -> None:
     elif ok is False:
         marker = red(" ✗")
     _p(f"  {label:<36} {value}{marker}")
-
-
-FILLER = "The ancient oak tree stood beside the quiet mountain stream."
-
-
-def _build_pdf(page_texts: dict[int, str]) -> str:
-    """Write a PDF to a temp file and return its absolute path. Keys are 0-indexed."""
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-        doc = pymupdf.open()
-        for i in sorted(page_texts.keys()):
-            page = doc.new_page()
-            page.insert_text((50, 50), page_texts[i])
-        doc.save(f.name)
-        doc.close()
-        return str(Path(f.name).resolve())
 
 
 def _strip_ansi(text: str) -> str:
@@ -631,308 +615,6 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
         )
 
 
-def run_scenario_1() -> dict:
-    """
-    Scenario 1: Keyword strength.
-    Claim: Hybrid preserves exact-match ranking regardless of what semantic does.
-
-    10-page PDF. Page 3 contains the rare token ZXQVP-7821.
-    Pages 1-2, 4-10: filler (nature text, no tech/finance vocabulary).
-    Query: "ZXQVP-7821"   K=3   Relevant: {3}
-
-    Assertions:
-      hybrid rank_first_hit == 1  (keyword contribution via RRF keeps page 3 at top)
-      keyword rank_first_hit == 1  (direct BM25 exact match)
-      semantic rank: reported as observed data only — no pass/fail
-    """
-    page_texts = {i: FILLER for i in range(10)}
-    # page 3 (0-indexed=2): rare token for exact keyword match
-    page_texts[2] = "The project identifier ZXQVP-7821 is the primary key."
-    query = "ZXQVP-7821"
-    relevant_pages = {3}  # 1-indexed
-    k = 3
-
-    pdf_path = _build_pdf(page_texts)
-    try:
-        result = _run_scenario("Keyword strength", pdf_path, query, relevant_pages, k)
-    finally:
-        os.unlink(pdf_path)
-
-    kw_rank = result["modes"]["keyword"]["rank_first_hit"]
-    hy_rank = result["modes"]["hybrid"]["rank_first_hit"]
-    assertions = {
-        "hybrid_rank_first_hit_eq_1": hy_rank == 1,
-        "keyword_rank_first_hit_eq_1": kw_rank == 1,
-    }
-    result["assertions"] = assertions
-
-    _section("Scenario 1: Keyword strength")
-    _p("  PDF: 10 pages — page 3 has exact token ZXQVP-7821")
-    _print_scenario_table(result, assertions)
-    sem_rank = result["modes"]["semantic"]["rank_first_hit"]
-    sem_rank_str = str(sem_rank) if sem_rank is not None else "∞"
-    _p()
-    _p(f"  {bold('Verdict')}")
-    _row(
-        "hybrid rank = 1",
-        green("✓") if hy_rank == 1 else red(f"rank {hy_rank}"),
-    )
-    _row(
-        "keyword rank = 1",
-        green("✓") if kw_rank == 1 else red(f"rank {kw_rank}"),
-    )
-    _row("semantic rank (observed)", f"[rank {sem_rank_str}]", None)
-
-    return result
-
-
-def run_scenario_2() -> dict:
-    """
-    Scenario 2: Semantic strength.
-    Claim: Hybrid preserves conceptual recall when keyword search misses.
-
-    10-page PDF. Page 7: "Sales surged and profit margins expanded dramatically."
-    Pages 1-6, 8-10: filler (nature text).
-    Query: "revenue growth" (no literal word overlap with page 7)
-    K=5   Relevant: {7}
-
-    Assertion: hybrid recall@5 > keyword recall@5  (expected 1.0 > 0.0)
-    When fastembed absent: assertion is N/A (both modes fall back to keyword,
-    making 0.0 > 0.0 an unfair test — skipped, not failed).
-    """
-    page_texts = {i: FILLER for i in range(10)}
-    # page 7 (0-indexed=6): conceptual match for "revenue growth"
-    page_texts[6] = "Sales surged and profit margins expanded dramatically."
-    query = "revenue growth"
-    relevant_pages = {7}  # 1-indexed
-    k = 5
-
-    pdf_path = _build_pdf(page_texts)
-    try:
-        result = _run_scenario("Semantic strength", pdf_path, query, relevant_pages, k)
-    finally:
-        os.unlink(pdf_path)
-
-    kw_recall = result["modes"]["keyword"]["recall"]
-    hy_recall = result["modes"]["hybrid"]["recall"]
-
-    assertion_result: bool | None = (
-        hy_recall > kw_recall if _FASTEMBED_AVAILABLE else None
-    )
-    assertions = {"hybrid_recall_gt_keyword_recall": assertion_result}
-    result["assertions"] = assertions
-
-    _section("Scenario 2: Semantic strength")
-    _p("  PDF: 10 pages — page 7 has conceptual match (no literal overlap with query)")
-    _print_scenario_table(result, assertions)
-    _p()
-    _p(f"  {bold('Verdict')}")
-    if assertion_result is None:
-        _row("hybrid recall > keyword (N/A: fastembed absent)", yellow("N/A"), None)
-    else:
-        hy_pct = f"{hy_recall * 100:.0f}%"
-        kw_pct = f"{kw_recall * 100:.0f}%"
-        _row(
-            f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
-            green("✓") if assertion_result else red("✗"),
-        )
-
-    return result
-
-
-def run_scenario_3() -> dict:
-    """
-    Scenario 3: Semantic preservation.
-    Claim: When keyword contributes nothing (FTS5 phrase query matches no page),
-    hybrid recall is still >= semantic recall. RRF fusion with a dead keyword
-    leg does not degrade the result.
-
-    Why keyword fails here: pdf-mcp wraps all queries in FTS5 double-quote
-    phrase syntax, requiring ALL query tokens in sequence. No page in this PDF
-    contains the full phrase "QXJM-4419 performance degradation" verbatim, so
-    keyword returns 0% recall.
-
-    10-page PDF.
-    Page 7: "Memory consumption spiked and throughput degraded under sustained load."
-            (conceptual match for "performance degradation" part of query)
-    Pages 1-6, 8-10: nature filler (FILLER constant).
-    Query: "QXJM-4419 performance degradation"
-    K=5   Relevant: {7}
-
-    Assertion: hybrid_recall_gte_semantic_recall
-    When fastembed absent: N/A (hybrid == keyword without fastembed, making
-    hybrid >= semantic trivially True but meaningless).
-    """
-    page_texts = {i: FILLER for i in range(10)}
-    # page 7 (0-indexed=6): conceptual match for "performance degradation"
-    page_texts[6] = (
-        "Memory consumption spiked and throughput degraded under sustained load."
-    )
-    query = "QXJM-4419 performance degradation"
-    relevant_pages = {7}  # 1-indexed
-    k = 5
-
-    pdf_path = _build_pdf(page_texts)
-    try:
-        result = _run_scenario(
-            "Semantic preservation", pdf_path, query, relevant_pages, k
-        )
-    finally:
-        os.unlink(pdf_path)
-
-    sem_recall = result["modes"]["semantic"]["recall"]
-    hy_recall = result["modes"]["hybrid"]["recall"]
-
-    assertion_result: bool | None = (
-        hy_recall >= sem_recall if _FASTEMBED_AVAILABLE else None
-    )
-    assertions = {"hybrid_recall_gte_semantic_recall": assertion_result}
-    result["assertions"] = assertions
-
-    _section("Scenario 3: Semantic preservation")
-    _p(
-        "  PDF: 10 pages — page 7 (conceptual match); "
-        "keyword finds nothing (phrase query)"
-    )
-    _print_scenario_table(result, assertions)
-    _p()
-    _p(f"  {bold('Verdict')}")
-    if assertion_result is None:
-        _row(
-            "hybrid recall >= semantic (N/A: fastembed absent)",
-            yellow("N/A"),
-            None,
-        )
-    else:
-        hy_pct = f"{hy_recall * 100:.0f}%"
-        sem_pct = f"{sem_recall * 100:.0f}%"
-        _row(
-            f"hybrid recall ({hy_pct}) >= semantic ({sem_pct})",
-            green("✓") if assertion_result else red("✗"),
-        )
-
-    return result
-
-
-def run_scenario_4() -> dict:
-    """
-    Scenario 4: Distractor tolerance.
-    Claim: When keyword returns a false positive (same phrase, wrong domain),
-    hybrid still finds the truly relevant page — keyword's misfire doesn't
-    crowd it out of the top-K.
-
-    Why "demotion" is the wrong frame for RRF: RRF is a summation. When keyword
-    ranks the distractor at rank 1 AND semantic also finds it at rank 2, the
-    distractor's combined score always exceeds the relevant page's semantic-only
-    score. Hybrid does not demote distractors; it ADDS coverage. The relevant
-    page appears in hybrid top-K even though keyword never found it.
-
-    10-page PDF.
-    Page 3: "memory leak" 3x in retail/sales context (high BM25, wrong domain).
-    Page 8: "The application heap size grew indefinitely causing out-of-memory
-             crashes." (semantic match for software memory leak, no literal phrase).
-    Pages 1-2, 4-7, 9-10: nature filler (FILLER constant).
-    Query: "memory leak"
-    K=5   Relevant: {8}
-
-    Expected:
-    - keyword: page 3 (distractor) at rank 1; page 8 not found → recall 0%
-    - semantic: page 8 at rank 1 (software heap/OOM); page 3 lower (retail)
-    - hybrid: distractor at rank 1 (keyword+semantic signal), relevant at rank 2
-              → recall 100% despite distractor occupying rank 1
-
-    Assertions:
-      hybrid_recall_gt_keyword_recall: hybrid recall > keyword recall  (100% > 0%)
-      hybrid_rr_gt_keyword_rr: hybrid rr > keyword rr  (soft: hybrid ranks relevant
-                               higher than keyword does — keyword never finds it)
-    When fastembed absent: both assertions are N/A.
-    """
-    page_texts = {i: FILLER for i in range(10)}
-    # page 3 (0-indexed=2): distractor — "memory leak" 3x in retail context
-    page_texts[2] = (
-        "Memory Leak! Don't miss our Memory Leak sale. "
-        "Memory Leak is the name of our memory foam mattress."
-    )
-    # page 8 (0-indexed=7): semantic match — software heap / OOM context
-    page_texts[7] = (
-        "The application heap size grew indefinitely "
-        "causing eventual out-of-memory crashes."
-    )
-    query = "memory leak"
-    relevant_pages = {8}  # 1-indexed
-    k = 5
-
-    pdf_path = _build_pdf(page_texts)
-    try:
-        result = _run_scenario(
-            "Distractor tolerance", pdf_path, query, relevant_pages, k
-        )
-    finally:
-        os.unlink(pdf_path)
-
-    kw_recall = result["modes"]["keyword"]["recall"]
-    kw_rr = result["modes"]["keyword"]["rr"]
-    hy_recall = result["modes"]["hybrid"]["recall"]
-    hy_rr = result["modes"]["hybrid"]["rr"]
-
-    if _FASTEMBED_AVAILABLE:
-        recall_gt_kw: bool | None = hy_recall > kw_recall
-        rr_gt_kw: bool | None = hy_rr > kw_rr
-    else:
-        recall_gt_kw = None
-        rr_gt_kw = None
-
-    assertions = {
-        "hybrid_recall_gt_keyword_recall": recall_gt_kw,
-        "hybrid_rr_gt_keyword_rr": rr_gt_kw,
-    }
-    result["assertions"] = assertions
-
-    _section("Scenario 4: Distractor tolerance")
-    _p("  PDF: 10 pages — page 3 (BM25 distractor), page 8 (semantic match)")
-    _print_scenario_table(result, assertions)
-    _p()
-    _p(f"  {bold('Verdict')}")
-    if recall_gt_kw is None:
-        _row(
-            "hybrid recall > keyword (N/A: fastembed absent)",
-            yellow("N/A"),
-            None,
-        )
-        _row("hybrid rr > keyword rr (N/A: fastembed absent)", yellow("N/A"), None)
-    else:
-        hy_pct = f"{hy_recall * 100:.0f}%"
-        kw_pct = f"{kw_recall * 100:.0f}%"
-        kw_rr_str = f"{kw_rr:.2f}"
-        hy_rr_str = f"{hy_rr:.2f}"
-        _row(
-            f"hybrid recall ({hy_pct}) > keyword ({kw_pct})",
-            green("✓") if recall_gt_kw else red("✗"),
-        )
-        _row(
-            f"hybrid rr ({hy_rr_str}) > keyword rr ({kw_rr_str})",
-            green("✓") if rr_gt_kw else red("✗"),
-        )
-
-    return result
-
-
-def run_synthetic_scenarios() -> list[dict]:
-    """Run all four synthetic scenarios inside an isolated temp cache."""
-    with tempfile.TemporaryDirectory() as tmp:
-        original_cache = server_module.cache
-        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
-        try:
-            results = []
-            results.append(run_scenario_1())
-            results.append(run_scenario_2())
-            results.append(run_scenario_3())
-            results.append(run_scenario_4())
-        finally:
-            server_module.cache = original_cache
-    return results
-
-
 def _print_summary(
     qa_results: list[dict],
     context_results: list[dict],
@@ -1008,58 +690,6 @@ def _save_results(
     base.with_suffix(".json").write_text(
         json.dumps(data, indent=2), encoding="utf-8"
     )
-
-
-def run_real_pdf_scenario(pdf_arg: str, query: str, relevant_pages: set[int]) -> dict:
-    """
-    Run the optional real-PDF section.
-
-    Uses the normal global cache (no isolation) — this is the user's own document.
-    pdf_arg may be a local path or a URL; _resolve_path handles both.
-    K=10 by default (same as pdf_search default max_results).
-    """
-    pdf_path = _resolve_path(pdf_arg)
-    k = 10
-
-    result = _run_scenario(
-        f"Real PDF: {Path(pdf_arg).name}",
-        pdf_path,
-        query,
-        relevant_pages,
-        k,
-    )
-
-    kw_recall = result["modes"]["keyword"]["recall"]
-    sem_recall = result["modes"]["semantic"]["recall"]
-    hy_recall = result["modes"]["hybrid"]["recall"]
-
-    assertion_result: bool | None = (
-        hy_recall >= max(kw_recall, sem_recall) if _FASTEMBED_AVAILABLE else None
-    )
-    assertions = {"hybrid_recall_gte_max_kw_sem": assertion_result}
-    result["assertions"] = assertions
-
-    _section(f"Real PDF: {Path(pdf_arg).name}")
-    _p(f"  Relevant pages: {sorted(relevant_pages)}")
-    _print_scenario_table(result, assertions)
-    _p()
-    _p(f"  {bold('Verdict')}")
-    if assertion_result is None:
-        _row(
-            "hybrid recall >= max(keyword, semantic) (N/A: fastembed absent)",
-            yellow("N/A"),
-            None,
-        )
-    else:
-        hy_pct = f"{hy_recall * 100:.0f}%"
-        kw_pct = f"{kw_recall * 100:.0f}%"
-        sem_pct = f"{sem_recall * 100:.0f}%"
-        _row(
-            f"hybrid ({hy_pct}) >= keyword ({kw_pct}), semantic ({sem_pct})",
-            green("✓") if assertion_result else red("✗"),
-        )
-
-    return result
 
 
 def main() -> None:

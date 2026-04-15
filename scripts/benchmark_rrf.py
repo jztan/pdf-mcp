@@ -637,10 +637,10 @@ def _print_summary(
 
     # Context building — Recall@K per scenario and mode
     _p(f"  {bold('Task Group 2: Context Building')}  (primary metric: Recall@K)")
-    _p(f"  {'Scenario':<32} {'kw':<8} {'sem':<8} {'hybrid':<8} {'router'}")
+    _p(f"  {'Scenario':<36} {'kw':<8} {'sem':<8} {'hybrid':<8} {'router'}")
     for r in context_results:
         modes = r["modes"]
-        row = f"  {r['name']:<32}"
+        row = f"  {r['name']:<36}"
         for mode in ("keyword", "semantic", "hybrid", "router"):
             pct = f"{modes[mode]['recall'] * 100:.0f}%"
             row += f" {pct:<8}"
@@ -649,15 +649,17 @@ def _print_summary(
     _p()
 
     # Navigation — Recall@1 per scenario and mode
+    # Note: ANSI codes inflate string length, so pad the raw symbol first then colorize.
     _p(f"  {bold('Task Group 3: Navigation')}  (primary metric: Recall@1)")
-    _p(f"  {'Scenario':<32} {'kw R@1':<8} {'sem R@1':<8} {'hyb R@1':<8} {'rtr R@1'}")
+    _p(f"  {'Scenario':<36} {'kw R@1':<8} {'sem R@1':<8} {'hyb R@1':<8} {'rtr R@1'}")
     for r in nav_results:
         modes = r["modes"]
-        row = f"  {r['name']:<32}"
+        row = f"  {r['name']:<36}"
         for mode in ("keyword", "semantic", "hybrid", "router"):
             rank = modes[mode]["rank_first_hit"]
-            r1 = green("✓") if rank == 1 else "✗"
-            row += f" {r1:<8}"
+            symbol = "✓" if rank == 1 else "✗"
+            colored = green("✓") if rank == 1 else "✗"
+            row += " " + colored + " " * (7 - len(symbol))
         _p(row)
 
     _p()

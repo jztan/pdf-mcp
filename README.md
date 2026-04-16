@@ -220,9 +220,11 @@ Read a complete document in one call. Subject to a safety limit on page count.
 
 ### `pdf_search` — Search Within PDF
 
-Find relevant pages before loading content. Supports three modes:
+Find relevant pages before loading content. The default mode is **hybrid** — Reciprocal Rank Fusion (RRF) merges BM25 keyword results and semantic embedding results into a single ranked list. This consistently outperforms either method alone: keyword search finds exact terms that embeddings miss; semantic search finds conceptual matches that keyword search misses; RRF fusion captures both.
 
-- **`mode="auto"` (default)** — Reciprocal Rank Fusion of keyword (FTS5/BM25) and semantic results when `pdf-mcp[semantic]` is installed; keyword-only fallback otherwise.
+Three modes are available:
+
+- **`mode="auto"` (default)** — Hybrid RRF when `pdf-mcp[semantic]` is installed; keyword-only fallback otherwise.
 - **`mode="keyword"`** — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
 - **`mode="semantic"`** — Semantic only (requires `pdf-mcp[semantic]`). Best for conceptual queries.
 
@@ -340,7 +342,7 @@ black src/ tests/
 |---|---|---|
 | Large PDFs | Context overflow | Chunked reading |
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Keyword search (FTS5 + BM25) or semantic search (local embeddings) |
+| Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |

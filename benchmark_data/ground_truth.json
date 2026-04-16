@@ -1,0 +1,53 @@
+{
+  "pdfs": {
+    "attention": {
+      "url": "https://arxiv.org/pdf/1706.03762.pdf",
+      "title": "Attention Is All You Need (Vaswani et al., 2017)",
+      "page_count": 15,
+      "scenarios": {
+        "1a": {
+          "query": "dropout rate",
+          "relevant_pages": [8],
+          "notes": "Precise factual — keyword-friendly. Page 8 (Regularization section) explicitly states dropout rate values. Router picks semantic (all-lowercase query, no [A-Z0-9-]{4+} match), but all modes find page 8."
+        },
+        "1b": {
+          "query": "why self-attention is better than recurrent layers",
+          "relevant_pages": [7],
+          "notes": "Conceptual — semantic-friendly. No verbatim phrase match; keyword returns 0 results. Semantic finds page 7 (Why Self-Attention section) at rank 1. Router picks semantic (all lowercase)."
+        },
+        "1c": {
+          "query": "WMT-2014 generalization capability",
+          "relevant_pages": [8],
+          "notes": "Mixed — router trap. 'WMT-2014' contains W,M,T,-,2,0,1,4 which all match [A-Z0-9-]{4+}, so router routes to keyword. Keyword returns 0 matches (phrase not verbatim). Hybrid's semantic leg finds page 8 (Machine Translation results table, newstest2014)."
+        },
+        "3a": {
+          "query": "Scaled Dot-Product Attention",
+          "relevant_pages": [4],
+          "notes": "Navigation — keyword wins with exact section heading match (rank 1, score 5.67). Router picks semantic (no 4+ consecutive uppercase/digit/hyphen in 'Scaled Dot-Product Attention'—academic section headings don't trigger the code-pattern regex). Both semantic and keyword find page 4."
+        },
+        "3b": {
+          "query": "the parallelization advantage over sequential recurrence",
+          "relevant_pages": [6],
+          "notes": "Navigation — cross-reference by concept. Keyword returns 0 matches. Semantic finds page 6 (Why Self-Attention: formal analysis of parallelization advantage vs recurrent layers) at rank 2. Router picks semantic (all lowercase)."
+        }
+      }
+    },
+    "gpt3": {
+      "url": "https://arxiv.org/pdf/2005.14165.pdf",
+      "title": "Language Models are Few-Shot Learners (Brown et al., 2020)",
+      "page_count": 75,
+      "scenarios": {
+        "2a": {
+          "query": "few-shot performance",
+          "relevant_pages": [12, 14, 16],
+          "notes": "Context building — clustered pages. Phrase 'few-shot performance' appears verbatim across Results section (pages 12=QA benchmarks, 14=Translation, 16=Winograd). Keyword@10 finds all three. Demonstrates: for precise terminology, keyword alone achieves full recall on nearby pages."
+        },
+        "2b": {
+          "query": "bias fairness",
+          "relevant_pages": [34, 36, 39],
+          "notes": "Context building — TRUE FUSION scenario. Keyword finds page 34 (Broader Impacts section start, 'bias, fairness' appears in overview), misses pages 36 and 39. Semantic finds pages 36 (6.2 Fairness, Bias, and Representation subsection) and 39 (6.2.4 Future Bias and Fairness Challenges), misses page 34. Hybrid via RRF combines both signals and finds all three relevant pages."
+        }
+      }
+    }
+  }
+}

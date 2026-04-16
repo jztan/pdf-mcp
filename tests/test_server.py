@@ -15,16 +15,429 @@ import httpx
 from pdf_mcp.server import (
     _resolve_path,
     _python_search,
+    _rrf_fuse,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
     pdf_search,
-    pdf_semantic_search,
     pdf_get_toc,
     pdf_cache_stats,
     pdf_cache_clear,
 )
 from pdf_mcp.url_fetcher import URLFetcher
+
+
+class TestRrfFuse:
+    """Unit tests for _rrf_fuse() — pure RRF math, no PDF required."""
+
+    def test_scores_both_lists(self):
+        """Page in both lists accumulates both RRF terms."""
+        # page 5: kw_rank=1 → 1/61; sem_rank=2 → 1/62
+        # page 10: kw_rank=2 → 1/62; sem_rank=1 → 1/61
+        # Both equal → tie broken by ascending page: [5, 10]
+        result = _rrf_fuse([5, 10], [10, 5], max_results=10)
+        scores = dict(result)
+        assert abs(scores[5] - (1 / 61 + 1 / 62)) < 1e-6
+        assert abs(scores[10] - (1 / 62 + 1 / 61)) < 1e-6
+        pages = [p for p, _ in result]
+        assert pages == [5, 10]  # tie broken by ascending page
+
+    def test_keyword_only_page(self):
+        """Page in keyword list only gets 1/(60+rank), semantic term = 0."""
+        result = _rrf_fuse([3], [], max_results=10)
+        assert len(result) == 1
+        page, score = result[0]
+        assert page == 3
+        assert abs(score - 1 / 61) < 1e-6
+
+    def test_semantic_only_page(self):
+        """Page in semantic list only gets 1/(60+rank), keyword term = 0."""
+        result = _rrf_fuse([], [7], max_results=10)
+        assert len(result) == 1
+        page, score = result[0]
+        assert page == 7
+        assert abs(score - 1 / 61) < 1e-6
+
+    def test_tie_breaking_ascending_page(self):
+        """Equal RRF scores (both rank 1 in different lists) → ascending page wins."""
+        result = _rrf_fuse([20], [5], max_results=10)
+        pages = [p for p, _ in result]
+        assert pages == [5, 20]
+
+    def test_max_results_honored(self):
+        """Result truncated to max_results even with many candidates."""
+        result = _rrf_fuse(list(range(20)), list(range(20, 40)), max_results=5)
+        assert len(result) == 5
+
+    def test_sorted_descending_score(self):
+        """Pages that appear in both lists rank above pages in only one."""
+        # Pages 1,2,3 appear in both lists — higher RRF score
+        # Pages 4,5,6 appear only in keyword list — lower RRF score
+        result = _rrf_fuse([1, 2, 3, 4, 5, 6], [1, 2, 3], max_results=10)
+        scores = [s for _, s in result]
+        assert scores == sorted(scores, reverse=True)
+        # First 3 results should be pages 1, 2, 3
+        top_pages = [p for p, _ in result[:3]]
+        assert set(top_pages) == {1, 2, 3}
+
+
+class TestPdfSearchModes:
+    """Tests for pdf_search mode parameter routing."""
+
+    # ── helpers ─────────────────────────────────────────────────────────
+
+    def _make_encode(self, dim: int = 384):
+        """
+        Return (encode, encode_query) mocks with deterministic vectors.
+        Page i gets a unit vector at dimension (i % dim).
+        Query gets a unit vector at dimension 0 → page 0 scores highest.
+        """
+
+        def encode(texts):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            for i in range(len(texts)):
+                result[i, i % dim] = 1.0
+            return result
+
+        def encode_query(text):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        return encode, encode_query
+
+    # ── mode validation ──────────────────────────────────────────────────
+
+    def test_invalid_mode_returns_error(self, sample_pdf, isolated_server):
+        """Unknown mode string returns error dict before opening the PDF."""
+        result = pdf_search(sample_pdf, "page", mode="fuzzy")
+
+        assert "error" in result
+        assert "fuzzy" in result["error"]
+        assert "auto" in result["error"]
+        assert "keyword" in result["error"]
+        assert "semantic" in result["error"]
+
+    def test_invalid_mode_includes_query(self, sample_pdf, isolated_server):
+        """Error response includes the original query for context."""
+        result = pdf_search(sample_pdf, "hello", mode="bad")
+        assert result.get("query") == "hello"
+
+    # ── mode="keyword" ───────────────────────────────────────────────────
+
+    def test_keyword_mode_returns_search_mode_keyword(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='keyword' always returns search_mode='keyword'."""
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+
+        assert result.get("search_mode") == "keyword"
+
+    def test_keyword_mode_has_total_matches(self, sample_pdf, isolated_server):
+        """mode='keyword' response includes total_matches and page_match_counts."""
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_keyword_mode_ignores_fastembed(self, sample_pdf, isolated_server):
+        """mode='keyword' never calls embedder even when fastembed is installed."""
+        with patch("pdf_mcp.embedder.encode") as mock_encode:
+            pdf_search(sample_pdf, "page", mode="keyword")
+            mock_encode.assert_not_called()
+
+    # ── mode="semantic", no fastembed ────────────────────────────────────
+
+    def test_semantic_mode_no_fastembed_returns_error(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' without fastembed returns error + install_hint."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "query", mode="semantic")
+
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_semantic_mode_no_fastembed_check_before_path(
+        self, isolated_server, tmp_path
+    ):
+        """mode='semantic' fastembed check happens before path resolution."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            # Non-existent path — should still return error, not FileNotFoundError
+            result = pdf_search("/nonexistent/file.pdf", "query", mode="semantic")
+
+        assert "error" in result
+        assert "install_hint" in result
+
+    # ── mode="semantic", fastembed available ─────────────────────────────
+
+    def test_semantic_mode_returns_search_mode_semantic(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' with fastembed returns search_mode='semantic'."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert result.get("search_mode") == "semantic"
+
+    def test_semantic_mode_omits_keyword_fields(self, sample_pdf, isolated_server):
+        """mode='semantic' response omits total_matches and page_match_counts."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert "total_matches" not in result
+        assert "page_match_counts" not in result
+
+    def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
+        """mode='semantic' matches have page, excerpt, score, position."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert "matches" in result
+        assert len(result["matches"]) > 0
+        for m in result["matches"]:
+            assert "page" in m
+            assert "excerpt" in m
+            assert "score" in m
+            assert "position" in m
+            assert m["position"] == 0
+
+    def test_semantic_mode_excerpt_uses_context_chars(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='semantic' excerpt is first context_chars chars of page text."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result_50 = pdf_search(
+                sample_pdf, "test", mode="semantic", context_chars=50
+            )
+            result_200 = pdf_search(
+                sample_pdf, "test", mode="semantic", context_chars=200
+            )
+
+        # Shorter context produces shorter excerpts
+        lens_50 = [len(m["excerpt"]) for m in result_50["matches"]]
+        lens_200 = [len(m["excerpt"]) for m in result_200["matches"]]
+        assert max(lens_50) <= max(lens_200)
+
+    # ── mode="auto" hybrid ───────────────────────────────────────────────
+
+    def test_auto_mode_no_fastembed_returns_keyword(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' without fastembed falls back to search_mode='keyword'."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_auto_mode_with_fastembed_returns_hybrid(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' with fastembed available returns search_mode='hybrid'."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "hybrid"
+
+    def test_hybrid_has_total_matches(self, sample_pdf, isolated_server):
+        """Hybrid mode includes total_matches and page_match_counts (keyword counts)."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+
+    def test_hybrid_max_results_honored(self, sample_pdf, isolated_server):
+        """Hybrid mode returns at most max_results matches."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto", max_results=2)
+
+        assert len(result["matches"]) <= 2
+
+    def test_hybrid_semantic_only_pages_appear(
+        self, isolated_server, tmp_path
+    ):
+        """Pages with no keyword match but high semantic score appear in results."""
+        import pymupdf as _pymupdf
+
+        # Page 1: has keyword "banana"; page 2: unrelated text, wins semantically
+        pdf_path = str(tmp_path / "hybrid_test.pdf")
+        doc = _pymupdf.open()
+        p1 = doc.new_page()
+        p1.insert_text((50, 50), "banana is a yellow fruit")
+        p2 = doc.new_page()
+        p2.insert_text((50, 50), "unrelated filler text here for page two content")
+        doc.save(pdf_path)
+        doc.close()
+
+        dim = 384
+
+        def encode(texts):
+            # Page 0 (banana page): unit vec at dim 1
+            # Page 1 (filler page): unit vec at dim 0
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            result[0, 1] = 1.0
+            if len(texts) > 1:
+                result[1, 0] = 1.0
+            return result
+
+        def encode_query(text):
+            # Query matches dim 0 → page 1 (filler) wins semantically
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_path, "banana", mode="auto", max_results=5)
+
+        assert result["search_mode"] == "hybrid"
+        pages_returned = {m["page"] for m in result["matches"]}
+        # Page 2 (1-indexed) should appear even though it has no "banana" keyword
+        assert 2 in pages_returned
+
+    def test_hybrid_excerpt_source(self, isolated_server, tmp_path):
+        """Keyword-hit pages use FTS snippet; semantic-only pages use truncated text."""
+        import pymupdf as _pymupdf
+
+        cache_instance, _ = isolated_server
+        if not cache_instance.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        # Page 1 has keyword; page 2 is semantic-only
+        pdf_path = str(tmp_path / "excerpt_test.pdf")
+        keyword_text = "the quick brown fox jumps over the lazy dog"
+        filler_text = "unrelated content fills this second page entirely"
+        doc = _pymupdf.open()
+        p1 = doc.new_page()
+        p1.insert_text((50, 50), keyword_text)
+        p2 = doc.new_page()
+        p2.insert_text((50, 50), filler_text)
+        doc.save(pdf_path)
+        doc.close()
+
+        dim = 384
+
+        def encode(texts):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            result[0, 1] = 1.0  # page 0: dim 1
+            if len(texts) > 1:
+                result[1, 0] = 1.0  # page 1: dim 0 → wins query
+            return result
+
+        def encode_query(text):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        # Pre-populate FTS index
+        pdf_read_pages(pdf_path, "1-2")
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_path, "fox", mode="auto", max_results=5)
+
+        assert result["search_mode"] == "hybrid"
+        by_page = {m["page"]: m for m in result["matches"]}
+
+        # Page 1 (keyword hit) — FTS snippet should contain the matched word
+        assert 1 in by_page, "Page 1 (keyword hit) must appear in hybrid results"
+        assert "fox" in by_page[1]["excerpt"].lower()
+
+        # Page 2 (semantic only) — excerpt is raw page text prefix, not FTS snippet
+        assert 2 in by_page, "Page 2 (semantic-only) must appear in hybrid results"
+        assert by_page[2]["excerpt"].startswith(filler_text[:20])
+
+    def test_hybrid_embedding_cache_used_on_second_call(
+        self, sample_pdf, isolated_server
+    ):
+        """Second hybrid call hits embedding cache (encode not called again)."""
+        encode, encode_query = self._make_encode()
+        encode_mock = Mock(side_effect=encode)
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode_mock),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            pdf_search(sample_pdf, "page", mode="auto")   # first call — encodes
+            call_count_after_first = encode_mock.call_count
+
+            pdf_search(sample_pdf, "content", mode="auto")  # second call — cache hit
+            call_count_after_second = encode_mock.call_count
+
+        # encode() for page texts should not be called again on second query
+        assert call_count_after_second == call_count_after_first
+
+    def test_default_mode_is_auto(self, sample_pdf, isolated_server):
+        """Calling pdf_search without mode defaults to 'auto' behaviour."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("no fastembed"),
+        ):
+            result = pdf_search(sample_pdf, "page")
+
+        # auto + no fastembed → keyword
+        assert result.get("search_mode") == "keyword"
 
 
 class TestPdfInfo:
@@ -263,8 +676,8 @@ class TestPdfSearch:
         assert "position" in match
 
     def test_search_not_found(self, sample_pdf, isolated_server):
-        """Empty matches, total_matches=0."""
-        result = pdf_search(sample_pdf, "xyznonexistent")
+        """Keyword mode: no keyword match returns empty matches."""
+        result = pdf_search(sample_pdf, "xyznonexistent", mode="keyword")
 
         assert result["total_matches"] == 0
         assert len(result["matches"]) == 0
@@ -923,12 +1336,12 @@ class TestPdfSearchFTS5:
             assert isinstance(match["score"], float)
             assert match["score"] >= 0.0
 
-    def test_search_result_has_index_used_field(self, sample_pdf, isolated_server):
-        """Response includes 'index_used' boolean field."""
+    def test_search_result_has_search_mode_field(self, sample_pdf, isolated_server):
+        """Response includes 'search_mode' string field."""
         result = pdf_search(sample_pdf, "page")
 
-        assert "index_used" in result
-        assert isinstance(result["index_used"], bool)
+        assert "search_mode" in result
+        assert result["search_mode"] in ("keyword", "hybrid", "semantic")
 
     def test_search_uses_fts_after_read_pages(self, sample_pdf, isolated_server):
         """After pdf_read_pages populates page text cache, pdf_search uses FTS index."""
@@ -939,7 +1352,7 @@ class TestPdfSearchFTS5:
         pdf_read_pages(sample_pdf, "1-5")
         result = pdf_search(sample_pdf, "content")
 
-        assert result["index_used"] is True
+        assert result["search_mode"] in ("keyword", "hybrid")
 
     def test_search_fallback_when_not_indexed(self, sample_pdf, isolated_server):
         """Without prior pdf_read_pages, pdf_search still returns results via scan."""
@@ -947,7 +1360,7 @@ class TestPdfSearchFTS5:
 
         assert "matches" in result
         assert result["total_matches"] >= 1
-        assert "index_used" in result
+        assert "search_mode" in result
 
     def test_search_indexes_pages_during_scan(self, sample_pdf, isolated_server):
         """After pdf_search completes a scan, FTS index is populated for that file."""
@@ -962,7 +1375,7 @@ class TestPdfSearchFTS5:
         assert total == 5  # sample_pdf has 5 pages
 
     def test_search_second_call_uses_fts(self, sample_pdf, isolated_server):
-        """Second pdf_search (after first scan builds index) sets index_used=True."""
+        """Second pdf_search after first scan returns keyword or hybrid mode."""
         cache_instance, _ = isolated_server
         if not cache_instance.fts_available:
             pytest.skip("FTS5 not available in this SQLite build")
@@ -970,7 +1383,7 @@ class TestPdfSearchFTS5:
         pdf_search(sample_pdf, "page")  # First call — builds index
         result2 = pdf_search(sample_pdf, "content")  # Second call — should use FTS
 
-        assert result2["index_used"] is True
+        assert result2["search_mode"] in ("keyword", "hybrid")
 
     def test_search_page_match_counts_returned(self, sample_pdf, isolated_server):
         """Response has 'page_match_counts' dict, not 'pages_with_matches' list."""
@@ -1023,14 +1436,14 @@ class TestPdfSearchFTS5:
             "Porter stemmer should match 'searching'; also 'search' is a literal "
             "substring of 'searching' ensuring total_matches > 0"
         )
-        assert result["index_used"] is True
+        assert result["search_mode"] in ("keyword", "hybrid")
         assert len(result["matches"]) >= 1
 
     def test_search_no_matches_empty_page_match_counts(
         self, sample_pdf, isolated_server
     ):
-        """No matches: total_matches=0, page_match_counts={}, matches=[]."""
-        result = pdf_search(sample_pdf, "xyznonexistent")
+        """No keyword matches: total_matches=0, page_match_counts={}, matches=[]."""
+        result = pdf_search(sample_pdf, "xyznonexistent", mode="keyword")
 
         assert result["total_matches"] == 0
         assert result["page_match_counts"] == {}
@@ -1081,7 +1494,7 @@ class TestPdfSearchFTS5:
         finally:
             server_module.cache = original_cache
 
-        assert result["index_used"] is False
+        assert result["search_mode"] in ("keyword", "hybrid")
         assert result["total_matches"] >= 1
         assert len(result["matches"]) >= 1
         assert result["matches"][0]["excerpt"]
@@ -1124,212 +1537,3 @@ class TestSearchScanCacheHit:
         # After scan, all pages should be indexed
         indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
         assert indexed == total
-
-
-class TestPdfSemanticSearch:
-    """Integration tests for pdf_semantic_search tool."""
-
-    def _make_encode(self, dim: int = 384):
-        """
-        Return (encode, encode_query) mocks with deterministic vectors.
-
-        Page i gets a unit vector at dimension (i % dim).
-        Query gets a unit vector at dimension 0, so page 0 scores highest.
-        """
-
-        def encode(texts):
-            result = np.zeros((len(texts), dim), dtype=np.float32)
-            for i in range(len(texts)):
-                result[i, i % dim] = 1.0
-            return result
-
-        def encode_query(text):
-            v = np.zeros(dim, dtype=np.float32)
-            v[0] = 1.0
-            return v
-
-        return encode, encode_query
-
-    def test_fastembed_not_installed_returns_error(self, sample_pdf, isolated_server):
-        """Returns error dict with install_hint when fastembed is unavailable."""
-        with patch(
-            "pdf_mcp.embedder.check_available",
-            side_effect=ImportError(
-                "pdf_semantic_search requires the 'fastembed' package. "
-                "Install it with: pip install 'pdf-mcp[semantic]'"
-            ),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test query")
-
-        assert "error" in result
-        assert "install_hint" in result
-        assert "pdf-mcp[semantic]" in result["install_hint"]
-
-    def test_empty_query_returns_error(self, sample_pdf, isolated_server):
-        """Whitespace-only query returns error dict without opening the PDF."""
-        result = pdf_semantic_search(sample_pdf, "   ")
-        assert "error" in result
-        assert "query" in result
-
-    def test_returns_required_fields(self, sample_pdf, isolated_server):
-        """Response always contains the expected top-level fields."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "revenue growth")
-
-        for field in (
-            "content_warning",
-            "query",
-            "results",
-            "total_pages_searched",
-            "embedding_cache_hits",
-            "embedding_cache_misses",
-            "model",
-        ):
-            assert field in result, f"Missing field: {field}"
-
-    def test_results_have_required_fields(self, sample_pdf, isolated_server):
-        """Each result contains page (int), score (float), and snippet (str)."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test")
-
-        assert len(result["results"]) > 0
-        for r in result["results"]:
-            assert isinstance(r["page"], int)
-            assert isinstance(r["score"], float)
-            assert isinstance(r["snippet"], str)
-
-    def test_results_sorted_by_descending_score(self, sample_pdf, isolated_server):
-        """Results are ordered from highest to lowest score."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test", top_k=5)
-
-        scores = [r["score"] for r in result["results"]]
-        assert scores == sorted(scores, reverse=True)
-
-    def test_top_k_clamped_to_20(self, sample_pdf, isolated_server):
-        """top_k=999 is clamped; never more than 20 results."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test", top_k=999)
-
-        assert len(result["results"]) <= 20
-
-    def test_cache_misses_first_call_hits_second(self, sample_pdf, isolated_server):
-        """First call generates embeddings (misses); second call uses cache (hits)."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            r1 = pdf_semantic_search(sample_pdf, "test", top_k=3)
-            r2 = pdf_semantic_search(sample_pdf, "test", top_k=3)
-
-        # sample_pdf has 5 pages, all with text
-        assert r1["embedding_cache_misses"] == 5
-        assert r1["embedding_cache_hits"] == 0
-        assert r2["embedding_cache_misses"] == 0
-        assert r2["embedding_cache_hits"] == 5
-
-    def test_model_name_in_response(self, sample_pdf, isolated_server):
-        """model field reports BAAI/bge-small-en-v1.5."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test")
-
-        assert result["model"] == "BAAI/bge-small-en-v1.5"
-
-    def test_total_pages_searched(self, sample_pdf, isolated_server):
-        """total_pages_searched equals the document page count."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            result = pdf_semantic_search(sample_pdf, "test")
-
-        assert result["total_pages_searched"] == 5  # sample_pdf has 5 pages
-
-    def test_empty_pages_excluded_from_embeddings(self, isolated_server):
-        """Pages with no text are not passed to encode() or returned in results."""
-        import os
-        import tempfile
-        import pymupdf
-        from pathlib import Path
-
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-            doc = pymupdf.open()
-            p1 = doc.new_page()
-            p1.insert_text((50, 50), "This page has content about revenue.")
-            doc.new_page()  # page 2: blank, no text
-            doc.save(f.name)
-            doc.close()
-            pdf_path = str(Path(f.name).resolve())
-
-        encode, encode_query = self._make_encode()
-        encoded_counts = {"n": 0}
-
-        def counting_encode(texts):
-            encoded_counts["n"] += len(texts)
-            return encode(texts)
-
-        try:
-            with (
-                patch("pdf_mcp.embedder.check_available"),
-                patch("pdf_mcp.embedder.encode", counting_encode),
-                patch("pdf_mcp.embedder.encode_query", encode_query),
-            ):
-                result = pdf_semantic_search(pdf_path, "revenue")
-
-            # Only 1 page has text; encode called with 1 text, not 2
-            assert encoded_counts["n"] == 1
-            pages_in_results = {r["page"] for r in result["results"]}
-            assert 2 not in pages_in_results
-        finally:
-            os.unlink(pdf_path)
-
-    def test_cache_stats_includes_embedding_pages(self, sample_pdf, isolated_server):
-        """pdf_cache_stats reports embedding_pages after a successful search."""
-        encode, encode_query = self._make_encode()
-
-        with (
-            patch("pdf_mcp.embedder.check_available"),
-            patch("pdf_mcp.embedder.encode", encode),
-            patch("pdf_mcp.embedder.encode_query", encode_query),
-        ):
-            pdf_semantic_search(sample_pdf, "test")
-
-        stats = pdf_cache_stats()
-        assert "embedding_pages" in stats
-        assert stats["embedding_pages"] == 5

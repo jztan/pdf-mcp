@@ -20,14 +20,14 @@ def check_available() -> None:
     """
     Raise ImportError with install hint if fastembed is not installed.
 
-    Call this at the start of pdf_semantic_search to give a clear error
+    Call this before running semantic search to give a clear error
     before any expensive PDF work begins.
     """
     try:
         import fastembed  # type: ignore[import-untyped,import-not-found]  # noqa: F401
     except ImportError as exc:
         raise ImportError(
-            "pdf_semantic_search requires the 'fastembed' package. "
+            "pdf_search semantic mode requires the 'fastembed' package. "
             "Install it with: pip install 'pdf-mcp[semantic]'"
         ) from exc
 
@@ -40,7 +40,7 @@ def _get_model() -> Any:
             from fastembed import TextEmbedding  # type: ignore
         except ImportError as exc:
             raise ImportError(
-                "pdf_semantic_search requires the 'fastembed' package. "
+                "pdf_search semantic mode requires the 'fastembed' package. "
                 "Install it with: pip install 'pdf-mcp[semantic]'"
             ) from exc
         _model = TextEmbedding(MODEL_NAME)

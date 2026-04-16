@@ -14,11 +14,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 ## Features
 
-- **8 specialized tools** for different PDF operations
+- **7 specialized tools** for different PDF operations
 - **SQLite caching** — persistent cache survives server restarts (essential for STDIO transport)
 - **Paginated reading** — read large PDFs in manageable chunks
-- **Full-text search** — FTS5 index with BM25 ranking and Porter stemming
-- **Semantic search** — find pages by meaning using local embeddings (no external API)
+- **Hybrid search** — combines BM25 keyword (FTS5) and semantic (local embeddings) via Reciprocal Rank Fusion; falls back to keyword-only without `pdf-mcp[semantic]`
 - **Image extraction** — per-page images returned as PNG file paths alongside text
 - **Table extraction** — per-page tables with header and row data, detected via visible borders
 - **URL support** — read PDFs from HTTP/HTTPS URLs
@@ -221,21 +220,18 @@ Read a complete document in one call. Subject to a safety limit on page count.
 
 ### `pdf_search` — Search Within PDF
 
-Find relevant pages before loading content. Uses a SQLite FTS5 index with Porter stemming and BM25 relevance ranking — results are ordered by relevance, not page number. Morphological variants are matched automatically (e.g. searching "managing" finds pages containing "management"). Falls back to a linear scan on SQLite builds without FTS5 support.
+Find relevant pages before loading content. Supports three modes:
+
+- **`mode="auto"` (default)** — Reciprocal Rank Fusion of keyword (FTS5/BM25) and semantic results when `pdf-mcp[semantic]` is installed; keyword-only fallback otherwise.
+- **`mode="keyword"`** — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
+- **`mode="semantic"`** — Semantic only (requires `pdf-mcp[semantic]`). Best for conceptual queries.
+
+Response includes `search_mode: "hybrid" | "keyword" | "semantic"` indicating which path ran.
+
+The first call on a new document embeds all pages (one-time cost, ~291ms for 200 pages); subsequent calls are instant.
 
 ```
 "Search for 'quarterly revenue' in the PDF"
-```
-
-### `pdf_semantic_search` — Search by Meaning
-
-Find pages by conceptual similarity rather than exact keywords. Searching "revenue growth" matches pages about "sales increase" or "financial performance" even without literal keyword overlap. Uses `BAAI/bge-small-en-v1.5` embeddings (384-dim, local ONNX Runtime — no external API, no GPU required).
-
-Embeddings are generated once per page and cached in SQLite. The first call for a document takes ~8–15 s on CPU; subsequent queries are instant.
-
-Requires: `pip install 'pdf-mcp[semantic]'`
-
-```
 "Find pages about revenue growth in the PDF"
 "Which pages discuss supply chain risks?"
 ```

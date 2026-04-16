@@ -308,12 +308,23 @@ def bump_version(config: ReleaseConfig) -> tuple[str, str]:
     return current_version, new_version
 
 
+def regenerate_uv_lock(config: ReleaseConfig) -> None:
+    """Regenerate uv.lock after version bump."""
+    if config.dry_run:
+        print("  [DRY-RUN] Would run: uv lock")
+    else:
+        run_command(["uv", "lock"])
+        print("  ✓ Regenerated uv.lock")
+
+
 def commit_version_bump(config: ReleaseConfig, new_version: str) -> None:
     """Commit version bump changes on release branch."""
     print("\n=== Commit Version Bump ===\n")
 
+    regenerate_uv_lock(config)
+
     # Stage changes
-    files = ["pyproject.toml", "server.json", "src/pdf_mcp/__init__.py", "CHANGELOG.md"]
+    files = ["pyproject.toml", "server.json", "src/pdf_mcp/__init__.py", "CHANGELOG.md", "uv.lock"]
     for f in files:
         run_command(
             ["git", "add", f],

@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
+## [1.8.0] - 2026-04-16
 ### Changed
 - `pdf_search` gains a `mode` parameter: `"keyword"` (default, existing behaviour), `"semantic"` (embedding-based), or `"auto"` (hybrid RRF — runs both and fuses results)
 - In hybrid mode (`mode="auto"`), keyword and semantic results are fused via Reciprocal Rank Fusion (RRF, k=60); `search_mode` field in the response reflects which path ran (`"keyword"`, `"semantic"`, or `"hybrid"`)

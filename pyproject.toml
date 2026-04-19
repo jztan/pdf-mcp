@@ -84,6 +84,9 @@ filterwarnings = [
     "ignore::DeprecationWarning:importlib",
     "ignore:builtin type Swig:DeprecationWarning",
 ]
+markers = [
+    "integration: end-to-end tests requiring system dependencies (e.g. Tesseract)",
+]
 
 [tool.black]
 line-length = 88

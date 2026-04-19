@@ -137,7 +137,7 @@ def sample_pdf_with_images():
 
 @pytest.fixture
 def sample_pdf_scanned():
-    """PDF where pages have zero extractable text but contain raster images (scan simulation)."""
+    """PDF with zero extractable text but raster images (scan simulation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         doc = pymupdf.open()
         page = doc.new_page()

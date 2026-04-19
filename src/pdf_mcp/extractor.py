@@ -361,7 +361,7 @@ def ocr_page(
     """
     page = doc[page_num]
     textpage = page.get_textpage_ocr(language=lang, dpi=dpi)
-    return page.get_text(textpage=textpage)
+    return str(page.get_text(textpage=textpage))
 
 
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:

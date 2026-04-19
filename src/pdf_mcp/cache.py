@@ -117,7 +117,12 @@ class PDFCache:
 
             # page_renders: drop if missing required columns
             cols = _get_columns(conn, "page_renders")
-            if cols and not {"file_path", "page_num", "dpi", "file_path_on_disk"}.issubset(cols):
+            if cols and not {
+                "file_path",
+                "page_num",
+                "dpi",
+                "file_path_on_disk",
+            }.issubset(cols):
                 conn.execute("DROP TABLE IF EXISTS page_renders")
 
             conn.executescript("""
@@ -316,8 +321,12 @@ class PDFCache:
                     text_coverage_json, accessed_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
                 (
-                    path, mtime, size, page_count,
-                    json.dumps(metadata), json.dumps(toc),
+                    path,
+                    mtime,
+                    size,
+                    page_count,
+                    json.dumps(metadata),
+                    json.dumps(toc),
                     json.dumps(text_coverage) if text_coverage is not None else None,
                 ),
             )
@@ -707,7 +716,9 @@ class PDFCache:
     def get_page_render(
         self, path: str, page_num: int, dpi: int
     ) -> dict[str, Any] | None:
-        """Get cached render for a page at a specific DPI. Returns None if not cached."""
+        """Get cached render for a page at a specific DPI.
+
+        Returns None if not cached."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -737,7 +748,9 @@ class PDFCache:
         dpi: int,
         render_dict: dict[str, Any],
     ) -> None:
-        """Save a render to cache. Unlinks the old PNG if the path changed (orphan guard)."""
+        """Save a render to cache.
+
+        Unlinks the old PNG if the path changed (orphan guard)."""
         with sqlite3.connect(self.db_path) as conn:
             existing = conn.execute(
                 "SELECT file_path_on_disk FROM page_renders"
@@ -755,7 +768,10 @@ class PDFCache:
                     file_path_on_disk, size_bytes, width, height)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    path, page_num, file_mtime, dpi,
+                    path,
+                    page_num,
+                    file_mtime,
+                    dpi,
                     render_dict["file_path_on_disk"],
                     render_dict["size_bytes"],
                     render_dict["width"],
@@ -889,7 +905,8 @@ class PDFCache:
                 ).fetchone()
                 if sample_row and not self._is_cache_valid(rpath, sample_row[0]):
                     stale_render_rows = conn2.execute(
-                        "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
+                        "SELECT file_path_on_disk FROM page_renders"
+                        " WHERE file_path = ?",
                         (rpath,),
                     ).fetchall()
                     for (fp,) in stale_render_rows:

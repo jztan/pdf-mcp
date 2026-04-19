@@ -210,6 +210,13 @@ class PDFCache:
                     ON page_renders(file_path);
             """)
 
+            # page_text: add source column to existing tables (safe ALTER TABLE)
+            cols = _get_columns(conn, "page_text")
+            if cols and "source" not in cols:
+                conn.execute(
+                    "ALTER TABLE page_text ADD COLUMN source TEXT DEFAULT 'extracted'"
+                )
+
             # FTS5 virtual table must be in a separate execute() call so that
             # OperationalError from missing FTS5 support can be caught in isolation.
             try:
@@ -360,24 +367,19 @@ class PDFCache:
 
             return result
 
-    def save_page_text(self, path: str, page_num: int, text: str) -> None:
-        """
-        Save page text to cache.
-
-        Args:
-            path: Path to PDF file
-            page_num: Page number (0-indexed)
-            text: Extracted text content
-        """
+    def save_page_text(
+        self, path: str, page_num: int, text: str, source: str = "extracted"
+    ) -> None:
+        """Save page text to cache with optional source label ('extracted' or 'ocr')."""
         mtime, _ = self._get_file_info(path)
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
-                    text, text_length)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (path, page_num, mtime, text, len(text)),
+                    text, text_length, source)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (path, page_num, mtime, text, len(text), source),
             )
 
             if self.fts_available:
@@ -392,6 +394,37 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     (path, page_num, text),
                 )
+
+    def get_page_source(self, path: str, page_num: int) -> str | None:
+        """Return 'extracted', 'ocr', or None (page not cached)."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT source, file_mtime FROM page_text"
+                " WHERE file_path = ? AND page_num = ?",
+                (path, page_num),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row[1]):
+                return None
+            return str(row[0]) if row[0] else "extracted"
+
+    def get_pages_source(self, path: str, page_nums: list[int]) -> dict[int, str]:
+        """Bulk lookup of source for multiple pages. Missing/stale pages omitted."""
+        if not page_nums:
+            return {}
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, source, file_mtime FROM page_text"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+        return {
+            int(page_num): (str(source) if source else "extracted")
+            for page_num, source, mtime in rows
+            if self._is_cache_valid(path, mtime)
+        }
 
     def save_pages_text(self, path: str, pages: dict[int, str]) -> None:
         """

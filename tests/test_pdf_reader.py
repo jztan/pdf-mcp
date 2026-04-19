@@ -970,5 +970,40 @@ class TestPageRendersCache:
         assert new_path.exists()
 
 
+class TestPageTextSource:
+    """Tests for source column on page_text."""
+
+    def test_save_page_text_default_source_is_extracted(self, cache, sample_pdf):
+        """save_page_text with no source arg defaults to 'extracted'."""
+        cache.save_page_text(sample_pdf, 0, "hello world")
+        source = cache.get_page_source(sample_pdf, 0)
+        assert source == "extracted"
+
+    def test_save_page_text_ocr_source(self, cache, sample_pdf):
+        """save_page_text with source='ocr' is stored and retrieved."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr")
+        assert cache.get_page_source(sample_pdf, 0) == "ocr"
+
+    def test_get_page_source_miss(self, cache):
+        """Returns None for uncached page."""
+        assert cache.get_page_source("/nonexistent.pdf", 0) is None
+
+    def test_get_pages_source_bulk(self, cache, sample_pdf):
+        """get_pages_source returns dict of sources for multiple pages."""
+        cache.save_page_text(sample_pdf, 0, "native text", source="extracted")
+        cache.save_page_text(sample_pdf, 1, "ocr text", source="ocr")
+        sources = cache.get_pages_source(sample_pdf, [0, 1, 2])
+        assert sources[0] == "extracted"
+        assert sources[1] == "ocr"
+        assert 2 not in sources  # page 2 not cached
+
+    def test_get_page_text_return_type_unchanged(self, cache, sample_pdf):
+        """get_page_text still returns str, not a tuple."""
+        cache.save_page_text(sample_pdf, 0, "hello", source="ocr")
+        result = cache.get_page_text(sample_pdf, 0)
+        assert isinstance(result, str)
+        assert result == "hello"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
+from pdf_mcp.config import PDFConfig
 from pdf_mcp.url_fetcher import URLFetcher
 
 
@@ -342,20 +343,20 @@ class TestClearCache:
 class TestSSRFProtection:
     """Tests for SSRF prevention in URL validation."""
 
-    def test_localhost_blocked(self, url_fetcher):
-        """URLs targeting localhost are blocked."""
-        for url in [
-            "https://localhost/secret.pdf",
-            "https://127.0.0.1/secret.pdf",
-            "https://0.0.0.0/secret.pdf",
-        ]:
-            with pytest.raises(ValueError, match="localhost"):
-                url_fetcher._validate_url(url)
+    def test_http_scheme_blocked(self, url_fetcher):
+        """http:// URLs are rejected — only https:// is allowed."""
+        with pytest.raises(ValueError, match="Only HTTPS"):
+            url_fetcher._validate_url("http://example.com/test.pdf")
+
+    def test_non_http_scheme_blocked(self, url_fetcher):
+        """Non-HTTPS schemes are blocked."""
+        with pytest.raises(ValueError, match="Only HTTPS"):
+            url_fetcher._validate_url("ftp://example.com/test.pdf")
 
     def test_private_ip_blocked(self, url_fetcher):
         """URLs targeting private IPs are blocked."""
-        with patch.object(URLFetcher, "_is_private_ip", return_value=True):
-            with pytest.raises(ValueError, match="private/reserved"):
+        with patch.object(URLFetcher, "_is_blocked_ip", return_value=True):
+            with pytest.raises(ValueError, match="blocked IP"):
                 url_fetcher._validate_url("https://internal-server.corp/secret.pdf")
 
     def test_no_hostname_blocked(self, url_fetcher):
@@ -363,62 +364,78 @@ class TestSSRFProtection:
         with pytest.raises(ValueError, match="Could not extract hostname"):
             url_fetcher._validate_url("https://")
 
-    def test_non_http_scheme_blocked(self, url_fetcher):
-        """Non-HTTP(S) schemes are blocked."""
-        with pytest.raises(ValueError, match="Only HTTP and HTTPS"):
-            url_fetcher._validate_url("ftp://example.com/test.pdf")
-
     def test_public_ip_allowed(self, url_fetcher):
         """Public IPs pass validation."""
-        with patch.object(URLFetcher, "_is_private_ip", return_value=False):
-            # Should not raise
+        with patch.object(URLFetcher, "_is_blocked_ip", return_value=False):
             url_fetcher._validate_url("https://public-server.com/test.pdf")
 
-    def test_is_private_ip_loopback(self):
-        """Loopback addresses are detected as private."""
+    def test_is_blocked_ip_loopback(self):
+        """Loopback addresses are detected as blocked."""
         with patch(
             "socket.getaddrinfo",
-            return_value=[
-                (2, 1, 6, "", ("127.0.0.1", 0)),
-            ],
+            return_value=[(2, 1, 6, "", ("127.0.0.1", 0))],
         ):
-            assert URLFetcher._is_private_ip("localhost") is True
+            assert URLFetcher._is_blocked_ip("localhost") is True
 
-    def test_is_private_ip_rfc1918(self):
-        """RFC 1918 private addresses are detected."""
+    def test_is_blocked_ip_rfc1918(self):
+        """RFC 1918 private addresses are detected as blocked."""
         for ip in ["10.0.0.1", "172.16.0.1", "192.168.1.1"]:
             with patch(
                 "socket.getaddrinfo",
-                return_value=[
-                    (2, 1, 6, "", (ip, 0)),
-                ],
+                return_value=[(2, 1, 6, "", (ip, 0))],
             ):
-                assert URLFetcher._is_private_ip("some-host") is True
+                assert URLFetcher._is_blocked_ip("some-host") is True
 
-    def test_is_private_ip_link_local(self):
-        """Link-local addresses (cloud metadata) are detected."""
+    def test_is_blocked_ip_link_local(self):
+        """Link-local addresses (cloud metadata) are detected as blocked."""
         with patch(
             "socket.getaddrinfo",
-            return_value=[
-                (2, 1, 6, "", ("169.254.169.254", 0)),
-            ],
+            return_value=[(2, 1, 6, "", ("169.254.169.254", 0))],
         ):
-            assert URLFetcher._is_private_ip("metadata.google") is True
+            assert URLFetcher._is_blocked_ip("metadata.google") is True
 
-    def test_is_private_ip_public(self):
-        """Public IPs are not flagged as private."""
+    def test_is_blocked_ip_public(self):
+        """Public IPs are not blocked."""
         with patch(
             "socket.getaddrinfo",
-            return_value=[
-                (2, 1, 6, "", ("93.184.216.34", 0)),
-            ],
+            return_value=[(2, 1, 6, "", ("93.184.216.34", 0))],
         ):
-            assert URLFetcher._is_private_ip("example.com") is False
+            assert URLFetcher._is_blocked_ip("example.com") is False
 
-    def test_dns_failure_treated_as_private(self):
+    def test_dns_failure_treated_as_blocked(self):
         """DNS resolution failure is treated as potentially dangerous."""
         with patch("socket.getaddrinfo", side_effect=OSError("DNS failed")):
-            assert URLFetcher._is_private_ip("unknown-host") is True
+            assert URLFetcher._is_blocked_ip("unknown-host") is True
+
+    def test_localhost_blocked(self, url_fetcher):
+        """localhost, 127.0.0.1, and 0.0.0.0 are blocked via CIDR."""
+        for url in [
+            "https://localhost/secret.pdf",
+            "https://127.0.0.1/secret.pdf",
+            "https://0.0.0.0/secret.pdf",
+        ]:
+            with patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", ("127.0.0.1", 0))],
+            ):
+                with pytest.raises(ValueError, match="blocked IP"):
+                    url_fetcher._validate_url(url)
+
+
+class TestFloorStillApplies:
+    def test_config_wildcard_allow_cannot_bypass_cidr(self, tmp_path):
+        """config url.allow=['*'] cannot bypass the CIDR block floor."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[urls]\nallow = ["*"]\n')
+        config = PDFConfig(config_path=cfg)
+        fetcher = URLFetcher(cache_dir=tmp_path / "cache", config=config)
+
+        with patch(
+            "socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("10.0.0.1", 0))],
+        ):
+            with pytest.raises(ValueError, match="blocked IP"):
+                fetcher._validate_url("https://internal.example.com/doc.pdf")
 
 
 class TestDownloadSizeLimit:

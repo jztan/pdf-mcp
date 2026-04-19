@@ -890,5 +890,376 @@ class TestPageEmbeddingsCRUD:
         assert result == {}
 
 
+class TestPageRendersCache:
+    """Tests for page_renders table and renders_dir."""
+
+    def test_renders_dir_created(self, temp_cache_dir):
+        """PDFCache creates renders_dir on init."""
+        from pdf_mcp.cache import PDFCache
+
+        c = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        assert c.renders_dir.exists()
+        assert c.renders_dir != c.images_dir
+
+    def test_renders_dir_permissions(self, temp_cache_dir):
+        """renders_dir has 0o700 permissions."""
+        import stat
+        from pdf_mcp.cache import PDFCache
+
+        c = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        mode = stat.S_IMODE(c.renders_dir.stat().st_mode)
+        assert mode == 0o700
+
+    def test_get_page_render_miss(self, cache):
+        """Returns None when no render cached."""
+        assert cache.get_page_render("/some/file.pdf", 0, 200) is None
+
+    def test_save_and_get_page_render(self, cache, sample_pdf):
+        """Round-trip: save render dict then retrieve it."""
+        fake_path = cache.renders_dir / "test_render.png"
+        fake_path.write_bytes(b"fakepng")
+        render_dict = {
+            "file_path_on_disk": str(fake_path),
+            "size_bytes": 7,
+            "width": 100,
+            "height": 200,
+        }
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(sample_pdf, 0, mtime, 200, render_dict)
+        result = cache.get_page_render(sample_pdf, 0, 200)
+        assert result is not None
+        assert result["width"] == 100
+        assert result["height"] == 200
+        assert result["file_path_on_disk"] == str(fake_path)
+
+    def test_get_page_render_different_dpi_miss(self, cache, sample_pdf):
+        """Different DPI is a cache miss."""
+        fake_path = cache.renders_dir / "test_render200.png"
+        fake_path.write_bytes(b"fakepng")
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": str(fake_path),
+                "size_bytes": 7,
+                "width": 100,
+                "height": 200,
+            },
+        )
+        assert cache.get_page_render(sample_pdf, 0, 300) is None
+
+    def test_get_page_render_missing_file_returns_none(self, cache, sample_pdf):
+        """Returns None if the PNG file has been deleted from disk."""
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": "/nonexistent/render.png",
+                "size_bytes": 1,
+                "width": 10,
+                "height": 10,
+            },
+        )
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+
+    def test_save_page_render_orphan_guard(self, cache, sample_pdf):
+        """Saving a new render for same page/dpi unlinks the old PNG."""
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        old_path = cache.renders_dir / "old_render.png"
+        old_path.write_bytes(b"old")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": str(old_path),
+                "size_bytes": 3,
+                "width": 10,
+                "height": 10,
+            },
+        )
+        new_path = cache.renders_dir / "new_render.png"
+        new_path.write_bytes(b"new")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": str(new_path),
+                "size_bytes": 3,
+                "width": 10,
+                "height": 10,
+            },
+        )
+        assert not old_path.exists()
+        assert new_path.exists()
+
+
+class TestPageTextSource:
+    """Tests for source column on page_text."""
+
+    def test_save_page_text_default_source_is_extracted(self, cache, sample_pdf):
+        """save_page_text with no source arg defaults to 'extracted'."""
+        cache.save_page_text(sample_pdf, 0, "hello world")
+        source = cache.get_page_source(sample_pdf, 0)
+        assert source == "extracted"
+
+    def test_save_page_text_ocr_source(self, cache, sample_pdf):
+        """save_page_text with source='ocr' is stored and retrieved."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr")
+        assert cache.get_page_source(sample_pdf, 0) == "ocr"
+
+    def test_get_page_source_miss(self, cache):
+        """Returns None for uncached page."""
+        assert cache.get_page_source("/nonexistent.pdf", 0) is None
+
+    def test_get_pages_source_bulk(self, cache, sample_pdf):
+        """get_pages_source returns dict of sources for multiple pages."""
+        cache.save_page_text(sample_pdf, 0, "native text", source="extracted")
+        cache.save_page_text(sample_pdf, 1, "ocr text", source="ocr")
+        sources = cache.get_pages_source(sample_pdf, [0, 1, 2])
+        assert sources[0] == "extracted"
+        assert sources[1] == "ocr"
+        assert 2 not in sources  # page 2 not cached
+
+    def test_get_page_text_return_type_unchanged(self, cache, sample_pdf):
+        """get_page_text still returns str, not a tuple."""
+        cache.save_page_text(sample_pdf, 0, "hello", source="ocr")
+        result = cache.get_page_text(sample_pdf, 0)
+        assert isinstance(result, str)
+        assert result == "hello"
+
+
+class TestTextCoverageCache:
+    """Tests for text_coverage_json on pdf_metadata."""
+
+    def test_save_metadata_without_coverage(self, cache, sample_pdf):
+        """save_metadata with no coverage stores None for text_coverage."""
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        result = cache.get_metadata(sample_pdf)
+        assert result is not None
+        assert result["text_coverage"] is None
+
+    def test_save_and_get_text_coverage(self, cache, sample_pdf):
+        """Coverage saved round-trips correctly."""
+        coverage = [
+            {"page": 1, "text_chars": 100, "raster_images": 0},
+            {"page": 2, "text_chars": 0, "raster_images": 1},
+        ]
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=coverage)
+        result = cache.get_metadata(sample_pdf)
+        assert result["text_coverage"] == coverage
+
+    def test_save_coverage_update(self, cache, sample_pdf):
+        """Calling save_metadata again with coverage replaces old value."""
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=None)
+        coverage = [{"page": 1, "text_chars": 50, "raster_images": 0}]
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=coverage)
+        result = cache.get_metadata(sample_pdf)
+        assert result["text_coverage"] == coverage
+
+
+class TestRenderCacheHousekeeping:
+    """Tests for _invalidate_file, clear_expired, clear_all, get_stats with renders."""
+
+    def test_invalidate_file_deletes_render_rows_and_files(self, cache, sample_pdf):
+        """_invalidate_file removes page_renders DB rows and unlinks PNG files."""
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "inv_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {"file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10},
+        )
+        cache._invalidate_file(sample_pdf)
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+        assert not png.exists()
+
+    def test_clear_all_removes_renders_dir_contents(self, cache, sample_pdf):
+        """clear_all removes render PNGs."""
+        import os
+
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "clear_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {"file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10},
+        )
+        cache.clear_all()
+        assert not png.exists()
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+
+    def test_get_stats_includes_total_renders(self, cache, sample_pdf):
+        """get_stats returns total_renders count."""
+        import os
+
+        result = cache.get_stats()
+        assert "total_renders" in result
+        assert result["total_renders"] == 0
+
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "stats_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {"file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10},
+        )
+        result = cache.get_stats()
+        assert result["total_renders"] == 1
+
+    def test_get_stats_cache_size_includes_renders_dir(self, cache, sample_pdf):
+        """cache_size_bytes includes render PNG file sizes."""
+        import os
+
+        before = cache.get_stats()["cache_size_bytes"]
+        png = cache.renders_dir / "size_test.png"
+        png.write_bytes(b"x" * 1000)
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": str(png),
+                "size_bytes": 1000,
+                "width": 10,
+                "height": 10,
+            },
+        )
+        after = cache.get_stats()["cache_size_bytes"]
+        assert after > before
+
+
+class TestExtractorRenderAndOcr:
+    """Tests for render_page_as_png, check_tesseract_available, ocr_page."""
+
+    def test_render_page_as_png_creates_file(self, sample_pdf, temp_cache_dir):
+        """render_page_as_png saves a PNG to disk and returns metadata."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 0, temp_cache_dir, "testhash", dpi=72)
+        finally:
+            doc.close()
+        assert Path(result["file_path_on_disk"]).exists()
+        assert result["size_bytes"] > 0
+        assert result["width"] > 0
+        assert result["height"] > 0
+
+    def test_render_page_as_png_dimensions_scale_with_dpi(
+        self, sample_pdf, temp_cache_dir
+    ):
+        """Higher DPI produces larger pixel dimensions."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            low = render_page_as_png(doc, 0, temp_cache_dir, "hash_low", dpi=72)
+            high = render_page_as_png(doc, 0, temp_cache_dir, "hash_high", dpi=200)
+        finally:
+            doc.close()
+        assert high["width"] > low["width"]
+        assert high["height"] > low["height"]
+
+    def test_render_page_as_png_file_permissions(self, sample_pdf, temp_cache_dir):
+        """Rendered PNG has 0o600 permissions."""
+        import stat
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 0, temp_cache_dir, "perm_hash", dpi=72)
+        finally:
+            doc.close()
+        mode = stat.S_IMODE(Path(result["file_path_on_disk"]).stat().st_mode)
+        assert mode == 0o600
+
+    def test_render_page_as_png_deterministic_filename(
+        self, sample_pdf, temp_cache_dir
+    ):
+        """Filename contains hash, page number, and DPI."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 2, temp_cache_dir, "myhash", dpi=150)
+        finally:
+            doc.close()
+        filename = Path(result["file_path_on_disk"]).name
+        assert "myhash" in filename
+        assert "p2" in filename
+        assert "150dpi" in filename
+
+    def test_check_tesseract_available_raises_when_missing(self):
+        """check_tesseract_available raises RuntimeError when binary not on PATH."""
+        from unittest.mock import patch
+        from pdf_mcp.extractor import check_tesseract_available
+
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            with pytest.raises(RuntimeError, match="Tesseract not found"):
+                check_tesseract_available()
+
+    def test_check_tesseract_available_passes_when_present(self):
+        """check_tesseract_available does not raise when binary is present."""
+        from unittest.mock import patch, MagicMock
+        from pdf_mcp.extractor import check_tesseract_available
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result):
+            check_tesseract_available()  # should not raise
+
+    def test_ocr_page_returns_string(self, sample_pdf):
+        """ocr_page returns a string (may be empty if tesseract not installed)."""
+        import pymupdf as _pymupdf
+        import subprocess
+        from pdf_mcp.extractor import ocr_page
+
+        try:
+            subprocess.run(["tesseract", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pytest.skip("Tesseract not installed")
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = ocr_page(doc, 0, lang="eng", dpi=72)
+        finally:
+            doc.close()
+        assert isinstance(result, str)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

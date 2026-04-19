@@ -2,13 +2,18 @@
 URL fetching utilities for downloading PDFs from HTTP/HTTPS sources.
 """
 
+from __future__ import annotations
+
 import hashlib
 import ipaddress
 import os
 import socket
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .config import PDFConfig
 from urllib.parse import urlparse
 
 import httpx
@@ -19,13 +24,30 @@ MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
 # Maximum number of HTTP redirects to follow
 MAX_REDIRECTS = 10
 
+_BLOCKED_NETWORKS = (
+    ipaddress.ip_network("127.0.0.0/8"),    # loopback
+    ipaddress.ip_network("10.0.0.0/8"),     # RFC 1918
+    ipaddress.ip_network("172.16.0.0/12"),  # RFC 1918
+    ipaddress.ip_network("192.168.0.0/16"), # RFC 1918
+    ipaddress.ip_network("169.254.0.0/16"), # link-local / cloud metadata
+    ipaddress.ip_network("0.0.0.0/8"),      # reserved
+    ipaddress.ip_network("::1/128"),        # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),       # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),      # IPv6 link-local
+)
+
 
 class URLFetcher:
     """
     Fetches PDFs from URLs and caches them locally.
     """
 
-    def __init__(self, cache_dir: Path | None = None, timeout: int = 60):
+    def __init__(
+        self,
+        cache_dir: Path | None = None,
+        timeout: int = 60,
+        config: PDFConfig | None = None,
+    ):
         """
         Initialize URL fetcher.
 
@@ -41,27 +63,24 @@ class URLFetcher:
         # Restrict permissions on cache directory so other users can't read downloads
         os.chmod(self.cache_dir, 0o700)
         self.timeout = timeout
+        self._config = config
         self._url_to_path: dict[str, Path] = {}
 
     @staticmethod
-    def _is_private_ip(hostname: str) -> bool:
-        """Check if a hostname resolves to a private/reserved IP address."""
+    def _is_blocked_ip(hostname: str) -> bool:
+        """Check if hostname resolves to any blocked IP range."""
         try:
-            # Resolve hostname to IP addresses
             addr_infos = socket.getaddrinfo(hostname, None)
             for addr_info in addr_infos:
                 ip_str = addr_info[4][0]
                 ip = ipaddress.ip_address(ip_str)
-                if (
-                    ip.is_private
-                    or ip.is_loopback
-                    or ip.is_link_local
-                    or ip.is_reserved
-                    or ip.is_multicast
+                if any(
+                    ip in net
+                    for net in _BLOCKED_NETWORKS
+                    if ip.version == net.version
                 ):
                     return True
         except (OSError, ValueError):
-            # If we can't resolve, treat as potentially dangerous
             return True
         return False
 
@@ -70,34 +89,31 @@ class URLFetcher:
         Validate URL to prevent SSRF attacks.
 
         Blocks:
-        - Private/internal IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x)
-        - Link-local addresses (169.254.x - including cloud metadata endpoints)
-        - Localhost
-        - Non-HTTP(S) schemes
+        - Non-HTTPS schemes (http, ftp, file, data, etc.)
+        - IPs in blocked ranges: loopback, RFC 1918, link-local, reserved, IPv6 equivalents
 
         Raises:
-            ValueError: If URL targets a blocked address
+            ValueError: If URL targets a blocked address or uses a blocked scheme
         """
         parsed = urlparse(url)
 
-        if parsed.scheme not in ("http", "https"):
+        if parsed.scheme != "https":
             raise ValueError(
-                f"Only HTTP and HTTPS URLs are allowed, got: {parsed.scheme}"
+                f"Only HTTPS URLs are supported. "
+                f"Update your URL to use https:// (got: {parsed.scheme})"
             )
 
         hostname = parsed.hostname
         if not hostname:
             raise ValueError(f"Could not extract hostname from URL: {url}")
 
-        # Block obvious localhost references
-        if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-            raise ValueError(f"URLs targeting localhost are not allowed: {url}")
-
-        # Resolve hostname and check if it points to private/reserved IPs
-        if self._is_private_ip(hostname):
+        if self._is_blocked_ip(hostname):
             raise ValueError(
-                f"URL resolves to a private/reserved IP address and is blocked: {url}"
+                f"URL resolves to a blocked IP range and is not allowed: {url}"
             )
+
+        if self._config is not None:
+            self._config.check_url_host(hostname)
 
     def _get_cache_filename(self, url: str) -> str:
         """Generate cache filename from URL."""
@@ -116,8 +132,8 @@ class URLFetcher:
         return f"{url_hash}.pdf"
 
     def is_url(self, source: str) -> bool:
-        """Check if source is a URL."""
-        return source.startswith(("http://", "https://"))
+        """Check if source is an HTTPS URL."""
+        return source.startswith("https://")
 
     def get_local_path(self, url: str) -> Path | None:
         """

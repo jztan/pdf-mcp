@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `pdf_render_pages(path, pages, dpi=200)` — new MCP tool that renders PDF pages as PNG images returned inline as MCP image content blocks; intended for vision-capable models that need to *see* page content (diagrams, handwriting, scanned pages). First element of the response is always a JSON summary block; subsequent elements are one image per page. DPI clamped to `[72, 400]`; up to 5 pages inline per call (`truncated_render: true` when truncated). Does not run OCR — tools are orthogonal.
+- `pdf_read_pages` gains `ocr=True` / `ocr_lang="eng"` parameters — runs Tesseract OCR on pages that have no extractable text; OCR'd text is written to cache with `source='ocr'` and becomes instantly searchable via `pdf_search`. Requires system Tesseract (`brew install tesseract` / `apt install tesseract-ocr`). Pre-flight check returns a clean error with install hint if Tesseract is missing. Capped at 20 pages per call (`truncated_ocr: true` when truncated).
+- `pdf_read_pages` gains `render_dpi` parameter — attaches a `render_path` (PNG on disk) alongside extracted text for each page; uses the same `page_renders` cache as `pdf_render_pages` (bidirectional: either tool populates the cache, either reads it).
+- `pdf_info` gains `text_coverage` field — per-page `{page, text_chars, raster_images}` list letting agents identify OCR candidates without reading page content. Computed in the same parse pass as metadata; zero additional cost on cached calls. Pre-v1.9.0 cached rows are backfilled lazily on the next `pdf_info` call without requiring a cache clear.
+- `pdf_search` matches now include a `source` field (`"extracted"` or `"ocr"`) so agents can tell when a match came from OCR text (lower confidence, worth cross-checking with `pdf_render_pages`).
+- `page_renders` table in SQLite cache — stores rendered PNGs keyed on `(file_path, page_num, dpi)` with mtime-based invalidation and orphan guard (old PNG unlinked on path change). `renders_dir` (`~/.cache/pdf-mcp/renders/`) kept separate from `images_dir`.
+- `source` column on `page_text` — `'extracted'` (default) or `'ocr'`; schema migration is additive (existing rows get `'extracted'` via `DEFAULT`).
+- OCR requires only system Tesseract — no additional Python packages (`brew install tesseract` / `apt install tesseract-ocr` / [Windows installer](https://github.com/UB-Mannheim/tesseract/wiki)).
+
+### Fixed
+- `pdf_render_pages` raised `Output validation error: outputSchema defined but no structured output returned` in FastMCP 3.x when deployed to Claude Desktop. FastMCP infers an `outputSchema` from `list[Any]` and then rejects `ImageContent` blocks as non-serializable JSON. Fixed by setting `output_schema=None` on the decorator to opt out of schema generation for tools that return mixed content types.
+
+### Changed
+- `pdf_cache_stats` now includes `total_renders` count and adds render PNG sizes to `cache_size_bytes`.
+- Cache housekeeping (`_invalidate_file`, `clear_expired`, `clear_all`) extended to delete render PNGs and `page_renders` rows.
+
+### Tests
+- 87 new unit tests across `test_pdf_reader.py` and `test_server.py` covering: `page_renders` cache CRUD + housekeeping, `source` column on `page_text`, `text_coverage_json` on `pdf_metadata` (including lazy backfill), `render_page_as_png` extractor (dimensions, permissions, orphan guard), `check_tesseract_available` (mock subprocess), `pdf_info` text_coverage shape + caching + 500-page performance bound (<2 s), `pdf_read_pages` render path (cache hit, DPI clamp, bidirectional), `pdf_render_pages` (summary block, image blocks, truncation, orthogonality with OCR, error in summary), `pdf_read_pages` OCR path (Tesseract pre-flight, cache hit, empty result, native-text skip, `MAX_OCR_PAGES_LIMIT`, lang forwarding, FTS integration), `pdf_search` source field (all return paths).
+- New `tests/test_integration.py` — end-to-end tests using a synthetically scanned PDF (Pillow-rendered text embedded as raster): scan detection runs unconditionally; OCR extraction, FTS searchability, and render validity tests skip gracefully when Tesseract is not installed.
+
+### Security
+- URL fetching is now HTTPS-only — `http://` URLs are rejected with an actionable error message. Previously both schemes were accepted.
+- SSRF private-IP check replaced with an explicit, auditable CIDR block list (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `0.0.0.0/8`, `::1/128`, `fc00::/7`, `fe80::/10`) checked with IP-version-aware matching. Previously used Python's `is_private`/`is_loopback` properties whose semantics shifted between Python versions.
+- New optional access-control config at `~/.config/pdf-mcp/config.toml` — `[paths]` allow/deny rules for local file sources and `[urls]` allow/deny rules for URL hosts. Rules use shell-glob patterns; deny wins on conflict; `~` is expanded; path matching operates on the real (symlink-resolved) path to prevent traversal bypasses. The SSRF floor (HTTPS-only + CIDR blocks) is always enforced regardless of config. Missing config = permissive; malformed config = server refuses to start (never silently falls back to permissive).
+- CI now installs via `uv sync --frozen` (replacing `pip install -e .[dev]`) so the committed `uv.lock` is enforced on every build — dependency drift fails loudly.
+
+---
+
 ## [1.8.0] - 2026-04-16
 ### Changed
 - `pdf_search` gains a `mode` parameter: `"keyword"` (default, existing behaviour), `"semantic"` (embedding-based), or `"auto"` (hybrid RRF — runs both and fuses results)

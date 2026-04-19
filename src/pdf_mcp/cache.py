@@ -76,6 +76,9 @@ class PDFCache:
         self.images_dir = images_dir or (self.cache_dir / "images")
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
+        self.renders_dir = self.cache_dir / "renders"
+        self.renders_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(str(self.renders_dir), 0o700)
         self._init_db()
 
     def _init_db(self) -> None:
@@ -111,6 +114,16 @@ class PDFCache:
             cols = _get_columns(conn, "page_embeddings")
             if cols and "embedding" not in cols:
                 conn.execute("DROP TABLE IF EXISTS page_embeddings")
+
+            # page_renders: drop if missing required columns
+            cols = _get_columns(conn, "page_renders")
+            if cols and not {
+                "file_path",
+                "page_num",
+                "dpi",
+                "file_path_on_disk",
+            }.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS page_renders")
 
             conn.executescript("""
                 -- PDF metadata cache
@@ -183,7 +196,39 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
+
+                -- Page render cache (full-page PNG renders)
+                CREATE TABLE IF NOT EXISTS page_renders (
+                    file_path          TEXT    NOT NULL,
+                    page_num           INTEGER NOT NULL,
+                    file_mtime         REAL    NOT NULL,
+                    dpi                INTEGER NOT NULL,
+                    file_path_on_disk  TEXT    NOT NULL,
+                    size_bytes         INTEGER NOT NULL,
+                    width              INTEGER NOT NULL,
+                    height             INTEGER NOT NULL,
+                    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num, dpi)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_renders_path
+                    ON page_renders(file_path);
             """)
+
+            # page_text: add source column to existing tables (safe ALTER TABLE)
+            cols = _get_columns(conn, "page_text")
+            if cols and "source" not in cols:
+                conn.execute(
+                    "ALTER TABLE page_text ADD COLUMN source TEXT DEFAULT 'extracted'"
+                )
+
+            # pdf_metadata: add text_coverage_json column to existing tables
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "text_coverage_json" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
+                )
 
             # FTS5 virtual table must be in a separate execute() call so that
             # OperationalError from missing FTS5 support can be caught in isolation.
@@ -224,7 +269,7 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc
+                   metadata, toc, text_coverage_json
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -250,29 +295,40 @@ class PDFCache:
                 "page_count": row["page_count"],
                 "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
                 "toc": json.loads(row["toc"]) if row["toc"] else [],
+                "text_coverage": (
+                    json.loads(row["text_coverage_json"])
+                    if row["text_coverage_json"]
+                    else None
+                ),
             }
 
     def save_metadata(
-        self, path: str, page_count: int, metadata: dict[str, Any], toc: list[Any]
+        self,
+        path: str,
+        page_count: int,
+        metadata: dict[str, Any],
+        toc: list[Any],
+        text_coverage: list[dict[str, Any]] | None = None,
     ) -> None:
-        """
-        Save PDF metadata to cache.
-
-        Args:
-            path: Path to PDF file
-            page_count: Total number of pages
-            metadata: PDF metadata dict
-            toc: Table of contents list
-        """
+        """Save PDF metadata to cache, including optional text_coverage."""
         mtime, size = self._get_file_info(path)
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO pdf_metadata
                    (file_path, file_mtime, file_size,
-                    page_count, metadata, toc, accessed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-                (path, mtime, size, page_count, json.dumps(metadata), json.dumps(toc)),
+                    page_count, metadata, toc,
+                    text_coverage_json, accessed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                (
+                    path,
+                    mtime,
+                    size,
+                    page_count,
+                    json.dumps(metadata),
+                    json.dumps(toc),
+                    json.dumps(text_coverage) if text_coverage is not None else None,
+                ),
             )
 
     # ==================== Page Text Operations ====================
@@ -335,24 +391,19 @@ class PDFCache:
 
             return result
 
-    def save_page_text(self, path: str, page_num: int, text: str) -> None:
-        """
-        Save page text to cache.
-
-        Args:
-            path: Path to PDF file
-            page_num: Page number (0-indexed)
-            text: Extracted text content
-        """
+    def save_page_text(
+        self, path: str, page_num: int, text: str, source: str = "extracted"
+    ) -> None:
+        """Save page text to cache with optional source label ('extracted' or 'ocr')."""
         mtime, _ = self._get_file_info(path)
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
-                    text, text_length)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (path, page_num, mtime, text, len(text)),
+                    text, text_length, source)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (path, page_num, mtime, text, len(text), source),
             )
 
             if self.fts_available:
@@ -367,6 +418,37 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     (path, page_num, text),
                 )
+
+    def get_page_source(self, path: str, page_num: int) -> str | None:
+        """Return 'extracted', 'ocr', or None (page not cached)."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT source, file_mtime FROM page_text"
+                " WHERE file_path = ? AND page_num = ?",
+                (path, page_num),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row[1]):
+                return None
+            return str(row[0]) if row[0] else "extracted"
+
+    def get_pages_source(self, path: str, page_nums: list[int]) -> dict[int, str]:
+        """Bulk lookup of source for multiple pages. Missing/stale pages omitted."""
+        if not page_nums:
+            return {}
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, source, file_mtime FROM page_text"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+        return {
+            int(page_num): (str(source) if source else "extracted")
+            for page_num, source, mtime in rows
+            if self._is_cache_valid(path, mtime)
+        }
 
     def save_pages_text(self, path: str, pages: dict[int, str]) -> None:
         """
@@ -629,6 +711,74 @@ class PDFCache:
                 ],
             )
 
+    # ==================== Render Operations ====================
+
+    def get_page_render(
+        self, path: str, page_num: int, dpi: int
+    ) -> dict[str, Any] | None:
+        """Get cached render for a page at a specific DPI.
+
+        Returns None if not cached."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """SELECT file_path_on_disk, size_bytes, width, height, file_mtime
+                   FROM page_renders
+                   WHERE file_path = ? AND page_num = ? AND dpi = ?""",
+                (path, page_num, dpi),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row["file_mtime"]):
+                return None
+            if not Path(row["file_path_on_disk"]).exists():
+                return None
+            return {
+                "file_path_on_disk": row["file_path_on_disk"],
+                "size_bytes": row["size_bytes"],
+                "width": row["width"],
+                "height": row["height"],
+            }
+
+    def save_page_render(
+        self,
+        path: str,
+        page_num: int,
+        file_mtime: float,
+        dpi: int,
+        render_dict: dict[str, Any],
+    ) -> None:
+        """Save a render to cache.
+
+        Unlinks the old PNG if the path changed (orphan guard)."""
+        with sqlite3.connect(self.db_path) as conn:
+            existing = conn.execute(
+                "SELECT file_path_on_disk FROM page_renders"
+                " WHERE file_path = ? AND page_num = ? AND dpi = ?",
+                (path, page_num, dpi),
+            ).fetchone()
+            if existing and existing[0] != render_dict["file_path_on_disk"]:
+                try:
+                    Path(existing[0]).unlink()
+                except FileNotFoundError:
+                    pass
+            conn.execute(
+                """INSERT OR REPLACE INTO page_renders
+                   (file_path, page_num, file_mtime, dpi,
+                    file_path_on_disk, size_bytes, width, height)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    path,
+                    page_num,
+                    file_mtime,
+                    dpi,
+                    render_dict["file_path_on_disk"],
+                    render_dict["size_bytes"],
+                    render_dict["width"],
+                    render_dict["height"],
+                ),
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:
@@ -645,6 +795,18 @@ class PDFCache:
                         Path(row[0]).unlink()
                     except FileNotFoundError:
                         pass
+
+            # Delete render PNG files before removing DB rows
+            render_rows = conn.execute(
+                "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+            for (render_path,) in render_rows:
+                try:
+                    Path(render_path).unlink()
+                except FileNotFoundError:
+                    pass
+            conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
 
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
@@ -715,14 +877,58 @@ class PDFCache:
                         expired_paths,
                     )
 
-            return len(expired_paths)
+                # Delete render PNG files for expired paths
+                render_rows = conn.execute(
+                    f"SELECT file_path_on_disk FROM page_renders"
+                    f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                ).fetchall()
+                for (render_path,) in render_rows:
+                    try:
+                        Path(render_path).unlink()
+                    except FileNotFoundError:
+                        pass
+                conn.execute(
+                    f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
+
+        # Sweep page_renders for stale-mtime entries (PDF file changed)
+        with sqlite3.connect(self.db_path) as conn2:
+            stale_paths = conn2.execute(
+                "SELECT DISTINCT file_path FROM page_renders"
+            ).fetchall()
+            for (rpath,) in stale_paths:
+                sample_row = conn2.execute(
+                    "SELECT file_mtime FROM page_renders WHERE file_path = ? LIMIT 1",
+                    (rpath,),
+                ).fetchone()
+                if sample_row and not self._is_cache_valid(rpath, sample_row[0]):
+                    stale_render_rows = conn2.execute(
+                        "SELECT file_path_on_disk FROM page_renders"
+                        " WHERE file_path = ?",
+                        (rpath,),
+                    ).fetchall()
+                    for (fp,) in stale_render_rows:
+                        try:
+                            Path(fp).unlink()
+                        except FileNotFoundError:
+                            pass
+                    conn2.execute(
+                        "DELETE FROM page_renders WHERE file_path = ?", (rpath,)
+                    )
+
+        return len(expired_paths)
 
     def clear_all(self) -> int:
         """Clear entire cache. Returns number of files cleared."""
-        # Delete all image files
+        # Delete all image files and render files
         shutil.rmtree(self.images_dir, ignore_errors=True)
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
+        shutil.rmtree(self.renders_dir, ignore_errors=True)
+        self.renders_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(str(self.renders_dir), 0o700)
 
         with sqlite3.connect(self.db_path) as conn:
             count = conn.execute("SELECT COUNT(*) FROM pdf_metadata").fetchone()[0]
@@ -731,6 +937,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
             conn.execute("DELETE FROM page_embeddings")
+            conn.execute("DELETE FROM page_renders")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -763,6 +970,10 @@ class PDFCache:
                 "SELECT COUNT(*) FROM page_embeddings"
             ).fetchone()[0]
 
+            stats["total_renders"] = conn.execute(
+                "SELECT COUNT(*) FROM page_renders"
+            ).fetchone()[0]
+
             # FTS5 indexed page count
             if self.fts_available:
                 stats["fts_indexed_pages"] = conn.execute(
@@ -775,14 +986,22 @@ class PDFCache:
             row = conn.execute("SELECT SUM(text_length) FROM page_text").fetchone()
             stats["total_text_chars"] = row[0] or 0
 
-            # Database file size + image directory size
+            # Database file size + image directory size + renders directory size
             try:
                 images_size = sum(
                     f.stat().st_size for f in self.images_dir.glob("*.png")
                 )
             except FileNotFoundError:
                 images_size = 0
-            stats["cache_size_bytes"] = os.path.getsize(self.db_path) + images_size
+            try:
+                renders_size = sum(
+                    f.stat().st_size for f in self.renders_dir.glob("*.png")
+                )
+            except FileNotFoundError:
+                renders_size = 0
+            stats["cache_size_bytes"] = (
+                os.path.getsize(self.db_path) + images_size + renders_size
+            )
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats

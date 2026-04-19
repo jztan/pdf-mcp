@@ -23,6 +23,7 @@ from pdf_mcp.server import (
     pdf_get_toc,
     pdf_cache_stats,
     pdf_cache_clear,
+    pdf_render_pages,
 )
 from pdf_mcp.url_fetcher import URLFetcher
 
@@ -251,9 +252,7 @@ class TestPdfSearchModes:
 
     # ── mode="auto" hybrid ───────────────────────────────────────────────
 
-    def test_auto_mode_no_fastembed_returns_keyword(
-        self, sample_pdf, isolated_server
-    ):
+    def test_auto_mode_no_fastembed_returns_keyword(self, sample_pdf, isolated_server):
         """mode='auto' without fastembed falls back to search_mode='keyword'."""
         with patch(
             "pdf_mcp.embedder.check_available",
@@ -265,9 +264,7 @@ class TestPdfSearchModes:
         assert "total_matches" in result
         assert "page_match_counts" in result
 
-    def test_auto_mode_with_fastembed_returns_hybrid(
-        self, sample_pdf, isolated_server
-    ):
+    def test_auto_mode_with_fastembed_returns_hybrid(self, sample_pdf, isolated_server):
         """mode='auto' with fastembed available returns search_mode='hybrid'."""
         encode, encode_query = self._make_encode()
 
@@ -307,9 +304,7 @@ class TestPdfSearchModes:
 
         assert len(result["matches"]) <= 2
 
-    def test_hybrid_semantic_only_pages_appear(
-        self, isolated_server, tmp_path
-    ):
+    def test_hybrid_semantic_only_pages_appear(self, isolated_server, tmp_path):
         """Pages with no keyword match but high semantic score appear in results."""
         import pymupdf as _pymupdf
 
@@ -419,7 +414,7 @@ class TestPdfSearchModes:
             patch("pdf_mcp.embedder.encode", encode_mock),
             patch("pdf_mcp.embedder.encode_query", encode_query),
         ):
-            pdf_search(sample_pdf, "page", mode="auto")   # first call — encodes
+            pdf_search(sample_pdf, "page", mode="auto")  # first call — encodes
             call_count_after_first = encode_mock.call_count
 
             pdf_search(sample_pdf, "content", mode="auto")  # second call — cache hit
@@ -1537,3 +1532,396 @@ class TestSearchScanCacheHit:
         # After scan, all pages should be indexed
         indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
         assert indexed == total
+
+
+class TestPdfInfoTextCoverage:
+    """Tests for text_coverage field in pdf_info."""
+
+    def test_text_coverage_present(self, sample_pdf, isolated_server):
+        """pdf_info response includes text_coverage list."""
+        result = pdf_info(sample_pdf)
+        assert "text_coverage" in result
+        assert isinstance(result["text_coverage"], list)
+
+    def test_text_coverage_per_page_shape(self, sample_pdf, isolated_server):
+        """Each entry has page, text_chars, raster_images."""
+        result = pdf_info(sample_pdf)
+        assert len(result["text_coverage"]) == 5  # sample_pdf has 5 pages
+        entry = result["text_coverage"][0]
+        assert entry["page"] == 1
+        assert isinstance(entry["text_chars"], int)
+        assert isinstance(entry["raster_images"], int)
+
+    def test_text_coverage_text_pages_have_chars(self, sample_pdf, isolated_server):
+        """Pages with text have text_chars > 0."""
+        result = pdf_info(sample_pdf)
+        for entry in result["text_coverage"]:
+            assert entry["text_chars"] > 0
+
+    def test_text_coverage_image_only_pages(self, sample_pdf_scanned, isolated_server):
+        """Image-only pages have text_chars == 0 and raster_images > 0."""
+        result = pdf_info(sample_pdf_scanned)
+        entry = result["text_coverage"][0]
+        assert entry["text_chars"] == 0
+        assert entry["raster_images"] > 0
+
+    def test_text_coverage_cached_on_second_call(self, sample_pdf, isolated_server):
+        """Second pdf_info call returns same coverage from cache."""
+        r1 = pdf_info(sample_pdf)
+        r2 = pdf_info(sample_pdf)
+        assert r2["from_cache"] is True
+        assert r2["text_coverage"] == r1["text_coverage"]
+
+    def test_text_coverage_lazy_backfill(self, sample_pdf, isolated_server):
+        """Existing cached row with no coverage gets backfilled on next pdf_info."""
+        import pdf_mcp.server as srv
+
+        # Manually save metadata without coverage to simulate pre-v1.9.0 cache
+        srv.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
+        result = pdf_info(sample_pdf)
+        assert result["text_coverage"] is not None
+        assert len(result["text_coverage"]) == 5
+
+    def test_pdf_info_cold_500_page_under_2s(self, isolated_server, tmp_path):
+        """Cold pdf_info on a 500-page PDF completes under 2 seconds."""
+        import time
+        import pymupdf as _pymupdf
+
+        pdf_path = str(tmp_path / "big.pdf")
+        doc = _pymupdf.open()
+        for i in range(500):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Page {i + 1} content here.")
+        doc.save(pdf_path)
+        doc.close()
+
+        start = time.monotonic()
+        pdf_info(pdf_path)
+        elapsed = time.monotonic() - start
+        assert elapsed < 2.0, f"pdf_info took {elapsed:.2f}s on 500-page PDF"
+
+
+class TestPdfReadPagesRender:
+    """Tests for render_dpi parameter on pdf_read_pages."""
+
+    def test_render_dpi_adds_render_path(self, sample_pdf, isolated_server):
+        """render_dpi set -> each page dict has render_path."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        page = result["pages"][0]
+        assert "render_path" in page
+        assert Path(page["render_path"]).exists()
+
+    def test_render_dpi_adds_render_size_bytes(self, sample_pdf, isolated_server):
+        """render_dpi set -> each page dict has render_size_bytes > 0."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        assert result["pages"][0]["render_size_bytes"] > 0
+
+    def test_render_path_in_renders_dir(self, sample_pdf, isolated_server):
+        """Rendered PNG lives under renders_dir, not images_dir."""
+        import pdf_mcp.server as srv
+
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        render_path = Path(result["pages"][0]["render_path"])
+        assert srv.cache.renders_dir in render_path.parents
+
+    def test_render_dpi_response_includes_dpi_fields(self, sample_pdf, isolated_server):
+        """Response includes render_dpi_used and render_dpi_requested."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=200)
+        assert result["render_dpi_used"] == 200
+        assert result["render_dpi_requested"] == 200
+
+    def test_render_dpi_clamped_high(self, sample_pdf, isolated_server):
+        """render_dpi above 400 is clamped to 400."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=1000)
+        assert result["render_dpi_used"] == 400
+        assert result["render_dpi_requested"] == 1000
+
+    def test_render_dpi_clamped_low(self, sample_pdf, isolated_server):
+        """render_dpi below 72 is clamped to 72."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=10)
+        assert result["render_dpi_used"] == 72
+
+    def test_render_dpi_cache_hit(self, sample_pdf, isolated_server):
+        """Second call with same render_dpi hits the cache (no re-render)."""
+        from unittest.mock import patch
+
+        pdf_read_pages(sample_pdf, "1", render_dpi=72)  # first call — renders
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            pdf_read_pages(sample_pdf, "1", render_dpi=72)  # cache hit
+            mock_render.assert_not_called()
+
+    def test_render_dpi_not_set_no_render_path(self, sample_pdf, isolated_server):
+        """Without render_dpi, pages have no render_path key."""
+        result = pdf_read_pages(sample_pdf, "1")
+        assert "render_path" not in result["pages"][0]
+        assert "render_dpi_used" not in result
+
+    def test_cache_clear_removes_render_png(self, sample_pdf, isolated_server):
+        """pdf_cache_clear removes PNGs created by pdf_read_pages render_dpi."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        png_path = Path(result["pages"][0]["render_path"])
+        assert png_path.exists()
+        pdf_cache_clear(expired_only=False)
+        assert not png_path.exists()
+
+    def test_bidirectional_cache_read_then_render_tool(
+        self, sample_pdf, isolated_server
+    ):
+        """pdf_read_pages(render_dpi=72) populates cache; pdf_render_pages is a hit."""
+        from unittest.mock import patch
+
+        pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        # pdf_render_pages at same DPI should hit the cache
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            from pdf_mcp.server import pdf_render_pages
+
+            pdf_render_pages(sample_pdf, "1", dpi=72)
+            mock_render.assert_not_called()
+
+
+class TestPdfRenderPages:
+    """Tests for pdf_render_pages tool."""
+
+    def test_returns_list(self, sample_pdf, isolated_server):
+        """pdf_render_pages returns a list (not a dict)."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        assert isinstance(result, list)
+
+    def test_first_element_is_summary_dict(self, sample_pdf, isolated_server):
+        """First list element is a dict with pages_rendered and dpi_used."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        summary = result[0]
+        assert isinstance(summary, dict)
+        assert "pages_rendered" in summary
+        assert "dpi_used" in summary
+        assert 1 in summary["pages_rendered"]
+
+    def test_subsequent_elements_are_images(self, sample_pdf, isolated_server):
+        """Elements after the summary are FastMCP Image objects."""
+        from fastmcp.utilities.types import Image
+
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        assert len(result) == 2  # summary + 1 image
+        assert isinstance(result[1], Image)
+
+    def test_dpi_clamped(self, sample_pdf, isolated_server):
+        """DPI above 400 is clamped; dpi_requested vs dpi_used differ."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=1000)
+        summary = result[0]
+        assert summary["dpi_used"] == 400
+        assert summary["dpi_requested"] == 1000
+
+    def test_max_inline_pages_truncation(self, sample_pdf, isolated_server):
+        """Requesting more than MAX_RENDER_INLINE_PAGES returns truncated_render."""
+        import pdf_mcp.server as srv
+        from fastmcp.utilities.types import Image
+
+        original = srv.MAX_RENDER_INLINE_PAGES
+        srv.MAX_RENDER_INLINE_PAGES = 2
+        try:
+            result = pdf_render_pages(sample_pdf, "1-5", dpi=72)
+        finally:
+            srv.MAX_RENDER_INLINE_PAGES = original
+        image_count = sum(1 for x in result if isinstance(x, Image))
+        assert image_count == 2
+        assert result[0].get("truncated_render") is True
+
+    def test_does_not_have_ocr_parameter(self):
+        """pdf_render_pages does not accept ocr parameter — tools are orthogonal."""
+        import inspect
+
+        sig = inspect.signature(pdf_render_pages)
+        assert "ocr" not in sig.parameters
+
+    def test_bidirectional_cache_render_tool_then_read_pages(
+        self, sample_pdf, isolated_server
+    ):
+        """pdf_render_pages populates cache; pdf_read_pages(render_dpi=72) is a hit."""
+        from unittest.mock import patch
+
+        pdf_render_pages(sample_pdf, "1", dpi=72)
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            pdf_read_pages(sample_pdf, "1", render_dpi=72)
+            mock_render.assert_not_called()
+
+    def test_rendering_does_not_run_ocr(self, sample_pdf_scanned, isolated_server):
+        """Calling pdf_render_pages does not make pages searchable via pdf_search."""
+        pdf_render_pages(sample_pdf_scanned, "1", dpi=72)
+        # sample_pdf_scanned has no extractable text
+        result = pdf_search(sample_pdf_scanned, "the", mode="keyword")
+        assert result["total_matches"] == 0
+
+    def test_docstring_mentions_vision_models(self):
+        """Tool docstring explicitly mentions vision models."""
+        assert "vision" in pdf_render_pages.__doc__.lower()
+
+    def test_invalid_pages_returns_error_in_summary(self, sample_pdf, isolated_server):
+        """Out-of-range pages returns error in summary dict; no images appended."""
+        result = pdf_render_pages(sample_pdf, "100", dpi=72)
+        assert result[0]["error"]
+        assert len(result) == 1  # images list is empty in error case
+
+
+class TestPdfReadPagesOcr:
+    """Tests for ocr and ocr_lang parameters on pdf_read_pages."""
+
+    def test_ocr_error_when_tesseract_missing(self, sample_pdf, isolated_server):
+        """ocr=True returns error dict when Tesseract not installed."""
+        from unittest.mock import patch
+
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_ocr_error_before_path_resolution(self, isolated_server):
+        """Tesseract check fires before path resolution (no FileNotFoundError)."""
+        from unittest.mock import patch
+
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages("/nonexistent/file.pdf", "1", ocr=True)
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_ocr_false_no_source_in_page(self, sample_pdf, isolated_server):
+        """Without ocr=True, page dicts have no 'source' key."""
+        result = pdf_read_pages(sample_pdf, "1")
+        assert "source" not in result["pages"][0]
+
+    def test_ocr_true_page_has_source(self, sample_pdf, isolated_server):
+        """ocr=True adds 'source' to each page dict."""
+        from unittest.mock import patch
+
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", return_value="ocr text here"):
+                result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "source" in result["pages"][0]
+
+    def test_ocr_true_writes_source_ocr_to_cache(self, sample_pdf, isolated_server):
+        """OCR result is stored with source='ocr' in cache."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch
+
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", return_value="hello from ocr"):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        source = srv.cache.get_page_source(sample_pdf, 0)
+        assert source == "ocr"
+
+    def test_ocr_cache_hit_does_not_re_ocr(self, sample_pdf, isolated_server):
+        """Second ocr=True call does not re-run OCR if source='ocr' cached."""
+        from unittest.mock import patch, MagicMock
+
+        mock_ocr = MagicMock(return_value="ocr result")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                call_count_first = mock_ocr.call_count
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                call_count_second = mock_ocr.call_count
+        assert call_count_second == call_count_first  # not called again
+
+    def test_ocr_empty_result_cached_and_not_retriggered(
+        self, sample_pdf, isolated_server
+    ):
+        """Empty OCR result is cached as source='ocr'; subsequent call skips re-OCR."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch, MagicMock
+
+        mock_ocr = MagicMock(return_value="")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                assert srv.cache.get_page_source(sample_pdf, 0) == "ocr"
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert mock_ocr.call_count == 1  # not called a second time
+
+    def test_ocr_skip_page_with_native_text(self, sample_pdf, isolated_server):
+        """Page with source='extracted' and non-empty text is not re-OCR'd."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch, MagicMock
+
+        srv.cache.save_page_text(sample_pdf, 0, "native text here", source="extracted")
+        mock_ocr = MagicMock(return_value="should not be called")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        mock_ocr.assert_not_called()
+
+    def test_ocr_max_pages_limit_truncation(self, sample_pdf, isolated_server):
+        """Requesting more than MAX_OCR_PAGES_LIMIT pages sets truncated_ocr."""
+        from unittest.mock import patch
+        import pdf_mcp.server as srv
+
+        original = srv.MAX_OCR_PAGES_LIMIT
+        srv.MAX_OCR_PAGES_LIMIT = 2
+        try:
+            with patch("pdf_mcp.server.check_tesseract_available"):
+                with patch("pdf_mcp.server.ocr_page", return_value="text"):
+                    result = pdf_read_pages(sample_pdf, "1-5", ocr=True)
+        finally:
+            srv.MAX_OCR_PAGES_LIMIT = original
+        assert result.get("truncated_ocr") is True
+        assert len(result["pages"]) == 2
+
+    def test_ocr_lang_passed_to_ocr_page(self, sample_pdf, isolated_server):
+        """ocr_lang parameter is forwarded to ocr_page."""
+        from unittest.mock import patch, MagicMock
+
+        mock_ocr = MagicMock(return_value="text")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
+        _, kwargs = mock_ocr.call_args
+        assert kwargs.get("lang") == "fra" or mock_ocr.call_args[0][2] == "fra"
+
+    def test_ocr_text_searchable_via_pdf_search(
+        self, sample_pdf_scanned, isolated_server
+    ):
+        """OCR'd text is found by pdf_search after pdf_read_pages(ocr=True)."""
+        from unittest.mock import patch
+
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", return_value="the quick brown fox"):
+                pdf_read_pages(sample_pdf_scanned, "1", ocr=True)
+        result = pdf_search(sample_pdf_scanned, "fox", mode="keyword")
+        assert result["total_matches"] >= 1
+
+
+class TestPdfSearchSource:
+    """Tests for source field on pdf_search matches (v1.10.0)."""
+
+    def test_search_match_has_source_field(self, sample_pdf, isolated_server):
+        """Each search match includes a 'source' field."""
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+        assert len(result["matches"]) > 0
+        for match in result["matches"]:
+            assert "source" in match
+
+    def test_search_match_source_extracted_for_native_text(
+        self, sample_pdf, isolated_server
+    ):
+        """Matches from native extraction have source='extracted'."""
+        pdf_read_pages(sample_pdf, "1-5")  # populates page_text with source='extracted'
+        result = pdf_search(sample_pdf, "page", mode="keyword")
+        for match in result["matches"]:
+            assert match["source"] == "extracted"
+
+    def test_search_match_source_ocr_for_ocr_text(
+        self, sample_pdf_scanned, isolated_server
+    ):
+        """Matches from OCR'd pages have source='ocr'."""
+        import pdf_mcp.server as srv
+
+        srv.cache.save_page_text(
+            sample_pdf_scanned, 0, "ocr content here", source="ocr"
+        )
+        result = pdf_search(sample_pdf_scanned, "ocr", mode="keyword")
+        assert len(result["matches"]) > 0
+        assert result["matches"][0]["source"] == "ocr"

@@ -88,6 +88,3 @@
 ---
 
 ## Future / Under Consideration
-
-- Bring-your-own embedding model for domain-specific or multilingual PDFs
-- Query router: auto-select `pdf_search` vs `pdf_semantic_search` based on query type (exact identifiers → FTS5, natural language → embeddings)

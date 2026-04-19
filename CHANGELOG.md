@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `source` column on `page_text` — `'extracted'` (default) or `'ocr'`; schema migration is additive (existing rows get `'extracted'` via `DEFAULT`).
 - OCR requires only system Tesseract — no additional Python packages (`brew install tesseract` / `apt install tesseract-ocr` / [Windows installer](https://github.com/UB-Mannheim/tesseract/wiki)).
 
+### Fixed
+- `pdf_render_pages` raised `Output validation error: outputSchema defined but no structured output returned` in FastMCP 3.x when deployed to Claude Desktop. FastMCP infers an `outputSchema` from `list[Any]` and then rejects `ImageContent` blocks as non-serializable JSON. Fixed by setting `output_schema=None` on the decorator to opt out of schema generation for tools that return mixed content types.
+
 ### Changed
 - `pdf_cache_stats` now includes `total_renders` count and adds render PNG sizes to `cache_size_bytes`.
 - Cache housekeeping (`_invalidate_file`, `clear_expired`, `clear_all`) extended to delete render PNGs and `page_renders` rows.

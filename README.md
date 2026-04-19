@@ -14,12 +14,14 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 ## Features
 
-- **7 specialized tools** for different PDF operations
+- **8 specialized tools** for different PDF operations
 - **SQLite caching** — persistent cache survives server restarts (essential for STDIO transport)
 - **Paginated reading** — read large PDFs in manageable chunks
 - **Hybrid search** — combines BM25 keyword (FTS5) and semantic (local embeddings) via Reciprocal Rank Fusion; falls back to keyword-only without `pdf-mcp[semantic]`
 - **Image extraction** — per-page images returned as PNG file paths alongside text
 - **Table extraction** — per-page tables with header and row data, detected via visible borders
+- **Page rendering** — render any page as a PNG image for vision-capable models (`pdf_render_pages`)
+- **OCR** — extract text from scanned pages via Tesseract; OCR'd text is automatically searchable (`pdf_read_pages(ocr=True)`)
 - **URL support** — read PDFs from HTTP/HTTPS URLs
 
 ## Installation
@@ -195,7 +197,7 @@ pdf-mcp --help
 
 ### `pdf_info` — Get Document Information
 
-Returns page count, metadata, file size, and estimated token count. **Call this first** to understand a document before reading it. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs (e.g. slide decks) return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
+Returns page count, metadata, file size, estimated token count, and `text_coverage` — a per-page list of `{page, text_chars, raster_images}` that lets agents identify OCR candidates without reading content. **Call this first** to understand a document. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
 
 ```
 "Read the PDF at /path/to/document.pdf"
@@ -203,11 +205,27 @@ Returns page count, metadata, file size, and estimated token count. **Call this 
 
 ### `pdf_read_pages` — Read Specific Pages
 
-Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly in the page response — no separate tool call needed. Table detection requires visible borders in the PDF.
+Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly in the page response — no separate tool call needed.
+
+Optional parameters:
+- `ocr=True` / `ocr_lang="eng"` — run Tesseract OCR on pages with no extractable text; requires system Tesseract (`brew install tesseract`); capped at 20 pages per call
+- `render_dpi=200` — attach a rendered PNG path alongside text for each page (shares cache with `pdf_render_pages`)
 
 ```
 "Read pages 1-10 of the PDF"
 "Read pages 15, 20, and 25-30"
+"OCR pages 3-5 of the scanned PDF"
+```
+
+### `pdf_render_pages` — Render Pages as Images
+
+Render PDF pages as PNG images for vision-capable models. Use when you need to *see* page content — diagrams, handwriting, scanned pages, or any page where text extraction is insufficient. Returns MCP image content blocks that vision models can process natively. Up to 5 pages per call; DPI clamped to 72–400.
+
+For extracting text from scanned pages, use `pdf_read_pages(ocr=True)` instead — the two tools are orthogonal.
+
+```
+"Show me what page 5 looks like"
+"Render the diagram on page 12"
 ```
 
 ### `pdf_read_all` — Read Entire Document
@@ -289,13 +307,14 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 
 | Data | Benefit |
 |------|---------|
-| Metadata | Avoid re-parsing document info |
+| Metadata + text coverage | Avoid re-parsing document info |
 | Page text | Skip re-extraction |
 | Images | Skip re-encoding |
 | Tables | Skip re-detection |
 | TOC | Skip re-parsing |
 | FTS5 index | O(log N) search with BM25 ranking after first query |
 | Embeddings | Instant semantic search after first indexing run |
+| Rendered PNGs | Skip re-rendering; shared between `pdf_render_pages` and `pdf_read_pages(render_dpi=…)` |
 
 **Cache invalidation:**
 - Automatic when file modification time changes
@@ -346,7 +365,9 @@ black src/ tests/
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
-| Tool design | Single monolithic tool | 7 specialized tools |
+| Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
+| Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
+| Tool design | Single monolithic tool | 8 specialized tools |
 
 ## Roadmap
 

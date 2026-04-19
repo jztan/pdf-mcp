@@ -44,6 +44,10 @@ brew install tesseract
 
 # Ubuntu/Debian
 apt install tesseract-ocr
+
+# Windows — download the installer from:
+# https://github.com/UB-Mannheim/tesseract/wiki
+# Then add the install directory to your PATH.
 ```
 
 ## Quick Start

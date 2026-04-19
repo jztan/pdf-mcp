@@ -28,8 +28,8 @@ _BLOCKED_NETWORKS = (
     ipaddress.ip_network("127.0.0.0/8"),    # loopback
     ipaddress.ip_network("10.0.0.0/8"),     # RFC 1918
     ipaddress.ip_network("172.16.0.0/12"),  # RFC 1918
-    ipaddress.ip_network("192.168.0.0/16"), # RFC 1918
-    ipaddress.ip_network("169.254.0.0/16"), # link-local / cloud metadata
+    ipaddress.ip_network("192.168.0.0/16"),  # RFC 1918
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local / cloud metadata
     ipaddress.ip_network("0.0.0.0/8"),      # reserved
     ipaddress.ip_network("::1/128"),        # IPv6 loopback
     ipaddress.ip_network("fc00::/7"),       # IPv6 ULA
@@ -90,7 +90,7 @@ class URLFetcher:
 
         Blocks:
         - Non-HTTPS schemes (http, ftp, file, data, etc.)
-        - IPs in blocked ranges: loopback, RFC 1918, link-local, reserved, IPv6 equivalents
+        - IPs in blocked ranges: loopback, RFC 1918, link-local, reserved, IPv6
 
         Raises:
             ValueError: If URL targets a blocked address or uses a blocked scheme

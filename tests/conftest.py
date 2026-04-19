@@ -136,6 +136,44 @@ def sample_pdf_with_images():
 
 
 @pytest.fixture
+def sample_pdf_scanned():
+    """PDF where pages have zero extractable text but contain raster images (scan simulation)."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+        png_data = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png_data)
+        doc.save(f.name)
+        doc.close()
+        yield str(Path(f.name).resolve())
+        os.unlink(f.name)
+
+
+@pytest.fixture
+def sample_pdf_mixed():
+    """PDF with pages 1-2 having text and pages 3-4 being image-only."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        png_data = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        for i in range(2):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Page {i + 1} has text content here.")
+        for _ in range(2):
+            page = doc.new_page()
+            page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png_data)
+        doc.save(f.name)
+        doc.close()
+        yield str(Path(f.name).resolve())
+        os.unlink(f.name)
+
+
+@pytest.fixture
 def mock_url_to_pdf(sample_pdf):
     """Mock URL fetcher to return sample_pdf for any URL."""
     with patch.object(URLFetcher, "is_url", return_value=True):

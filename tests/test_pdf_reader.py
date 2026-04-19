@@ -1093,5 +1093,63 @@ class TestRenderCacheHousekeeping:
         assert after > before
 
 
+class TestExtractorRenderAndOcr:
+    """Tests for render_page_as_png, check_tesseract_available, ocr_page."""
+
+    def test_render_page_as_png_creates_file(self, sample_pdf, temp_cache_dir):
+        """render_page_as_png saves a PNG to disk and returns metadata."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 0, temp_cache_dir, "testhash", dpi=72)
+        finally:
+            doc.close()
+        assert Path(result["file_path_on_disk"]).exists()
+        assert result["size_bytes"] > 0
+        assert result["width"] > 0
+        assert result["height"] > 0
+
+    def test_render_page_as_png_dimensions_scale_with_dpi(self, sample_pdf, temp_cache_dir):
+        """Higher DPI produces larger pixel dimensions."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            low = render_page_as_png(doc, 0, temp_cache_dir, "hash_low", dpi=72)
+            high = render_page_as_png(doc, 0, temp_cache_dir, "hash_high", dpi=200)
+        finally:
+            doc.close()
+        assert high["width"] > low["width"]
+        assert high["height"] > low["height"]
+
+    def test_render_page_as_png_file_permissions(self, sample_pdf, temp_cache_dir):
+        """Rendered PNG has 0o600 permissions."""
+        import stat
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 0, temp_cache_dir, "perm_hash", dpi=72)
+        finally:
+            doc.close()
+        mode = stat.S_IMODE(Path(result["file_path_on_disk"]).stat().st_mode)
+        assert mode == 0o600
+
+    def test_render_page_as_png_deterministic_filename(self, sample_pdf, temp_cache_dir):
+        """Filename contains hash, page number, and DPI."""
+        import pymupdf as _pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = render_page_as_png(doc, 2, temp_cache_dir, "myhash", dpi=150)
+        finally:
+            doc.close()
+        filename = Path(result["file_path_on_disk"]).name
+        assert "myhash" in filename
+        assert "p2" in filename
+        assert "150dpi" in filename
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

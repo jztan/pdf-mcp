@@ -269,6 +269,50 @@ def extract_images_from_page(
     return images
 
 
+def render_page_as_png(
+    doc: pymupdf.Document,
+    page_num: int,
+    output_dir: Path,
+    pdf_hash: str,
+    dpi: int = 200,
+) -> dict[str, Any]:
+    """
+    Render a PDF page as a PNG file.
+
+    Args:
+        doc: PyMuPDF document object
+        page_num: Page number (0-indexed)
+        output_dir: Directory to save the PNG
+        pdf_hash: Hash prefix for deterministic filenames
+        dpi: Render resolution (default 200)
+
+    Returns:
+        Dict with file_path_on_disk, size_bytes, width, height
+    """
+    page = doc[page_num]
+    pix = page.get_pixmap(dpi=dpi)
+
+    file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi.png"
+    file_path = output_dir / file_name
+    try:
+        pix.save(str(file_path))
+        os.chmod(str(file_path), 0o600)
+    except Exception as e:
+        try:
+            file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        logger.warning("Failed to save render for page %d: %s", page_num, e)
+        raise
+
+    return {
+        "file_path_on_disk": str(file_path),
+        "size_bytes": file_path.stat().st_size,
+        "width": pix.width,
+        "height": pix.height,
+    }
+
+
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     """
     Extract tables from a PDF page using PyMuPDF's table finder.

@@ -1085,7 +1085,7 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
 # ============================================================================
 
 
-@mcp.tool()
+@mcp.tool(output_schema=None)
 def pdf_render_pages(
     path: str,
     pages: str,

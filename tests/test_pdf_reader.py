@@ -890,5 +890,85 @@ class TestPageEmbeddingsCRUD:
         assert result == {}
 
 
+class TestPageRendersCache:
+    """Tests for page_renders table and renders_dir."""
+
+    def test_renders_dir_created(self, temp_cache_dir):
+        """PDFCache creates renders_dir on init."""
+        from pdf_mcp.cache import PDFCache
+        c = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        assert c.renders_dir.exists()
+        assert c.renders_dir != c.images_dir
+
+    def test_renders_dir_permissions(self, temp_cache_dir):
+        """renders_dir has 0o700 permissions."""
+        import stat
+        from pdf_mcp.cache import PDFCache
+        c = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        mode = stat.S_IMODE(c.renders_dir.stat().st_mode)
+        assert mode == 0o700
+
+    def test_get_page_render_miss(self, cache):
+        """Returns None when no render cached."""
+        assert cache.get_page_render("/some/file.pdf", 0, 200) is None
+
+    def test_save_and_get_page_render(self, cache, sample_pdf):
+        """Round-trip: save render dict then retrieve it."""
+        fake_path = cache.renders_dir / "test_render.png"
+        fake_path.write_bytes(b"fakepng")
+        render_dict = {
+            "file_path_on_disk": str(fake_path),
+            "size_bytes": 7,
+            "width": 100,
+            "height": 200,
+        }
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(sample_pdf, 0, mtime, 200, render_dict)
+        result = cache.get_page_render(sample_pdf, 0, 200)
+        assert result is not None
+        assert result["width"] == 100
+        assert result["height"] == 200
+        assert result["file_path_on_disk"] == str(fake_path)
+
+    def test_get_page_render_different_dpi_miss(self, cache, sample_pdf):
+        """Different DPI is a cache miss."""
+        fake_path = cache.renders_dir / "test_render200.png"
+        fake_path.write_bytes(b"fakepng")
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(fake_path), "size_bytes": 7, "width": 100, "height": 200
+        })
+        assert cache.get_page_render(sample_pdf, 0, 300) is None
+
+    def test_get_page_render_missing_file_returns_none(self, cache, sample_pdf):
+        """Returns None if the PNG file has been deleted from disk."""
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": "/nonexistent/render.png",
+            "size_bytes": 1, "width": 10, "height": 10,
+        })
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+
+    def test_save_page_render_orphan_guard(self, cache, sample_pdf):
+        """Saving a new render for same page/dpi unlinks the old PNG."""
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        old_path = cache.renders_dir / "old_render.png"
+        old_path.write_bytes(b"old")
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(old_path), "size_bytes": 3, "width": 10, "height": 10
+        })
+        new_path = cache.renders_dir / "new_render.png"
+        new_path.write_bytes(b"new")
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(new_path), "size_bytes": 3, "width": 10, "height": 10
+        })
+        assert not old_path.exists()
+        assert new_path.exists()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

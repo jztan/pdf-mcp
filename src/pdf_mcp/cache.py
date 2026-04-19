@@ -76,6 +76,9 @@ class PDFCache:
         self.images_dir = images_dir or (self.cache_dir / "images")
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
+        self.renders_dir = self.cache_dir / "renders"
+        self.renders_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(str(self.renders_dir), 0o700)
         self._init_db()
 
     def _init_db(self) -> None:
@@ -111,6 +114,11 @@ class PDFCache:
             cols = _get_columns(conn, "page_embeddings")
             if cols and "embedding" not in cols:
                 conn.execute("DROP TABLE IF EXISTS page_embeddings")
+
+            # page_renders: drop if missing required columns
+            cols = _get_columns(conn, "page_renders")
+            if cols and not {"file_path", "page_num", "dpi", "file_path_on_disk"}.issubset(cols):
+                conn.execute("DROP TABLE IF EXISTS page_renders")
 
             conn.executescript("""
                 -- PDF metadata cache
@@ -183,6 +191,23 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
+
+                -- Page render cache (full-page PNG renders)
+                CREATE TABLE IF NOT EXISTS page_renders (
+                    file_path          TEXT    NOT NULL,
+                    page_num           INTEGER NOT NULL,
+                    file_mtime         REAL    NOT NULL,
+                    dpi                INTEGER NOT NULL,
+                    file_path_on_disk  TEXT    NOT NULL,
+                    size_bytes         INTEGER NOT NULL,
+                    width              INTEGER NOT NULL,
+                    height             INTEGER NOT NULL,
+                    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num, dpi)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_renders_path
+                    ON page_renders(file_path);
             """)
 
             # FTS5 virtual table must be in a separate execute() call so that
@@ -627,6 +652,67 @@ class PDFCache:
                     (path, page_num, mtime, blob)
                     for page_num, blob in embeddings.items()
                 ],
+            )
+
+    # ==================== Render Operations ====================
+
+    def get_page_render(
+        self, path: str, page_num: int, dpi: int
+    ) -> dict[str, Any] | None:
+        """Get cached render for a page at a specific DPI. Returns None if not cached."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """SELECT file_path_on_disk, size_bytes, width, height, file_mtime
+                   FROM page_renders
+                   WHERE file_path = ? AND page_num = ? AND dpi = ?""",
+                (path, page_num, dpi),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row["file_mtime"]):
+                return None
+            if not Path(row["file_path_on_disk"]).exists():
+                return None
+            return {
+                "file_path_on_disk": row["file_path_on_disk"],
+                "size_bytes": row["size_bytes"],
+                "width": row["width"],
+                "height": row["height"],
+            }
+
+    def save_page_render(
+        self,
+        path: str,
+        page_num: int,
+        file_mtime: float,
+        dpi: int,
+        render_dict: dict[str, Any],
+    ) -> None:
+        """Save a render to cache. Unlinks the old PNG if the path changed (orphan guard)."""
+        with sqlite3.connect(self.db_path) as conn:
+            existing = conn.execute(
+                "SELECT file_path_on_disk FROM page_renders"
+                " WHERE file_path = ? AND page_num = ? AND dpi = ?",
+                (path, page_num, dpi),
+            ).fetchone()
+            if existing and existing[0] != render_dict["file_path_on_disk"]:
+                try:
+                    Path(existing[0]).unlink()
+                except FileNotFoundError:
+                    pass
+            conn.execute(
+                """INSERT OR REPLACE INTO page_renders
+                   (file_path, page_num, file_mtime, dpi,
+                    file_path_on_disk, size_bytes, width, height)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    path, page_num, file_mtime, dpi,
+                    render_dict["file_path_on_disk"],
+                    render_dict["size_bytes"],
+                    render_dict["width"],
+                    render_dict["height"],
+                ),
             )
 
     # ==================== Cache Management ====================

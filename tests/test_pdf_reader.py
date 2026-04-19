@@ -1005,5 +1005,34 @@ class TestPageTextSource:
         assert result == "hello"
 
 
+class TestTextCoverageCache:
+    """Tests for text_coverage_json on pdf_metadata."""
+
+    def test_save_metadata_without_coverage(self, cache, sample_pdf):
+        """Existing save_metadata call with no coverage returns None for text_coverage."""
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        result = cache.get_metadata(sample_pdf)
+        assert result is not None
+        assert result["text_coverage"] is None
+
+    def test_save_and_get_text_coverage(self, cache, sample_pdf):
+        """Coverage saved round-trips correctly."""
+        coverage = [
+            {"page": 1, "text_chars": 100, "raster_images": 0},
+            {"page": 2, "text_chars": 0, "raster_images": 1},
+        ]
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=coverage)
+        result = cache.get_metadata(sample_pdf)
+        assert result["text_coverage"] == coverage
+
+    def test_save_coverage_update(self, cache, sample_pdf):
+        """Calling save_metadata again with coverage replaces old value."""
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=None)
+        coverage = [{"page": 1, "text_chars": 50, "raster_images": 0}]
+        cache.save_metadata(sample_pdf, 2, {}, [], text_coverage=coverage)
+        result = cache.get_metadata(sample_pdf)
+        assert result["text_coverage"] == coverage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -217,6 +217,14 @@ class PDFCache:
                     "ALTER TABLE page_text ADD COLUMN source TEXT DEFAULT 'extracted'"
                 )
 
+            # pdf_metadata: add text_coverage_json column to existing tables
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "text_coverage_json" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
+                )
+
             # FTS5 virtual table must be in a separate execute() call so that
             # OperationalError from missing FTS5 support can be caught in isolation.
             try:
@@ -256,7 +264,7 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc
+                   metadata, toc, text_coverage_json
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -282,29 +290,36 @@ class PDFCache:
                 "page_count": row["page_count"],
                 "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
                 "toc": json.loads(row["toc"]) if row["toc"] else [],
+                "text_coverage": (
+                    json.loads(row["text_coverage_json"])
+                    if row["text_coverage_json"]
+                    else None
+                ),
             }
 
     def save_metadata(
-        self, path: str, page_count: int, metadata: dict[str, Any], toc: list[Any]
+        self,
+        path: str,
+        page_count: int,
+        metadata: dict[str, Any],
+        toc: list[Any],
+        text_coverage: list[dict[str, Any]] | None = None,
     ) -> None:
-        """
-        Save PDF metadata to cache.
-
-        Args:
-            path: Path to PDF file
-            page_count: Total number of pages
-            metadata: PDF metadata dict
-            toc: Table of contents list
-        """
+        """Save PDF metadata to cache, including optional text_coverage."""
         mtime, size = self._get_file_info(path)
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO pdf_metadata
                    (file_path, file_mtime, file_size,
-                    page_count, metadata, toc, accessed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-                (path, mtime, size, page_count, json.dumps(metadata), json.dumps(toc)),
+                    page_count, metadata, toc,
+                    text_coverage_json, accessed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                (
+                    path, mtime, size, page_count,
+                    json.dumps(metadata), json.dumps(toc),
+                    json.dumps(text_coverage) if text_coverage is not None else None,
+                ),
             )
 
     # ==================== Page Text Operations ====================

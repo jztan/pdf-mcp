@@ -1537,3 +1537,68 @@ class TestSearchScanCacheHit:
         # After scan, all pages should be indexed
         indexed, total = cache_instance.get_fts_index_coverage(sample_pdf)
         assert indexed == total
+
+
+class TestPdfInfoTextCoverage:
+    """Tests for text_coverage field in pdf_info."""
+
+    def test_text_coverage_present(self, sample_pdf, isolated_server):
+        """pdf_info response includes text_coverage list."""
+        result = pdf_info(sample_pdf)
+        assert "text_coverage" in result
+        assert isinstance(result["text_coverage"], list)
+
+    def test_text_coverage_per_page_shape(self, sample_pdf, isolated_server):
+        """Each entry has page, text_chars, raster_images."""
+        result = pdf_info(sample_pdf)
+        assert len(result["text_coverage"]) == 5  # sample_pdf has 5 pages
+        entry = result["text_coverage"][0]
+        assert entry["page"] == 1
+        assert isinstance(entry["text_chars"], int)
+        assert isinstance(entry["raster_images"], int)
+
+    def test_text_coverage_text_pages_have_chars(self, sample_pdf, isolated_server):
+        """Pages with text have text_chars > 0."""
+        result = pdf_info(sample_pdf)
+        for entry in result["text_coverage"]:
+            assert entry["text_chars"] > 0
+
+    def test_text_coverage_image_only_pages(self, sample_pdf_scanned, isolated_server):
+        """Image-only pages have text_chars == 0 and raster_images > 0."""
+        result = pdf_info(sample_pdf_scanned)
+        entry = result["text_coverage"][0]
+        assert entry["text_chars"] == 0
+        assert entry["raster_images"] > 0
+
+    def test_text_coverage_cached_on_second_call(self, sample_pdf, isolated_server):
+        """Second pdf_info call returns same coverage from cache."""
+        r1 = pdf_info(sample_pdf)
+        r2 = pdf_info(sample_pdf)
+        assert r2["from_cache"] is True
+        assert r2["text_coverage"] == r1["text_coverage"]
+
+    def test_text_coverage_lazy_backfill(self, sample_pdf, isolated_server):
+        """Existing cached row with no coverage gets backfilled on next pdf_info."""
+        import pdf_mcp.server as srv
+        # Manually save metadata without coverage to simulate pre-v1.9.0 cache
+        srv.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
+        result = pdf_info(sample_pdf)
+        assert result["text_coverage"] is not None
+        assert len(result["text_coverage"]) == 5
+
+    def test_pdf_info_cold_500_page_under_2s(self, isolated_server, tmp_path):
+        """Cold pdf_info on a 500-page PDF completes under 2 seconds."""
+        import time
+        import pymupdf as _pymupdf
+        pdf_path = str(tmp_path / "big.pdf")
+        doc = _pymupdf.open()
+        for i in range(500):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Page {i + 1} content here.")
+        doc.save(pdf_path)
+        doc.close()
+
+        start = time.monotonic()
+        pdf_info(pdf_path)
+        elapsed = time.monotonic() - start
+        assert elapsed < 2.0, f"pdf_info took {elapsed:.2f}s on 500-page PDF"

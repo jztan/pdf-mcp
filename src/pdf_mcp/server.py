@@ -26,6 +26,7 @@ from .extractor import (
     extract_text_from_page,
     extract_toc,
     parse_page_range,
+    render_page_as_png,
 )
 from .url_fetcher import URLFetcher
 
@@ -36,6 +37,10 @@ MAX_CONTEXT_CHARS_LIMIT = 2000
 
 # Maximum TOC entries to inline in pdf_info (~1000 token budget)
 TOC_INLINE_LIMIT = 50
+
+RENDER_DPI_MIN = 72
+RENDER_DPI_MAX = 400
+MAX_RENDER_INLINE_PAGES = 5
 
 # Initialize MCP server
 mcp = FastMCP(
@@ -194,12 +199,35 @@ def pdf_info(path: str) -> dict[str, Any]:
     # Try cache first
     cached = cache.get_metadata(local_path)
     if cached:
+        coverage = cached.get("text_coverage")
+        if coverage is None:
+            # Lazy backfill: pre-v1.9.0 cached row has no coverage
+            doc = pymupdf.open(local_path)
+            try:
+                coverage = [
+                    {
+                        "page": pn + 1,
+                        "text_chars": len(doc[pn].get_text()),
+                        "raster_images": len(doc[pn].get_images()),
+                    }
+                    for pn in range(cached["page_count"])
+                ]
+            finally:
+                doc.close()
+            cache.save_metadata(
+                local_path,
+                cached["page_count"],
+                cached.get("metadata", {}),
+                cached.get("toc", []),
+                text_coverage=coverage,
+            )
         return {
             "page_count": cached["page_count"],
             "metadata": cached.get("metadata", {}),
             **_toc_fields(cached.get("toc", [])),
+            "text_coverage": coverage,
             "from_cache": True,
-            "estimated_tokens": cached["page_count"] * 800,  # Rough estimate
+            "estimated_tokens": cached["page_count"] * 800,
             "file_size_bytes": cached["file_size"],
             "file_size_mb": round(cached["file_size"] / (1024 * 1024), 2),
             "content_warning": "Metadata fields are untrusted content from the PDF.",
@@ -214,13 +242,23 @@ def pdf_info(path: str) -> dict[str, Any]:
         toc = extract_toc(doc)
         file_size = os.path.getsize(local_path)
 
-        # Cache the results
-        cache.save_metadata(local_path, page_count, metadata, toc)
+        # Coverage scan: cheap get_text() + get_images() per page
+        coverage = [
+            {
+                "page": pn + 1,
+                "text_chars": len(doc[pn].get_text()),
+                "raster_images": len(doc[pn].get_images()),
+            }
+            for pn in range(page_count)
+        ]
+
+        cache.save_metadata(local_path, page_count, metadata, toc, text_coverage=coverage)
 
         return {
             "page_count": page_count,
             "metadata": metadata,
             **_toc_fields(toc),
+            "text_coverage": coverage,
             "file_size_bytes": file_size,
             "file_size_mb": round(file_size / (1024 * 1024), 2),
             "estimated_tokens": page_count * 800,

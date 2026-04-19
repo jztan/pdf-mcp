@@ -1151,5 +1151,39 @@ class TestExtractorRenderAndOcr:
         assert "150dpi" in filename
 
 
+    def test_check_tesseract_available_raises_when_missing(self):
+        """check_tesseract_available raises RuntimeError when binary not on PATH."""
+        from unittest.mock import patch
+        from pdf_mcp.extractor import check_tesseract_available
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            with pytest.raises(RuntimeError, match="Tesseract not found"):
+                check_tesseract_available()
+
+    def test_check_tesseract_available_passes_when_present(self):
+        """check_tesseract_available does not raise when binary is present."""
+        from unittest.mock import patch, MagicMock
+        from pdf_mcp.extractor import check_tesseract_available
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result):
+            check_tesseract_available()  # should not raise
+
+    def test_ocr_page_returns_string(self, sample_pdf):
+        """ocr_page returns a string (may be empty if tesseract not installed)."""
+        import pymupdf as _pymupdf
+        import subprocess
+        from pdf_mcp.extractor import ocr_page
+        try:
+            subprocess.run(["tesseract", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pytest.skip("Tesseract not installed")
+        doc = _pymupdf.open(sample_pdf)
+        try:
+            result = ocr_page(doc, 0, lang="eng", dpi=72)
+        finally:
+            doc.close()
+        assert isinstance(result, str)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

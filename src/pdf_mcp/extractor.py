@@ -313,6 +313,57 @@ def render_page_as_png(
     }
 
 
+def check_tesseract_available() -> None:
+    """
+    Verify Tesseract binary is on PATH.
+
+    Raises:
+        RuntimeError: If tesseract binary is not found or returns non-zero.
+    """
+    import subprocess
+
+    try:
+        subprocess.run(
+            ["tesseract", "--version"],
+            capture_output=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise RuntimeError(
+            "Tesseract not found. Install with: "
+            "brew install tesseract (macOS) / "
+            "apt install tesseract-ocr (Linux). "
+            "See https://tesseract-ocr.github.io/tessdoc/Installation.html. "
+            "If OCR returns empty for a page with visible text, also verify "
+            "the language pack: tesseract --list-langs"
+        ) from exc
+
+
+def ocr_page(
+    doc: pymupdf.Document,
+    page_num: int,
+    lang: str = "eng",
+    dpi: int = 300,
+) -> str:
+    """
+    OCR a PDF page using PyMuPDF's built-in Tesseract binding.
+
+    Args:
+        doc: PyMuPDF document object
+        page_num: Page number (0-indexed)
+        lang: Tesseract language code (default 'eng')
+        dpi: Internal render DPI for OCR (fixed at 300 for v1; not user-configurable
+             to keep the surface minimal — expose as parameter in a future release
+             if user feedback demands finer control)
+
+    Returns:
+        Extracted text string (empty string if OCR produces nothing)
+    """
+    page = doc[page_num]
+    textpage = page.get_textpage_ocr(language=lang, dpi=dpi)
+    return page.get_text(textpage=textpage)
+
+
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     """
     Extract tables from a PDF page using PyMuPDF's table finder.

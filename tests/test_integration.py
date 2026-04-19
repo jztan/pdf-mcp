@@ -58,6 +58,15 @@ class TestScanDetectionNoOcr:
         assert coverage[0]["text_chars"] == 0
         assert coverage[0]["raster_images"] >= 1
 
+    def test_render_returns_valid_png(self, sample_pdf_synthetic_scan):
+        result = pdf_render_pages(sample_pdf_synthetic_scan, "1", dpi=150)
+        assert len(result) >= 2
+        assert "pages_rendered" in result[0]
+        assert isinstance(result[1], McpImage)
+        pil_img = Image.open(io.BytesIO(result[1].data))
+        assert pil_img.width > 0
+        assert pil_img.height > 0
+
 
 class TestOcrIntegration:
     pytestmark = pytest.mark.skipif(
@@ -81,12 +90,3 @@ class TestOcrIntegration:
         assert len(result["matches"]) > 0
         assert result["matches"][0]["page"] == 1
         assert result["matches"][0]["source"] == "ocr"
-
-    def test_render_returns_valid_png(self, sample_pdf_synthetic_scan):
-        result = pdf_render_pages(sample_pdf_synthetic_scan, "1", dpi=150)
-        assert len(result) >= 2
-        assert "pages_rendered" in result[0]
-        assert isinstance(result[1], McpImage)
-        pil_img = Image.open(io.BytesIO(result[1].data))
-        assert pil_img.width > 0
-        assert pil_img.height > 0

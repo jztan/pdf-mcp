@@ -2,13 +2,18 @@
 URL fetching utilities for downloading PDFs from HTTP/HTTPS sources.
 """
 
+from __future__ import annotations
+
 import hashlib
 import ipaddress
 import os
 import socket
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .config import PDFConfig
 from urllib.parse import urlparse
 
 import httpx
@@ -37,7 +42,12 @@ class URLFetcher:
     Fetches PDFs from URLs and caches them locally.
     """
 
-    def __init__(self, cache_dir: Path | None = None, timeout: int = 60):
+    def __init__(
+        self,
+        cache_dir: Path | None = None,
+        timeout: int = 60,
+        config: PDFConfig | None = None,
+    ):
         """
         Initialize URL fetcher.
 
@@ -53,6 +63,7 @@ class URLFetcher:
         # Restrict permissions on cache directory so other users can't read downloads
         os.chmod(self.cache_dir, 0o700)
         self.timeout = timeout
+        self._config = config
         self._url_to_path: dict[str, Path] = {}
 
     @staticmethod
@@ -100,6 +111,9 @@ class URLFetcher:
             raise ValueError(
                 f"URL resolves to a blocked IP range and is not allowed: {url}"
             )
+
+        if self._config is not None:
+            self._config.check_url_host(hostname)
 
     def _get_cache_filename(self, url: str) -> str:
         """Generate cache filename from URL."""

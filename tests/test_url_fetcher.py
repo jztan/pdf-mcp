@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
+from pdf_mcp.config import PDFConfig
 from pdf_mcp.url_fetcher import URLFetcher
 
 
@@ -419,6 +420,22 @@ class TestSSRFProtection:
             ):
                 with pytest.raises(ValueError, match="blocked IP"):
                     url_fetcher._validate_url(url)
+
+
+class TestFloorStillApplies:
+    def test_config_wildcard_allow_cannot_bypass_cidr(self, tmp_path):
+        """config url.allow=['*'] cannot bypass the CIDR block floor."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[urls]\nallow = ["*"]\n')
+        config = PDFConfig(config_path=cfg)
+        fetcher = URLFetcher(cache_dir=tmp_path / "cache", config=config)
+
+        with patch(
+            "socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("10.0.0.1", 0))],
+        ):
+            with pytest.raises(ValueError, match="blocked IP"):
+                fetcher._validate_url("https://internal.example.com/doc.pdf")
 
 
 class TestDownloadSizeLimit:

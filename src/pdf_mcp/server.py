@@ -19,6 +19,7 @@ from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
 
 from .cache import PDFCache
+from .config import PDFConfig
 from .extractor import (
     check_tesseract_available,
     estimate_tokens,
@@ -59,9 +60,10 @@ mcp = FastMCP(
     ),
 )
 
-# Initialize cache and URL fetcher
+# Initialize cache, config, and URL fetcher
 cache = PDFCache(ttl_hours=24)
-url_fetcher = URLFetcher()
+pdf_config = PDFConfig()
+url_fetcher = URLFetcher(config=pdf_config)
 
 
 def _resolve_path(source: str) -> str:
@@ -104,6 +106,9 @@ def _resolve_path(source: str) -> str:
         raise ValueError(
             f"Only PDF files are supported. Got file with extension: {resolved.suffix}"
         )
+
+    # Enforce user-configured path allow/deny rules
+    pdf_config.check_path(str(resolved))
 
     if not resolved.exists():
         raise FileNotFoundError(f"PDF file not found: {source}")

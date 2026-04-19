@@ -8,13 +8,14 @@ Malformed file = ValueError at startup (never silently fall back to permissive).
 from __future__ import annotations
 
 import fnmatch
+import sys
 from pathlib import Path
 from typing import Any
 
-try:
+if sys.version_info >= (3, 11):
     import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore[no-redef]
+else:
+    import tomli as tomllib
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".config" / "pdf-mcp" / "config.toml"
 
@@ -32,7 +33,8 @@ class PDFConfig:
             return {}
         try:
             with open(path, "rb") as f:
-                return tomllib.load(f)
+                data: dict[str, Any] = tomllib.load(f)
+                return data
         except Exception as e:
             raise ValueError(
                 f"Failed to parse config file {path}: {e}"

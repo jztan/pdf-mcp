@@ -25,15 +25,15 @@ MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
 MAX_REDIRECTS = 10
 
 _BLOCKED_NETWORKS = (
-    ipaddress.ip_network("127.0.0.0/8"),    # loopback
-    ipaddress.ip_network("10.0.0.0/8"),     # RFC 1918
+    ipaddress.ip_network("127.0.0.0/8"),  # loopback
+    ipaddress.ip_network("10.0.0.0/8"),  # RFC 1918
     ipaddress.ip_network("172.16.0.0/12"),  # RFC 1918
     ipaddress.ip_network("192.168.0.0/16"),  # RFC 1918
     ipaddress.ip_network("169.254.0.0/16"),  # link-local / cloud metadata
-    ipaddress.ip_network("0.0.0.0/8"),      # reserved
-    ipaddress.ip_network("::1/128"),        # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),       # IPv6 ULA
-    ipaddress.ip_network("fe80::/10"),      # IPv6 link-local
+    ipaddress.ip_network("0.0.0.0/8"),  # reserved
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 )
 
 
@@ -75,9 +75,7 @@ class URLFetcher:
                 ip_str = addr_info[4][0]
                 ip = ipaddress.ip_address(ip_str)
                 if any(
-                    ip in net
-                    for net in _BLOCKED_NETWORKS
-                    if ip.version == net.version
+                    ip in net for net in _BLOCKED_NETWORKS if ip.version == net.version
                 ):
                     return True
         except (OSError, ValueError):

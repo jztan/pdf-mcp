@@ -36,9 +36,7 @@ class PDFConfig:
                 data: dict[str, Any] = tomllib.load(f)
                 return data
         except Exception as e:
-            raise ValueError(
-                f"Failed to parse config file {path}: {e}"
-            ) from e
+            raise ValueError(f"Failed to parse config file {path}: {e}") from e
 
     def check_path(self, path: str) -> None:
         """Enforce [paths] allow/deny rules. Raises ValueError if denied."""

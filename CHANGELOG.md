@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
+## [1.9.0] - 2026-04-19
 ### Added
 - `pdf_render_pages(path, pages, dpi=200)` — new MCP tool that renders PDF pages as PNG images returned inline as MCP image content blocks; intended for vision-capable models that need to *see* page content (diagrams, handwriting, scanned pages). First element of the response is always a JSON summary block; subsequent elements are one image per page. DPI clamped to `[72, 400]`; up to 5 pages inline per call (`truncated_render: true` when truncated). Does not run OCR — tools are orthogonal.
 - `pdf_read_pages` gains `ocr=True` / `ocr_lang="eng"` parameters — runs Tesseract OCR on pages that have no extractable text; OCR'd text is written to cache with `source='ocr'` and becomes instantly searchable via `pdf_search`. Requires system Tesseract (`brew install tesseract` / `apt install tesseract-ocr`). Pre-flight check returns a clean error with install hint if Tesseract is missing. Capped at 20 pages per call (`truncated_ocr: true` when truncated).

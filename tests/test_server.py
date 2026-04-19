@@ -23,6 +23,7 @@ from pdf_mcp.server import (
     pdf_get_toc,
     pdf_cache_stats,
     pdf_cache_clear,
+    pdf_render_pages,
 )
 from pdf_mcp.url_fetcher import URLFetcher
 
@@ -1676,3 +1677,84 @@ class TestPdfReadPagesRender:
             from pdf_mcp.server import pdf_render_pages
             pdf_render_pages(sample_pdf, "1", dpi=72)
             mock_render.assert_not_called()
+
+
+class TestPdfRenderPages:
+    """Tests for pdf_render_pages tool."""
+
+    def test_returns_list(self, sample_pdf, isolated_server):
+        """pdf_render_pages returns a list (not a dict)."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        assert isinstance(result, list)
+
+    def test_first_element_is_summary_dict(self, sample_pdf, isolated_server):
+        """First list element is a dict with pages_rendered and dpi_used."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        summary = result[0]
+        assert isinstance(summary, dict)
+        assert "pages_rendered" in summary
+        assert "dpi_used" in summary
+        assert 1 in summary["pages_rendered"]
+
+    def test_subsequent_elements_are_images(self, sample_pdf, isolated_server):
+        """Elements after the summary are FastMCP Image objects."""
+        from fastmcp.utilities.types import Image
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        assert len(result) == 2  # summary + 1 image
+        assert isinstance(result[1], Image)
+
+    def test_dpi_clamped(self, sample_pdf, isolated_server):
+        """DPI above 400 is clamped; dpi_requested vs dpi_used differ."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=1000)
+        summary = result[0]
+        assert summary["dpi_used"] == 400
+        assert summary["dpi_requested"] == 1000
+
+    def test_max_inline_pages_truncation(self, sample_pdf, isolated_server):
+        """Requesting more than MAX_RENDER_INLINE_PAGES returns truncated_render."""
+        import pdf_mcp.server as srv
+        from fastmcp.utilities.types import Image
+        original = srv.MAX_RENDER_INLINE_PAGES
+        srv.MAX_RENDER_INLINE_PAGES = 2
+        try:
+            result = pdf_render_pages(sample_pdf, "1-5", dpi=72)
+        finally:
+            srv.MAX_RENDER_INLINE_PAGES = original
+        image_count = sum(1 for x in result if isinstance(x, Image))
+        assert image_count == 2
+        assert result[0].get("truncated_render") is True
+
+    def test_does_not_have_ocr_parameter(self):
+        """pdf_render_pages does not accept ocr parameter — tools are orthogonal."""
+        import inspect
+        sig = inspect.signature(pdf_render_pages)
+        assert "ocr" not in sig.parameters
+
+    def test_bidirectional_cache_render_tool_then_read_pages(
+        self, sample_pdf, isolated_server
+    ):
+        """pdf_render_pages populates cache; pdf_read_pages(render_dpi=72) is a hit."""
+        from unittest.mock import patch
+        pdf_render_pages(sample_pdf, "1", dpi=72)
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            pdf_read_pages(sample_pdf, "1", render_dpi=72)
+            mock_render.assert_not_called()
+
+    def test_rendering_does_not_run_ocr(self, sample_pdf_scanned, isolated_server):
+        """Calling pdf_render_pages does not make pages searchable via pdf_search."""
+        pdf_render_pages(sample_pdf_scanned, "1", dpi=72)
+        # sample_pdf_scanned has no extractable text
+        result = pdf_search(sample_pdf_scanned, "the", mode="keyword")
+        assert result["total_matches"] == 0
+
+    def test_docstring_mentions_vision_models(self):
+        """Tool docstring explicitly mentions vision models."""
+        assert "vision" in pdf_render_pages.__doc__.lower()
+
+    def test_invalid_pages_returns_error_in_summary(
+        self, sample_pdf, isolated_server
+    ):
+        """Out-of-range pages returns error in summary dict; no images appended."""
+        result = pdf_render_pages(sample_pdf, "100", dpi=72)
+        assert result[0]["error"]
+        assert len(result) == 1  # images list is empty in error case

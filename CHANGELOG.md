@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 87 new unit tests across `test_pdf_reader.py` and `test_server.py` covering: `page_renders` cache CRUD + housekeeping, `source` column on `page_text`, `text_coverage_json` on `pdf_metadata` (including lazy backfill), `render_page_as_png` extractor (dimensions, permissions, orphan guard), `check_tesseract_available` (mock subprocess), `pdf_info` text_coverage shape + caching + 500-page performance bound (<2 s), `pdf_read_pages` render path (cache hit, DPI clamp, bidirectional), `pdf_render_pages` (summary block, image blocks, truncation, orthogonality with OCR, error in summary), `pdf_read_pages` OCR path (Tesseract pre-flight, cache hit, empty result, native-text skip, `MAX_OCR_PAGES_LIMIT`, lang forwarding, FTS integration), `pdf_search` source field (all return paths).
 - New `tests/test_integration.py` — end-to-end tests using a synthetically scanned PDF (Pillow-rendered text embedded as raster): scan detection runs unconditionally; OCR extraction, FTS searchability, and render validity tests skip gracefully when Tesseract is not installed.
 
+### Security
+- URL fetching is now HTTPS-only — `http://` URLs are rejected with an actionable error message. Previously both schemes were accepted.
+- SSRF private-IP check replaced with an explicit, auditable CIDR block list (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `0.0.0.0/8`, `::1/128`, `fc00::/7`, `fe80::/10`) checked with IP-version-aware matching. Previously used Python's `is_private`/`is_loopback` properties whose semantics shifted between Python versions.
+- New optional access-control config at `~/.config/pdf-mcp/config.toml` — `[paths]` allow/deny rules for local file sources and `[urls]` allow/deny rules for URL hosts. Rules use shell-glob patterns; deny wins on conflict; `~` is expanded; path matching operates on the real (symlink-resolved) path to prevent traversal bypasses. The SSRF floor (HTTPS-only + CIDR blocks) is always enforced regardless of config. Missing config = permissive; malformed config = server refuses to start (never silently falls back to permissive).
+- CI now installs via `uv sync --frozen` (replacing `pip install -e .[dev]`) so the committed `uv.lock` is enforced on every build — dependency drift fails loudly.
+
 ---
 
 ## [1.8.0] - 2026-04-16

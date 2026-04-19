@@ -22,7 +22,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 - **Table extraction** — per-page tables with header and row data, detected via visible borders
 - **Page rendering** — render any page as a PNG image for vision-capable models (`pdf_render_pages`)
 - **OCR** — extract text from scanned pages via Tesseract; OCR'd text is automatically searchable (`pdf_read_pages(ocr=True)`)
-- **URL support** — read PDFs from HTTP/HTTPS URLs
+- **URL support** — read PDFs from HTTPS URLs with SSRF protection (explicit CIDR block list, HTTPS-only)
 
 ## Installation
 
@@ -342,7 +342,23 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 
 ## Configuration
 
-Environment variables:
+### Access control (optional)
+
+Create `~/.config/pdf-mcp/config.toml` to restrict which local paths and URL hosts the server will access. The file is optional — if absent, the server is permissive within the built-in SSRF floor (HTTPS-only, blocked private IP ranges).
+
+```toml
+[paths]
+allow = ["~/Documents/**", "/data/pdfs/**"]
+deny  = ["~/.ssh/**", "~/.aws/**"]
+
+[urls]
+allow = ["*.internal.example.com"]
+deny  = ["untrusted.example.com"]
+```
+
+Rules use shell-glob patterns (`*` matches across path separators). `deny` wins when both match. Path matching operates on the resolved path after symlink expansion. A malformed config file prevents the server from starting — it never silently falls back to permissive.
+
+### Environment variables
 
 ```bash
 # Cache directory (default: ~/.cache/pdf-mcp)

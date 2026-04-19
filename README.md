@@ -36,6 +36,16 @@ For semantic search (adds `fastembed` and `numpy`, ~67 MB model download on firs
 pip install 'pdf-mcp[semantic]'
 ```
 
+For OCR on scanned PDFs (requires system Tesseract):
+
+```bash
+# macOS
+brew install tesseract
+
+# Ubuntu/Debian
+apt install tesseract-ocr
+```
+
 ## Quick Start
 
 <details open>

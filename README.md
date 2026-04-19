@@ -52,6 +52,8 @@ apt install tesseract-ocr
 
 ## Quick Start
 
+Choose your MCP client below to get started:
+
 <details open>
 <summary><strong>Claude Code</strong></summary>
 
@@ -244,7 +246,10 @@ For extracting text from scanned pages, use `pdf_read_pages(ocr=True)` instead �
 
 ### `pdf_read_all` — Read Entire Document
 
-Read a complete document in one call. Subject to a safety limit on page count.
+Read a complete document in one call. Does not include images or tables — use `pdf_read_pages` if you need those.
+
+Optional parameters:
+- `max_pages=50` — safety cap on pages read (default 50, max 500)
 
 ```
 "Read the entire PDF (it's only 10 pages)"
@@ -401,5 +406,6 @@ MIT — see [LICENSE](LICENSE).
 - [pdf-mcp on GitHub](https://github.com/jztan/pdf-mcp)
 - [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/) — The problem with large PDFs in AI agents and a working solution
 - [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/) — What we found when we audited an MCP server for security holes
-- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/) — How chunked reading, FTS5, and SQLite caching work together
+- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/) — How AI agents use pdf-mcp tools to read and navigate PDF documents
 - [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/) — Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
+- [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/) — Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types

@@ -60,4 +60,18 @@ class PDFConfig:
 
     def check_url_host(self, hostname: str) -> None:
         """Enforce [urls] allow/deny rules. Raises ValueError if denied."""
-        pass
+        rules = self._data.get("urls", {})
+        allow: list[str] = rules.get("allow", [])
+        deny: list[str] = rules.get("deny", [])
+
+        host = hostname.lower()
+
+        for pattern in deny:
+            if fnmatch.fnmatch(host, pattern.lower()):
+                raise ValueError(f"URL host denied by config: {hostname}")
+
+        if allow:
+            for pattern in allow:
+                if fnmatch.fnmatch(host, pattern.lower()):
+                    return
+            raise ValueError(f"URL host not in allowed list: {hostname}")

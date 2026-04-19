@@ -96,3 +96,38 @@ class TestPathRules:
 
         with pytest.raises(ValueError, match="denied"):
             config.check_path(str(link))
+
+
+class TestUrlRules:
+    def test_no_allow_is_permissive(self, tmp_path):
+        """No allow list means any public host is accepted."""
+        config = PDFConfig(config_path=tmp_path / "none.toml")
+        config.check_url_host("example.com")
+
+    def test_wildcard_matching(self, tmp_path):
+        """* in hostname pattern matches any chars including dots."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[urls]\nallow = ["*.example.com"]\n')
+        config = PDFConfig(config_path=cfg)
+        config.check_url_host("docs.example.com")
+        with pytest.raises(ValueError, match="not in allowed"):
+            config.check_url_host("evil.com")
+
+    def test_case_insensitive(self, tmp_path):
+        """Hostname matching is case-insensitive."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[urls]\ndeny = ["Evil.com"]\n')
+        config = PDFConfig(config_path=cfg)
+        with pytest.raises(ValueError, match="denied"):
+            config.check_url_host("EVIL.COM")
+
+    def test_deny_wins_over_allow(self, tmp_path):
+        """Host matching both allow and deny is denied (fail-closed)."""
+        cfg = tmp_path / "config.toml"
+        cfg.write_text(
+            '[urls]\nallow = ["*.example.com"]\ndeny = ["bad.example.com"]\n'
+        )
+        config = PDFConfig(config_path=cfg)
+        config.check_url_host("docs.example.com")
+        with pytest.raises(ValueError, match="denied"):
+            config.check_url_host("bad.example.com")

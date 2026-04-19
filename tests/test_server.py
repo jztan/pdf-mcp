@@ -1602,3 +1602,77 @@ class TestPdfInfoTextCoverage:
         pdf_info(pdf_path)
         elapsed = time.monotonic() - start
         assert elapsed < 2.0, f"pdf_info took {elapsed:.2f}s on 500-page PDF"
+
+
+class TestPdfReadPagesRender:
+    """Tests for render_dpi parameter on pdf_read_pages."""
+
+    def test_render_dpi_adds_render_path(self, sample_pdf, isolated_server):
+        """render_dpi set -> each page dict has render_path."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        page = result["pages"][0]
+        assert "render_path" in page
+        assert Path(page["render_path"]).exists()
+
+    def test_render_dpi_adds_render_size_bytes(self, sample_pdf, isolated_server):
+        """render_dpi set -> each page dict has render_size_bytes > 0."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        assert result["pages"][0]["render_size_bytes"] > 0
+
+    def test_render_path_in_renders_dir(self, sample_pdf, isolated_server):
+        """Rendered PNG lives under renders_dir, not images_dir."""
+        import pdf_mcp.server as srv
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        render_path = Path(result["pages"][0]["render_path"])
+        assert srv.cache.renders_dir in render_path.parents
+
+    def test_render_dpi_response_includes_dpi_fields(self, sample_pdf, isolated_server):
+        """Response includes render_dpi_used and render_dpi_requested."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=200)
+        assert result["render_dpi_used"] == 200
+        assert result["render_dpi_requested"] == 200
+
+    def test_render_dpi_clamped_high(self, sample_pdf, isolated_server):
+        """render_dpi above 400 is clamped to 400."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=1000)
+        assert result["render_dpi_used"] == 400
+        assert result["render_dpi_requested"] == 1000
+
+    def test_render_dpi_clamped_low(self, sample_pdf, isolated_server):
+        """render_dpi below 72 is clamped to 72."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=10)
+        assert result["render_dpi_used"] == 72
+
+    def test_render_dpi_cache_hit(self, sample_pdf, isolated_server):
+        """Second call with same render_dpi hits the cache (no re-render)."""
+        from unittest.mock import patch
+        pdf_read_pages(sample_pdf, "1", render_dpi=72)  # first call — renders
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            pdf_read_pages(sample_pdf, "1", render_dpi=72)  # cache hit
+            mock_render.assert_not_called()
+
+    def test_render_dpi_not_set_no_render_path(self, sample_pdf, isolated_server):
+        """Without render_dpi, pages have no render_path key."""
+        result = pdf_read_pages(sample_pdf, "1")
+        assert "render_path" not in result["pages"][0]
+        assert "render_dpi_used" not in result
+
+    def test_cache_clear_removes_render_png(self, sample_pdf, isolated_server):
+        """pdf_cache_clear removes PNGs created by pdf_read_pages render_dpi."""
+        result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        png_path = Path(result["pages"][0]["render_path"])
+        assert png_path.exists()
+        pdf_cache_clear(expired_only=False)
+        assert not png_path.exists()
+
+    def test_bidirectional_cache_read_then_render_tool(
+        self, sample_pdf, isolated_server
+    ):
+        """pdf_read_pages(render_dpi=72) populates cache; pdf_render_pages is a hit."""
+        from unittest.mock import patch
+        pdf_read_pages(sample_pdf, "1", render_dpi=72)
+        # pdf_render_pages at same DPI should hit the cache
+        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+            from pdf_mcp.server import pdf_render_pages
+            pdf_render_pages(sample_pdf, "1", dpi=72)
+            mock_render.assert_not_called()

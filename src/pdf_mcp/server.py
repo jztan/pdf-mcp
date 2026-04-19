@@ -278,6 +278,7 @@ def pdf_info(path: str) -> dict[str, Any]:
 def pdf_read_pages(
     path: str,
     pages: str,
+    render_dpi: int | None = None,
 ) -> dict[str, Any]:
     """
     Read text content and images from specific pages of a PDF.
@@ -294,6 +295,8 @@ def pdf_read_pages(
             - "1-10": Pages 1 through 10
             - "1,5,10": Pages 1, 5, and 10
             - "1-5,10,15-20": Combination of ranges and individual pages
+        render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
+            The render path is included in each page dict as render_path.
 
     Returns:
         - pages: List of {page, text, chars, images, image_count, tables, table_count} objects  # noqa: E501
@@ -304,6 +307,10 @@ def pdf_read_pages(
         - total_tables: Total number of tables across all pages
     """
     local_path = _resolve_path(path)
+
+    clamped_dpi: int | None = None
+    if render_dpi is not None:
+        clamped_dpi = _clamp(render_dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
 
     doc = pymupdf.open(local_path)
 
@@ -370,17 +377,38 @@ def pdf_read_pages(
             total_chars += len(text)
             total_images += len(page_images)
             total_tables += len(page_tables)
-            results.append(
-                {
-                    "page": page_num + 1,
-                    "text": text,
-                    "chars": len(text),
-                    "images": page_images,
-                    "image_count": len(page_images),
-                    "tables": page_tables,
-                    "table_count": len(page_tables),
-                }
-            )
+
+            page_result: dict[str, Any] = {
+                "page": page_num + 1,
+                "text": text,
+                "chars": len(text),
+                "images": page_images,
+                "image_count": len(page_images),
+                "tables": page_tables,
+                "table_count": len(page_tables),
+            }
+
+            if clamped_dpi is not None:
+                cached_render = cache.get_page_render(local_path, page_num, clamped_dpi)
+                if cached_render:
+                    render_info = cached_render
+                else:
+                    render_info = render_page_as_png(
+                        doc, page_num,
+                        cache.renders_dir,
+                        _pdf_hash(local_path),
+                        clamped_dpi,
+                    )
+                    cache.save_page_render(
+                        local_path, page_num,
+                        os.stat(local_path).st_mtime,
+                        clamped_dpi,
+                        render_info,
+                    )
+                page_result["render_path"] = render_info["file_path_on_disk"]
+                page_result["render_size_bytes"] = render_info["size_bytes"]
+
+            results.append(page_result)
 
         return {
             "content_warning": (
@@ -396,6 +424,14 @@ def pdf_read_pages(
             "cache_misses": len(page_nums) - cache_hits,
             "total_images": total_images,
             "total_tables": total_tables,
+            **(
+                {
+                    "render_dpi_used": clamped_dpi,
+                    "render_dpi_requested": render_dpi,
+                }
+                if clamped_dpi is not None
+                else {}
+            ),
         }
 
     finally:

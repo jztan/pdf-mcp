@@ -56,7 +56,7 @@
 - Least-privilege `permissions` blocks on all workflows
 - `black` upgraded to 26.3.1 (CVE-2026-32274 fix)
 
-### v1.7.0 — Semantic Search ← current
+### v1.7.0 — Semantic Search
 - New `pdf_semantic_search` tool: finds pages by meaning, not keywords ("revenue growth" matches "sales increase", "financial performance")
 - Powered by `BAAI/bge-small-en-v1.5` (384-dim) via `fastembed` — fully local, no external API
 - Optional `[semantic]` install extra (`fastembed>=0.7`, `numpy>=1.24`); all existing tools work without it
@@ -65,6 +65,21 @@
 - `embedding_pages` field added to `pdf_cache_stats` response
 - Graceful error with install hint when `fastembed` is not installed
 - Automatic schema migration: `page_embeddings` table preserved across upgrades
+
+### v1.8.0 — Hybrid RRF Search
+- `pdf_search` gains `mode` parameter: `"keyword"`, `"semantic"`, `"auto"` (hybrid RRF default)
+- Reciprocal Rank Fusion (k=60) merges BM25 and semantic results into a single ranked list
+- `search_mode` field in response indicates which path ran; `pdf_semantic_search` removed
+- Hybrid falls back to keyword-only when `fastembed` is not installed
+
+### v1.9.0 — OCR & Page Rendering ← current
+- New `pdf_render_pages` tool: renders pages as PNG images for vision-capable models (8 tools total)
+- `pdf_read_pages` gains `ocr=True`/`ocr_lang` for Tesseract OCR on scanned pages; OCR'd text automatically searchable via `pdf_search`
+- `pdf_read_pages` gains `render_dpi` to attach rendered PNG path alongside text (shared cache with `pdf_render_pages`)
+- `pdf_info` gains `text_coverage`: per-page `{text_chars, raster_images}` for OCR candidate detection
+- `pdf_search` matches gain `source` field (`"extracted"` or `"ocr"`)
+- SQLite `page_renders` table with dedicated `renders_dir`; bidirectional cache sharing between render tools
+- `source` column on `page_text`; lazy backfill for pre-v1.9.0 cached rows
 
 ---
 

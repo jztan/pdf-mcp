@@ -780,6 +780,18 @@ class PDFCache:
                     except FileNotFoundError:
                         pass
 
+            # Delete render PNG files before removing DB rows
+            render_rows = conn.execute(
+                "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+            for (render_path,) in render_rows:
+                try:
+                    Path(render_path).unlink()
+                except FileNotFoundError:
+                    pass
+            conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
+
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
@@ -849,14 +861,57 @@ class PDFCache:
                         expired_paths,
                     )
 
-            return len(expired_paths)
+                # Delete render PNG files for expired paths
+                render_rows = conn.execute(
+                    f"SELECT file_path_on_disk FROM page_renders"
+                    f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                ).fetchall()
+                for (render_path,) in render_rows:
+                    try:
+                        Path(render_path).unlink()
+                    except FileNotFoundError:
+                        pass
+                conn.execute(
+                    f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
+
+        # Sweep page_renders for stale-mtime entries (PDF file changed)
+        with sqlite3.connect(self.db_path) as conn2:
+            stale_paths = conn2.execute(
+                "SELECT DISTINCT file_path FROM page_renders"
+            ).fetchall()
+            for (rpath,) in stale_paths:
+                sample_row = conn2.execute(
+                    "SELECT file_mtime FROM page_renders WHERE file_path = ? LIMIT 1",
+                    (rpath,),
+                ).fetchone()
+                if sample_row and not self._is_cache_valid(rpath, sample_row[0]):
+                    stale_render_rows = conn2.execute(
+                        "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
+                        (rpath,),
+                    ).fetchall()
+                    for (fp,) in stale_render_rows:
+                        try:
+                            Path(fp).unlink()
+                        except FileNotFoundError:
+                            pass
+                    conn2.execute(
+                        "DELETE FROM page_renders WHERE file_path = ?", (rpath,)
+                    )
+
+        return len(expired_paths)
 
     def clear_all(self) -> int:
         """Clear entire cache. Returns number of files cleared."""
-        # Delete all image files
+        # Delete all image files and render files
         shutil.rmtree(self.images_dir, ignore_errors=True)
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
+        shutil.rmtree(self.renders_dir, ignore_errors=True)
+        self.renders_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(str(self.renders_dir), 0o700)
 
         with sqlite3.connect(self.db_path) as conn:
             count = conn.execute("SELECT COUNT(*) FROM pdf_metadata").fetchone()[0]
@@ -865,6 +920,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
             conn.execute("DELETE FROM page_embeddings")
+            conn.execute("DELETE FROM page_renders")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -897,6 +953,10 @@ class PDFCache:
                 "SELECT COUNT(*) FROM page_embeddings"
             ).fetchone()[0]
 
+            stats["total_renders"] = conn.execute(
+                "SELECT COUNT(*) FROM page_renders"
+            ).fetchone()[0]
+
             # FTS5 indexed page count
             if self.fts_available:
                 stats["fts_indexed_pages"] = conn.execute(
@@ -909,14 +969,22 @@ class PDFCache:
             row = conn.execute("SELECT SUM(text_length) FROM page_text").fetchone()
             stats["total_text_chars"] = row[0] or 0
 
-            # Database file size + image directory size
+            # Database file size + image directory size + renders directory size
             try:
                 images_size = sum(
                     f.stat().st_size for f in self.images_dir.glob("*.png")
                 )
             except FileNotFoundError:
                 images_size = 0
-            stats["cache_size_bytes"] = os.path.getsize(self.db_path) + images_size
+            try:
+                renders_size = sum(
+                    f.stat().st_size for f in self.renders_dir.glob("*.png")
+                )
+            except FileNotFoundError:
+                renders_size = 0
+            stats["cache_size_bytes"] = (
+                os.path.getsize(self.db_path) + images_size + renders_size
+            )
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats

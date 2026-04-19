@@ -1034,5 +1034,64 @@ class TestTextCoverageCache:
         assert result["text_coverage"] == coverage
 
 
+class TestRenderCacheHousekeeping:
+    """Tests for _invalidate_file, clear_expired, clear_all, get_stats with renders."""
+
+    def test_invalidate_file_deletes_render_rows_and_files(self, cache, sample_pdf):
+        """_invalidate_file removes page_renders DB rows and unlinks PNG files."""
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "inv_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10
+        })
+        cache._invalidate_file(sample_pdf)
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+        assert not png.exists()
+
+    def test_clear_all_removes_renders_dir_contents(self, cache, sample_pdf):
+        """clear_all removes render PNGs."""
+        import os
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "clear_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10
+        })
+        cache.clear_all()
+        assert not png.exists()
+        assert cache.get_page_render(sample_pdf, 0, 200) is None
+
+    def test_get_stats_includes_total_renders(self, cache, sample_pdf):
+        """get_stats returns total_renders count."""
+        import os
+        result = cache.get_stats()
+        assert "total_renders" in result
+        assert result["total_renders"] == 0
+
+        mtime = os.stat(sample_pdf).st_mtime
+        png = cache.renders_dir / "stats_test.png"
+        png.write_bytes(b"x")
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(png), "size_bytes": 1, "width": 10, "height": 10
+        })
+        result = cache.get_stats()
+        assert result["total_renders"] == 1
+
+    def test_get_stats_cache_size_includes_renders_dir(self, cache, sample_pdf):
+        """cache_size_bytes includes render PNG file sizes."""
+        import os
+        before = cache.get_stats()["cache_size_bytes"]
+        png = cache.renders_dir / "size_test.png"
+        png.write_bytes(b"x" * 1000)
+        mtime = os.stat(sample_pdf).st_mtime
+        cache.save_page_render(sample_pdf, 0, mtime, 200, {
+            "file_path_on_disk": str(png), "size_bytes": 1000, "width": 10, "height": 10
+        })
+        after = cache.get_stats()["cache_size_bytes"]
+        assert after > before
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

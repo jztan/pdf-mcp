@@ -15,14 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pdf_search` matches now include a `source` field (`"extracted"` or `"ocr"`) so agents can tell when a match came from OCR text (lower confidence, worth cross-checking with `pdf_render_pages`).
 - `page_renders` table in SQLite cache — stores rendered PNGs keyed on `(file_path, page_num, dpi)` with mtime-based invalidation and orphan guard (old PNG unlinked on path change). `renders_dir` (`~/.cache/pdf-mcp/renders/`) kept separate from `images_dir`.
 - `source` column on `page_text` — `'extracted'` (default) or `'ocr'`; schema migration is additive (existing rows get `'extracted'` via `DEFAULT`).
-- `[ocr]` install workflow: OCR support requires only system Tesseract — no additional Python packages.
+- OCR requires only system Tesseract — no additional Python packages (`brew install tesseract` / `apt install tesseract-ocr` / [Windows installer](https://github.com/UB-Mannheim/tesseract/wiki)).
 
 ### Changed
 - `pdf_cache_stats` now includes `total_renders` count and adds render PNG sizes to `cache_size_bytes`.
 - Cache housekeeping (`_invalidate_file`, `clear_expired`, `clear_all`) extended to delete render PNGs and `page_renders` rows.
 
 ### Tests
-- 87 new tests across `test_pdf_reader.py` and `test_server.py` covering: `page_renders` cache CRUD + housekeeping, `source` column on `page_text`, `text_coverage_json` on `pdf_metadata` (including lazy backfill), `render_page_as_png` extractor (dimensions, permissions, orphan guard), `check_tesseract_available` (mock subprocess), `pdf_info` text_coverage shape + caching + 500-page performance bound (<2 s), `pdf_read_pages` render path (cache hit, DPI clamp, bidirectional), `pdf_render_pages` (summary block, image blocks, truncation, orthogonality with OCR, error in summary), `pdf_read_pages` OCR path (Tesseract pre-flight, cache hit, empty result, native-text skip, `MAX_OCR_PAGES_LIMIT`, lang forwarding, FTS integration), `pdf_search` source field (all return paths).
+- 87 new unit tests across `test_pdf_reader.py` and `test_server.py` covering: `page_renders` cache CRUD + housekeeping, `source` column on `page_text`, `text_coverage_json` on `pdf_metadata` (including lazy backfill), `render_page_as_png` extractor (dimensions, permissions, orphan guard), `check_tesseract_available` (mock subprocess), `pdf_info` text_coverage shape + caching + 500-page performance bound (<2 s), `pdf_read_pages` render path (cache hit, DPI clamp, bidirectional), `pdf_render_pages` (summary block, image blocks, truncation, orthogonality with OCR, error in summary), `pdf_read_pages` OCR path (Tesseract pre-flight, cache hit, empty result, native-text skip, `MAX_OCR_PAGES_LIMIT`, lang forwarding, FTS integration), `pdf_search` source field (all return paths).
+- New `tests/test_integration.py` — end-to-end tests using a synthetically scanned PDF (Pillow-rendered text embedded as raster): scan detection runs unconditionally; OCR extraction, FTS searchability, and render validity tests skip gracefully when Tesseract is not installed.
 
 ---
 

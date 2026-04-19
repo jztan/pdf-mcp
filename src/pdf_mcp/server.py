@@ -20,12 +20,14 @@ from fastmcp.utilities.types import Image
 
 from .cache import PDFCache
 from .extractor import (
+    check_tesseract_available,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
     extract_tables_from_page,
     extract_text_from_page,
     extract_toc,
+    ocr_page,
     parse_page_range,
     render_page_as_png,
 )
@@ -42,6 +44,7 @@ TOC_INLINE_LIMIT = 50
 RENDER_DPI_MIN = 72
 RENDER_DPI_MAX = 400
 MAX_RENDER_INLINE_PAGES = 5
+MAX_OCR_PAGES_LIMIT = 20
 
 # Initialize MCP server
 mcp = FastMCP(
@@ -279,6 +282,8 @@ def pdf_info(path: str) -> dict[str, Any]:
 def pdf_read_pages(
     path: str,
     pages: str,
+    ocr: bool = False,
+    ocr_lang: str = "eng",
     render_dpi: int | None = None,
 ) -> dict[str, Any]:
     """
@@ -296,6 +301,10 @@ def pdf_read_pages(
             - "1-10": Pages 1 through 10
             - "1,5,10": Pages 1, 5, and 10
             - "1-5,10,15-20": Combination of ranges and individual pages
+        ocr: If True, run Tesseract OCR on pages that don't have native text.
+            Requires Tesseract to be installed. Results are stored in the cache
+            with source='ocr' and become searchable via pdf_search.
+        ocr_lang: Tesseract language code (default 'eng'). Only used when ocr=True.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
             The render path is included in each page dict as render_path.
 
@@ -307,6 +316,18 @@ def pdf_read_pages(
         - total_images: Total number of images across all pages
         - total_tables: Total number of tables across all pages
     """
+    if ocr:
+        try:
+            check_tesseract_available()
+        except RuntimeError as exc:
+            return {
+                "error": str(exc),
+                "install_hint": (
+                    "brew install tesseract (macOS) / "
+                    "apt install tesseract-ocr (Linux)"
+                ),
+            }
+
     local_path = _resolve_path(path)
 
     clamped_dpi: int | None = None
@@ -331,8 +352,14 @@ def pdf_read_pages(
         if len(page_nums) > MAX_PAGES_LIMIT:
             page_nums = page_nums[:MAX_PAGES_LIMIT]
 
+        ocr_truncated = False
+        if ocr and len(page_nums) > MAX_OCR_PAGES_LIMIT:
+            page_nums = page_nums[:MAX_OCR_PAGES_LIMIT]
+            ocr_truncated = True
+
         # Try to get cached text for all pages at once
         cached_texts = cache.get_pages_text(local_path, page_nums)
+        cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
 
         results = []
         cache_hits = 0
@@ -341,8 +368,26 @@ def pdf_read_pages(
         total_tables = 0
 
         for page_num in page_nums:
-            # Check text cache
-            if page_num in cached_texts:
+            page_source: str | None = None
+
+            if ocr:
+                cached_src = cached_sources.get(page_num)
+                if cached_src == "ocr" or (
+                    cached_src == "extracted"
+                    and page_num in cached_texts
+                    and len(cached_texts[page_num]) > 0
+                ):
+                    # Cache hit — use existing text
+                    text = cached_texts.get(page_num, "")
+                    if page_num in cached_texts:
+                        cache_hits += 1
+                    page_source = cached_src
+                else:
+                    # Run OCR
+                    text = ocr_page(doc, page_num, lang=ocr_lang, dpi=300)
+                    cache.save_page_text(local_path, page_num, text, source="ocr")
+                    page_source = "ocr"
+            elif page_num in cached_texts:
                 text = cached_texts[page_num]
                 cache_hits += 1
             else:
@@ -388,6 +433,8 @@ def pdf_read_pages(
                 "tables": page_tables,
                 "table_count": len(page_tables),
             }
+            if page_source is not None:
+                page_result["source"] = page_source
 
             if clamped_dpi is not None:
                 cached_render = cache.get_page_render(local_path, page_num, clamped_dpi)
@@ -425,6 +472,7 @@ def pdf_read_pages(
             "cache_misses": len(page_nums) - cache_hits,
             "total_images": total_images,
             "total_tables": total_tables,
+            **({"truncated_ocr": True} if ocr_truncated else {}),
             **(
                 {
                     "render_dpi_used": clamped_dpi,

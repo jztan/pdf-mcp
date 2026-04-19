@@ -1758,3 +1758,128 @@ class TestPdfRenderPages:
         result = pdf_render_pages(sample_pdf, "100", dpi=72)
         assert result[0]["error"]
         assert len(result) == 1  # images list is empty in error case
+
+
+class TestPdfReadPagesOcr:
+    """Tests for ocr and ocr_lang parameters on pdf_read_pages."""
+
+    def test_ocr_error_when_tesseract_missing(self, sample_pdf, isolated_server):
+        """ocr=True returns error dict when Tesseract not installed."""
+        from unittest.mock import patch
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_ocr_error_before_path_resolution(self, isolated_server):
+        """Tesseract check fires before path resolution (no FileNotFoundError)."""
+        from unittest.mock import patch
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages("/nonexistent/file.pdf", "1", ocr=True)
+        assert "error" in result
+        assert "install_hint" in result
+
+    def test_ocr_false_no_source_in_page(self, sample_pdf, isolated_server):
+        """Without ocr=True, page dicts have no 'source' key."""
+        result = pdf_read_pages(sample_pdf, "1")
+        assert "source" not in result["pages"][0]
+
+    def test_ocr_true_page_has_source(self, sample_pdf, isolated_server):
+        """ocr=True adds 'source' to each page dict."""
+        from unittest.mock import patch
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", return_value="ocr text here"):
+                result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "source" in result["pages"][0]
+
+    def test_ocr_true_writes_source_ocr_to_cache(self, sample_pdf, isolated_server):
+        """OCR result is stored with source='ocr' in cache."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", return_value="hello from ocr"):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        source = srv.cache.get_page_source(sample_pdf, 0)
+        assert source == "ocr"
+
+    def test_ocr_cache_hit_does_not_re_ocr(self, sample_pdf, isolated_server):
+        """Second ocr=True call does not re-run OCR if source='ocr' cached."""
+        from unittest.mock import patch, MagicMock
+        mock_ocr = MagicMock(return_value="ocr result")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                call_count_first = mock_ocr.call_count
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                call_count_second = mock_ocr.call_count
+        assert call_count_second == call_count_first  # not called again
+
+    def test_ocr_empty_result_cached_and_not_retriggered(
+        self, sample_pdf, isolated_server
+    ):
+        """Empty OCR result is cached as source='ocr'; subsequent call skips re-OCR."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch, MagicMock
+        mock_ocr = MagicMock(return_value="")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+                assert srv.cache.get_page_source(sample_pdf, 0) == "ocr"
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert mock_ocr.call_count == 1  # not called a second time
+
+    def test_ocr_skip_page_with_native_text(self, sample_pdf, isolated_server):
+        """Page with source='extracted' and non-empty text is not re-OCR'd."""
+        import pdf_mcp.server as srv
+        from unittest.mock import patch, MagicMock
+        srv.cache.save_page_text(sample_pdf, 0, "native text here", source="extracted")
+        mock_ocr = MagicMock(return_value="should not be called")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True)
+        mock_ocr.assert_not_called()
+
+    def test_ocr_max_pages_limit_truncation(self, sample_pdf, isolated_server):
+        """Requesting more than MAX_OCR_PAGES_LIMIT pages sets truncated_ocr."""
+        from unittest.mock import patch
+        import pdf_mcp.server as srv
+        original = srv.MAX_OCR_PAGES_LIMIT
+        srv.MAX_OCR_PAGES_LIMIT = 2
+        try:
+            with patch("pdf_mcp.server.check_tesseract_available"):
+                with patch("pdf_mcp.server.ocr_page", return_value="text"):
+                    result = pdf_read_pages(sample_pdf, "1-5", ocr=True)
+        finally:
+            srv.MAX_OCR_PAGES_LIMIT = original
+        assert result.get("truncated_ocr") is True
+        assert len(result["pages"]) == 2
+
+    def test_ocr_lang_passed_to_ocr_page(self, sample_pdf, isolated_server):
+        """ocr_lang parameter is forwarded to ocr_page."""
+        from unittest.mock import patch, MagicMock
+        mock_ocr = MagicMock(return_value="text")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+                pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
+        _, kwargs = mock_ocr.call_args
+        assert kwargs.get("lang") == "fra" or mock_ocr.call_args[0][2] == "fra"
+
+    def test_ocr_text_searchable_via_pdf_search(
+        self, sample_pdf_scanned, isolated_server
+    ):
+        """OCR'd text is found by pdf_search after pdf_read_pages(ocr=True)."""
+        from unittest.mock import patch
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.server.ocr_page",
+                return_value="the quick brown fox"
+            ):
+                pdf_read_pages(sample_pdf_scanned, "1", ocr=True)
+        result = pdf_search(sample_pdf_scanned, "fox", mode="keyword")
+        assert result["total_matches"] >= 1

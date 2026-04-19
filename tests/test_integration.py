@@ -13,11 +13,20 @@ from pathlib import Path
 import pymupdf
 import pytest
 from PIL import Image, ImageDraw
+from fastmcp.utilities.types import Image as McpImage
 
 from pdf_mcp.extractor import check_tesseract_available
 from pdf_mcp.server import pdf_info, pdf_read_pages, pdf_render_pages, pdf_search
 
 KNOWN_TEXT = "Integration test OCR phrase"
+
+
+def _tesseract_available() -> bool:
+    try:
+        check_tesseract_available()
+        return True
+    except RuntimeError:
+        return False
 
 
 @pytest.fixture
@@ -48,3 +57,36 @@ class TestScanDetectionNoOcr:
         assert len(coverage) == 1
         assert coverage[0]["text_chars"] == 0
         assert coverage[0]["raster_images"] >= 1
+
+
+class TestOcrIntegration:
+    pytestmark = pytest.mark.skipif(
+        not _tesseract_available(),
+        reason="Tesseract not installed",
+    )
+
+    def test_ocr_extracts_known_text(self, sample_pdf_synthetic_scan):
+        result = pdf_read_pages(sample_pdf_synthetic_scan, "1", ocr=True)
+        page = result["pages"][0]
+        assert page["source"] == "ocr"
+        words = KNOWN_TEXT.lower().split()
+        text_lower = page["text"].lower()
+        assert any(w in text_lower for w in words), (
+            f"None of {words} found in OCR output: {page['text']!r}"
+        )
+
+    def test_ocr_text_is_searchable(self, sample_pdf_synthetic_scan):
+        pdf_read_pages(sample_pdf_synthetic_scan, "1", ocr=True)
+        result = pdf_search(sample_pdf_synthetic_scan, "integration")
+        assert len(result["matches"]) > 0
+        assert result["matches"][0]["page"] == 1
+        assert result["matches"][0]["source"] == "ocr"
+
+    def test_render_returns_valid_png(self, sample_pdf_synthetic_scan):
+        result = pdf_render_pages(sample_pdf_synthetic_scan, "1", dpi=150)
+        assert len(result) >= 2
+        assert "pages_rendered" in result[0]
+        assert isinstance(result[1], McpImage)
+        pil_img = Image.open(io.BytesIO(result[1].data))
+        assert pil_img.width > 0
+        assert pil_img.height > 0

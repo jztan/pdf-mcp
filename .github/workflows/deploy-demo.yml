@@ -2,7 +2,7 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [feature/pages]
+    branches: [develop]
     paths:
       - 'pages/**'
       - '.github/workflows/deploy-demo.yml'

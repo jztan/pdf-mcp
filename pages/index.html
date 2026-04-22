@@ -52,6 +52,11 @@
 }
 </script>
 <!-- Google tag (gtag.js) -->
+<script>
+  if (new URLSearchParams(window.location.search).get('ga_optout') === 'true') {
+    window['ga-disable-__GA_MEASUREMENT_ID__'] = true;
+  }
+</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=__GA_MEASUREMENT_ID__"></script>
 <script>
   window.dataLayer = window.dataLayer || [];

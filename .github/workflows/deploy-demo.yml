@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Inject GA4 measurement ID
+        run: sed -i 's/__GA_MEASUREMENT_ID__/${{ secrets.GA_MEASUREMENT_ID }}/g' pages/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

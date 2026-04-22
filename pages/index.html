@@ -492,7 +492,7 @@
     border: 1px solid var(--border); border-radius: var(--radius-md);
     font-family: var(--font-mono); font-size: 15px;
   }
-  .install-cmd-text { flex: 1; text-align: left; color: var(--text); }
+  .install-cmd-text { flex: 1; text-align: left; color: var(--text); white-space: nowrap; }
   .install-cmd-text::before { content: "$ "; color: var(--text-tertiary); }
 
   .other-tools { font-size: 13px; color: var(--text-tertiary); margin: 0 auto 28px; max-width: 540px; line-height: 1.6; }
@@ -617,7 +617,7 @@
     section.upload { padding: 0 16px 24px; }
     .dropzone { padding: 44px 20px; }
     .url-row { flex-direction: column; }
-    .btn { width: 100%; }
+    .btn:not(.btn-icon) { width: 100%; }
     section.workflow { padding: 8px 16px 40px; }
     .step-card { padding: 20px 18px; }
     .step-card + .step-card::before { left: 36px; }
@@ -788,7 +788,7 @@
   <p class="install-sub">One command. Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro.</p>
   <div class="install-cmd">
     <span class="install-cmd-text" id="installCmd">pip install pdf-mcp</span>
-    <button class="btn btn-ghost" id="installCopyBtn" aria-label="Copy install command">
+    <button class="btn btn-ghost btn-icon" id="installCopyBtn" aria-label="Copy install command">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     </button>
   </div>

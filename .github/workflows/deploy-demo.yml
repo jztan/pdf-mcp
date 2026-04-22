@@ -3,10 +3,7 @@ name: Deploy demo to GitHub Pages
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on version tags like v1.0.0
-    paths:
-      - 'pages/**'
-      - '.github/workflows/deploy-demo.yml'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -28,6 +25,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Inject GA4 measurement ID
         run: sed -i 's/__GA_MEASUREMENT_ID__/${{ secrets.GA_MEASUREMENT_ID }}/g' pages/index.html
+      - name: Inject pdf-mcp version
+        run: sed -i 's/__PDF_MCP_VERSION__/${{ github.ref_name }}/g' pages/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

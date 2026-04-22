@@ -834,6 +834,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.1</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>
@@ -867,7 +868,7 @@
     try {
       const buffer = await file.arrayBuffer();
       await runWorkflow(new Uint8Array(buffer), file.name, file.size);
-    } catch (err) { hideLoader(); showToast("Couldn't parse this PDF"); }
+    } catch (err) { hideLoader(); uploadSection.classList.remove("hidden"); showToast("Couldn't parse this PDF"); }
   }
 
   async function handleUrl(url) {
@@ -878,7 +879,7 @@
       const buffer = await res.arrayBuffer();
       const fn = url.split("/").pop().split("?")[0] || "document.pdf";
       await runWorkflow(new Uint8Array(buffer), fn, buffer.byteLength);
-    } catch (err) { hideLoader(); showToast("Couldn't fetch that URL (CORS or network issue)"); }
+    } catch (err) { hideLoader(); uploadSection.classList.remove("hidden"); showToast("Couldn't fetch that URL (CORS or network issue)"); }
   }
 
   async function runWorkflow(data, filename, sizeBytes) {
@@ -890,6 +891,7 @@
     try { pdf = await loadingTask.promise; }
     catch (err) {
       hideLoader();
+      uploadSection.classList.remove("hidden");
       if (err.name === "PasswordException") showToast("Password-protected — pdf-mcp supports these server-side");
       else showToast("Couldn't parse this PDF");
       return;

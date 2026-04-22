@@ -12,17 +12,22 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 **mcp-name: io.github.jztan/pdf-mcp**
 
+## Try it in your browser
+
+**[See what your AI agent sees →](https://pdf-mcp.jztan.com/)**
+
+Walk through the three main tools (`pdf_info`, `pdf_search`, `pdf_read_pages`) with any PDF. 100% client-side, no install required.
+
 ## Features
 
-- **8 specialized tools** for different PDF operations
-- **SQLite caching** — persistent cache survives server restarts (essential for STDIO transport)
-- **Paginated reading** — read large PDFs in manageable chunks
-- **Hybrid search** — combines BM25 keyword (FTS5) and semantic (local embeddings) via Reciprocal Rank Fusion; falls back to keyword-only without `pdf-mcp[semantic]`
-- **Image extraction** — per-page images returned as PNG file paths alongside text
-- **Table extraction** — per-page tables with header and row data, detected via visible borders
-- **Page rendering** — render any page as a PNG image for vision-capable models (`pdf_render_pages`)
-- **OCR** — extract text from scanned pages via Tesseract; OCR'd text is automatically searchable (`pdf_read_pages(ocr=True)`)
-- **URL support** — read PDFs from HTTPS URLs with SSRF protection (explicit CIDR block list, HTTPS-only)
+Give your agent surgical access to PDFs instead of flooding context with raw text.
+
+- **Hybrid search** — find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
+- **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
+- **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract
+- **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
+- **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
+- **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
 
 ## Installation
 

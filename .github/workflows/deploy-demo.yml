@@ -2,7 +2,8 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: [develop]
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0
     paths:
       - 'pages/**'
       - '.github/workflows/deploy-demo.yml'

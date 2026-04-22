@@ -106,7 +106,7 @@ Restart Claude Desktop after updating the config.
 <details>
 <summary><strong>Visual Studio Code</strong></summary>
 
-Requires VS Code 1.102+ with GitHub Copilot.
+Requires VS Code 1.101+ with GitHub Copilot.
 
 **CLI:**
 ```bash
@@ -238,6 +238,17 @@ Optional parameters:
 "OCR pages 3-5 of the scanned PDF"
 ```
 
+### `pdf_read_all` — Read Entire Document
+
+Read a complete document in one call. Best for short documents (~50 pages or fewer) where you want everything at once. Does not include images or tables — use `pdf_read_pages` for those.
+
+Optional parameters:
+- `max_pages=50` — safety cap on pages read (default 50, max 500)
+
+```
+"Read the entire PDF (it's only 10 pages)"
+```
+
 ### `pdf_render_pages` — Render Pages as Images
 
 Render PDF pages as PNG images for vision-capable models. Use when you need to *see* page content — diagrams, handwriting, scanned pages, or any page where text extraction is insufficient. Returns MCP image content blocks that vision models can process natively. Up to 5 pages per call; DPI clamped to 72–400.
@@ -247,17 +258,6 @@ For extracting text from scanned pages, use `pdf_read_pages(ocr=True)` instead �
 ```
 "Show me what page 5 looks like"
 "Render the diagram on page 12"
-```
-
-### `pdf_read_all` — Read Entire Document
-
-Read a complete document in one call. Does not include images or tables — use `pdf_read_pages` if you need those.
-
-Optional parameters:
-- `max_pages=50` — safety cap on pages read (default 50, max 500)
-
-```
-"Read the entire PDF (it's only 10 pages)"
 ```
 
 ### `pdf_search` — Search Within PDF
@@ -272,7 +272,7 @@ Three modes are available:
 
 Response includes `search_mode: "hybrid" | "keyword" | "semantic"` indicating which path ran.
 
-The first call on a new document embeds all pages (one-time cost, ~291ms for 200 pages); subsequent calls are instant.
+The first call on a new document embeds all pages (one-time cost, typically a few seconds for large documents); subsequent calls are instant.
 
 ```
 "Search for 'quarterly revenue' in the PDF"
@@ -282,17 +282,23 @@ The first call on a new document embeds all pages (one-time cost, ~291ms for 200
 
 ### `pdf_get_toc` — Get Table of Contents
 
+Returns the full outline with titles, levels, and page numbers. Use when `pdf_info` returns `toc_truncated: true` (documents with more than 50 bookmarks).
+
 ```
 "Show me the table of contents"
 ```
 
 ### `pdf_cache_stats` — View Cache Statistics
 
+Returns a breakdown of what's cached per document — page text, images, tables, embeddings, and rendered PNGs — plus total cache size and hit counts.
+
 ```
 "Show PDF cache statistics"
 ```
 
 ### `pdf_cache_clear` — Clear Cache
+
+Removes expired or all cache entries. Use when cached content is stale or to free disk space.
 
 ```
 "Clear expired PDF cache entries"

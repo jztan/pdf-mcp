@@ -85,6 +85,14 @@
 
 ## Planned
 
+### vNext — Semantic Section Chunking
+- Automatic structural boundary detection using PyMuPDF block metadata (font size, bold flags, numbered heading patterns, vertical whitespace gaps, TOC cross-reference)
+- New `sections` table in SQLite cache: `section_id`, `title`, `level`, `start_page`, `end_page`, `text`, `embedding`
+- Built once on first search; persisted like page text with no extra PyMuPDF passes
+- `pdf_search` gains `granularity` parameter: `"page"` (default, backward compat) or `"section"` (returns complete detected section containing each match)
+- TOC entries used as authoritative boundaries when present; heuristic detection as fallback for TOC-less PDFs
+- Collapses the typical search → read-pages → read-more-pages workflow into a single search call
+
 ---
 
 ## Future / Under Consideration

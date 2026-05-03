@@ -699,49 +699,6 @@ def run_completeness_group(pdfs: list[dict]) -> dict:
     }
 
 
-def _char_coverage(accumulated: str, gold: str) -> float:
-    """
-    Character-length fraction of gold covered by accumulated text.
-    Used by run_toolcall_group to avoid the unique-token collapse artefact
-    (_token_coverage collapses repeated-word text to 100% on first read).
-    Returns 1.0 when gold is empty.
-    """
-    if not gold:
-        return 1.0
-    return min(len(accumulated), len(gold)) / len(gold)
-
-
-def _simulate_page_mode_reads(
-    initial_page: int,
-    gold_section: Section,
-    get_page: Callable[[int], str],
-    doc_total_pages: int,
-    coverage_target: float = COVERAGE_TARGET_FRACTION,
-    max_extra: int = MAX_EXTRA_READS,
-) -> int:
-    """
-    Simulate page-mode agent walking outward from a search hit until
-    character-length coverage >= target or max_extra additional reads issued.
-    Uses character fraction rather than unique-token coverage so that
-    repeated-word sections (e.g. "x " * 600) correctly require multiple reads.
-
-    Returns the number of additional pdf_read_pages calls beyond the initial hit.
-    """
-    accumulated = get_page(initial_page)
-    if _char_coverage(accumulated, gold_section.text) >= coverage_target:
-        return 0
-
-    extra_reads = 0
-    for page in _walk_order(initial_page, doc_total_pages):
-        if extra_reads >= max_extra:
-            break
-        accumulated = accumulated + "\n" + get_page(page)
-        extra_reads += 1
-        if _char_coverage(accumulated, gold_section.text) >= coverage_target:
-            break
-    return extra_reads
-
-
 def run_toolcall_group(pdfs: list[dict]) -> dict:
     """
     Group 3: simulate page-mode agent's extra-read cost vs section mode (always 0).
@@ -768,7 +725,7 @@ def run_toolcall_group(pdfs: list[dict]) -> dict:
             if not matches:
                 continue
             initial = matches[0]["page"]
-            page_extra = _simulate_page_mode_reads(
+            page_extra = _simulate_agent_reads(
                 initial_page=initial,
                 gold_section=sec,
                 get_page=lambda p, _path=path: _get_page_text(_path, p),

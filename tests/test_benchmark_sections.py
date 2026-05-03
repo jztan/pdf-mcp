@@ -799,34 +799,42 @@ class TestRunToolcallGroup:
         assert all(r["section_mode_extra_reads"] == 0 for r in sec_results)
 
     def test_fraction_zero_extra_reads_reported(self, monkeypatch):
-        # Two sections; one needs 1 extra read in page mode, one needs 0
+        # Two sections; one needs 1 extra read in page mode, one needs 0.
+        # Use distinct tokens so token-coverage is meaningful (the original
+        # "x " * 600 had only one unique token, defeating coverage growth).
         s1 = bs.Section("Done in one", 1, 1, "alpha beta " * 500)
-        s2 = bs.Section("Needs walk", 2, 3, "x " * 600)
+        # s2 spans pages 2-3 with 5 distinct gold tokens. Page 2 has only 2;
+        # the agent must walk to page 3 to get the rest.
+        s2 = bs.Section(
+            "Needs walk",
+            2,
+            3,
+            " ".join(["alpha beta gamma delta epsilon"] * 50),  # 5 unique tokens
+        )
         monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: [s1, s2])
         monkeypatch.setattr(bs, "_doc_total_pages", lambda p: 3)
 
-        # First section's hit page covers it; second's doesn't
         def fake_keyword_search(path, q, top_k=1):
             page = 1 if q == s1.title else 2
             return {"matches": [{"page": page, "excerpt": ""}]}
 
         monkeypatch.setattr(bs, "_keyword_page_search", fake_keyword_search)
 
-        # Page text providers
         def fake_page_text(path, page):
             if page == 1:
-                return s1.text
+                return s1.text  # page 1 covers s1 fully
             if page == 2:
-                return "x " * 100
+                return "alpha beta"  # only 2 of s2's 5 tokens — needs walk
             if page == 3:
-                return s2.text  # needed by walk
+                return "gamma delta epsilon"  # remaining 3 tokens
             return ""
 
         monkeypatch.setattr(bs, "_get_page_text", fake_page_text)
         pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
         result = bs.run_toolcall_group(pdfs)
         per_pdf = result["per_pdf"]["x"]
-        # In section mode both sections are 0 reads → 100% zero-read
+        # Section mode is always 0 reads
         assert per_pdf["section_mode_zero_read_fraction"] == 1.0
-        # In page mode: section 1 = 0 reads, section 2 >= 1 → 50%
+        # Page mode: s1 = 0 reads (full coverage on hit page),
+        # s2 = 1 extra read (page 2 → 40% → walk to page 3 → 100%) → 50% zero-read
         assert per_pdf["page_mode_zero_read_fraction"] == 0.5

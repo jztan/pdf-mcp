@@ -584,6 +584,30 @@ def _line_features(
     }
 
 
+HEADING_SCORE_THRESHOLD = 4
+_SIGNAL_WEIGHTS = {
+    "face_delta": 2,
+    "bold_marker": 2,
+    "whitespace_above": 1,
+    "top_of_page": 1,
+    "regex_match": 3,
+    "title_case_or_caps": 1,
+    "short_line": 1,
+}
+
+
+def _heading_score(features: dict[str, bool]) -> int:
+    """Sum of weighted signals — see _SIGNAL_WEIGHTS for rationale."""
+    return sum(_SIGNAL_WEIGHTS[k] for k, fired in features.items() if fired)
+
+
+def _is_heading(
+    features: dict[str, bool], threshold: int = HEADING_SCORE_THRESHOLD
+) -> bool:
+    """A line is a heading iff its summed signal score ≥ threshold."""
+    return _heading_score(features) >= threshold
+
+
 def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
     PDF-aware wrapper: extract text lines from each page, apply the regex

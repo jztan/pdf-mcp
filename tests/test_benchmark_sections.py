@@ -1221,3 +1221,65 @@ class TestLineFeatures:
         fl = bs._line_features(long_line, body_fp, prev_line=None, page_height=800)
         assert fs["short_line"] is True
         assert fl["short_line"] is False
+
+
+class TestHeadingScore:
+    """Tests _heading_score and _is_heading."""
+
+    def _features(self, **overrides):
+        defaults = {
+            "face_delta": False,
+            "bold_marker": False,
+            "whitespace_above": False,
+            "top_of_page": False,
+            "regex_match": False,
+            "title_case_or_caps": False,
+            "short_line": False,
+        }
+        defaults.update(overrides)
+        return defaults
+
+    def test_zero_signals(self):
+        assert bs._heading_score(self._features()) == 0
+        assert bs._is_heading(self._features()) is False
+
+    def test_regex_alone_insufficient(self):
+        # regex (3) alone is not enough — needs at least one supporting signal
+        f = self._features(regex_match=True)
+        assert bs._heading_score(f) == 3
+        assert bs._is_heading(f) is False
+
+    def test_regex_plus_short_line_clears_threshold(self):
+        f = self._features(regex_match=True, short_line=True)
+        assert bs._heading_score(f) == 4
+        assert bs._is_heading(f) is True
+
+    def test_face_delta_plus_bold_marker_clears_threshold(self):
+        # 2 + 2 = 4
+        f = self._features(face_delta=True, bold_marker=True)
+        assert bs._heading_score(f) == 4
+        assert bs._is_heading(f) is True
+
+    def test_inline_bold_label_below_threshold(self):
+        # Body face + bold flag (e.g. "**Note:**") → bold_marker(2) + short_line(1) = 3
+        f = self._features(bold_marker=True, short_line=True)
+        assert bs._heading_score(f) == 3
+        assert bs._is_heading(f) is False
+
+    def test_strong_combo_top_of_page_heading(self):
+        # face_delta + bold_marker + whitespace + top_of_page + title_case + short
+        f = self._features(
+            face_delta=True,
+            bold_marker=True,
+            whitespace_above=True,
+            top_of_page=True,
+            title_case_or_caps=True,
+            short_line=True,
+        )
+        assert bs._heading_score(f) == 8
+        assert bs._is_heading(f) is True
+
+    def test_threshold_constant_is_at_module_level(self):
+        # Assert the threshold is exposed for tuning/calibration
+        assert hasattr(bs, "HEADING_SCORE_THRESHOLD")
+        assert bs.HEADING_SCORE_THRESHOLD == 4

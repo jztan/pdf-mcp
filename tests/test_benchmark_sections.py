@@ -581,3 +581,69 @@ class TestDetectBoundariesIntegration:
         assert intro.end_page == 1
         # Section text should contain page 1's content
         assert "Introduction" in intro.text or "intro" in intro.text.lower()
+
+
+class TestSectionSearch:
+    def test_returns_section_containing_top_page_hit(self, monkeypatch):
+        sections = [
+            bs.Section("Intro", 1, 5, "intro text"),
+            bs.Section("Methods", 6, 10, "methods text"),
+            bs.Section("Results", 11, 15, "results text"),
+        ]
+
+        # Stub the keyword search to return page 8 as rank-1
+        def fake_search(path, query, mode, max_results):
+            return {"matches": [{"page": 8, "excerpt": ""}]}
+
+        monkeypatch.setattr(bs, "_PDF_SEARCH_FN", fake_search)
+
+        result = bs._section_search("p.pdf", "method", sections=sections, top_k=1)
+        assert len(result["sections"]) == 1
+        assert result["sections"][0]["title"] == "Methods"
+        assert result["sections"][0]["start_page"] == 6
+        assert result["sections"][0]["end_page"] == 10
+        assert result["sections"][0]["text"] == "methods text"
+
+    def test_returns_empty_when_no_keyword_hit(self, monkeypatch):
+        sections = [bs.Section("Intro", 1, 5, "intro text")]
+        monkeypatch.setattr(
+            bs,
+            "_PDF_SEARCH_FN",
+            lambda path, query, mode, max_results: {"matches": []},
+        )
+        result = bs._section_search("p.pdf", "x", sections=sections, top_k=1)
+        assert result["sections"] == []
+
+    def test_returns_empty_when_hit_falls_outside_any_section(self, monkeypatch):
+        # Detected section covers pages 6..10; keyword hit is on page 3.
+        # No section contains page 3 → empty result.
+        sections = [bs.Section("Methods", 6, 10, "methods text")]
+        monkeypatch.setattr(
+            bs,
+            "_PDF_SEARCH_FN",
+            lambda path, query, mode, max_results: {"matches": [{"page": 3}]},
+        )
+        result = bs._section_search("p.pdf", "x", sections=sections, top_k=1)
+        assert result["sections"] == []
+
+    def test_top_k_collects_distinct_sections(self, monkeypatch):
+        # Three keyword hits on pages 2, 7, 8 → distinct sections Intro and Methods.
+        # Methods appears twice (pages 7 and 8) but should be deduped.
+        sections = [
+            bs.Section("Intro", 1, 5, "intro text"),
+            bs.Section("Methods", 6, 10, "methods text"),
+        ]
+        monkeypatch.setattr(
+            bs,
+            "_PDF_SEARCH_FN",
+            lambda path, query, mode, max_results: {
+                "matches": [
+                    {"page": 2},
+                    {"page": 7},
+                    {"page": 8},
+                ]
+            },
+        )
+        result = bs._section_search("p.pdf", "x", sections=sections, top_k=2)
+        titles = [s["title"] for s in result["sections"]]
+        assert titles == ["Intro", "Methods"]

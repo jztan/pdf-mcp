@@ -35,6 +35,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from pdf_mcp.server import pdf_search as _PDF_SEARCH_FN  # noqa: E402
+
 # ---- Threshold constants (placeholders — calibrate before relying on them) ----
 THRESHOLD_BOUNDARY_F1 = 0.80  # Group 1, per PDF
 THRESHOLD_SECTION_RECALL_MEAN = 0.90  # Group 2
@@ -485,3 +487,45 @@ def _detect_boundaries(pdf_path: str) -> list[Section]:
         return sections
     finally:
         doc.close()
+
+
+def _section_search(
+    pdf_path: str,
+    query: str,
+    sections: list[Section],
+    top_k: int = 1,
+) -> dict:
+    """
+    In-script section-granularity search. Runs the existing keyword search,
+    maps each rank-ordered page hit to the section containing it, and
+    returns the first `top_k` distinct sections (preserving rank order).
+
+    This is the benchmark's stand-in for `pdf_search(granularity="section")`.
+    If the benchmark passes, this is the surface area to upstream — likely
+    re-implemented internally with section-aware ranking rather than this
+    page-hit-then-lookup approach.
+    """
+    # Pull more keyword hits than top_k since multiple hits can fall in one
+    # section; we want top_k *distinct* sections.
+    raw = _PDF_SEARCH_FN(pdf_path, query, mode="keyword", max_results=top_k * 5)
+    matches = raw.get("matches", [])
+
+    seen_titles: set[str] = set()
+    out: list[dict] = []
+    for m in matches:
+        page = m.get("page")
+        for sec in sections:
+            if sec.start_page <= page <= sec.end_page and sec.title not in seen_titles:
+                seen_titles.add(sec.title)
+                out.append(
+                    {
+                        "title": sec.title,
+                        "start_page": sec.start_page,
+                        "end_page": sec.end_page,
+                        "text": sec.text,
+                    }
+                )
+                break
+        if len(out) >= top_k:
+            break
+    return {"sections": out}

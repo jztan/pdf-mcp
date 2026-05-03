@@ -1082,3 +1082,21 @@ class TestGetSectionFTSCoverage:
         cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
         cache.fts_available = False
         assert cache.get_section_fts_coverage("/p.pdf") == 0
+
+
+def test_section_embeddings_table_exists(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache.db_path) as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(section_embeddings)")}
+    assert cols == {
+        "file_path",
+        "section_id",
+        "section_key",
+        "file_mtime",
+        "embedding",
+        "model",
+        "created_at",
+    }

@@ -211,6 +211,22 @@ class PDFCache:
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
 
+                -- Section embeddings cache (Phase-1 validation shim;
+                -- mirrors page_embeddings, keyed by section_id within a PDF).
+                CREATE TABLE IF NOT EXISTS section_embeddings (
+                    file_path   TEXT    NOT NULL,
+                    section_id  INTEGER NOT NULL,
+                    section_key TEXT    NOT NULL,
+                    file_mtime  REAL    NOT NULL,
+                    embedding   BLOB    NOT NULL,
+                    model       TEXT    NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, section_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_section_embeddings_path
+                    ON section_embeddings(file_path);
+
                 -- Page render cache (full-page PNG renders)
                 CREATE TABLE IF NOT EXISTS page_renders (
                     file_path          TEXT    NOT NULL,

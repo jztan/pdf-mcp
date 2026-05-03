@@ -197,3 +197,67 @@ class TestBoundaryF1:
         assert m["recall"] == 0.0
         assert m["precision"] == 0.0
         assert m["f1"] == 0.0
+
+
+class TestBoilerplateStripping:
+    def test_strips_lines_appearing_on_majority_of_pages(self):
+        pages = [
+            "GPT-3 Technical Report\nPage 1 content here\nFooter line",
+            "GPT-3 Technical Report\nPage 2 content here\nFooter line",
+            "GPT-3 Technical Report\nPage 3 content here\nFooter line",
+            "GPT-3 Technical Report\nPage 4 content here\nFooter line",
+        ]
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.5)
+        assert "GPT-3 Technical Report" in boilerplate
+        assert "Footer line" in boilerplate
+        assert "Page 1 content here" not in boilerplate
+
+    def test_keeps_lines_below_threshold(self):
+        pages = ["Header\nA", "Header\nB", "C\nD"]  # Header is on 2/3 pages
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.7)
+        # 2/3 = 0.667 < 0.7 → not stripped
+        assert "Header" not in boilerplate
+
+    def test_normalizes_whitespace_before_counting(self):
+        # Trailing whitespace should not split otherwise-identical headers
+        pages = ["Header   \nA", "Header\nB", "Header\t\nC"]
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.5)
+        assert "Header" in boilerplate
+
+    def test_strips_paginated_page_numbers_with_changing_digits(self):
+        # "Page 1 of 4", "Page 2 of 4", ... never match each other under exact
+        # equality. The detector must collapse them into a page-number family.
+        pages = [f"Title\nReal content {i}\nPage {i} of 4" for i in range(1, 5)]
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.5)
+        # All four raw forms should land in the boilerplate set
+        assert "Page 1 of 4" in boilerplate
+        assert "Page 2 of 4" in boilerplate
+        assert "Page 4 of 4" in boilerplate
+        # Real content (which also contains a digit) is NOT swept up
+        assert "Real content 1" not in boilerplate
+
+    def test_strips_bare_page_numbers(self):
+        # arxiv-style: bare "1", "2", "3" as page numbers in the footer
+        pages = [f"Body text {i}\n{i}" for i in range(1, 6)]
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.5)
+        assert "1" in boilerplate
+        assert "5" in boilerplate
+        # Body lines vary by digit but each appears only once → not boilerplate
+        assert "Body text 3" not in boilerplate
+
+    def test_does_not_strip_content_with_embedded_digits(self):
+        # Lines like "GPT-3 Technical Report" appear on every page and should
+        # be caught by the EXACT-match path, not the page-number family
+        # (the line is not a pure "Page N" / "N of M" / bare "N" form).
+        pages = ["GPT-3 Technical Report\nA"] * 4
+        boilerplate = bs._detect_boilerplate(pages, threshold=0.5)
+        assert "GPT-3 Technical Report" in boilerplate
+
+    def test_strip_boilerplate_removes_lines(self):
+        text = "Header\nReal content\nFooter"
+        boilerplate = {"Header", "Footer"}
+        assert bs._strip_boilerplate(text, boilerplate) == "Real content"
+
+    def test_strip_boilerplate_idempotent_on_clean_text(self):
+        text = "Real content only"
+        assert bs._strip_boilerplate(text, set()) == "Real content only"

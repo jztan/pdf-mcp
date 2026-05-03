@@ -26,6 +26,7 @@ import pymupdf
 import re
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -248,3 +249,59 @@ def _compute_boundary_f1(
         "n_gold": n_gold,
         "n_detected": n_det,
     }
+
+
+_PAGE_NUMBER_RE = re.compile(
+    r"^\s*(page\s+)?\d+(\s*(of|/)\s*\d+)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _detect_boilerplate(
+    page_texts: list[str],
+    threshold: float = BOILERPLATE_LINE_FREQUENCY_THRESHOLD,
+) -> set[str]:
+    """
+    Build a set of lines that appear on >= threshold fraction of pages.
+
+    Two passes:
+      1. Exact-match path — lines repeated verbatim (running titles, footers).
+      2. Page-number family — lines matching `_PAGE_NUMBER_RE` (e.g. "Page 1
+         of 144", bare "5") are collapsed into one family; if the family
+         appears on >= threshold pages, all its raw forms join boilerplate.
+
+    Whitespace is stripped before counting so trailing-space variants dedupe.
+    """
+    if not page_texts:
+        return set()
+
+    counter: Counter[str] = Counter()
+    page_number_lines: set[str] = set()
+    pages_with_page_number = 0
+
+    for page in page_texts:
+        unique_lines = {line.strip() for line in page.splitlines() if line.strip()}
+        page_has_pagenum = False
+        for line in unique_lines:
+            if _PAGE_NUMBER_RE.match(line):
+                page_number_lines.add(line)
+                page_has_pagenum = True
+            else:
+                counter[line] += 1
+        if page_has_pagenum:
+            pages_with_page_number += 1
+
+    n_pages = len(page_texts)
+    cutoff = threshold * n_pages
+    boilerplate = {line for line, count in counter.items() if count >= cutoff}
+    if pages_with_page_number >= cutoff:
+        boilerplate |= page_number_lines
+    return boilerplate
+
+
+def _strip_boilerplate(text: str, boilerplate: set[str]) -> str:
+    """Remove any line whose stripped form is in `boilerplate`."""
+    if not boilerplate:
+        return text
+    kept = [line for line in text.splitlines() if line.strip() not in boilerplate]
+    return "\n".join(kept)

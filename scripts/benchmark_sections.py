@@ -643,9 +643,12 @@ def _merge_split_headings(
 
 def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
-    PDF-aware wrapper: extract text lines from each page, apply the regex
-    detector, and fill `Section.text` with concatenated page text for the
-    detected page range.
+    Multi-signal section detector. Combines 7 weak signals (font face delta,
+    bold marker, whitespace gap, top-of-page, heading regex, title-case,
+    short-line) via a weighted score; threshold-4 wins.
+
+    Multi-line headings (a number line followed by the title text on the
+    next line) are merged via _merge_split_headings before section assembly.
 
     NOTE: This is the in-script implementation. If the benchmark passes
     its calibration thresholds, this function (or its descendant) is the
@@ -654,20 +657,55 @@ def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
     doc = pymupdf.open(pdf_path)
     try:
-        lines: list[tuple[int, str]] = []
+        # Phase 1: collect every line with its dict-shape attributes.
+        all_lines: list[tuple[int, dict, float]] = []
+        # ^ (page_1idx, line_dict, page_height)
         for page_idx in range(len(doc)):
-            # `get_text("blocks", sort=True)` returns blocks in
-            # top-to-bottom, left-to-right order — critical for two-column
-            # PDFs where plain get_text() can interleave columns. Mirrors
-            # the pattern used in pdf_mcp/extractor.py:127.
-            blocks = doc[page_idx].get_text("blocks", sort=True)
-            for block in blocks:
-                block_text = block[
-                    4
-                ]  # PyMuPDF block tuple: (x0,y0,x1,y1,text,block_no,block_type)
-                for line in block_text.splitlines():
-                    lines.append((page_idx + 1, line))
-        sections = _detect_boundaries_from_lines(lines, total_pages=len(doc))
+            page = doc[page_idx]
+            page_height = page.rect.height
+            for blk in page.get_text("dict")["blocks"]:
+                if "lines" not in blk:
+                    continue
+                for line in blk["lines"]:
+                    all_lines.append((page_idx + 1, line, page_height))
+
+        # Phase 2: compute body fingerprint from raw line dicts.
+        body_fingerprint = _compute_body_fingerprint([line for _, line, _ in all_lines])
+
+        # Phase 3: score each line; collect candidates with their y-position.
+        candidates: list[tuple[int, str, float]] = []
+        prev_line_per_page: dict[int, dict] = {}
+        for page, line, page_height in all_lines:
+            features = _line_features(
+                line,
+                body_fingerprint,
+                prev_line_per_page.get(page),
+                page_height,
+            )
+            prev_line_per_page[page] = line
+            if not _is_heading(features):
+                continue
+            text = "".join(s["text"] for s in line.get("spans", [])).strip()
+            if not text:
+                continue
+            y0 = line.get("bbox", [0, 0, 0, 0])[1]
+            candidates.append((page, text, y0))
+
+        # Phase 4: merge split number/title pairs.
+        candidates = _merge_split_headings(candidates)
+
+        # Phase 5: assemble Sections from candidate boundaries.
+        sections: list[Section] = []
+        for i, (page, title, _y) in enumerate(candidates):
+            if i + 1 < len(candidates):
+                end_page = candidates[i + 1][0] - 1
+            else:
+                end_page = len(doc)
+            sections.append(
+                Section(title=title, start_page=page, end_page=end_page, text="")
+            )
+
+        # Phase 6: fill section text from page ranges.
         for s in sections:
             if s.start_page > s.end_page:
                 continue

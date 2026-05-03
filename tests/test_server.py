@@ -1952,3 +1952,65 @@ class TestPdfSearchGranularityValidation:
         result = pdf_search(sample_pdf, "Sample", granularity="page")
         assert "matches" in result
         assert "sections" not in result
+
+
+class TestPdfSearchSectionMode:
+    """Section-mode dispatch: TOC-first index, BM25 ranking."""
+
+    def test_returns_sections_shape(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "graph attention", granularity="section"
+        )
+        assert "sections" in result
+        assert result["search_mode"] == "section"
+        # No page-mode keys leak through
+        assert "matches" not in result
+
+    def test_returns_ranked_sections(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "graph attention", granularity="section"
+        )
+        sections = result["sections"]
+        assert len(sections) >= 1
+        # "Methods" body has the strongest match for "graph attention"
+        assert sections[0]["title"] == "Methods"
+        # Each section dict has the expected keys
+        sec = sections[0]
+        for key in ("section_id", "title", "start_page", "end_page", "score"):
+            assert key in sec
+
+    def test_no_keyword_match_returns_empty_sections(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections,
+            "zebra octopus xylophone",
+            granularity="section",
+        )
+        assert result["sections"] == []
+        assert result["search_mode"] == "section"
+
+    def test_total_sections_reflects_indexed_count(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "graph", granularity="section"
+        )
+        # The fixture has 5 TOC entries -> 5 sections indexed
+        assert result["total_sections"] == 5
+
+    def test_caches_after_first_call(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        # First call populates the cache; second call should reuse it.
+        # Both should return the same shape.
+        r1 = pdf_search(sample_pdf_with_toc_sections, "graph", granularity="section")
+        r2 = pdf_search(sample_pdf_with_toc_sections, "graph", granularity="section")
+        assert r1["total_sections"] == r2["total_sections"]
+        assert [s["title"] for s in r1["sections"]] == [
+            s["title"] for s in r2["sections"]
+        ]

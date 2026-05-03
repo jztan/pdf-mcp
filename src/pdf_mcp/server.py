@@ -32,6 +32,7 @@ from .extractor import (
     parse_page_range,
     render_page_as_png,
 )
+from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
 # Safety limits for parameters
@@ -644,6 +645,40 @@ def _python_search(
     return matches, page_counts
 
 
+def _pdf_search_section_mode(
+    local_path: str, query: str, max_results: int
+) -> dict[str, Any]:
+    """
+    Section-granularity search.
+
+    Derives sections (TOC-first, heuristic fallback), populates the
+    section FTS5 cache if not already populated, runs a BM25-ranked
+    query, returns top sections by score.
+
+    Returns shape:
+      {"sections": [{"section_id", "title", "start_page", "end_page",
+                      "score"}, ...],
+       "search_mode": "section",
+       "total_sections": int (count of indexed sections for this PDF)}
+    """
+    if cache.get_section_fts_coverage(local_path) == 0:
+        sections = derive_sections(local_path)
+        if not sections:
+            return {
+                "sections": [],
+                "search_mode": "section",
+                "total_sections": 0,
+            }
+        cache.index_sections(local_path, sections)
+
+    matches = cache.search_section_fts(local_path, query, max_results)
+    return {
+        "sections": matches,
+        "search_mode": "section",
+        "total_sections": cache.get_section_fts_coverage(local_path),
+    }
+
+
 @mcp.tool()
 def pdf_search(
     path: str,
@@ -672,19 +707,27 @@ def pdf_search(
         query: Text to search for
         mode: 'auto' (default) — hybrid when fastembed installed, else keyword;
               'keyword' — BM25/FTS5 only, never loads embeddings;
-              'semantic' — semantic only, error if fastembed not installed
+              'semantic' — semantic only, error if fastembed not installed.
+              (mode is ignored when granularity='section' — section search is
+              always BM25/FTS5 over section text.)
         max_results: Maximum number of matches to return (default 10, max 100)
-        context_chars: Characters of context around each match (default 200, max 2000)
-        granularity: 'page' (default) — search returns matching pages.
-                     'section' — search returns matching sections (TOC-first
-                     with heuristic fallback).
+        context_chars: Characters of context around each match (default 200,
+            max 2000)
+        granularity: 'page' (default) — returns matching pages.
+                     'section' — returns matching sections (TOC-first with
+                     heuristic fallback). The section index is built lazily
+                     on first section-mode call per PDF and cached in SQLite
+                     FTS5; subsequent calls reuse it.
 
     Returns:
-        - matches: List of {page, excerpt, position, score} objects
-        - total_matches: Total keyword literal matches (omitted in semantic mode)
-        - page_match_counts: Per-page keyword counts (omitted in semantic mode)
-        - search_mode: 'hybrid' | 'keyword' | 'semantic'
-        - searched_pages: Total pages in the document
+        Page mode (granularity='page'):
+            - matches: List of {page, excerpt, position, score}
+            - total_matches, page_match_counts, search_mode, searched_pages
+        Section mode (granularity='section'):
+            - sections: List of {section_id, title, start_page, end_page,
+                        score} sorted by descending BM25 relevance.
+            - search_mode: 'section'
+            - total_sections: count of indexed sections for this PDF
     """
     # 1. Validate mode
     if mode not in ("auto", "keyword", "semantic"):
@@ -724,6 +767,9 @@ def pdf_search(
     local_path = _resolve_path(path)
     max_results = _clamp(max_results, 1, MAX_RESULTS_LIMIT)
     context_chars = _clamp(context_chars, 10, MAX_CONTEXT_CHARS_LIMIT)
+
+    if granularity == "section":
+        return _pdf_search_section_mode(local_path, query, max_results)
 
     doc = pymupdf.open(local_path)
 

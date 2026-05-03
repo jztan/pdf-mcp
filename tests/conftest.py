@@ -90,6 +90,36 @@ def sample_pdf_with_toc():
 
 
 @pytest.fixture
+def sample_pdf_with_toc_sections(tmp_path):
+    """A 5-page PDF with set_toc and distinctive body text per section."""
+    path = tmp_path / "with_toc_sections.pdf"
+    doc = pymupdf.open()
+    contents = [
+        ("Introduction", "introduction body about graph neural networks"),
+        ("Methods", "methods describing graph attention mechanism in detail"),
+        ("Results", "results we observed strong performance gains"),
+        ("Discussion", "discussion of implications and tradeoffs"),
+        ("Conclusion", "conclusion and future work directions"),
+    ]
+    for title, body in contents:
+        page = doc.new_page(width=600, height=800)
+        page.insert_text((50, 100), title, fontsize=14)
+        page.insert_text((50, 130), body, fontsize=11)
+    doc.set_toc(
+        [
+            [1, "Introduction", 1],
+            [1, "Methods", 2],
+            [1, "Results", 3],
+            [1, "Discussion", 4],
+            [1, "Conclusion", 5],
+        ]
+    )
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+@pytest.fixture
 def sample_pdf_with_large_toc():
     """Create a PDF with more than 50 TOC entries (triggers truncation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:

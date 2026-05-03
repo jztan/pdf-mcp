@@ -1122,3 +1122,64 @@ def test_get_section_embeddings_empty_input_returns_empty(tmp_path):
 
     cache = PDFCache(cache_dir=tmp_path)
     assert cache.get_section_embeddings("/no/such/path.pdf", []) == {}
+
+
+def test_section_embeddings_invalidated_on_mtime_change(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import os
+    import time
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    assert cache.get_section_embeddings(str(pdf_path), [0]) == {0: b"\x00" * 1536}
+
+    time.sleep(0.05)
+    pdf_path.write_bytes(b"%PDF-1.4\n%modified\n%%EOF\n")
+    os.utime(pdf_path, None)
+
+    # Stale rows must be filtered out by _is_cache_valid.
+    assert cache.get_section_embeddings(str(pdf_path), [0]) == {}
+
+
+def test_invalidate_file_drops_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    cache._invalidate_file(str(pdf_path))
+
+    with sqlite3.connect(cache.db_path) as conn:
+        (n,) = conn.execute(
+            "SELECT COUNT(*) FROM section_embeddings WHERE file_path = ?",
+            (str(pdf_path),),
+        ).fetchone()
+    assert n == 0
+
+
+def test_clear_all_drops_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    cache.clear_all()
+
+    with sqlite3.connect(cache.db_path) as conn:
+        (n,) = conn.execute("SELECT COUNT(*) FROM section_embeddings").fetchone()
+    assert n == 0

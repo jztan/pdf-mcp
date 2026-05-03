@@ -1,6 +1,7 @@
 # tests/test_benchmark_sections.py
 """Unit tests for scripts/benchmark_sections.py."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -838,3 +839,29 @@ class TestRunToolcallGroup:
         # Page mode: s1 = 0 reads (full coverage on hit page),
         # s2 = 1 extra read (page 2 → 40% → walk to page 3 → 100%) → 50% zero-read
         assert per_pdf["page_mode_zero_read_fraction"] == 0.5
+
+
+class TestSaveResults:
+    def test_writes_txt_and_json(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        bs._OUTPUT.clear()
+        bs._OUTPUT.append("\x1b[32mline 1\x1b[0m")
+        bs._OUTPUT.append("line 2")
+        results = {"group_1": {"min_f1": 0.9}}
+        bs._save_results(
+            results,
+            file_timestamp="20260503_120000",
+            iso_timestamp="2026-05-03T12:00:00",
+        )
+        txt = (
+            tmp_path / "benchmark_results" / "sections_20260503_120000.txt"
+        ).read_text()
+        assert "line 1" in txt
+        assert "\x1b[" not in txt  # ANSI stripped
+        data = json.loads(
+            (
+                tmp_path / "benchmark_results" / "sections_20260503_120000.json"
+            ).read_text()
+        )
+        assert data["timestamp"] == "2026-05-03T12:00:00"
+        assert data["results"] == results

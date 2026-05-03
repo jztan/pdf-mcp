@@ -773,3 +773,83 @@ def run_toolcall_group(pdfs: list[dict]) -> dict:
             min(cross_section_zero_fractions) if cross_section_zero_fractions else 0.0
         ),
     }
+
+
+def _save_results(results: dict, file_timestamp: str, iso_timestamp: str) -> None:
+    out_dir = Path("benchmark_results")
+    out_dir.mkdir(exist_ok=True)
+    base = out_dir / f"sections_{file_timestamp}"
+
+    txt_content = _strip_ansi("\n".join(_OUTPUT))
+    base.with_suffix(".txt").write_text(txt_content, encoding="utf-8")
+
+    payload = {
+        "timestamp": iso_timestamp,
+        "thresholds": {
+            "boundary_f1": THRESHOLD_BOUNDARY_F1,
+            "section_recall_mean": THRESHOLD_SECTION_RECALL_MEAN,
+            "section_precision_mean": THRESHOLD_SECTION_PRECISION_MEAN,
+            "recall_delta_mean": THRESHOLD_RECALL_DELTA_MEAN,
+            "fraction_zero_extra_reads": THRESHOLD_FRACTION_ZERO_EXTRA_READS,
+        },
+        "results": results,
+    }
+    base.with_suffix(".json").write_text(
+        json.dumps(payload, indent=2, default=str), encoding="utf-8"
+    )
+
+
+def _print_summary(results: dict, calibrate: bool) -> tuple[bool, list[str]]:
+    """
+    Print final pass/fail table and return (passed, list_of_failures).
+    In calibrate mode, every check returns "INFO" and passed=True.
+    """
+    _section("Summary")
+    failures: list[str] = []
+
+    def _check(label: str, value: float, threshold: float, op: str = ">=") -> None:
+        if calibrate:
+            _row(
+                label, f"{value:.3f} (threshold {threshold:.3f}, calibrate-only)", None
+            )
+            return
+        passed = value >= threshold if op == ">=" else value <= threshold
+        _row(label, f"{value:.3f} (threshold {threshold:.3f})", ok=passed)
+        if not passed:
+            failures.append(f"{label}: {value:.3f} < {threshold:.3f}")
+
+    g1 = results.get("group_1")
+    if g1:
+        for key, m in g1["per_pdf"].items():
+            if "error" in m:
+                failures.append(f"Group 1 [{key}]: {m['error']}")
+                continue
+            _check(f"Group 1 [{key}] F1", m["f1"], THRESHOLD_BOUNDARY_F1)
+
+    g2 = results.get("group_2")
+    if g2:
+        _check(
+            "Group 2 min section-mode recall",
+            g2.get("min_section_recall", 0.0),
+            THRESHOLD_SECTION_RECALL_MEAN,
+        )
+        _check(
+            "Group 2 min section-mode precision",
+            g2.get("min_section_precision", 0.0),
+            THRESHOLD_SECTION_PRECISION_MEAN,
+        )
+        _check(
+            "Group 2 min recall delta",
+            g2.get("min_recall_delta", 0.0),
+            THRESHOLD_RECALL_DELTA_MEAN,
+        )
+
+    g3 = results.get("group_3")
+    if g3:
+        _check(
+            "Group 3 min section-mode 0-read fraction",
+            g3.get("min_section_zero_fraction", 0.0),
+            THRESHOLD_FRACTION_ZERO_EXTRA_READS,
+        )
+
+    return (len(failures) == 0, failures)

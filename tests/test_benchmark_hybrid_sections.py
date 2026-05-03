@@ -52,3 +52,9 @@ def test_recall_at_k_empty_gold_raises():
 
     with pytest.raises(ValueError):
         recall_at_k(["a"], set(), k=5)
+
+
+def test_recall_at_k_no_gold_in_ranked():
+    from benchmark_hybrid_sections import recall_at_k
+
+    assert recall_at_k(["x", "y", "z"], {"a", "b"}, k=10) == 0.0

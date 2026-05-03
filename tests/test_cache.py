@@ -2,6 +2,7 @@
 """Tests for pdf_mcp.cache module - edge cases."""
 
 import os
+import sqlite3
 import time
 import tempfile
 from pathlib import Path
@@ -844,3 +845,40 @@ class TestPageEmbeddingsLifecycle:
 
         assert cleared >= 1
         assert cache.get_stats()["embedding_pages"] == 0
+
+
+class TestSectionFTSSchema:
+    def test_section_fts_table_created_on_init(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            import pytest
+
+            pytest.skip("FTS5 not available in this SQLite build")
+        with sqlite3.connect(cache.db_path) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+        assert "pdf_section_fts" in tables
+
+    def test_section_fts_columns(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            import pytest
+
+            pytest.skip("FTS5 not available")
+        with sqlite3.connect(cache.db_path) as conn:
+            cols = {
+                row[1] for row in conn.execute("PRAGMA table_info(pdf_section_fts)")
+            }
+        # FTS5 reports both indexed and UNINDEXED columns via PRAGMA
+        assert {
+            "file_path",
+            "section_id",
+            "title",
+            "text",
+            "start_page",
+            "end_page",
+        }.issubset(cols)

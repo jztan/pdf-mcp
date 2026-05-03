@@ -22,6 +22,18 @@ _FTS5_TABLE_SCHEMA = (
     ")"
 )
 
+_FTS5_SECTION_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_section_fts USING fts5("
+    "file_path UNINDEXED, "
+    "section_id UNINDEXED, "
+    "title, "
+    "text, "
+    "start_page UNINDEXED, "
+    "end_page UNINDEXED, "
+    "tokenize='porter unicode61'"
+    ")"
+)
+
 
 def _escape_fts5_query(query: str) -> str:
     """
@@ -237,6 +249,14 @@ class PDFCache:
                 self.fts_available = True
             except sqlite3.OperationalError:
                 self.fts_available = False
+
+            if self.fts_available:
+                try:
+                    conn.execute(_FTS5_SECTION_TABLE_SCHEMA)
+                except sqlite3.OperationalError:
+                    # Section table failed but page table succeeded — unusual.
+                    # Leave fts_available=True since page search still works.
+                    pass
 
         self.clear_expired()
 

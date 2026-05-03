@@ -72,7 +72,7 @@
 - `search_mode` field in response indicates which path ran; `pdf_semantic_search` removed
 - Hybrid falls back to keyword-only when `fastembed` is not installed
 
-### v1.9.0 — OCR & Page Rendering ← current
+### v1.9.0 — OCR & Page Rendering
 - New `pdf_render_pages` tool: renders pages as PNG images for vision-capable models (8 tools total)
 - `pdf_read_pages` gains `ocr=True`/`ocr_lang` for Tesseract OCR on scanned pages; OCR'd text automatically searchable via `pdf_search`
 - `pdf_read_pages` gains `render_dpi` to attach rendered PNG path alongside text (shared cache with `pdf_render_pages`)
@@ -81,17 +81,22 @@
 - SQLite `page_renders` table with dedicated `renders_dir`; bidirectional cache sharing between render tools
 - `source` column on `page_text`; lazy backfill for pre-v1.9.0 cached rows
 
+### v1.10.0 — Section-Granularity Search ← unreleased (on `develop`)
+- `pdf_search` gains `granularity` parameter: `"page"` (default, backward compatible) or `"section"` (returns complete sections containing each match, ranked by BM25 over section text)
+- New `pdf_mcp.section_detector` module — public `Section` dataclass and `detect_boundaries(pdf_path)` / `extract_toc_sections(doc)` / `derive_sections(pdf_path)` API
+- 7-signal heuristic detector combines font-face delta, bold detection (via flag bit OR font-name marker like `.B`/`Bold`), vertical whitespace gap, top-of-page position, numbered/keyword heading regex, Title Case / ALL CAPS, and short-line cues. Threshold-4 weighted score; multi-line headings (number on one line, title on next) are merged via a post-pass
+- TOC-first dispatcher: uses `doc.get_toc()` when present (authoritative for ~95% of academic PDFs); heuristic detector is the fallback for TOC-less PDFs
+- New `pdf_section_fts` SQLite FTS5 virtual table (parallel to `pdf_search_fts` for pages); section index lazily populated on the first section-mode call per PDF, then reused
+- New cache methods: `index_sections`, `search_section_fts`, `get_section_fts_coverage`
+- **Validated on three real arxiv PDFs** (GNN review, LLM survey, GPT-3): heuristic detector F1 0.80–0.94 across PDFs with ≤0.20 spread (passes the kill-switch gate); page-mode agents save **1.32–9.46 extra `pdf_read_pages` calls per query** depending on document structure (9.46 average on the 75-page GPT-3 paper, where 0% of sections fit in a single page)
+- New benchmark harness: `scripts/benchmark_sections.py` (with `--detector-source=toc|heuristic` and `--toc-flatten=all|leaves` flags for reproducible alternative views)
+- 60+ new tests across `tests/test_section_detector.py`, `tests/test_cache.py`, `tests/test_server.py` (521 total, up from 489)
+
 ---
 
 ## Planned
 
-### vNext — Semantic Section Chunking
-- Automatic structural boundary detection using PyMuPDF block metadata (font size, bold flags, numbered heading patterns, vertical whitespace gaps, TOC cross-reference)
-- New `sections` table in SQLite cache: `section_id`, `title`, `level`, `start_page`, `end_page`, `text`, `embedding`
-- Built once on first search; persisted like page text with no extra PyMuPDF passes
-- `pdf_search` gains `granularity` parameter: `"page"` (default, backward compat) or `"section"` (returns complete detected section containing each match)
-- TOC entries used as authoritative boundaries when present; heuristic detection as fallback for TOC-less PDFs
-- Collapses the typical search → read-pages → read-more-pages workflow into a single search call
+(none currently scheduled)
 
 ---
 
@@ -99,3 +104,6 @@
 
 - **`pdf_render_pages` page labels** — each `ImageContent` block currently has no page annotation; if `render_failed_pages` fires, surviving images could be misaligned. FastMCP `Image` supports an `annotations` field — embed `{"page": N}` in each block so agents can correlate images to pages regardless of failures.
 - **Bring-your-own embedding model (BYOM)** — allow users to swap out `BAAI/bge-small-en-v1.5` for any `fastembed`-compatible model via config, for multilingual or domain-specific use cases.
+- **Hybrid (BM25 + semantic) section search** — `pdf_search(granularity="section")` currently uses BM25/FTS5 only. Adding RRF fusion with section-level embeddings (parallel to what page search does) would catch semantic matches that BM25 misses ("graph attention" → section discussing transformers without naming it). Requires a `section_embeddings` table and an embedding pass per section on first call.
+- **Heuristic detector escalation for low-quality PDFs** — for PDFs where the 7-signal detector underperforms (e.g., scanned PDFs after OCR, layout-irregular preprints), explore CRF-based or transformer-based layout detection (GROBID, Marker, Surya). Heavier dependency footprint; would be an optional `pdf-mcp[layout]` extra.
+- **Agent-task evaluation for section vs page search** — the existing benchmark measures retrieval characteristics. A downstream eval (LLM grading on Q&A tasks, or agent-task completion benchmarks) would measure whether agents *answer better questions* with section-granularity, not just whether retrieval recalls more content.

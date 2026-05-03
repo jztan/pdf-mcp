@@ -37,3 +37,14 @@ def mrr(ranked: list[T], gold: set[T]) -> float:
         if item in gold:
             return 1.0 / rank
     return 0.0
+
+
+def recall_at_k(ranked: list[T], gold: set[T], k: int) -> float:
+    """Fraction of gold items appearing in the top-k of `ranked`.
+
+    Raises ValueError when gold is empty (recall is undefined).
+    """
+    if not gold:
+        raise ValueError("recall_at_k requires non-empty gold set")
+    top_k = set(ranked[:k])
+    return len(top_k & gold) / len(gold)

@@ -255,6 +255,42 @@ def _detect_boundaries_from_lines(
     return sections
 
 
+def _toc_entries_to_sections(
+    toc: list[tuple[int, str, int]] | list[list[Any]],
+    total_pages: int,
+) -> list[Section]:
+    """
+    Convert PyMuPDF's get_toc() output into Sections with derived end_page.
+
+    end_page for entry i at level N = (start_page of next entry j>i with
+    level_j <= N) - 1, or total_pages if no such j exists.
+
+    Args:
+        toc: list of (level, title, start_page) entries (1-indexed start_page)
+        total_pages: total pages in the document (1-indexed last page)
+
+    Returns:
+        list[Section] with text="" — caller fills text via PDF I/O.
+
+    Raises:
+        ValueError: if toc is empty (TOC-derived ground truth is required).
+    """
+    if not toc:
+        raise ValueError("Cannot extract sections from empty TOC")
+
+    sections: list[Section] = []
+    for i, entry in enumerate(toc):
+        level, title, start = entry[0], entry[1], entry[2]
+        end = total_pages
+        for j in range(i + 1, len(toc)):
+            next_level, _, next_start = toc[j][0], toc[j][1], toc[j][2]
+            if next_level <= level:
+                end = next_start - 1
+                break
+        sections.append(Section(title=title, start_page=start, end_page=end, text=""))
+    return sections
+
+
 def _filter_to_leaves(sections: list[Section]) -> list[Section]:
     """
     Filter to leaf sections: those whose page range contains no other
@@ -275,6 +311,27 @@ def _filter_to_leaves(sections: list[Section]) -> list[Section]:
         if not has_child:
             out.append(s)
     return out
+
+
+def extract_toc_sections(doc: pymupdf.Document) -> list[Section]:
+    """
+    Derive sections from the PDF's TOC, filling section.text from page text.
+
+    Caller is responsible for opening and closing the document.
+
+    Raises ValueError if doc.get_toc() is empty.
+    """
+    toc = doc.get_toc()
+    sections = _toc_entries_to_sections(toc, total_pages=len(doc))
+    for s in sections:
+        if s.start_page > s.end_page:
+            # Malformed (e.g. consecutive entries on same page). Skip text fill.
+            continue
+        pages_text = []
+        for p in range(s.start_page - 1, s.end_page):
+            pages_text.append(doc[p].get_text())
+        s.text = "\n".join(pages_text)
+    return sections
 
 
 def detect_boundaries(pdf_path: str) -> list[Section]:
@@ -347,3 +404,20 @@ def detect_boundaries(pdf_path: str) -> list[Section]:
         return sections
     finally:
         doc.close()
+
+
+def derive_sections(pdf_path: str) -> list[Section]:
+    """
+    TOC-first / heuristic-fallback dispatcher.
+
+    If the PDF has a TOC, returns TOC-derived sections (authoritative).
+    Otherwise falls back to the multi-signal heuristic detector.
+    Returns [] if both yield no sections.
+    """
+    doc = pymupdf.open(pdf_path)
+    try:
+        if doc.get_toc():
+            return extract_toc_sections(doc)
+    finally:
+        doc.close()
+    return detect_boundaries(pdf_path)

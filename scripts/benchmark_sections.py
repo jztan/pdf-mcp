@@ -36,12 +36,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pdf_mcp.server as server_module  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
+from pdf_mcp.section_detector import _toc_entries_to_sections  # noqa: E402
 from pdf_mcp.server import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search as _PDF_SEARCH_FN  # noqa: E402
 
@@ -139,42 +139,6 @@ def _row(label: str, value: str, ok: bool | None = None) -> None:
 
 def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
-
-def _toc_entries_to_sections(
-    toc: list[tuple[int, str, int]] | list[list[Any]],
-    total_pages: int,
-) -> list[Section]:
-    """
-    Convert PyMuPDF's get_toc() output into Sections with derived end_page.
-
-    end_page for entry i at level N = (start_page of next entry j>i with
-    level_j <= N) - 1, or total_pages if no such j exists.
-
-    Args:
-        toc: list of (level, title, start_page) entries (1-indexed start_page)
-        total_pages: total pages in the document (1-indexed last page)
-
-    Returns:
-        list[Section] with text="" — caller fills text via PDF I/O.
-
-    Raises:
-        ValueError: if toc is empty (TOC-derived ground truth is required).
-    """
-    if not toc:
-        raise ValueError("Cannot extract sections from empty TOC")
-
-    sections: list[Section] = []
-    for i, entry in enumerate(toc):
-        level, title, start = entry[0], entry[1], entry[2]
-        end = total_pages
-        for j in range(i + 1, len(toc)):
-            next_level, _, next_start = toc[j][0], toc[j][1], toc[j][2]
-            if next_level <= level:
-                end = next_start - 1
-                break
-        sections.append(Section(title=title, start_page=start, end_page=end, text=""))
-    return sections
 
 
 def _extract_toc_boundaries(pdf_path: str) -> list[Section]:

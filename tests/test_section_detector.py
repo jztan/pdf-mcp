@@ -515,3 +515,187 @@ class TestMultilineHeadingMerge:
             (1, "1.1 Background", 100),
             (5, "References", 100),
         ]
+
+
+class TestExtractTocBoundariesPure:
+    """Tests _toc_entries_to_sections — the pure function that takes
+    a TOC list (no PDF I/O) and returns Sections without text filled in."""
+
+    def test_flat_toc_two_entries(self):
+        # Two top-level entries; first ends one before the second
+        toc = [
+            (1, "Intro", 1),
+            (1, "Body", 5),
+        ]
+        result = sd._toc_entries_to_sections(toc, total_pages=10)
+        assert result == [
+            sd.Section(title="Intro", start_page=1, end_page=4, text=""),
+            sd.Section(title="Body", start_page=5, end_page=10, text=""),
+        ]
+
+    def test_last_entry_extends_to_final_page(self):
+        toc = [(1, "Only", 3)]
+        result = sd._toc_entries_to_sections(toc, total_pages=10)
+        assert result == [sd.Section(title="Only", start_page=3, end_page=10, text="")]
+
+    def test_nested_subsection_does_not_close_parent(self):
+        # 1 Intro (p1) > 1.1 Background (p2) > 1.2 Motivation (p3) > 2 Body (p5)
+        # Intro should end at p4 (before Body), NOT at p1 (before its child).
+        # 1.1 ends at p2 (before 1.2). 1.2 ends at p4 (before sibling at level<=2).
+        toc = [
+            (1, "Intro", 1),
+            (2, "Background", 2),
+            (2, "Motivation", 3),
+            (1, "Body", 5),
+        ]
+        result = sd._toc_entries_to_sections(toc, total_pages=10)
+        assert result == [
+            sd.Section(title="Intro", start_page=1, end_page=4, text=""),
+            sd.Section(title="Background", start_page=2, end_page=2, text=""),
+            sd.Section(title="Motivation", start_page=3, end_page=4, text=""),
+            sd.Section(title="Body", start_page=5, end_page=10, text=""),
+        ]
+
+    def test_four_level_hierarchy(self):
+        # Critical case for the GNN review (4 levels).
+        # 1 (p1) > 1.1 (p2) > 1.1.1 (p3) > 1.1.1.1 (p4) > 1.2 (p6) > 2 (p10)
+        toc = [
+            (1, "L1", 1),
+            (2, "L2", 2),
+            (3, "L3", 3),
+            (4, "L4", 4),
+            (2, "L2b", 6),
+            (1, "L1b", 10),
+        ]
+        result = sd._toc_entries_to_sections(toc, total_pages=12)
+        starts_ends = [(s.title, s.start_page, s.end_page) for s in result]
+        assert starts_ends == [
+            ("L1", 1, 9),
+            ("L2", 2, 5),
+            ("L3", 3, 5),
+            ("L4", 4, 5),
+            ("L2b", 6, 9),
+            ("L1b", 10, 12),
+        ]
+
+    def test_consecutive_entries_on_same_page(self):
+        # When two entries point at the same page, the earlier one has
+        # end_page = start_page. Tests don't enforce 'duplicate detection' —
+        # caller may dedupe boundary set later.
+        toc = [
+            (1, "A", 5),
+            (1, "B", 5),
+            (1, "C", 9),
+        ]
+        result = sd._toc_entries_to_sections(toc, total_pages=12)
+        starts_ends = [(s.title, s.start_page, s.end_page) for s in result]
+        assert starts_ends == [
+            (
+                "A",
+                5,
+                4,
+            ),  # malformed (start>end); caller's job to filter;
+            # helper reports faithfully
+            ("B", 5, 8),
+            ("C", 9, 12),
+        ]
+
+    def test_empty_toc_raises(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="empty TOC"):
+            sd._toc_entries_to_sections([], total_pages=10)
+
+
+class TestExtractTocSections:
+    """Tests extract_toc_sections — uses an open pymupdf.Document."""
+
+    def test_returns_sections_with_text(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "with_toc.pdf"
+        doc = pymupdf.open()
+        for i in range(3):
+            page = doc.new_page()
+            page.insert_text((50, 100), f"Body of page {i + 1}", fontsize=11)
+        doc.set_toc(
+            [
+                [1, "Intro", 1],
+                [1, "Body", 2],
+                [1, "Conclusion", 3],
+            ]
+        )
+        doc.save(str(path))
+        doc.close()
+
+        doc = pymupdf.open(str(path))
+        try:
+            sections = sd.extract_toc_sections(doc)
+        finally:
+            doc.close()
+        titles = [s.title for s in sections]
+        assert titles == ["Intro", "Body", "Conclusion"]
+        # Each section's text was filled from its page range
+        for s in sections:
+            assert s.text  # non-empty
+
+    def test_empty_toc_raises(self, tmp_path):
+        import pymupdf
+        import pytest
+
+        path = tmp_path / "no_toc.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(path))
+        doc.close()
+
+        doc = pymupdf.open(str(path))
+        try:
+            with pytest.raises(ValueError, match="empty TOC"):
+                sd.extract_toc_sections(doc)
+        finally:
+            doc.close()
+
+
+class TestDeriveSections:
+    """TOC-first / heuristic-fallback dispatcher."""
+
+    def test_uses_toc_when_present(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "with_toc.pdf"
+        doc = pymupdf.open()
+        for _ in range(3):
+            doc.new_page()
+        doc.set_toc(
+            [
+                [1, "Intro", 1],
+                [1, "Body", 2],
+                [1, "Conclusion", 3],
+            ]
+        )
+        doc.save(str(path))
+        doc.close()
+
+        sections = sd.derive_sections(str(path))
+        titles = [s.title for s in sections]
+        assert titles == ["Intro", "Body", "Conclusion"]
+
+    def test_falls_back_to_heuristic_when_no_toc(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "no_toc.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=600, height=800)
+        page.insert_text((50, 100), "1 Introduction", fontsize=14)
+        page.insert_text((50, 130), "Some intro body text.", fontsize=11)
+        page2 = doc.new_page(width=600, height=800)
+        page2.insert_text((50, 100), "2 Methods", fontsize=14)
+        page2.insert_text((50, 130), "Methods body.", fontsize=11)
+        doc.save(str(path))
+        doc.close()
+
+        sections = sd.derive_sections(str(path))
+        titles = [s.title for s in sections]
+        assert "1 Introduction" in titles
+        assert "2 Methods" in titles

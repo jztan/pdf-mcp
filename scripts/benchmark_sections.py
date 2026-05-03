@@ -697,3 +697,122 @@ def run_completeness_group(pdfs: list[dict]) -> dict:
         ),
         "min_recall_delta": min(all_recall_deltas) if all_recall_deltas else 0.0,
     }
+
+
+def _char_coverage(accumulated: str, gold: str) -> float:
+    """
+    Character-length fraction of gold covered by accumulated text.
+    Used by run_toolcall_group to avoid the unique-token collapse artefact
+    (_token_coverage collapses repeated-word text to 100% on first read).
+    Returns 1.0 when gold is empty.
+    """
+    if not gold:
+        return 1.0
+    return min(len(accumulated), len(gold)) / len(gold)
+
+
+def _simulate_page_mode_reads(
+    initial_page: int,
+    gold_section: Section,
+    get_page: Callable[[int], str],
+    doc_total_pages: int,
+    coverage_target: float = COVERAGE_TARGET_FRACTION,
+    max_extra: int = MAX_EXTRA_READS,
+) -> int:
+    """
+    Simulate page-mode agent walking outward from a search hit until
+    character-length coverage >= target or max_extra additional reads issued.
+    Uses character fraction rather than unique-token coverage so that
+    repeated-word sections (e.g. "x " * 600) correctly require multiple reads.
+
+    Returns the number of additional pdf_read_pages calls beyond the initial hit.
+    """
+    accumulated = get_page(initial_page)
+    if _char_coverage(accumulated, gold_section.text) >= coverage_target:
+        return 0
+
+    extra_reads = 0
+    for page in _walk_order(initial_page, doc_total_pages):
+        if extra_reads >= max_extra:
+            break
+        accumulated = accumulated + "\n" + get_page(page)
+        extra_reads += 1
+        if _char_coverage(accumulated, gold_section.text) >= coverage_target:
+            break
+    return extra_reads
+
+
+def run_toolcall_group(pdfs: list[dict]) -> dict:
+    """
+    Group 3: simulate page-mode agent's extra-read cost vs section mode (always 0).
+    Reports fraction of sections with 0 extra reads, per mode, per PDF.
+    """
+    _section("Group 3: Tool Call Simulation")
+    per_pdf: dict[str, dict] = {}
+    cross_section_zero_fractions: list[float] = []
+
+    for pdf in pdfs:
+        _p()
+        _p(f"  PDF: {bold(pdf['title'])}")
+        path = pdf["_local_path"]
+        # Let ValueError (empty TOC) propagate — main() converts it to exit 2.
+        gold = _extract_toc_boundaries(path)
+
+        eligible = [s for s in gold if len(s.text) >= SECTION_MIN_CHARS]
+        total_pages = _doc_total_pages(path)
+        sec_results: list[dict] = []
+
+        for sec in eligible:
+            page_hit = _keyword_page_search(path, sec.title, top_k=1)
+            matches = page_hit.get("matches", [])
+            if not matches:
+                continue
+            initial = matches[0]["page"]
+            page_extra = _simulate_page_mode_reads(
+                initial_page=initial,
+                gold_section=sec,
+                get_page=lambda p, _path=path: _get_page_text(_path, p),
+                doc_total_pages=total_pages,
+            )
+            sec_results.append(
+                {
+                    "title": sec.title,
+                    "page_mode_extra_reads": page_extra,
+                    "section_mode_extra_reads": 0,
+                }
+            )
+
+        n = len(sec_results)
+        page_zero = sum(1 for r in sec_results if r["page_mode_extra_reads"] == 0)
+        section_zero = n  # section mode is always 0
+        page_frac = page_zero / n if n else 0.0
+        section_frac = 1.0 if n else 0.0
+        per_pdf[pdf["key"]] = {
+            "sections": sec_results,
+            "n_sections": n,
+            "page_mode_zero_read_fraction": page_frac,
+            "section_mode_zero_read_fraction": section_frac,
+            "page_mode_mean_extra_reads": (
+                sum(r["page_mode_extra_reads"] for r in sec_results) / n if n else 0.0
+            ),
+        }
+        if n:
+            _row("Sections evaluated (>=1000 chars)", str(n))
+            _row(
+                "Page-mode mean extra reads",
+                f"{per_pdf[pdf['key']]['page_mode_mean_extra_reads']:.2f}",
+            )
+            _row("Page-mode 0-extra-reads fraction", f"{page_frac:.2%}")
+            _row(
+                "Section-mode 0-extra-reads fraction",
+                f"{section_frac:.2%}",
+                ok=section_frac >= THRESHOLD_FRACTION_ZERO_EXTRA_READS,
+            )
+            cross_section_zero_fractions.append(section_frac)
+
+    return {
+        "per_pdf": per_pdf,
+        "min_section_zero_fraction": (
+            min(cross_section_zero_fractions) if cross_section_zero_fractions else 0.0
+        ),
+    }

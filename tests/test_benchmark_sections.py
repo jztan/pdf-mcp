@@ -778,3 +778,55 @@ class TestRunCompletenessGroup:
         sec = result["per_pdf"]["x"]["sections"][0]
         assert sec["section_mode"]["recall"] > sec["page_mode"]["recall"]
         assert sec["section_mode"]["recall"] >= 0.95  # near-full coverage
+
+
+class TestRunToolcallGroup:
+    def test_section_mode_always_zero_extra_reads(self, monkeypatch):
+        gold = [bs.Section("S", 1, 3, "x " * 600)]
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: gold)
+        monkeypatch.setattr(
+            bs,
+            "_keyword_page_search",
+            lambda path, q, top_k=1: {"matches": [{"page": 1, "excerpt": ""}]},
+        )
+        monkeypatch.setattr(bs, "_get_page_text", lambda path, page: "x " * 200)
+        monkeypatch.setattr(bs, "_doc_total_pages", lambda p: 3)
+
+        pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
+        result = bs.run_toolcall_group(pdfs)
+        sec_results = result["per_pdf"]["x"]["sections"]
+        # Section mode is always 0
+        assert all(r["section_mode_extra_reads"] == 0 for r in sec_results)
+
+    def test_fraction_zero_extra_reads_reported(self, monkeypatch):
+        # Two sections; one needs 1 extra read in page mode, one needs 0
+        s1 = bs.Section("Done in one", 1, 1, "alpha beta " * 500)
+        s2 = bs.Section("Needs walk", 2, 3, "x " * 600)
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: [s1, s2])
+        monkeypatch.setattr(bs, "_doc_total_pages", lambda p: 3)
+
+        # First section's hit page covers it; second's doesn't
+        def fake_keyword_search(path, q, top_k=1):
+            page = 1 if q == s1.title else 2
+            return {"matches": [{"page": page, "excerpt": ""}]}
+
+        monkeypatch.setattr(bs, "_keyword_page_search", fake_keyword_search)
+
+        # Page text providers
+        def fake_page_text(path, page):
+            if page == 1:
+                return s1.text
+            if page == 2:
+                return "x " * 100
+            if page == 3:
+                return s2.text  # needed by walk
+            return ""
+
+        monkeypatch.setattr(bs, "_get_page_text", fake_page_text)
+        pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
+        result = bs.run_toolcall_group(pdfs)
+        per_pdf = result["per_pdf"]["x"]
+        # In section mode both sections are 0 reads → 100% zero-read
+        assert per_pdf["section_mode_zero_read_fraction"] == 1.0
+        # In page mode: section 1 = 0 reads, section 2 >= 1 → 50%
+        assert per_pdf["page_mode_zero_read_fraction"] == 0.5

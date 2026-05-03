@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from pdf_mcp.section_detector import Section
+
 # FTS5 virtual table schema for full-text search with Porter stemmer.
 # Must be created in a separate conn.execute() call (not inside executescript)
 # so that FTS5 unavailability can be caught in isolation.
@@ -1137,3 +1139,27 @@ class PDFCache:
             ).fetchone()[0]
 
         return (int(indexed), int(total))
+
+    def index_sections(self, path: str, sections: list[Section]) -> None:
+        """
+        Replace the cached section FTS5 entries for `path` with the given list.
+
+        Uses DELETE + INSERT for atomic replacement (FTS5 lacks PRIMARY KEY,
+        matching the existing pattern for page indexing).
+
+        No-op if FTS5 is unavailable on this SQLite build.
+        """
+        if not self.fts_available:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM pdf_section_fts WHERE file_path = ?", (path,))
+            if sections:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts"
+                    " (file_path, section_id, title, text, start_page, end_page)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    [
+                        (path, i, s.title, s.text, s.start_page, s.end_page)
+                        for i, s in enumerate(sections)
+                    ],
+                )

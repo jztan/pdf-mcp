@@ -882,3 +882,87 @@ class TestSectionFTSSchema:
             "start_page",
             "end_page",
         }.issubset(cols)
+
+
+class TestIndexSections:
+    def test_index_then_count(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            import pytest
+
+            pytest.skip("FTS5 not available")
+        sections = [
+            Section("Intro", 1, 5, "introduction body text"),
+            Section("Methods", 6, 10, "methods body text"),
+        ]
+        cache.index_sections("/fake/path.pdf", sections)
+        with sqlite3.connect(cache.db_path) as conn:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM pdf_section_fts WHERE file_path = ?",
+                ("/fake/path.pdf",),
+            ).fetchone()[0]
+        assert n == 2
+
+    def test_reindex_replaces_old_entries(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            import pytest
+
+            pytest.skip("FTS5 not available")
+        cache.index_sections("/fake/path.pdf", [Section("A", 1, 1, "a")])
+        cache.index_sections(
+            "/fake/path.pdf",
+            [Section("B", 1, 1, "b"), Section("C", 2, 2, "c")],
+        )
+        with sqlite3.connect(cache.db_path) as conn:
+            titles = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT title FROM pdf_section_fts WHERE file_path = ?",
+                    ("/fake/path.pdf",),
+                )
+            )
+        assert titles == ["B", "C"]
+
+    def test_index_isolated_per_file(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            import pytest
+
+            pytest.skip("FTS5 not available")
+        cache.index_sections("/a.pdf", [Section("A1", 1, 1, "a1")])
+        cache.index_sections("/b.pdf", [Section("B1", 1, 1, "b1")])
+        # Reindexing /a.pdf must not affect /b.pdf
+        cache.index_sections("/a.pdf", [Section("A2", 1, 1, "a2")])
+        with sqlite3.connect(cache.db_path) as conn:
+            a_titles = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT title FROM pdf_section_fts WHERE file_path = ?",
+                    ("/a.pdf",),
+                )
+            )
+            b_titles = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT title FROM pdf_section_fts WHERE file_path = ?",
+                    ("/b.pdf",),
+                )
+            )
+        assert a_titles == ["A2"]
+        assert b_titles == ["B1"]
+
+    def test_no_op_when_fts_unavailable(self, tmp_path, monkeypatch):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        # Force fts_available=False to simulate FTS5-less build
+        cache.fts_available = False
+        # Should not raise; should be a no-op
+        cache.index_sections("/p.pdf", [Section("X", 1, 1, "x")])

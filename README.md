@@ -280,6 +280,14 @@ The first call on a new document embeds all pages (one-time cost, typically a fe
 "Which pages discuss supply chain risks?"
 ```
 
+**Section-granularity search** — pass `granularity="section"` to return matching *sections* instead of pages. Useful when an agent needs the full context of a topic, not just one page that mentions it. Section index uses the PDF's TOC when available (~95% of academic PDFs), falling back to a 7-signal heuristic detector (font-face delta, bold detection, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. BM25-ranked via SQLite FTS5, same engine as page search. Validated on three arxiv PDFs: detector F1 0.80–0.94; page-mode agents save 1–9 `pdf_read_pages` tool calls per query on multi-page sections (9.46 average on a 75-page paper).
+
+```python
+pdf_search("paper.pdf", "training process", granularity="section")
+# Returns: {"sections": [{"section_id", "title", "start_page", "end_page", "score"}, ...],
+#           "search_mode": "section", "total_sections": 32}
+```
+
 ### `pdf_get_toc` — Get Table of Contents
 
 Returns the full outline with titles, levels, and page numbers. Use when `pdf_info` returns `toc_truncated: true` (documents with more than 50 bookmarks).

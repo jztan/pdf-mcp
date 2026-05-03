@@ -262,25 +262,28 @@ For extracting text from scanned pages, use `pdf_read_pages(ocr=True)` instead �
 
 ### `pdf_search` — Search Within PDF
 
-Find relevant pages before loading content. The default mode is **hybrid** — Reciprocal Rank Fusion (RRF) merges BM25 keyword results and semantic embedding results into a single ranked list. This consistently outperforms either method alone: keyword search finds exact terms that embeddings miss; semantic search finds conceptual matches that keyword search misses; RRF fusion captures both.
+Find relevant content before loading pages. Two orthogonal parameters control the search:
 
-Three modes are available:
+**`mode`** — how results are ranked:
 
-- **`mode="auto"` (default)** — Hybrid RRF when `pdf-mcp[semantic]` is installed; keyword-only fallback otherwise.
-- **`mode="keyword"`** — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
-- **`mode="semantic"`** — Semantic only (requires `pdf-mcp[semantic]`). Best for conceptual queries.
+- **`"auto"` (default)** — Hybrid Reciprocal Rank Fusion (RRF) when `pdf-mcp[semantic]` is installed; keyword-only otherwise. RRF merges BM25 and semantic rankings, capturing what either alone would miss: exact terms (keyword) and conceptual matches (semantic).
+- **`"keyword"`** — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
+- **`"semantic"`** — Embeddings only (requires `pdf-mcp[semantic]`). Best for conceptual queries.
 
-Response includes `search_mode: "hybrid" | "keyword" | "semantic"` indicating which path ran.
+**`granularity`** — what comes back:
 
-The first call on a new document embeds all pages (one-time cost, typically a few seconds for large documents); subsequent calls are instant.
+- **`"page"` (default)** — ranked pages. Best for pinpoint lookups. Honors `mode`.
+- **`"section"`** — ranked sections (`section_id`, `title`, `start_page`, `end_page`, `score`). Best when an agent needs the full context of a topic, not just one page that mentions it. Sections come from the PDF's TOC when available (~95% of academic PDFs), with a 7-signal heuristic fallback (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. Ranked by BM25/FTS5 only — `mode` is ignored. Validated on arxiv PDFs: detector F1 0.80–0.94; saves up to ~9 `pdf_read_pages` calls per query on multi-page sections.
+
+The response includes `search_mode` indicating which path ran (`"hybrid"`, `"keyword"`, `"semantic"`, or `"section"`).
+
+The first call on a new document embeds all pages (one-time cost, typically a few seconds); subsequent calls are instant.
 
 ```
 "Search for 'quarterly revenue' in the PDF"
-"Find pages about revenue growth in the PDF"
 "Which pages discuss supply chain risks?"
+"Find sections about the training process"   # granularity="section"
 ```
-
-**Section-granularity search** — pass `granularity="section"` to return matching *sections* instead of pages. Useful when an agent needs the full context of a topic, not just one page that mentions it. Section index uses the PDF's TOC when available (~95% of academic PDFs), falling back to a 7-signal heuristic detector (font-face delta, bold detection, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. BM25-ranked via SQLite FTS5, same engine as page search. Validated on three arxiv PDFs: detector F1 0.80–0.94; page-mode agents save 1–9 `pdf_read_pages` tool calls per query on multi-page sections (9.46 average on a 75-page paper).
 
 ```python
 pdf_search("paper.pdf", "training process", granularity="section")

@@ -271,3 +271,88 @@ def test_hybrid_section_search_fuses_keyword_and_semantic(tmp_path):
         cache, str(pdf_path), "convolutional", query_vec, top_k=4
     )
     assert set(ranked_ids[:2]) == {1, 2}
+
+
+def _baseline_cells():
+    """Return a baseline 4-cell scoring where all clauses pass."""
+    return {
+        "keyword-page": {
+            "lexical": 0.70,
+            "paraphrase-semantic": 0.40,
+            "mixed-distractor": 0.30,
+            "all": 0.47,
+        },
+        "keyword-section": {
+            "lexical": 0.85,
+            "paraphrase-semantic": 0.50,
+            "mixed-distractor": 0.40,
+            "all": 0.58,
+        },
+        "hybrid-page": {
+            "lexical": 0.75,
+            "paraphrase-semantic": 0.60,
+            "mixed-distractor": 0.50,
+            "all": 0.62,
+        },
+        "hybrid-section": {
+            "lexical": 0.82,
+            "paraphrase-semantic": 0.70,
+            "mixed-distractor": 0.65,
+            "all": 0.72,
+        },
+    }
+
+
+def test_gate_passes_when_all_clauses_met():
+    from benchmark_hybrid_sections import evaluate_gate
+
+    v = evaluate_gate(_baseline_cells())
+    assert v["pass"] is True
+    assert v["clause_1_mixed_distractor"]["pass"] is True
+    assert v["clause_2_lexical"]["pass"] is True
+    assert v["clause_3_overall"]["pass"] is True
+
+
+def test_gate_fails_clause_1_mixed_distractor_margin():
+    from benchmark_hybrid_sections import evaluate_gate
+
+    cells = _baseline_cells()
+    # Hybrid-page mixed-distractor catches up to 0.60 → margin 0.05 < 0.10.
+    cells["hybrid-page"]["mixed-distractor"] = 0.60
+    v = evaluate_gate(cells)
+    assert v["pass"] is False
+    assert v["clause_1_mixed_distractor"]["pass"] is False
+
+
+def test_gate_fails_clause_2_lexical_regression():
+    from benchmark_hybrid_sections import evaluate_gate
+
+    cells = _baseline_cells()
+    # Drop hybrid-section lexical 0.10 below keyword-section.
+    cells["hybrid-section"]["lexical"] = 0.74
+    v = evaluate_gate(cells)
+    assert v["pass"] is False
+    assert v["clause_2_lexical"]["pass"] is False
+
+
+def test_gate_fails_clause_3_overall_below_hybrid_page():
+    from benchmark_hybrid_sections import evaluate_gate
+
+    cells = _baseline_cells()
+    cells["hybrid-section"]["all"] = 0.61  # hybrid-page is 0.62
+    v = evaluate_gate(cells)
+    assert v["pass"] is False
+    assert v["clause_3_overall"]["pass"] is False
+
+
+def test_gate_clause_1_uses_next_best_not_just_hybrid_page():
+    """If keyword-section happens to beat hybrid-page on mixed-distractor,
+    that's the cell hybrid-section must beat by 0.10."""
+    from benchmark_hybrid_sections import evaluate_gate
+
+    cells = _baseline_cells()
+    cells["hybrid-page"]["mixed-distractor"] = 0.30  # lower
+    cells["keyword-section"]["mixed-distractor"] = 0.60  # now next-best
+    cells["hybrid-section"]["mixed-distractor"] = 0.65  # margin only 0.05
+    v = evaluate_gate(cells)
+    assert v["clause_1_mixed_distractor"]["pass"] is False

@@ -41,6 +41,9 @@ T = TypeVar("T")
 VALID_CATEGORIES = {"lexical", "paraphrase-semantic", "mixed-distractor"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "gold_section_keys")
 
+GATE_CLAUSE_1_MARGIN = 0.10
+GATE_CLAUSE_2_TOLERANCE = 0.05
+
 
 def load_queries(path: str) -> dict:
     """Load and validate the frozen query corpus.
@@ -166,3 +169,45 @@ def hybrid_section_search(
 
     fused = _rrf_fuse(keyword_ids, semantic_ids, max_results=top_k)
     return [sid for sid, _score in fused]
+
+
+def evaluate_gate(cells: dict) -> dict:
+    """Evaluate the three-clause kill-switch gate.
+
+    cells: {cell_name: {"lexical": float, "paraphrase-semantic": float,
+                        "mixed-distractor": float, "all": float}}.
+            All values are micro-mean MRR over the relevant query subset.
+
+    Returns a dict with overall `pass` and per-clause detail.
+    """
+    hs = cells["hybrid-section"]
+    others = {k: v for k, v in cells.items() if k != "hybrid-section"}
+
+    next_best_md = max(c["mixed-distractor"] for c in others.values())
+    clause_1_pass = hs["mixed-distractor"] >= next_best_md + GATE_CLAUSE_1_MARGIN
+
+    ks_lex = cells["keyword-section"]["lexical"]
+    clause_2_pass = hs["lexical"] >= ks_lex - GATE_CLAUSE_2_TOLERANCE
+
+    clause_3_pass = hs["all"] >= cells["hybrid-page"]["all"]
+
+    return {
+        "pass": clause_1_pass and clause_2_pass and clause_3_pass,
+        "clause_1_mixed_distractor": {
+            "pass": clause_1_pass,
+            "hybrid_section": hs["mixed-distractor"],
+            "next_best": next_best_md,
+            "required_margin": GATE_CLAUSE_1_MARGIN,
+        },
+        "clause_2_lexical": {
+            "pass": clause_2_pass,
+            "hybrid_section": hs["lexical"],
+            "keyword_section": ks_lex,
+            "tolerance": GATE_CLAUSE_2_TOLERANCE,
+        },
+        "clause_3_overall": {
+            "pass": clause_3_pass,
+            "hybrid_section": hs["all"],
+            "hybrid_page": cells["hybrid-page"]["all"],
+        },
+    }

@@ -1064,3 +1064,50 @@ class TestMainExitCodes:
         with pytest.raises(SystemExit):
             bs.main(argv=["--groups", "1"])
         assert called == [1]
+
+
+class TestBodyFingerprint:
+    """Tests _compute_body_fingerprint — finds the most common
+    (font_name, is_bold) tuple across all lines in a document."""
+
+    def test_picks_most_common_font_face(self):
+        lines = [
+            {"spans": [{"font": "Body", "flags": 0, "text": "x"}]},
+            {"spans": [{"font": "Body", "flags": 0, "text": "y"}]},
+            {"spans": [{"font": "Body", "flags": 0, "text": "z"}]},
+            {"spans": [{"font": "Heading", "flags": 16, "text": "h"}]},
+        ]
+        assert bs._compute_body_fingerprint(lines) == ("Body", False)
+
+    def test_uses_dominant_span_per_line(self):
+        # Line with mixed spans — dominant = longest text
+        lines = [
+            {
+                "spans": [
+                    {"font": "Body", "flags": 0, "text": "x" * 100},
+                    {"font": "Italic", "flags": 2, "text": "i"},
+                ]
+            },
+            {"spans": [{"font": "Body", "flags": 0, "text": "y"}]},
+        ]
+        assert bs._compute_body_fingerprint(lines) == ("Body", False)
+
+    def test_skips_empty_lines(self):
+        lines = [
+            {"spans": []},
+            {"spans": [{"font": "Body", "flags": 0, "text": ""}]},
+            {"spans": [{"font": "Body", "flags": 0, "text": "real"}]},
+        ]
+        assert bs._compute_body_fingerprint(lines) == ("Body", False)
+
+    def test_empty_input_returns_none(self):
+        assert bs._compute_body_fingerprint([]) is None
+
+    def test_recognizes_bold_via_flag(self):
+        # When body is itself bold (rare), fingerprint should reflect that
+        lines = [
+            {"spans": [{"font": "X", "flags": 16, "text": "a"}]},
+            {"spans": [{"font": "X", "flags": 16, "text": "b"}]},
+            {"spans": [{"font": "Y", "flags": 0, "text": "c"}]},
+        ]
+        assert bs._compute_body_fingerprint(lines) == ("X", True)

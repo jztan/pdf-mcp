@@ -467,6 +467,33 @@ def _detect_boundaries_from_lines(
     return sections
 
 
+def _compute_body_fingerprint(
+    lines: list[dict],
+) -> tuple[str, bool] | None:
+    """
+    Identify the document's body text fingerprint as the most common
+    (font_name, is_bold) tuple across all non-empty lines.
+
+    Each line contributes its dominant span (longest text). A line with
+    no text is ignored.
+
+    Returns None if no non-empty lines are provided.
+    """
+    counter: Counter[tuple[str, bool]] = Counter()
+    for line in lines:
+        spans = line.get("spans", [])
+        non_empty = [s for s in spans if s.get("text", "").strip()]
+        if not non_empty:
+            continue
+        dominant = max(non_empty, key=lambda s: len(s["text"]))
+        face = dominant["font"]
+        is_bold = bool(dominant.get("flags", 0) & 16)
+        counter[(face, is_bold)] += 1
+    if not counter:
+        return None
+    return counter.most_common(1)[0][0]
+
+
 def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
     PDF-aware wrapper: extract text lines from each page, apply the regex

@@ -21,6 +21,7 @@ Exit codes: 0 = PASS / calibrate, 1 = FAIL, 2 = setup error.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from collections.abc import Iterable  # noqa: F401
@@ -217,3 +218,147 @@ def evaluate_gate(cells: dict) -> dict:
             "hybrid_page": cells["hybrid-page"]["all"],
         },
     }
+
+
+def section_key(i: int, section) -> str:
+    """Stable section key: "S<idx>:p<start_page>:<title-prefix>"."""
+    title_short = (section.title or "").strip().replace("\n", " ")[:40]
+    return f"S{i:03d}:p{section.start_page}:{title_short}"
+
+
+def _require_fastembed() -> object:
+    """Return a TextEmbedding instance or sys.exit(2) with install hint."""
+    try:
+        from fastembed import TextEmbedding  # type: ignore
+    except ImportError:
+        print(
+            "ERROR: fastembed not installed. Install with:\n"
+            "    pip install -e '.[semantic]'\n"
+            "Or pass --no-require-fastembed (NOT recommended — silently "
+            "degrades hybrid-section to keyword-only).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Phase-1 hybrid section search validation benchmark"
+    )
+    p.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="Print numbers, no PASS/FAIL gating.",
+    )
+    p.add_argument(
+        "--require-fastembed",
+        dest="require_fastembed",
+        action="store_true",
+        default=True,
+    )
+    p.add_argument(
+        "--no-require-fastembed",
+        dest="require_fastembed",
+        action="store_false",
+    )
+    p.add_argument(
+        "--pdfs",
+        default="",
+        help="Comma-separated PDF keys (default: all).",
+    )
+    p.add_argument(
+        "--categories",
+        default="",
+        help="Comma-separated categories (default: all).",
+    )
+    p.add_argument(
+        "--output-json",
+        default="",
+        help="Write structured results to this path.",
+    )
+    p.add_argument(
+        "--queries",
+        default="benchmark_data/hybrid_section_queries.json",
+        help="Path to the query corpus file.",
+    )
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Returns exit code: 0 PASS / calibrate, 1 FAIL, 2 setup error."""
+    args = _build_parser().parse_args(argv)
+
+    try:
+        all_pdfs = load_queries(args.queries)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+
+    if args.pdfs:
+        keep = set(args.pdfs.split(","))
+        all_pdfs = {k: v for k, v in all_pdfs.items() if k in keep}
+    if args.categories:
+        cats = set(args.categories.split(","))
+        for v in all_pdfs.values():
+            v["queries"] = [q for q in v["queries"] if q["category"] in cats]
+
+    total_q = sum(len(v["queries"]) for v in all_pdfs.values())
+    if total_q == 0:
+        print(
+            "ERROR: no queries loaded — query file is empty or filters "
+            "excluded everything.",
+            file=sys.stderr,
+        )
+        return 2
+
+    embedder = _require_fastembed() if args.require_fastembed else None
+
+    cells = run_all_cells(all_pdfs, embedder)
+    print_report(cells, all_pdfs)
+
+    if args.output_json:
+        with open(args.output_json, "w") as f:
+            json.dump(
+                {"cells": cells, "queries_used": all_pdfs},
+                f,
+                indent=2,
+                default=str,
+            )
+
+    if args.calibrate:
+        print("\n[--calibrate] Skipping gate. No exit-code gating.")
+        return 0
+
+    verdict = evaluate_gate(cells)
+    print_gate_verdict(verdict)
+    return 0 if verdict["pass"] else 1
+
+
+def run_all_cells(all_pdfs: dict, embedder) -> dict:
+    """Filled in by Task 12 against the synthetic-PDF integration test."""
+    raise NotImplementedError("Task 12: implement run_all_cells")
+
+
+def print_report(cells: dict, queries: dict) -> None:
+    """Filled in by Task 12."""
+    raise NotImplementedError("Task 12: implement print_report")
+
+
+def print_gate_verdict(verdict: dict) -> None:
+    print()
+    print("=" * 60)
+    print(f"GATE VERDICT: {'PASS' if verdict['pass'] else 'FAIL'}")
+    print("=" * 60)
+    for clause_key in (
+        "clause_1_mixed_distractor",
+        "clause_2_lexical",
+        "clause_3_overall",
+    ):
+        c = verdict[clause_key]
+        marker = "✓" if c["pass"] else "✗"
+        print(f"  {marker} {clause_key}: {c}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

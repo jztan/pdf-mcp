@@ -1,5 +1,6 @@
 # tests/test_benchmark_sections.py
 """Unit tests for scripts/benchmark_sections.py."""
+
 import sys
 from pathlib import Path
 

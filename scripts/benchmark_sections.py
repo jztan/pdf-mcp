@@ -32,16 +32,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # ---- Threshold constants (placeholders — calibrate before relying on them) ----
-THRESHOLD_BOUNDARY_F1 = 0.80               # Group 1, per PDF
-THRESHOLD_SECTION_RECALL_MEAN = 0.90       # Group 2
-THRESHOLD_SECTION_PRECISION_MEAN = 0.85    # Group 2
-THRESHOLD_RECALL_DELTA_MEAN = 0.50         # Group 2 (section - page)
-THRESHOLD_FRACTION_ZERO_EXTRA_READS = 0.90 # Group 3
-SECTION_MIN_CHARS = 1000                   # Group 2/3 size filter
-BOUNDARY_TOLERANCE_PAGES = 1              # Group 1 ±N tolerance
-BOILERPLATE_LINE_FREQUENCY_THRESHOLD = 0.5 # Strip lines on >=50% of pages
-COVERAGE_TARGET_FRACTION = 0.95            # Group 3 stop condition
-MAX_EXTRA_READS = 10                       # Group 3 cap
+THRESHOLD_BOUNDARY_F1 = 0.80  # Group 1, per PDF
+THRESHOLD_SECTION_RECALL_MEAN = 0.90  # Group 2
+THRESHOLD_SECTION_PRECISION_MEAN = 0.85  # Group 2
+THRESHOLD_RECALL_DELTA_MEAN = 0.50  # Group 2 (section - page)
+THRESHOLD_FRACTION_ZERO_EXTRA_READS = 0.90  # Group 3
+SECTION_MIN_CHARS = 1000  # Group 2/3 size filter
+BOUNDARY_TOLERANCE_PAGES = 1  # Group 1 ±N tolerance
+BOILERPLATE_LINE_FREQUENCY_THRESHOLD = 0.5  # Strip lines on >=50% of pages
+COVERAGE_TARGET_FRACTION = 0.95  # Group 3 stop condition
+MAX_EXTRA_READS = 10  # Group 3 cap
 
 # ---- PDFs ----
 PDFS_VALIDATION = [
@@ -67,9 +67,9 @@ PDF_BLOG_EXTRA = {
 @dataclass
 class Section:
     title: str
-    start_page: int   # 1-indexed
-    end_page: int     # 1-indexed, inclusive
-    text: str = ""    # full concatenated text of all pages in [start_page, end_page]
+    start_page: int  # 1-indexed
+    end_page: int  # 1-indexed, inclusive
+    text: str = ""  # full concatenated text of all pages in [start_page, end_page]
 
 
 # ---- Printing / output buffering (mirrors benchmark_rrf.py) ----
@@ -81,11 +81,24 @@ def _c(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m" if _IS_TTY else text
 
 
-def green(t: str) -> str: return _c("32", t)
-def red(t: str) -> str: return _c("31", t)
-def yellow(t: str) -> str: return _c("33", t)
-def cyan(t: str) -> str: return _c("36", t)
-def bold(t: str) -> str: return _c("1", t)
+def green(t: str) -> str:
+    return _c("32", t)
+
+
+def red(t: str) -> str:
+    return _c("31", t)
+
+
+def yellow(t: str) -> str:
+    return _c("33", t)
+
+
+def cyan(t: str) -> str:
+    return _c("36", t)
+
+
+def bold(t: str) -> str:
+    return _c("1", t)
 
 
 def _p(text: str = "") -> None:

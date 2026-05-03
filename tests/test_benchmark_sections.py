@@ -652,7 +652,8 @@ class TestSectionSearch:
 
 class TestRunBoundaryGroup:
     def test_returns_per_pdf_metrics(self, monkeypatch):
-        # Mock _extract_toc_boundaries and _detect_boundaries to return controlled sections
+        # Mock _extract_toc_boundaries and _detect_boundaries to return controlled
+        # sections
         gold_pdf_a = [bs.Section("A", 1, 5, ""), bs.Section("B", 6, 10, "")]
         gold_pdf_b = [bs.Section("X", 1, 3, ""), bs.Section("Y", 4, 8, "")]
 
@@ -865,3 +866,162 @@ class TestSaveResults:
         )
         assert data["timestamp"] == "2026-05-03T12:00:00"
         assert data["results"] == results
+
+
+class TestMainExitCodes:
+    def _common_mocks(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        # Stub _resolve_path to avoid network/cache I/O
+        monkeypatch.setattr(
+            bs, "_resolve_pdf_local_path", lambda url: f"/fake/{url.split('/')[-1]}.pdf"
+        )
+        # Stub group runners
+        monkeypatch.setattr(
+            bs,
+            "run_boundary_group",
+            lambda pdfs: {
+                "per_pdf": {
+                    p["key"]: {
+                        "f1": 1.0,
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "tp": 1,
+                        "fp": 0,
+                        "fn": 0,
+                        "n_gold": 1,
+                        "n_detected": 1,
+                    }
+                    for p in pdfs
+                },
+                "min_f1": 1.0,
+            },
+        )
+        monkeypatch.setattr(
+            bs,
+            "run_completeness_group",
+            lambda pdfs: {
+                "per_pdf": {},
+                "min_section_recall": 1.0,
+                "min_section_precision": 1.0,
+                "min_recall_delta": 0.6,
+            },
+        )
+        monkeypatch.setattr(
+            bs,
+            "run_toolcall_group",
+            lambda pdfs: {
+                "per_pdf": {},
+                "min_section_zero_fraction": 1.0,
+            },
+        )
+
+    def test_pass_returns_zero(self, monkeypatch, tmp_path):
+        self._common_mocks(monkeypatch, tmp_path)
+        import pytest
+
+        with pytest.raises(SystemExit) as exc:
+            bs.main(argv=[])
+        assert exc.value.code == 0
+
+    def test_fail_returns_one(self, monkeypatch, tmp_path):
+        self._common_mocks(monkeypatch, tmp_path)
+        # Force a Group 1 failure
+        monkeypatch.setattr(
+            bs,
+            "run_boundary_group",
+            lambda pdfs: {
+                "per_pdf": {
+                    p["key"]: {
+                        "f1": 0.5,
+                        "precision": 0.5,
+                        "recall": 0.5,
+                        "tp": 1,
+                        "fp": 1,
+                        "fn": 1,
+                        "n_gold": 2,
+                        "n_detected": 2,
+                    }
+                    for p in pdfs
+                },
+                "min_f1": 0.5,
+            },
+        )
+        import pytest
+
+        with pytest.raises(SystemExit) as exc:
+            bs.main(argv=[])
+        assert exc.value.code == 1
+
+    def test_calibrate_returns_zero_even_when_below_threshold(
+        self, monkeypatch, tmp_path
+    ):
+        self._common_mocks(monkeypatch, tmp_path)
+        monkeypatch.setattr(
+            bs,
+            "run_boundary_group",
+            lambda pdfs: {
+                "per_pdf": {
+                    p["key"]: {
+                        "f1": 0.0,
+                        "precision": 0.0,
+                        "recall": 0.0,
+                        "tp": 0,
+                        "fp": 0,
+                        "fn": 1,
+                        "n_gold": 1,
+                        "n_detected": 0,
+                    }
+                    for p in pdfs
+                },
+                "min_f1": 0.0,
+            },
+        )
+        import pytest
+
+        with pytest.raises(SystemExit) as exc:
+            bs.main(argv=["--calibrate"])
+        assert exc.value.code == 0
+
+    def test_setup_error_returns_two(self, monkeypatch, tmp_path):
+        self._common_mocks(monkeypatch, tmp_path)
+
+        def boom(pdfs):
+            raise ValueError("PDF has no TOC — cannot derive ground truth")
+
+        monkeypatch.setattr(bs, "run_boundary_group", boom)
+        import pytest
+
+        with pytest.raises(SystemExit) as exc:
+            bs.main(argv=[])
+        assert exc.value.code == 2
+
+    def test_groups_flag_restricts_runs(self, monkeypatch, tmp_path):
+        self._common_mocks(monkeypatch, tmp_path)
+        called = []
+        monkeypatch.setattr(
+            bs,
+            "run_boundary_group",
+            lambda pdfs: called.append(1) or {"per_pdf": {}, "min_f1": 1.0},
+        )
+        monkeypatch.setattr(
+            bs,
+            "run_completeness_group",
+            lambda pdfs: called.append(2)
+            or {
+                "per_pdf": {},
+                "min_section_recall": 1.0,
+                "min_section_precision": 1.0,
+                "min_recall_delta": 1.0,
+            },
+        )
+        monkeypatch.setattr(
+            bs,
+            "run_toolcall_group",
+            lambda pdfs: called.append(3)
+            or {"per_pdf": {}, "min_section_zero_fraction": 1.0},
+        )
+        import pytest
+
+        with pytest.raises(SystemExit):
+            bs.main(argv=["--groups", "1"])
+        assert called == [1]

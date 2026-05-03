@@ -10,7 +10,7 @@ Three groups:
   3. Tool-call simulation - how many extra reads does the agent need?
 
 Usage:
-    python scripts/benchmark_sections.py                     # validation gate (PDFs 1+2)
+    python scripts/benchmark_sections.py          # validation gate (PDFs 1+2)
     python scripts/benchmark_sections.py --include-blog-pdf  # also run the GPT-3 PDF
     python scripts/benchmark_sections.py --calibrate         # print numbers, no gating
     python scripts/benchmark_sections.py --groups 1,2        # run a subset
@@ -28,13 +28,16 @@ import sys
 import tempfile
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp.cache import PDFCache  # noqa: E402
+from pdf_mcp.server import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search as _PDF_SEARCH_FN  # noqa: E402
 
 # ---- Threshold constants (placeholders — calibrate before relying on them) ----
@@ -326,7 +329,7 @@ def _ngram_set(tokens: list[str], n: int = 5) -> set[tuple[str, ...]]:
     """Set of contiguous n-grams. Returns empty set if len(tokens) < n."""
     if len(tokens) < n:
         return set()
-    return {tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)}
+    return {tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)}  # noqa: E203
 
 
 def _coverage_metrics(returned: str, gold: str, n: int = 5) -> dict:
@@ -345,7 +348,8 @@ def _coverage_metrics(returned: str, gold: str, n: int = 5) -> dict:
 
 
 def _walk_order(initial: int, doc_total: int) -> list[int]:
-    """Yield N+1, N-1, N+2, N-2, ... clipped to [1, doc_total], in order, until exhausted."""
+    """Yield N+1, N-1, N+2, N-2, ... clipped to [1, doc_total], in order,
+    until exhausted."""
     order: list[int] = []
     delta = 1
     while True:
@@ -530,7 +534,8 @@ def run_boundary_group(pdfs: list[dict]) -> dict:
 
 
 def _get_page_text(pdf_path: str, page: int) -> str:
-    """1-indexed page text accessor (opens doc each call; cheap because tempdir cache is hot)."""
+    """1-indexed page text accessor (opens doc each call;
+    cheap because tempdir cache is hot)."""
     doc = pymupdf.open(pdf_path)
     try:
         return doc[page - 1].get_text()
@@ -741,7 +746,6 @@ def run_toolcall_group(pdfs: list[dict]) -> dict:
 
         n = len(sec_results)
         page_zero = sum(1 for r in sec_results if r["page_mode_extra_reads"] == 0)
-        section_zero = n  # section mode is always 0
         page_frac = page_zero / n if n else 0.0
         section_frac = 1.0 if n else 0.0
         per_pdf[pdf["key"]] = {
@@ -853,3 +857,100 @@ def _print_summary(results: dict, calibrate: bool) -> tuple[bool, list[str]]:
         )
 
     return (len(failures) == 0, failures)
+
+
+def _resolve_pdf_local_path(url: str) -> str:
+    """Wrapper around server._resolve_path (kept separate so tests can stub it)."""
+    return _resolve_path(url)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Benchmark section-granularity vs page-granularity for pdf_search.",
+    )
+    parser.add_argument(
+        "--groups",
+        default="1,2,3",
+        help="Comma-separated subset of groups to run (default: 1,2,3)",
+    )
+    parser.add_argument(
+        "--include-blog-pdf",
+        action="store_true",
+        help=(
+            "Append the GPT-3 paper for blog-comparison data "
+            "(not run by validation gate)"
+        ),
+    )
+    parser.add_argument(
+        "--calibrate",
+        action="store_true",
+        help=(
+            "Print achieved numbers but never enforce thresholds "
+            "(always exits 0 unless setup error)"
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    selected_groups = {int(g.strip()) for g in args.groups.split(",")}
+
+    now = datetime.now()
+    file_ts = now.strftime("%Y%m%d_%H%M%S")
+    iso_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
+
+    pdfs = [dict(p) for p in PDFS_VALIDATION]
+    if args.include_blog_pdf:
+        pdfs.append(dict(PDF_BLOG_EXTRA))
+
+    _p(bold("\npdf-mcp Section Chunking Benchmark"))
+    _p("─" * 68)
+    if args.calibrate:
+        _p(yellow("  Calibration mode: thresholds are NOT enforced."))
+
+    # Resolve URLs to local paths (network → cache).
+    try:
+        for pdf in pdfs:
+            pdf["_local_path"] = _resolve_pdf_local_path(pdf["url"])
+    except Exception as exc:  # noqa: BLE001
+        _p(red(f"  Setup error: cannot resolve PDF: {exc}"))
+        sys.exit(2)
+
+    results: dict = {}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        original_cache = server_module.cache
+        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        try:
+            if 1 in selected_groups:
+                results["group_1"] = run_boundary_group(pdfs)
+            if 2 in selected_groups:
+                results["group_2"] = run_completeness_group(pdfs)
+            if 3 in selected_groups:
+                results["group_3"] = run_toolcall_group(pdfs)
+        except ValueError as exc:
+            _p(red(f"  Setup error: {exc}"))
+            _save_results(results, file_ts, iso_ts)
+            sys.exit(2)
+        finally:
+            server_module.cache = original_cache
+
+    passed, failures = _print_summary(results, calibrate=args.calibrate)
+    _save_results(results, file_ts, iso_ts)
+
+    _p()
+    _p(f"  Results saved to benchmark_results/sections_{file_ts}.{{txt,json}}")
+
+    if args.calibrate:
+        sys.exit(0)
+    if not passed:
+        _p()
+        _p(red(f"  FAIL — {len(failures)} threshold(s) missed:"))
+        for f in failures:
+            _p(red(f"    - {f}"))
+        sys.exit(1)
+    _p()
+    _p(green("  PASS — all thresholds met."))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

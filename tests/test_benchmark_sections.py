@@ -516,6 +516,45 @@ class TestDetectBoundariesPure:
         lines = [(1, "Pure prose with no numbered headings"), (2, "More prose")]
         assert bs._detect_boundaries_from_lines(lines, total_pages=2) == []
 
+    def test_unnumbered_academic_headings_fire(self):
+        # First calibration showed the detector missed Abstract / References /
+        # Acknowledgments / Appendix headings, dragging recall down to 0.22 on
+        # the LLM survey. These standalone forms must now match.
+        lines = [
+            (1, "Abstract"),
+            (1, "abstract concepts are useful"),  # body sentence — no match
+            (5, "References"),
+            (6, "Acknowledgments"),
+            (7, "Acknowledgements"),  # British spelling
+            (8, "Bibliography"),
+            (9, "Appendix A"),
+            (10, "Appendix B Theorems and Proofs"),
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=12)
+        titles = [s.title for s in sections]
+        assert "Abstract" in titles
+        assert "References" in titles
+        assert "Acknowledgments" in titles
+        assert "Acknowledgements" in titles
+        assert "Bibliography" in titles
+        assert "Appendix A" in titles
+        assert "Appendix B Theorems and Proofs" in titles
+        # Body sentence containing "abstract" must NOT match — \s*$ anchor
+        # rejects anything other than the bare standalone word.
+        assert "abstract concepts are useful" not in titles
+
+    def test_lowercase_appendix_does_not_fire(self):
+        # "Appendix" without an uppercase letter following is not a heading
+        # ("the appendix discusses" — body prose with leading "the").
+        # Also "appendix a" (all lowercase) shouldn't fire because the [A-Z]
+        # guard requires uppercase after the keyword.
+        lines = [
+            (1, "the appendix discusses"),
+            (1, "appendix a is small"),  # lowercase — body prose
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=1)
+        assert sections == []
+
 
 class TestDetectBoundariesIntegration:
     """End-to-end test: build a synthetic two-column PDF, run the real

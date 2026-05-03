@@ -421,8 +421,19 @@ def _simulate_agent_reads(
 #   - Chapter/Section/Part keyword followed by a number (case-insensitive
 #     for the keyword via a localized flag, so the [A-Z] guard above is not
 #     defeated by a global IGNORECASE).
+#   - Standalone academic headings (Abstract, References, Acknowledg(e)ments,
+#     Bibliography) anchored to whole-line so body words don't match. Added
+#     after first calibration showed the detector under-fires by missing
+#     unnumbered top-level sections.
+#   - "Appendix A", "Appendix B Title", etc. — uppercase letter follows the
+#     keyword, so common prose like "the appendix discusses" can't match.
 _HEADING_RE = re.compile(
-    r"^(?:\d+(?:\.\d+)*\s+[A-Z]|(?i:Chapter|Section|Part)\s+\d+)",
+    r"^(?:"
+    r"\d+(?:\.\d+)*\s+[A-Z]"
+    r"|(?i:Chapter|Section|Part)\s+\d+"
+    r"|(?i:Abstract|References|Acknowledgements?|Acknowledgments?|Bibliography)\s*$"
+    r"|Appendix\s+[A-Z]"
+    r")",
 )
 
 

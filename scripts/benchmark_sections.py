@@ -489,6 +489,46 @@ def _detect_boundaries(pdf_path: str) -> list[Section]:
         doc.close()
 
 
+def run_boundary_group(pdfs: list[dict]) -> dict:
+    """
+    Group 1: Boundary precision per PDF.
+
+    For each PDF: derive gold sections from TOC, run the detector, compute F1.
+    Returns {"per_pdf": {key: {precision, recall, f1, ...}}, "min_f1": float}
+    """
+    _section("Group 1: Boundary Precision")
+    per_pdf: dict[str, dict] = {}
+
+    for pdf in pdfs:
+        _p()
+        _p(f"  PDF: {bold(pdf['title'])}")
+        # Let ValueError (empty TOC) propagate — main() converts it to exit 2.
+        gold = _extract_toc_boundaries(pdf["_local_path"])
+        detected = _detect_boundaries(pdf["_local_path"])
+
+        metrics = _compute_boundary_f1(
+            gold, detected, tolerance=BOUNDARY_TOLERANCE_PAGES
+        )
+        per_pdf[pdf["key"]] = metrics
+
+        _row("Gold boundaries (deduped pages)", str(metrics["n_gold"]))
+        _row("Detected boundaries (deduped)", str(metrics["n_detected"]))
+        _row("True positives (±1 tolerance)", str(metrics["tp"]))
+        _row("Precision", f"{metrics['precision']:.3f}")
+        _row("Recall", f"{metrics['recall']:.3f}")
+        _row(
+            "F1",
+            f"{metrics['f1']:.3f}",
+            ok=metrics["f1"] >= THRESHOLD_BOUNDARY_F1,
+        )
+
+    f1_values = [m["f1"] for m in per_pdf.values() if "error" not in m]
+    min_f1 = min(f1_values) if f1_values else 0.0
+    _p()
+    _row("min F1 across PDFs", f"{min_f1:.3f}", ok=min_f1 >= THRESHOLD_BOUNDARY_F1)
+    return {"per_pdf": per_pdf, "min_f1": min_f1}
+
+
 def _section_search(
     pdf_path: str,
     query: str,

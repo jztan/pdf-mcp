@@ -647,3 +647,50 @@ class TestSectionSearch:
         result = bs._section_search("p.pdf", "x", sections=sections, top_k=2)
         titles = [s["title"] for s in result["sections"]]
         assert titles == ["Intro", "Methods"]
+
+
+class TestRunBoundaryGroup:
+    def test_returns_per_pdf_metrics(self, monkeypatch):
+        # Mock _extract_toc_boundaries and _detect_boundaries to return controlled sections
+        gold_pdf_a = [bs.Section("A", 1, 5, ""), bs.Section("B", 6, 10, "")]
+        gold_pdf_b = [bs.Section("X", 1, 3, ""), bs.Section("Y", 4, 8, "")]
+
+        def fake_extract(p):
+            return gold_pdf_a if "a.pdf" in p else gold_pdf_b
+
+        # Detector returns same as gold for PDF A, off-by-1 for PDF B (still passes ±1)
+        def fake_detect(p):
+            return (
+                gold_pdf_a
+                if "a.pdf" in p
+                else [
+                    bs.Section("X", 2, 0, ""),
+                    bs.Section("Y", 5, 0, ""),
+                ]
+            )
+
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", fake_extract)
+        monkeypatch.setattr(bs, "_detect_boundaries", fake_detect)
+
+        pdfs = [
+            {"key": "a", "title": "PDF A", "url": "a.pdf", "_local_path": "a.pdf"},
+            {"key": "b", "title": "PDF B", "url": "b.pdf", "_local_path": "b.pdf"},
+        ]
+        result = bs.run_boundary_group(pdfs)
+        assert result["per_pdf"]["a"]["f1"] == 1.0
+        assert result["per_pdf"]["b"]["f1"] == 1.0  # within ±1 tolerance
+        assert "min_f1" in result
+        assert result["min_f1"] == 1.0
+
+    def test_detects_off_by_two_failure(self, monkeypatch):
+        gold = [bs.Section("A", 5, 0, "")]
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: gold)
+        monkeypatch.setattr(
+            bs,
+            "_detect_boundaries",
+            lambda p: [bs.Section("A", 7, 0, "")],  # off by 2
+        )
+        pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
+        result = bs.run_boundary_group(pdfs)
+        assert result["per_pdf"]["x"]["f1"] == 0.0
+        assert result["min_f1"] == 0.0

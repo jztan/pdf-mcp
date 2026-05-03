@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
+## [1.10.0] - 2026-05-03
 ### Added
 - `pdf_search` gains `granularity="section"` parameter — returns matching *sections* instead of pages, ranked by BM25 over section text. Section boundaries come from the PDF's TOC when present (~95% of academic PDFs); otherwise from a new 7-signal heuristic detector that combines font-face delta, bold detection, vertical whitespace gap, top-of-page position, heading regex, capitalization, and line length. Default `granularity="page"` preserves existing behaviour byte-for-byte. Response shape: `{"sections": [{"section_id", "title", "start_page", "end_page", "score"}], "search_mode": "section", "total_sections": int}`.
 - `pdf_mcp.section_detector` module — new public module exposing `Section` dataclass, `detect_boundaries(pdf_path)` (heuristic detector), `extract_toc_sections(doc)` (TOC-derived), and `derive_sections(pdf_path)` (TOC-first dispatcher with heuristic fallback). Validated on three real arxiv PDFs: F1 0.80–0.94 detector quality; page-mode agents save 1–9 `pdf_read_pages` tool calls per query on multi-page sections (9.46 average on a 75-page paper).

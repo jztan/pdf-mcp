@@ -1111,3 +1111,113 @@ class TestBodyFingerprint:
             {"spans": [{"font": "Y", "flags": 0, "text": "c"}]},
         ]
         assert bs._compute_body_fingerprint(lines) == ("X", True)
+
+
+class TestLineFeatures:
+    """Tests _line_features — extracts the 7 weak signals from a line."""
+
+    def _make_line(self, text, font="Body", flags=0, y0=100, y1=110):
+        return {
+            "spans": [{"font": font, "flags": flags, "text": text, "size": 10}],
+            "bbox": [50, y0, 500, y1],
+        }
+
+    def test_face_delta_fires_on_different_face(self):
+        body_fp = ("Body", False)
+        line = self._make_line("Heading", font="Heading", flags=16)
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["face_delta"] is True
+        assert f["bold_marker"] is True
+
+    def test_bold_via_font_name_marker(self):
+        # Some PDFs encode bold in the font name (e.g., AdvTTc9617e0c.B)
+        # without setting the flag bit
+        body_fp = ("Body", False)
+        line = self._make_line("X", font="AdvTTc9617e0c.B", flags=0)
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["bold_marker"] is True
+
+    def test_bold_via_name_marker_for_dash_b(self):
+        body_fp = ("Body", False)
+        line = self._make_line("X", font="NimbusSanL-Bold", flags=0)
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["bold_marker"] is True
+
+    def test_no_bold_when_face_matches_body_and_no_flag(self):
+        body_fp = ("Body", False)
+        line = self._make_line("body text", font="Body", flags=0)
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["face_delta"] is False
+        assert f["bold_marker"] is False
+
+    def test_whitespace_above_first_line(self):
+        # First line of a page (prev_line=None) gets whitespace_above=True
+        body_fp = ("Body", False)
+        line = self._make_line("X")
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["whitespace_above"] is True
+
+    def test_whitespace_above_threshold(self):
+        body_fp = ("Body", False)
+        prev = self._make_line("prev", y0=100, y1=110)  # baseline at y=110
+        # Gap: current y0=145; line_height ≈ 10; gap = 35 ≥ 1.5*10=15 → fires
+        far = self._make_line("X", y0=145, y1=155)
+        f = bs._line_features(far, body_fp, prev_line=prev, page_height=800)
+        assert f["whitespace_above"] is True
+
+    def test_no_whitespace_above_when_close(self):
+        body_fp = ("Body", False)
+        prev = self._make_line("prev", y0=100, y1=110)
+        # Gap: y0=115; line_height=10; gap=5 < 15 → does not fire
+        near = self._make_line("X", y0=115, y1=125)
+        f = bs._line_features(near, body_fp, prev_line=prev, page_height=800)
+        assert f["whitespace_above"] is False
+
+    def test_top_of_page_within_first_15_percent(self):
+        body_fp = ("Body", False)
+        # page_height=800, top 15% = y < 120
+        top = self._make_line("X", y0=50, y1=60)
+        bottom = self._make_line("X", y0=400, y1=410)
+        ft = bs._line_features(top, body_fp, prev_line=None, page_height=800)
+        fb = bs._line_features(bottom, body_fp, prev_line=None, page_height=800)
+        assert ft["top_of_page"] is True
+        assert fb["top_of_page"] is False
+
+    def test_regex_match_numbered(self):
+        body_fp = ("Body", False)
+        line = self._make_line("1.1 Background")
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["regex_match"] is True
+
+    def test_regex_match_chapter_keyword(self):
+        body_fp = ("Body", False)
+        line = self._make_line("Chapter 3")
+        f = bs._line_features(line, body_fp, prev_line=None, page_height=800)
+        assert f["regex_match"] is True
+
+    def test_title_case_recognition(self):
+        body_fp = ("Body", False)
+        title = self._make_line("Background for LLMs")
+        f = bs._line_features(title, body_fp, prev_line=None, page_height=800)
+        assert f["title_case_or_caps"] is True
+
+    def test_all_caps_recognition(self):
+        body_fp = ("Body", False)
+        caps = self._make_line("INTRODUCTION")
+        f = bs._line_features(caps, body_fp, prev_line=None, page_height=800)
+        assert f["title_case_or_caps"] is True
+
+    def test_lowercase_prose_not_title_case(self):
+        body_fp = ("Body", False)
+        prose = self._make_line("the cat sat on the mat")
+        f = bs._line_features(prose, body_fp, prev_line=None, page_height=800)
+        assert f["title_case_or_caps"] is False
+
+    def test_short_line_threshold(self):
+        body_fp = ("Body", False)
+        short = self._make_line("Short heading")
+        long_line = self._make_line("x" * 200)
+        fs = bs._line_features(short, body_fp, prev_line=None, page_height=800)
+        fl = bs._line_features(long_line, body_fp, prev_line=None, page_height=800)
+        assert fs["short_line"] is True
+        assert fl["short_line"] is False

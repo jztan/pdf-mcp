@@ -494,6 +494,96 @@ def _compute_body_fingerprint(
     return counter.most_common(1)[0][0]
 
 
+_BOLD_NAME_MARKERS = ("Bold", "-B", ".B")
+_TOP_OF_PAGE_FRACTION = 0.15
+_WHITESPACE_GAP_RATIO = 1.5
+_SHORT_LINE_CHARS = 80
+
+
+def _looks_bold(font_name: str, flags: int) -> bool:
+    """A line is bold if the flag bit is set OR the font name has a bold marker."""
+    if flags & 16:
+        return True
+    return any(marker in font_name for marker in _BOLD_NAME_MARKERS)
+
+
+def _is_title_case_or_caps(text: str) -> bool:
+    """Title Case (most words start uppercase) or ALL CAPS — heading typography."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.isupper() and any(c.isalpha() for c in stripped):
+        return True
+    words = [w for w in stripped.split() if any(c.isalpha() for c in w)]
+    if not words:
+        return False
+    initial_caps = sum(1 for w in words if w[0].isupper())
+    return initial_caps / len(words) >= 0.6
+
+
+def _line_features(
+    line: dict,
+    body_fingerprint: tuple[str, bool] | None,
+    prev_line: dict | None,
+    page_height: float,
+) -> dict[str, bool]:
+    """
+    Compute the 7 weak signals for one line. Returns a dict of bool flags.
+    """
+    spans = line.get("spans", [])
+    non_empty = [s for s in spans if s.get("text", "").strip()]
+    empty_features = {
+        k: False
+        for k in (
+            "face_delta",
+            "bold_marker",
+            "whitespace_above",
+            "top_of_page",
+            "regex_match",
+            "title_case_or_caps",
+            "short_line",
+        )
+    }
+    if not non_empty:
+        return empty_features
+    dominant = max(non_empty, key=lambda s: len(s["text"]))
+    text = "".join(s["text"] for s in spans).strip()
+    font = dominant["font"]
+    flags = dominant.get("flags", 0)
+    is_bold_flag = bool(flags & 16)
+    bbox = line.get("bbox", [0, 0, 0, 0])
+    y0 = bbox[1]
+    y1 = bbox[3]
+    line_height = max(y1 - y0, 1.0)
+
+    face_delta = (
+        body_fingerprint is not None and (font, is_bold_flag) != body_fingerprint
+    )
+    bold_marker = _looks_bold(font, flags)
+
+    if prev_line is None:
+        whitespace_above = True
+    else:
+        prev_y1 = prev_line.get("bbox", [0, 0, 0, 0])[3]
+        gap = y0 - prev_y1
+        whitespace_above = gap >= _WHITESPACE_GAP_RATIO * line_height
+
+    top_of_page = y0 < _TOP_OF_PAGE_FRACTION * page_height
+    regex_match = bool(_HEADING_RE.match(text))
+    title_case_or_caps = _is_title_case_or_caps(text)
+    short_line = len(text) <= _SHORT_LINE_CHARS
+
+    return {
+        "face_delta": face_delta,
+        "bold_marker": bold_marker,
+        "whitespace_above": whitespace_above,
+        "top_of_page": top_of_page,
+        "regex_match": regex_match,
+        "title_case_or_caps": title_case_or_caps,
+        "short_line": short_line,
+    }
+
+
 def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
     PDF-aware wrapper: extract text lines from each page, apply the regex

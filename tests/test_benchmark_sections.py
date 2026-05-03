@@ -1283,3 +1283,57 @@ class TestHeadingScore:
         # Assert the threshold is exposed for tuning/calibration
         assert hasattr(bs, "HEADING_SCORE_THRESHOLD")
         assert bs.HEADING_SCORE_THRESHOLD == 4
+
+
+class TestMultilineHeadingMerge:
+    """Tests _merge_split_headings — joins a number-only line with the
+    immediately-following title-text line into one heading candidate."""
+
+    def test_number_line_followed_by_title_merges(self):
+        candidates = [
+            (1, "1", 100),  # (page, text, y_position)
+            (1, "Introduction", 130),
+            (3, "2", 100),
+            (3, "Methods", 130),
+        ]
+        merged = bs._merge_split_headings(candidates, max_y_gap=50)
+        assert merged == [
+            (1, "1 Introduction", 100),
+            (3, "2 Methods", 100),
+        ]
+
+    def test_far_apart_lines_do_not_merge(self):
+        # Y gap > max means they're not part of the same heading
+        candidates = [
+            (1, "1", 100),
+            (1, "Some other thing", 500),  # far below
+        ]
+        merged = bs._merge_split_headings(candidates, max_y_gap=50)
+        assert merged == [
+            (1, "1", 100),
+            (1, "Some other thing", 500),
+        ]
+
+    def test_different_pages_do_not_merge(self):
+        # Number line on page 1, title-like line on page 2 → no merge
+        candidates = [
+            (1, "1", 100),
+            (2, "Introduction", 100),
+        ]
+        merged = bs._merge_split_headings(candidates, max_y_gap=50)
+        assert merged == [
+            (1, "1", 100),
+            (2, "Introduction", 100),
+        ]
+
+    def test_non_number_lines_pass_through(self):
+        # Already-complete heading lines aren't touched
+        candidates = [
+            (1, "1.1 Background", 100),
+            (5, "References", 100),
+        ]
+        merged = bs._merge_split_headings(candidates, max_y_gap=50)
+        assert merged == [
+            (1, "1.1 Background", 100),
+            (5, "References", 100),
+        ]

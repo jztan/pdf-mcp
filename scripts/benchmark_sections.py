@@ -608,6 +608,39 @@ def _is_heading(
     return _heading_score(features) >= threshold
 
 
+_NUMBER_ONLY_RE = re.compile(r"^\d+(\.\d+)*\.?$")
+
+
+def _merge_split_headings(
+    candidates: list[tuple[int, str, float]],
+    max_y_gap: float = 50.0,
+) -> list[tuple[int, str, float]]:
+    """
+    When a heading is rendered as a bare number line followed by its title
+    on the next line (same page, vertically close), merge them into one
+    candidate. Otherwise pass through unchanged.
+
+    candidates: list of (page, text, y_position).
+    """
+    merged: list[tuple[int, str, float]] = []
+    i = 0
+    while i < len(candidates):
+        page, text, y = candidates[i]
+        if (
+            _NUMBER_ONLY_RE.match(text.strip())
+            and i + 1 < len(candidates)
+            and candidates[i + 1][0] == page
+            and abs(candidates[i + 1][2] - y) <= max_y_gap
+        ):
+            next_text = candidates[i + 1][1]
+            merged.append((page, f"{text.strip()} {next_text.strip()}", y))
+            i += 2
+        else:
+            merged.append((page, text, y))
+            i += 1
+    return merged
+
+
 def _detect_boundaries(pdf_path: str) -> list[Section]:
     """
     PDF-aware wrapper: extract text lines from each page, apply the regex

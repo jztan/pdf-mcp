@@ -140,3 +140,71 @@ def test_query_loader_rejects_missing_field(tmp_path):
     )
     with pytest.raises(ValueError, match="gold_section_keys"):
         load_queries(str(f))
+
+
+def test_embed_sections_lazy_skips_already_cached(tmp_path):
+    """First call embeds; second call short-circuits when cache hits."""
+    from pdf_mcp.cache import PDFCache
+    from benchmark_hybrid_sections import embed_sections_for_pdf
+    import numpy as np
+
+    pdf_path = tmp_path / "x.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache = PDFCache(cache_dir=tmp_path)
+    sections = [
+        {"id": 0, "key": "S000:p1:A", "text": "alpha"},
+        {"id": 1, "key": "S001:p2:B", "text": "beta"},
+    ]
+
+    class FakeEmbedder:
+        def __init__(self):
+            self.calls: list[list[str]] = []
+
+        def embed(self, texts):
+            self.calls.append(list(texts))
+            return [np.ones(384, dtype="float32") for _ in texts]
+
+    e1 = FakeEmbedder()
+    embed_sections_for_pdf(cache, str(pdf_path), sections, e1, model_name="fake")
+    assert len(e1.calls) == 1 and len(e1.calls[0]) == 2
+
+    # Second pass: cache should serve everything; new embedder gets zero calls.
+    e2 = FakeEmbedder()
+    embed_sections_for_pdf(cache, str(pdf_path), sections, e2, model_name="fake")
+    assert e2.calls == []
+
+
+def test_embed_sections_partial_cache_only_embeds_missing(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    from benchmark_hybrid_sections import embed_sections_for_pdf
+    import numpy as np
+
+    pdf_path = tmp_path / "x.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache = PDFCache(cache_dir=tmp_path)
+    cache.save_section_embeddings(
+        str(pdf_path),
+        {0: np.ones(384, dtype="float32").tobytes()},
+        {0: "S000:p1:A"},
+        model="fake",
+    )
+
+    sections = [
+        {"id": 0, "key": "S000:p1:A", "text": "alpha"},
+        {"id": 1, "key": "S001:p2:B", "text": "beta"},
+    ]
+
+    class FakeEmbedder:
+        def __init__(self):
+            self.calls: list[list[str]] = []
+
+        def embed(self, texts):
+            self.calls.append(list(texts))
+            return [np.ones(384, dtype="float32") for _ in texts]
+
+    fe = FakeEmbedder()
+    embed_sections_for_pdf(cache, str(pdf_path), sections, fe, model_name="fake")
+    # Only section 1 should have been embedded.
+    assert fe.calls == [["beta"]]

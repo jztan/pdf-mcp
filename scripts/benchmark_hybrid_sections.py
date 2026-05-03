@@ -79,3 +79,36 @@ def recall_at_k(ranked: list[T], gold: set[T], k: int) -> float:
         raise ValueError("recall_at_k requires non-empty gold set")
     top_k = set(ranked[:k])
     return len(top_k & gold) / len(gold)
+
+
+def embed_sections_for_pdf(
+    cache,
+    pdf_path: str,
+    sections: list[dict],
+    embedder,
+    model_name: str,
+) -> None:
+    """Embed any sections not already cached (idempotent).
+
+    Args:
+        cache: PDFCache instance.
+        pdf_path: Path to the PDF.
+        sections: [{"id": int, "key": str, "text": str}, ...].
+        embedder: Object with .embed(list[str]) -> iterable of np.ndarray
+                  (matches fastembed.TextEmbedding).
+        model_name: Identifier stored alongside embeddings.
+    """
+    section_ids = [s["id"] for s in sections]
+    cached = cache.get_section_embeddings(pdf_path, section_ids)
+    todo = [s for s in sections if s["id"] not in cached]
+    if not todo:
+        return
+
+    texts = [s["text"] for s in todo]
+    vectors = list(embedder.embed(texts))
+
+    new_blobs = {
+        s["id"]: vectors[i].astype("float32").tobytes() for i, s in enumerate(todo)
+    }
+    new_keys = {s["id"]: s["key"] for s in todo}
+    cache.save_section_embeddings(pdf_path, new_blobs, new_keys, model=model_name)

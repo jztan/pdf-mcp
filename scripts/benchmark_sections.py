@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pymupdf
 import re
 import sys
@@ -781,6 +782,11 @@ def _doc_total_pages(pdf_path: str) -> int:
         doc.close()
 
 
+# BM25 (Okapi) constants
+_BM25_K1 = 1.5
+_BM25_B = 0.75
+
+
 def _section_search(
     pdf_path: str,
     query: str,
@@ -788,38 +794,79 @@ def _section_search(
     top_k: int = 1,
 ) -> dict:
     """
-    In-script section-granularity search. Runs the existing keyword search,
-    maps each rank-ordered page hit to the section containing it, and
-    returns the first `top_k` distinct sections (preserving rank order).
+    In-script section-granularity search. Scores each section via Okapi BM25
+    over its full text and returns the top_k highest-scoring sections.
 
-    This is the benchmark's stand-in for `pdf_search(granularity="section")`.
-    If the benchmark passes, this is the surface area to upstream — likely
-    re-implemented internally with section-aware ranking rather than this
-    page-hit-then-lookup approach.
+    This replaces an earlier naive shim that did keyword page search and
+    mapped the rank-1 page to its containing section. The naive approach
+    was sensitive to keyword hits in unrelated sections (e.g. "background"
+    mentioned in introduction beat the actual Background section). BM25
+    over section text is what production should ship — same algorithm
+    pdf-mcp already uses for page search via SQLite FTS5, applied at
+    section granularity.
+
+    Tokenization shares the benchmark's `_tokenize` so query and section
+    text use the same token space.
     """
-    # Pull more keyword hits than top_k since multiple hits can fall in one
-    # section; we want top_k *distinct* sections.
-    raw = _PDF_SEARCH_FN(pdf_path, query, mode="keyword", max_results=top_k * 5)
-    matches = raw.get("matches", [])
+    if not sections:
+        return {"sections": []}
 
-    seen_titles: set[str] = set()
+    # Tokenize each section's text; drop sections with no tokens
+    tokenized: list[tuple[Section, list[str]]] = [
+        (s, _tokenize(s.text)) for s in sections
+    ]
+    valid = [(s, toks) for s, toks in tokenized if toks]
+    if not valid:
+        return {"sections": []}
+
+    n_docs = len(valid)
+    avgdl = sum(len(toks) for _, toks in valid) / n_docs
+
+    # Document frequency: how many sections contain each term
+    doc_freq: Counter[str] = Counter()
+    for _, toks in valid:
+        for term in set(toks):
+            doc_freq[term] += 1
+
+    # Score each section against the query
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return {"sections": []}
+
+    scored: list[tuple[float, Section]] = []
+    for sec, toks in valid:
+        tf = Counter(toks)
+        doc_len = len(toks)
+        score = 0.0
+        for term in query_tokens:
+            if term not in tf:
+                continue
+            df = doc_freq[term]
+            # Standard Okapi BM25 IDF with +1 floor
+            idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1)
+            tf_t = tf[term]
+            score += (
+                idf
+                * tf_t
+                * (_BM25_K1 + 1)
+                / (tf_t + _BM25_K1 * (1 - _BM25_B + _BM25_B * doc_len / avgdl))
+            )
+        scored.append((score, sec))
+
+    # Sort by score desc; drop zero-score sections
+    scored.sort(key=lambda x: -x[0])
     out: list[dict] = []
-    for m in matches:
-        page = m.get("page")
-        for sec in sections:
-            if sec.start_page <= page <= sec.end_page and sec.title not in seen_titles:
-                seen_titles.add(sec.title)
-                out.append(
-                    {
-                        "title": sec.title,
-                        "start_page": sec.start_page,
-                        "end_page": sec.end_page,
-                        "text": sec.text,
-                    }
-                )
-                break
-        if len(out) >= top_k:
+    for score, sec in scored[:top_k]:
+        if score <= 0:
             break
+        out.append(
+            {
+                "title": sec.title,
+                "start_page": sec.start_page,
+                "end_page": sec.end_page,
+                "text": sec.text,
+            }
+        )
     return {"sections": out}
 
 

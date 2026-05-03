@@ -624,69 +624,54 @@ class TestDetectBoundariesIntegration:
 
 
 class TestSectionSearch:
-    def test_returns_section_containing_top_page_hit(self, monkeypatch):
+    """Tests _section_search — BM25-over-sections ranker."""
+
+    def test_returns_highest_scoring_section(self):
         sections = [
-            bs.Section("Intro", 1, 5, "intro text"),
-            bs.Section("Methods", 6, 10, "methods text"),
-            bs.Section("Results", 11, 15, "results text"),
+            bs.Section("Intro", 1, 5, "introduction text introducing things"),
+            bs.Section("Methods", 6, 10, "method method method experimental approach"),
+            bs.Section("Results", 11, 15, "results we found we observed"),
         ]
-
-        # Stub the keyword search to return page 8 as rank-1
-        def fake_search(path, query, mode, max_results):
-            return {"matches": [{"page": 8, "excerpt": ""}]}
-
-        monkeypatch.setattr(bs, "_PDF_SEARCH_FN", fake_search)
-
         result = bs._section_search("p.pdf", "method", sections=sections, top_k=1)
         assert len(result["sections"]) == 1
         assert result["sections"][0]["title"] == "Methods"
-        assert result["sections"][0]["start_page"] == 6
-        assert result["sections"][0]["end_page"] == 10
-        assert result["sections"][0]["text"] == "methods text"
 
-    def test_returns_empty_when_no_keyword_hit(self, monkeypatch):
-        sections = [bs.Section("Intro", 1, 5, "intro text")]
-        monkeypatch.setattr(
-            bs,
-            "_PDF_SEARCH_FN",
-            lambda path, query, mode, max_results: {"matches": []},
-        )
-        result = bs._section_search("p.pdf", "x", sections=sections, top_k=1)
+    def test_returns_empty_when_query_terms_missing(self):
+        sections = [bs.Section("Intro", 1, 5, "alpha beta gamma")]
+        result = bs._section_search("p.pdf", "zeta", sections=sections, top_k=1)
         assert result["sections"] == []
 
-    def test_returns_empty_when_hit_falls_outside_any_section(self, monkeypatch):
-        # Detected section covers pages 6..10; keyword hit is on page 3.
-        # No section contains page 3 → empty result.
-        sections = [bs.Section("Methods", 6, 10, "methods text")]
-        monkeypatch.setattr(
-            bs,
-            "_PDF_SEARCH_FN",
-            lambda path, query, mode, max_results: {"matches": [{"page": 3}]},
-        )
-        result = bs._section_search("p.pdf", "x", sections=sections, top_k=1)
+    def test_returns_empty_when_sections_list_empty(self):
+        result = bs._section_search("p.pdf", "anything", sections=[], top_k=1)
         assert result["sections"] == []
 
-    def test_top_k_collects_distinct_sections(self, monkeypatch):
-        # Three keyword hits on pages 2, 7, 8 → distinct sections Intro and Methods.
-        # Methods appears twice (pages 7 and 8) but should be deduped.
+    def test_returns_empty_for_empty_query(self):
+        sections = [bs.Section("X", 1, 5, "alpha beta gamma")]
+        result = bs._section_search("p.pdf", "", sections=sections, top_k=1)
+        assert result["sections"] == []
+
+    def test_top_k_returns_ranked_distinct_sections(self):
+        # Same shared term "alpha" in both sections; Methods has higher TF
         sections = [
-            bs.Section("Intro", 1, 5, "intro text"),
-            bs.Section("Methods", 6, 10, "methods text"),
+            bs.Section("Intro", 1, 5, "alpha beta gamma delta epsilon"),
+            bs.Section("Methods", 6, 10, "alpha alpha alpha beta gamma"),
         ]
-        monkeypatch.setattr(
-            bs,
-            "_PDF_SEARCH_FN",
-            lambda path, query, mode, max_results: {
-                "matches": [
-                    {"page": 2},
-                    {"page": 7},
-                    {"page": 8},
-                ]
-            },
-        )
-        result = bs._section_search("p.pdf", "x", sections=sections, top_k=2)
+        result = bs._section_search("p.pdf", "alpha", sections=sections, top_k=2)
         titles = [s["title"] for s in result["sections"]]
-        assert titles == ["Intro", "Methods"]
+        # BM25 ranks shorter-doc-with-more-hits higher (TF * length norm)
+        assert "Methods" in titles
+        assert "Intro" in titles
+        assert titles[0] == "Methods"  # higher TF wins
+
+    def test_skips_sections_with_empty_text(self):
+        # Sections without text shouldn't crash the ranker
+        sections = [
+            bs.Section("Empty", 1, 1, ""),
+            bs.Section("Real", 2, 5, "alpha beta gamma"),
+        ]
+        result = bs._section_search("p.pdf", "alpha", sections=sections, top_k=1)
+        assert len(result["sections"]) == 1
+        assert result["sections"][0]["title"] == "Real"
 
 
 class TestRunBoundaryGroup:

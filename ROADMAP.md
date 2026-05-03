@@ -81,7 +81,7 @@
 - SQLite `page_renders` table with dedicated `renders_dir`; bidirectional cache sharing between render tools
 - `source` column on `page_text`; lazy backfill for pre-v1.9.0 cached rows
 
-### v1.10.0 — Section-Granularity Search ← unreleased (on `develop`)
+### v1.10.0 — Section-Granularity Search (2026-05-04)
 - `pdf_search` gains `granularity` parameter: `"page"` (default, backward compatible) or `"section"` (returns complete sections containing each match, ranked by BM25 over section text)
 - New `pdf_mcp.section_detector` module — public `Section` dataclass and `detect_boundaries(pdf_path)` / `extract_toc_sections(doc)` / `derive_sections(pdf_path)` API
 - 7-signal heuristic detector combines font-face delta, bold detection (via flag bit OR font-name marker like `.B`/`Bold`), vertical whitespace gap, top-of-page position, numbered/keyword heading regex, Title Case / ALL CAPS, and short-line cues. Threshold-4 weighted score; multi-line headings (number on one line, title on next) are merged via a post-pass

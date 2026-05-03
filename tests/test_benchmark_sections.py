@@ -261,3 +261,71 @@ class TestBoilerplateStripping:
     def test_strip_boilerplate_idempotent_on_clean_text(self):
         text = "Real content only"
         assert bs._strip_boilerplate(text, set()) == "Real content only"
+
+
+class TestTokenize:
+    def test_lowercases_and_strips_punctuation(self):
+        assert bs._tokenize("Hello, World!") == ["hello", "world"]
+
+    def test_splits_on_whitespace(self):
+        assert bs._tokenize("a  b\tc\nd") == ["a", "b", "c", "d"]
+
+    def test_keeps_alphanumeric(self):
+        assert bs._tokenize("GPT-3 has 175B params.") == [
+            "gpt-3",
+            "has",
+            "175b",
+            "params",
+        ]
+
+
+class TestNgrams:
+    def test_5gram_set(self):
+        tokens = ["a", "b", "c", "d", "e", "f"]
+        # Two contiguous 5-grams: (a,b,c,d,e) and (b,c,d,e,f)
+        result = bs._ngram_set(tokens, n=5)
+        assert result == {("a", "b", "c", "d", "e"), ("b", "c", "d", "e", "f")}
+
+    def test_dedup_repeats(self):
+        tokens = ["x"] * 7
+        # All 5-grams identical → set of size 1
+        assert bs._ngram_set(tokens, n=5) == {("x", "x", "x", "x", "x")}
+
+    def test_too_short_returns_empty(self):
+        assert bs._ngram_set(["a", "b", "c"], n=5) == set()
+
+
+class TestCoverageMetrics:
+    def test_perfect_overlap(self):
+        text = "the quick brown fox jumps over the lazy dog and runs away"
+        m = bs._coverage_metrics(returned=text, gold=text)
+        assert m["recall"] == 1.0
+        assert m["precision"] == 1.0
+
+    def test_returned_subset_of_gold(self):
+        gold = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+        # First 6 words → 2 unique 5-grams; gold has 6 unique 5-grams
+        returned = "alpha beta gamma delta epsilon zeta"
+        m = bs._coverage_metrics(returned=returned, gold=gold)
+        # recall = |intersection| / |gold ngrams| = 2/6
+        assert abs(m["recall"] - 2 / 6) < 1e-9
+        # precision = |intersection| / |returned ngrams| = 2/2
+        assert m["precision"] == 1.0
+
+    def test_disjoint_strings(self):
+        m = bs._coverage_metrics(
+            returned="aa bb cc dd ee ff",
+            gold="zz yy xx ww vv uu",
+        )
+        assert m["recall"] == 0.0
+        assert m["precision"] == 0.0
+
+    def test_empty_returned_yields_zero(self):
+        m = bs._coverage_metrics(returned="", gold="alpha beta gamma delta epsilon")
+        assert m["recall"] == 0.0
+        assert m["precision"] == 0.0
+
+    def test_empty_gold_yields_zero(self):
+        m = bs._coverage_metrics(returned="alpha beta gamma delta epsilon", gold="")
+        assert m["recall"] == 0.0
+        assert m["precision"] == 0.0

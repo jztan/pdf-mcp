@@ -305,3 +305,37 @@ def _strip_boilerplate(text: str, boilerplate: set[str]) -> str:
         return text
     kept = [line for line in text.splitlines() if line.strip() not in boilerplate]
     return "\n".join(kept)
+
+
+# ---- Tokenization and n-gram coverage metrics ----
+
+_WORD_PUNCT_RE = re.compile(r"[^\w\s\-]")  # keep word chars + hyphens
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase, strip non-word punctuation (keep hyphens for tokens like GPT-3),
+    split on whitespace."""
+    cleaned = _WORD_PUNCT_RE.sub(" ", text.lower())
+    return cleaned.split()
+
+
+def _ngram_set(tokens: list[str], n: int = 5) -> set[tuple[str, ...]]:
+    """Set of contiguous n-grams. Returns empty set if len(tokens) < n."""
+    if len(tokens) < n:
+        return set()
+    return {tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)}
+
+
+def _coverage_metrics(returned: str, gold: str, n: int = 5) -> dict:
+    """
+    Recall  = |grams_returned ∩ grams_gold| / |grams_gold|
+    Precision = |grams_returned ∩ grams_gold| / |grams_returned|
+
+    Returns 0.0 for either metric when its denominator is empty.
+    """
+    g_returned = _ngram_set(_tokenize(returned), n)
+    g_gold = _ngram_set(_tokenize(gold), n)
+    inter = g_returned & g_gold
+    recall = len(inter) / len(g_gold) if g_gold else 0.0
+    precision = len(inter) / len(g_returned) if g_returned else 0.0
+    return {"recall": recall, "precision": precision, "intersection": len(inter)}

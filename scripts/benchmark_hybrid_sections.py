@@ -41,6 +41,9 @@ T = TypeVar("T")
 VALID_CATEGORIES = {"lexical", "paraphrase-semantic", "mixed-distractor"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "gold_section_keys")
 
+# Thresholds locked by spec §3 of
+# docs/superpowers/specs/2026-05-04-hybrid-section-search-validation-design.md
+# Do not adjust without updating the spec — these gate the release decision.
 GATE_CLAUSE_1_MARGIN = 0.10
 GATE_CLAUSE_2_TOLERANCE = 0.05
 
@@ -183,7 +186,9 @@ def evaluate_gate(cells: dict) -> dict:
     hs = cells["hybrid-section"]
     others = {k: v for k, v in cells.items() if k != "hybrid-section"}
 
-    next_best_md = max(c["mixed-distractor"] for c in others.values())
+    next_best_md, next_best_cell = max(
+        (c["mixed-distractor"], name) for name, c in others.items()
+    )
     clause_1_pass = hs["mixed-distractor"] >= next_best_md + GATE_CLAUSE_1_MARGIN
 
     ks_lex = cells["keyword-section"]["lexical"]
@@ -197,6 +202,7 @@ def evaluate_gate(cells: dict) -> dict:
             "pass": clause_1_pass,
             "hybrid_section": hs["mixed-distractor"],
             "next_best": next_best_md,
+            "next_best_cell": next_best_cell,
             "required_margin": GATE_CLAUSE_1_MARGIN,
         },
         "clause_2_lexical": {

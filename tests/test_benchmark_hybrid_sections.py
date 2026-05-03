@@ -356,3 +356,17 @@ def test_gate_clause_1_uses_next_best_not_just_hybrid_page():
     cells["hybrid-section"]["mixed-distractor"] = 0.65  # margin only 0.05
     v = evaluate_gate(cells)
     assert v["clause_1_mixed_distractor"]["pass"] is False
+
+
+def test_gate_reports_next_best_cell_name():
+    """When keyword-section is the next-best on mixed-distractor, that
+    name must appear in the verdict so the spec §7 open question
+    ('is keyword-section beating hybrid-page?') is answerable from the
+    verdict alone."""
+    from benchmark_hybrid_sections import evaluate_gate
+
+    cells = _baseline_cells()
+    cells["hybrid-page"]["mixed-distractor"] = 0.30
+    cells["keyword-section"]["mixed-distractor"] = 0.55
+    v = evaluate_gate(cells)
+    assert v["clause_1_mixed_distractor"]["next_best_cell"] == "keyword-section"

@@ -97,6 +97,9 @@ def embed_sections_for_pdf(
         embedder: Object with .embed(list[str]) -> iterable of np.ndarray
                   (matches fastembed.TextEmbedding).
         model_name: Identifier stored alongside embeddings.
+
+    Note: does not detect model_name changes; clear section_embeddings
+    if switching models between runs.
     """
     section_ids = [s["id"] for s in sections]
     cached = cache.get_section_embeddings(pdf_path, section_ids)

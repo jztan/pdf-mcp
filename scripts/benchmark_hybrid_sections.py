@@ -22,8 +22,19 @@ Exit codes: 0 = PASS / calibrate, 1 = FAIL, 2 = setup error.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Iterable  # noqa: F401
+from pathlib import Path
 from typing import TypeVar
+
+# Make src/pdf_mcp importable even when run from outside the project root.
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+import sqlite3  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+from pdf_mcp.server import _rrf_fuse  # noqa: E402  reuse the existing RRF
 
 T = TypeVar("T")
 
@@ -115,3 +126,43 @@ def embed_sections_for_pdf(
     }
     new_keys = {s["id"]: s["key"] for s in todo}
     cache.save_section_embeddings(pdf_path, new_blobs, new_keys, model=model_name)
+
+
+def _cosine_rank(cache, pdf_path: str, query_vec: np.ndarray, top_k: int) -> list[int]:
+    """Return section IDs ranked by cosine similarity to query_vec."""
+    with sqlite3.connect(cache.db_path) as conn:
+        rows = conn.execute(
+            "SELECT section_id, embedding FROM section_embeddings"
+            " WHERE file_path = ?",
+            (pdf_path,),
+        ).fetchall()
+
+    if not rows:
+        return []
+
+    ids = [int(r[0]) for r in rows]
+    mat = np.stack([np.frombuffer(r[1], dtype="float32") for r in rows])
+    # bge embeddings are L2-normalized, so dot product == cosine similarity.
+    # Only normalize the query (defensive; cheap and harmless if already unit).
+    qn = query_vec / (np.linalg.norm(query_vec) + 1e-12)
+    scores = mat @ qn.astype("float32")
+
+    order = np.argsort(-scores)[:top_k]
+    return [ids[i] for i in order]
+
+
+def hybrid_section_search(
+    cache,
+    pdf_path: str,
+    query: str,
+    query_vec: np.ndarray,
+    top_k: int = 5,
+) -> list[int]:
+    """Phase-1 shim: BM25 over pdf_section_fts + cosine over
+    section_embeddings, fused with RRF (k=60). Returns ranked section IDs."""
+    bm25_results = cache.search_section_fts(pdf_path, query, max_results=top_k * 2)
+    keyword_ids = [int(r["section_id"]) for r in bm25_results]
+    semantic_ids = _cosine_rank(cache, pdf_path, query_vec, top_k * 2)
+
+    fused = _rrf_fuse(keyword_ids, semantic_ids, max_results=top_k)
+    return [sid for sid, _score in fused]

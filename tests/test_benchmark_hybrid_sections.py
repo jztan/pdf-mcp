@@ -208,3 +208,66 @@ def test_embed_sections_partial_cache_only_embeds_missing(tmp_path):
     embed_sections_for_pdf(cache, str(pdf_path), sections, fe, model_name="fake")
     # Only section 1 should have been embedded.
     assert fe.calls == [["beta"]]
+
+
+def test_hybrid_section_search_fuses_keyword_and_semantic(tmp_path):
+    """BM25 ranks section 1 first (lexical match); semantic ranks
+    section 2 first (vector closest); RRF should put both in top-2."""
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.section_detector import Section
+    from benchmark_hybrid_sections import hybrid_section_search
+    import numpy as np
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "x.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    sections = [
+        Section(
+            title="Intro",
+            start_page=1,
+            end_page=1,
+            text="introduction to graphs",
+        ),
+        Section(
+            title="Methods",
+            start_page=2,
+            end_page=2,
+            text="convolutional neural networks",
+        ),
+        Section(
+            title="Results",
+            start_page=3,
+            end_page=3,
+            text="experimental analysis",
+        ),
+        Section(
+            title="Conclusion",
+            start_page=4,
+            end_page=4,
+            text="summary and future work",
+        ),
+    ]
+    cache.index_sections(str(pdf_path), sections)
+
+    # Embeddings: query is closest to section 2 in vector space.
+    embeddings = {
+        0: np.array([0.1] + [0.0] * 383, dtype="float32"),
+        1: np.array([0.3] + [0.0] * 383, dtype="float32"),
+        2: np.array([0.9] + [0.0] * 383, dtype="float32"),  # closest
+        3: np.array([0.2] + [0.0] * 383, dtype="float32"),
+    }
+    cache.save_section_embeddings(
+        str(pdf_path),
+        {k: v.tobytes() for k, v in embeddings.items()},
+        {k: f"S{k:03d}:p{k+1}:T" for k in range(4)},
+        model="m",
+    )
+
+    query_vec = np.array([1.0] + [0.0] * 383, dtype="float32")
+    # BM25 will match "convolutional" → section 1.
+    # Cosine puts section 2 first.
+    ranked_ids = hybrid_section_search(
+        cache, str(pdf_path), "convolutional", query_vec, top_k=4
+    )
+    assert set(ranked_ids[:2]) == {1, 2}

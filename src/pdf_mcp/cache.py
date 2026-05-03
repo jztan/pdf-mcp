@@ -1163,3 +1163,67 @@ class PDFCache:
                         for i, s in enumerate(sections)
                     ],
                 )
+
+    def search_section_fts(
+        self,
+        path: str,
+        query: str,
+        max_results: int,
+    ) -> list[dict[str, Any]]:
+        """
+        Search the section FTS5 index for sections matching the query.
+
+        Returns at most max_results results sorted by descending BM25 relevance.
+        Each result has keys: section_id (int), title (str), start_page (int),
+        end_page (int), score (float >= 0).
+
+        Returns [] when fts_available is False or no matches found.
+
+        Args:
+            path: Path to PDF file (must match the value stored at index time)
+            query: Search query (Porter stemming applied; FTS5 operators escaped)
+            max_results: Maximum number of results to return
+        """
+        if not self.fts_available:
+            return []
+        escaped = _escape_fts5_query(query)
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT section_id, title, start_page, end_page,"
+                    " -bm25(pdf_section_fts)"
+                    " FROM pdf_section_fts"
+                    " WHERE pdf_section_fts MATCH ? AND file_path = ?"
+                    " ORDER BY bm25(pdf_section_fts)"
+                    " LIMIT ?",
+                    (escaped, path, max_results),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [
+            {
+                "section_id": int(sid),
+                "title": title,
+                "start_page": int(sp),
+                "end_page": int(ep),
+                "score": float(score),
+            }
+            for sid, title, sp, ep, score in rows
+        ]
+
+    def get_section_fts_coverage(self, path: str) -> int:
+        """
+        Return the number of indexed sections for `path`. 0 means no index
+        populated yet (or FTS5 unavailable).
+        """
+        if not self.fts_available:
+            return 0
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM pdf_section_fts WHERE file_path = ?",
+                    (path,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return 0
+        return int(row[0]) if row else 0

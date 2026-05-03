@@ -966,3 +966,119 @@ class TestIndexSections:
         cache.fts_available = False
         # Should not raise; should be a no-op
         cache.index_sections("/p.pdf", [Section("X", 1, 1, "x")])
+
+
+class TestSearchSectionFTS:
+    def test_returns_ranked_sections_by_bm25(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        sections = [
+            Section("Intro", 1, 5, "introduction body about graphs"),
+            Section("Methods", 6, 10, "graph attention mechanism details"),
+            Section("Results", 11, 15, "we observed the following"),
+        ]
+        cache.index_sections("/fake/p.pdf", sections)
+        out = cache.search_section_fts("/fake/p.pdf", "graph attention", max_results=3)
+        assert len(out) >= 1
+        # Methods has the strongest match for "graph attention"
+        assert out[0]["title"] == "Methods"
+        # Returned shape includes the expected keys
+        assert {"section_id", "title", "start_page", "end_page", "score"}.issubset(
+            out[0].keys()
+        )
+
+    def test_score_ordering_descending(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        sections = [
+            Section("A", 1, 1, "alpha alpha alpha alpha"),
+            Section("B", 2, 2, "alpha"),
+            Section("C", 3, 3, "alpha alpha"),
+        ]
+        cache.index_sections("/p.pdf", sections)
+        out = cache.search_section_fts("/p.pdf", "alpha", max_results=3)
+        # All three should match; scores must be descending
+        scores = [r["score"] for r in out]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_no_matches_returns_empty(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        cache.index_sections("/p.pdf", [Section("X", 1, 1, "alpha")])
+        assert cache.search_section_fts("/p.pdf", "zeta", max_results=3) == []
+
+    def test_max_results_truncates(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        sections = [Section(f"S{i}", i, i, f"alpha {i}") for i in range(1, 6)]
+        cache.index_sections("/p.pdf", sections)
+        out = cache.search_section_fts("/p.pdf", "alpha", max_results=2)
+        assert len(out) == 2
+
+    def test_isolated_per_file(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        cache.index_sections("/a.pdf", [Section("A", 1, 1, "alpha")])
+        cache.index_sections("/b.pdf", [Section("B", 1, 1, "alpha")])
+        out = cache.search_section_fts("/a.pdf", "alpha", max_results=10)
+        titles = [r["title"] for r in out]
+        assert titles == ["A"]
+
+    def test_fts_unavailable_returns_empty(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        cache.fts_available = False
+        assert cache.search_section_fts("/p.pdf", "anything", 3) == []
+
+
+class TestGetSectionFTSCoverage:
+    def test_returns_zero_when_unindexed(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        assert cache.get_section_fts_coverage("/never-indexed.pdf") == 0
+
+    def test_returns_section_count_after_indexing(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        cache.index_sections(
+            "/p.pdf",
+            [
+                Section("A", 1, 1, "a"),
+                Section("B", 2, 2, "b"),
+                Section("C", 3, 3, "c"),
+            ],
+        )
+        assert cache.get_section_fts_coverage("/p.pdf") == 3
+
+    def test_count_drops_to_zero_after_empty_reindex(self, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        cache.index_sections("/p.pdf", [Section("A", 1, 1, "a")])
+        cache.index_sections("/p.pdf", [])  # explicit empty
+        assert cache.get_section_fts_coverage("/p.pdf") == 0
+
+    def test_returns_zero_when_fts_unavailable(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        cache.fts_available = False
+        assert cache.get_section_fts_coverage("/p.pdf") == 0

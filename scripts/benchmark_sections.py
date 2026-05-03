@@ -14,6 +14,8 @@ Usage:
     python scripts/benchmark_sections.py --include-blog-pdf  # also run the GPT-3 PDF
     python scripts/benchmark_sections.py --calibrate         # print numbers, no gating
     python scripts/benchmark_sections.py --groups 1,2        # run a subset
+    python scripts/benchmark_sections.py --detector-source=toc        # default
+    python scripts/benchmark_sections.py --detector-source=heuristic  # fallback
 
 Exit codes: 0 = PASS, 1 = FAIL, 2 = setup error.
 """
@@ -609,12 +611,19 @@ def _section_search(
     return {"sections": out}
 
 
-def run_completeness_group(pdfs: list[dict]) -> dict:
+def run_completeness_group(pdfs: list[dict], detector_source: str = "toc") -> dict:
     """
     Group 2: For each gold section >= SECTION_MIN_CHARS, query its title under both
     granularities and compare 5-gram recall + precision against the gold section text.
+
+    `detector_source` controls what the section-search shim indexes:
+      - "toc" (default): use doc.get_toc() — what production does when the
+        PDF has a TOC. Section-mode metrics measure the *upper bound* the
+        feature can deliver in that path.
+      - "heuristic": use _detect_boundaries — the regex fallback for
+        TOC-less PDFs. Group 1's F1 measures this detector's quality.
     """
-    _section("Group 2: Completeness")
+    _section(f"Group 2: Completeness  (detector_source={detector_source})")
     per_pdf: dict[str, dict] = {}
     all_section_recalls: list[float] = []
     all_section_precisions: list[float] = []
@@ -626,8 +635,13 @@ def run_completeness_group(pdfs: list[dict]) -> dict:
         path = pdf["_local_path"]
         # Let ValueError (empty TOC) propagate — main() converts it to exit 2.
         gold_sections = _extract_toc_boundaries(path)
-        # Detected sections are the index for the section-search shim.
-        detected_sections = _detect_boundaries(path)
+        # The section-search shim's index. In TOC mode this is the same
+        # list as gold (TOC is authoritative); in heuristic mode it's
+        # whatever the regex detector produced.
+        if detector_source == "toc":
+            detected_sections = gold_sections
+        else:
+            detected_sections = _detect_boundaries(path)
 
         # Pre-build the boilerplate set once per PDF
         page_texts = [
@@ -900,6 +914,17 @@ def main(argv: list[str] | None = None) -> None:
             "(always exits 0 unless setup error)"
         ),
     )
+    parser.add_argument(
+        "--detector-source",
+        choices=["toc", "heuristic"],
+        default="toc",
+        help=(
+            "Where Group 2 gets its section index. 'toc' uses doc.get_toc() "
+            "(production behaviour for PDFs with a TOC, ~95%% of academic PDFs); "
+            "'heuristic' uses the regex detector (fallback for TOC-less PDFs). "
+            "Group 1 always measures the heuristic detector regardless."
+        ),
+    )
     args = parser.parse_args(argv)
 
     selected_groups = {int(g.strip()) for g in args.groups.split(",")}
@@ -934,7 +959,9 @@ def main(argv: list[str] | None = None) -> None:
             if 1 in selected_groups:
                 results["group_1"] = run_boundary_group(pdfs)
             if 2 in selected_groups:
-                results["group_2"] = run_completeness_group(pdfs)
+                results["group_2"] = run_completeness_group(
+                    pdfs, detector_source=args.detector_source
+                )
             if 3 in selected_groups:
                 results["group_3"] = run_toolcall_group(pdfs)
         except ValueError as exc:

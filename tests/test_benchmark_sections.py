@@ -918,7 +918,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_boundary_group",
-            lambda pdfs: {
+            lambda pdfs, **kwargs: {
                 "per_pdf": {
                     p["key"]: {
                         "f1": 1.0,
@@ -938,7 +938,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_completeness_group",
-            lambda pdfs: {
+            lambda pdfs, **kwargs: {
                 "per_pdf": {},
                 "min_section_recall": 1.0,
                 "min_section_precision": 1.0,
@@ -948,7 +948,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_toolcall_group",
-            lambda pdfs: {
+            lambda pdfs, **kwargs: {
                 "per_pdf": {},
                 "min_section_zero_fraction": 1.0,
             },
@@ -968,7 +968,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_boundary_group",
-            lambda pdfs: {
+            lambda pdfs, **kwargs: {
                 "per_pdf": {
                     p["key"]: {
                         "f1": 0.5,
@@ -998,7 +998,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_boundary_group",
-            lambda pdfs: {
+            lambda pdfs, **kwargs: {
                 "per_pdf": {
                     p["key"]: {
                         "f1": 0.0,
@@ -1024,7 +1024,7 @@ class TestMainExitCodes:
     def test_setup_error_returns_two(self, monkeypatch, tmp_path):
         self._common_mocks(monkeypatch, tmp_path)
 
-        def boom(pdfs):
+        def boom(pdfs, **kwargs):
             raise ValueError("PDF has no TOC — cannot derive ground truth")
 
         monkeypatch.setattr(bs, "run_boundary_group", boom)
@@ -1040,12 +1040,12 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_boundary_group",
-            lambda pdfs: called.append(1) or {"per_pdf": {}, "min_f1": 1.0},
+            lambda pdfs, **kwargs: called.append(1) or {"per_pdf": {}, "min_f1": 1.0},
         )
         monkeypatch.setattr(
             bs,
             "run_completeness_group",
-            lambda pdfs: called.append(2)
+            lambda pdfs, **kwargs: called.append(2)
             or {
                 "per_pdf": {},
                 "min_section_recall": 1.0,
@@ -1056,7 +1056,7 @@ class TestMainExitCodes:
         monkeypatch.setattr(
             bs,
             "run_toolcall_group",
-            lambda pdfs: called.append(3)
+            lambda pdfs, **kwargs: called.append(3)
             or {"per_pdf": {}, "min_section_zero_fraction": 1.0},
         )
         import pytest

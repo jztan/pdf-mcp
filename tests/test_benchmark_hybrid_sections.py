@@ -370,3 +370,103 @@ def test_gate_reports_next_best_cell_name():
     cells["keyword-section"]["mixed-distractor"] = 0.55
     v = evaluate_gate(cells)
     assert v["clause_1_mixed_distractor"]["next_best_cell"] == "keyword-section"
+
+
+def test_run_all_cells_end_to_end(tmp_path):
+    """Build a tiny synthetic PDF with two clearly-different sections,
+    run the benchmark on a one-query-per-category fixture, and assert
+    every cell × category produces a finite MRR in [0, 1]."""
+    import pymupdf
+    import numpy as np
+    import json
+    from benchmark_hybrid_sections import (
+        run_all_cells,
+        load_queries,
+        section_key,
+    )
+    from pdf_mcp.section_detector import derive_sections
+
+    # 1. Build a 2-page PDF: section A about cats, section B about dogs.
+    pdf_path = tmp_path / "tiny.pdf"
+    doc = pymupdf.open()
+    p1 = doc.new_page()
+    p1.insert_text((50, 50), "Section A: Cats", fontsize=20)
+    p1.insert_text((50, 100), "Felines purr and meow loudly")
+    p2 = doc.new_page()
+    p2.insert_text((50, 50), "Section B: Dogs", fontsize=20)
+    p2.insert_text((50, 100), "Canines bark and fetch sticks")
+    doc.save(str(pdf_path))
+    doc.close()
+
+    # 2. Compute section keys exactly as the benchmark would.
+    sections = derive_sections(str(pdf_path))
+    if len(sections) < 2:
+        # Heuristic detector may not split this trivial PDF; bail with
+        # a clear assertion so it's obvious in CI.
+        raise AssertionError(
+            f"Synthetic PDF only produced {len(sections)} sections; "
+            "test fixture needs adjustment."
+        )
+    key_for = {i: section_key(i, s) for i, s in enumerate(sections)}
+    cats_key = key_for[0]
+
+    # 3. Author a query fixture pointing at the local PDF.
+    qfile = tmp_path / "q.json"
+    qfile.write_text(
+        json.dumps(
+            {
+                "pdfs": {
+                    "tiny": {
+                        "url": str(pdf_path),
+                        "queries": [
+                            {
+                                "id": "tlex",
+                                "category": "lexical",
+                                "query": "Cats",
+                                "gold_section_keys": [cats_key],
+                            },
+                            {
+                                "id": "tsem",
+                                "category": "paraphrase-semantic",
+                                "query": "felines",
+                                "gold_section_keys": [cats_key],
+                            },
+                            {
+                                "id": "tdist",
+                                "category": "mixed-distractor",
+                                "query": "purr",
+                                "gold_section_keys": [cats_key],
+                                "distractor_section_keys": [key_for[1]],
+                            },
+                        ],
+                    }
+                }
+            }
+        )
+    )
+    pdfs = load_queries(str(qfile))
+
+    # 4. Stub embedder mapping cat-words to dim 0, dog-words to dim 1.
+    class StubEmbedder:
+        def embed(self, texts):
+            for t in texts:
+                v = np.zeros(384, dtype="float32")
+                tl = t.lower()
+                if "cat" in tl or "felin" in tl or "purr" in tl or "meow" in tl:
+                    v[0] = 1.0
+                elif "dog" in tl or "canin" in tl or "bark" in tl:
+                    v[1] = 1.0
+                yield v
+
+    cells = run_all_cells(pdfs, embedder=StubEmbedder())
+
+    # 5. Assert shape + finite values.
+    for cell_name in (
+        "keyword-page",
+        "keyword-section",
+        "hybrid-page",
+        "hybrid-section",
+    ):
+        for category in ("lexical", "paraphrase-semantic", "mixed-distractor", "all"):
+            score = cells[cell_name][category]
+            assert 0.0 <= score <= 1.0, f"{cell_name}/{category} = {score} out of [0,1]"

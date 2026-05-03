@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import defaultdict
 from collections.abc import Iterable  # noqa: F401
 from pathlib import Path
 from typing import TypeVar
@@ -336,13 +337,123 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_all_cells(all_pdfs: dict, embedder) -> dict:
-    """Filled in by Task 12 against the synthetic-PDF integration test."""
-    raise NotImplementedError("Task 12: implement run_all_cells")
+    """Run the 2x2 cells over every (pdf, query) pair and aggregate MRR.
+
+    Returns: {cell_name: {category: micro_mean_mrr, "all": micro_mean_mrr}}.
+    """
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.section_detector import derive_sections
+    from pdf_mcp.server import pdf_search as _pdf_search, _resolve_path
+
+    cache = PDFCache()
+    CELLS = ("keyword-page", "hybrid-page", "keyword-section", "hybrid-section")
+
+    accum: dict[str, dict[str, list[float]]] = {c: defaultdict(list) for c in CELLS}
+
+    for pdf_key, pdf_data in all_pdfs.items():
+        local_path = _resolve_path(pdf_data["url"])
+
+        sections = derive_sections(local_path)
+        cache.index_sections(local_path, sections)
+
+        id_to_key = {i: section_key(i, s) for i, s in enumerate(sections)}
+        page_to_keys = _page_to_section_keys(sections, id_to_key)
+
+        if embedder is not None:
+            embed_sections_for_pdf(
+                cache,
+                local_path,
+                [
+                    {"id": i, "key": id_to_key[i], "text": s.text}
+                    for i, s in enumerate(sections)
+                ],
+                embedder=embedder,
+                model_name="BAAI/bge-small-en-v1.5",
+            )
+
+        for q in pdf_data["queries"]:
+            gold = set(q["gold_section_keys"])
+            cat = q["category"]
+            qstr = q["query"]
+
+            # keyword-page
+            kp = _pdf_search(local_path, qstr, mode="keyword", max_results=10)
+            kp_keys = _page_results_to_section_keys(kp.get("matches", []), page_to_keys)
+            accum["keyword-page"][cat].append(mrr(kp_keys, gold))
+
+            # hybrid-page
+            hp = _pdf_search(local_path, qstr, mode="auto", max_results=10)
+            hp_keys = _page_results_to_section_keys(hp.get("matches", []), page_to_keys)
+            accum["hybrid-page"][cat].append(mrr(hp_keys, gold))
+
+            # keyword-section (BM25 over pdf_section_fts)
+            ks = cache.search_section_fts(local_path, qstr, max_results=10)
+            ks_keys = [id_to_key[int(r["section_id"])] for r in ks]
+            accum["keyword-section"][cat].append(mrr(ks_keys, gold))
+
+            # hybrid-section (shim) — falls back to keyword-section when no embedder
+            if embedder is not None:
+                qvec = next(iter(embedder.embed([qstr])))
+                qvec = np.asarray(qvec, dtype="float32")
+                hs_ids = hybrid_section_search(cache, local_path, qstr, qvec, top_k=10)
+                hs_keys = [id_to_key[i] for i in hs_ids]
+            else:
+                hs_keys = ks_keys
+            accum["hybrid-section"][cat].append(mrr(hs_keys, gold))
+
+    out: dict[str, dict[str, float]] = {}
+    for cell in CELLS:
+        cell_out: dict[str, float] = {}
+        all_vals: list[float] = []
+        for cat in ("lexical", "paraphrase-semantic", "mixed-distractor"):
+            vals = accum[cell][cat]
+            cell_out[cat] = sum(vals) / len(vals) if vals else 0.0
+            all_vals.extend(vals)
+        cell_out["all"] = sum(all_vals) / len(all_vals) if all_vals else 0.0
+        out[cell] = cell_out
+    return out
+
+
+def _page_to_section_keys(sections, id_to_key) -> dict[int, list[str]]:
+    """Map 1-indexed page number → list of section keys covering that page,
+    in section order. Used to translate page-grain results into the section
+    namespace for fair MRR comparison."""
+    mapping: dict[int, list[str]] = defaultdict(list)
+    for i, s in enumerate(sections):
+        for p in range(s.start_page, s.end_page + 1):
+            mapping[p].append(id_to_key[i])
+    return dict(mapping)
+
+
+def _page_results_to_section_keys(
+    matches: list[dict], page_to_keys: dict[int, list[str]]
+) -> list[str]:
+    """Convert page-grain matches to a section-key ranking (de-duped,
+    rank-preserving). Each page contributes its covering section(s) once."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in matches:
+        page = m.get("page")
+        for k in page_to_keys.get(page, []):
+            if k not in seen:
+                seen.add(k)
+                out.append(k)
+    return out
 
 
 def print_report(cells: dict, queries: dict) -> None:
-    """Filled in by Task 12."""
-    raise NotImplementedError("Task 12: implement print_report")
+    print()
+    print("=" * 78)
+    print("Per-cell mean MRR (micro-mean across all queries)")
+    print("=" * 78)
+    cats = ("lexical", "paraphrase-semantic", "mixed-distractor", "all")
+    print(f"{'cell':<20}" + "".join(f"{c:>14}" for c in cats))
+    for cell, scores in cells.items():
+        row = f"{cell:<20}" + "".join(f"{scores[c]:>14.4f}" for c in cats)
+        print(row)
+    print()
+    n = sum(len(v["queries"]) for v in queries.values())
+    print(f"Queries used: {n} across {len(queries)} PDF(s).")
 
 
 def print_gate_verdict(verdict: dict) -> None:

@@ -436,3 +436,148 @@ class TestSimulateAgentReads:
         )
         # Page 1: 10/20 = 50%. Walks to N+1=2 → 20/20 = 100%. N-1=0 skipped.
         assert reads == 1
+
+
+class TestDetectBoundariesPure:
+    """Tests _detect_boundaries_from_lines — the pure function that takes
+    a list of (page_num, line_text) tuples and applies the heading regex,
+    bypassing PDF I/O. The PDF-opening wrapper _detect_boundaries is
+    integration-tested separately at calibration time."""
+
+    def test_numbered_heading_fires(self):
+        lines = [
+            (1, "Some intro paragraph here"),
+            (1, "1 Introduction"),
+            (1, "More intro text"),
+            (2, "1.1 Background"),
+            (2, "Background paragraph"),
+            (3, "2 Methods"),
+            (3, "Methods text"),
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=3)
+        starts = [(s.title, s.start_page, s.end_page) for s in sections]
+        assert starts == [
+            ("1 Introduction", 1, 1),
+            ("1.1 Background", 2, 2),
+            ("2 Methods", 3, 3),
+        ]
+
+    def test_chapter_section_keyword_fires(self):
+        lines = [
+            (1, "Chapter 1 Introduction"),
+            (1, "intro text"),
+            (5, "Section 2 Body"),
+            (5, "body text"),
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=8)
+        starts = [(s.title, s.start_page, s.end_page) for s in sections]
+        assert starts == [
+            ("Chapter 1 Introduction", 1, 4),
+            ("Section 2 Body", 5, 8),
+        ]
+
+    def test_non_heading_text_with_leading_digit_does_not_fire(self):
+        # "1km of cable" or "100 widgets" — leading digit but no section structure
+        lines = [
+            (1, "Real heading"),  # not a heading per the regex
+            (
+                1,
+                "1km of cable was used",
+            ),  # leading digit but no period and not section-like
+            (1, "100 widgets total"),
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=1)
+        # No heading detected → empty list (caller must handle)
+        assert sections == []
+
+    def test_dedupes_consecutive_same_page_headings(self):
+        # Two headings on the same page should produce two sections, but the
+        # earlier section gets a malformed end_page that the F1 set-dedup
+        # path collapses. Pure detector reports them faithfully.
+        lines = [
+            (1, "1 Intro"),
+            (1, "1.1 Background"),
+            (3, "2 Body"),
+        ]
+        sections = bs._detect_boundaries_from_lines(lines, total_pages=5)
+        # First section ends at start_page_of_next - 1 = 0 (malformed); set
+        # dedup in F1 collapses both starts on page 1 to a single boundary.
+        assert [s.title for s in sections] == ["1 Intro", "1.1 Background", "2 Body"]
+        assert sections[0].start_page == 1
+        assert sections[1].start_page == 1
+        assert sections[2].start_page == 3
+        assert sections[2].end_page == 5
+
+    def test_empty_input_returns_empty_list(self):
+        assert bs._detect_boundaries_from_lines([], total_pages=10) == []
+
+    def test_no_headings_returns_empty_list(self):
+        lines = [(1, "Pure prose with no numbered headings"), (2, "More prose")]
+        assert bs._detect_boundaries_from_lines(lines, total_pages=2) == []
+
+
+class TestDetectBoundariesIntegration:
+    """End-to-end test: build a synthetic two-column PDF, run the real
+    _detect_boundaries (which opens the PDF and uses PyMuPDF), and assert
+    the detected starts are in monotonic page order. This is the canary
+    that catches column-interleaving surprises before calibration."""
+
+    def _build_two_column_pdf(self, tmp_path):
+        import pymupdf
+
+        doc = pymupdf.open()
+        # Page 1: left column = body prose, right column = section heading
+        # then body. If get_text() reads naively top-to-bottom across both
+        # columns, the heading "1 Introduction" appears AFTER body text.
+        page1 = doc.new_page(width=600, height=800)
+        # Left column body (x=50)
+        page1.insert_text((50, 100), "This is left column prose.", fontsize=11)
+        page1.insert_text((50, 130), "More left column body text here.", fontsize=11)
+        # Right column heading (x=320)
+        page1.insert_text((320, 100), "1 Introduction", fontsize=14)
+        page1.insert_text(
+            (320, 130), "Right column body for intro section.", fontsize=11
+        )
+
+        # Page 2: top-of-page heading, then body
+        page2 = doc.new_page(width=600, height=800)
+        page2.insert_text((50, 100), "2 Methods", fontsize=14)
+        page2.insert_text((50, 130), "Methods body text.", fontsize=11)
+
+        path = tmp_path / "two_column.pdf"
+        doc.save(str(path))
+        doc.close()
+        return str(path)
+
+    def test_detects_headings_in_monotonic_page_order(self, tmp_path):
+        path = self._build_two_column_pdf(tmp_path)
+        sections = bs._detect_boundaries(path)
+        titles_pages = [(s.title, s.start_page) for s in sections]
+        # Both headings detected, in correct page order
+        assert ("1 Introduction", 1) in titles_pages
+        assert ("2 Methods", 2) in titles_pages
+        # Page order must be monotonic — Introduction (page 1) before Methods (page 2)
+        intro_idx = next(
+            i
+            for i, (_, p) in enumerate(titles_pages)
+            if titles_pages[i][0] == "1 Introduction"
+        )
+        methods_idx = next(
+            i
+            for i, (_, p) in enumerate(titles_pages)
+            if titles_pages[i][0] == "2 Methods"
+        )
+        assert intro_idx < methods_idx, (
+            f"Detected headings are out of page order — got {titles_pages}. "
+            f"Likely cause: get_text() is not respecting column reading order. "
+            f"Verify _detect_boundaries uses get_text('blocks', sort=True)."
+        )
+
+    def test_section_text_spans_correct_page_range(self, tmp_path):
+        path = self._build_two_column_pdf(tmp_path)
+        sections = bs._detect_boundaries(path)
+        intro = next(s for s in sections if s.title == "1 Introduction")
+        # Intro is on page 1; next heading is on page 2 → end_page = 1
+        assert intro.end_page == 1
+        # Section text should contain page 1's content
+        assert "Introduction" in intro.text or "intro" in intro.text.lower()

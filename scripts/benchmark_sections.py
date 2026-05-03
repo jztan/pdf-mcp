@@ -406,3 +406,82 @@ def _simulate_agent_reads(
         if _token_coverage(accumulated_text, gold_section.text) >= coverage_target:
             break
     return extra_reads
+
+
+# Heading regex per spec sketch:
+#   - Numbered sections: "1", "1.1", "3.2.1" followed by whitespace and an
+#     UPPERCASE letter (so "1km" and "100 widgets total" don't fire — section
+#     titles in academic PDFs are Title Case or ALL CAPS, while prose is not).
+#   - Chapter/Section/Part keyword followed by a number (case-insensitive
+#     for the keyword via a localized flag, so the [A-Z] guard above is not
+#     defeated by a global IGNORECASE).
+_HEADING_RE = re.compile(
+    r"^(?:\d+(?:\.\d+)*\s+[A-Z]|(?i:Chapter|Section|Part)\s+\d+)",
+)
+
+
+def _detect_boundaries_from_lines(
+    lines: list[tuple[int, str]],
+    total_pages: int,
+) -> list[Section]:
+    """
+    Apply the heading regex to a flat list of (page, line_text) tuples and
+    derive Sections. Pure function — no PDF I/O; tests inject lines directly.
+    """
+    candidates: list[tuple[int, str]] = []
+    for page, text in lines:
+        stripped = text.strip()
+        if not stripped:
+            continue
+        if _HEADING_RE.match(stripped):
+            candidates.append((page, stripped))
+
+    sections: list[Section] = []
+    for i, (page, title) in enumerate(candidates):
+        if i + 1 < len(candidates):
+            end_page = candidates[i + 1][0] - 1
+        else:
+            end_page = total_pages
+        sections.append(
+            Section(title=title, start_page=page, end_page=end_page, text="")
+        )
+    return sections
+
+
+def _detect_boundaries(pdf_path: str) -> list[Section]:
+    """
+    PDF-aware wrapper: extract text lines from each page, apply the regex
+    detector, and fill `Section.text` with concatenated page text for the
+    detected page range.
+
+    NOTE: This is the in-script implementation. If the benchmark passes
+    its calibration thresholds, this function (or its descendant) is the
+    body that should be promoted to `pdf_mcp/section_detector.py` when
+    the feature is upstreamed.
+    """
+    doc = pymupdf.open(pdf_path)
+    try:
+        lines: list[tuple[int, str]] = []
+        for page_idx in range(len(doc)):
+            # `get_text("blocks", sort=True)` returns blocks in
+            # top-to-bottom, left-to-right order — critical for two-column
+            # PDFs where plain get_text() can interleave columns. Mirrors
+            # the pattern used in pdf_mcp/extractor.py:127.
+            blocks = doc[page_idx].get_text("blocks", sort=True)
+            for block in blocks:
+                block_text = block[
+                    4
+                ]  # PyMuPDF block tuple: (x0,y0,x1,y1,text,block_no,block_type)
+                for line in block_text.splitlines():
+                    lines.append((page_idx + 1, line))
+        sections = _detect_boundaries_from_lines(lines, total_pages=len(doc))
+        for s in sections:
+            if s.start_page > s.end_page:
+                continue
+            pages_text = []
+            for p in range(s.start_page - 1, s.end_page):
+                pages_text.append(doc[p].get_text())
+            s.text = "\n".join(pages_text)
+        return sections
+    finally:
+        doc.close()

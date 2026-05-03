@@ -120,3 +120,80 @@ class TestExtractTocBoundariesPure:
 
         with pytest.raises(ValueError, match="empty TOC"):
             bs._toc_entries_to_sections([], total_pages=10)
+
+
+class TestBoundaryF1:
+    def test_perfect_match_scores_one(self):
+        gold = [bs.Section("A", 1, 5, ""), bs.Section("B", 6, 10, "")]
+        detected = [bs.Section("A", 1, 0, ""), bs.Section("B", 6, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=1)
+        assert m == {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "tp": 2,
+            "fp": 0,
+            "fn": 0,
+            "n_gold": 2,
+            "n_detected": 2,
+        }
+
+    def test_off_by_one_within_tolerance(self):
+        gold = [bs.Section("A", 5, 0, "")]
+        detected = [bs.Section("A", 6, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=1)
+        assert m["f1"] == 1.0
+
+    def test_off_by_two_outside_tolerance(self):
+        gold = [bs.Section("A", 5, 0, "")]
+        detected = [bs.Section("A", 7, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=1)
+        assert m["precision"] == 0.0
+        assert m["recall"] == 0.0
+        assert m["f1"] == 0.0
+
+    def test_duplicate_starts_dedupe_to_set(self):
+        # Two TOC entries on the same page count as one gold boundary
+        gold = [bs.Section("A", 5, 0, ""), bs.Section("B", 5, 0, "")]
+        detected = [bs.Section("X", 5, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=0)
+        # n_gold should be 1 (deduped), not 2
+        assert m["n_gold"] == 1
+        assert m["recall"] == 1.0
+        assert m["precision"] == 1.0
+
+    def test_extra_detection_lowers_precision(self):
+        gold = [bs.Section("A", 5, 0, "")]
+        detected = [bs.Section("A", 5, 0, ""), bs.Section("B", 50, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=1)
+        assert m["recall"] == 1.0
+        assert m["precision"] == 0.5
+        assert abs(m["f1"] - (2 * 0.5 * 1.0 / 1.5)) < 1e-9
+
+    def test_missing_detection_lowers_recall(self):
+        gold = [bs.Section("A", 5, 0, ""), bs.Section("B", 50, 0, "")]
+        detected = [bs.Section("A", 5, 0, "")]
+        m = bs._compute_boundary_f1(gold, detected, tolerance=1)
+        assert m["recall"] == 0.5
+        assert m["precision"] == 1.0
+
+    def test_empty_detected_returns_zero_f1(self):
+        gold = [bs.Section("A", 5, 0, "")]
+        m = bs._compute_boundary_f1(gold, [], tolerance=1)
+        assert m == {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "n_gold": 1,
+            "n_detected": 0,
+        }
+
+    def test_empty_gold_returns_zero_recall(self):
+        # Defensive: real callers should never pass empty gold (validated upstream).
+        m = bs._compute_boundary_f1([], [bs.Section("A", 5, 0, "")], tolerance=1)
+        assert m["recall"] == 0.0
+        assert m["precision"] == 0.0
+        assert m["f1"] == 0.0

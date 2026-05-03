@@ -188,3 +188,63 @@ def _extract_toc_boundaries(pdf_path: str) -> list[Section]:
         return sections
     finally:
         doc.close()
+
+
+def _compute_boundary_f1(
+    gold: list[Section],
+    detected: list[Section],
+    tolerance: int = BOUNDARY_TOLERANCE_PAGES,
+) -> dict:
+    """
+    Precision/Recall/F1 on section-start pages, with ±tolerance page slack.
+
+    Both sides are deduplicated to a set of distinct start pages (a PDF with
+    multiple TOC entries on the same page contributes one gold boundary).
+
+    A detected start D is a true positive if min(|D - g|) <= tolerance for
+    some g in gold; recall is symmetric (a gold start is matched if any
+    detected start is within tolerance).
+    """
+    gold_pages = {s.start_page for s in gold}
+    det_pages = {s.start_page for s in detected}
+
+    if not gold_pages:
+        return {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp": 0,
+            "fp": len(det_pages),
+            "fn": 0,
+            "n_gold": 0,
+            "n_detected": len(det_pages),
+        }
+
+    tp_detected = sum(
+        1 for d in det_pages if any(abs(d - g) <= tolerance for g in gold_pages)
+    )
+    matched_gold = sum(
+        1 for g in gold_pages if any(abs(d - g) <= tolerance for d in det_pages)
+    )
+
+    n_gold = len(gold_pages)
+    n_det = len(det_pages)
+    precision = tp_detected / n_det if n_det else 0.0
+    recall = matched_gold / n_gold
+
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
+
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "tp": tp_detected,
+        "fp": n_det - tp_detected,
+        "fn": n_gold - matched_gold,
+        "n_gold": n_gold,
+        "n_detected": n_det,
+    }

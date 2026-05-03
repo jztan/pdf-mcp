@@ -123,6 +123,48 @@ class TestExtractTocBoundariesPure:
             bs._toc_entries_to_sections([], total_pages=10)
 
 
+class TestFilterToLeaves:
+    """Tests _filter_to_leaves — drops parent containers in nested TOC."""
+
+    def test_drops_parent_with_children(self):
+        # 'Intro' (p1-4) contains '1.1' (p2-2) and '1.2' (p3-4) — drop Intro
+        sections = [
+            bs.Section("Intro", 1, 4, ""),
+            bs.Section("1.1 Bg", 2, 2, ""),
+            bs.Section("1.2 Mot", 3, 4, ""),
+            bs.Section("Body", 5, 10, ""),
+        ]
+        leaves = bs._filter_to_leaves(sections)
+        titles = [s.title for s in leaves]
+        assert titles == ["1.1 Bg", "1.2 Mot", "Body"]
+
+    def test_flat_partition_passes_through(self):
+        # Already-flat sections — no parents to remove
+        sections = [
+            bs.Section("A", 1, 5, ""),
+            bs.Section("B", 6, 10, ""),
+            bs.Section("C", 11, 15, ""),
+        ]
+        leaves = bs._filter_to_leaves(sections)
+        assert leaves == sections
+
+    def test_deeply_nested_keeps_only_innermost(self):
+        # 1 (p1-10) > 1.1 (p1-5) > 1.1.1 (p1-3) — only 1.1.1 is a leaf
+        sections = [
+            bs.Section("1", 1, 10, ""),
+            bs.Section("1.1", 1, 5, ""),
+            bs.Section("1.1.1", 1, 3, ""),
+            bs.Section("1.1.2", 4, 5, ""),
+            bs.Section("1.2", 6, 10, ""),
+        ]
+        leaves = bs._filter_to_leaves(sections)
+        titles = [s.title for s in leaves]
+        assert titles == ["1.1.1", "1.1.2", "1.2"]
+
+    def test_empty_input(self):
+        assert bs._filter_to_leaves([]) == []
+
+
 class TestBoundaryF1:
     def test_perfect_match_scores_one(self):
         gold = [bs.Section("A", 1, 5, ""), bs.Section("B", 6, 10, "")]

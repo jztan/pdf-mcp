@@ -16,6 +16,8 @@ Usage:
     python scripts/benchmark_sections.py --groups 1,2        # run a subset
     python scripts/benchmark_sections.py --detector-source=toc        # default
     python scripts/benchmark_sections.py --detector-source=heuristic  # fallback
+    python scripts/benchmark_sections.py --toc-flatten=all           # default (nested)
+    python scripts/benchmark_sections.py --toc-flatten=leaves        # leaf-only
 
 Exit codes: 0 = PASS, 1 = FAIL, 2 = setup error.
 """
@@ -198,6 +200,28 @@ def _extract_toc_boundaries(pdf_path: str) -> list[Section]:
         return sections
     finally:
         doc.close()
+
+
+def _filter_to_leaves(sections: list[Section]) -> list[Section]:
+    """
+    Filter to leaf sections: those whose page range contains no other
+    section's start_page. Removes parent containers in nested TOC
+    hierarchies, yielding a non-overlapping partition.
+
+    A section is a leaf iff no other section starts strictly within its
+    (start_page, end_page] range. Heuristic-mode output (already flat)
+    passes through unchanged.
+    """
+    starts = [s.start_page for s in sections]
+    out = []
+    for s in sections:
+        has_child = any(
+            other_start > s.start_page and other_start <= s.end_page
+            for other_start in starts
+        )
+        if not has_child:
+            out.append(s)
+    return out
 
 
 def _compute_boundary_f1(
@@ -870,7 +894,11 @@ def _section_search(
     return {"sections": out}
 
 
-def run_completeness_group(pdfs: list[dict], detector_source: str = "toc") -> dict:
+def run_completeness_group(
+    pdfs: list[dict],
+    detector_source: str = "toc",
+    toc_flatten: str = "all",
+) -> dict:
     """
     Group 2: For each gold section >= SECTION_MIN_CHARS, query its title under both
     granularities and compare 5-gram recall + precision against the gold section text.
@@ -881,8 +909,19 @@ def run_completeness_group(pdfs: list[dict], detector_source: str = "toc") -> di
         feature can deliver in that path.
       - "heuristic": use _detect_boundaries — the regex fallback for
         TOC-less PDFs. Group 1's F1 measures this detector's quality.
+
+    `toc_flatten` controls whether nested overlapping sections are kept:
+      - "all" (default): every TOC entry, including parent containers.
+        Reflects the natural TOC structure.
+      - "leaves": only TOC entries with no children (non-overlapping
+        partition). Useful for measuring section vs page on a flat
+        slicing where each gold section has a unique counterpart in
+        the index. No-op in heuristic mode (detector is already flat).
     """
-    _section(f"Group 2: Completeness  (detector_source={detector_source})")
+    _section(
+        f"Group 2: Completeness  "
+        f"(detector_source={detector_source}, toc_flatten={toc_flatten})"
+    )
     per_pdf: dict[str, dict] = {}
     all_section_recalls: list[float] = []
     all_section_precisions: list[float] = []
@@ -901,6 +940,10 @@ def run_completeness_group(pdfs: list[dict], detector_source: str = "toc") -> di
             detected_sections = gold_sections
         else:
             detected_sections = _detect_boundaries(path)
+
+        if toc_flatten == "leaves":
+            gold_sections = _filter_to_leaves(gold_sections)
+            detected_sections = _filter_to_leaves(detected_sections)
 
         # Pre-build the boilerplate set once per PDF
         page_texts = [
@@ -1184,6 +1227,18 @@ def main(argv: list[str] | None = None) -> None:
             "Group 1 always measures the heuristic detector regardless."
         ),
     )
+    parser.add_argument(
+        "--toc-flatten",
+        choices=["all", "leaves"],
+        default="all",
+        help=(
+            "Whether to keep nested TOC sections (default 'all') or filter to "
+            "leaf entries only ('leaves' — non-overlapping partition). The "
+            "'leaves' view tightens the section-vs-page comparison by removing "
+            "parent containers; the 'all' view reflects natural TOC structure. "
+            "No-op in heuristic mode (detector output is already flat)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     selected_groups = {int(g.strip()) for g in args.groups.split(",")}
@@ -1219,7 +1274,9 @@ def main(argv: list[str] | None = None) -> None:
                 results["group_1"] = run_boundary_group(pdfs)
             if 2 in selected_groups:
                 results["group_2"] = run_completeness_group(
-                    pdfs, detector_source=args.detector_source
+                    pdfs,
+                    detector_source=args.detector_source,
+                    toc_flatten=args.toc_flatten,
                 )
             if 3 in selected_groups:
                 results["group_3"] = run_toolcall_group(pdfs)

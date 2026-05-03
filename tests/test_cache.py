@@ -1100,3 +1100,25 @@ def test_section_embeddings_table_exists(tmp_path):
         "model",
         "created_at",
     }
+
+
+def test_save_and_get_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    blobs = {0: b"\x00" * 1536, 1: b"\x01" * 1536}
+    keys = {0: "S000:p1:Intro", 1: "S001:p3:Methods"}
+    cache.save_section_embeddings(str(pdf_path), blobs, keys, model="bge-small-en-v1.5")
+
+    got = cache.get_section_embeddings(str(pdf_path), [0, 1])
+    assert got == blobs
+
+
+def test_get_section_embeddings_empty_input_returns_empty(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    assert cache.get_section_embeddings("/no/such/path.pdf", []) == {}

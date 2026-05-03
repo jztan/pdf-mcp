@@ -749,6 +749,63 @@ class PDFCache:
                 ],
             )
 
+    def get_section_embeddings(
+        self, path: str, section_ids: list[int]
+    ) -> dict[int, bytes]:
+        """Get cached raw embedding bytes for multiple sections of a PDF.
+
+        Returns {section_id: blob} for sections whose mtime is still
+        valid. Sections not in cache or with stale mtime are omitted.
+        """
+        if not section_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(section_ids))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT section_id, embedding, file_mtime"
+                f" FROM section_embeddings"
+                f" WHERE file_path = ? AND section_id IN ({placeholders})",
+                (path, *section_ids),
+            ).fetchall()
+
+        result: dict[int, bytes] = {}
+        for section_id, blob, mtime in rows:
+            if self._is_cache_valid(path, mtime):
+                result[int(section_id)] = bytes(blob)
+        return result
+
+    def save_section_embeddings(
+        self,
+        path: str,
+        embeddings: dict[int, bytes],
+        section_keys: dict[int, str],
+        model: str,
+    ) -> None:
+        """Save section embedding blobs (idempotent INSERT OR REPLACE).
+
+        Args:
+            path: Path to PDF file.
+            embeddings: {section_id: float32 blob}.
+            section_keys: {section_id: stable string key}.
+            model: Embedding model identifier.
+        """
+        if not embeddings:
+            return
+
+        mtime, _ = self._get_file_info(path)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO section_embeddings"
+                " (file_path, section_id, section_key, file_mtime,"
+                "  embedding, model)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (path, sid, section_keys[sid], mtime, blob, model)
+                    for sid, blob in embeddings.items()
+                ],
+            )
+
     # ==================== Render Operations ====================
 
     def get_page_render(

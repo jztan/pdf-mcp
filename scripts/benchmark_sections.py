@@ -529,6 +529,28 @@ def run_boundary_group(pdfs: list[dict]) -> dict:
     return {"per_pdf": per_pdf, "min_f1": min_f1}
 
 
+def _get_page_text(pdf_path: str, page: int) -> str:
+    """1-indexed page text accessor (opens doc each call; cheap because tempdir cache is hot)."""
+    doc = pymupdf.open(pdf_path)
+    try:
+        return doc[page - 1].get_text()
+    finally:
+        doc.close()
+
+
+def _keyword_page_search(pdf_path: str, query: str, top_k: int = 1) -> dict:
+    """Page-mode baseline: keyword search via pdf_search(mode='keyword')."""
+    return _PDF_SEARCH_FN(pdf_path, query, mode="keyword", max_results=top_k)
+
+
+def _doc_total_pages(pdf_path: str) -> int:
+    doc = pymupdf.open(pdf_path)
+    try:
+        return len(doc)
+    finally:
+        doc.close()
+
+
 def _section_search(
     pdf_path: str,
     query: str,
@@ -569,3 +591,109 @@ def _section_search(
         if len(out) >= top_k:
             break
     return {"sections": out}
+
+
+def run_completeness_group(pdfs: list[dict]) -> dict:
+    """
+    Group 2: For each gold section >= SECTION_MIN_CHARS, query its title under both
+    granularities and compare 5-gram recall + precision against the gold section text.
+    """
+    _section("Group 2: Completeness")
+    per_pdf: dict[str, dict] = {}
+    all_section_recalls: list[float] = []
+    all_section_precisions: list[float] = []
+    all_recall_deltas: list[float] = []
+
+    for pdf in pdfs:
+        _p()
+        _p(f"  PDF: {bold(pdf['title'])}")
+        path = pdf["_local_path"]
+        # Let ValueError (empty TOC) propagate — main() converts it to exit 2.
+        gold_sections = _extract_toc_boundaries(path)
+        # Detected sections are the index for the section-search shim.
+        detected_sections = _detect_boundaries(path)
+
+        # Pre-build the boilerplate set once per PDF
+        page_texts = [
+            _get_page_text(path, p) for p in range(1, _doc_total_pages(path) + 1)
+        ]
+        boilerplate = _detect_boilerplate(page_texts)
+
+        eligible = [s for s in gold_sections if len(s.text) >= SECTION_MIN_CHARS]
+        sec_results: list[dict] = []
+        for sec in eligible:
+            page_hit = _keyword_page_search(path, sec.title, top_k=1)
+            page_matches = page_hit.get("matches", [])
+            if not page_matches:
+                continue
+            page_chunk = _strip_boilerplate(
+                _get_page_text(path, page_matches[0]["page"]), boilerplate
+            )
+            section_resp = _section_search(
+                path, sec.title, sections=detected_sections, top_k=1
+            )
+            section_chunks = section_resp.get("sections", [])
+            if not section_chunks:
+                continue
+            section_chunk = _strip_boilerplate(section_chunks[0]["text"], boilerplate)
+
+            gold_clean = _strip_boilerplate(sec.text, boilerplate)
+            page_metrics = _coverage_metrics(page_chunk, gold_clean)
+            section_metrics = _coverage_metrics(section_chunk, gold_clean)
+            sec_results.append(
+                {
+                    "title": sec.title,
+                    "start_page": sec.start_page,
+                    "end_page": sec.end_page,
+                    "char_count": len(sec.text),
+                    "page_mode": page_metrics,
+                    "section_mode": section_metrics,
+                    "recall_delta": section_metrics["recall"] - page_metrics["recall"],
+                }
+            )
+
+        per_pdf[pdf["key"]] = {"sections": sec_results}
+        if sec_results:
+            mean_sec_recall = sum(
+                r["section_mode"]["recall"] for r in sec_results
+            ) / len(sec_results)
+            mean_sec_prec = sum(
+                r["section_mode"]["precision"] for r in sec_results
+            ) / len(sec_results)
+            mean_delta = sum(r["recall_delta"] for r in sec_results) / len(sec_results)
+            per_pdf[pdf["key"]].update(
+                {
+                    "mean_section_recall": mean_sec_recall,
+                    "mean_section_precision": mean_sec_prec,
+                    "mean_recall_delta": mean_delta,
+                    "n_sections": len(sec_results),
+                }
+            )
+            _row("Sections evaluated (>=1000 chars)", str(len(sec_results)))
+            _row(
+                "Mean section-mode recall",
+                f"{mean_sec_recall:.3f}",
+                ok=mean_sec_recall >= THRESHOLD_SECTION_RECALL_MEAN,
+            )
+            _row(
+                "Mean section-mode precision",
+                f"{mean_sec_prec:.3f}",
+                ok=mean_sec_prec >= THRESHOLD_SECTION_PRECISION_MEAN,
+            )
+            _row(
+                "Mean recall delta (section - page)",
+                f"{mean_delta:.3f}",
+                ok=mean_delta >= THRESHOLD_RECALL_DELTA_MEAN,
+            )
+            all_section_recalls.append(mean_sec_recall)
+            all_section_precisions.append(mean_sec_prec)
+            all_recall_deltas.append(mean_delta)
+
+    return {
+        "per_pdf": per_pdf,
+        "min_section_recall": min(all_section_recalls) if all_section_recalls else 0.0,
+        "min_section_precision": (
+            min(all_section_precisions) if all_section_precisions else 0.0
+        ),
+        "min_recall_delta": min(all_recall_deltas) if all_recall_deltas else 0.0,
+    }

@@ -694,3 +694,87 @@ class TestRunBoundaryGroup:
         result = bs.run_boundary_group(pdfs)
         assert result["per_pdf"]["x"]["f1"] == 0.0
         assert result["min_f1"] == 0.0
+
+
+class TestRunCompletenessGroup:
+    def test_excludes_sub_threshold_sections(self, monkeypatch):
+        # Tiny section (text < 1000 chars) must be skipped
+        small = bs.Section("Small", 1, 1, "tiny text")
+        big = bs.Section("Big", 2, 5, "word " * 500)  # 2500 chars
+        gold = [small, big]
+
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: gold)
+        # The detector is exercised by Task 7's tests; here we stub it to return
+        # the same shape as gold so Group 2 can run in isolation.
+        monkeypatch.setattr(bs, "_detect_boundaries", lambda p: gold)
+
+        # Page text covers exactly the matched page (1 of 4 → ~25% recall expected)
+        # Set up mocks that always return the matched page text
+        def fake_get_page_text(pdf_path: str, page: int) -> str:
+            return big.text  # whole section content on the matched page (artificial)
+
+        # page-mode pdf_search: hit page = big.start_page
+        def fake_keyword_search(pdf_path, query, top_k):
+            return {"matches": [{"page": big.start_page, "excerpt": ""}]}
+
+        # section-mode: returns the gold section text. Note the new `sections=` kwarg.
+        def fake_section_search(pdf_path, query, sections, top_k=1):
+            return {
+                "sections": [
+                    {
+                        "title": big.title,
+                        "start_page": big.start_page,
+                        "end_page": big.end_page,
+                        "text": big.text,
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(bs, "_get_page_text", fake_get_page_text)
+        monkeypatch.setattr(bs, "_keyword_page_search", fake_keyword_search)
+        monkeypatch.setattr(bs, "_section_search", fake_section_search)
+        monkeypatch.setattr(bs, "_doc_total_pages", lambda p: 5)
+
+        pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
+        result = bs.run_completeness_group(pdfs)
+
+        # Only the "Big" section should appear in the per-section results
+        sections_evaluated = result["per_pdf"]["x"]["sections"]
+        assert len(sections_evaluated) == 1
+        assert sections_evaluated[0]["title"] == "Big"
+
+    def test_section_mode_recall_higher_than_page_mode(self, monkeypatch):
+        # Construct a 2-page section where page mode gets only half
+        page_a = "alpha beta gamma delta epsilon zeta eta theta iota kappa " * 30
+        page_b = "lambda mu nu xi omicron pi rho sigma tau upsilon " * 30
+        section_text = page_a + page_b
+        gold = [bs.Section("S", 1, 2, section_text)]
+
+        monkeypatch.setattr(bs, "_extract_toc_boundaries", lambda p: gold)
+        monkeypatch.setattr(bs, "_detect_boundaries", lambda p: gold)
+        monkeypatch.setattr(
+            bs,
+            "_get_page_text",
+            lambda path, page: page_a if page == 1 else page_b,
+        )
+        monkeypatch.setattr(
+            bs,
+            "_keyword_page_search",
+            lambda path, q, top_k: {"matches": [{"page": 1, "excerpt": ""}]},
+        )
+        monkeypatch.setattr(
+            bs,
+            "_section_search",
+            lambda path, q, sections, top_k=1: {
+                "sections": [
+                    {"title": "S", "start_page": 1, "end_page": 2, "text": section_text}
+                ]
+            },
+        )
+        monkeypatch.setattr(bs, "_doc_total_pages", lambda p: 2)
+
+        pdfs = [{"key": "x", "title": "X", "url": "x.pdf", "_local_path": "x.pdf"}]
+        result = bs.run_completeness_group(pdfs)
+        sec = result["per_pdf"]["x"]["sections"][0]
+        assert sec["section_mode"]["recall"] > sec["page_mode"]["recall"]
+        assert sec["section_mode"]["recall"] >= 0.95  # near-full coverage

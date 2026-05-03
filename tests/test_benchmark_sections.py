@@ -329,3 +329,110 @@ class TestCoverageMetrics:
         m = bs._coverage_metrics(returned="alpha beta gamma delta epsilon", gold="")
         assert m["recall"] == 0.0
         assert m["precision"] == 0.0
+
+
+class TestSimulateAgentReads:
+    """Tests _simulate_agent_reads with injectable page text — no PDF I/O."""
+
+    def _page_provider(self, pages: dict[int, str]):
+        """Return a callable(page_num)->str that errors on out-of-range."""
+
+        def get_page(p: int) -> str:
+            if p not in pages:
+                raise IndexError(f"page {p} out of range")
+            return pages[p]
+
+        return get_page
+
+    def test_zero_extra_reads_when_initial_page_covers(self):
+        gold = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+        pages = {3: gold}  # initial hit covers everything
+        get_page = self._page_provider(pages)
+        gold_section = bs.Section("X", 1, 5, gold)
+        reads = bs._simulate_agent_reads(
+            initial_page=3,
+            gold_section=gold_section,
+            get_page=get_page,
+            doc_total_pages=5,
+        )
+        assert reads == 0
+
+    def test_walks_outward_alternating_forward_first(self):
+        # Verifies the walk visits N+1 before N-1 (forward-first) and stops
+        # as soon as token coverage clears the 95% target.
+        # Gold has 3 unique tokens placed on consecutive pages 3, 4, 5 — so
+        # the agent reads page 4 (forward) → 67% then page 2 (backward, no
+        # new tokens) → 67% then page 5 (forward) → 100%. Stops at 3 reads.
+        gold = "w1 w2 w3"
+        pages = {
+            1: "filler-a",
+            2: "filler-b",
+            3: "w1",  # initial hit
+            4: "w2",  # forward neighbour, contributes w2
+            5: "w3",  # second-forward, contributes w3 → 100%
+        }
+        get_page = self._page_provider(pages)
+        gold_section = bs.Section("X", 1, 5, gold)
+        reads = bs._simulate_agent_reads(
+            initial_page=3,
+            gold_section=gold_section,
+            get_page=get_page,
+            doc_total_pages=5,
+        )
+        # Walk order [4, 2, 5, 1]:
+        #   start: {w1} → 33%
+        #   +4: {w1,w2} → 67%
+        #   +2: {w1,w2} → 67% (filler-b adds nothing relevant)
+        #   +5: {w1,w2,w3} → 100% ≥ 95% → stop
+        assert reads == 3
+
+    def test_walk_order_traversal_when_coverage_never_reaches_target(self):
+        # Pages contain only filler; coverage never reaches the target and the
+        # agent walks the entire bounded order before the for-loop exhausts.
+        # Walk from page 3 with doc_total=5 is [4, 2, 5, 1] → reads = 4.
+        gold = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+        pages = {p: "filler " * 50 for p in range(1, 6)}
+        pages[3] = "alpha beta"  # initial hit, 2 of 10 tokens = 20%
+        get_page = self._page_provider(pages)
+        gold_section = bs.Section("X", 1, 5, gold)
+        reads = bs._simulate_agent_reads(
+            initial_page=3,
+            gold_section=gold_section,
+            get_page=get_page,
+            doc_total_pages=5,
+        )
+        assert reads == 4
+
+    def test_caps_at_max_extra_reads(self):
+        # Gold needs many pages but get_page never gets coverage to 95%
+        gold = " ".join(f"w{i}" for i in range(200))
+        # All pages return one irrelevant word
+        pages = {i: "noise" for i in range(1, 30)}
+        pages[5] = gold[:50]  # initial page has tiny fragment
+        get_page = self._page_provider(pages)
+        gold_section = bs.Section("X", 1, 30, gold)
+        reads = bs._simulate_agent_reads(
+            initial_page=5,
+            gold_section=gold_section,
+            get_page=get_page,
+            doc_total_pages=30,
+        )
+        assert reads == bs.MAX_EXTRA_READS  # capped at 10
+
+    def test_skips_out_of_bounds_pages_without_counting(self):
+        # initial_page=1 means N-1=0 (out of bounds) — must be skipped silently
+        gold_words = " ".join(f"w{i}" for i in range(1, 21))  # 20 unique tokens
+        pages = {
+            1: " ".join(f"w{i}" for i in range(1, 11)),  # w1..w10
+            2: " ".join(f"w{i}" for i in range(11, 21)),  # w11..w20
+        }
+        get_page = self._page_provider(pages)
+        gold_section = bs.Section("X", 1, 2, gold_words)
+        reads = bs._simulate_agent_reads(
+            initial_page=1,
+            gold_section=gold_section,
+            get_page=get_page,
+            doc_total_pages=2,
+        )
+        # Page 1: 10/20 = 50%. Walks to N+1=2 → 20/20 = 100%. N-1=0 skipped.
+        assert reads == 1

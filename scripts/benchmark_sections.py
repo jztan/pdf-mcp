@@ -27,6 +27,7 @@ import re
 import sys
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -339,3 +340,69 @@ def _coverage_metrics(returned: str, gold: str, n: int = 5) -> dict:
     recall = len(inter) / len(g_gold) if g_gold else 0.0
     precision = len(inter) / len(g_returned) if g_returned else 0.0
     return {"recall": recall, "precision": precision, "intersection": len(inter)}
+
+
+def _walk_order(initial: int, doc_total: int) -> list[int]:
+    """Yield N+1, N-1, N+2, N-2, ... clipped to [1, doc_total], in order, until exhausted."""
+    order: list[int] = []
+    delta = 1
+    while True:
+        forward = initial + delta
+        backward = initial - delta
+        added = False
+        if 1 <= forward <= doc_total:
+            order.append(forward)
+            added = True
+        if 1 <= backward <= doc_total:
+            order.append(backward)
+            added = True
+        if not added:
+            return order
+        delta += 1
+
+
+def _token_coverage(returned: str, gold: str) -> float:
+    """
+    Fraction of unique gold tokens present in returned text. Used by the
+    agent-read simulation in place of 5-gram recall to avoid the
+    cross-page-boundary artefact: when reads concatenate non-adjacent
+    pages, gold's contiguous 5-grams across page joins are unrecoverable
+    and recall under-counts even when all tokens are present. Token-level
+    coverage is order-independent and answers the simulation's actual
+    question — "did the agent read the section's content".
+    """
+    g_returned = set(_tokenize(returned))
+    g_gold = set(_tokenize(gold))
+    if not g_gold:
+        return 0.0
+    return len(g_gold & g_returned) / len(g_gold)
+
+
+def _simulate_agent_reads(
+    initial_page: int,
+    gold_section: Section,
+    get_page: Callable[[int], str],
+    doc_total_pages: int,
+    coverage_target: float = COVERAGE_TARGET_FRACTION,
+    max_extra: int = MAX_EXTRA_READS,
+) -> int:
+    """
+    Simulate page-mode agent walking outward from a search hit until token
+    coverage >= target or max_extra additional reads have been issued.
+    Out-of-range pages are skipped without counting toward the cap.
+
+    Returns the number of additional pdf_read_pages calls beyond the initial hit.
+    """
+    accumulated_text = get_page(initial_page)
+    if _token_coverage(accumulated_text, gold_section.text) >= coverage_target:
+        return 0
+
+    extra_reads = 0
+    for page in _walk_order(initial_page, doc_total_pages):
+        if extra_reads >= max_extra:
+            break
+        accumulated_text = accumulated_text + "\n" + get_page(page)
+        extra_reads += 1
+        if _token_coverage(accumulated_text, gold_section.text) >= coverage_target:
+            break
+    return extra_reads

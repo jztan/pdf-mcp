@@ -1925,3 +1925,30 @@ class TestPdfSearchSource:
         result = pdf_search(sample_pdf_scanned, "ocr", mode="keyword")
         assert len(result["matches"]) > 0
         assert result["matches"][0]["source"] == "ocr"
+
+
+class TestPdfSearchGranularityValidation:
+    """Granularity parameter validation. Section-mode dispatch is tested
+    in a later task (P-C2)."""
+
+    def test_default_granularity_preserves_page_behaviour(
+        self, sample_pdf, isolated_server
+    ):
+        # Calling without `granularity` should behave exactly as before:
+        # returns page-mode shape with `matches`, `search_mode`, etc.
+        result = pdf_search(sample_pdf, "Sample")
+        assert "matches" in result
+        assert "search_mode" in result
+        # Should NOT contain section-mode keys
+        assert "sections" not in result
+
+    def test_invalid_granularity_returns_error(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "Sample", granularity="bogus")
+        assert "error" in result
+        assert "granularity" in result["error"].lower()
+
+    def test_explicit_granularity_page_works(self, sample_pdf, isolated_server):
+        # Explicit granularity="page" should work identically to default
+        result = pdf_search(sample_pdf, "Sample", granularity="page")
+        assert "matches" in result
+        assert "sections" not in result

@@ -651,6 +651,7 @@ def pdf_search(
     mode: str = "auto",
     max_results: int = 10,
     context_chars: int = 200,
+    granularity: str = "page",
 ) -> dict[str, Any]:
     """
     Search for text within a PDF document.
@@ -674,6 +675,9 @@ def pdf_search(
               'semantic' — semantic only, error if fastembed not installed
         max_results: Maximum number of matches to return (default 10, max 100)
         context_chars: Characters of context around each match (default 200, max 2000)
+        granularity: 'page' (default) — search returns matching pages.
+                     'section' — search returns matching sections (TOC-first
+                     with heuristic fallback).
 
     Returns:
         - matches: List of {page, excerpt, position, score} objects
@@ -687,6 +691,15 @@ def pdf_search(
         return {
             "error": (
                 f"Invalid mode '{mode}'. " "Must be 'auto', 'keyword', or 'semantic'."
+            ),
+            "query": query,
+        }
+
+    # 1b. Validate granularity
+    if granularity not in ("page", "section"):
+        return {
+            "error": (
+                f"Invalid granularity '{granularity}'. " "Must be 'page' or 'section'."
             ),
             "query": query,
         }

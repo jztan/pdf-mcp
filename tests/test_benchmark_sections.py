@@ -94,8 +94,9 @@ class TestExtractTocBoundariesPure:
         ]
 
     def test_consecutive_entries_on_same_page(self):
-        # When two entries point at the same page, the earlier one has end_page = start_page.
-        # Tests don't enforce 'duplicate detection' — caller may dedupe boundary set later.
+        # When two entries point at the same page, the earlier one has
+        # end_page = start_page. Tests don't enforce 'duplicate detection' —
+        # caller may dedupe boundary set later.
         toc = [
             (1, "A", 5),
             (1, "B", 5),
@@ -108,7 +109,8 @@ class TestExtractTocBoundariesPure:
                 "A",
                 5,
                 4,
-            ),  # malformed (start>end); caller's job to filter; helper reports faithfully
+            ),  # malformed (start>end); caller's job to filter;
+            # helper reports faithfully
             ("B", 5, 8),
             ("C", 9, 12),
         ]

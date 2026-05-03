@@ -22,12 +22,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import pymupdf
 import re
 import sys
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -127,11 +129,8 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
-import pymupdf  # noqa: E402
-
-
 def _toc_entries_to_sections(
-    toc: list[tuple[int, str, int]] | list[list],
+    toc: list[tuple[int, str, int]] | list[list[Any]],
     total_pages: int,
 ) -> list[Section]:
     """
@@ -171,14 +170,12 @@ def _extract_toc_boundaries(pdf_path: str) -> list[Section]:
     Open the PDF, derive sections from its TOC, and concatenate page text
     for each section into Section.text.
 
-    Raises ValueError on empty TOC. Caller is expected to convert this to
-    exit code 2 at the CLI boundary.
+    Raises ValueError on empty TOC (from `_toc_entries_to_sections`). Caller is
+    expected to convert this to exit code 2 at the CLI boundary.
     """
     doc = pymupdf.open(pdf_path)
     try:
         toc = doc.get_toc()
-        if not toc:
-            raise ValueError(f"PDF {pdf_path} has no TOC — cannot derive ground truth")
         sections = _toc_entries_to_sections(toc, total_pages=len(doc))
         for s in sections:
             if s.start_page > s.end_page:

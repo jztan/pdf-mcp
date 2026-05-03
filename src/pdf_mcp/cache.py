@@ -1310,3 +1310,12 @@ class PDFCache:
             except sqlite3.OperationalError:
                 return 0
         return int(row[0]) if row else 0
+
+    def get_section_embeddings_coverage(self, path: str) -> int:
+        """Return the number of cached, valid section embeddings for `path`."""
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT file_mtime FROM section_embeddings WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+        return sum(1 for (mtime,) in rows if self._is_cache_valid(path, mtime))

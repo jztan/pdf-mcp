@@ -1183,3 +1183,20 @@ def test_clear_all_drops_section_embeddings(tmp_path):
     with sqlite3.connect(cache.db_path) as conn:
         (n,) = conn.execute("SELECT COUNT(*) FROM section_embeddings").fetchone()
     assert n == 0
+
+
+def test_get_section_embeddings_coverage(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "x.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    assert cache.get_section_embeddings_coverage(str(pdf_path)) == 0
+    cache.save_section_embeddings(
+        str(pdf_path),
+        {0: b"\x00" * 1536, 2: b"\x02" * 1536},
+        {0: "S000:p1:A", 2: "S002:p5:B"},
+        model="m",
+    )
+    assert cache.get_section_embeddings_coverage(str(pdf_path)) == 2

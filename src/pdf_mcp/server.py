@@ -20,6 +20,7 @@ from fastmcp.utilities.types import Image
 
 from .cache import PDFCache
 from .config import PDFConfig
+from .edit_tools import register_edit_tools
 from .extractor import (
     check_tesseract_available,
     estimate_tokens,
@@ -65,6 +66,9 @@ mcp = FastMCP(
 cache = PDFCache(ttl_hours=24)
 pdf_config = PDFConfig()
 url_fetcher = URLFetcher(config=pdf_config)
+
+# Register PDF editing tools (creation/manipulation)
+register_edit_tools(mcp, pdf_config)
 
 
 def _resolve_path(source: str) -> str:

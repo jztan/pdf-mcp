@@ -21,7 +21,7 @@ def test_check_available_raises_when_fastembed_missing():
 def _make_mock_model(dim: int = 384) -> MagicMock:
     """Mock fastembed TextEmbedding that yields dim-dimensional unit vectors."""
     mock = MagicMock()
-    mock.embed.side_effect = lambda texts, **_: (
+    mock.embed.side_effect = lambda texts: (
         np.ones(dim, dtype=np.float32) for _ in texts
     )
     return mock

@@ -68,14 +68,6 @@ MODELS = [
         "mteb": 54.90,
         "is_baseline": False,
     },
-    {
-        "name": "nomic-ai/nomic-embed-text-v1.5",
-        "size_mb": 520,
-        "dim": 768,
-        "license": "Apache 2.0",
-        "mteb": 53.0,
-        "is_baseline": False,
-    },
 ]
 BASELINE = next(m["name"] for m in MODELS if m["is_baseline"])
 

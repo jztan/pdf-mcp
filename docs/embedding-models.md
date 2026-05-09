@@ -1,6 +1,6 @@
 # Embedding Models
 
-pdf-mcp uses [`fastembed`](https://github.com/qdrant/fastembed) for local, offline embedding. Any model in the [fastembed TextEmbedding catalogue](https://qdrant.github.io/fastembed/examples/Supported_Models/) works — set it once in config and the server handles the rest.
+pdf-mcp uses [`fastembed`](https://github.com/qdrant/fastembed) for local, offline embedding. The four models below are validated end-to-end against the project's arxiv benchmark corpus (see [Live Benchmark Results](#live-benchmark-results)). Any other model in the [fastembed TextEmbedding catalogue](https://qdrant.github.io/fastembed/examples/Supported_Models/) is accepted by the BYOM config, but is unvalidated — see the [Unvalidated section](#unvalidated-models) below for the gotchas we've already hit.
 
 ## Configuration
 
@@ -8,16 +8,16 @@ Add to `~/.config/pdf-mcp/config.toml`:
 
 ```toml
 [embedding]
-model = "nomic-ai/nomic-embed-text-v1.5"
+model = "snowflake/snowflake-arctic-embed-s"
 ```
 
 Missing key → default `BAAI/bge-small-en-v1.5`. The model downloads once on first use. Switching models clears the embedding cache for that PDF; re-embedding happens automatically on the next search.
 
 ---
 
-## Model Comparison
+## Validated Models
 
-MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmark). Higher is better. Sources: model cards on HuggingFace; see [Notes](#notes) below.
+These four models have been live-tested against the 7-scenario arxiv ground-truth corpus (Attention paper + GPT-3 paper). MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmark). Higher is better. Sources: model cards on HuggingFace; see [Notes](#notes) below.
 
 ### Fast English (384 dimensions)
 
@@ -26,27 +26,12 @@ MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmar
 | `BAAI/bge-small-en-v1.5` *(default)* | 67 MB | 51.68 | MIT | Best retrieval-per-MB at this size; proven default |
 | `snowflake/snowflake-arctic-embed-s` | 130 MB | 51.98 | Apache 2.0 | Slightly better retrieval than default; good Apache 2.0 alternative |
 
-### High-Quality English (768–1024 dimensions)
+### Mid-Size English (768 dimensions)
 
-| Model | Dims | Size | MTEB Retrieval | License | Notes |
-|-------|------|------|---------------|---------|-------|
-| `BAAI/bge-base-en-v1.5` | 768 | 210 MB | 53.25 | MIT | Solid mid-size step-up |
-| `snowflake/snowflake-arctic-embed-m` | 768 | 430 MB | 54.90 | Apache 2.0 | Best retrieval under 500 MB |
-| `mixedbread-ai/mxbai-embed-large-v1` | 1024 | 640 MB | 54.39 | Apache 2.0 | Highest overall MTEB (64.68); beats OpenAI `text-embedding-3-large` |
-| `BAAI/bge-large-en-v1.5` | 1024 | 1.2 GB | 54.29 | MIT | Large BGE; established and stable |
-
-### Long Context (8 192-token window)
-
-| Model | Dims | Size | MTEB Retrieval | License | Notes |
-|-------|------|------|---------------|---------|-------|
-| `nomic-ai/nomic-embed-text-v1.5` | 768 | 520 MB | ~53 | Apache 2.0 | Fully open — weights + training data + code; Matryoshka dimensions (64–768) |
-
-### Multilingual
-
-| Model | Dims | Size | Languages | License | Notes |
-|-------|------|------|-----------|---------|-------|
-| `intfloat/multilingual-e5-small` | 384 | — | 100+ | MIT | Low memory; requires `"query: "` prefix |
-| `intfloat/multilingual-e5-large` | 1024 | 2.2 GB | 100+ | MIT | Best multilingual retrieval in fastembed |
+| Model | Size | MTEB Retrieval | License | Notes |
+|-------|------|---------------|---------|-------|
+| `BAAI/bge-base-en-v1.5` | 210 MB | 53.25 | MIT | Solid mid-size step-up |
+| `snowflake/snowflake-arctic-embed-m` | 430 MB | 54.90 | Apache 2.0 | Best MTEB under 500 MB |
 
 ---
 
@@ -55,12 +40,25 @@ MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmar
 | Goal | Model |
 |------|-------|
 | Keep it simple | `BAAI/bge-small-en-v1.5` *(default)* |
-| Best retrieval, no size constraint | `snowflake/snowflake-arctic-embed-m` or `-l` |
-| Best overall MTEB score | `mixedbread-ai/mxbai-embed-large-v1` |
-| Long documents (contracts, books) | `nomic-ai/nomic-embed-text-v1.5` |
-| Multilingual PDFs | `intfloat/multilingual-e5-large` |
 | Apache 2.0 drop-in for default | `snowflake/snowflake-arctic-embed-s` |
-| Fully open (audit / compliance) | `nomic-ai/nomic-embed-text-v1.5` |
+| Mid-size step-up (MIT) | `BAAI/bge-base-en-v1.5` |
+| Best validated retrieval | `snowflake/snowflake-arctic-embed-m` |
+
+---
+
+## Unvalidated Models
+
+The fastembed catalogue includes additional models (long-context, very-large, multilingual) that the BYOM config will accept but that we have **not** validated end-to-end. Use at your own risk; if you successfully run the benchmark on one, send numbers and we'll promote it.
+
+Known gotchas we've already hit:
+
+- **`nomic-ai/nomic-embed-text-v1.5`** (520 MB, 768-dim, 8192-token context) — fastembed's default `batch_size=256` makes the model OOM/hang when embedding PDFs with ~75+ pages of long text on commodity hardware. Lowering `batch_size` helps but didn't make it reliable in our tests.
+- **`mixedbread-ai/mxbai-embed-large-v1`** (640 MB, 1024-dim) — not run against the live corpus.
+- **`BAAI/bge-large-en-v1.5`** (1.2 GB, 1024-dim) — not run against the live corpus.
+- **`intfloat/multilingual-e5-small`** (384-dim, 100+ languages) — not run against the live corpus; requires `"query: "` / `"passage: "` prefix tokens that fastembed does not apply automatically, so retrieval quality is suspect.
+- **`intfloat/multilingual-e5-large`** (2.2 GB, 1024-dim, 100+ languages) — same caveat as `-small`, plus untested at this size.
+
+If you need any of these (long contexts, multilingual, larger English models), pin via BYOM and validate the retrieval yourself before depending on it.
 
 ---
 
@@ -68,10 +66,7 @@ MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmar
 
 - **MTEB scores** for BGE v1.5 models from their [HuggingFace model cards](https://huggingface.co/BAAI/bge-small-en-v1.5).
 - **Snowflake Arctic Embed** scores from [snowflake-arctic-embed-m](https://huggingface.co/Snowflake/snowflake-arctic-embed-m) and [-l](https://huggingface.co/Snowflake/snowflake-arctic-embed-l) model cards.
-- **mxbai-embed-large-v1** score from its [model card](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1).
-- **nomic-embed-text-v1.5** retrieval score inferred from its [model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) comparison against `bge-base-en-v1.5`.
-- Multilingual MTEB retrieval scores not listed — multilingual benchmarks use different task sets (Mr.TyDi, MIRACL) and are not directly comparable to English MTEB retrieval averages.
-- All models run fully locally via fastembed — no external API calls.
+- All validated models run fully locally via fastembed — no external API calls.
 
 ---
 

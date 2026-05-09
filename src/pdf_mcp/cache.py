@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
 # FTS5 virtual table schema for full-text search with Porter stemmer.
@@ -204,6 +205,7 @@ class PDFCache:
                     page_num    INTEGER NOT NULL,
                     file_mtime  REAL    NOT NULL,
                     embedding   BLOB    NOT NULL,
+                    model       TEXT    NOT NULL DEFAULT 'BAAI/bge-small-en-v1.5',
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (file_path, page_num)
                 );
@@ -258,6 +260,14 @@ class PDFCache:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
+                )
+
+            # page_embeddings: add model column to existing tables
+            cols = _get_columns(conn, "page_embeddings")
+            if cols and "model" not in cols:
+                conn.execute(
+                    f"ALTER TABLE page_embeddings"
+                    f" ADD COLUMN model TEXT NOT NULL DEFAULT '{DEFAULT_MODEL}'"
                 )
 
             # FTS5 virtual table must be in a separate execute() call so that
@@ -694,13 +704,18 @@ class PDFCache:
 
     # ==================== Embedding Operations ====================
 
-    def get_page_embeddings(self, path: str, page_nums: list[int]) -> dict[int, bytes]:
+    def get_page_embeddings(
+        self, path: str, page_nums: list[int], model_name: str
+    ) -> dict[int, bytes]:
         """
         Get cached raw embedding bytes for multiple pages.
 
+        Deletes any rows stored under a different model before querying,
+        so the caller always gets embeddings consistent with model_name.
+
         Returns a dict mapping 0-indexed page_num to the raw float32 bytes
-        (1536 bytes = 384 × 4 bytes) for each page whose mtime is still valid.
-        Pages not in cache or with a stale mtime are omitted.
+        for each page whose mtime is still valid. Pages not in cache or with
+        a stale mtime are omitted.
 
         The caller is responsible for converting bytes to a numpy array:
             np.frombuffer(blob, dtype=np.float32).copy()
@@ -712,11 +727,16 @@ class PDFCache:
 
         placeholders = ",".join("?" * len(page_nums))
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM page_embeddings WHERE file_path = ? AND model != ?",
+                (path, model_name),
+            )
             rows = conn.execute(
                 f"SELECT page_num, embedding, file_mtime"
                 f" FROM page_embeddings"
-                f" WHERE file_path = ? AND page_num IN ({placeholders})",
-                (path, *page_nums),
+                f" WHERE file_path = ? AND page_num IN ({placeholders})"
+                f" AND model = ?",
+                (path, *page_nums, model_name),
             ).fetchall()
 
         result: dict[int, bytes] = {}
@@ -725,14 +745,17 @@ class PDFCache:
                 result[int(page_num)] = bytes(blob)
         return result
 
-    def save_page_embeddings(self, path: str, embeddings: dict[int, bytes]) -> None:
+    def save_page_embeddings(
+        self, path: str, embeddings: dict[int, bytes], model_name: str
+    ) -> None:
         """
         Save raw embedding bytes to cache.
 
         Args:
-            path: Path to PDF file
+            path: Path to PDF file.
             embeddings: Dict mapping 0-indexed page_num to raw float32 bytes.
                         Use ndarray.tobytes() to convert from numpy.
+            model_name: fastembed model identifier (stored alongside the blob).
         """
         if not embeddings:
             return
@@ -741,10 +764,10 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.executemany(
                 "INSERT OR REPLACE INTO page_embeddings"
-                " (file_path, page_num, file_mtime, embedding)"
-                " VALUES (?, ?, ?, ?)",
+                " (file_path, page_num, file_mtime, embedding, model)"
+                " VALUES (?, ?, ?, ?, ?)",
                 [
-                    (path, page_num, mtime, blob)
+                    (path, page_num, mtime, blob, model_name)
                     for page_num, blob in embeddings.items()
                 ],
             )

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-MODEL_NAME = "BAAI/bge-small-en-v1.5"
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 # Module-level singleton. None until the first encode() call.
 _model: Any = None
@@ -43,7 +43,7 @@ def _get_model() -> Any:
                 "pdf_search semantic mode requires the 'fastembed' package. "
                 "Install it with: pip install 'pdf-mcp[semantic]'"
             ) from exc
-        _model = TextEmbedding(MODEL_NAME)
+        _model = TextEmbedding(DEFAULT_MODEL)
     return _model
 
 

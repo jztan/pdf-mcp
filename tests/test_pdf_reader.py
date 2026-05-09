@@ -10,6 +10,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp.cache import PDFCache
+from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
     estimate_tokens,
     extract_images_from_page,
@@ -797,6 +798,29 @@ class TestFTS5Cache:
 
         result = cache.get_fts_page_counts(sample_pdf, "query")
         assert result == {}
+
+
+class TestPDFConfigEmbeddingModel:
+    """PDFConfig.embedding_model reads [embedding] model from config.toml."""
+
+    def test_embedding_model_default(self, tmp_path):
+        """Returns default model when [embedding] section is absent."""
+        cfg = PDFConfig(config_path=tmp_path / "missing.toml")
+        assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
+
+    def test_embedding_model_configured(self, tmp_path):
+        """Returns the model name set in [embedding] model = ..."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[embedding]\nmodel = "BAAI/bge-large-en-v1.5"\n')
+        cfg = PDFConfig(config_path=config_file)
+        assert cfg.embedding_model == "BAAI/bge-large-en-v1.5"
+
+    def test_embedding_model_section_present_key_absent(self, tmp_path):
+        """Returns default when [embedding] section exists but model key absent."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("[embedding]\n")
+        cfg = PDFConfig(config_path=config_file)
+        assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
 
 
 class TestPageEmbeddingsTable:

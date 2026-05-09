@@ -5,11 +5,15 @@ scripts/benchmark_embedding_models.py
 Live benchmark: compare 4 fastembed models on the existing ground-truth
 corpus and recommend whether to change the default embedding model.
 
+Each of 4 fastembed models is run against the 7 hand-annotated scenarios
+in benchmark_data/ground_truth.json. Metrics: per-scenario recall, RR;
+aggregate MRR; p50 warm-cache query latency. Decision gate: a challenger
+replaces the default iff its MRR is at least baseline + 0.05 AND its p50
+latency is at most 1.5x the baseline's. The script does not edit docs;
+it prints a copy-pasteable markdown block for docs/embedding-models.md.
+
 Run:
     python scripts/benchmark_embedding_models.py
-
-See docs/superpowers/specs/2026-05-09-embedding-model-benchmark-design.md
-for the design (gate, corpus, metrics).
 """
 
 from __future__ import annotations

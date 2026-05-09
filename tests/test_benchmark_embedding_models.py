@@ -343,3 +343,45 @@ class TestPrintSummary:
         out = bem._strip_ansi("\n".join(bem._OUTPUT))
         assert "BAAI/bge-small-en-v1.5" in out
         assert "single-model run" in out
+
+
+class TestSaveResults:
+    def test_writes_txt_and_json(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        bem._OUTPUT.clear()
+        bem._OUTPUT.extend(["\x1b[31mhello\x1b[0m", "world"])
+        results = [
+            {
+                "model": "BAAI/bge-small-en-v1.5",
+                "mrr": 0.7,
+                "p50_query_ms": 5.0,
+                "embed_ms": {},
+                "scenarios": [],
+            }
+        ]
+        verdict = {
+            "default_changed": False,
+            "winner": None,
+            "reason": "stub",
+            "baseline": "BAAI/bge-small-en-v1.5",
+            "thresholds": {"mrr_lift": 0.05, "latency_ratio": 1.5},
+        }
+        bem._save_results(
+            results,
+            verdict,
+            file_timestamp="20260509_120000",
+            iso_timestamp="2026-05-09T12:00:00",
+        )
+        txt = (
+            tmp_path / "benchmark_results" / "embedding_models_20260509_120000.txt"
+        ).read_text()
+        assert "hello\nworld" == txt  # ANSI stripped
+        data = json.loads(
+            (
+                tmp_path / "benchmark_results" / "embedding_models_20260509_120000.json"
+            ).read_text()
+        )
+        assert data["timestamp"] == "2026-05-09T12:00:00"
+        assert data["baseline"] == "BAAI/bge-small-en-v1.5"
+        assert data["models"][0]["model"] == "BAAI/bge-small-en-v1.5"
+        assert data["verdict"]["default_changed"] is False

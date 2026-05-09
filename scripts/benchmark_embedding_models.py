@@ -498,6 +498,30 @@ def format_markdown_table(results: list[dict], verdict: dict) -> str:
     return "\n".join(lines)
 
 
+def _save_results(
+    results: list[dict],
+    verdict: dict,
+    file_timestamp: str,
+    iso_timestamp: str,
+) -> None:
+    """Write the .txt (ANSI-stripped) and .json reports to benchmark_results/."""
+    out_dir = Path("benchmark_results")
+    out_dir.mkdir(exist_ok=True)
+    base = out_dir / f"embedding_models_{file_timestamp}"
+
+    txt_content = _strip_ansi("\n".join(_OUTPUT))
+    base.with_suffix(".txt").write_text(txt_content, encoding="utf-8")
+
+    data = {
+        "timestamp": iso_timestamp,
+        "baseline": verdict["baseline"],
+        "gate": verdict["thresholds"],
+        "models": results,
+        "verdict": verdict,
+    }
+    base.with_suffix(".json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Live benchmark of fastembed models for pdf-mcp default selection."

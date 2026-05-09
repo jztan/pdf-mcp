@@ -288,6 +288,7 @@ The first call on a new document embeds all pages (one-time cost, typically a fe
 | `BAAI/bge-large-en-v1.5` | 1024 | Best English quality (large download) |
 | `intfloat/multilingual-e5-small` | 384 | 100+ languages, low memory |
 | `intfloat/multilingual-e5-large` | 1024 | Best multilingual quality |
+| `nomic-ai/nomic-embed-text-v1.5` | 768 | Fully open (data + code + weights), Apache 2.0 |
 | `sentence-transformers/all-MiniLM-L6-v2` | 384 | Very fast, broad domain |
 
 To use a different model, add to `~/.config/pdf-mcp/config.toml`:

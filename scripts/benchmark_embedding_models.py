@@ -296,6 +296,90 @@ def run_model(
         server_module.cache = original_cache
 
 
+def compute_verdict(
+    results: list[dict],
+    baseline_name: str,
+    mrr_lift_threshold: float = MRR_LIFT_THRESHOLD,
+    latency_ratio_threshold: float = LATENCY_RATIO_THRESHOLD,
+) -> dict:
+    """
+    Apply the design doc §4 gate to per-model results and pick a verdict.
+
+    A challenger passes iff:
+        challenger.mrr >= baseline.mrr + mrr_lift_threshold AND
+        challenger.p50_query_ms <= baseline.p50_query_ms * latency_ratio_threshold
+
+    If multiple challengers pass, pick highest MRR (tiebreak: smaller p50 latency).
+    If none pass, keep the default and explain which gate failed in `reason`.
+
+    Returns:
+        {
+          "default_changed": bool,
+          "winner": str | None,
+          "reason": str,
+          "baseline": str,
+          "thresholds": {"mrr_lift": float, "latency_ratio": float},
+        }
+    """
+    baseline = next((r for r in results if r["model"] == baseline_name), None)
+    if baseline is None:
+        raise ValueError(
+            f"Baseline model {baseline_name!r} not in results: "
+            f"{[r['model'] for r in results]}"
+        )
+
+    challengers = [r for r in results if r["model"] != baseline_name]
+    passing = []
+    blocked_by_latency = []
+    for c in challengers:
+        lift = c["mrr"] - baseline["mrr"]
+        ratio = c["p50_query_ms"] / max(baseline["p50_query_ms"], 1e-9)
+        if lift < mrr_lift_threshold:
+            continue
+        if ratio > latency_ratio_threshold:
+            blocked_by_latency.append((c, ratio))
+            continue
+        passing.append(c)
+
+    base = {
+        "baseline": baseline_name,
+        "thresholds": {
+            "mrr_lift": mrr_lift_threshold,
+            "latency_ratio": latency_ratio_threshold,
+        },
+    }
+    if passing:
+        winner = sorted(passing, key=lambda r: (-r["mrr"], r["p50_query_ms"]))[0]
+        lift = winner["mrr"] - baseline["mrr"]
+        ratio = winner["p50_query_ms"] / max(baseline["p50_query_ms"], 1e-9)
+        return {
+            **base,
+            "default_changed": True,
+            "winner": winner["model"],
+            "reason": (
+                f"{winner['model']} passes both gates "
+                f"(MRR +{lift:.3f}, latency {ratio:.2f}x baseline)"
+            ),
+        }
+    if blocked_by_latency:
+        c, ratio = blocked_by_latency[0]
+        return {
+            **base,
+            "default_changed": False,
+            "winner": None,
+            "reason": (
+                f"{c['model']} hit MRR gate but failed latency "
+                f"({ratio:.2f}x > {latency_ratio_threshold}x threshold)"
+            ),
+        }
+    return {
+        **base,
+        "default_changed": False,
+        "winner": None,
+        "reason": "No challenger met the mrr_lift threshold",
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Live benchmark of fastembed models for pdf-mcp default selection."

@@ -188,3 +188,59 @@ class TestRunModel:
             scenario_k={"1a": 5},
         )
         assert bem.server_module.pdf_config.embedding_model == original_model
+
+
+class TestComputeVerdict:
+    def _model_result(self, name, mrr, p50, is_baseline=False):
+        return {
+            "model": name,
+            "mrr": mrr,
+            "p50_query_ms": p50,
+            "embed_ms": {},
+            "scenarios": [],
+        }
+
+    def test_no_challenger_passes_keeps_default(self):
+        results = [
+            self._model_result("BAAI/bge-small-en-v1.5", 0.70, 5.0, True),
+            self._model_result("snowflake/snowflake-arctic-embed-s", 0.72, 6.0),
+            self._model_result("BAAI/bge-base-en-v1.5", 0.73, 12.0),
+        ]
+        v = bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")
+        assert v["default_changed"] is False
+        assert v["winner"] is None
+        assert (
+            "mrr_lift" in v["reason"].lower() or "no challenger" in v["reason"].lower()
+        )
+
+    def test_clear_winner_swaps_default(self):
+        results = [
+            self._model_result("BAAI/bge-small-en-v1.5", 0.60, 5.0, True),
+            self._model_result("snowflake/snowflake-arctic-embed-s", 0.68, 6.0),
+        ]
+        v = bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")
+        assert v["default_changed"] is True
+        assert v["winner"] == "snowflake/snowflake-arctic-embed-s"
+
+    def test_latency_blowout_blocks_otherwise_winner(self):
+        results = [
+            self._model_result("BAAI/bge-small-en-v1.5", 0.60, 5.0, True),
+            self._model_result("BAAI/bge-base-en-v1.5", 0.70, 8.0),  # 1.6x latency
+        ]
+        v = bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")
+        assert v["default_changed"] is False
+        assert "latency" in v["reason"].lower()
+
+    def test_picks_highest_mrr_when_two_pass(self):
+        results = [
+            self._model_result("BAAI/bge-small-en-v1.5", 0.60, 5.0, True),
+            self._model_result("snowflake/snowflake-arctic-embed-s", 0.66, 6.0),
+            self._model_result("BAAI/bge-base-en-v1.5", 0.69, 7.0),
+        ]
+        v = bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")
+        assert v["winner"] == "BAAI/bge-base-en-v1.5"
+
+    def test_baseline_missing_raises(self):
+        results = [self._model_result("foo", 0.5, 5.0)]
+        with pytest.raises(ValueError):
+            bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")

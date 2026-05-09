@@ -416,22 +416,33 @@ pip install pdf-mcp=={new_version}
         print(f"  ✓ Created GitHub release: {tag}")
 
 
-def wait_for_pypi(new_version: str, max_wait: int = 300) -> bool:
-    """Wait for package to be available on PyPI."""
+def wait_for_pypi(new_version: str, max_wait: int = 600) -> bool:
+    """Wait for package to be available on PyPI.
+
+    Checks the JSON API endpoint that the MCP Registry actually validates
+    against. `pip index versions` can return false positives because the
+    simple index updates before the JSON API does.
+    """
+    import urllib.request
+    import urllib.error
+
     print("\n=== Waiting for PyPI ===\n")
 
+    url = f"https://pypi.org/pypi/pdf-mcp/{new_version}/json"
     start_time = time.time()
     check_interval = 15
 
     while time.time() - start_time < max_wait:
-        result = run_command(
-            ["pip", "index", "versions", "pdf-mcp"],
-            check=False,
-            capture_output=True,
-        )
-        if new_version in result.stdout:
-            print(f"  ✓ Version {new_version} is available on PyPI")
-            return True
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                if resp.status == 200:
+                    print(f"  ✓ Version {new_version} is available on PyPI")
+                    return True
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                print(f"  Unexpected status {e.code}, retrying...")
+        except urllib.error.URLError as e:
+            print(f"  Network error: {e.reason}, retrying...")
 
         elapsed = int(time.time() - start_time)
         print(f"  Waiting for PyPI... ({elapsed}s elapsed)")

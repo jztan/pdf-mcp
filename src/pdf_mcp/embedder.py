@@ -1,70 +1,84 @@
 """
 Thin wrapper around fastembed for lazy model loading and text embedding.
 
-The embedding model is loaded once per process (singleton). fastembed is an
-optional dependency; calling encode() when it is not installed raises
-ImportError with an actionable install hint.
+The embedding model is loaded once per process (singleton). If the configured
+model name changes mid-process, the singleton reloads automatically.
+fastembed is an optional dependency; calling encode() when it is not installed
+raises ImportError with an actionable install hint.
+
+Note: _get_model is not thread-safe. This is intentional — FastMCP uses
+asyncio with a single thread for STDIO transport, so concurrent access cannot
+occur in normal operation.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-MODEL_NAME = "BAAI/bge-small-en-v1.5"
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 # Module-level singleton. None until the first encode() call.
 _model: Any = None
+_model_name_loaded: str | None = None
 
 
-def check_available() -> None:
+def check_available(model_name: str) -> None:
     """
-    Raise ImportError with install hint if fastembed is not installed.
+    Raise ImportError (fastembed missing) or ValueError (unknown model name).
 
-    Call this before running semantic search to give a clear error
+    Call this before running semantic search to surface config errors
     before any expensive PDF work begins.
     """
     try:
-        import fastembed  # type: ignore[import-untyped,import-not-found]  # noqa: F401
+        from fastembed import TextEmbedding
     except ImportError as exc:
         raise ImportError(
             "pdf_search semantic mode requires the 'fastembed' package. "
             "Install it with: pip install 'pdf-mcp[semantic]'"
         ) from exc
+    supported = {m["model"] for m in TextEmbedding.list_supported_models()}
+    if model_name not in supported:
+        names = ", ".join(sorted(supported))
+        raise ValueError(
+            f"Unknown embedding model '{model_name}'. "
+            f"Supported fastembed models: {names}"
+        )
 
 
-def _get_model() -> Any:
-    """Load embedding model on first call; return cached model on later calls."""
-    global _model
-    if _model is None:
+def _get_model(model_name: str) -> Any:
+    """Load embedding model on first call; reload if model_name changed."""
+    global _model, _model_name_loaded
+    if _model is None or _model_name_loaded != model_name:
         try:
-            from fastembed import TextEmbedding  # type: ignore
+            from fastembed import TextEmbedding
         except ImportError as exc:
             raise ImportError(
                 "pdf_search semantic mode requires the 'fastembed' package. "
                 "Install it with: pip install 'pdf-mcp[semantic]'"
             ) from exc
-        _model = TextEmbedding(MODEL_NAME)
+        _model = TextEmbedding(model_name)
+        _model_name_loaded = model_name
     return _model
 
 
-def encode(texts: list[str]) -> Any:
+def encode(texts: list[str], model_name: str) -> Any:
     """
     Encode a list of texts into embedding vectors.
 
-    Returns an ndarray of shape (N, 384), dtype float32.
+    Returns an ndarray of shape (N, D), dtype float32.
     Vectors are L2-normalized by fastembed (dot product == cosine similarity).
     """
     import numpy as np  # type: ignore[import-untyped]
 
-    model = _get_model()
+    model = _get_model(model_name)
     embeddings = list(model.embed(texts))
     return np.array(embeddings, dtype=np.float32)
 
 
-def encode_query(text: str) -> Any:
+def encode_query(text: str, model_name: str) -> Any:
     """
     Encode a single query string.
 
-    Returns an ndarray of shape (384,), dtype float32.
+    Returns an ndarray of shape (D,), dtype float32.
     """
-    return encode([text])[0]
+    return encode([text], model_name)[0]

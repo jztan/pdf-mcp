@@ -10,6 +10,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp.cache import PDFCache
+from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
     estimate_tokens,
     extract_images_from_page,
@@ -799,6 +800,94 @@ class TestFTS5Cache:
         assert result == {}
 
 
+class TestPDFConfigEmbeddingModel:
+    """PDFConfig.embedding_model reads [embedding] model from config.toml."""
+
+    def test_embedding_model_default(self, tmp_path):
+        """Returns default model when [embedding] section is absent."""
+        cfg = PDFConfig(config_path=tmp_path / "missing.toml")
+        assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
+
+    def test_embedding_model_configured(self, tmp_path):
+        """Returns the model name set in [embedding] model = ..."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[embedding]\nmodel = "BAAI/bge-large-en-v1.5"\n')
+        cfg = PDFConfig(config_path=config_file)
+        assert cfg.embedding_model == "BAAI/bge-large-en-v1.5"
+
+    def test_embedding_model_section_present_key_absent(self, tmp_path):
+        """Returns default when [embedding] section exists but model key absent."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text("[embedding]\n")
+        cfg = PDFConfig(config_path=config_file)
+        assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
+
+
+class TestEmbedderByom:
+    """Embedder singleton reloads on model change; check_available validates name."""
+
+    def _fake_fastembed(self, monkeypatch, call_log=None):
+        """Inject a fake fastembed module into sys.modules."""
+        import sys
+
+        log = call_log if call_log is not None else []
+
+        class FakeTextEmbedding:
+            def __init__(self, model_name):
+                log.append(model_name)
+
+            @staticmethod
+            def list_supported_models():
+                return [
+                    {"model": "BAAI/bge-small-en-v1.5"},
+                    {"model": "BAAI/bge-large-en-v1.5"},
+                ]
+
+        fake = type(sys)("fastembed")
+        fake.TextEmbedding = FakeTextEmbedding
+        monkeypatch.setitem(sys.modules, "fastembed", fake)
+        return log
+
+    def test_get_model_reloads_on_model_change(self, monkeypatch):
+        """_get_model loads a new TextEmbedding when model_name changes."""
+        import pdf_mcp.embedder as embedder
+
+        call_log = self._fake_fastembed(monkeypatch, call_log=[])
+        monkeypatch.setattr(embedder, "_model", None)
+        monkeypatch.setattr(embedder, "_model_name_loaded", None)
+
+        embedder._get_model("BAAI/bge-small-en-v1.5")
+        embedder._get_model("BAAI/bge-small-en-v1.5")  # cached — no reload
+        embedder._get_model("BAAI/bge-large-en-v1.5")  # different — reload
+
+        assert call_log == ["BAAI/bge-small-en-v1.5", "BAAI/bge-large-en-v1.5"]
+
+    def test_check_available_unknown_model_raises_valueerror(self, monkeypatch):
+        """check_available raises ValueError for an unknown model name."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+
+        with pytest.raises(ValueError, match="Unknown embedding model 'bad-model'"):
+            embedder.check_available("bad-model")
+
+    def test_check_available_unknown_model_lists_supported(self, monkeypatch):
+        """ValueError message includes the supported model names."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+
+        with pytest.raises(ValueError, match="BAAI/bge-small-en-v1.5"):
+            embedder.check_available("bad-model")
+
+    def test_check_available_known_model_passes(self, monkeypatch):
+        """check_available does not raise for a known model name."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+        embedder.check_available("BAAI/bge-small-en-v1.5")  # must not raise
+
+
 class TestPageEmbeddingsTable:
     """page_embeddings table and index are created by PDFCache.__init__."""
 
@@ -835,8 +924,8 @@ class TestPageEmbeddingsCRUD:
         cache = PDFCache(cache_dir=temp_cache_dir)
         raw = bytes(range(256)) * 6  # 1536 bytes = 384 float32s
 
-        cache.save_page_embeddings(sample_pdf, {0: raw})
-        result = cache.get_page_embeddings(sample_pdf, [0])
+        cache.save_page_embeddings(sample_pdf, {0: raw}, "BAAI/bge-small-en-v1.5")
+        result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
 
         assert 0 in result
         assert result[0] == raw
@@ -844,12 +933,12 @@ class TestPageEmbeddingsCRUD:
     def test_get_returns_empty_when_nothing_saved(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings returns {} when no embeddings are cached."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        assert cache.get_page_embeddings(sample_pdf, [0, 1, 2]) == {}
+        assert cache.get_page_embeddings(sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5") == {}
 
     def test_get_empty_page_nums_returns_empty(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings([]) returns {} without hitting the database."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        assert cache.get_page_embeddings(sample_pdf, []) == {}
+        assert cache.get_page_embeddings(sample_pdf, [], "BAAI/bge-small-en-v1.5") == {}
 
     def test_get_multiple_pages(self, temp_cache_dir, sample_pdf):
         """Multiple pages saved and retrieved correctly."""
@@ -858,8 +947,8 @@ class TestPageEmbeddingsCRUD:
         raw1 = b"\xff" * 1536
         raw2 = b"\x80" * 1536
 
-        cache.save_page_embeddings(sample_pdf, {0: raw0, 1: raw1, 2: raw2})
-        result = cache.get_page_embeddings(sample_pdf, [0, 1, 2])
+        cache.save_page_embeddings(sample_pdf, {0: raw0, 1: raw1, 2: raw2}, "BAAI/bge-small-en-v1.5")
+        result = cache.get_page_embeddings(sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5")
 
         assert set(result.keys()) == {0, 1, 2}
         assert result[0] == raw0
@@ -869,8 +958,8 @@ class TestPageEmbeddingsCRUD:
     def test_get_only_returns_requested_pages(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings only returns the pages in page_nums."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536})
-        result = cache.get_page_embeddings(sample_pdf, [0])
+        cache.save_page_embeddings(sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536}, "BAAI/bge-small-en-v1.5")
+        result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
 
         assert 0 in result
         assert 1 not in result
@@ -881,13 +970,101 @@ class TestPageEmbeddingsCRUD:
         import time
 
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536})
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5")
 
         time.sleep(0.01)
         os.utime(sample_pdf, None)  # bump mtime
 
-        result = cache.get_page_embeddings(sample_pdf, [0])
+        result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
         assert result == {}
+
+
+class TestPageEmbeddingsByom:
+    """page_embeddings has model column; cache evicts rows from other models."""
+
+    def test_page_embeddings_has_model_column(self, temp_cache_dir):
+        """New cache has model column in page_embeddings."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(cache.db_path) as conn:
+            cols = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(page_embeddings)"
+                ).fetchall()
+            }
+        assert "model" in cols
+
+    def test_migration_adds_model_column_to_existing_db(self, temp_cache_dir):
+        """Existing page_embeddings table without model column gets it on init."""
+        db_path = temp_cache_dir / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_embeddings (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    file_mtime REAL NOT NULL,
+                    embedding BLOB NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+        PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(db_path) as conn:
+            cols = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(page_embeddings)"
+                ).fetchall()
+            }
+        assert "model" in cols
+
+    def test_save_and_get_round_trip_with_model(self, temp_cache_dir, sample_pdf):
+        """save → get returns identical bytes for the same model."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw = b"\xAB" * 1536
+        cache.save_page_embeddings(sample_pdf, {0: raw}, "BAAI/bge-small-en-v1.5")
+        result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
+        assert result == {0: raw}
+
+    def test_model_change_evicts_stale_rows(self, temp_cache_dir, sample_pdf):
+        """get_page_embeddings deletes rows from a different model before returning."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        raw = b"\xAB" * 1536
+        cache.save_page_embeddings(sample_pdf, {0: raw}, "BAAI/bge-small-en-v1.5")
+
+        result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-large-en-v1.5")
+        assert result == {}
+
+        with sqlite3.connect(cache.db_path) as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM page_embeddings WHERE file_path = ?",
+                (sample_pdf,),
+            ).fetchone()[0]
+        assert count == 0
+
+    def test_migration_existing_rows_get_default_model(self, temp_cache_dir, sample_pdf):
+        """Rows inserted before migration get model='BAAI/bge-small-en-v1.5' default."""
+        db_path = temp_cache_dir / "cache.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE page_embeddings (
+                    file_path TEXT NOT NULL,
+                    page_num  INTEGER NOT NULL,
+                    file_mtime REAL NOT NULL,
+                    embedding BLOB NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )
+            """)
+            conn.execute(
+                "INSERT INTO page_embeddings VALUES (?, 0, 0.0, ?)",
+                (sample_pdf, b"\x00" * 1536),
+            )
+        PDFCache(cache_dir=temp_cache_dir)
+        with sqlite3.connect(db_path) as conn:
+            model_val = conn.execute(
+                "SELECT model FROM page_embeddings WHERE file_path = ?",
+                (sample_pdf,),
+            ).fetchone()[0]
+        assert model_val == "BAAI/bge-small-en-v1.5"
 
 
 class TestPageRendersCache:

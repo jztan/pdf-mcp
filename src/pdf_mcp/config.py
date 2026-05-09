@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .embedder import DEFAULT_MODEL
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -57,6 +59,11 @@ class PDFConfig:
                 if fnmatch.fnmatch(resolved, expanded):
                     return
             raise ValueError(f"Path not in allowed list: {path}")
+
+    @property
+    def embedding_model(self) -> str:
+        """Return configured embedding model, or the default bge-small model."""
+        return self._data.get("embedding", {}).get("model", DEFAULT_MODEL)
 
     def check_url_host(self, hostname: str) -> None:
         """Enforce [urls] allow/deny rules. Raises ValueError if denied."""

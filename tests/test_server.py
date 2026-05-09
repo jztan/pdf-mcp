@@ -94,13 +94,13 @@ class TestPdfSearchModes:
         Query gets a unit vector at dimension 0 → page 0 scores highest.
         """
 
-        def encode(texts):
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
             result = np.zeros((len(texts), dim), dtype=np.float32)
             for i in range(len(texts)):
                 result[i, i % dim] = 1.0
             return result
 
-        def encode_query(text):
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
             v = np.zeros(dim, dtype=np.float32)
             v[0] = 1.0
             return v
@@ -320,7 +320,7 @@ class TestPdfSearchModes:
 
         dim = 384
 
-        def encode(texts):
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
             # Page 0 (banana page): unit vec at dim 1
             # Page 1 (filler page): unit vec at dim 0
             result = np.zeros((len(texts), dim), dtype=np.float32)
@@ -329,7 +329,7 @@ class TestPdfSearchModes:
                 result[1, 0] = 1.0
             return result
 
-        def encode_query(text):
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
             # Query matches dim 0 → page 1 (filler) wins semantically
             v = np.zeros(dim, dtype=np.float32)
             v[0] = 1.0
@@ -369,14 +369,14 @@ class TestPdfSearchModes:
 
         dim = 384
 
-        def encode(texts):
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
             result = np.zeros((len(texts), dim), dtype=np.float32)
             result[0, 1] = 1.0  # page 0: dim 1
             if len(texts) > 1:
                 result[1, 0] = 1.0  # page 1: dim 0 → wins query
             return result
 
-        def encode_query(text):
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
             v = np.zeros(dim, dtype=np.float32)
             v[0] = 1.0
             return v
@@ -2014,3 +2014,74 @@ class TestPdfSearchSectionMode:
         assert [s["title"] for s in r1["sections"]] == [
             s["title"] for s in r2["sections"]
         ]
+
+
+class TestSearchResponseModelField:
+    """pdf_search response includes model field on semantic/hybrid paths."""
+
+    def _make_encode(self, dim: int = 4):
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
+            return np.ones((len(texts), dim), dtype=np.float32)
+
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
+            return np.ones(dim, dtype=np.float32)
+
+        return encode, encode_query
+
+    def test_semantic_response_has_model_field(self, sample_pdf, isolated_server):
+        """mode='semantic' response includes model field with configured model name."""
+        from pdf_mcp.server import pdf_search
+
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="semantic")
+
+        assert "model" in result
+        assert result["model"] == "BAAI/bge-small-en-v1.5"
+
+    def test_hybrid_response_has_model_field(self, sample_pdf, isolated_server):
+        """mode='auto' with fastembed returns model field."""
+        from pdf_mcp.server import pdf_search
+
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "test", mode="auto")
+
+        if result.get("search_mode") == "hybrid":
+            assert "model" in result
+            assert result["model"] == "BAAI/bge-small-en-v1.5"
+
+    def test_auto_mode_invalid_model_returns_error(self, sample_pdf, isolated_server):
+        """mode='auto' with invalid model name propagates ValueError as error."""
+        from pdf_mcp.server import pdf_search
+
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ValueError("Unknown embedding model 'bad-model'"),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert "error" in result
+
+
+class TestCacheStatsEmbeddingModel:
+    """pdf_cache_stats includes embedding_model field."""
+
+    def test_cache_stats_has_embedding_model(self, isolated_server):
+        """pdf_cache_stats response includes embedding_model key."""
+        from pdf_mcp.server import pdf_cache_stats
+
+        result = pdf_cache_stats()
+
+        assert "embedding_model" in result
+        assert result["embedding_model"] == "BAAI/bge-small-en-v1.5"

@@ -279,6 +279,17 @@ The response includes `search_mode` indicating which path ran (`"hybrid"`, `"key
 
 The first call on a new document embeds all pages (one-time cost, typically a few seconds); subsequent calls are instant.
 
+Any [`fastembed`-compatible model](https://qdrant.github.io/fastembed/examples/Supported_Models/) works — configure in `~/.config/pdf-mcp/config.toml`:
+
+```toml
+[embedding]
+model = "nomic-ai/nomic-embed-text-v1.5"
+```
+
+The model downloads once on first use. Switching models clears the embedding cache for that PDF (re-embedding happens automatically on the next search).
+
+See **[docs/embedding-models.md](docs/embedding-models.md)** for a full comparison with MTEB retrieval scores, size, and a selection guide.
+
 ```
 "Search for 'quarterly revenue' in the PDF"
 "Which pages discuss supply chain risks?"

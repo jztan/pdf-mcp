@@ -756,13 +756,16 @@ def pdf_search(
     if mode == "semantic":
         from . import embedder as _embedder
 
+        _model_name = pdf_config.embedding_model
         try:
-            _embedder.check_available()
+            _embedder.check_available(_model_name)
         except ImportError as exc:
             return {
                 "error": str(exc),
                 "install_hint": "pip install 'pdf-mcp[semantic]'",
             }
+        except ValueError as exc:
+            return {"error": str(exc)}
 
     local_path = _resolve_path(path)
     max_results = _clamp(max_results, 1, MAX_RESULTS_LIMIT)
@@ -782,7 +785,7 @@ def pdf_search(
             import numpy as np
 
             all_page_nums = list(range(doc_pages))
-            raw_cached = cache.get_page_embeddings(local_path, all_page_nums)
+            raw_cached = cache.get_page_embeddings(local_path, all_page_nums, _model_name)
             cached_embeddings: dict[int, Any] = {
                 k: np.frombuffer(v, dtype=np.float32).copy()
                 for k, v in raw_cached.items()
@@ -806,12 +809,12 @@ def pdf_search(
                 if non_empty:
                     sorted_nums = sorted(non_empty.keys())
                     texts_list = [non_empty[pn] for pn in sorted_nums]
-                    vecs: Any = _embedder.encode(texts_list)
+                    vecs: Any = _embedder.encode(texts_list, _model_name)
                     raw_new = {
                         sorted_nums[i]: vecs[i].tobytes()
                         for i in range(len(sorted_nums))
                     }
-                    cache.save_page_embeddings(local_path, raw_new)
+                    cache.save_page_embeddings(local_path, raw_new, _model_name)
                     for i, pn in enumerate(sorted_nums):
                         cached_embeddings[pn] = vecs[i]
 
@@ -825,9 +828,10 @@ def pdf_search(
                     "matches": [],
                     "searched_pages": doc_pages,
                     "search_mode": "semantic",
+                    "model": _model_name,
                 }
 
-            query_vec: Any = _embedder.encode_query(query)
+            query_vec: Any = _embedder.encode_query(query, _model_name)
             page_nums_list = sorted(cached_embeddings.keys())
             matrix: Any = np.stack([cached_embeddings[p] for p in page_nums_list])
             sem_scores: Any = matrix @ query_vec
@@ -864,6 +868,7 @@ def pdf_search(
                 "matches": matches,
                 "searched_pages": doc_pages,
                 "search_mode": "semantic",
+                "model": _model_name,
             }
 
         # ── mode="keyword" or mode="auto" — run keyword search ───────────
@@ -927,8 +932,11 @@ def pdf_search(
         # ── mode="auto": check fastembed, hybrid if available ─────────────
         from . import embedder as _embedder
 
+        _model_name = pdf_config.embedding_model
         try:
-            _embedder.check_available()
+            _embedder.check_available(_model_name)
+        except ValueError as exc:
+            return {"error": str(exc)}
         except ImportError:
             auto_kw = kw_matches[:max_results]
             auto_sources = cache.get_pages_source(
@@ -953,7 +961,7 @@ def pdf_search(
         import numpy as np
 
         all_page_nums = list(range(doc_pages))
-        raw_cached = cache.get_page_embeddings(local_path, all_page_nums)
+        raw_cached = cache.get_page_embeddings(local_path, all_page_nums, _model_name)
         cached_embeddings = {
             k: np.frombuffer(v, dtype=np.float32).copy() for k, v in raw_cached.items()
         }
@@ -973,16 +981,16 @@ def pdf_search(
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())
                 texts_list = [non_empty[pn] for pn in sorted_nums]
-                vecs = _embedder.encode(texts_list)
+                vecs = _embedder.encode(texts_list, _model_name)
                 raw_new = {
                     sorted_nums[i]: vecs[i].tobytes() for i in range(len(sorted_nums))
                 }
-                cache.save_page_embeddings(local_path, raw_new)
+                cache.save_page_embeddings(local_path, raw_new, _model_name)
                 for i, pn in enumerate(sorted_nums):
                     cached_embeddings[pn] = vecs[i]
 
         if cached_embeddings:
-            query_vec = _embedder.encode_query(query)
+            query_vec = _embedder.encode_query(query, _model_name)
             page_nums_list = sorted(cached_embeddings.keys())
             matrix = np.stack([cached_embeddings[p] for p in page_nums_list])
             sem_scores = matrix @ query_vec
@@ -1031,6 +1039,7 @@ def pdf_search(
             "page_match_counts": page_match_counts,
             "searched_pages": doc_pages,
             "search_mode": "hybrid",
+            "model": _model_name,
         }
 
     finally:
@@ -1110,6 +1119,7 @@ def pdf_cache_stats() -> dict[str, Any]:
 
     return {
         **stats,
+        "embedding_model": pdf_config.embedding_model,
         "url_cache": url_stats,
     }
 

@@ -18,11 +18,11 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from pdf_mcp.server import pdf_search  # noqa: E402
 
 # ── Models under test ───────────────────────────────────────────────
 MODELS = [
@@ -129,6 +129,42 @@ def _row(label: str, value: str, ok: bool | None = None) -> None:
 
 def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def _compute_metrics(matches: list[dict], relevant_pages: set[int], k: int) -> dict:
+    """
+    Compute recall@K, RR (Reciprocal Rank), and rank-of-first-hit.
+
+    matches: list of {"page": N, ...} from pdf_search (page is 1-indexed)
+    relevant_pages: 1-indexed page numbers that are ground-truth relevant
+    k: cutoff — only the first k entries in matches are considered
+    """
+    if not relevant_pages:
+        return {"recall": 0.0, "rr": 0.0, "rank_first_hit": None}
+    top_k_pages = [m["page"] for m in matches[:k]]
+    recall = len(set(top_k_pages) & relevant_pages) / len(relevant_pages)
+    rank_first_hit = None
+    for i, page in enumerate(top_k_pages, 1):
+        if page in relevant_pages:
+            rank_first_hit = i
+            break
+    rr = 1.0 / rank_first_hit if rank_first_hit is not None else 0.0
+    return {"recall": recall, "rr": rr, "rank_first_hit": rank_first_hit}
+
+
+def _run_scenario(pdf_path: str, query: str, relevant_pages: set[int], k: int) -> dict:
+    """
+    Run one scenario in semantic mode and return per-scenario metrics.
+
+    Returns dict with: recall, rr, rank_first_hit, top_pages.
+    On pdf_search error, returns zero metrics with empty top_pages.
+    """
+    result = pdf_search(pdf_path, query, mode="semantic", max_results=k)
+    if "error" in result:
+        return {"recall": 0.0, "rr": 0.0, "rank_first_hit": None, "top_pages": []}
+    matches = result.get("matches", [])
+    metrics = _compute_metrics(matches, relevant_pages, k)
+    return {**metrics, "top_pages": [m["page"] for m in matches[:k]]}
 
 
 def main() -> None:

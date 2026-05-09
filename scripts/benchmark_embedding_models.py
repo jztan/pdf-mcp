@@ -522,9 +522,22 @@ def _save_results(
     base.with_suffix(".json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+SCENARIO_K = {
+    "1a": 5,
+    "1b": 5,
+    "1c": 5,  # Q&A
+    "2a": 10,
+    "2b": 10,  # Context
+    "3a": 3,
+    "3b": 3,  # Navigation
+}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Live benchmark of fastembed models for pdf-mcp default selection."
+        description=(
+            "Live benchmark of fastembed models for pdf-mcp default selection."
+        )
     )
     parser.add_argument(
         "--ground-truth",
@@ -532,9 +545,53 @@ def main() -> None:
         help="Path to ground truth JSON (default: benchmark_data/ground_truth.json)",
     )
     args = parser.parse_args()
-    # Wired up in Task 8
-    _ = args
-    raise NotImplementedError("main() will be implemented in Task 8")
+
+    now = datetime.now()
+    file_ts = now.strftime("%Y%m%d_%H%M%S")
+    iso_ts = now.strftime("%Y-%m-%dT%H:%M:%S")
+
+    _p(bold("\npdf-mcp Embedding-Model Live Benchmark"))
+    _p("─" * 68)
+    _p(f"  Models under test: {len(MODELS)}  " f"(baseline: {BASELINE})")
+    _p(
+        f"  Gate: MRR lift ≥ {MRR_LIFT_THRESHOLD} "
+        f"AND p50 latency ≤ {LATENCY_RATIO_THRESHOLD}x baseline"
+    )
+
+    gt = load_ground_truth(args.ground_truth)
+
+    # Build scenario_k by intersecting SCENARIO_K with the loaded ground truth
+    seen_sids: set[str] = set()
+    for pdf in gt["pdfs"].values():
+        seen_sids.update(pdf["scenarios"].keys())
+    scenario_k = {sid: SCENARIO_K.get(sid, 5) for sid in seen_sids}
+
+    results = []
+    for m in MODELS:
+        _section(f"Running model: {m['name']}")
+        try:
+            r = run_model(m["name"], gt, scenario_k)
+            results.append(r)
+        except Exception as e:  # network/HF outage on first download
+            _p(red(f"  Failed: {e}"))
+            results.append(
+                {
+                    "model": m["name"],
+                    "mrr": 0.0,
+                    "p50_query_ms": float("inf"),
+                    "embed_ms": {},
+                    "scenarios": [],
+                    "error": str(e),
+                }
+            )
+
+    verdict = compute_verdict(results, BASELINE)
+    print_summary(results, verdict)
+    _save_results(results, verdict, file_ts, iso_ts)
+
+    _p()
+    _p(f"  Saved: benchmark_results/embedding_models_{file_ts}.txt")
+    _p(f"         benchmark_results/embedding_models_{file_ts}.json")
 
 
 if __name__ == "__main__":

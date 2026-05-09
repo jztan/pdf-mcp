@@ -385,3 +385,59 @@ class TestSaveResults:
         assert data["baseline"] == "BAAI/bge-small-en-v1.5"
         assert data["models"][0]["model"] == "BAAI/bge-small-en-v1.5"
         assert data["verdict"]["default_changed"] is False
+
+
+class TestMainIntegration:
+    """Drives main() with a stubbed pdf_search so no real models download."""
+
+    def test_main_runs_end_to_end(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        # Minimal ground truth covering 1 PDF, 2 scenarios
+        gt_path = tmp_path / "benchmark_data" / "ground_truth.json"
+        gt_path.parent.mkdir(parents=True)
+        gt_path.write_text(
+            json.dumps(
+                {
+                    "pdfs": {
+                        "fake": {
+                            "url": "https://example.com/x.pdf",
+                            "title": "X",
+                            "page_count": 5,
+                            "scenarios": {
+                                "1a": {"query": "q1", "relevant_pages": [1]},
+                                "1b": {"query": "q2", "relevant_pages": [2]},
+                            },
+                        }
+                    }
+                }
+            )
+        )
+        # Stub _resolve_path and pdf_search
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/fake.pdf")
+        monkeypatch.setattr(
+            bem,
+            "pdf_search",
+            lambda pdf, q, mode, max_results: {
+                "matches": [{"page": 1 if q == "q1" else 2}]
+            },
+        )
+        # Run main() with the test ground truth
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["benchmark_embedding_models.py", "--ground-truth", str(gt_path)],
+        )
+        bem._OUTPUT.clear()
+        bem.main()
+
+        # Output files exist and the verdict line appeared on stdout
+        results_dir = tmp_path / "benchmark_results"
+        assert results_dir.exists()
+        json_files = list(results_dir.glob("embedding_models_*.json"))
+        assert len(json_files) == 1
+        data = json.loads(json_files[0].read_text())
+        # All 4 models ran (against the stubbed pdf_search)
+        assert len(data["models"]) == 4
+        assert data["verdict"]["baseline"] == "BAAI/bge-small-en-v1.5"
+        out = bem._strip_ansi("\n".join(bem._OUTPUT))
+        assert "Verdict" in out

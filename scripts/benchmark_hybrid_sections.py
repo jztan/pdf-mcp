@@ -7,8 +7,7 @@ Phase-1 validation benchmark for hybrid (BM25 + semantic) section search.
 Compares four cells over a frozen query corpus on three arxiv PDFs:
     keyword-page, hybrid-page, keyword-section, hybrid-section
 
-Asserts a three-clause kill-switch gate (see
-docs/superpowers/specs/2026-05-04-hybrid-section-search-validation-design.md).
+Asserts a three-clause kill-switch gate.
 
 Usage:
     python scripts/benchmark_hybrid_sections.py              # gated run
@@ -43,9 +42,8 @@ T = TypeVar("T")
 VALID_CATEGORIES = {"lexical", "paraphrase-semantic", "mixed-distractor"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "gold_section_keys")
 
-# Thresholds locked by spec §3 of
-# docs/superpowers/specs/2026-05-04-hybrid-section-search-validation-design.md
-# Do not adjust without updating the spec — these gate the release decision.
+# Thresholds for the kill-switch gate (clause 1: mixed-distractor uplift,
+# clause 2: max lexical regression allowed).
 GATE_CLAUSE_1_MARGIN = 0.10
 GATE_CLAUSE_2_TOLERANCE = 0.05
 

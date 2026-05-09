@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `embedding_model` property on `Config` (renamed `MODEL_NAME` → `DEFAULT_MODEL`).
 
 ### Fixed
-- `embedder` batch_size capped at 8 (was unlimited) to prevent OOM and hang on long-context models like `nomic-embed-text-v1.5` when processing 75-page PDFs.
+- `embedder` batch_size lowered to 8 (fastembed default is 256) to prevent OOM and hang on long-context models like `nomic-embed-text-v1.5` (8192-token window) when processing 75-page PDFs. First capped at 16 (68772e1), then lowered to 8 after 16 still hung nomic (17db1ef).
 
 ### Changed
 - Bumped `pip` to 26.1.1 and `python-multipart` to 0.0.27 (transitive dep updates).

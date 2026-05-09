@@ -823,6 +823,71 @@ class TestPDFConfigEmbeddingModel:
         assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
 
 
+class TestEmbedderByom:
+    """Embedder singleton reloads on model change; check_available validates name."""
+
+    def _fake_fastembed(self, monkeypatch, call_log=None):
+        """Inject a fake fastembed module into sys.modules."""
+        import sys
+
+        log = call_log if call_log is not None else []
+
+        class FakeTextEmbedding:
+            def __init__(self, model_name):
+                log.append(model_name)
+
+            @staticmethod
+            def list_supported_models():
+                return [
+                    {"model": "BAAI/bge-small-en-v1.5"},
+                    {"model": "BAAI/bge-large-en-v1.5"},
+                ]
+
+        fake = type(sys)("fastembed")
+        fake.TextEmbedding = FakeTextEmbedding
+        monkeypatch.setitem(sys.modules, "fastembed", fake)
+        return log
+
+    def test_get_model_reloads_on_model_change(self, monkeypatch):
+        """_get_model loads a new TextEmbedding when model_name changes."""
+        import pdf_mcp.embedder as embedder
+
+        call_log = self._fake_fastembed(monkeypatch, call_log=[])
+        monkeypatch.setattr(embedder, "_model", None)
+        monkeypatch.setattr(embedder, "_model_name_loaded", None)
+
+        embedder._get_model("BAAI/bge-small-en-v1.5")
+        embedder._get_model("BAAI/bge-small-en-v1.5")  # cached — no reload
+        embedder._get_model("BAAI/bge-large-en-v1.5")  # different — reload
+
+        assert call_log == ["BAAI/bge-small-en-v1.5", "BAAI/bge-large-en-v1.5"]
+
+    def test_check_available_unknown_model_raises_valueerror(self, monkeypatch):
+        """check_available raises ValueError for an unknown model name."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+
+        with pytest.raises(ValueError, match="Unknown embedding model 'bad-model'"):
+            embedder.check_available("bad-model")
+
+    def test_check_available_unknown_model_lists_supported(self, monkeypatch):
+        """ValueError message includes the supported model names."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+
+        with pytest.raises(ValueError, match="BAAI/bge-small-en-v1.5"):
+            embedder.check_available("bad-model")
+
+    def test_check_available_known_model_passes(self, monkeypatch):
+        """check_available does not raise for a known model name."""
+        import pdf_mcp.embedder as embedder
+
+        self._fake_fastembed(monkeypatch)
+        embedder.check_available("BAAI/bge-small-en-v1.5")  # must not raise
+
+
 class TestPageEmbeddingsTable:
     """page_embeddings table and index are created by PDFCache.__init__."""
 

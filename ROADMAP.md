@@ -92,6 +92,17 @@
 - New benchmark harness: `scripts/benchmark_sections.py` (with `--detector-source=toc|heuristic` and `--toc-flatten=all|leaves` flags for reproducible alternative views)
 - 60+ new tests across `tests/test_section_detector.py`, `tests/test_cache.py`, `tests/test_server.py` (521 total, up from 489)
 
+### v1.11.0 — Bring-Your-Own Embedding Model (BYOM)
+- `[embedding] model = "..."` in `~/.config/pdf-mcp/config.toml` — swap the embedding model per-install without touching code
+- Default remains `BAAI/bge-small-en-v1.5`; missing key is fully backward-compatible
+- `embedder.py` singleton is now model-aware: reloads `TextEmbedding` automatically when the configured model changes mid-process
+- `check_available(model_name)` validates the model name against fastembed's local supported-model list before any PDF work; error message includes the full list of valid names
+- `page_embeddings` cache gains a `model` column; stale rows from a prior model are evicted automatically on the next search — no manual cache clear needed
+- `model` field added to semantic and hybrid `pdf_search` responses
+- `embedding_model` field added to `pdf_cache_stats` response
+- New `docs/embedding-models.md` — MTEB retrieval benchmark comparison across 9 fastembed models (fast English, high-quality English, long-context, multilingual) with size, license, and a selection guide
+- 13 new tests across `test_pdf_reader.py`, `test_server.py`, `test_embedder.py`, `test_cache.py`
+
 ---
 
 ## Planned
@@ -110,6 +121,6 @@ Items that were actively prototyped or benchmarked and then deliberately closed.
 ## Future / Under Consideration
 
 - **`pdf_render_pages` page labels** — each `ImageContent` block currently has no page annotation; if `render_failed_pages` fires, surviving images could be misaligned. FastMCP `Image` supports an `annotations` field — embed `{"page": N}` in each block so agents can correlate images to pages regardless of failures.
-- **Bring-your-own embedding model (BYOM)** — allow users to swap out `BAAI/bge-small-en-v1.5` for any `fastembed`-compatible model via config, for multilingual or domain-specific use cases.
+- **Default embedding model benchmark** — `BAAI/bge-small-en-v1.5` was chosen in v1.7.0 without a comparative benchmark. v1.11.0 added a static MTEB retrieval comparison (`docs/embedding-models.md`); the next step is a live benchmark on the existing arxiv PDFs measuring MRR and latency across the top candidates (`snowflake-arctic-embed-s` at 51.98, `bge-base-en-v1.5` at 53.25, `snowflake-arctic-embed-m` at 54.90). `all-MiniLM-L6-v2` was ruled out — its paraphrase-optimized training and 256-token limit make it unsuitable for PDF retrieval. The BYOM config key makes any future default change backward-compatible.
 - **Heuristic detector escalation for low-quality PDFs** — for PDFs where the 7-signal detector underperforms (e.g., scanned PDFs after OCR, layout-irregular preprints), explore CRF-based or transformer-based layout detection (GROBID, Marker, Surya). Heavier dependency footprint; would be an optional `pdf-mcp[layout]` extra.
 - **Agent-task evaluation for section vs page search** — the existing benchmark measures retrieval characteristics. A downstream eval (LLM grading on Q&A tasks, or agent-task completion benchmarks) would measure whether agents *answer better questions* with section-granularity, not just whether retrieval recalls more content.

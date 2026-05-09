@@ -22,11 +22,15 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp.cache import PDFCache  # noqa: E402
+from pdf_mcp.server import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search  # noqa: E402
 
 # ── Models under test ───────────────────────────────────────────────
@@ -186,6 +190,110 @@ def run_latency_probe(pdf_path: str, query: str, k: int, n_runs: int = 3) -> flo
         samples.append((time.perf_counter() - t0) * 1000)
     samples.sort()
     return samples[len(samples) // 2]
+
+
+class _ConfigStub:
+    """Minimal stand-in for PDFConfig that returns a fixed embedding model.
+
+    Used to swap server_module.pdf_config per-run. Path/URL access checks
+    are no-ops because the benchmark only reads public arxiv PDFs that the
+    real config already permits.
+    """
+
+    def __init__(self, model_name: str) -> None:
+        self.embedding_model = model_name
+
+    def check_path(self, path: str) -> None:  # noqa: D401
+        pass
+
+    def check_url_host(self, hostname: str) -> None:  # noqa: D401
+        pass
+
+
+def run_model(
+    model_name: str,
+    gt: dict,
+    scenario_k: dict[str, int],
+) -> dict:
+    """
+    Run all scenarios in the ground truth against a single embedding model.
+
+    Side-effects: swaps server_module.pdf_config and server_module.cache
+    for the duration of the call; both are restored on exit (even on error).
+
+    Returns:
+        {
+          "model": str,
+          "embed_ms": {pdf_key: float, ...},   # cold-cache first-search time
+          "p50_query_ms": float,               # warm-cache median over 3 runs
+          "scenarios": [{"id": ..., "recall": ..., ...}, ...],
+          "mrr": float,                        # mean RR across all scenarios
+        }
+    """
+    original_config = server_module.pdf_config
+    original_cache = server_module.cache
+    try:
+        server_module.pdf_config = _ConfigStub(model_name)
+        with tempfile.TemporaryDirectory() as tmp:
+            server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+
+            # Pre-resolve paths and warm embed cache per PDF (cold-time recorded)
+            embed_ms: dict[str, float] = {}
+            pdf_paths: dict[str, str] = {}
+            first_query: dict[str, tuple[str, int]] = {}
+            for pdf_key, pdf in gt["pdfs"].items():
+                pdf_paths[pdf_key] = _resolve_path(pdf["url"])
+                first_sid = next(iter(pdf["scenarios"]))
+                s = pdf["scenarios"][first_sid]
+                k = scenario_k[first_sid]
+                first_query[pdf_key] = (s["query"], k)
+                t0 = time.perf_counter()
+                pdf_search(
+                    pdf_paths[pdf_key],
+                    s["query"],
+                    mode="semantic",
+                    max_results=k,
+                )
+                embed_ms[pdf_key] = (time.perf_counter() - t0) * 1000
+
+            # Run all scenarios
+            scenarios = []
+            for pdf_key, pdf in gt["pdfs"].items():
+                for sid, s in pdf["scenarios"].items():
+                    k = scenario_k[sid]
+                    metrics = _run_scenario(
+                        pdf_paths[pdf_key],
+                        s["query"],
+                        set(s["relevant_pages"]),
+                        k,
+                    )
+                    scenarios.append(
+                        {
+                            "id": sid,
+                            "pdf": pdf_key,
+                            "query": s["query"],
+                            "k": k,
+                            "relevant_pages": sorted(s["relevant_pages"]),
+                            **metrics,
+                        }
+                    )
+
+            # Latency probe on the first scenario of the first PDF
+            first_pdf_key = next(iter(gt["pdfs"]))
+            probe_query, probe_k = first_query[first_pdf_key]
+            p50 = run_latency_probe(pdf_paths[first_pdf_key], probe_query, probe_k)
+
+            mrr = sum(s["rr"] for s in scenarios) / len(scenarios)
+            return {
+                "model": model_name,
+                "embed_ms": embed_ms,
+                "p50_query_ms": p50,
+                "scenarios": scenarios,
+                "mrr": mrr,
+            }
+    finally:
+        server_module.pdf_config = original_config
+        server_module.cache = original_cache
 
 
 def main() -> None:

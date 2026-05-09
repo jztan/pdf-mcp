@@ -114,3 +114,77 @@ class TestRunLatency:
         monkeypatch.setattr(bem, "pdf_search", fake_search)
         bem.run_latency_probe("/tmp/x.pdf", "q", k=5)
         assert call_count["n"] == 3
+
+
+class TestRunModel:
+    def test_swaps_config_and_cache_runs_all_scenarios(self, monkeypatch, tmp_path):
+        # Minimal ground truth: one PDF, two scenarios
+        gt = {
+            "pdfs": {
+                "fakepaper": {
+                    "url": "https://example.com/x.pdf",
+                    "title": "X",
+                    "page_count": 5,
+                    "scenarios": {
+                        "1a": {"query": "q1", "relevant_pages": [1]},
+                        "1b": {"query": "q2", "relevant_pages": [2]},
+                    },
+                }
+            }
+        }
+        # Stub _resolve_path to skip URL fetching
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/fake.pdf")
+        # Stub pdf_search to return the relevant page first
+        observed_models = []
+
+        def fake_search(pdf_path, query, mode, max_results):
+            # Capture which model is "active" via the patched pdf_config
+            observed_models.append(bem.server_module.pdf_config.embedding_model)
+            page = 1 if query == "q1" else 2
+            return {"matches": [{"page": page}]}
+
+        monkeypatch.setattr(bem, "pdf_search", fake_search)
+        # Map scenario id → k value (matches benchmark_rrf.py defaults)
+        scenario_k = {"1a": 5, "1b": 5}
+
+        result = bem.run_model(
+            model_name="snowflake/snowflake-arctic-embed-s",
+            gt=gt,
+            scenario_k=scenario_k,
+        )
+
+        assert result["model"] == "snowflake/snowflake-arctic-embed-s"
+        assert len(result["scenarios"]) == 2
+        # Each scenario hit its relevant page → recall 1.0
+        assert all(s["recall"] == 1.0 for s in result["scenarios"])
+        # Config was swapped during the run
+        assert all(m == "snowflake/snowflake-arctic-embed-s" for m in observed_models)
+        # Embed-time was measured per PDF
+        assert "fakepaper" in result["embed_ms"]
+        # Latency probe ran
+        assert result["p50_query_ms"] >= 0.0
+
+    def test_restores_config_after_run(self, monkeypatch, tmp_path):
+        gt = {
+            "pdfs": {
+                "x": {
+                    "url": "u",
+                    "title": "X",
+                    "page_count": 1,
+                    "scenarios": {
+                        "1a": {"query": "q", "relevant_pages": [1]},
+                    },
+                }
+            }
+        }
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/x.pdf")
+        monkeypatch.setattr(
+            bem, "pdf_search", lambda *a, **kw: {"matches": [{"page": 1}]}
+        )
+        original_model = bem.server_module.pdf_config.embedding_model
+        bem.run_model(
+            model_name="BAAI/bge-base-en-v1.5",
+            gt=gt,
+            scenario_k={"1a": 5},
+        )
+        assert bem.server_module.pdf_config.embedding_model == original_model

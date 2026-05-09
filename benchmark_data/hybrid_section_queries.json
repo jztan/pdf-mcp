@@ -1,0 +1,17 @@
+{
+  "_comment": "SKELETON — real queries authored in Task 13 of the implementation plan, frozen before any benchmark cell is run. Do not score against this file in its skeleton state; the benchmark will exit 2 if no queries are loaded.",
+  "pdfs": {
+    "gnn_review": {
+      "url": "https://arxiv.org/pdf/1812.08434",
+      "queries": []
+    },
+    "llm_survey": {
+      "url": "https://arxiv.org/pdf/2303.18223",
+      "queries": []
+    },
+    "gpt3": {
+      "url": "https://arxiv.org/pdf/2005.14165",
+      "queries": []
+    }
+  }
+}

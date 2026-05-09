@@ -100,10 +100,16 @@
 
 ---
 
+## Investigated / Rejected
+
+Items that were actively prototyped or benchmarked and then deliberately closed.
+
+- **Hybrid (BM25 + semantic) section search** (2026-05-04) — Built a full Phase-1 validation pipeline on `feature/hybrid-section-validation` (15 commits, 550 tests), then ran a literature review + 45-query confirmation calibration across the three arxiv benchmark PDFs. Found: (a) hybrid RRF gives only ~5% lift over BM25 on scientific papers (BEIR SciFact), well below the spec's 0.10 MRR gate threshold; (b) severe **lexical regression** at section grain (0.93 → 0.63 MRR, −33%) because RRF dilutes BM25's clean rank-1 signal on title-style queries; (c) the existing v1.8.0 page-grain hybrid is **3× better** on paraphrase queries (0.19 vs 0.07). No query class where `hybrid-section` wins. SOTA scientific-paper QA systems (e.g., PaperQA2) use semantic + LLM rerank, not BM25/dense fusion.
+---
+
 ## Future / Under Consideration
 
 - **`pdf_render_pages` page labels** — each `ImageContent` block currently has no page annotation; if `render_failed_pages` fires, surviving images could be misaligned. FastMCP `Image` supports an `annotations` field — embed `{"page": N}` in each block so agents can correlate images to pages regardless of failures.
 - **Bring-your-own embedding model (BYOM)** — allow users to swap out `BAAI/bge-small-en-v1.5` for any `fastembed`-compatible model via config, for multilingual or domain-specific use cases.
-- **Hybrid (BM25 + semantic) section search** — `pdf_search(granularity="section")` currently uses BM25/FTS5 only. Adding RRF fusion with section-level embeddings (parallel to what page search does) would catch semantic matches that BM25 misses ("graph attention" → section discussing transformers without naming it). Requires a `section_embeddings` table and an embedding pass per section on first call.
 - **Heuristic detector escalation for low-quality PDFs** — for PDFs where the 7-signal detector underperforms (e.g., scanned PDFs after OCR, layout-irregular preprints), explore CRF-based or transformer-based layout detection (GROBID, Marker, Surya). Heavier dependency footprint; would be an optional `pdf-mcp[layout]` extra.
 - **Agent-task evaluation for section vs page search** — the existing benchmark measures retrieval characteristics. A downstream eval (LLM grading on Q&A tasks, or agent-task completion benchmarks) would measure whether agents *answer better questions* with section-granularity, not just whether retrieval recalls more content.

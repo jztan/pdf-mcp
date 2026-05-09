@@ -211,6 +211,22 @@ class PDFCache:
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
 
+                -- Section embeddings cache (Phase-1 validation shim;
+                -- mirrors page_embeddings, keyed by section_id within a PDF).
+                CREATE TABLE IF NOT EXISTS section_embeddings (
+                    file_path   TEXT    NOT NULL,
+                    section_id  INTEGER NOT NULL,
+                    section_key TEXT    NOT NULL,
+                    file_mtime  REAL    NOT NULL,
+                    embedding   BLOB    NOT NULL,
+                    model       TEXT    NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, section_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_section_embeddings_path
+                    ON section_embeddings(file_path);
+
                 -- Page render cache (full-page PNG renders)
                 CREATE TABLE IF NOT EXISTS page_renders (
                     file_path          TEXT    NOT NULL,
@@ -733,6 +749,63 @@ class PDFCache:
                 ],
             )
 
+    def get_section_embeddings(
+        self, path: str, section_ids: list[int]
+    ) -> dict[int, bytes]:
+        """Get cached raw embedding bytes for multiple sections of a PDF.
+
+        Returns {section_id: blob} for sections whose mtime is still
+        valid. Sections not in cache or with stale mtime are omitted.
+        """
+        if not section_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(section_ids))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT section_id, embedding, file_mtime"
+                f" FROM section_embeddings"
+                f" WHERE file_path = ? AND section_id IN ({placeholders})",
+                (path, *section_ids),
+            ).fetchall()
+
+        result: dict[int, bytes] = {}
+        for section_id, blob, mtime in rows:
+            if self._is_cache_valid(path, mtime):
+                result[int(section_id)] = bytes(blob)
+        return result
+
+    def save_section_embeddings(
+        self,
+        path: str,
+        embeddings: dict[int, bytes],
+        section_keys: dict[int, str],
+        model: str,
+    ) -> None:
+        """Save section embedding blobs (idempotent INSERT OR REPLACE).
+
+        Args:
+            path: Path to PDF file.
+            embeddings: {section_id: float32 blob}.
+            section_keys: {section_id: stable string key}.
+            model: Embedding model identifier.
+        """
+        if not embeddings:
+            return
+
+        mtime, _ = self._get_file_info(path)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO section_embeddings"
+                " (file_path, section_id, section_key, file_mtime,"
+                "  embedding, model)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (path, sid, section_keys[sid], mtime, blob, model)
+                    for sid, blob in embeddings.items()
+                ],
+            )
+
     # ==================== Render Operations ====================
 
     def get_page_render(
@@ -835,6 +908,10 @@ class PDFCache:
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
+            conn.execute(
+                "DELETE FROM section_embeddings WHERE file_path = ?",
+                (path,),
+            )
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
 
@@ -889,6 +966,11 @@ class PDFCache:
                 )
                 conn.execute(
                     f"DELETE FROM page_embeddings"
+                    f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
+                conn.execute(
+                    f"DELETE FROM section_embeddings"
                     f" WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
@@ -959,6 +1041,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
             conn.execute("DELETE FROM page_embeddings")
+            conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
@@ -1227,3 +1310,12 @@ class PDFCache:
             except sqlite3.OperationalError:
                 return 0
         return int(row[0]) if row else 0
+
+    def get_section_embeddings_coverage(self, path: str) -> int:
+        """Return the number of cached, valid section embeddings for `path`."""
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT file_mtime FROM section_embeddings WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+        return sum(1 for (mtime,) in rows if self._is_cache_valid(path, mtime))

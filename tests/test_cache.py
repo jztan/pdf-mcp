@@ -1082,3 +1082,121 @@ class TestGetSectionFTSCoverage:
         cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
         cache.fts_available = False
         assert cache.get_section_fts_coverage("/p.pdf") == 0
+
+
+def test_section_embeddings_table_exists(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache.db_path) as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(section_embeddings)")}
+    assert cols == {
+        "file_path",
+        "section_id",
+        "section_key",
+        "file_mtime",
+        "embedding",
+        "model",
+        "created_at",
+    }
+
+
+def test_save_and_get_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    blobs = {0: b"\x00" * 1536, 1: b"\x01" * 1536}
+    keys = {0: "S000:p1:Intro", 1: "S001:p3:Methods"}
+    cache.save_section_embeddings(str(pdf_path), blobs, keys, model="bge-small-en-v1.5")
+
+    got = cache.get_section_embeddings(str(pdf_path), [0, 1])
+    assert got == blobs
+
+
+def test_get_section_embeddings_empty_input_returns_empty(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    assert cache.get_section_embeddings("/no/such/path.pdf", []) == {}
+
+
+def test_section_embeddings_invalidated_on_mtime_change(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import os
+    import time
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    assert cache.get_section_embeddings(str(pdf_path), [0]) == {0: b"\x00" * 1536}
+
+    time.sleep(0.05)
+    pdf_path.write_bytes(b"%PDF-1.4\n%modified\n%%EOF\n")
+    os.utime(pdf_path, None)
+
+    # Stale rows must be filtered out by _is_cache_valid.
+    assert cache.get_section_embeddings(str(pdf_path), [0]) == {}
+
+
+def test_invalidate_file_drops_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    cache._invalidate_file(str(pdf_path))
+
+    with sqlite3.connect(cache.db_path) as conn:
+        (n,) = conn.execute(
+            "SELECT COUNT(*) FROM section_embeddings WHERE file_path = ?",
+            (str(pdf_path),),
+        ).fetchone()
+    assert n == 0
+
+
+def test_clear_all_drops_section_embeddings(tmp_path):
+    from pdf_mcp.cache import PDFCache
+    import sqlite3
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    cache.save_section_embeddings(
+        str(pdf_path), {0: b"\x00" * 1536}, {0: "S000:p1:T"}, model="m"
+    )
+    cache.clear_all()
+
+    with sqlite3.connect(cache.db_path) as conn:
+        (n,) = conn.execute("SELECT COUNT(*) FROM section_embeddings").fetchone()
+    assert n == 0
+
+
+def test_get_section_embeddings_coverage(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf_path = tmp_path / "x.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    assert cache.get_section_embeddings_coverage(str(pdf_path)) == 0
+    cache.save_section_embeddings(
+        str(pdf_path),
+        {0: b"\x00" * 1536, 2: b"\x02" * 1536},
+        {0: "S000:p1:A", 2: "S002:p5:B"},
+        model="m",
+    )
+    assert cache.get_section_embeddings_coverage(str(pdf_path)) == 2

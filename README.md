@@ -285,7 +285,7 @@ The first call on a new document embeds all pages (one-time cost, typically a fe
 |-------|-----------|---------|
 | `BAAI/bge-small-en-v1.5` *(default)* | 384 | General English — fast, low memory |
 | `BAAI/bge-base-en-v1.5` | 768 | Better English retrieval quality |
-| `BAAI/bge-large-en-v1.5` | 1024 | Best English quality (~1.3 GB download) |
+| `BAAI/bge-large-en-v1.5` | 1024 | Best English quality (large download) |
 | `intfloat/multilingual-e5-small` | 384 | 100+ languages, low memory |
 | `intfloat/multilingual-e5-large` | 1024 | Best multilingual quality |
 | `sentence-transformers/all-MiniLM-L6-v2` | 384 | Very fast, broad domain |

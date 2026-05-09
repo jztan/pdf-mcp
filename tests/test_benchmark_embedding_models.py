@@ -301,7 +301,7 @@ class TestFormatMarkdownTable:
             "baseline": "A",
         }
         out = bem.format_markdown_table(results, verdict)
-        assert "changed to B" in out or "→ B" in out
+        assert "changed to `B`" in out
 
 
 class TestPrintSummary:

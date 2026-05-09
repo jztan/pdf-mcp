@@ -489,7 +489,7 @@ def format_markdown_table(results: list[dict], verdict: dict) -> str:
         )
     lines.append("")
     if verdict["default_changed"]:
-        decision = f"changed to `{verdict['winner']}` (→ {verdict['winner']})"
+        decision = f"changed to `{verdict['winner']}`"
     else:
         decision = "kept (no challenger passed the gate)"
     today = datetime.now().strftime("%Y-%m-%d")

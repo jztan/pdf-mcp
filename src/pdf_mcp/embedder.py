@@ -18,10 +18,10 @@ from typing import Any
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 # fastembed defaults to batch_size=256, which OOMs long-context models
-# (e.g. nomic-embed-text-v1.5, 8192-token window) on 75+ page PDFs. 16 is
-# safe across all fastembed-supported models we currently document and
-# trades negligible throughput on small PDFs.
-ENCODE_BATCH_SIZE = 16
+# (e.g. nomic-embed-text-v1.5, 8192-token window) on 75+ page PDFs. 8 is
+# safe across all fastembed-supported models we currently document with
+# negligible throughput impact on small PDFs.
+ENCODE_BATCH_SIZE = 8
 
 # Module-level singleton. None until the first encode() call.
 _model: Any = None

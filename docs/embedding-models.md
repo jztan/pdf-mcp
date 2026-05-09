@@ -72,3 +72,18 @@ MTEB Retrieval = nDCG@10 averaged over 15 retrieval tasks (English MTEB benchmar
 - **nomic-embed-text-v1.5** retrieval score inferred from its [model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) comparison against `bge-base-en-v1.5`.
 - Multilingual MTEB retrieval scores not listed — multilingual benchmarks use different task sets (Mr.TyDi, MIRACL) and are not directly comparable to English MTEB retrieval averages.
 - All models run fully locally via fastembed — no external API calls.
+
+---
+
+## Live Benchmark Results
+
+Measured on the existing arxiv ground-truth corpus (Attention paper + GPT-3 paper, 7 hand-annotated scenarios). MRR aggregated across all 7 scenarios at each scenario's native k. Latency = p50 query time on a warm embedding cache. Run via `scripts/benchmark_embedding_models.py`.
+
+| Model | MRR | p50 latency | Size | MTEB |
+|-------|-----|-------------|------|------|
+| `BAAI/bge-small-en-v1.5` *(baseline)* | 0.806 | 6.1 ms | 67 MB | 51.68 |
+| `snowflake/snowflake-arctic-embed-s` | 0.690 | 4.1 ms | 130 MB | 51.98 |
+| `BAAI/bge-base-en-v1.5` | 0.667 | 5.7 ms | 210 MB | 53.25 |
+| `snowflake/snowflake-arctic-embed-m` | 0.029 | 5.8 ms | 430 MB | 54.90 |
+
+**Default decision (2026-05-09):** kept — no challenger passed the gate (MRR lift ≥ 0.05 AND p50 ≤ 1.5x baseline). bge-small wins MRR by 0.116 over the best challenger on this corpus. The arctic-embed-m collapse (0.029) likely reflects a missing query/passage prefix protocol that fastembed does not apply automatically; users running BYOM with that family should validate their results before relying on them.

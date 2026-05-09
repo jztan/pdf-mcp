@@ -63,7 +63,8 @@ class PDFConfig:
     @property
     def embedding_model(self) -> str:
         """Return configured embedding model, or the default bge-small model."""
-        return self._data.get("embedding", {}).get("model", DEFAULT_MODEL)
+        model: str = self._data.get("embedding", {}).get("model", DEFAULT_MODEL)
+        return model
 
     def check_url_host(self, hostname: str) -> None:
         """Enforce [urls] allow/deny rules. Raises ValueError if denied."""

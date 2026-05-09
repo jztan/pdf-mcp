@@ -1,0 +1,25 @@
+# Run locally before each commit to mirror the CI checks in .github/workflows/ci.yml.
+# Setup: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        args: ["--check", "--line-length=88"]
+        files: ^src/
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args: ["--max-line-length=88"]
+        files: ^src/
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src/
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.py$

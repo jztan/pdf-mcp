@@ -58,6 +58,7 @@ dev = [
     "black>=26.3.1",
     "pip-audit>=2.7.0",
     "numpy>=1.24",
+    "pre-commit>=3.5",
 ]
 
 semantic = [
@@ -102,6 +103,10 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = "pymupdf"
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "fastembed"
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]

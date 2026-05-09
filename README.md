@@ -410,6 +410,9 @@ cd pdf-mcp
 # Install with dev dependencies
 pip install -e ".[dev]"
 
+# One-time: install pre-commit hooks (auto-runs black/flake8/mypy on commit)
+pre-commit install
+
 # Run tests
 pytest tests/ -v
 

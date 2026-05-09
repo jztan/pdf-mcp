@@ -1,0 +1,150 @@
+#!/usr/bin/env python
+"""
+scripts/benchmark_embedding_models.py
+
+Live benchmark: compare 4 fastembed models on the existing ground-truth
+corpus and recommend whether to change the default embedding model.
+
+Run:
+    python scripts/benchmark_embedding_models.py
+
+See docs/superpowers/specs/2026-05-09-embedding-model-benchmark-design.md
+for the design (gate, corpus, metrics).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+
+# ── Models under test ───────────────────────────────────────────────
+MODELS = [
+    {
+        "name": "BAAI/bge-small-en-v1.5",
+        "size_mb": 67,
+        "dim": 384,
+        "license": "MIT",
+        "mteb": 51.68,
+        "is_baseline": True,
+    },
+    {
+        "name": "snowflake/snowflake-arctic-embed-s",
+        "size_mb": 130,
+        "dim": 384,
+        "license": "Apache 2.0",
+        "mteb": 51.98,
+        "is_baseline": False,
+    },
+    {
+        "name": "BAAI/bge-base-en-v1.5",
+        "size_mb": 210,
+        "dim": 768,
+        "license": "MIT",
+        "mteb": 53.25,
+        "is_baseline": False,
+    },
+    {
+        "name": "snowflake/snowflake-arctic-embed-m",
+        "size_mb": 430,
+        "dim": 768,
+        "license": "Apache 2.0",
+        "mteb": 54.90,
+        "is_baseline": False,
+    },
+]
+BASELINE = next(m["name"] for m in MODELS if m["is_baseline"])
+
+# Decision gate (see spec §4)
+MRR_LIFT_THRESHOLD = 0.05
+LATENCY_RATIO_THRESHOLD = 1.5
+
+
+# ── Ground truth loader ─────────────────────────────────────────────
+def load_ground_truth(path: str = "benchmark_data/ground_truth.json") -> dict:
+    """Load ground truth annotations from JSON. Raises FileNotFoundError if missing."""
+    gt_path = Path(path)
+    if not gt_path.exists():
+        raise FileNotFoundError(f"Ground truth file not found: {path}")
+    with open(gt_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ── ANSI / printing helpers (duplicated from benchmark_rrf.py) ──────
+_OUTPUT: list[str] = []
+_IS_TTY = sys.stdout.isatty()
+
+
+def _c(code: str, text: str) -> str:
+    return f"\033[{code}m{text}\033[0m" if _IS_TTY else text
+
+
+def green(t: str) -> str:
+    return _c("32", t)
+
+
+def red(t: str) -> str:
+    return _c("31", t)
+
+
+def yellow(t: str) -> str:
+    return _c("33", t)
+
+
+def cyan(t: str) -> str:
+    return _c("36", t)
+
+
+def bold(t: str) -> str:
+    return _c("1", t)
+
+
+def _p(text: str = "") -> None:
+    _OUTPUT.append(text)
+    print(text)
+
+
+def _section(title: str) -> None:
+    width = 68
+    _p()
+    _p(bold(cyan("=" * width)))
+    _p(bold(cyan(f"  {title}")))
+    _p(bold(cyan("=" * width)))
+
+
+def _row(label: str, value: str, ok: bool | None = None) -> None:
+    marker = ""
+    if ok is True:
+        marker = green(" ✓")
+    elif ok is False:
+        marker = red(" ✗")
+    _p(f"  {label:<36} {value}{marker}")
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Live benchmark of fastembed models for pdf-mcp default selection."
+    )
+    parser.add_argument(
+        "--ground-truth",
+        default="benchmark_data/ground_truth.json",
+        help="Path to ground truth JSON (default: benchmark_data/ground_truth.json)",
+    )
+    args = parser.parse_args()
+    # Wired up in Task 8
+    _ = args
+    raise NotImplementedError("main() will be implemented in Task 8")
+
+
+if __name__ == "__main__":
+    main()

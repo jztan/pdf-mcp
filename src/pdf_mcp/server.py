@@ -785,7 +785,9 @@ def pdf_search(
             import numpy as np
 
             all_page_nums = list(range(doc_pages))
-            raw_cached = cache.get_page_embeddings(local_path, all_page_nums, _model_name)
+            raw_cached = cache.get_page_embeddings(
+                local_path, all_page_nums, _model_name
+            )
             cached_embeddings: dict[int, Any] = {
                 k: np.frombuffer(v, dtype=np.float32).copy()
                 for k, v in raw_cached.items()

@@ -279,6 +279,26 @@ The response includes `search_mode` indicating which path ran (`"hybrid"`, `"key
 
 The first call on a new document embeds all pages (one-time cost, typically a few seconds); subsequent calls are instant.
 
+**Supported embedding models** (any [`fastembed`-compatible model](https://qdrant.github.io/fastembed/examples/Supported_Models/) works; configure in `~/.config/pdf-mcp/config.toml`):
+
+| Model | Dimensions | Best for |
+|-------|-----------|---------|
+| `BAAI/bge-small-en-v1.5` *(default)* | 384 | General English — fast, low memory |
+| `BAAI/bge-base-en-v1.5` | 768 | Better English retrieval quality |
+| `BAAI/bge-large-en-v1.5` | 1024 | Best English quality (~1.3 GB download) |
+| `intfloat/multilingual-e5-small` | 384 | 100+ languages, low memory |
+| `intfloat/multilingual-e5-large` | 1024 | Best multilingual quality |
+| `sentence-transformers/all-MiniLM-L6-v2` | 384 | Very fast, broad domain |
+
+To use a different model, add to `~/.config/pdf-mcp/config.toml`:
+
+```toml
+[embedding]
+model = "intfloat/multilingual-e5-small"
+```
+
+The model downloads once on first use. Switching models clears the embedding cache for that PDF (re-embedding happens automatically on the next search).
+
 ```
 "Search for 'quarterly revenue' in the PDF"
 "Which pages discuss supply chain risks?"

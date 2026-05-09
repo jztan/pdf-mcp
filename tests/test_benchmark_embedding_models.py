@@ -89,3 +89,28 @@ class TestRunScenario:
         assert result["rr"] == 0.0
         assert result["rank_first_hit"] is None
         assert result["top_pages"] == []
+
+
+class TestRunLatency:
+    def test_returns_median_of_n_runs(self, monkeypatch):
+        call_count = {"n": 0}
+
+        def fake_search(*args, **kwargs):
+            call_count["n"] += 1
+            return {"matches": []}
+
+        monkeypatch.setattr(bem, "pdf_search", fake_search)
+        ms = bem.run_latency_probe("/tmp/x.pdf", "q", k=5, n_runs=3)
+        assert call_count["n"] == 3
+        assert ms >= 0.0
+
+    def test_default_n_runs_is_three(self, monkeypatch):
+        call_count = {"n": 0}
+
+        def fake_search(*args, **kwargs):
+            call_count["n"] += 1
+            return {"matches": []}
+
+        monkeypatch.setattr(bem, "pdf_search", fake_search)
+        bem.run_latency_probe("/tmp/x.pdf", "q", k=5)
+        assert call_count["n"] == 3

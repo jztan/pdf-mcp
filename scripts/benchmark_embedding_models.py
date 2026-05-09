@@ -22,6 +22,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -169,6 +170,22 @@ def _run_scenario(pdf_path: str, query: str, relevant_pages: set[int], k: int) -
     matches = result.get("matches", [])
     metrics = _compute_metrics(matches, relevant_pages, k)
     return {**metrics, "top_pages": [m["page"] for m in matches[:k]]}
+
+
+def run_latency_probe(pdf_path: str, query: str, k: int, n_runs: int = 3) -> float:
+    """
+    Run pdf_search n_runs times and return the median wall-clock time (ms).
+
+    Caller must ensure the embedding cache is warm before invoking
+    (one prior pdf_search call on this PDF is sufficient).
+    """
+    samples: list[float] = []
+    for _ in range(n_runs):
+        t0 = time.perf_counter()
+        pdf_search(pdf_path, query, mode="semantic", max_results=k)
+        samples.append((time.perf_counter() - t0) * 1000)
+    samples.sort()
+    return samples[len(samples) // 2]
 
 
 def main() -> None:

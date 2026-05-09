@@ -24,6 +24,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -378,6 +379,123 @@ def compute_verdict(
         "winner": None,
         "reason": "No challenger met the mrr_lift threshold",
     }
+
+
+def _model_meta(name: str) -> dict:
+    """Look up MODELS metadata by name, or return a stub if missing."""
+    for m in MODELS:
+        if m["name"] == name:
+            return m
+    return {
+        "name": name,
+        "size_mb": "?",
+        "dim": "?",
+        "license": "?",
+        "mteb": "?",
+        "is_baseline": False,
+    }
+
+
+def print_summary(results: list[dict], verdict: dict) -> None:
+    """Print per-model scenario tables, cross-model summary, and verdict."""
+    _section("Per-Model Scenario Results")
+    for r in results:
+        meta = _model_meta(r["model"])
+        _p()
+        _p(bold(f"  {r['model']}"))
+        _row("  Size", f"{meta['size_mb']} MB / {meta['dim']}-dim")
+        _row("  MTEB Retrieval", str(meta["mteb"]))
+        _row("  License", str(meta["license"]))
+        _p()
+        _p(
+            f"  {'Scenario':<10} {'PDF':<14} {'k':<4} "
+            f"{'Recall':<8} {'RR':<8} {'Top-K pages'}"
+        )
+        _p(f"  {'─' * 9} {'─' * 12} {'─' * 3} " f"{'─' * 6} {'─' * 6} {'─' * 20}")
+        for s in r["scenarios"]:
+            top = ", ".join(str(p) for p in s["top_pages"]) or "(none)"
+            _p(
+                f"  {s['id']:<10} {s['pdf']:<14} {s['k']:<4} "
+                f"{s['recall'] * 100:.0f}%      {s['rr']:.2f}     {top}"
+            )
+        _p()
+        _row("  MRR", f"{r['mrr']:.3f}")
+        _row("  p50 query latency", f"{r['p50_query_ms']:.1f} ms")
+        for pdf_key, ms in r["embed_ms"].items():
+            _row(f"  embed-all-pages ({pdf_key})", f"{ms:.0f} ms")
+
+    _section("Cross-Model Summary")
+    _p()
+    _p(f"  {'Model':<42} {'MRR':<8} {'p50':<10} " f"{'Size':<10} {'MTEB'}")
+    _p(f"  {'─' * 41} {'─' * 6} {'─' * 8} {'─' * 8} {'─' * 6}")
+    for r in results:
+        meta = _model_meta(r["model"])
+        marker = " (baseline)" if meta.get("is_baseline") else ""
+        size_str = f"{meta['size_mb']} MB" if meta["size_mb"] != "?" else "?"
+        _p(
+            f"  {r['model'] + marker:<42} {r['mrr']:.3f}   "
+            f"{r['p50_query_ms']:>5.1f} ms   {size_str:<10} {meta['mteb']}"
+        )
+
+    _section("Verdict")
+    _p()
+    if verdict["default_changed"]:
+        _row(
+            "Decision",
+            green(f"CHANGE default → {verdict['winner']}"),
+            ok=True,
+        )
+    else:
+        _row("Decision", yellow("KEEP default unchanged"), ok=None)
+    _p(f"  Reason: {verdict['reason']}")
+    _p(f"  Baseline: {verdict['baseline']}")
+    th = verdict.get(
+        "thresholds",
+        {"mrr_lift": MRR_LIFT_THRESHOLD, "latency_ratio": LATENCY_RATIO_THRESHOLD},
+    )
+    _p(
+        f"  Gate: MRR lift ≥ {th['mrr_lift']:.2f} AND "
+        f"p50 ≤ {th['latency_ratio']}x baseline"
+    )
+
+    _section("Copy-pasteable Markdown for docs/embedding-models.md")
+    _p()
+    _p(format_markdown_table(results, verdict))
+
+
+def format_markdown_table(results: list[dict], verdict: dict) -> str:
+    """Return the Live Benchmark Results section as plain markdown."""
+    lines = [
+        "## Live Benchmark Results",
+        "",
+        (
+            "Measured on the existing arxiv ground-truth corpus "
+            "(Attention paper + GPT-3 paper, 7 hand-annotated scenarios). "
+            "MRR aggregated across all 7 scenarios at each scenario's "
+            "native k. Latency = p50 query time on a warm embedding cache. "
+            "Run via `scripts/benchmark_embedding_models.py`."
+        ),
+        "",
+        "| Model | MRR | p50 latency | Size | MTEB |",
+        "|-------|-----|-------------|------|------|",
+    ]
+    for r in results:
+        meta = _model_meta(r["model"])
+        marker = " *(baseline)*" if meta.get("is_baseline") else ""
+        size_str = f"{meta['size_mb']} MB" if meta["size_mb"] != "?" else "?"
+        lines.append(
+            f"| `{r['model']}`{marker} | {r['mrr']:.3f} "
+            f"| {r['p50_query_ms']:.1f} ms | {size_str} | {meta['mteb']} |"
+        )
+    lines.append("")
+    if verdict["default_changed"]:
+        decision = f"changed to `{verdict['winner']}` (→ {verdict['winner']})"
+    else:
+        decision = "kept (no challenger passed the gate)"
+    today = datetime.now().strftime("%Y-%m-%d")
+    lines.append(f"**Default decision ({today}):** {decision} — {verdict['reason']}.")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def main() -> None:

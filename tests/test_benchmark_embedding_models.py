@@ -244,3 +244,102 @@ class TestComputeVerdict:
         results = [self._model_result("foo", 0.5, 5.0)]
         with pytest.raises(ValueError):
             bem.compute_verdict(results, "BAAI/bge-small-en-v1.5")
+
+
+class TestFormatMarkdownTable:
+    def test_includes_all_models_and_verdict(self):
+        results = [
+            {
+                "model": "BAAI/bge-small-en-v1.5",
+                "mrr": 0.70,
+                "p50_query_ms": 5.0,
+                "embed_ms": {"a": 1000, "b": 2000},
+                "scenarios": [],
+            },
+            {
+                "model": "BAAI/bge-base-en-v1.5",
+                "mrr": 0.72,
+                "p50_query_ms": 7.0,
+                "embed_ms": {"a": 1500, "b": 3000},
+                "scenarios": [],
+            },
+        ]
+        verdict = {
+            "default_changed": False,
+            "winner": None,
+            "reason": "No challenger met threshold",
+            "baseline": "BAAI/bge-small-en-v1.5",
+        }
+        out = bem.format_markdown_table(results, verdict)
+        assert "BAAI/bge-small-en-v1.5" in out
+        assert "BAAI/bge-base-en-v1.5" in out
+        assert "0.70" in out
+        assert "0.72" in out
+        assert "kept" in out.lower() or "no challenger" in out.lower()
+
+    def test_marks_default_changed(self):
+        results = [
+            {
+                "model": "A",
+                "mrr": 0.60,
+                "p50_query_ms": 5.0,
+                "embed_ms": {},
+                "scenarios": [],
+            },
+            {
+                "model": "B",
+                "mrr": 0.70,
+                "p50_query_ms": 6.0,
+                "embed_ms": {},
+                "scenarios": [],
+            },
+        ]
+        verdict = {
+            "default_changed": True,
+            "winner": "B",
+            "reason": "B wins",
+            "baseline": "A",
+        }
+        out = bem.format_markdown_table(results, verdict)
+        assert "changed to B" in out or "→ B" in out
+
+
+class TestPrintSummary:
+    """Exercises the terminal printer; we just check it doesn't crash and
+    that the verdict line and per-model rows make it into _OUTPUT.
+    """
+
+    def test_prints_verdict_and_models(self):
+        bem._OUTPUT.clear()
+        results = [
+            {
+                "model": "BAAI/bge-small-en-v1.5",
+                "mrr": 0.70,
+                "p50_query_ms": 5.0,
+                "embed_ms": {"a": 1000},
+                "scenarios": [
+                    {
+                        "id": "1a",
+                        "pdf": "a",
+                        "query": "q",
+                        "k": 5,
+                        "relevant_pages": [1],
+                        "recall": 1.0,
+                        "rr": 1.0,
+                        "rank_first_hit": 1,
+                        "top_pages": [1],
+                    },
+                ],
+            },
+        ]
+        verdict = {
+            "default_changed": False,
+            "winner": None,
+            "reason": "single-model run",
+            "baseline": "BAAI/bge-small-en-v1.5",
+            "thresholds": {"mrr_lift": 0.05, "latency_ratio": 1.5},
+        }
+        bem.print_summary(results, verdict)
+        out = bem._strip_ansi("\n".join(bem._OUTPUT))
+        assert "BAAI/bge-small-en-v1.5" in out
+        assert "single-model run" in out

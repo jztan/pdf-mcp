@@ -436,8 +436,8 @@ class TestMainIntegration:
         json_files = list(results_dir.glob("embedding_models_*.json"))
         assert len(json_files) == 1
         data = json.loads(json_files[0].read_text())
-        # All 4 models ran (against the stubbed pdf_search)
-        assert len(data["models"]) == 4
+        # All configured models ran (against the stubbed pdf_search)
+        assert len(data["models"]) == len(bem.MODELS)
         assert data["verdict"]["baseline"] == "BAAI/bge-small-en-v1.5"
         out = bem._strip_ansi("\n".join(bem._OUTPUT))
         assert "Verdict" in out

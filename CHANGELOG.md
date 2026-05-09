@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.11.0] - 2026-05-09
 
+### Added
+- **Bring Your Own Model (BYOM)** — embedding model is now configurable via the `[embedding] model = "..."` setting. Four models validated: `BAAI/bge-small-en-v1.5` (default), `BAAI/bge-large-en-v1.5`, `mixedbread-ai/mxbai-embed-large-v1`, and `nomic-ai/nomic-embed-text-v1.5`. See `docs/embedding-models.md` for MTEB scores and trade-offs.
+- `model_name` threaded through `pdf_search` and `pdf_cache_stats` responses so agents can verify which embedding model produced a given result.
+- `model` column on `page_embeddings` cache table — switching models evicts stale rows automatically (no manual cache clear needed).
+- Embedding-model benchmark script (`scripts/bench_embedding_models.py`) with MRR + latency gate, summary tables, and markdown export. Used to validate the four supported models before shipping.
+- `embedding_model` property on `Config` (renamed `MODEL_NAME` → `DEFAULT_MODEL`).
+
+### Fixed
+- `embedder` batch_size capped at 8 (was unlimited) to prevent OOM and hang on long-context models like `nomic-embed-text-v1.5` when processing 75-page PDFs.
+
 ### Changed
-- Version bump
+- Bumped `pip` to 26.1.1 and `python-multipart` to 0.0.27 (transitive dep updates).
 
 ## [1.10.0] - 2026-05-03
 ### Added

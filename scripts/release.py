@@ -247,27 +247,33 @@ def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> Non
     content = changelog.read_text()
     today = date.today().strftime("%Y-%m-%d")
 
-    # Check if there's an [Unreleased] section to convert
-    unreleased_pattern = r"## \[Unreleased\]\s*\n"
-    if re.search(unreleased_pattern, content, re.IGNORECASE):
-        # Replace [Unreleased] with new version
-        new_content = re.sub(
-            unreleased_pattern,
-            f"## [{new_version}] - {today}\n",
-            content,
-            flags=re.IGNORECASE,
+    # Require an [Unreleased] section with real content. Auto-stamping a
+    # "Version bump" placeholder produces vacuous GitHub release notes
+    # (see v1.11.0 incident); fail loud instead so the user fills it in.
+    unreleased_pattern = r"## \[Unreleased\]\s*\n(.*?)(?=^## \[|\Z)"
+    match = re.search(unreleased_pattern, content, re.IGNORECASE | re.DOTALL)
+    if not match:
+        print(
+            "Error: CHANGELOG.md has no [Unreleased] section.\n"
+            "Add one with the changes for this release before running the script."
         )
-    else:
-        # No Unreleased section - add new version section after header
-        # Find the first version entry and insert before it
-        first_version_match = re.search(r"^## \[\d+\.\d+\.\d+\]", content, re.MULTILINE)
-        if first_version_match:
-            insert_pos = first_version_match.start()
-            new_section = f"## [{new_version}] - {today}\n\n### Changed\n- Version bump\n\n"
-            new_content = content[:insert_pos] + new_section + content[insert_pos:]
-        else:
-            print("Error: Could not find where to insert new version in CHANGELOG.md")
-            sys.exit(1)
+        sys.exit(1)
+
+    unreleased_body = match.group(1).strip()
+    if not unreleased_body or unreleased_body in ("### Changed", "### Added"):
+        print(
+            "Error: [Unreleased] section in CHANGELOG.md is empty.\n"
+            "Document the changes for this release before running the script."
+        )
+        sys.exit(1)
+
+    new_content = re.sub(
+        r"## \[Unreleased\]\s*\n",
+        f"## [{new_version}] - {today}\n",
+        content,
+        count=1,
+        flags=re.IGNORECASE,
+    )
 
     if dry_run:
         print(f"  [DRY-RUN] Would update CHANGELOG.md with version {new_version}")

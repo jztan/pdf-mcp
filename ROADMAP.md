@@ -92,15 +92,6 @@
 - New benchmark harness: `scripts/benchmark_sections.py` (with `--detector-source=toc|heuristic` and `--toc-flatten=all|leaves` flags for reproducible alternative views)
 - 60+ new tests across `tests/test_section_detector.py`, `tests/test_cache.py`, `tests/test_server.py` (521 total, up from 489)
 
-### v1.12.0 — LLM-evaluation fixes round 1 (2026-05-12)
-- `pdf_search` hybrid mode used to ship a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode also gains `total_matches`/`page_match_counts` so the schema is consistent across all three modes.
-- Tokenised `_escape_fts5_query`: keyword queries like `"pgvector latency"` no longer require adjacency. Tokenise on whitespace, strip FTS5 reserved chars, join with implicit AND. BM25 still ranks.
-- Auto-mode no longer crashes with `ToolError` when fastembed is installed but the embedding model can't load (offline machine, HF outage). Degrades to keyword with `semantic_unavailable=true` and a reason string.
-- Heuristic section detector rejects line candidates longer than 200 chars to suppress body paragraphs that happen to start with a heading-shaped prefix.
-- **BREAKING**: `pdf_info.text_coverage` shape changed from `list[{page, text_chars, raster_images}]` to a compact dict. Default response now contains only a constant-size `summary` (page-count rollups + truncated OCR candidate list); a 3000-page PDF no longer ships ~6000 ints just for coverage. Pass `pdf_info(path, detail=True)` to opt into the per-page parallel arrays.
-- Per-match `low_confidence` + response-level `all_low_confidence` / `confidence_threshold` on semantic-mode `pdf_search` results.
-- Browser demo (`pages/index.html`) and README updated for the new `text_coverage` shape; demo footer bumped to v0.3.
-
 ### v1.11.0 — Bring-Your-Own Embedding Model (BYOM)
 - `[embedding] model = "..."` in `~/.config/pdf-mcp/config.toml` — swap the embedding model per-install without touching code
 - Default remains `BAAI/bge-small-en-v1.5`; missing key is fully backward-compatible
@@ -112,15 +103,24 @@
 - New `docs/embedding-models.md` — MTEB retrieval benchmark comparison across 9 fastembed models (fast English, high-quality English, long-context, multilingual) with size, license, and a selection guide
 - 13 new tests across `test_pdf_reader.py`, `test_server.py`, `test_embedder.py`, `test_cache.py`
 
+### v1.12.0 — LLM-evaluation fixes round 1 (2026-05-12)
+- `pdf_search` hybrid mode used to ship a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode also gains `total_matches`/`page_match_counts` so the schema is consistent across all three modes.
+- Tokenised `_escape_fts5_query`: keyword queries like `"pgvector latency"` no longer require adjacency. Tokenise on whitespace, strip FTS5 reserved chars, join with implicit AND. BM25 still ranks.
+- Auto-mode no longer crashes with `ToolError` when fastembed is installed but the embedding model can't load (offline machine, HF outage). Degrades to keyword with `semantic_unavailable=true` and a reason string.
+- Heuristic section detector rejects line candidates longer than 200 chars to suppress body paragraphs that happen to start with a heading-shaped prefix.
+- **BREAKING**: `pdf_info.text_coverage` shape changed from `list[{page, text_chars, raster_images}]` to a compact dict. Default response now contains only a constant-size `summary` (page-count rollups + truncated OCR candidate list); a 3000-page PDF no longer ships ~6000 ints just for coverage. Pass `pdf_info(path, detail=True)` to opt into the per-page parallel arrays.
+- Per-match `low_confidence` + response-level `all_low_confidence` / `confidence_threshold` on semantic-mode `pdf_search` results.
+- Browser demo (`pages/index.html`) and README updated for the new `text_coverage` shape; demo footer bumped to v0.3.
+
+### v1.12.1 — LLM-evaluation fixes round 2
+- `pdf_search.total_matches` could disagree with `len(matches)` in keyword mode after the 1.12.0 tokenisation fix — multi-word queries like `pgvector latency` returned 4 matches with `total_matches: 0` because the literal phrase didn't appear anywhere even though both tokens did. `total_matches` now equals `len(matches)` in every mode, and `get_fts_page_counts` counts token occurrences so `page_match_counts` keeps its per-page intensity signal for keyword mode. A property test (`test_total_matches_equals_len_matches_property`) asserts the invariant across modes × queries in CI.
+- Hybrid-mode `low_confidence` flag — true only when there's no keyword hit on the page AND the underlying semantic cosine is below `confidence_threshold`. Pages with literal-term hits stay confident regardless of cosine. Each hybrid match also exposes its `semantic_score` so the agent can see the raw cosine alongside the RRF score it's ranking on.
+- Semantic-mode `all_low_confidence` renamed to `all_results_low_confidence` for parity with the new hybrid-mode rollup.
+- Section-title honesty: heuristic candidates that pass the scored threshold but fail a stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now emit a section boundary with `title=None`. Each section carries a `title_source` field (`"toc"` | `"heading_detected"` | `null`) set at detection time on the `Section` dataclass and persisted on a new `title_source UNINDEXED` column of `pdf_section_fts`. Schema migration drops and recreates the pre-1.12.1 section FTS table; sections re-index lazily on the next section-mode call per PDF.
+
 ---
 
 ## Planned
-
-### v1.13.0 — LLM-evaluation fixes round 2 (staged on `feature/bug-fix`)
-- **BREAKING**: `pdf_search.total_matches` now equals `len(matches)` in every mode. Keyword mode previously defined it as total literal occurrences across the document — semantically different from hybrid/semantic and started disagreeing with `len(matches)` after 1.12.0 tokenisation. `get_fts_page_counts` updated to count token occurrences so `page_match_counts` keeps its per-page intensity signal for keyword mode. A property test (`test_total_matches_equals_len_matches_property`) asserts the invariant across modes × queries in CI.
-- Hybrid-mode `low_confidence` flag — true only when there's no keyword hit on the page AND the underlying semantic cosine is below `confidence_threshold`. Pages with literal-term hits stay confident regardless of cosine. Each hybrid match also exposes its `semantic_score` so the agent can see the raw cosine alongside the RRF score it's ranking on.
-- Semantic-mode `all_low_confidence` renamed to `all_results_low_confidence` for parity with the new hybrid-mode rollup.
-- Section-title honesty: heuristic candidates that pass the scored threshold but fail a stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now emit a section boundary with `title=None`. Each section carries a `title_source` field (`"toc"` | `"heading_detected"` | `null`) set at detection time on the `Section` dataclass and persisted on a new `title_source UNINDEXED` column of `pdf_section_fts` (schema migration drops and recreates the pre-1.13 section FTS table).
 
 ---
 

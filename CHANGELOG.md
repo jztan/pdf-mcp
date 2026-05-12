@@ -7,17 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **BREAKING**: `pdf_search` `total_matches` now equals `len(matches)` in every mode. Previously the keyword path defined it as total literal occurrences across the document (independent of `max_results`), which started disagreeing with `len(matches)` after the 1.12.0 tokenisation fix: queries like `pgvector latency` could return 4 matches with `total_matches: 0`. The keyword path also updates `get_fts_page_counts` to count token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal. Hybrid and semantic modes already used `len(matches)` semantics; this change brings keyword into line.
+(none currently scheduled)
 
-### Added
-- New pytest property test `test_total_matches_equals_len_matches_property` asserts the invariant `len(matches) == total_matches` across all modes × queries (including multi-word tokenised queries), so a future regression that reintroduces a meaning-mismatch fails CI.
-- `pdf_search` hybrid-mode matches now carry per-match `low_confidence` (true when there's no keyword hit on the page AND the underlying semantic cosine is below `confidence_threshold` — pages with literal-term hits stay confident regardless of cosine) plus `semantic_score`, mirroring the semantic-mode flag added in 1.12.0. Response-level `all_results_low_confidence` and `confidence_threshold` are present in both modes. Matches are NOT dropped when low-confidence — agents decide whether to surface "couldn't find it but here's the closest" vs "couldn't find it."
-- Semantic-mode `all_low_confidence` is renamed to `all_results_low_confidence` for parity with the new hybrid-mode field.
-- `pdf_search` section-mode matches now carry a `title_source` field: `"toc"` when the title came from the PDF's authoritative TOC, `"heading_detected"` when the heuristic detector produced a title that passed the clean-heading shape check, or `null` when the heuristic flagged a boundary but the candidate text didn't look like a real heading. Sections with `title_source: null` also have `title: null` so an LLM can show the page range without rendering a synthesised label. The field is set at detection time on the `Section` dataclass and persisted on the FTS row (new `title_source` column on `pdf_section_fts` with migration drop+recreate for pre-1.13 caches), so it is correct regardless of whether `pdf_info` populated the metadata cache before `pdf_search` ran.
+## [1.12.1] - 2026-05-12
 
 ### Fixed
-- Heuristic section detector previously emitted body paragraphs that started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ...") as the section title, because the regex fired on the prefix even when the rest of the line was prose. A stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now runs after the scored signals; candidates that fail it still produce a section boundary but with `title: None`.
+- `pdf_search` `total_matches` in keyword mode could disagree with `len(matches)` after the 1.12.0 tokenisation fix — multi-word queries like `pgvector latency` returned 4 matches with `total_matches: 0` because the literal phrase didn't appear anywhere even though both tokens did. `total_matches` now equals `len(matches)` in every mode, and `get_fts_page_counts` counts token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal in keyword mode.
+- Heuristic section detector emitted body paragraphs that started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ...") as the section title, because the regex fired on the prefix even when the rest of the line was prose. A stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now runs after the scored signals; candidates that fail it still produce a section boundary but with `title: None`.
+- `pdf_search` section-mode previously inferred `title_source` from cached PDF metadata at response time, which meant a section search called before `pdf_info` populated the metadata cache reported `title_source: "heading_detected"` for every match — even when `derive_sections` actually took the TOC path. `title_source` is now set at detection time on the `Section` dataclass and persisted on the FTS row, so the field is correct regardless of call order.
+
+### Added
+- `pdf_search` hybrid-mode matches now carry per-match `low_confidence` (true when there's no keyword hit on the page AND the underlying semantic cosine is below `confidence_threshold` — pages with literal-term hits stay confident regardless of cosine) plus `semantic_score`, mirroring the semantic-mode flag added in 1.12.0. Response-level `all_results_low_confidence` and `confidence_threshold` are present in both modes. Matches are NOT dropped when low-confidence — agents decide whether to surface "couldn't find it but here's the closest" vs "couldn't find it."
+- `pdf_search` section-mode matches now carry a `title_source` field: `"toc"`, `"heading_detected"`, or `null`. Sections with `title_source: null` also have `title: null` so agents can show the page range without rendering a synthesised label.
+- Property test `test_total_matches_equals_len_matches_property` asserts the invariant `len(matches) == total_matches` across all modes × queries (including multi-word tokenised queries), so a future regression fails CI.
+
+### Changed
+- Semantic-mode `all_low_confidence` renamed to `all_results_low_confidence` for parity with the new hybrid-mode field.
+- New `title_source UNINDEXED` column on `pdf_section_fts`. Pre-1.12.1 section indexes are dropped and recreated on first launch (FTS5 does not support `ALTER ADD COLUMN`); sections re-index lazily on the next section-mode call per PDF.
 
 ## [1.12.0] - 2026-05-12
 ### Fixed

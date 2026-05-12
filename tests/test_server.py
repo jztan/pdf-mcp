@@ -2178,6 +2178,32 @@ class TestPdfSearchSectionMode:
         assert result["sections"] == []
         assert result["search_mode"] == "section"
 
+    def test_title_source_is_toc_when_pdf_has_toc(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        """title_source == "toc" for sections derived from PyMuPDF's TOC.
+
+        Regression: an earlier implementation derived title_source from
+        the cached pdf_metadata, which meant a pdf_search call BEFORE
+        pdf_info populated the metadata cache would report
+        title_source="heading_detected" on every match — even when
+        derive_sections actually took the TOC path. The fix records
+        title_source on the Section dataclass at detection time and
+        persists it on the FTS row, so the field is correct regardless
+        of call order.
+        """
+        # Call section search FIRST — pdf_info has not run yet, so the
+        # metadata cache is empty for this path. The fix should still
+        # report "toc" because derive_sections takes the TOC path.
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "graph", granularity="section"
+        )
+        assert result["sections"], "fixture should produce matches"
+        for sec in result["sections"]:
+            assert "title_source" in sec
+            assert sec["title_source"] == "toc"
+            assert sec["title"] is not None
+
     def test_total_sections_reflects_indexed_count(
         self, isolated_server, sample_pdf_with_toc_sections
     ):

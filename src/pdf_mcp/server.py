@@ -759,19 +759,8 @@ def _pdf_search_section_mode(
         cache.index_sections(local_path, sections)
 
     matches = cache.search_section_fts(local_path, query, max_results)
-
-    # TOC presence on the cached PDF tells us which detector path produced
-    # the stored sections (derive_sections is binary: TOC or heuristic).
-    cached_meta = cache.get_metadata(local_path)
-    toc_used = bool(cached_meta and cached_meta.get("toc"))
-    for m in matches:
-        if m.get("title") is None:
-            m["title_source"] = None
-        elif toc_used:
-            m["title_source"] = "toc"
-        else:
-            m["title_source"] = "heading_detected"
-
+    # title_source is carried on each row by search_section_fts, set at
+    # detection time (toc / heading_detected / None) — no inference needed.
     return {
         "sections": matches,
         "search_mode": "section",

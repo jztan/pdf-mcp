@@ -33,6 +33,11 @@ class Section:
     start_page: int  # 1-indexed
     end_page: int  # 1-indexed, inclusive
     text: str = ""  # full concatenated text of all pages in [start_page, end_page]
+    # Provenance of `title`. "toc" — from the PDF's authoritative TOC.
+    # "heading_detected" — from the heuristic detector, passed the clean-
+    # heading shape check. None — heuristic flagged a boundary but the
+    # candidate didn't look like a real heading (title is None too).
+    title_source: str | None = "heading_detected"
 
 
 # ---- Internal constants ----
@@ -292,9 +297,17 @@ def _detect_boundaries_from_lines(
             end_page = candidates[i + 1][0] - 1
         else:
             end_page = total_pages
-        title = raw_title if _looks_like_clean_heading(raw_title) else None
+        is_clean = _looks_like_clean_heading(raw_title)
+        title = raw_title if is_clean else None
+        source = "heading_detected" if is_clean else None
         sections.append(
-            Section(title=title, start_page=page, end_page=end_page, text="")
+            Section(
+                title=title,
+                start_page=page,
+                end_page=end_page,
+                text="",
+                title_source=source,
+            )
         )
     return sections
 
@@ -331,7 +344,15 @@ def _toc_entries_to_sections(
             if next_level <= level:
                 end = next_start - 1
                 break
-        sections.append(Section(title=title, start_page=start, end_page=end, text=""))
+        sections.append(
+            Section(
+                title=title,
+                start_page=start,
+                end_page=end,
+                text="",
+                title_source="toc",
+            )
+        )
     return sections
 
 
@@ -438,9 +459,17 @@ def detect_boundaries(pdf_path: str) -> list[Section]:
                 end_page = candidates[i + 1][0] - 1
             else:
                 end_page = len(doc)
-            title = raw_title if _looks_like_clean_heading(raw_title) else None
+            is_clean = _looks_like_clean_heading(raw_title)
+            title = raw_title if is_clean else None
+            source = "heading_detected" if is_clean else None
             sections.append(
-                Section(title=title, start_page=page, end_page=end_page, text="")
+                Section(
+                    title=title,
+                    start_page=page,
+                    end_page=end_page,
+                    text="",
+                    title_source=source,
+                )
             )
 
         # Phase 6: fill section text from page ranges.

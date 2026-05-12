@@ -582,14 +582,22 @@ class TestExtractTocBoundariesPure:
         ]
         result = sd._toc_entries_to_sections(toc, total_pages=10)
         assert result == [
-            sd.Section(title="Intro", start_page=1, end_page=4, text=""),
-            sd.Section(title="Body", start_page=5, end_page=10, text=""),
+            sd.Section(
+                title="Intro", start_page=1, end_page=4, text="", title_source="toc"
+            ),
+            sd.Section(
+                title="Body", start_page=5, end_page=10, text="", title_source="toc"
+            ),
         ]
 
     def test_last_entry_extends_to_final_page(self):
         toc = [(1, "Only", 3)]
         result = sd._toc_entries_to_sections(toc, total_pages=10)
-        assert result == [sd.Section(title="Only", start_page=3, end_page=10, text="")]
+        assert result == [
+            sd.Section(
+                title="Only", start_page=3, end_page=10, text="", title_source="toc"
+            )
+        ]
 
     def test_nested_subsection_does_not_close_parent(self):
         # 1 Intro (p1) > 1.1 Background (p2) > 1.2 Motivation (p3) > 2 Body (p5)
@@ -603,10 +611,26 @@ class TestExtractTocBoundariesPure:
         ]
         result = sd._toc_entries_to_sections(toc, total_pages=10)
         assert result == [
-            sd.Section(title="Intro", start_page=1, end_page=4, text=""),
-            sd.Section(title="Background", start_page=2, end_page=2, text=""),
-            sd.Section(title="Motivation", start_page=3, end_page=4, text=""),
-            sd.Section(title="Body", start_page=5, end_page=10, text=""),
+            sd.Section(
+                title="Intro", start_page=1, end_page=4, text="", title_source="toc"
+            ),
+            sd.Section(
+                title="Background",
+                start_page=2,
+                end_page=2,
+                text="",
+                title_source="toc",
+            ),
+            sd.Section(
+                title="Motivation",
+                start_page=3,
+                end_page=4,
+                text="",
+                title_source="toc",
+            ),
+            sd.Section(
+                title="Body", start_page=5, end_page=10, text="", title_source="toc"
+            ),
         ]
 
     def test_four_level_hierarchy(self):

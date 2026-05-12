@@ -34,6 +34,7 @@ _FTS5_SECTION_TABLE_SCHEMA = (
     "text, "
     "start_page UNINDEXED, "
     "end_page UNINDEXED, "
+    "title_source UNINDEXED, "
     "tokenize='porter unicode61'"
     ")"
 )
@@ -293,6 +294,14 @@ class PDFCache:
                 self.fts_available = False
 
             if self.fts_available:
+                # Section FTS table: drop and recreate if the title_source
+                # column is missing (pre-1.13 cache). FTS5 virtual tables
+                # don't support ALTER ADD COLUMN, so a drop+recreate is
+                # the only path. Sections are cheap to re-derive lazily on
+                # the next section-mode search.
+                section_cols = _get_columns(conn, "pdf_section_fts")
+                if section_cols and "title_source" not in section_cols:
+                    conn.execute("DROP TABLE IF EXISTS pdf_section_fts")
                 try:
                     conn.execute(_FTS5_SECTION_TABLE_SCHEMA)
                 except sqlite3.OperationalError:
@@ -1285,10 +1294,19 @@ class PDFCache:
             if sections:
                 conn.executemany(
                     "INSERT INTO pdf_section_fts"
-                    " (file_path, section_id, title, text, start_page, end_page)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     [
-                        (path, i, s.title, s.text, s.start_page, s.end_page)
+                        (
+                            path,
+                            i,
+                            s.title,
+                            s.text,
+                            s.start_page,
+                            s.end_page,
+                            s.title_source,
+                        )
                         for i, s in enumerate(sections)
                     ],
                 )
@@ -1320,7 +1338,7 @@ class PDFCache:
             try:
                 rows = conn.execute(
                     "SELECT section_id, title, start_page, end_page,"
-                    " -bm25(pdf_section_fts)"
+                    " title_source, -bm25(pdf_section_fts)"
                     " FROM pdf_section_fts"
                     " WHERE pdf_section_fts MATCH ? AND file_path = ?"
                     " ORDER BY bm25(pdf_section_fts)"
@@ -1335,9 +1353,10 @@ class PDFCache:
                 "title": title,
                 "start_page": int(sp),
                 "end_page": int(ep),
+                "title_source": title_source,
                 "score": float(score),
             }
-            for sid, title, sp, ep, score in rows
+            for sid, title, sp, ep, title_source, score in rows
         ]
 
     def get_section_fts_coverage(self, path: str) -> int:

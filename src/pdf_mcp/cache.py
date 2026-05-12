@@ -4,6 +4,7 @@ SQLite-based cache for PDF data persistence across MCP server restarts.
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 from datetime import datetime, timedelta
@@ -38,18 +39,31 @@ _FTS5_SECTION_TABLE_SCHEMA = (
 )
 
 
+_FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
+_NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
+
+
 def _escape_fts5_query(query: str) -> str:
     """
     Escape a user-supplied query for FTS5 MATCH expressions.
 
-    Wraps the query in double-quotes to make it a phrase query,
-    preventing FTS5 reserved operators (AND, OR, NOT, NEAR) and
-    special characters from being interpreted as query syntax.
-    Internal double-quote characters are replaced with spaces
-    (NOT escaped as "" — FTS5 does not define "" inside phrases).
-    Porter stemming still applies to each token in the phrase.
+    Tokenises the query on whitespace, strips FTS5 reserved characters
+    from each token, wraps each non-empty token in double-quotes, and
+    joins with spaces. FTS5 treats space-separated quoted tokens as an
+    implicit AND, so all words must appear on the same page; BM25 then
+    ranks pages by combined token frequency. Word order does not matter.
+
+    Returns a sentinel token that matches nothing when the query has no
+    extractable tokens (e.g. only punctuation).
     """
-    return '"' + query.replace('"', " ") + '"'
+    tokens: list[str] = []
+    for raw in query.split():
+        cleaned = _FTS_TOKEN_STRIP.sub("", raw)
+        if cleaned:
+            tokens.append(f'"{cleaned}"')
+    if not tokens:
+        return _NO_MATCH_SENTINEL
+    return " ".join(tokens)
 
 
 def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:

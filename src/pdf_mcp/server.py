@@ -591,56 +591,63 @@ def _python_search(
     context_chars: int,
 ) -> tuple[list[dict[str, Any]], dict[int, int]]:
     """
-    Python string-matching fallback for pdf_search when FTS5 is unavailable.
+    Python token-matching fallback for pdf_search when FTS5 is unavailable.
+
+    Tokenises the query on whitespace and requires every token to appear
+    on the page (case-insensitive, order-independent). Page counts reflect
+    total token occurrences across the page; the excerpt is centred on the
+    first token hit found.
 
     Returns (matches, page_counts) where:
     - matches: list of {page, excerpt, position, score} (score=0.0)
-    - page_counts: dict mapping 0-indexed page_num to literal occurrence count
+    - page_counts: dict mapping 0-indexed page_num to total token-occurrence count
     """
     matches: list[dict[str, Any]] = []
     page_counts: dict[int, int] = {}
-    query_lower = query.lower()
+    tokens_lower = [t for t in query.lower().split() if t]
+    if not tokens_lower:
+        return matches, page_counts
 
     for page_num, text in sorted(page_texts.items()):
         text_lower = text.lower()
-        count = text_lower.count(query_lower)
-        if count > 0:
-            page_counts[page_num] = count
+        token_counts = [text_lower.count(t) for t in tokens_lower]
+        if not all(c > 0 for c in token_counts):
+            continue
 
-        start = 0
-        while len(matches) < max_results:
-            pos = text_lower.find(query_lower, start)
-            if pos == -1:
-                break
+        page_counts[page_num] = sum(token_counts)
 
-            ctx_start = max(0, pos - context_chars // 2)
-            ctx_end = min(len(text), pos + len(query) + context_chars // 2)
+        if len(matches) >= max_results:
+            continue
 
-            if ctx_start > 0:
-                space_pos = text.rfind(" ", ctx_start - 50, ctx_start)
-                if space_pos > 0:
-                    ctx_start = space_pos + 1
+        first_token = tokens_lower[0]
+        pos = text_lower.find(first_token)
+        ctx_start = max(0, pos - context_chars // 2)
+        ctx_end = min(len(text), pos + len(first_token) + context_chars // 2)
 
-            if ctx_end < len(text):
-                space_pos = text.find(" ", ctx_end, ctx_end + 50)
-                if space_pos > 0:
-                    ctx_end = space_pos
+        if ctx_start > 0:
+            space_pos = text.rfind(" ", ctx_start - 50, ctx_start)
+            if space_pos > 0:
+                ctx_start = space_pos + 1
 
-            excerpt = text[ctx_start:ctx_end]
-            if ctx_start > 0:
-                excerpt = "..." + excerpt
-            if ctx_end < len(text):
-                excerpt = excerpt + "..."
+        if ctx_end < len(text):
+            space_pos = text.find(" ", ctx_end, ctx_end + 50)
+            if space_pos > 0:
+                ctx_end = space_pos
 
-            matches.append(
-                {
-                    "page": page_num + 1,
-                    "excerpt": excerpt.strip(),
-                    "position": pos,
-                    "score": 0.0,
-                }
-            )
-            start = pos + len(query_lower)
+        excerpt = text[ctx_start:ctx_end]
+        if ctx_start > 0:
+            excerpt = "..." + excerpt
+        if ctx_end < len(text):
+            excerpt = excerpt + "..."
+
+        matches.append(
+            {
+                "page": page_num + 1,
+                "excerpt": excerpt.strip(),
+                "position": pos,
+                "score": 0.0,
+            }
+        )
 
     return matches, page_counts
 

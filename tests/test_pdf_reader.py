@@ -601,6 +601,44 @@ class TestFTS5Cache:
         assert isinstance(results, list)
         assert len(results) == 1
 
+    def test_search_fts_multi_word_token_and(self, cache, sample_pdf):
+        """Multi-word query matches when all tokens appear on the page,
+        even if non-contiguous or in different order."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf,
+            0,
+            "our benchmark shows pgvector achieves 12ms p50 latency with HNSW",
+        )
+
+        # both words present, non-contiguous → must match
+        assert (
+            len(
+                cache.search_fts(
+                    sample_pdf, "pgvector latency", max_results=5, context_chars=50
+                )
+            )
+            == 1
+        )
+        # reversed order → must match
+        assert (
+            len(
+                cache.search_fts(
+                    sample_pdf, "latency pgvector", max_results=5, context_chars=50
+                )
+            )
+            == 1
+        )
+        # any missing token → no match (AND semantics)
+        assert (
+            cache.search_fts(
+                sample_pdf, "pgvector unicorn", max_results=5, context_chars=50
+            )
+            == []
+        )
+
     def test_search_fts_query_with_special_chars_no_crash(self, cache, sample_pdf):
         """search_fts handles queries with parentheses and quotes without raising."""
         if not cache.fts_available:
@@ -933,7 +971,10 @@ class TestPageEmbeddingsCRUD:
     def test_get_returns_empty_when_nothing_saved(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings returns {} when no embeddings are cached."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        assert cache.get_page_embeddings(sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5") == {}
+        assert (
+            cache.get_page_embeddings(sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5")
+            == {}
+        )
 
     def test_get_empty_page_nums_returns_empty(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings([]) returns {} without hitting the database."""
@@ -947,8 +988,12 @@ class TestPageEmbeddingsCRUD:
         raw1 = b"\xff" * 1536
         raw2 = b"\x80" * 1536
 
-        cache.save_page_embeddings(sample_pdf, {0: raw0, 1: raw1, 2: raw2}, "BAAI/bge-small-en-v1.5")
-        result = cache.get_page_embeddings(sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5")
+        cache.save_page_embeddings(
+            sample_pdf, {0: raw0, 1: raw1, 2: raw2}, "BAAI/bge-small-en-v1.5"
+        )
+        result = cache.get_page_embeddings(
+            sample_pdf, [0, 1, 2], "BAAI/bge-small-en-v1.5"
+        )
 
         assert set(result.keys()) == {0, 1, 2}
         assert result[0] == raw0
@@ -958,7 +1003,9 @@ class TestPageEmbeddingsCRUD:
     def test_get_only_returns_requested_pages(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings only returns the pages in page_nums."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536}, "BAAI/bge-small-en-v1.5")
+        cache.save_page_embeddings(
+            sample_pdf, {0: b"\x01" * 1536, 1: b"\x02" * 1536}, "BAAI/bge-small-en-v1.5"
+        )
         result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
 
         assert 0 in result
@@ -970,7 +1017,9 @@ class TestPageEmbeddingsCRUD:
         import time
 
         cache = PDFCache(cache_dir=temp_cache_dir)
-        cache.save_page_embeddings(sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5")
+        cache.save_page_embeddings(
+            sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5"
+        )
 
         time.sleep(0.01)
         os.utime(sample_pdf, None)  # bump mtime
@@ -988,9 +1037,7 @@ class TestPageEmbeddingsByom:
         with sqlite3.connect(cache.db_path) as conn:
             cols = {
                 row[1]
-                for row in conn.execute(
-                    "PRAGMA table_info(page_embeddings)"
-                ).fetchall()
+                for row in conn.execute("PRAGMA table_info(page_embeddings)").fetchall()
             }
         assert "model" in cols
 
@@ -1011,16 +1058,14 @@ class TestPageEmbeddingsByom:
         with sqlite3.connect(db_path) as conn:
             cols = {
                 row[1]
-                for row in conn.execute(
-                    "PRAGMA table_info(page_embeddings)"
-                ).fetchall()
+                for row in conn.execute("PRAGMA table_info(page_embeddings)").fetchall()
             }
         assert "model" in cols
 
     def test_save_and_get_round_trip_with_model(self, temp_cache_dir, sample_pdf):
         """save → get returns identical bytes for the same model."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        raw = b"\xAB" * 1536
+        raw = b"\xab" * 1536
         cache.save_page_embeddings(sample_pdf, {0: raw}, "BAAI/bge-small-en-v1.5")
         result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-small-en-v1.5")
         assert result == {0: raw}
@@ -1028,7 +1073,7 @@ class TestPageEmbeddingsByom:
     def test_model_change_evicts_stale_rows(self, temp_cache_dir, sample_pdf):
         """get_page_embeddings deletes rows from a different model before returning."""
         cache = PDFCache(cache_dir=temp_cache_dir)
-        raw = b"\xAB" * 1536
+        raw = b"\xab" * 1536
         cache.save_page_embeddings(sample_pdf, {0: raw}, "BAAI/bge-small-en-v1.5")
 
         result = cache.get_page_embeddings(sample_pdf, [0], "BAAI/bge-large-en-v1.5")
@@ -1041,7 +1086,9 @@ class TestPageEmbeddingsByom:
             ).fetchone()[0]
         assert count == 0
 
-    def test_migration_existing_rows_get_default_model(self, temp_cache_dir, sample_pdf):
+    def test_migration_existing_rows_get_default_model(
+        self, temp_cache_dir, sample_pdf
+    ):
         """Rows inserted before migration get model='BAAI/bge-small-en-v1.5' default."""
         db_path = temp_cache_dir / "cache.db"
         with sqlite3.connect(db_path) as conn:

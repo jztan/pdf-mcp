@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.12.1] - 2026-05-12
 ### Fixed
 - `pdf_search` `total_matches` in keyword mode could disagree with `len(matches)` after the 1.12.0 tokenisation fix — multi-word queries like `pgvector latency` returned 4 matches with `total_matches: 0` because the literal phrase didn't appear anywhere even though both tokens did. `total_matches` now equals `len(matches)` in every mode, and `get_fts_page_counts` counts token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal in keyword mode.
 - Heuristic section detector emitted body paragraphs that started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ...") as the section title, because the regex fired on the prefix even when the rest of the line was prose. A stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now runs after the scored signals; candidates that fail it still produce a section boundary but with `title: None`.

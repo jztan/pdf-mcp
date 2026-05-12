@@ -130,6 +130,28 @@ class TestDetectBoundariesPure:
         assert sections[2].start_page == 3
         assert sections[2].end_page == 5
 
+    def test_overlong_heading_candidate_is_rejected(self):
+        # A line that starts like a heading ("Section 2:") but continues as a
+        # full body paragraph used to be accepted, producing a section whose
+        # title was a truncated body sentence. The length gate now rejects
+        # candidates longer than _MAX_HEADING_CHARS so no spurious section
+        # is created.
+        body_paragraph = (
+            "Section 2: This paragraph discusses evaluation in greater depth. "
+            "Specifically, it covers the relationship between retrieval "
+            "quality and downstream task performance across the eight "
+            "benchmarks introduced earlier, with attention to the trade-offs "
+            "made in each evaluation regime."
+        )
+        assert len(body_paragraph) > sd._MAX_HEADING_CHARS
+        lines = [
+            (1, body_paragraph),
+            (3, "Section 3 Methods"),
+        ]
+        sections = sd._detect_boundaries_from_lines(lines, total_pages=5)
+        # Only the short, legitimate heading survives.
+        assert [s.title for s in sections] == ["Section 3 Methods"]
+
     def test_empty_input_returns_empty_list(self):
         assert sd._detect_boundaries_from_lines([], total_pages=10) == []
 

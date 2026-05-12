@@ -228,9 +228,7 @@ class TestPdfSearchModes:
         for m in result["matches"]:
             assert "low_confidence" in m
             assert isinstance(m["low_confidence"], bool)
-            assert m["low_confidence"] is (
-                m["score"] < result["confidence_threshold"]
-            )
+            assert m["low_confidence"] is (m["score"] < result["confidence_threshold"])
 
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
@@ -289,9 +287,7 @@ class TestPdfSearchModes:
         assert "total_matches" in result
         assert "page_match_counts" in result
 
-    def test_auto_mode_falls_back_on_encode_failure(
-        self, sample_pdf, isolated_server
-    ):
+    def test_auto_mode_falls_back_on_encode_failure(self, sample_pdf, isolated_server):
         """mode='auto' degrades to keyword when embedder.encode() raises
         (model load failure, network outage, etc.)."""
         with (
@@ -511,6 +507,46 @@ class TestPdfSearchModes:
 
         # auto + no fastembed → keyword
         assert result.get("search_mode") == "keyword"
+
+    def test_total_matches_equals_len_matches_property(
+        self, sample_pdf, isolated_server
+    ):
+        """Property: total_matches == len(matches) across every mode and
+        every query, including multi-word tokenised queries that the
+        1.12.0 LLM evaluation surfaced as the schema regression.
+
+        This is the codified-in-CI version of the cross-mode matrix in
+        the evaluation reports. If a future change reintroduces a
+        meaning-mismatch on total_matches, this test fails the build.
+        """
+        encode, encode_query = self._make_encode()
+        queries = [
+            "page",
+            "pgvector latency",
+            "this string definitely does not appear",
+            "xyznonexistent",
+        ]
+        modes = ["keyword", "semantic", "auto"]
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            for mode in modes:
+                for query in queries:
+                    result = pdf_search(sample_pdf, query, mode=mode)
+                    assert (
+                        "matches" in result
+                    ), f"mode={mode} query={query!r}: missing matches"
+                    assert (
+                        "total_matches" in result
+                    ), f"mode={mode} query={query!r}: missing total_matches"
+                    assert result["total_matches"] == len(result["matches"]), (
+                        f"mode={mode} query={query!r}: "
+                        f"total_matches={result['total_matches']} vs "
+                        f"len(matches)={len(result['matches'])}"
+                    )
 
 
 class TestPdfInfo:
@@ -1476,16 +1512,26 @@ class TestPdfSearchFTS5:
             assert isinstance(key, str)
             assert int(key) >= 1
 
-    def test_search_total_matches_accurate_no_early_exit(
+    def test_search_total_matches_equals_len_matches_across_max_results(
         self, sample_pdf, isolated_server
     ):
-        """total_matches reflects all pages, not truncated by max_results."""
+        """total_matches equals len(matches) for every max_results.
+
+        The pre-1.13 contract was total_matches = total occurrences across
+        the document (intentionally independent of max_results). That was
+        the source of the LLM-visible schema disagreement: total_matches
+        could exceed len(matches) without any signal that the rest had
+        been truncated. The schema-parity contract now makes total_matches
+        always equal len(matches); the doc-wide signal lives in
+        page_match_counts.
+        """
         result_limited = pdf_search(sample_pdf, "page", max_results=1)
         result_full = pdf_search(sample_pdf, "page", max_results=100)
 
-        assert result_limited["total_matches"] == result_full["total_matches"]
-        assert len(result_limited["matches"]) == 1
-        assert len(result_full["matches"]) >= 5
+        assert result_limited["total_matches"] == len(result_limited["matches"])
+        assert result_full["total_matches"] == len(result_full["matches"])
+        assert result_limited["total_matches"] == 1
+        assert result_full["total_matches"] >= 5
 
     def test_search_stemming_via_fts(self, isolated_server, tmp_path):
         """FTS5 stemming: query 'search' finds pages with 'searching'."""

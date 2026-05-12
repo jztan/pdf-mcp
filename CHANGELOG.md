@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **BREAKING**: `pdf_search` `total_matches` now equals `len(matches)` in every mode. Previously the keyword path defined it as total literal occurrences across the document (independent of `max_results`), which started disagreeing with `len(matches)` after the 1.12.0 tokenisation fix: queries like `pgvector latency` could return 4 matches with `total_matches: 0`. The keyword path also updates `get_fts_page_counts` to count token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal. Hybrid and semantic modes already used `len(matches)` semantics; this change brings keyword into line.
+
+### Added
+- New pytest property test `test_total_matches_equals_len_matches_property` asserts the invariant `len(matches) == total_matches` across all modes × queries (including multi-word tokenised queries), so a future regression that reintroduces a meaning-mismatch fails CI.
+
 ## [1.12.0] - 2026-05-12
 ### Fixed
 - `pdf_search` hybrid mode used to return a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode now includes `total_matches`/`page_match_counts` so the schema is consistent across all three modes.

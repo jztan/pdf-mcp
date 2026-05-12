@@ -1017,7 +1017,9 @@ def pdf_search(
                     page_texts_kw, query, kw_limit, context_chars
                 )
 
-        total_matches = sum(page_counts.values())
+        # total_matches is len(matches) across every mode (schema parity);
+        # page_match_counts carries the per-page intensity signal (token
+        # occurrences per page) so keyword mode keeps its recall info.
         page_match_counts = {str(pg + 1): v for pg, v in page_counts.items()}
 
         if mode == "keyword":
@@ -1033,7 +1035,7 @@ def pdf_search(
                 ),
                 "query": query,
                 "matches": kw_matches,
-                "total_matches": total_matches,
+                "total_matches": len(kw_matches),
                 "page_match_counts": page_match_counts,
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
@@ -1060,8 +1062,10 @@ def pdf_search(
                 ),
                 "query": query,
                 "matches": auto_kw,
-                "total_matches": total_matches,
-                "page_match_counts": page_match_counts,
+                "total_matches": len(auto_kw),
+                "page_match_counts": {
+                    str(m["page"]): page_counts.get(m["page"] - 1, 0) for m in auto_kw
+                },
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
             }

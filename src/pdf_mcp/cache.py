@@ -1203,20 +1203,28 @@ class PDFCache:
 
     def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:
         """
-        Return literal (case-insensitive) occurrence counts per page for query.
+        Return per-page token-occurrence counts for query.
 
-        Queries the FTS5 index for ALL matching pages (no LIMIT) and counts
-        literal occurrences in the stored text. Used to compute total_matches
-        and page_match_counts in pdf_search without early-exit truncation.
+        Queries the FTS5 index for ALL matching pages (no LIMIT) using the
+        same tokenised AND semantics as `_escape_fts5_query`. For each
+        matched page, sums case-insensitive occurrences of every query
+        token in the stored text — a per-page intensity signal that
+        agrees with the retrieval path (so pages returned in `matches`
+        are guaranteed to appear here).
 
-        Returns a dict mapping 0-indexed page_num to occurrence count.
-        Returns {} when fts_available is False or no matches found.
+        Returns a dict mapping 0-indexed page_num to total token-occurrence
+        count. Returns {} when fts_available is False, the query has no
+        usable tokens, or no pages match.
         """
         if not self.fts_available:
             return {}
 
+        tokens_lower = [_FTS_TOKEN_STRIP.sub("", tok).lower() for tok in query.split()]
+        tokens_lower = [t for t in tokens_lower if t]
+        if not tokens_lower:
+            return {}
+
         escaped = _escape_fts5_query(query)
-        query_lower = query.lower()
 
         with sqlite3.connect(self.db_path) as conn:
             try:
@@ -1231,7 +1239,8 @@ class PDFCache:
 
         result: dict[int, int] = {}
         for page_num, text in rows:
-            count = text.lower().count(query_lower)
+            text_lower = text.lower()
+            count = sum(text_lower.count(t) for t in tokens_lower)
             if count > 0:
                 result[int(page_num)] = count
         return result

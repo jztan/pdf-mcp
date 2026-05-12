@@ -735,9 +735,16 @@ def _pdf_search_section_mode(
     section FTS5 cache if not already populated, runs a BM25-ranked
     query, returns top sections by score.
 
+    Each match carries a `title_source`:
+      - "toc": title came from the PDF's authoritative TOC
+      - "heading_detected": title came from the heuristic detector and
+        passed the clean-heading shape check
+      - null: heuristic flagged a boundary but the candidate didn't
+        look like a real heading; title is null too
+
     Returns shape:
-      {"sections": [{"section_id", "title", "start_page", "end_page",
-                      "score"}, ...],
+      {"sections": [{"section_id", "title", "title_source",
+                      "start_page", "end_page", "score"}, ...],
        "search_mode": "section",
        "total_sections": int (count of indexed sections for this PDF)}
     """
@@ -752,6 +759,8 @@ def _pdf_search_section_mode(
         cache.index_sections(local_path, sections)
 
     matches = cache.search_section_fts(local_path, query, max_results)
+    # title_source is carried on each row by search_section_fts, set at
+    # detection time (toc / heading_detected / None) — no inference needed.
     return {
         "sections": matches,
         "search_mode": "section",
@@ -801,20 +810,28 @@ def pdf_search(
 
     Returns:
         Page mode (granularity='page'):
-            - matches: List of {page, excerpt, position, score, source}
-              Semantic and hybrid responses also include per-match
-              `low_confidence` (bool) and top-level
-              `all_low_confidence` + `confidence_threshold` (cosine
-              floor below which a semantic match is treated as
-              non-relevant).
+            - matches: List of {page, excerpt, position, score, source}.
+              Semantic mode matches also carry `low_confidence` (cosine
+              below the confidence threshold). Hybrid mode matches
+              additionally carry `semantic_score` and `low_confidence`
+              (true only when there's no keyword hit on the page AND
+              the semantic cosine is below threshold — pages with
+              literal-term hits stay confident regardless of cosine).
+              Response-level `all_results_low_confidence` +
+              `confidence_threshold` are present in both semantic and
+              hybrid modes.
             - total_matches, page_match_counts, search_mode, searched_pages
             - semantic_unavailable (only set in auto mode when the
               embedding model could not be loaded; the response then
               degrades to search_mode='keyword' and carries a
               `semantic_unavailable_reason` string).
         Section mode (granularity='section'):
-            - sections: List of {section_id, title, start_page, end_page,
-                        score} sorted by descending BM25 relevance.
+            - sections: List of {section_id, title, title_source,
+                        start_page, end_page, score} sorted by descending
+                        BM25 relevance. `title_source` is "toc" |
+                        "heading_detected" | null; when null, `title` is
+                        also null (the heuristic flagged a boundary but
+                        couldn't produce a trustworthy label).
             - search_mode: 'section'
             - total_sections: count of indexed sections for this PDF
 
@@ -961,7 +978,7 @@ def pdf_search(
                 m["source"] = sem_sources.get(m["page"] - 1, "extracted")
 
             sem_page_counts = {str(m["page"]): 1 for m in matches}
-            all_low_confidence = bool(matches) and all(
+            all_results_low_confidence = bool(matches) and all(
                 m["low_confidence"] for m in matches
             )
 
@@ -974,7 +991,7 @@ def pdf_search(
                 "matches": matches,
                 "total_matches": len(matches),
                 "page_match_counts": sem_page_counts,
-                "all_low_confidence": all_low_confidence,
+                "all_results_low_confidence": all_results_low_confidence,
                 "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "searched_pages": doc_pages,
                 "search_mode": "semantic",
@@ -1017,7 +1034,9 @@ def pdf_search(
                     page_texts_kw, query, kw_limit, context_chars
                 )
 
-        total_matches = sum(page_counts.values())
+        # total_matches is len(matches) across every mode (schema parity);
+        # page_match_counts carries the per-page intensity signal (token
+        # occurrences per page) so keyword mode keeps its recall info.
         page_match_counts = {str(pg + 1): v for pg, v in page_counts.items()}
 
         if mode == "keyword":
@@ -1033,7 +1052,7 @@ def pdf_search(
                 ),
                 "query": query,
                 "matches": kw_matches,
-                "total_matches": total_matches,
+                "total_matches": len(kw_matches),
                 "page_match_counts": page_match_counts,
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
@@ -1060,8 +1079,10 @@ def pdf_search(
                 ),
                 "query": query,
                 "matches": auto_kw,
-                "total_matches": total_matches,
-                "page_match_counts": page_match_counts,
+                "total_matches": len(auto_kw),
+                "page_match_counts": {
+                    str(m["page"]): page_counts.get(m["page"] - 1, 0) for m in auto_kw
+                },
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
             }
@@ -1114,6 +1135,7 @@ def pdf_search(
                 for i, pn in enumerate(sorted_nums):
                     cached_embeddings[pn] = vecs[i]
 
+        page_sem_score: dict[int, float] = {}
         if cached_embeddings:
             try:
                 query_vec = _embedder.encode_query(query, _model_name)
@@ -1124,6 +1146,10 @@ def pdf_search(
             page_nums_list = sorted(cached_embeddings.keys())
             matrix = np.stack([cached_embeddings[p] for p in page_nums_list])
             sem_scores = matrix @ query_vec
+            page_sem_score = {
+                page_nums_list[i]: float(sem_scores[i])
+                for i in range(len(page_nums_list))
+            }
             sem_top_k = min(kw_limit, len(page_nums_list))
             top_idx = np.argpartition(sem_scores, -sem_top_k)[-sem_top_k:]
             top_idx = top_idx[np.argsort(sem_scores[top_idx])[::-1]]
@@ -1133,6 +1159,7 @@ def pdf_search(
 
         keyword_pages_0idx = [m["page"] - 1 for m in kw_matches]
         keyword_excerpts = {m["page"] - 1: m.get("excerpt", "") for m in kw_matches}
+        keyword_pages_set = set(keyword_pages_0idx)
 
         fused = _rrf_fuse(keyword_pages_0idx, semantic_pages_0idx, max_results)
 
@@ -1143,11 +1170,22 @@ def pdf_search(
             else:
                 page_text = cache.get_page_text(local_path, page_num) or ""
                 excerpt = page_text[:context_chars]
+            # A hybrid match is low-confidence when (a) it has no keyword
+            # hit on the page AND (b) the underlying semantic cosine is
+            # below the confidence threshold. Keyword-hit pages always
+            # count as confident: the query terms literally appear.
+            sem_score = page_sem_score.get(page_num, 0.0)
+            low_confidence = (
+                page_num not in keyword_pages_set
+                and sem_score < _SEMANTIC_CONFIDENCE_THRESHOLD
+            )
             hybrid_matches.append(
                 {
                     "page": page_num + 1,
                     "excerpt": excerpt,
                     "score": round(rrf_score, 4),
+                    "semantic_score": round(sem_score, 4),
+                    "low_confidence": low_confidence,
                     "position": 0,
                 }
             )
@@ -1159,6 +1197,9 @@ def pdf_search(
             m["source"] = hybrid_sources.get(m["page"] - 1, "extracted")
 
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}
+        all_results_low_confidence = bool(hybrid_matches) and all(
+            m["low_confidence"] for m in hybrid_matches
+        )
 
         return {
             "content_warning": (
@@ -1169,6 +1210,8 @@ def pdf_search(
             "matches": hybrid_matches,
             "total_matches": len(hybrid_matches),
             "page_match_counts": hybrid_page_counts,
+            "all_results_low_confidence": all_results_low_confidence,
+            "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
             "searched_pages": doc_pages,
             "search_mode": "hybrid",
             "model": _model_name,

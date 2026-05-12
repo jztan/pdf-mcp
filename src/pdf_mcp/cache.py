@@ -34,6 +34,7 @@ _FTS5_SECTION_TABLE_SCHEMA = (
     "text, "
     "start_page UNINDEXED, "
     "end_page UNINDEXED, "
+    "title_source UNINDEXED, "
     "tokenize='porter unicode61'"
     ")"
 )
@@ -293,6 +294,14 @@ class PDFCache:
                 self.fts_available = False
 
             if self.fts_available:
+                # Section FTS table: drop and recreate if the title_source
+                # column is missing (pre-1.13 cache). FTS5 virtual tables
+                # don't support ALTER ADD COLUMN, so a drop+recreate is
+                # the only path. Sections are cheap to re-derive lazily on
+                # the next section-mode search.
+                section_cols = _get_columns(conn, "pdf_section_fts")
+                if section_cols and "title_source" not in section_cols:
+                    conn.execute("DROP TABLE IF EXISTS pdf_section_fts")
                 try:
                     conn.execute(_FTS5_SECTION_TABLE_SCHEMA)
                 except sqlite3.OperationalError:
@@ -1203,20 +1212,28 @@ class PDFCache:
 
     def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:
         """
-        Return literal (case-insensitive) occurrence counts per page for query.
+        Return per-page token-occurrence counts for query.
 
-        Queries the FTS5 index for ALL matching pages (no LIMIT) and counts
-        literal occurrences in the stored text. Used to compute total_matches
-        and page_match_counts in pdf_search without early-exit truncation.
+        Queries the FTS5 index for ALL matching pages (no LIMIT) using the
+        same tokenised AND semantics as `_escape_fts5_query`. For each
+        matched page, sums case-insensitive occurrences of every query
+        token in the stored text — a per-page intensity signal that
+        agrees with the retrieval path (so pages returned in `matches`
+        are guaranteed to appear here).
 
-        Returns a dict mapping 0-indexed page_num to occurrence count.
-        Returns {} when fts_available is False or no matches found.
+        Returns a dict mapping 0-indexed page_num to total token-occurrence
+        count. Returns {} when fts_available is False, the query has no
+        usable tokens, or no pages match.
         """
         if not self.fts_available:
             return {}
 
+        tokens_lower = [_FTS_TOKEN_STRIP.sub("", tok).lower() for tok in query.split()]
+        tokens_lower = [t for t in tokens_lower if t]
+        if not tokens_lower:
+            return {}
+
         escaped = _escape_fts5_query(query)
-        query_lower = query.lower()
 
         with sqlite3.connect(self.db_path) as conn:
             try:
@@ -1231,7 +1248,8 @@ class PDFCache:
 
         result: dict[int, int] = {}
         for page_num, text in rows:
-            count = text.lower().count(query_lower)
+            text_lower = text.lower()
+            count = sum(text_lower.count(t) for t in tokens_lower)
             if count > 0:
                 result[int(page_num)] = count
         return result
@@ -1276,10 +1294,19 @@ class PDFCache:
             if sections:
                 conn.executemany(
                     "INSERT INTO pdf_section_fts"
-                    " (file_path, section_id, title, text, start_page, end_page)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     [
-                        (path, i, s.title, s.text, s.start_page, s.end_page)
+                        (
+                            path,
+                            i,
+                            s.title,
+                            s.text,
+                            s.start_page,
+                            s.end_page,
+                            s.title_source,
+                        )
                         for i, s in enumerate(sections)
                     ],
                 )
@@ -1311,7 +1338,7 @@ class PDFCache:
             try:
                 rows = conn.execute(
                     "SELECT section_id, title, start_page, end_page,"
-                    " -bm25(pdf_section_fts)"
+                    " title_source, -bm25(pdf_section_fts)"
                     " FROM pdf_section_fts"
                     " WHERE pdf_section_fts MATCH ? AND file_path = ?"
                     " ORDER BY bm25(pdf_section_fts)"
@@ -1326,9 +1353,10 @@ class PDFCache:
                 "title": title,
                 "start_page": int(sp),
                 "end_page": int(ep),
+                "title_source": title_source,
                 "score": float(score),
             }
-            for sid, title, sp, ep, score in rows
+            for sid, title, sp, ep, title_source, score in rows
         ]
 
     def get_section_fts_coverage(self, path: str) -> int:

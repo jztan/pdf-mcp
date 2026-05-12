@@ -213,7 +213,7 @@ class TestPdfSearchModes:
     ):
         """Each semantic match carries low_confidence; response carries the
         threshold and a roll-up flag. With a deterministic encode that yields
-        cosine ~0 we expect all_low_confidence=True."""
+        cosine ~0 we expect all_results_low_confidence=True."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -224,13 +224,37 @@ class TestPdfSearchModes:
             result = pdf_search(sample_pdf, "unrelated", mode="semantic")
 
         assert "confidence_threshold" in result
-        assert "all_low_confidence" in result
+        assert "all_results_low_confidence" in result
         for m in result["matches"]:
             assert "low_confidence" in m
             assert isinstance(m["low_confidence"], bool)
-            assert m["low_confidence"] is (
-                m["score"] < result["confidence_threshold"]
-            )
+            assert m["low_confidence"] is (m["score"] < result["confidence_threshold"])
+
+    def test_hybrid_mode_low_confidence_flag(self, sample_pdf, isolated_server):
+        """Hybrid match without keyword hit and with semantic cosine below
+        the threshold is flagged low_confidence; pages with keyword hits
+        are not flagged (literal terms appear)."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            # "page" appears literally in the corpus → keyword hits → confident
+            kw_result = pdf_search(sample_pdf, "page", mode="auto")
+            # Unrelated query → no keyword hits and tiny cosine scores
+            none_result = pdf_search(sample_pdf, "unrelated", mode="auto")
+
+        for m in kw_result["matches"]:
+            assert "low_confidence" in m
+            assert "semantic_score" in m
+        # The "unrelated" query should have at least one low-confidence match
+        # and the top-level rollup should reflect that
+        assert "all_results_low_confidence" in none_result
+        assert any(m["low_confidence"] for m in none_result["matches"])
+        # Returned, not dropped — agent decides what to do
+        assert len(none_result["matches"]) > 0
 
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
@@ -289,9 +313,7 @@ class TestPdfSearchModes:
         assert "total_matches" in result
         assert "page_match_counts" in result
 
-    def test_auto_mode_falls_back_on_encode_failure(
-        self, sample_pdf, isolated_server
-    ):
+    def test_auto_mode_falls_back_on_encode_failure(self, sample_pdf, isolated_server):
         """mode='auto' degrades to keyword when embedder.encode() raises
         (model load failure, network outage, etc.)."""
         with (
@@ -511,6 +533,46 @@ class TestPdfSearchModes:
 
         # auto + no fastembed → keyword
         assert result.get("search_mode") == "keyword"
+
+    def test_total_matches_equals_len_matches_property(
+        self, sample_pdf, isolated_server
+    ):
+        """Property: total_matches == len(matches) across every mode and
+        every query, including multi-word tokenised queries that the
+        1.12.0 LLM evaluation surfaced as the schema regression.
+
+        This is the codified-in-CI version of the cross-mode matrix in
+        the evaluation reports. If a future change reintroduces a
+        meaning-mismatch on total_matches, this test fails the build.
+        """
+        encode, encode_query = self._make_encode()
+        queries = [
+            "page",
+            "pgvector latency",
+            "this string definitely does not appear",
+            "xyznonexistent",
+        ]
+        modes = ["keyword", "semantic", "auto"]
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            for mode in modes:
+                for query in queries:
+                    result = pdf_search(sample_pdf, query, mode=mode)
+                    assert (
+                        "matches" in result
+                    ), f"mode={mode} query={query!r}: missing matches"
+                    assert (
+                        "total_matches" in result
+                    ), f"mode={mode} query={query!r}: missing total_matches"
+                    assert result["total_matches"] == len(result["matches"]), (
+                        f"mode={mode} query={query!r}: "
+                        f"total_matches={result['total_matches']} vs "
+                        f"len(matches)={len(result['matches'])}"
+                    )
 
 
 class TestPdfInfo:
@@ -1476,16 +1538,26 @@ class TestPdfSearchFTS5:
             assert isinstance(key, str)
             assert int(key) >= 1
 
-    def test_search_total_matches_accurate_no_early_exit(
+    def test_search_total_matches_equals_len_matches_across_max_results(
         self, sample_pdf, isolated_server
     ):
-        """total_matches reflects all pages, not truncated by max_results."""
+        """total_matches equals len(matches) for every max_results.
+
+        The pre-1.13 contract was total_matches = total occurrences across
+        the document (intentionally independent of max_results). That was
+        the source of the LLM-visible schema disagreement: total_matches
+        could exceed len(matches) without any signal that the rest had
+        been truncated. The schema-parity contract now makes total_matches
+        always equal len(matches); the doc-wide signal lives in
+        page_match_counts.
+        """
         result_limited = pdf_search(sample_pdf, "page", max_results=1)
         result_full = pdf_search(sample_pdf, "page", max_results=100)
 
-        assert result_limited["total_matches"] == result_full["total_matches"]
-        assert len(result_limited["matches"]) == 1
-        assert len(result_full["matches"]) >= 5
+        assert result_limited["total_matches"] == len(result_limited["matches"])
+        assert result_full["total_matches"] == len(result_full["matches"])
+        assert result_limited["total_matches"] == 1
+        assert result_full["total_matches"] >= 5
 
     def test_search_stemming_via_fts(self, isolated_server, tmp_path):
         """FTS5 stemming: query 'search' finds pages with 'searching'."""
@@ -2105,6 +2177,32 @@ class TestPdfSearchSectionMode:
         )
         assert result["sections"] == []
         assert result["search_mode"] == "section"
+
+    def test_title_source_is_toc_when_pdf_has_toc(
+        self, isolated_server, sample_pdf_with_toc_sections
+    ):
+        """title_source == "toc" for sections derived from PyMuPDF's TOC.
+
+        Regression: an earlier implementation derived title_source from
+        the cached pdf_metadata, which meant a pdf_search call BEFORE
+        pdf_info populated the metadata cache would report
+        title_source="heading_detected" on every match — even when
+        derive_sections actually took the TOC path. The fix records
+        title_source on the Section dataclass at detection time and
+        persists it on the FTS row, so the field is correct regardless
+        of call order.
+        """
+        # Call section search FIRST — pdf_info has not run yet, so the
+        # metadata cache is empty for this path. The fix should still
+        # report "toc" because derive_sections takes the TOC path.
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "graph", granularity="section"
+        )
+        assert result["sections"], "fixture should produce matches"
+        for sec in result["sections"]:
+            assert "title_source" in sec
+            assert sec["title_source"] == "toc"
+            assert sec["title"] is not None
 
     def test_total_sections_reflects_indexed_count(
         self, isolated_server, sample_pdf_with_toc_sections

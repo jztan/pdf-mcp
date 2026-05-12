@@ -213,7 +213,7 @@ class TestPdfSearchModes:
     ):
         """Each semantic match carries low_confidence; response carries the
         threshold and a roll-up flag. With a deterministic encode that yields
-        cosine ~0 we expect all_low_confidence=True."""
+        cosine ~0 we expect all_results_low_confidence=True."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -224,11 +224,37 @@ class TestPdfSearchModes:
             result = pdf_search(sample_pdf, "unrelated", mode="semantic")
 
         assert "confidence_threshold" in result
-        assert "all_low_confidence" in result
+        assert "all_results_low_confidence" in result
         for m in result["matches"]:
             assert "low_confidence" in m
             assert isinstance(m["low_confidence"], bool)
             assert m["low_confidence"] is (m["score"] < result["confidence_threshold"])
+
+    def test_hybrid_mode_low_confidence_flag(self, sample_pdf, isolated_server):
+        """Hybrid match without keyword hit and with semantic cosine below
+        the threshold is flagged low_confidence; pages with keyword hits
+        are not flagged (literal terms appear)."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            # "page" appears literally in the corpus → keyword hits → confident
+            kw_result = pdf_search(sample_pdf, "page", mode="auto")
+            # Unrelated query → no keyword hits and tiny cosine scores
+            none_result = pdf_search(sample_pdf, "unrelated", mode="auto")
+
+        for m in kw_result["matches"]:
+            assert "low_confidence" in m
+            assert "semantic_score" in m
+        # The "unrelated" query should have at least one low-confidence match
+        # and the top-level rollup should reflect that
+        assert "all_results_low_confidence" in none_result
+        assert any(m["low_confidence"] for m in none_result["matches"])
+        # Returned, not dropped — agent decides what to do
+        assert len(none_result["matches"]) > 0
 
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""

@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New pytest property test `test_total_matches_equals_len_matches_property` asserts the invariant `len(matches) == total_matches` across all modes × queries (including multi-word tokenised queries), so a future regression that reintroduces a meaning-mismatch fails CI.
+- `pdf_search` hybrid-mode matches now carry per-match `low_confidence` (true when there's no keyword hit on the page AND the underlying semantic cosine is below `confidence_threshold` — pages with literal-term hits stay confident regardless of cosine) plus `semantic_score`, mirroring the semantic-mode flag added in 1.12.0. Response-level `all_results_low_confidence` and `confidence_threshold` are present in both modes. Matches are NOT dropped when low-confidence — agents decide whether to surface "couldn't find it but here's the closest" vs "couldn't find it."
+- Semantic-mode `all_low_confidence` is renamed to `all_results_low_confidence` for parity with the new hybrid-mode field.
 - `pdf_search` section-mode matches now carry a `title_source` field: `"toc"` when the title came from the PDF's authoritative TOC, `"heading_detected"` when the heuristic detector produced a title that passed the clean-heading shape check, or `null` when the heuristic flagged a boundary but the candidate text didn't look like a real heading. Sections with `title_source: null` also have `title: null` so an LLM can show the page range without rendering a synthesised label.
 
 ### Fixed

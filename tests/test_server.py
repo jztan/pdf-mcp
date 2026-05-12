@@ -1592,32 +1592,52 @@ class TestPdfInfoTextCoverage:
     """Tests for text_coverage field in pdf_info."""
 
     def test_text_coverage_present(self, sample_pdf, isolated_server):
-        """pdf_info response includes text_coverage list."""
+        """pdf_info response includes compact text_coverage dict."""
         result = pdf_info(sample_pdf)
         assert "text_coverage" in result
-        assert isinstance(result["text_coverage"], list)
+        cov = result["text_coverage"]
+        assert isinstance(cov, dict)
+        assert "summary" in cov
+        assert "text_chars_per_page" in cov
+        assert "raster_images_per_page" in cov
 
-    def test_text_coverage_per_page_shape(self, sample_pdf, isolated_server):
-        """Each entry has page, text_chars, raster_images."""
+    def test_text_coverage_per_page_arrays(self, sample_pdf, isolated_server):
+        """Parallel per-page arrays carry int values, one per page."""
         result = pdf_info(sample_pdf)
-        assert len(result["text_coverage"]) == 5  # sample_pdf has 5 pages
-        entry = result["text_coverage"][0]
-        assert entry["page"] == 1
-        assert isinstance(entry["text_chars"], int)
-        assert isinstance(entry["raster_images"], int)
+        cov = result["text_coverage"]
+        # sample_pdf has 5 pages
+        assert len(cov["text_chars_per_page"]) == 5
+        assert len(cov["raster_images_per_page"]) == 5
+        assert all(isinstance(c, int) for c in cov["text_chars_per_page"])
+        assert all(isinstance(r, int) for r in cov["raster_images_per_page"])
 
     def test_text_coverage_text_pages_have_chars(self, sample_pdf, isolated_server):
-        """Pages with text have text_chars > 0."""
+        """Pages with text have text_chars > 0 across the array."""
         result = pdf_info(sample_pdf)
-        for entry in result["text_coverage"]:
-            assert entry["text_chars"] > 0
+        chars = result["text_coverage"]["text_chars_per_page"]
+        assert all(c > 0 for c in chars)
 
     def test_text_coverage_image_only_pages(self, sample_pdf_scanned, isolated_server):
-        """Image-only pages have text_chars == 0 and raster_images > 0."""
+        """Image-only pages: text_chars == 0, raster > 0; summary reflects them."""
         result = pdf_info(sample_pdf_scanned)
-        entry = result["text_coverage"][0]
-        assert entry["text_chars"] == 0
-        assert entry["raster_images"] > 0
+        cov = result["text_coverage"]
+        assert cov["text_chars_per_page"][0] == 0
+        assert cov["raster_images_per_page"][0] > 0
+        assert cov["summary"]["pages_with_only_images"] >= 1
+        # OCR candidate listing surfaces this page (1-indexed)
+        assert 1 in cov["summary"]["ocr_candidate_pages"]
+
+    def test_text_coverage_summary_counts(self, sample_pdf, isolated_server):
+        """Summary rollups equal direct counts over the parallel arrays."""
+        result = pdf_info(sample_pdf)
+        cov = result["text_coverage"]
+        chars = cov["text_chars_per_page"]
+        raster = cov["raster_images_per_page"]
+        assert cov["summary"]["pages_with_text"] == sum(1 for c in chars if c > 0)
+        assert cov["summary"]["total_text_chars"] == sum(chars)
+        assert cov["summary"]["pages_with_raster_images"] == sum(
+            1 for r in raster if r > 0
+        )
 
     def test_text_coverage_cached_on_second_call(self, sample_pdf, isolated_server):
         """Second pdf_info call returns same coverage from cache."""
@@ -1633,8 +1653,9 @@ class TestPdfInfoTextCoverage:
         # Manually save metadata without coverage to simulate pre-v1.9.0 cache
         srv.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
         result = pdf_info(sample_pdf)
-        assert result["text_coverage"] is not None
-        assert len(result["text_coverage"]) == 5
+        cov = result["text_coverage"]
+        assert cov is not None
+        assert len(cov["text_chars_per_page"]) == 5
 
     def test_pdf_info_cold_500_page_under_2s(self, isolated_server, tmp_path):
         """Cold pdf_info on a 500-page PDF completes under 2 seconds."""

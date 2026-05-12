@@ -177,6 +177,53 @@ def _toc_fields(toc: list[Any]) -> dict[str, Any]:
     return fields
 
 
+# OCR candidate heuristic: pages with raster images and very little text are
+# likely scanned. 100 chars is a low-effort threshold that catches OCR-only
+# pages while leaving short-but-textual pages (e.g. chapter title pages) out.
+_OCR_TEXT_THRESHOLD = 100
+_OCR_CANDIDATES_MAX = 50
+
+
+def _compact_text_coverage(
+    coverage: list[dict[str, int]],
+) -> dict[str, Any]:
+    """
+    Compact a list-of-dicts coverage map into a token-cheap shape.
+
+    Replaces the prior per-page list of {page, text_chars, raster_images}
+    objects with a summary + two parallel arrays (0-indexed by page-1).
+    On a 500-page doc this is ~5x fewer tokens than the verbose shape
+    while preserving per-page detail when needed.
+    """
+    text_chars = [c["text_chars"] for c in coverage]
+    raster = [c["raster_images"] for c in coverage]
+    pages_with_text = sum(1 for c in text_chars if c > 0)
+    pages_image_only = sum(
+        1 for i, c in enumerate(text_chars) if c == 0 and raster[i] > 0
+    )
+    pages_empty = sum(1 for i, c in enumerate(text_chars) if c == 0 and raster[i] == 0)
+    pages_with_raster = sum(1 for r in raster if r > 0)
+    ocr_candidates = [
+        i + 1
+        for i, c in enumerate(text_chars)
+        if raster[i] > 0 and c < _OCR_TEXT_THRESHOLD
+    ]
+    ocr_truncated = len(ocr_candidates) > _OCR_CANDIDATES_MAX
+    return {
+        "summary": {
+            "pages_with_text": pages_with_text,
+            "pages_with_only_images": pages_image_only,
+            "pages_empty": pages_empty,
+            "pages_with_raster_images": pages_with_raster,
+            "total_text_chars": sum(text_chars),
+            "ocr_candidate_pages": ocr_candidates[:_OCR_CANDIDATES_MAX],
+            "ocr_candidate_pages_truncated": ocr_truncated,
+        },
+        "text_chars_per_page": text_chars,
+        "raster_images_per_page": raster,
+    }
+
+
 @mcp.tool()
 def pdf_info(path: str) -> dict[str, Any]:
     """
@@ -203,6 +250,11 @@ def pdf_info(path: str) -> dict[str, Any]:
         - file_size_mb: File size in megabytes
         - estimated_tokens: Rough estimate of total tokens
         - from_cache: Whether result was served from cache
+        - text_coverage: Compact text/image coverage map. Contains
+          `summary` (page-count rollups + OCR candidate pages),
+          `text_chars_per_page` (array indexed by page-1), and
+          `raster_images_per_page` (parallel array). Use the summary
+          for routing decisions; use the arrays for per-page detail.
     """
     local_path = _resolve_path(path)
 
@@ -235,7 +287,7 @@ def pdf_info(path: str) -> dict[str, Any]:
             "page_count": cached["page_count"],
             "metadata": cached.get("metadata", {}),
             **_toc_fields(cached.get("toc", [])),
-            "text_coverage": coverage,
+            "text_coverage": _compact_text_coverage(coverage),
             "from_cache": True,
             "estimated_tokens": cached["page_count"] * 800,
             "file_size_bytes": cached["file_size"],
@@ -270,7 +322,7 @@ def pdf_info(path: str) -> dict[str, Any]:
             "page_count": page_count,
             "metadata": metadata,
             **_toc_fields(toc),
-            "text_coverage": coverage,
+            "text_coverage": _compact_text_coverage(coverage),
             "file_size_bytes": file_size,
             "file_size_mb": round(file_size / (1024 * 1024), 2),
             "estimated_tokens": page_count * 800,

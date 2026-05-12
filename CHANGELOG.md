@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
+## [1.12.0] - 2026-05-12
 ### Fixed
 - `pdf_search` hybrid mode used to return a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode now includes `total_matches`/`page_match_counts` so the schema is consistent across all three modes.
 - `pdf_search` keyword mode was effectively phrase-only because `_escape_fts5_query` wrapped the entire query in double-quotes. Multi-word queries like `"pgvector latency"` returned zero matches when the words appeared on the same page but non-contiguously. Queries are now tokenised; pages must contain all tokens (implicit FTS5 AND) and BM25 still ranks by combined frequency.

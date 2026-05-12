@@ -56,6 +56,13 @@ _BOLD_NAME_MARKERS = ("Bold", "-B", ".B")
 _TOP_OF_PAGE_FRACTION = 0.15
 _WHITESPACE_GAP_RATIO = 1.5
 _SHORT_LINE_CHARS = 80
+# Sanity gate for heading length. Real section titles rarely exceed ~200 chars
+# (the longest legitimate headings in academic papers and books we surveyed
+# sit around 150). Lines longer than this almost always come from PyMuPDF
+# merging a numbered heading prefix ("Section 2:") with the first body
+# sentence on the same line — a common false-positive source. Reject those
+# entirely rather than render a body-paragraph snippet as a section title.
+_MAX_HEADING_CHARS = 200
 
 _NUMBER_ONLY_RE = re.compile(r"^\d+(\.\d+)*\.?$")
 
@@ -240,6 +247,8 @@ def _detect_boundaries_from_lines(
         stripped = text.strip()
         if not stripped:
             continue
+        if len(stripped) > _MAX_HEADING_CHARS:
+            continue
         if _HEADING_RE.match(stripped):
             candidates.append((page, stripped))
 
@@ -375,6 +384,8 @@ def detect_boundaries(pdf_path: str) -> list[Section]:
                 continue
             text = "".join(s["text"] for s in line.get("spans", [])).strip()
             if not text:
+                continue
+            if len(text) > _MAX_HEADING_CHARS:
                 continue
             y0 = line.get("bbox", [0, 0, 0, 0])[1]
             candidates.append((page, text, y0))

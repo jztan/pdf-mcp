@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `pdf_search` hybrid mode used to return a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode now includes `total_matches`/`page_match_counts` so the schema is consistent across all three modes.
+- `pdf_search` keyword mode was effectively phrase-only because `_escape_fts5_query` wrapped the entire query in double-quotes. Multi-word queries like `"pgvector latency"` returned zero matches when the words appeared on the same page but non-contiguously. Queries are now tokenised; pages must contain all tokens (implicit FTS5 AND) and BM25 still ranks by combined frequency.
+- `pdf_search` auto mode crashed with a `ToolError` when fastembed was installed but the embedding model could not be loaded (offline machine, HF outage, etc.). It now degrades to keyword and surfaces `semantic_unavailable=true` plus a `semantic_unavailable_reason` string.
+- Heuristic section detector emitted body-paragraph snippets as section titles when a line started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ..."). Lines longer than 200 chars are now rejected as heading candidates so no spurious sections are produced.
+
+### Changed
+- **BREAKING**: `pdf_info.text_coverage` shape changed from `list[{page, text_chars, raster_images}]` to a compact dict. By default it now contains only a constant-size `summary` (page-count rollups + truncated OCR candidate list) so payload size stays bounded regardless of page count — a 3000-page PDF no longer ships ~6000 ints just for coverage. Pass `pdf_info(path, detail=True)` to opt into the per-page parallel arrays `text_chars_per_page` and `raster_images_per_page`.
+
+### Added
+- Per-match `low_confidence` flag plus response-level `all_low_confidence` and `confidence_threshold` on `pdf_search` semantic-mode responses, so agents can decide whether to trust top-k semantic results below the cosine threshold.
+
+### Docs
+- README: updated the `pdf_info` description to reflect the new `text_coverage` shape (summary by default, per-page arrays under `detail=True`).
+- Browser demo (`pages/index.html`, served at `pdf-mcp.jztan.com`): mock response and coverage visualizations migrated to the new compact `text_coverage` shape; demo footer bumped to `v0.3`.
+
 ## [1.11.0] - 2026-05-09
 
 ### Added

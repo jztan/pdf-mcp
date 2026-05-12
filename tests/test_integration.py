@@ -51,12 +51,12 @@ def sample_pdf_synthetic_scan(isolated_server):
 
 class TestScanDetectionNoOcr:
     def test_pdf_info_detects_scanned_page(self, sample_pdf_synthetic_scan):
-        result = pdf_info(sample_pdf_synthetic_scan)
+        result = pdf_info(sample_pdf_synthetic_scan, detail=True)
         coverage = result["text_coverage"]
-        assert isinstance(coverage, list)
-        assert len(coverage) == 1
-        assert coverage[0]["text_chars"] == 0
-        assert coverage[0]["raster_images"] >= 1
+        assert isinstance(coverage, dict)
+        assert len(coverage["text_chars_per_page"]) == 1
+        assert coverage["text_chars_per_page"][0] == 0
+        assert coverage["raster_images_per_page"][0] >= 1
 
     def test_render_returns_valid_png(self, sample_pdf_synthetic_scan):
         result = pdf_render_pages(sample_pdf_synthetic_scan, "1", dpi=150)

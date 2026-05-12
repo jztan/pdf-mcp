@@ -193,8 +193,8 @@ class TestPdfSearchModes:
 
         assert result.get("search_mode") == "semantic"
 
-    def test_semantic_mode_omits_keyword_fields(self, sample_pdf, isolated_server):
-        """mode='semantic' response omits total_matches and page_match_counts."""
+    def test_semantic_mode_includes_count_fields(self, sample_pdf, isolated_server):
+        """mode='semantic' response includes total_matches matching len(matches)."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -204,8 +204,33 @@ class TestPdfSearchModes:
         ):
             result = pdf_search(sample_pdf, "test", mode="semantic")
 
-        assert "total_matches" not in result
-        assert "page_match_counts" not in result
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+        assert result["total_matches"] == len(result["matches"])
+
+    def test_semantic_mode_low_confidence_flagged_when_score_below_threshold(
+        self, sample_pdf, isolated_server
+    ):
+        """Each semantic match carries low_confidence; response carries the
+        threshold and a roll-up flag. With a deterministic encode that yields
+        cosine ~0 we expect all_low_confidence=True."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "unrelated", mode="semantic")
+
+        assert "confidence_threshold" in result
+        assert "all_low_confidence" in result
+        for m in result["matches"]:
+            assert "low_confidence" in m
+            assert isinstance(m["low_confidence"], bool)
+            assert m["low_confidence"] is (
+                m["score"] < result["confidence_threshold"]
+            )
 
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
@@ -264,6 +289,58 @@ class TestPdfSearchModes:
         assert "total_matches" in result
         assert "page_match_counts" in result
 
+    def test_auto_mode_falls_back_on_encode_failure(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' degrades to keyword when embedder.encode() raises
+        (model load failure, network outage, etc.)."""
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch(
+                "pdf_mcp.embedder.encode",
+                side_effect=ValueError("Could not load model BAAI/bge-small-en-v1.5"),
+            ),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert result.get("semantic_unavailable") is True
+        assert "semantic_unavailable_reason" in result
+        assert "Could not load model" in result["semantic_unavailable_reason"]
+
+    def test_auto_mode_falls_back_on_encode_query_failure(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' degrades to keyword when encode_query() raises after
+        page embeddings are already cached."""
+        encode, _ = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch(
+                "pdf_mcp.embedder.encode_query",
+                side_effect=ValueError("Could not load model"),
+            ),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert result.get("semantic_unavailable") is True
+
+    def test_auto_mode_no_fastembed_omits_unavailable_flag(
+        self, sample_pdf, isolated_server
+    ):
+        """ImportError fallback (fastembed missing) does not set
+        semantic_unavailable — that flag is for installed-but-broken cases."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert "semantic_unavailable" not in result
+
     def test_auto_mode_with_fastembed_returns_hybrid(self, sample_pdf, isolated_server):
         """mode='auto' with fastembed available returns search_mode='hybrid'."""
         encode, encode_query = self._make_encode()
@@ -277,8 +354,8 @@ class TestPdfSearchModes:
 
         assert result.get("search_mode") == "hybrid"
 
-    def test_hybrid_has_total_matches(self, sample_pdf, isolated_server):
-        """Hybrid mode includes total_matches and page_match_counts (keyword counts)."""
+    def test_hybrid_total_matches_equals_len_matches(self, sample_pdf, isolated_server):
+        """Hybrid mode: total_matches equals len(matches) after RRF fusion."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -290,6 +367,7 @@ class TestPdfSearchModes:
 
         assert "total_matches" in result
         assert "page_match_counts" in result
+        assert result["total_matches"] == len(result["matches"])
 
     def test_hybrid_max_results_honored(self, sample_pdf, isolated_server):
         """Hybrid mode returns at most max_results matches."""
@@ -1538,37 +1616,70 @@ class TestPdfInfoTextCoverage:
     """Tests for text_coverage field in pdf_info."""
 
     def test_text_coverage_present(self, sample_pdf, isolated_server):
-        """pdf_info response includes text_coverage list."""
+        """pdf_info response includes a summary-only text_coverage by default."""
         result = pdf_info(sample_pdf)
         assert "text_coverage" in result
-        assert isinstance(result["text_coverage"], list)
+        cov = result["text_coverage"]
+        assert isinstance(cov, dict)
+        assert "summary" in cov
+        assert cov["detail_included"] is False
+        # Per-page arrays omitted by default (keeps payload bounded on big PDFs)
+        assert "text_chars_per_page" not in cov
+        assert "raster_images_per_page" not in cov
 
-    def test_text_coverage_per_page_shape(self, sample_pdf, isolated_server):
-        """Each entry has page, text_chars, raster_images."""
-        result = pdf_info(sample_pdf)
-        assert len(result["text_coverage"]) == 5  # sample_pdf has 5 pages
-        entry = result["text_coverage"][0]
-        assert entry["page"] == 1
-        assert isinstance(entry["text_chars"], int)
-        assert isinstance(entry["raster_images"], int)
+    def test_text_coverage_detail_includes_per_page_arrays(
+        self, sample_pdf, isolated_server
+    ):
+        """detail=True returns the parallel per-page arrays."""
+        result = pdf_info(sample_pdf, detail=True)
+        cov = result["text_coverage"]
+        assert cov["detail_included"] is True
+        # sample_pdf has 5 pages
+        assert len(cov["text_chars_per_page"]) == 5
+        assert len(cov["raster_images_per_page"]) == 5
+        assert all(isinstance(c, int) for c in cov["text_chars_per_page"])
+        assert all(isinstance(r, int) for r in cov["raster_images_per_page"])
 
     def test_text_coverage_text_pages_have_chars(self, sample_pdf, isolated_server):
-        """Pages with text have text_chars > 0."""
-        result = pdf_info(sample_pdf)
-        for entry in result["text_coverage"]:
-            assert entry["text_chars"] > 0
+        """Pages with text have text_chars > 0 across the array."""
+        result = pdf_info(sample_pdf, detail=True)
+        chars = result["text_coverage"]["text_chars_per_page"]
+        assert all(c > 0 for c in chars)
 
     def test_text_coverage_image_only_pages(self, sample_pdf_scanned, isolated_server):
-        """Image-only pages have text_chars == 0 and raster_images > 0."""
-        result = pdf_info(sample_pdf_scanned)
-        entry = result["text_coverage"][0]
-        assert entry["text_chars"] == 0
-        assert entry["raster_images"] > 0
+        """Image-only pages: text_chars == 0, raster > 0; summary reflects them."""
+        result = pdf_info(sample_pdf_scanned, detail=True)
+        cov = result["text_coverage"]
+        assert cov["text_chars_per_page"][0] == 0
+        assert cov["raster_images_per_page"][0] > 0
+        assert cov["summary"]["pages_with_only_images"] >= 1
+        # OCR candidate listing surfaces this page (1-indexed)
+        assert 1 in cov["summary"]["ocr_candidate_pages"]
+
+    def test_text_coverage_summary_counts(self, sample_pdf, isolated_server):
+        """Summary rollups equal direct counts over the parallel arrays."""
+        result = pdf_info(sample_pdf, detail=True)
+        cov = result["text_coverage"]
+        chars = cov["text_chars_per_page"]
+        raster = cov["raster_images_per_page"]
+        assert cov["summary"]["pages_with_text"] == sum(1 for c in chars if c > 0)
+        assert cov["summary"]["total_text_chars"] == sum(chars)
+        assert cov["summary"]["pages_with_raster_images"] == sum(
+            1 for r in raster if r > 0
+        )
+
+    def test_text_coverage_summary_independent_of_detail(
+        self, sample_pdf, isolated_server
+    ):
+        """The summary section is identical whether detail is requested or not."""
+        default_summary = pdf_info(sample_pdf)["text_coverage"]["summary"]
+        detailed_summary = pdf_info(sample_pdf, detail=True)["text_coverage"]["summary"]
+        assert default_summary == detailed_summary
 
     def test_text_coverage_cached_on_second_call(self, sample_pdf, isolated_server):
         """Second pdf_info call returns same coverage from cache."""
-        r1 = pdf_info(sample_pdf)
-        r2 = pdf_info(sample_pdf)
+        r1 = pdf_info(sample_pdf, detail=True)
+        r2 = pdf_info(sample_pdf, detail=True)
         assert r2["from_cache"] is True
         assert r2["text_coverage"] == r1["text_coverage"]
 
@@ -1578,9 +1689,10 @@ class TestPdfInfoTextCoverage:
 
         # Manually save metadata without coverage to simulate pre-v1.9.0 cache
         srv.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
-        result = pdf_info(sample_pdf)
-        assert result["text_coverage"] is not None
-        assert len(result["text_coverage"]) == 5
+        result = pdf_info(sample_pdf, detail=True)
+        cov = result["text_coverage"]
+        assert cov is not None
+        assert len(cov["text_chars_per_page"]) == 5
 
     def test_pdf_info_cold_500_page_under_2s(self, isolated_server, tmp_path):
         """Cold pdf_info on a 500-page PDF completes under 2 seconds."""

@@ -193,14 +193,17 @@ _OCR_CANDIDATES_MAX = 50
 
 def _compact_text_coverage(
     coverage: list[dict[str, int]],
+    detail: bool = False,
 ) -> dict[str, Any]:
     """
-    Compact a list-of-dicts coverage map into a token-cheap shape.
+    Summarise a per-page coverage map into a token-cheap shape.
 
-    Replaces the prior per-page list of {page, text_chars, raster_images}
-    objects with a summary + two parallel arrays (0-indexed by page-1).
-    On a 500-page doc this is ~5x fewer tokens than the verbose shape
-    while preserving per-page detail when needed.
+    Always emits a constant-size `summary` (page-count rollups plus a
+    truncated list of OCR candidate pages). The per-page parallel arrays
+    `text_chars_per_page` and `raster_images_per_page` are only included
+    when `detail=True`; otherwise they are omitted so payload size stays
+    bounded regardless of page count. On a 3000-page PDF the summary
+    alone covers the routing decisions an agent actually needs.
     """
     text_chars = [c["text_chars"] for c in coverage]
     raster = [c["raster_images"] for c in coverage]
@@ -216,7 +219,7 @@ def _compact_text_coverage(
         if raster[i] > 0 and c < _OCR_TEXT_THRESHOLD
     ]
     ocr_truncated = len(ocr_candidates) > _OCR_CANDIDATES_MAX
-    return {
+    result: dict[str, Any] = {
         "summary": {
             "pages_with_text": pages_with_text,
             "pages_with_only_images": pages_image_only,
@@ -226,13 +229,16 @@ def _compact_text_coverage(
             "ocr_candidate_pages": ocr_candidates[:_OCR_CANDIDATES_MAX],
             "ocr_candidate_pages_truncated": ocr_truncated,
         },
-        "text_chars_per_page": text_chars,
-        "raster_images_per_page": raster,
+        "detail_included": detail,
     }
+    if detail:
+        result["text_chars_per_page"] = text_chars
+        result["raster_images_per_page"] = raster
+    return result
 
 
 @mcp.tool()
-def pdf_info(path: str) -> dict[str, Any]:
+def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
     """
     Get PDF document information including metadata,
     page count, and table of contents.
@@ -246,6 +252,13 @@ def pdf_info(path: str) -> dict[str, Any]:
 
     Args:
         path: Path to PDF file (absolute, relative, or URL)
+        detail: When True, include per-page arrays
+            (`text_chars_per_page`, `raster_images_per_page`) inside
+            `text_coverage`. Default False — only the constant-size
+            `summary` is returned, which keeps the payload bounded on
+            large documents (a 3000-page PDF otherwise ships ~6000
+            ints just for coverage). Opt in only when you need
+            per-page char/image counts.
 
     Returns:
         Document info including:
@@ -257,11 +270,12 @@ def pdf_info(path: str) -> dict[str, Any]:
         - file_size_mb: File size in megabytes
         - estimated_tokens: Rough estimate of total tokens
         - from_cache: Whether result was served from cache
-        - text_coverage: Compact text/image coverage map. Contains
-          `summary` (page-count rollups + OCR candidate pages),
-          `text_chars_per_page` (array indexed by page-1), and
-          `raster_images_per_page` (parallel array). Use the summary
-          for routing decisions; use the arrays for per-page detail.
+        - text_coverage: {
+            summary: page-count rollups + truncated OCR candidate list,
+            detail_included: bool (mirrors the `detail` argument),
+            text_chars_per_page: int[] (only when detail=True),
+            raster_images_per_page: int[] (only when detail=True),
+          }
     """
     local_path = _resolve_path(path)
 
@@ -294,7 +308,7 @@ def pdf_info(path: str) -> dict[str, Any]:
             "page_count": cached["page_count"],
             "metadata": cached.get("metadata", {}),
             **_toc_fields(cached.get("toc", [])),
-            "text_coverage": _compact_text_coverage(coverage),
+            "text_coverage": _compact_text_coverage(coverage, detail=detail),
             "from_cache": True,
             "estimated_tokens": cached["page_count"] * 800,
             "file_size_bytes": cached["file_size"],
@@ -329,7 +343,7 @@ def pdf_info(path: str) -> dict[str, Any]:
             "page_count": page_count,
             "metadata": metadata,
             **_toc_fields(toc),
-            "text_coverage": _compact_text_coverage(coverage),
+            "text_coverage": _compact_text_coverage(coverage, detail=detail),
             "file_size_bytes": file_size,
             "file_size_mb": round(file_size / (1024 * 1024), 2),
             "estimated_tokens": page_count * 800,

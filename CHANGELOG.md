@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Heuristic section detector emitted body-paragraph snippets as section titles when a line started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ..."). Lines longer than 200 chars are now rejected as heading candidates so no spurious sections are produced.
 
 ### Changed
-- **BREAKING**: `pdf_info.text_coverage` shape changed from `list[{page, text_chars, raster_images}]` to a compact dict `{summary, text_chars_per_page, raster_images_per_page}`. The summary covers page-count rollups and a list of OCR candidate pages; per-page detail is preserved via the parallel arrays at ~5x fewer tokens than the prior shape.
+- **BREAKING**: `pdf_info.text_coverage` shape changed from `list[{page, text_chars, raster_images}]` to a compact dict. By default it now contains only a constant-size `summary` (page-count rollups + truncated OCR candidate list) so payload size stays bounded regardless of page count — a 3000-page PDF no longer ships ~6000 ints just for coverage. Pass `pdf_info(path, detail=True)` to opt into the per-page parallel arrays `text_chars_per_page` and `raster_images_per_page`.
 
 ### Added
 - Per-match `low_confidence` flag plus response-level `all_low_confidence` and `confidence_threshold` on `pdf_search` semantic-mode responses, so agents can decide whether to trust top-k semantic results below the cosine threshold.

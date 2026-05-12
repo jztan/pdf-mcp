@@ -51,7 +51,7 @@ def sample_pdf_synthetic_scan(isolated_server):
 
 class TestScanDetectionNoOcr:
     def test_pdf_info_detects_scanned_page(self, sample_pdf_synthetic_scan):
-        result = pdf_info(sample_pdf_synthetic_scan)
+        result = pdf_info(sample_pdf_synthetic_scan, detail=True)
         coverage = result["text_coverage"]
         assert isinstance(coverage, dict)
         assert len(coverage["text_chars_per_page"]) == 1

@@ -208,6 +208,30 @@ class TestPdfSearchModes:
         assert "page_match_counts" in result
         assert result["total_matches"] == len(result["matches"])
 
+    def test_semantic_mode_low_confidence_flagged_when_score_below_threshold(
+        self, sample_pdf, isolated_server
+    ):
+        """Each semantic match carries low_confidence; response carries the
+        threshold and a roll-up flag. With a deterministic encode that yields
+        cosine ~0 we expect all_low_confidence=True."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(sample_pdf, "unrelated", mode="semantic")
+
+        assert "confidence_threshold" in result
+        assert "all_low_confidence" in result
+        for m in result["matches"]:
+            assert "low_confidence" in m
+            assert isinstance(m["low_confidence"], bool)
+            assert m["low_confidence"] is (
+                m["score"] < result["confidence_threshold"]
+            )
+
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
         encode, encode_query = self._make_encode()

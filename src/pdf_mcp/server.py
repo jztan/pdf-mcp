@@ -124,6 +124,13 @@ def _clamp(value: int, minimum: int, maximum: int) -> int:
 
 _RRF_K = 60
 
+# Cosine-similarity threshold below which a semantic match is flagged as
+# low confidence. Below ~0.5 on a normalised embedding (the default
+# fastembed pipeline normalises) typically corresponds to "topically
+# unrelated" — useful for letting an agent decide whether to trust the
+# top-k results or report "no real match."
+_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5
+
 
 def _rrf_fuse(
     keyword_pages: list[int],
@@ -780,13 +787,28 @@ def pdf_search(
 
     Returns:
         Page mode (granularity='page'):
-            - matches: List of {page, excerpt, position, score}
+            - matches: List of {page, excerpt, position, score, source}
+              Semantic and hybrid responses also include per-match
+              `low_confidence` (bool) and top-level
+              `all_low_confidence` + `confidence_threshold` (cosine
+              floor below which a semantic match is treated as
+              non-relevant).
             - total_matches, page_match_counts, search_mode, searched_pages
+            - semantic_unavailable (only set in auto mode when the
+              embedding model could not be loaded; the response then
+              degrades to search_mode='keyword' and carries a
+              `semantic_unavailable_reason` string).
         Section mode (granularity='section'):
             - sections: List of {section_id, title, start_page, end_page,
                         score} sorted by descending BM25 relevance.
             - search_mode: 'section'
             - total_sections: count of indexed sections for this PDF
+
+    Error contract: validation failures (empty query, missing fastembed
+    in semantic mode, unknown mode) return an inline payload of the
+    form {"error": "...", ...} with the tool call still succeeding —
+    callers should check for an `error` key before reading other
+    fields rather than handling a raised exception.
     """
     # 1. Validate mode
     if mode not in ("auto", "keyword", "semantic"):
@@ -907,11 +929,13 @@ def pdf_search(
             for idx in top_idx:
                 page_num = page_nums_list[int(idx)]
                 text = cache.get_page_text(local_path, page_num) or ""
+                score = round(float(sem_scores[idx]), 4)
                 matches.append(
                     {
                         "page": page_num + 1,
                         "excerpt": text[:context_chars],
-                        "score": round(float(sem_scores[idx]), 4),
+                        "score": score,
+                        "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                         "position": 0,
                     }
                 )
@@ -923,6 +947,9 @@ def pdf_search(
                 m["source"] = sem_sources.get(m["page"] - 1, "extracted")
 
             sem_page_counts = {str(m["page"]): 1 for m in matches}
+            all_low_confidence = bool(matches) and all(
+                m["low_confidence"] for m in matches
+            )
 
             return {
                 "content_warning": (
@@ -933,6 +960,8 @@ def pdf_search(
                 "matches": matches,
                 "total_matches": len(matches),
                 "page_match_counts": sem_page_counts,
+                "all_low_confidence": all_low_confidence,
+                "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "searched_pages": doc_pages,
                 "search_mode": "semantic",
                 "model": _model_name,

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic-mode `all_low_confidence` renamed to `all_results_low_confidence` for parity with the new hybrid-mode field.
 - New `title_source UNINDEXED` column on `pdf_section_fts`. Pre-1.12.1 section indexes are dropped and recreated on first launch (FTS5 does not support `ALTER ADD COLUMN`); sections re-index lazily on the next section-mode call per PDF.
 
+### Docs
+- Browser demo (`pages/index.html`, served at `pdf-mcp.jztan.com`): search mock now tokenises queries (whitespace AND), counts token occurrences for `page_match_counts`, and sets `total_matches = matches.length` to mirror the server's 1.12.1 keyword path. Demo footer bumped to `v0.4`.
+
 ## [1.12.0] - 2026-05-12
 ### Fixed
 - `pdf_search` hybrid mode used to return a stale, pre-fusion `total_matches` (and `page_match_counts`) alongside the post-RRF matches array, producing self-contradicting payloads like `matches=[5 items], total_matches=0`. Both fields are now recomputed from the fused result set. Semantic mode now includes `total_matches`/`page_match_counts` so the schema is consistent across all three modes.

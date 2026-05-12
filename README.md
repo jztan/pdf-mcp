@@ -218,7 +218,7 @@ pdf-mcp --help
 
 ### `pdf_info` — Get Document Information
 
-Returns page count, metadata, file size, estimated token count, and `text_coverage` — a per-page list of `{page, text_chars, raster_images}` that lets agents identify OCR candidates without reading content. **Call this first** to understand a document. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
+Returns page count, metadata, file size, estimated token count, and `text_coverage` — a constant-size `summary` with page-count rollups and a list of OCR candidate pages, so agents can route around scanned content without reading it. Pass `detail=True` to opt into per-page arrays (`text_chars_per_page`, `raster_images_per_page`); by default they are omitted so a 3000-page PDF doesn't blow your context just for coverage. **Call this first** to understand a document. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
 
 ```
 "Read the PDF at /path/to/document.pdf"

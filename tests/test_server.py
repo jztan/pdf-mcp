@@ -193,8 +193,8 @@ class TestPdfSearchModes:
 
         assert result.get("search_mode") == "semantic"
 
-    def test_semantic_mode_omits_keyword_fields(self, sample_pdf, isolated_server):
-        """mode='semantic' response omits total_matches and page_match_counts."""
+    def test_semantic_mode_includes_count_fields(self, sample_pdf, isolated_server):
+        """mode='semantic' response includes total_matches matching len(matches)."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -204,8 +204,9 @@ class TestPdfSearchModes:
         ):
             result = pdf_search(sample_pdf, "test", mode="semantic")
 
-        assert "total_matches" not in result
-        assert "page_match_counts" not in result
+        assert "total_matches" in result
+        assert "page_match_counts" in result
+        assert result["total_matches"] == len(result["matches"])
 
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
@@ -277,8 +278,8 @@ class TestPdfSearchModes:
 
         assert result.get("search_mode") == "hybrid"
 
-    def test_hybrid_has_total_matches(self, sample_pdf, isolated_server):
-        """Hybrid mode includes total_matches and page_match_counts (keyword counts)."""
+    def test_hybrid_total_matches_equals_len_matches(self, sample_pdf, isolated_server):
+        """Hybrid mode: total_matches equals len(matches) after RRF fusion."""
         encode, encode_query = self._make_encode()
 
         with (
@@ -290,6 +291,7 @@ class TestPdfSearchModes:
 
         assert "total_matches" in result
         assert "page_match_counts" in result
+        assert result["total_matches"] == len(result["matches"])
 
     def test_hybrid_max_results_honored(self, sample_pdf, isolated_server):
         """Hybrid mode returns at most max_results matches."""

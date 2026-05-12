@@ -706,7 +706,7 @@
     <ul class="meta-list" id="infoMeta"></ul>
     <div class="coverage">
       <div class="coverage-label">
-        <strong>text_coverage[]</strong>
+        <strong>text_coverage</strong>
         <span>click a page → read in Step 3</span>
       </div>
       <div class="coverage-bars" id="coverageBars"></div>
@@ -904,8 +904,11 @@
 
     loaderText.textContent = `Extracting ${pdf.numPages} pages...`;
     pageTexts = [];
-    const coverage = [];
+    const textCharsPerPage = [];
+    const rasterImagesPerPage = [];
     const PAINT_IMG = pdfjs.OPS?.paintImageXObject ?? 85;
+    const OCR_TEXT_THRESHOLD = 100;
+    const OCR_CANDIDATES_MAX = 50;
 
     for (let i = 0; i < pdf.numPages; i++) {
       const page = await pdf.getPage(i + 1);
@@ -919,12 +922,27 @@
         rasterCount = ops.fnArray.filter(op => op === PAINT_IMG).length;
       } catch (e) {}
 
-      coverage.push({ page: i + 1, text_chars: text.length, raster_images: rasterCount });
+      textCharsPerPage.push(text.length);
+      rasterImagesPerPage.push(rasterCount);
       loaderText.textContent = `Page ${i + 1} of ${pdf.numPages}...`;
     }
 
     const meta = await pdf.getMetadata();
     const info = meta.info || {};
+
+    const ocrCandidates = [];
+    let pagesWithText = 0, pagesImageOnly = 0, pagesEmpty = 0, pagesWithRaster = 0, totalTextChars = 0;
+    for (let i = 0; i < textCharsPerPage.length; i++) {
+      const c = textCharsPerPage[i];
+      const r = rasterImagesPerPage[i];
+      totalTextChars += c;
+      if (c > 0) pagesWithText++;
+      else if (r > 0) pagesImageOnly++;
+      else pagesEmpty++;
+      if (r > 0) pagesWithRaster++;
+      if (r > 0 && c < OCR_TEXT_THRESHOLD) ocrCandidates.push(i + 1);
+    }
+    const ocrTruncated = ocrCandidates.length > OCR_CANDIDATES_MAX;
 
     pdfInfo = {
       page_count: pdf.numPages,
@@ -939,7 +957,20 @@
       },
       toc_entry_count: 0,
       toc: [],
-      text_coverage: coverage,
+      text_coverage: {
+        summary: {
+          pages_with_text: pagesWithText,
+          pages_with_only_images: pagesImageOnly,
+          pages_empty: pagesEmpty,
+          pages_with_raster_images: pagesWithRaster,
+          total_text_chars: totalTextChars,
+          ocr_candidate_pages: ocrCandidates.slice(0, OCR_CANDIDATES_MAX),
+          ocr_candidate_pages_truncated: ocrTruncated
+        },
+        detail_included: true,
+        text_chars_per_page: textCharsPerPage,
+        raster_images_per_page: rasterImagesPerPage
+      },
       file_size_bytes: sizeBytes,
       file_size_mb: Math.round(sizeBytes / (1024 * 1024) * 100) / 100,
       estimated_tokens: pdf.numPages * 800,
@@ -972,16 +1003,16 @@
 
     // Coverage viz: bars for small PDFs (interactive per-page), SVG area chart for large PDFs (scalable)
     const COVERAGE_BAR_THRESHOLD = 120;
-    renderCoverage(info, info.text_coverage.length <= COVERAGE_BAR_THRESHOLD);
+    renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
 
     const calloutsEl = $("infoCallouts");
     calloutsEl.innerHTML = "";
-    const scannedPages = info.text_coverage.filter(c => c.text_chars < 40 && c.raster_images > 0);
-    if (scannedPages.length > 0) {
+    const scannedCount = info.text_coverage.summary.pages_with_only_images;
+    if (scannedCount > 0) {
       calloutsEl.innerHTML = `
         <div class="callout">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span><strong>${scannedPages.length} page${scannedPages.length !== 1 ? 's' : ''} look scanned.</strong> pdf-mcp runs Tesseract OCR via <code>pdf_read_pages(ocr=True)</code>.</span>
+          <span><strong>${scannedCount} page${scannedCount !== 1 ? 's' : ''} look scanned.</strong> pdf-mcp runs Tesseract OCR via <code>pdf_read_pages(ocr=True)</code>.</span>
         </div>`;
     }
 
@@ -990,9 +1021,10 @@
   }
 
   function renderCoverage(info, useBars) {
-    const coverage = info.text_coverage;
-    const n = coverage.length;
-    const maxChars = Math.max(...coverage.map(c => c.text_chars), 1);
+    const textChars = info.text_coverage.text_chars_per_page;
+    const raster = info.text_coverage.raster_images_per_page;
+    const n = textChars.length;
+    const maxChars = Math.max(...textChars, 1);
 
     let step;
     if (n <= 15) step = 1;
@@ -1017,17 +1049,19 @@
       barsEl.classList.remove("hidden");
       labelsEl.classList.remove("hidden");
 
-      barsEl.innerHTML = coverage.map(c => {
-        const h = Math.max(4, (c.text_chars / maxChars) * 100);
-        const scanned = c.text_chars < 40 && c.raster_images > 0;
-        return `<div class="coverage-bar ${scanned ? 'scanned' : ''}" style="height:${h}%" data-page="${c.page}">
-          <div class="coverage-tip">page ${c.page} · ${c.text_chars} chars${scanned ? ' · scanned' : ''}</div>
+      barsEl.innerHTML = textChars.map((chars, i) => {
+        const page = i + 1;
+        const h = Math.max(4, (chars / maxChars) * 100);
+        const scanned = chars < 40 && raster[i] > 0;
+        return `<div class="coverage-bar ${scanned ? 'scanned' : ''}" style="height:${h}%" data-page="${page}">
+          <div class="coverage-tip">page ${page} · ${chars} chars${scanned ? ' · scanned' : ''}</div>
         </div>`;
       }).join("");
 
-      labelsEl.innerHTML = coverage.map((c, i) => {
-        const show = i === 0 || i === n - 1 || (c.page % step === 0);
-        return `<span>${show ? c.page : ''}</span>`;
+      labelsEl.innerHTML = textChars.map((_, i) => {
+        const page = i + 1;
+        const show = i === 0 || i === n - 1 || (page % step === 0);
+        return `<span>${show ? page : ''}</span>`;
       }).join("");
 
       barsEl.querySelectorAll(".coverage-bar").forEach(bar => {
@@ -1039,12 +1073,12 @@
       svgEl.classList.remove("hidden");
 
       const W = 1000, H = 100;
-      const points = coverage.map((c, i) => ({
+      const points = textChars.map((chars, i) => ({
         x: (i / Math.max(1, n - 1)) * W,
-        y: H - (c.text_chars / maxChars) * H,
-        page: c.page,
-        chars: c.text_chars,
-        scanned: c.text_chars < 40 && c.raster_images > 0
+        y: H - (chars / maxChars) * H,
+        page: i + 1,
+        chars,
+        scanned: chars < 40 && raster[i] > 0
       }));
 
       const areaPath = `M 0 ${H} ` +
@@ -1057,10 +1091,10 @@
         `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="2" fill="#ff9500" />`
       ).join("");
 
-      const ticks = coverage.filter((c, i) => i === 0 || i === n - 1 || c.page % step === 0);
-      const tickLabels = ticks.map(c => {
-        const x = ((c.page - 1) / Math.max(1, n - 1)) * W;
-        return `<text x="${x.toFixed(2)}" y="${H + 14}" font-size="10" fill="currentColor" opacity="0.5" text-anchor="middle">${c.page}</text>`;
+      const ticks = points.filter((p, i) => i === 0 || i === n - 1 || p.page % step === 0);
+      const tickLabels = ticks.map(p => {
+        const x = ((p.page - 1) / Math.max(1, n - 1)) * W;
+        return `<text x="${x.toFixed(2)}" y="${H + 14}" font-size="10" fill="currentColor" opacity="0.5" text-anchor="middle">${p.page}</text>`;
       }).join("");
 
       svgEl.innerHTML = `

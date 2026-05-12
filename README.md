@@ -273,7 +273,7 @@ Find relevant content before loading pages. Two orthogonal parameters control th
 **`granularity`** — what comes back:
 
 - **`"page"` (default)** — ranked pages. Best for pinpoint lookups. Honors `mode`.
-- **`"section"`** — ranked sections (`section_id`, `title`, `start_page`, `end_page`, `score`). Best when an agent needs the full context of a topic, not just one page that mentions it. Sections come from the PDF's TOC when available (~95% of academic PDFs), with a 7-signal heuristic fallback (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. Ranked by BM25/FTS5 only — `mode` is ignored. Validated on arxiv PDFs: detector F1 0.80–0.94; saves up to ~9 `pdf_read_pages` calls per query on multi-page sections.
+- **`"section"`** — ranked sections (`section_id`, `title`, `title_source`, `start_page`, `end_page`, `score`). Best when an agent needs the full context of a topic, not just one page that mentions it. Sections come from the PDF's TOC when available (~95% of academic PDFs), with a 7-signal heuristic fallback (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. `title_source` is `"toc"` | `"heading_detected"` | `null`; when `null`, `title` is also `null` (the detector flagged a boundary but couldn't produce a trustworthy label — agents should fall back to "section on pages N–M"). Ranked by BM25/FTS5 only — `mode` is ignored. Validated on arxiv PDFs: detector F1 0.80–0.94; saves up to ~9 `pdf_read_pages` calls per query on multi-page sections.
 
 The response includes `search_mode` indicating which path ran (`"hybrid"`, `"keyword"`, `"semantic"`, or `"section"`).
 
@@ -298,7 +298,8 @@ See **[docs/embedding-models.md](docs/embedding-models.md)** for a full comparis
 
 ```python
 pdf_search("paper.pdf", "training process", granularity="section")
-# Returns: {"sections": [{"section_id", "title", "start_page", "end_page", "score"}, ...],
+# Returns: {"sections": [{"section_id", "title", "title_source",
+#                         "start_page", "end_page", "score"}, ...],
 #           "search_mode": "section", "total_sections": 32}
 ```
 

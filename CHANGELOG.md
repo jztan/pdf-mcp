@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New pytest property test `test_total_matches_equals_len_matches_property` asserts the invariant `len(matches) == total_matches` across all modes × queries (including multi-word tokenised queries), so a future regression that reintroduces a meaning-mismatch fails CI.
+- `pdf_search` section-mode matches now carry a `title_source` field: `"toc"` when the title came from the PDF's authoritative TOC, `"heading_detected"` when the heuristic detector produced a title that passed the clean-heading shape check, or `null` when the heuristic flagged a boundary but the candidate text didn't look like a real heading. Sections with `title_source: null` also have `title: null` so an LLM can show the page range without rendering a synthesised label.
+
+### Fixed
+- Heuristic section detector previously emitted body paragraphs that started with a heading-shaped prefix (e.g. "Section 2: This paragraph discusses ...") as the section title, because the regex fired on the prefix even when the rest of the line was prose. A stricter `_looks_like_clean_heading` shape check (≤120 chars, no mid-string `. ` or `; `) now runs after the scored signals; candidates that fail it still produce a section boundary but with `title: None`.
 
 ## [1.12.0] - 2026-05-12
 ### Fixed

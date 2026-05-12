@@ -735,9 +735,16 @@ def _pdf_search_section_mode(
     section FTS5 cache if not already populated, runs a BM25-ranked
     query, returns top sections by score.
 
+    Each match carries a `title_source`:
+      - "toc": title came from the PDF's authoritative TOC
+      - "heading_detected": title came from the heuristic detector and
+        passed the clean-heading shape check
+      - null: heuristic flagged a boundary but the candidate didn't
+        look like a real heading; title is null too
+
     Returns shape:
-      {"sections": [{"section_id", "title", "start_page", "end_page",
-                      "score"}, ...],
+      {"sections": [{"section_id", "title", "title_source",
+                      "start_page", "end_page", "score"}, ...],
        "search_mode": "section",
        "total_sections": int (count of indexed sections for this PDF)}
     """
@@ -752,6 +759,19 @@ def _pdf_search_section_mode(
         cache.index_sections(local_path, sections)
 
     matches = cache.search_section_fts(local_path, query, max_results)
+
+    # TOC presence on the cached PDF tells us which detector path produced
+    # the stored sections (derive_sections is binary: TOC or heuristic).
+    cached_meta = cache.get_metadata(local_path)
+    toc_used = bool(cached_meta and cached_meta.get("toc"))
+    for m in matches:
+        if m.get("title") is None:
+            m["title_source"] = None
+        elif toc_used:
+            m["title_source"] = "toc"
+        else:
+            m["title_source"] = "heading_detected"
+
     return {
         "sections": matches,
         "search_mode": "section",

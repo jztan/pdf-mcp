@@ -24,7 +24,12 @@ import pymupdf
 # ---- Core dataclass ----
 @dataclass
 class Section:
-    title: str
+    # None when the heuristic detector flagged a section boundary but the
+    # candidate text didn't look like a clean heading (e.g. a body paragraph
+    # that happened to start with "Section 2:"). Callers should treat None
+    # as "I don't know what this section is called" rather than displaying a
+    # synthesised label.
+    title: str | None
     start_page: int  # 1-indexed
     end_page: int  # 1-indexed, inclusive
     text: str = ""  # full concatenated text of all pages in [start_page, end_page]
@@ -63,6 +68,35 @@ _SHORT_LINE_CHARS = 80
 # sentence on the same line — a common false-positive source. Reject those
 # entirely rather than render a body-paragraph snippet as a section title.
 _MAX_HEADING_CHARS = 200
+
+# Stricter check used at title-assignment time. A line can pass the
+# scored-signal threshold (and the 200-char gate above) yet still be a
+# body sentence dressed up with a heading-shaped prefix. Real headings
+# rarely run past ~120 chars and almost never contain a sentence-final
+# period followed by more prose. Candidates that fail this stricter
+# check become section boundaries with title=None — the LLM gets the
+# page range but no synthesised label.
+_CLEAN_HEADING_MAX_CHARS = 120
+
+
+def _looks_like_clean_heading(text: str) -> bool:
+    """
+    Return True if `text` looks like a real heading worth displaying.
+
+    Rejects: text longer than _CLEAN_HEADING_MAX_CHARS, text with a
+    mid-string sentence break (". " or "; "), and empty input. Allows a
+    trailing period or colon (e.g. "Introduction.", "Methods:").
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if len(stripped) > _CLEAN_HEADING_MAX_CHARS:
+        return False
+    inner = stripped[:-1] if stripped.endswith((".", ":")) else stripped
+    if ". " in inner or "; " in inner:
+        return False
+    return True
+
 
 _NUMBER_ONLY_RE = re.compile(r"^\d+(\.\d+)*\.?$")
 
@@ -253,11 +287,12 @@ def _detect_boundaries_from_lines(
             candidates.append((page, stripped))
 
     sections: list[Section] = []
-    for i, (page, title) in enumerate(candidates):
+    for i, (page, raw_title) in enumerate(candidates):
         if i + 1 < len(candidates):
             end_page = candidates[i + 1][0] - 1
         else:
             end_page = total_pages
+        title = raw_title if _looks_like_clean_heading(raw_title) else None
         sections.append(
             Section(title=title, start_page=page, end_page=end_page, text="")
         )
@@ -394,12 +429,16 @@ def detect_boundaries(pdf_path: str) -> list[Section]:
         candidates = _merge_split_headings(candidates)
 
         # Phase 5: assemble Sections from candidate boundaries.
+        # Candidates that pass the scored signal but fail the stricter
+        # clean-heading shape check emit a section with title=None — the
+        # boundary is real, the label isn't trustworthy.
         sections: list[Section] = []
-        for i, (page, title, _y) in enumerate(candidates):
+        for i, (page, raw_title, _y) in enumerate(candidates):
             if i + 1 < len(candidates):
                 end_page = candidates[i + 1][0] - 1
             else:
                 end_page = len(doc)
+            title = raw_title if _looks_like_clean_heading(raw_title) else None
             sections.append(
                 Section(title=title, start_page=page, end_page=end_page, text="")
             )

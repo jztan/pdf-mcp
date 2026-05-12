@@ -130,6 +130,37 @@ class TestDetectBoundariesPure:
         assert sections[2].start_page == 3
         assert sections[2].end_page == 5
 
+    def test_body_paragraph_with_heading_prefix_yields_null_title(self):
+        # A line short enough to pass the 200-char gate but containing a
+        # mid-sentence period — body prose dressed up with a heading prefix.
+        # The boundary is still emitted (the regex fired) but the title is
+        # None so the LLM knows not to display it as a section label.
+        line = (
+            "Section 2: This paragraph discusses evaluation in greater depth. "
+            "Specifically it covers"
+        )
+        assert len(line) < sd._MAX_HEADING_CHARS
+        lines = [(1, line), (3, "3 Methods")]
+        sections = sd._detect_boundaries_from_lines(lines, total_pages=5)
+        # Both boundaries survive; first one has no usable title.
+        assert len(sections) == 2
+        assert sections[0].title is None
+        assert sections[0].start_page == 1
+        assert sections[1].title == "3 Methods"
+
+    def test_clean_heading_helper(self):
+        assert sd._looks_like_clean_heading("3 Methods")
+        assert sd._looks_like_clean_heading("Introduction.")
+        assert sd._looks_like_clean_heading("Results:")
+        # Mid-sentence period → body prose
+        assert not sd._looks_like_clean_heading(
+            "Section 2: This discusses X. Specifically Y"
+        )
+        # Too long
+        assert not sd._looks_like_clean_heading("A" * 200)
+        # Empty
+        assert not sd._looks_like_clean_heading("   ")
+
     def test_overlong_heading_candidate_is_rejected(self):
         # A line that starts like a heading ("Section 2:") but continues as a
         # full body paragraph used to be accepted, producing a section whose

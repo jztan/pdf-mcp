@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Per-match `low_confidence` flag plus response-level `all_low_confidence` and `confidence_threshold` on `pdf_search` semantic-mode responses, so agents can decide whether to trust top-k semantic results below the cosine threshold.
 
+### Docs
+- README: updated the `pdf_info` description to reflect the new `text_coverage` shape (summary by default, per-page arrays under `detail=True`).
+- Browser demo (`pages/index.html`, served at `pdf-mcp.jztan.com`): mock response and coverage visualizations migrated to the new compact `text_coverage` shape; demo footer bumped to `v0.3`.
+
 ## [1.11.0] - 2026-05-09
 
 ### Added

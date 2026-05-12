@@ -265,6 +265,58 @@ class TestPdfSearchModes:
         assert "total_matches" in result
         assert "page_match_counts" in result
 
+    def test_auto_mode_falls_back_on_encode_failure(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' degrades to keyword when embedder.encode() raises
+        (model load failure, network outage, etc.)."""
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch(
+                "pdf_mcp.embedder.encode",
+                side_effect=ValueError("Could not load model BAAI/bge-small-en-v1.5"),
+            ),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert result.get("semantic_unavailable") is True
+        assert "semantic_unavailable_reason" in result
+        assert "Could not load model" in result["semantic_unavailable_reason"]
+
+    def test_auto_mode_falls_back_on_encode_query_failure(
+        self, sample_pdf, isolated_server
+    ):
+        """mode='auto' degrades to keyword when encode_query() raises after
+        page embeddings are already cached."""
+        encode, _ = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch(
+                "pdf_mcp.embedder.encode_query",
+                side_effect=ValueError("Could not load model"),
+            ),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert result.get("semantic_unavailable") is True
+
+    def test_auto_mode_no_fastembed_omits_unavailable_flag(
+        self, sample_pdf, isolated_server
+    ):
+        """ImportError fallback (fastembed missing) does not set
+        semantic_unavailable — that flag is for installed-but-broken cases."""
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(sample_pdf, "page", mode="auto")
+
+        assert result.get("search_mode") == "keyword"
+        assert "semantic_unavailable" not in result
+
     def test_auto_mode_with_fastembed_returns_hybrid(self, sample_pdf, isolated_server):
         """mode='auto' with fastembed available returns search_mode='hybrid'."""
         encode, encode_query = self._make_encode()

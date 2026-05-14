@@ -216,116 +216,30 @@ pdf-mcp --help
 
 ## Tools
 
-### `pdf_info` — Get Document Information
+Eight specialized tools cover document introspection, content reading, search, and cache management. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate, then `pdf_read_pages` or `pdf_read_all` to consume.
 
-Returns page count, metadata, file size, estimated token count, and `text_coverage` — a constant-size `summary` with page-count rollups and a list of OCR candidate pages, so agents can route around scanned content without reading it. Pass `detail=True` to opt into per-page arrays (`text_chars_per_page`, `raster_images_per_page`); by default they are omitted so a 3000-page PDF doesn't blow your context just for coverage. **Call this first** to understand a document. Includes `toc_entry_count` and inline TOC entries when the document has ≤50 bookmarks; larger TOCs return `toc_truncated: true` — use `pdf_get_toc` to retrieve the full outline.
+| Tool | What it does |
+|------|--------------|
+| `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
+| `pdf_get_toc` | Full table of contents for documents with >50 bookmarks |
+| `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables |
+| `pdf_read_all` | Read entire document in one call (byte-capped for safety) |
+| `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |
+| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity |
+| `pdf_cache_stats` | Per-document cache breakdown + total size |
+| `pdf_cache_clear` | Clear expired or all cache entries |
+
+Example prompts:
 
 ```
 "Read the PDF at /path/to/document.pdf"
-```
-
-### `pdf_read_pages` — Read Specific Pages
-
-Read selected pages to manage context size. Each page dict includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly in the page response — no separate tool call needed.
-
-Optional parameters:
-- `ocr=True` / `ocr_lang="eng"` — run Tesseract OCR on pages with no extractable text; requires system Tesseract (`brew install tesseract`); capped at 20 pages per call
-- `render_dpi=200` — attach a rendered PNG path alongside text for each page (shares cache with `pdf_render_pages`)
-
-```
-"Read pages 1-10 of the PDF"
-"Read pages 15, 20, and 25-30"
+"Which pages discuss supply chain risks?"
+"Find sections about the training process"
+"Show me what page 5 looks like"
 "OCR pages 3-5 of the scanned PDF"
 ```
 
-### `pdf_read_all` — Read Entire Document
-
-Read a complete document in one call. Best for short documents (~50 pages or fewer) where you want everything at once. Does not include images or tables — use `pdf_read_pages` for those.
-
-Optional parameters:
-- `max_pages=50` — safety cap on pages read (default 50, max 500)
-
-```
-"Read the entire PDF (it's only 10 pages)"
-```
-
-### `pdf_render_pages` — Render Pages as Images
-
-Render PDF pages as PNG images for vision-capable models. Use when you need to *see* page content — diagrams, handwriting, scanned pages, or any page where text extraction is insufficient. Returns MCP image content blocks that vision models can process natively. Up to 5 pages per call; DPI clamped to 72–400.
-
-For extracting text from scanned pages, use `pdf_read_pages(ocr=True)` instead — the two tools are orthogonal.
-
-```
-"Show me what page 5 looks like"
-"Render the diagram on page 12"
-```
-
-### `pdf_search` — Search Within PDF
-
-Find relevant content before loading pages. Two orthogonal parameters control the search:
-
-**`mode`** — how results are ranked:
-
-- **`"auto"` (default)** — Hybrid Reciprocal Rank Fusion (RRF) when `pdf-mcp[semantic]` is installed; keyword-only otherwise. RRF merges BM25 and semantic rankings, capturing what either alone would miss: exact terms (keyword) and conceptual matches (semantic).
-- **`"keyword"`** — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
-- **`"semantic"`** — Embeddings only (requires `pdf-mcp[semantic]`). Best for conceptual queries.
-
-**`granularity`** — what comes back:
-
-- **`"page"` (default)** — ranked pages. Best for pinpoint lookups. Honors `mode`.
-- **`"section"`** — ranked sections (`section_id`, `title`, `title_source`, `start_page`, `end_page`, `score`). Best when an agent needs the full context of a topic, not just one page that mentions it. Sections come from the PDF's TOC when available (~95% of academic PDFs), with a 7-signal heuristic fallback (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length) for TOC-less PDFs. `title_source` is `"toc"` | `"heading_detected"` | `null`; when `null`, `title` is also `null` (the detector flagged a boundary but couldn't produce a trustworthy label — agents should fall back to "section on pages N–M"). Ranked by BM25/FTS5 only — `mode` is ignored. Validated on arxiv PDFs: detector F1 0.80–0.94; saves up to ~9 `pdf_read_pages` calls per query on multi-page sections.
-
-The response includes `search_mode` indicating which path ran (`"hybrid"`, `"keyword"`, `"semantic"`, or `"section"`).
-
-The first call on a new document embeds all pages (one-time cost, typically a few seconds); subsequent calls are instant.
-
-Any [`fastembed`-compatible model](https://qdrant.github.io/fastembed/examples/Supported_Models/) works — configure in `~/.config/pdf-mcp/config.toml`:
-
-```toml
-[embedding]
-model = "nomic-ai/nomic-embed-text-v1.5"
-```
-
-The model downloads once on first use. Switching models clears the embedding cache for that PDF (re-embedding happens automatically on the next search).
-
-See **[docs/embedding-models.md](docs/embedding-models.md)** for a full comparison with MTEB retrieval scores, size, and a selection guide.
-
-```
-"Search for 'quarterly revenue' in the PDF"
-"Which pages discuss supply chain risks?"
-"Find sections about the training process"   # granularity="section"
-```
-
-```python
-pdf_search("paper.pdf", "training process", granularity="section")
-# Returns: {"sections": [{"section_id", "title", "title_source",
-#                         "start_page", "end_page", "score"}, ...],
-#           "search_mode": "section", "total_sections": 32}
-```
-
-### `pdf_get_toc` — Get Table of Contents
-
-Returns the full outline with titles, levels, and page numbers. Use when `pdf_info` returns `toc_truncated: true` (documents with more than 50 bookmarks).
-
-```
-"Show me the table of contents"
-```
-
-### `pdf_cache_stats` — View Cache Statistics
-
-Returns a breakdown of what's cached per document — page text, images, tables, embeddings, and rendered PNGs — plus total cache size and hit counts.
-
-```
-"Show PDF cache statistics"
-```
-
-### `pdf_cache_clear` — Clear Cache
-
-Removes expired or all cache entries. Use when cached content is stale or to free disk space.
-
-```
-"Clear expired PDF cache entries"
-```
+See **[docs/tool-reference.md](docs/tool-reference.md)** for the complete reference — every parameter, response shape, security contract, and example. For semantic-search model selection, see **[docs/embedding-models.md](docs/embedding-models.md)**.
 
 ## Example Workflow
 
@@ -388,9 +302,12 @@ deny  = ["~/.ssh/**", "~/.aws/**"]
 [urls]
 allow = ["*.internal.example.com"]
 deny  = ["untrusted.example.com"]
+
+[limits]
+max_response_bytes = 200000
 ```
 
-Rules use shell-glob patterns (`*` matches across path separators). `deny` wins when both match. Path matching operates on the resolved path after symlink expansion. A malformed config file prevents the server from starting — it never silently falls back to permissive.
+The `[limits]` block caps text-payload byte size on `pdf_read_all` and section-granularity `pdf_search` — see [docs/response-limits.md](docs/response-limits.md). Rules use shell-glob patterns (`*` matches across path separators). `deny` wins when both match. Path matching operates on the resolved path after symlink expansion. A malformed config file prevents the server from starting — it never silently falls back to permissive.
 
 ### Environment variables
 

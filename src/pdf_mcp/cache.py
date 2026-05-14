@@ -101,6 +101,10 @@ class PDFCache:
 
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Tighten perms on the cache dir itself (images/renders subdirs
+        # already get 0o700 below). Closes a multi-user info-leak gap
+        # where cached PDF text was readable via the user's umask.
+        os.chmod(str(self.cache_dir), 0o700)
         self.db_path = self.cache_dir / "cache.db"
         self.ttl_hours = ttl_hours
         self.images_dir = images_dir or (self.cache_dir / "images")

@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `[limits].max_response_bytes` config option (default 200 KB, max 2 MB)
+  capping `pdf_read_all` and section-granularity `pdf_search` response
+  payloads. New response fields: `truncated`, `truncated_pages`,
+  `truncated_bytes`, `bytes_returned`, `bytes_available`, `next_page`
+  (on `pdf_read_all`) and `matches_omitted` (on section search).
+- Untrusted-content security preamble on every MCP tool that returns
+  PDF-derived text/OCR/section content, visible to non-Claude-Code
+  clients via the tool `description` field.
+
+### Security
+- `url_fetcher` now rejects non-PDF content-types (`text/*`,
+  `application/json`, image/audio/video, etc.) before buffering bytes.
+- Expanded IPv6 SSRF deny list: `::ffff:0:0/96` (IPv4-mapped),
+  `64:ff9b::/96`, `100::/64`, `2001:db8::/32`, `fd00:ec2::254/128`
+  (AWS IMDS over IPv6), and `::/128` (unspecified). IPv4-mapped IPv6
+  addresses are unwrapped and re-tested against the IPv4 deny list.
+- `url_fetcher` now pins the DNS-resolved IP per redirect hop,
+  closing the TOCTOU gap between SSRF validation and TCP connect.
+- Cache directory is now `chmod 0o700` after creation, closing a
+  multi-user info-leak gap where cached PDF text was readable via
+  the user's default umask.
+
+### Changed
+- `PDF_MCP_CACHE_DIR` and `PDF_MCP_CACHE_TTL` environment variables
+  are now honored at server startup (previously declared in the MCP
+  registry manifest but not wired into the Python code). `CACHE_TTL`
+  must parse as an integer in `[0, 8760]` hours (up to one year) —
+  bad values fail loud at startup rather than silently falling back
+  to the default.
+- `pdf_read_all` now accepts `start_page: int` (default `1`) and
+  echoes the post-clamp value in the response. The pre-existing
+  `next_page` field in the response is now consumable: pass it back
+  as `start_page` to resume the read on a clean page boundary.
+  Previously `next_page` named a continuation cursor the tool had
+  no parameter to accept, forcing callers to fall back to
+  `pdf_read_pages` for the resume. A regression test enforces the
+  invariant that iterating `start_page=next_page` covers every page
+  exactly once.
+- The MCP `initialize` handshake now reports pdf-mcp's `__version__`
+  as `serverInfo.version`. Previously the field carried FastMCP's
+  framework version (e.g. `3.2.4`) because no explicit `version=`
+  was passed to `FastMCP(...)`, so MCP clients could not tell
+  pdf-mcp releases apart from the handshake alone.
+
+### Documentation
+- Clarified `[limits].max_response_bytes` docstring: the cap bounds
+  the text content field (`full_text` on `pdf_read_all`; section
+  titles + overhead on section-mode `pdf_search`), not the wire-
+  level MCP TextContent envelope. The envelope adds ~300–500 bytes
+  of other response fields and JSON framing on top of the cap.
+
 ## [1.12.1] - 2026-05-12
 ### Fixed
 - `pdf_search` `total_matches` in keyword mode could disagree with `len(matches)` after the 1.12.0 tokenisation fix — multi-word queries like `pgvector latency` returned 4 matches with `total_matches: 0` because the literal phrase didn't appear anywhere even though both tokens did. `total_matches` now equals `len(matches)` in every mode, and `get_fts_page_counts` counts token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal in keyword mode.

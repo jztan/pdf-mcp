@@ -77,8 +77,49 @@ mcp = FastMCP(
     ),
 )
 
+_DEFAULT_CACHE_TTL_HOURS = 24
+_MAX_CACHE_TTL_HOURS = 8760  # one year
+
+
+def _cache_dir_from_env() -> Path | None:
+    """Return the cache directory override from PDF_MCP_CACHE_DIR, or None.
+
+    Leaves `~` expansion to `Path.expanduser`. Symlinks are NOT resolved —
+    the user's chosen path is honored verbatim.
+    """
+    raw = os.environ.get("PDF_MCP_CACHE_DIR", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser()
+
+
+def _ttl_hours_from_env() -> int:
+    """Return PDF_MCP_CACHE_TTL as a clamped integer, or the default.
+
+    Fails loud (ValueError at startup) on non-integer or out-of-range
+    input rather than silently falling back, so a typo in the user's
+    MCP client config surfaces immediately instead of being ignored.
+    """
+    raw = os.environ.get("PDF_MCP_CACHE_TTL")
+    if raw is None or raw.strip() == "":
+        return _DEFAULT_CACHE_TTL_HOURS
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"PDF_MCP_CACHE_TTL must be an integer (got {raw!r})") from exc
+    if value < 0 or value > _MAX_CACHE_TTL_HOURS:
+        raise ValueError(
+            f"PDF_MCP_CACHE_TTL must be in [0, {_MAX_CACHE_TTL_HOURS}] hours "
+            f"(got {value})"
+        )
+    return value
+
+
 # Initialize cache, config, and URL fetcher
-cache = PDFCache(ttl_hours=24)
+cache = PDFCache(
+    cache_dir=_cache_dir_from_env(),
+    ttl_hours=_ttl_hours_from_env(),
+)
 pdf_config = PDFConfig()
 url_fetcher = URLFetcher(config=pdf_config)
 

@@ -107,3 +107,63 @@ class TestPdfReadAllByteCap:
         assert result["truncated_pages"] is True
         assert result["truncated_bytes"] is False
         assert result["next_page"] == 3
+
+
+class TestSectionSearchByteCap:
+    def test_long_title_truncated(self, isolated_server, monkeypatch):
+        from pdf_mcp import server as server_module
+
+        long_title = "A" * 5000
+        monkeypatch.setattr(
+            server_module.cache, "get_section_fts_coverage", lambda _p: 1
+        )
+        monkeypatch.setattr(
+            server_module.cache,
+            "search_section_fts",
+            lambda _p, _q, _n: [
+                {
+                    "section_id": 1,
+                    "title": long_title,
+                    "title_source": "heading_detected",
+                    "start_page": 1,
+                    "end_page": 1,
+                    "score": 0.5,
+                }
+            ],
+        )
+        out = server_module._pdf_search_section_mode("/tmp/x.pdf", "q", 10)
+        match = out["sections"][0]
+        assert match["title_truncated"] is True
+        assert len(match["title"].encode("utf-8")) <= 2048
+
+    def test_byte_cap_drops_trailing_matches(self, isolated_server, monkeypatch):
+        from pdf_mcp import server as server_module
+
+        monkeypatch.setattr(
+            server_module.pdf_config, "_data",
+            {"limits": {"max_response_bytes": 4096}},
+            raising=False,
+        )
+        matches = [
+            {
+                "section_id": i,
+                "title": f"Section {i} " + ("x" * 80),
+                "title_source": "toc",
+                "start_page": i,
+                "end_page": i,
+                "score": 1.0 / (i + 1),
+            }
+            for i in range(200)
+        ]
+        monkeypatch.setattr(
+            server_module.cache, "get_section_fts_coverage", lambda _p: 200
+        )
+        monkeypatch.setattr(
+            server_module.cache,
+            "search_section_fts",
+            lambda _p, _q, _n: matches,
+        )
+        out = server_module._pdf_search_section_mode("/tmp/x.pdf", "q", 200)
+        assert out["truncated_bytes"] is True
+        assert out["matches_omitted"] > 0
+        assert len(out["sections"]) + out["matches_omitted"] == 200

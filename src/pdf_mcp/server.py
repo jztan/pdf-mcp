@@ -39,6 +39,7 @@ from .url_fetcher import URLFetcher
 MAX_PAGES_LIMIT = 500
 MAX_RESULTS_LIMIT = 100
 MAX_CONTEXT_CHARS_LIMIT = 2000
+MAX_SECTION_TITLE_BYTES = 2_048
 
 # Maximum TOC entries to inline in pdf_info (~1000 token budget)
 TOC_INLINE_LIMIT = 50
@@ -778,6 +779,21 @@ def _python_search(
     return matches, page_counts
 
 
+def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
+    """
+    Truncate `text` so its UTF-8 byte length does not exceed `max_bytes`.
+    Returns (possibly_shortened_text, was_truncated). Cuts on a codepoint
+    boundary (never mid-multibyte character).
+    """
+    raw = text.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return text, False
+    cut = max_bytes
+    while cut > 0 and (raw[cut] & 0xC0) == 0x80:
+        cut -= 1
+    return raw[:cut].decode("utf-8", errors="ignore"), True
+
+
 def _pdf_search_section_mode(
     local_path: str, query: str, max_results: int
 ) -> dict[str, Any]:
@@ -812,12 +828,36 @@ def _pdf_search_section_mode(
         cache.index_sections(local_path, sections)
 
     matches = cache.search_section_fts(local_path, query, max_results)
-    # title_source is carried on each row by search_section_fts, set at
-    # detection time (toc / heading_detected / None) — no inference needed.
+    total_sections = cache.get_section_fts_coverage(local_path)
+
+    cap = pdf_config.max_response_bytes
+    kept: list[dict[str, Any]] = []
+    cumulative = 0
+    matches_omitted = 0
+
+    for m in matches:
+        title, title_truncated = _truncate_utf8(
+            m["title"] or "", MAX_SECTION_TITLE_BYTES
+        )
+        entry = dict(m)
+        entry["title"] = title
+        if title_truncated:
+            entry["title_truncated"] = True
+        entry_bytes = len(title.encode("utf-8")) + 80
+        if cumulative + entry_bytes > cap and kept:
+            matches_omitted = len(matches) - len(kept)
+            break
+        kept.append(entry)
+        cumulative += entry_bytes
+
+    truncated_bytes = matches_omitted > 0
     return {
-        "sections": matches,
+        "sections": kept,
         "search_mode": "section",
-        "total_sections": cache.get_section_fts_coverage(local_path),
+        "total_sections": total_sections,
+        "truncated_bytes": truncated_bytes,
+        "matches_omitted": matches_omitted,
+        "bytes_returned": cumulative,
     }
 
 

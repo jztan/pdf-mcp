@@ -1,6 +1,11 @@
 """Tests for byte-cap behavior on pdf_read_all and section-search."""
 
-from pdf_mcp.server import _apply_byte_cap
+import tempfile
+from pathlib import Path
+
+import pymupdf
+
+from pdf_mcp.server import _apply_byte_cap, pdf_read_all
 
 
 class TestApplyByteCap:
@@ -40,3 +45,65 @@ class TestApplyByteCap:
         assert included == 1
         assert returned == 9
         assert available == 20
+
+
+def _make_pdf(pages_text: list[str]) -> str:
+    f = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+    doc = pymupdf.open()
+    for body in pages_text:
+        page = doc.new_page()
+        page.insert_textbox(
+            pymupdf.Rect(36, 36, 560, 800), body, fontsize=10
+        )
+    doc.save(f.name)
+    doc.close()
+    f.close()
+    return str(Path(f.name).resolve())
+
+
+class TestPdfReadAllByteCap:
+    def test_uncapped_when_under_budget(self, isolated_server):
+        path = _make_pdf(["short page one.", "short page two."])
+        try:
+            result = pdf_read_all(path)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        assert result["truncated"] is False
+        assert result["truncated_bytes"] is False
+        assert result["truncated_pages"] is False
+        assert result["bytes_returned"] == result["bytes_available"]
+        assert result["next_page"] is None
+
+    def test_byte_cap_truncates(self, isolated_server, monkeypatch):
+        from pdf_mcp import server as server_module
+
+        monkeypatch.setattr(
+            server_module.pdf_config,
+            "_data",
+            {"limits": {"max_response_bytes": 4096}},
+            raising=False,
+        )
+        body = "Lorem ipsum dolor sit amet. " * 80
+        path = _make_pdf([body] * 6)
+        try:
+            result = pdf_read_all(path, max_pages=50)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        assert result["truncated"] is True
+        assert result["truncated_bytes"] is True
+        assert result["truncated_pages"] is False
+        assert result["bytes_returned"] < result["bytes_available"]
+        assert isinstance(result["next_page"], int)
+        assert result["next_page"] >= 2
+        assert result["page_count"] < 6
+
+    def test_page_cap_still_sets_truncated_pages(self, isolated_server):
+        path = _make_pdf(["p1", "p2", "p3", "p4", "p5"])
+        try:
+            result = pdf_read_all(path, max_pages=2)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        assert result["truncated"] is True
+        assert result["truncated_pages"] is True
+        assert result["truncated_bytes"] is False
+        assert result["next_page"] == 3

@@ -795,7 +795,7 @@
   <p class="other-tools">
     The demo shows 3 of pdf-mcp's 8 tools. The server also includes
     <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
-    <code>pdf_extract_images</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code>,
+    <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code>,
     plus OCR, SQLite caching, and RRF hybrid search.
   </p>
   <div class="links">
@@ -820,7 +820,7 @@
 
     <h2>How agents use pdf-mcp</h2>
     <p>
-      The server exposes eight tools, but a typical agent workflow uses three of them in sequence. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) to find the pages that match the user's question. Finally, <code>pdf_read_pages</code> extracts text, images, and tables from just those pages. The other five tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_images</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code> — cover full-document reads, visual inspection of scanned pages, image extraction, and cache management.
+      The server exposes eight tools, but a typical agent workflow uses three of them in sequence. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) to find the pages that match the user's question. Finally, <code>pdf_read_pages</code> extracts text, images, and tables from just those pages. The other five tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code> — cover full-document reads, visual inspection of scanned pages, and cache management. (Embedded images and structured tables come back inline from <code>pdf_read_pages</code> rather than via a dedicated extraction tool.)
     </p>
 
     <h2>What the browser demo shows</h2>

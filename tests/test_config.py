@@ -1,6 +1,5 @@
 """Tests for pdf_mcp.config module."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -35,7 +34,7 @@ class TestPathRules:
     def test_no_allow_is_permissive(self, tmp_path):
         """Empty allow list means any path is accepted (within floor)."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\ndeny = []\n')
+        cfg.write_text("[paths]\ndeny = []\n")
         config = PDFConfig(config_path=cfg)
         config.check_path("/any/path/file.pdf")
 
@@ -59,9 +58,7 @@ class TestPathRules:
     def test_deny_wins_over_allow(self, tmp_path):
         """Path matching both allow and deny is denied (fail-closed)."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text(
-            '[paths]\nallow = ["/data/**"]\ndeny = ["/data/secret/**"]\n'
-        )
+        cfg.write_text('[paths]\nallow = ["/data/**"]\ndeny = ["/data/secret/**"]\n')
         config = PDFConfig(config_path=cfg)
         config.check_path("/data/public/report.pdf")
         with pytest.raises(ValueError, match="denied"):
@@ -134,34 +131,37 @@ class TestUrlRules:
             config.check_url_host("bad.example.com")
 
 
-def _write_config(text: str) -> Path:
-    f = tempfile.NamedTemporaryFile(
-        suffix=".toml", delete=False, mode="w", encoding="utf-8"
-    )
-    f.write(text)
-    f.close()
-    return Path(f.name)
-
-
-def test_max_response_bytes_default_when_missing():
-    cfg_path = _write_config("")
+def test_max_response_bytes_default_when_missing(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 200_000
 
 
-def test_max_response_bytes_honored():
-    cfg_path = _write_config("[limits]\nmax_response_bytes = 50000\n")
+def test_max_response_bytes_honored(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("[limits]\nmax_response_bytes = 50000\n")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 50_000
 
 
-def test_max_response_bytes_clamped_to_ceiling():
-    cfg_path = _write_config("[limits]\nmax_response_bytes = 999999999\n")
+def test_max_response_bytes_clamped_to_ceiling(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("[limits]\nmax_response_bytes = 999999999\n")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 2_000_000
 
 
-def test_max_response_bytes_clamped_to_floor():
-    cfg_path = _write_config("[limits]\nmax_response_bytes = 10\n")
+def test_max_response_bytes_clamped_to_floor(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("[limits]\nmax_response_bytes = 10\n")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 4_096
+
+
+def test_max_response_bytes_rejects_non_int(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text('[limits]\nmax_response_bytes = "200kb"\n')
+    cfg = PDFConfig(config_path=cfg_path)
+    with pytest.raises(ValueError, match="must be an integer"):
+        cfg.max_response_bytes

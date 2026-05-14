@@ -82,7 +82,7 @@ class TestFetch:
             mock_client.return_value.__exit__ = Mock(return_value=False)
             mock_client.return_value.stream.return_value = mock_response
 
-            with pytest.raises(ValueError, match="does not appear to be a PDF"):
+            with pytest.raises(ValueError, match="not.*PDF|content[- ]type"):
                 url_fetcher.fetch(url)
 
     @patch.object(URLFetcher, "_validate_url")
@@ -154,7 +154,7 @@ class TestFetch:
             mock_client.return_value.__exit__ = Mock(return_value=False)
             mock_client.return_value.stream.return_value = mock_response
 
-            with pytest.raises(ValueError, match="does not appear to be a PDF"):
+            with pytest.raises(ValueError, match="not.*PDF|content[- ]type"):
                 url_fetcher.fetch(url)
 
     @patch.object(URLFetcher, "_validate_url")
@@ -182,7 +182,7 @@ class TestFetch:
                 final_response,
             ]
 
-            with pytest.raises(ValueError, match="does not appear to be a PDF"):
+            with pytest.raises(ValueError, match="not.*PDF|content[- ]type"):
                 url_fetcher.fetch(url)
 
     @patch.object(URLFetcher, "_validate_url")

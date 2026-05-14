@@ -21,6 +21,20 @@ import httpx
 # Maximum download size: 100 MB
 MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
 
+# Content-Types that are immediately disqualified before any bytes are
+# buffered. PDFs may arrive as application/pdf, application/x-pdf, or
+# application/octet-stream; anything in this deny list cannot be a PDF.
+_DENIED_CONTENT_TYPE_PREFIXES = (
+    "text/",
+    "application/json",
+    "application/xml",
+    "application/xhtml+xml",
+    "image/",
+    "audio/",
+    "video/",
+    "multipart/",
+)
+
 # Maximum number of HTTP redirects to follow
 MAX_REDIRECTS = 10
 
@@ -198,6 +212,15 @@ class URLFetcher:
                         continue
 
                     response.raise_for_status()
+
+                    early_ct = response.headers.get("content-type", "").lower()
+                    if any(
+                        early_ct.startswith(p) for p in _DENIED_CONTENT_TYPE_PREFIXES
+                    ):
+                        raise ValueError(
+                            f"URL content-type {early_ct!r} is not a PDF: "
+                            f"{current_url}"
+                        )
 
                     # Check Content-Length header if available
                     content_length = response.headers.get("content-length")

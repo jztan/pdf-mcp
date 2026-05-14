@@ -140,7 +140,9 @@ class URLFetcher:
 
     def _validate_url(self, url: str) -> None:
         """
-        Validate URL to prevent SSRF attacks.
+        Standalone URL validation (HTTPS scheme, IP block list, config allow/deny).
+        The fetch path uses _validate_url_no_dns + _pick_pinned_ip instead to
+        perform exactly one DNS lookup per hop and pin the resolved IP.
 
         Blocks:
         - Non-HTTPS schemes (http, ftp, file, data, etc.)

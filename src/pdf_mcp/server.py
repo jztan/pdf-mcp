@@ -889,7 +889,7 @@ def _pdf_search_section_mode(
         "total_sections": total_sections,
         "truncated_bytes": truncated_bytes,
         "matches_omitted": matches_omitted,
-        "bytes_returned": cumulative,
+        "estimated_bytes_returned": cumulative,
     }
 
 
@@ -964,6 +964,16 @@ def pdf_search(
                         couldn't produce a trustworthy label).
             - search_mode: 'section'
             - total_sections: count of indexed sections for this PDF
+            - truncated_bytes (bool): True if trailing matches were dropped
+              to keep the response under the byte cap.
+            - matches_omitted (int): number of trailing matches dropped due
+              to the byte cap (0 when truncated_bytes is False).
+            - estimated_bytes_returned (int): approximate serialized byte
+              size of the included matches (title bytes + ~80 bytes overhead
+              per match; not exact serialized size).
+            - Per-match title_truncated (bool, optional): present and True
+              when an individual section title was truncated to fit within
+              MAX_SECTION_TITLE_BYTES.
 
     Error contract: validation failures (empty query, missing fastembed
     in semantic mode, unknown mode) return an inline payload of the

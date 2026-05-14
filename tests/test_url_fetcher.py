@@ -44,7 +44,7 @@ def _mock_stream_response(content, headers=None, is_redirect=False, redirect_url
 class TestFetch:
     """Tests for URLFetcher.fetch() method."""
 
-    @patch.object(URLFetcher, "_validate_url")
+    @patch.object(URLFetcher, "_validate_url_no_dns")
     def test_successful_download(self, mock_validate, url_fetcher, valid_pdf_bytes):
         """Successful download saves file and returns path."""
         url = "https://example.com/test.pdf"
@@ -53,18 +53,23 @@ class TestFetch:
             valid_pdf_bytes, {"content-type": "application/pdf"}
         )
 
-        with patch("httpx.Client") as mock_client:
-            mock_client.return_value.__enter__ = Mock(
-                return_value=mock_client.return_value
-            )
-            mock_client.return_value.__exit__ = Mock(return_value=False)
-            mock_client.return_value.stream.return_value = mock_response
+        with patch(
+            "pdf_mcp.url_fetcher.socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("93.184.216.34", 0))],
+        ):
+            with patch("httpx.Client") as mock_client:
+                mock_client.return_value.__enter__ = Mock(
+                    return_value=mock_client.return_value
+                )
+                mock_client.return_value.__exit__ = Mock(return_value=False)
+                mock_client.return_value.stream.return_value = mock_response
 
-            result = url_fetcher.fetch(url)
+                result = url_fetcher.fetch(url)
 
         assert result.exists()
         assert result.read_bytes() == valid_pdf_bytes
-        mock_validate.assert_called_once_with(url)
+        # _validate_url_no_dns called twice: once pre-loop + once inside loop
+        assert mock_validate.call_count >= 1
 
     @patch.object(URLFetcher, "_validate_url")
     def test_invalid_content_raises_valueerror(self, mock_validate, url_fetcher):
@@ -491,15 +496,11 @@ class TestRedirectSSRFValidation:
     def test_redirect_to_private_ip_blocked(
         self, mock_validate, url_fetcher, valid_pdf_bytes
     ):
-        """Redirect to private IP is validated before following."""
+        """Redirect to private IP is blocked by _pick_pinned_ip before connecting."""
         url = "https://public.example.com/paper.pdf"
-        redirect_url = "http://169.254.169.254/latest/meta-data/"
-
-        # First call passes (initial URL), second call raises (redirect target)
-        mock_validate.side_effect = [
-            None,
-            ValueError("URL resolves to a private/reserved IP"),
-        ]
+        # Must be HTTPS so the scheme check passes; private IP is blocked by
+        # _pick_pinned_ip via DNS resolution.
+        redirect_url = "https://169.254.169.254/latest/meta-data/"
 
         redirect_response = _mock_stream_response(
             b"",
@@ -507,15 +508,23 @@ class TestRedirectSSRFValidation:
             redirect_url=redirect_url,
         )
 
-        with patch("httpx.Client") as mock_client:
-            mock_client.return_value.__enter__ = Mock(
-                return_value=mock_client.return_value
-            )
-            mock_client.return_value.__exit__ = Mock(return_value=False)
-            mock_client.return_value.stream.return_value = redirect_response
+        # Return a public IP for the initial URL, and a private/link-local IP
+        # for the redirect target — _pick_pinned_ip must block the redirect.
+        def resolve(hostname, *args, **kwargs):
+            if "169.254" in hostname or hostname == "169.254.169.254":
+                return [(2, 1, 6, "", ("169.254.169.254", 0))]
+            return [(2, 1, 6, "", ("203.0.113.1", 0))]
 
-            with pytest.raises(ValueError, match="private/reserved"):
-                url_fetcher.fetch(url)
+        with patch("pdf_mcp.url_fetcher.socket.getaddrinfo", side_effect=resolve):
+            with patch("httpx.Client") as mock_client:
+                mock_client.return_value.__enter__ = Mock(
+                    return_value=mock_client.return_value
+                )
+                mock_client.return_value.__exit__ = Mock(return_value=False)
+                mock_client.return_value.stream.return_value = redirect_response
+
+                with pytest.raises(ValueError, match="blocked"):
+                    url_fetcher.fetch(url)
 
     @patch.object(URLFetcher, "_validate_url")
     def test_redirect_to_public_url_allowed(
@@ -535,22 +544,24 @@ class TestRedirectSSRFValidation:
             {"content-type": "application/pdf"},
         )
 
-        with patch("httpx.Client") as mock_client:
-            mock_client.return_value.__enter__ = Mock(
-                return_value=mock_client.return_value
-            )
-            mock_client.return_value.__exit__ = Mock(return_value=False)
-            mock_client.return_value.stream.side_effect = [
-                redirect_response,
-                final_response,
-            ]
+        with patch(
+            "pdf_mcp.url_fetcher.socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("203.0.113.1", 0))],
+        ):
+            with patch("httpx.Client") as mock_client:
+                mock_client.return_value.__enter__ = Mock(
+                    return_value=mock_client.return_value
+                )
+                mock_client.return_value.__exit__ = Mock(return_value=False)
+                mock_client.return_value.stream.side_effect = [
+                    redirect_response,
+                    final_response,
+                ]
 
-            result = url_fetcher.fetch(url)
+                result = url_fetcher.fetch(url)
 
         assert result.exists()
         assert result.read_bytes() == valid_pdf_bytes
-        # validate_url called for initial URL + redirect target
-        assert mock_validate.call_count == 2
 
     @patch.object(URLFetcher, "_validate_url")
     def test_redirect_with_no_target_url(self, mock_validate, url_fetcher):

@@ -73,3 +73,51 @@ def test_blocks_aws_imds_ipv6(fetcher):
     ):
         with pytest.raises(ValueError, match="blocked"):
             fetcher.fetch("https://malicious.example/x.pdf")
+
+
+def test_dns_rebind_between_validation_and_connect(fetcher, tmp_path):
+    """
+    First getaddrinfo (validation) returns a public IP; second
+    getaddrinfo (would-be connect) returns loopback. The fetch must
+    NOT connect to loopback — either it succeeds against the pinned
+    public IP, or it raises. Loopback connect is forbidden either way.
+    """
+    public = _addrinfo_for("203.0.113.42")
+    loopback = _addrinfo_for("127.0.0.1")
+    call_count = {"n": 0}
+
+    def flaky_getaddrinfo(*args, **kwargs):
+        call_count["n"] += 1
+        return public if call_count["n"] == 1 else loopback
+
+    requested_urls: list[str] = []
+
+    def fake_stream(method, url, **kwargs):
+        requested_urls.append(url)
+        return _mock_response(
+            headers={"content-type": "application/pdf"},
+            body=b"%PDF-1.4\n%%EOF\n",
+        )
+
+    fake_client = MagicMock()
+    fake_client.__enter__ = MagicMock(return_value=fake_client)
+    fake_client.__exit__ = MagicMock(return_value=False)
+    fake_client.stream = MagicMock(side_effect=fake_stream)
+
+    with patch("pdf_mcp.url_fetcher.socket.getaddrinfo", side_effect=flaky_getaddrinfo):
+        with patch("pdf_mcp.url_fetcher.httpx.Client", return_value=fake_client):
+            try:
+                fetcher.fetch("https://rebind.example/x.pdf")
+            except ValueError:
+                pass
+
+    # At least one request must have been issued
+    assert requested_urls, "No HTTP request was made"
+    # All requested URLs must use the pinned public IP, not loopback
+    for url in requested_urls:
+        assert "127.0.0.1" not in url, (
+            "Fetcher attempted connect to loopback after DNS rebind"
+        )
+        assert "203.0.113.42" in url, (
+            "Fetcher did not pin to the validated public IP"
+        )

@@ -57,6 +57,30 @@ _BLOCKED_NETWORKS = (
 )
 
 
+def _pick_pinned_ip(hostname: str) -> tuple[str, socket.AddressFamily]:
+    """
+    Resolve hostname once and pick the first non-blocked address.
+    Returns (ip_literal, family). Raises ValueError if the resolution
+    yields no addresses or only blocked addresses.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except OSError as e:
+        raise ValueError(f"DNS resolution failed for {hostname}: {e}") from e
+    for info in infos:
+        ip_str = str(info[4][0])
+        ip = ipaddress.ip_address(ip_str)
+        if any(ip in net for net in _BLOCKED_NETWORKS if ip.version == net.version):
+            continue
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None and any(
+            mapped in net for net in _BLOCKED_NETWORKS if net.version == 4
+        ):
+            continue
+        return ip_str, info[0]  # family is socket.AF_INET / AF_INET6
+    raise ValueError(f"All resolved addresses for {hostname} are blocked")
+
+
 class URLFetcher:
     """
     Fetches PDFs from URLs and caches them locally.
@@ -145,6 +169,33 @@ class URLFetcher:
         if self._config is not None:
             self._config.check_url_host(hostname)
 
+    def _validate_url_no_dns(self, url: str) -> None:
+        """
+        Validate URL scheme and config rules without performing DNS resolution.
+        IP-range blocking is handled separately by _pick_pinned_ip.
+
+        Used inside the fetch loop so that each hop makes exactly one
+        getaddrinfo call (via _pick_pinned_ip), closing the DNS-rebinding
+        TOCTOU gap.
+
+        Raises:
+            ValueError: If URL uses a blocked scheme or is disallowed by config
+        """
+        parsed = urlparse(url)
+
+        if parsed.scheme != "https":
+            raise ValueError(
+                f"Only HTTPS URLs are supported. "
+                f"Update your URL to use https:// (got: {parsed.scheme})"
+            )
+
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError(f"Could not extract hostname from URL: {url}")
+
+        if self._config is not None:
+            self._config.check_url_host(hostname)
+
     def _get_cache_filename(self, url: str) -> str:
         """Generate cache filename from URL."""
         url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
@@ -205,8 +256,10 @@ class URLFetcher:
             httpx.HTTPError: If download fails
             ValueError: If URL doesn't return a PDF or targets a blocked address
         """
-        # Validate URL to prevent SSRF
-        self._validate_url(url)
+        # Validate URL scheme and config rules. IP-range blocking is deferred
+        # to _pick_pinned_ip inside the loop so there is exactly one
+        # getaddrinfo call per hop, closing the DNS-rebinding TOCTOU gap.
+        self._validate_url_no_dns(url)
 
         # Check cache first
         if not force_refresh:
@@ -215,18 +268,41 @@ class URLFetcher:
                 return cached_path
 
         # Download with manual redirect handling to validate each hop
-        # before connecting (prevents TOCTOU SSRF via redirects)
+        # before connecting (prevents TOCTOU SSRF via redirects).
+        # IP pinning: resolve the hostname once per hop and rewrite the
+        # URL to the pinned IP so httpx connects to the address we
+        # validated — closing the DNS-rebinding TOCTOU gap.
         current_url = url
         with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
             for _ in range(MAX_REDIRECTS):
-                with client.stream("GET", current_url) as response:
+                # Validate scheme + config; IP check is done by _pick_pinned_ip
+                # below to keep exactly one getaddrinfo call per hop (TOCTOU fix).
+                self._validate_url_no_dns(current_url)
+
+                parsed = urlparse(current_url)
+                hostname = parsed.hostname or ""
+                pinned_ip, af = _pick_pinned_ip(hostname)
+                if af == socket.AF_INET6:
+                    ip_host = f"[{pinned_ip}]"
+                else:
+                    ip_host = pinned_ip
+                rebuilt_netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
+                rebuilt = parsed._replace(netloc=rebuilt_netloc).geturl()
+
+                request_headers = {"Host": parsed.netloc}
+                request_extensions: dict[str, Any] = {"sni_hostname": hostname}
+
+                with client.stream(
+                    "GET",
+                    rebuilt,
+                    headers=request_headers,
+                    extensions=request_extensions,
+                ) as response:
                     if response.is_redirect:
                         next_req = response.next_request
                         if next_req is None:
                             raise ValueError("Redirect with no target URL")
-                        redirect_url = str(next_req.url)
-                        self._validate_url(redirect_url)
-                        current_url = redirect_url
+                        current_url = str(next_req.url)
                         continue
 
                     response.raise_for_status()

@@ -73,8 +73,18 @@ class PDFConfig:
     @property
     def max_response_bytes(self) -> int:
         """
-        Maximum UTF-8 byte size of text payloads returned by
-        `pdf_read_all` and section-granularity `pdf_search`.
+        Maximum UTF-8 byte size of the **text content** returned by
+        `pdf_read_all` (the `full_text` field) and section-granularity
+        `pdf_search` (the sum of included section titles plus a per-entry
+        overhead estimate). This bounds the content the cap was designed
+        to bound — the field an LLM sees as untrusted PDF data.
+
+        Note: this is NOT a wire-level envelope cap. The MCP TextContent
+        block that crosses the transport also carries the other response
+        fields (`truncated`, `next_page`, etc.) plus JSON framing
+        overhead, typically adding ~300–500 bytes on top of this limit.
+        Callers that need strict wire-size enforcement should pick a
+        cap a few KB below their transport ceiling.
 
         Loaded from `[limits].max_response_bytes` in config.toml. Values
         above `_MAX_RESPONSE_BYTES_CEILING` are clamped down; values below

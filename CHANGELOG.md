@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_read_pages` for the resume. A regression test enforces the
   invariant that iterating `start_page=next_page` covers every page
   exactly once.
+- The MCP `initialize` handshake now reports pdf-mcp's `__version__`
+  as `serverInfo.version`. Previously the field carried FastMCP's
+  framework version (e.g. `3.2.4`) because no explicit `version=`
+  was passed to `FastMCP(...)`, so MCP clients could not tell
+  pdf-mcp releases apart from the handshake alone.
+
+### Documentation
+- Clarified `[limits].max_response_bytes` docstring: the cap bounds
+  the text content field (`full_text` on `pdf_read_all`; section
+  titles + overhead on section-mode `pdf_search`), not the wire-
+  level MCP TextContent envelope. The envelope adds ~300–500 bytes
+  of other response fields and JSON framing on top of the cap.
 
 ## [1.12.1] - 2026-05-12
 ### Fixed

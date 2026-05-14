@@ -34,8 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PDF_MCP_CACHE_DIR` and `PDF_MCP_CACHE_TTL` environment variables
   are now honored at server startup (previously declared in the MCP
   registry manifest but not wired into the Python code). `CACHE_TTL`
-  must parse as an integer in `[0, 8760]` hours — bad values fail
-  loud at startup rather than silently falling back to the default.
+  must parse as an integer in `[0, 8760]` hours (up to one year) —
+  bad values fail loud at startup rather than silently falling back
+  to the default.
+- `pdf_read_all` now accepts `start_page: int` (default `1`) and
+  echoes the post-clamp value in the response. The pre-existing
+  `next_page` field in the response is now consumable: pass it back
+  as `start_page` to resume the read on a clean page boundary.
+  Previously `next_page` named a continuation cursor the tool had
+  no parameter to accept, forcing callers to fall back to
+  `pdf_read_pages` for the resume. A regression test enforces the
+  invariant that iterating `start_page=next_page` covers every page
+  exactly once.
 
 ## [1.12.1] - 2026-05-12
 ### Fixed

@@ -189,24 +189,26 @@ Read the full document in one call. Best for short documents (≤50 pages) where
 
 **Parameters:**
 - `path` (string, required) — Path to PDF file.
-- `max_pages` (int, optional, default `50`) — Safety cap on pages read. Clamped to `[1, 500]`.
+- `max_pages` (int, optional, default `50`) — Safety cap on pages read **in this call**. Clamped to `[1, 500]`.
+- `start_page` (int, optional, default `1`) — 1-indexed page to start reading from. Values `< 1` are clamped to `1`. A value past the last page returns an empty window (`page_count=0`, `next_page=null`). When a previous call returned `next_page=N`, pass `start_page=N` to resume on a clean page boundary.
 
 **Returns:**
 - `full_text` (string) — Concatenated page text. May be truncated by the byte cap.
 - `page_count` (int) — Pages included in this response (post-cap).
+- `start_page` (int) — 1-indexed first page included (echoes the input, post-clamp).
 - `total_pages` (int) — Total page count of the document.
 - `truncated` (bool) — `true` if **either** cap fired.
 - `truncated_pages` (bool) — `true` if `max_pages` limited the response.
 - `truncated_bytes` (bool) — `true` if `max_response_bytes` limited the response.
 - `bytes_returned` (int) — UTF-8 byte length of `full_text`.
 - `bytes_available` (int) — UTF-8 byte length the full uncapped payload would have had.
-- `next_page` (int or null) — 1-indexed page to resume from, or `null` when complete.
+- `next_page` (int or null) — 1-indexed page to resume from, or `null` when complete. **Always consumable** by calling this same tool with `start_page=next_page`.
 - `total_chars`, `estimated_tokens` (int).
 - `content_warning` (string).
 
-**Truncation contract:** pages are added in order; a page is included only if its UTF-8 byte length keeps the running total at or below `max_response_bytes`. Pages are never split. `next_page = included_count + 1` when byte-truncated, `pages_to_read + 1` when only page-truncated, `null` otherwise. The existing `truncated` field continues to fire in the page-cap case for backward compatibility.
+**Truncation contract:** pages are added in order from `start_page`; a page is included only if its UTF-8 byte length keeps the running total at or below `max_response_bytes`. Pages are never split. `next_page` is the first omitted page (1-indexed) or `null` when the window reached the end of the document. The existing `truncated` field continues to fire in the page-cap case for backward compatibility.
 
-**Resume protocol:** when `truncated_bytes` is `true`, call `pdf_read_pages(path, pages=f"{next_page}-")` to continue. `pdf_read_all` itself does not accept a starting page by design.
+**Resume protocol:** when `next_page` is set, call the same tool again with `start_page=next_page`. Repeat until `next_page` is `null`. The invariant — every page appears in exactly one response when iterating to completion — is covered by a regression test.
 
 **Example:**
 
@@ -226,24 +228,19 @@ pdf_read_all("/path/to/memo.pdf")
 # }
 ```
 
-**Byte-truncated example:**
+**Byte-truncated example (with resume):**
 
 ```python
-pdf_read_all("/path/to/huge.pdf", max_pages=200)
-# {
-#   "page_count": 47,
-#   "total_pages": 200,
-#   "truncated": true,
-#   "truncated_pages": false,
-#   "truncated_bytes": true,
-#   "bytes_returned": 199_842,
-#   "bytes_available": 1_240_310,
-#   "next_page": 48,
-#   ...
-# }
-# Resume:
-pdf_read_pages("/path/to/huge.pdf", "48-100")
+r1 = pdf_read_all("/path/to/huge.pdf", max_pages=200)
+# r1: page_count=47, next_page=48, truncated_bytes=true
+
+r2 = pdf_read_all("/path/to/huge.pdf", max_pages=200, start_page=r1["next_page"])
+# r2: start_page=48, page_count=53, next_page=101, truncated_bytes=true
+
+# Continue until next_page is None.
 ```
+
+`pdf_read_pages(path, pages="48-100")` is also valid for ad-hoc range reading and gives you tables and images, but for streaming the full document with byte-cap respect, `pdf_read_all` + `start_page` is the natural loop.
 
 ---
 

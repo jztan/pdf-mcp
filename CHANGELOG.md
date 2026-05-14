@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses are unwrapped and re-tested against the IPv4 deny list.
 - `url_fetcher` now pins the DNS-resolved IP per redirect hop,
   closing the TOCTOU gap between SSRF validation and TCP connect.
+- Cache directory is now `chmod 0o700` after creation, closing a
+  multi-user info-leak gap where cached PDF text was readable via
+  the user's default umask.
+
+### Changed
+- `PDF_MCP_CACHE_DIR` and `PDF_MCP_CACHE_TTL` environment variables
+  are now honored at server startup (previously declared in the MCP
+  registry manifest but not wired into the Python code). `CACHE_TTL`
+  must parse as an integer in `[0, 8760]` hours — bad values fail
+  loud at startup rather than silently falling back to the default.
 
 ## [1.12.1] - 2026-05-12
 ### Fixed

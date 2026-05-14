@@ -34,9 +34,7 @@ def _mock_response(
 
 def test_rejects_text_html_content_type(fetcher, monkeypatch):
     """Content-Type: text/html must be rejected before any bytes are read."""
-    monkeypatch.setattr(
-        URLFetcher, "_is_blocked_ip", staticmethod(lambda host: False)
-    )
+    monkeypatch.setattr(URLFetcher, "_is_blocked_ip", staticmethod(lambda host: False))
     resp = _mock_response(headers={"content-type": "text/html; charset=utf-8"})
     fake_client = MagicMock()
     fake_client.__enter__ = MagicMock(return_value=fake_client)
@@ -115,9 +113,7 @@ def test_dns_rebind_between_validation_and_connect(fetcher, tmp_path):
     assert requested_urls, "No HTTP request was made"
     # All requested URLs must use the pinned public IP, not loopback
     for url in requested_urls:
-        assert "127.0.0.1" not in url, (
-            "Fetcher attempted connect to loopback after DNS rebind"
-        )
-        assert "203.0.113.42" in url, (
-            "Fetcher did not pin to the validated public IP"
-        )
+        assert (
+            "127.0.0.1" not in url
+        ), "Fetcher attempted connect to loopback after DNS rebind"
+        assert "203.0.113.42" in url, "Fetcher did not pin to the validated public IP"

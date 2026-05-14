@@ -3,7 +3,6 @@ description, not only in CLAUDE.md (which non-Claude-Code clients can't read).""
 
 from pdf_mcp.server import mcp, _UNTRUSTED_PDF_PREAMBLE
 
-
 PDF_CONTENT_TOOLS = {
     "pdf_info",
     "pdf_read_pages",
@@ -30,7 +29,7 @@ def _registered_tools() -> dict:
         components = getattr(providers[0], "_components", None)
         if components is not None:
             tools = {
-                k[len("tool:"):k.index("@")]: v
+                k[len("tool:") : k.index("@")]: v
                 for k, v in components.items()
                 if k.startswith("tool:")
             }

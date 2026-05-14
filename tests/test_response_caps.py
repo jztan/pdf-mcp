@@ -52,9 +52,7 @@ def _make_pdf(pages_text: list[str]) -> str:
     doc = pymupdf.open()
     for body in pages_text:
         page = doc.new_page()
-        page.insert_textbox(
-            pymupdf.Rect(36, 36, 560, 800), body, fontsize=10
-        )
+        page.insert_textbox(pymupdf.Rect(36, 36, 560, 800), body, fontsize=10)
     doc.save(f.name)
     doc.close()
     f.close()
@@ -140,7 +138,8 @@ class TestSectionSearchByteCap:
         from pdf_mcp import server as server_module
 
         monkeypatch.setattr(
-            server_module.pdf_config, "_data",
+            server_module.pdf_config,
+            "_data",
             {"limits": {"max_response_bytes": 4096}},
             raising=False,
         )

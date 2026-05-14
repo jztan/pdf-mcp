@@ -366,6 +366,10 @@ See [ROADMAP.md](ROADMAP.md) for planned features and release history.
 
 Contributions are welcome. Please submit a pull request.
 
+## Security
+
+Found a vulnerability? See [SECURITY.md](SECURITY.md) for the threat model, reporting channel, and expected response timeline. Please do not open a public GitHub issue for unpatched security reports.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

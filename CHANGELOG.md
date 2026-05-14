@@ -26,9 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses are unwrapped and re-tested against the IPv4 deny list.
 - `url_fetcher` now pins the DNS-resolved IP per redirect hop,
   closing the TOCTOU gap between SSRF validation and TCP connect.
-- Cache directory is now `chmod 0o700` after creation, closing a
-  multi-user info-leak gap where cached PDF text was readable via
-  the user's default umask.
+- Cache directory is now `chmod 0o700` after creation (defense-in-
+  depth). pdf-mcp's supported deployment is single-user, so this
+  does not patch an in-scope threat — it tightens permissions to
+  match `images/` and `renders/` which were already 0o700, and
+  reduces blast radius if the supported model ever expands.
 
 ### Changed
 - `PDF_MCP_CACHE_DIR` and `PDF_MCP_CACHE_TTL` environment variables

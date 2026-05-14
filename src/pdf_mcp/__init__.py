@@ -19,8 +19,12 @@ Usage with Claude Desktop:
     }
 """
 
-from .cache import PDFCache
-from .server import mcp
-
+# Defined before the .server import so server.py can reach it without
+# triggering a circular import during package initialisation. FastMCP
+# uses this value as serverInfo.version in the MCP initialize handshake.
 __version__ = "1.12.1"
+
+from .cache import PDFCache  # noqa: E402
+from .server import mcp  # noqa: E402
+
 __all__ = ["mcp", "PDFCache", "__version__"]

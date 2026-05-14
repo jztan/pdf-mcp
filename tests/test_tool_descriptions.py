@@ -60,3 +60,20 @@ def test_non_content_tools_skipped():
     tools = _registered_tools()
     for name in NON_CONTENT_TOOLS:
         assert tools.get(name) is not None
+
+
+def test_server_advertises_pdf_mcp_version_in_handshake():
+    """The FastMCP server must surface pdf-mcp's __version__ (not the
+    FastMCP framework version) so MCP clients can tell pdf-mcp releases
+    apart via the `initialize` handshake's `serverInfo.version` field.
+
+    Regression for: when no explicit `version=` is passed to FastMCP(...),
+    clients see FastMCP's own framework version (e.g. "3.2.4") instead of
+    pdf-mcp's.
+    """
+    from pdf_mcp import __version__
+
+    assert mcp.version == __version__, (
+        f"FastMCP server.version is {mcp.version!r}, expected {__version__!r}. "
+        f"Did the FastMCP() constructor lose its `version=` kwarg?"
+    )

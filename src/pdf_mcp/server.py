@@ -18,6 +18,7 @@ import pymupdf
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
 
+from . import __version__
 from .cache import PDFCache
 from .config import PDFConfig
 from .extractor import (
@@ -64,9 +65,13 @@ RENDER_DPI_MAX = 400
 MAX_RENDER_INLINE_PAGES = 5
 MAX_OCR_PAGES_LIMIT = 20
 
-# Initialize MCP server
+# Initialize MCP server. `version` is propagated through the MCP
+# `initialize` handshake as `serverInfo.version`, so clients can tell
+# pdf-mcp releases apart. Without an explicit version FastMCP fills
+# in its own framework version, which is misleading for clients.
 mcp = FastMCP(
     name="pdf-mcp",
+    version=__version__,
     instructions=(
         "Production-ready PDF processing server with caching. "
         "Use pdf_info first to understand document structure, "

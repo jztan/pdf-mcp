@@ -237,6 +237,37 @@ def _compact_text_coverage(
     return result
 
 
+def _apply_byte_cap(
+    parts: list[str], cap: int, separator: str = "\n\n"
+) -> tuple[str, int, int, int]:
+    """
+    Concatenate `parts` joined by `separator`, stopping before the total
+    UTF-8 byte length exceeds `cap`. Never splits a part — only whole
+    parts are included.
+
+    Returns (joined_text, included_count, bytes_returned, bytes_available)
+    where `bytes_available` is the UTF-8 byte length of the full
+    concatenation that would have been emitted without the cap.
+    """
+    sep_bytes = separator.encode("utf-8")
+    included: list[str] = []
+    returned = 0
+    available = 0
+    stopped = False
+    for part in parts:
+        part_bytes = len(part.encode("utf-8"))
+        prefix_bytes = len(sep_bytes) if available > 0 else 0
+        if not stopped:
+            candidate = returned + prefix_bytes + part_bytes
+            if candidate <= cap:
+                included.append(part)
+                returned = candidate
+            else:
+                stopped = True
+        available += prefix_bytes + part_bytes
+    return separator.join(included), len(included), returned, available
+
+
 @mcp.tool()
 def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
     """

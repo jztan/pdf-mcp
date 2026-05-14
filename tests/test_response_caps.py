@@ -107,6 +107,111 @@ class TestPdfReadAllByteCap:
         assert result["next_page"] == 3
 
 
+class TestPdfReadAllStartPage:
+    """Tests for the start_page resume parameter on pdf_read_all."""
+
+    def test_start_page_skips_earlier_pages(self, isolated_server):
+        path = _make_pdf(
+            [
+                "alpha page one body.",
+                "bravo page two body.",
+                "charlie page three body.",
+            ]
+        )
+        try:
+            result = pdf_read_all(path, start_page=2)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        assert "alpha" not in result["full_text"]
+        assert "bravo" in result["full_text"]
+        assert "charlie" in result["full_text"]
+        assert result["start_page"] == 2
+        assert result["page_count"] == 2
+
+    def test_start_page_below_one_clamps_to_one(self, isolated_server):
+        path = _make_pdf(["a", "b", "c"])
+        try:
+            for bad in (0, -1, -999):
+                result = pdf_read_all(path, start_page=bad)
+                assert result["start_page"] == 1
+                assert result["page_count"] == 3
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_start_page_past_end_returns_empty_window(self, isolated_server):
+        path = _make_pdf(["a", "b", "c"])
+        try:
+            result = pdf_read_all(path, start_page=100)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        assert result["page_count"] == 0
+        assert result["full_text"] == ""
+        assert result["next_page"] is None
+        assert result["truncated"] is False
+        assert result["bytes_returned"] == 0
+        assert result["bytes_available"] == 0
+
+    def test_next_page_after_byte_cap_is_consumable(
+        self, isolated_server, monkeypatch
+    ):
+        """Property test: resuming with start_page=next_page eventually
+        covers every page of the document exactly once, in order. This
+        is the invariant the response contract promises — if next_page
+        is set, calling the same tool with start_page=next_page must
+        actually work and continue from the right place."""
+        from pdf_mcp import server as server_module
+
+        monkeypatch.setattr(
+            server_module.pdf_config,
+            "_data",
+            {"limits": {"max_response_bytes": 4096}},
+            raising=False,
+        )
+        body = "Lorem ipsum dolor sit amet. " * 80  # ~2KB each
+        path = _make_pdf([f"PAGE{i:02d}_MARKER {body}" for i in range(10)])
+        try:
+            collected: list[str] = []
+            seen_starts: list[int] = []
+            cursor: int | None = 1
+            iterations = 0
+            while cursor is not None and iterations < 20:
+                iterations += 1
+                seen_starts.append(cursor)
+                result = pdf_read_all(path, start_page=cursor, max_pages=50)
+                assert result["start_page"] == cursor
+                collected.append(result["full_text"])
+                cursor = result["next_page"]
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+        assert iterations >= 2, "byte cap should have forced at least one resume"
+        assert cursor is None, "loop terminated without exhausting next_page"
+        # No start_page repeated — pagination strictly advances.
+        assert len(seen_starts) == len(set(seen_starts))
+        # Every page marker appears exactly once across all collected text.
+        joined = "\n\n".join(collected)
+        for i in range(10):
+            marker = f"PAGE{i:02d}_MARKER"
+            count = joined.count(marker)
+            assert count == 1, f"{marker} appeared {count} times, expected exactly 1"
+
+    def test_next_page_after_page_cap_is_consumable(self, isolated_server):
+        """Same invariant under the max_pages cap rather than the byte cap."""
+        path = _make_pdf([f"PAGE{i:02d}_BODY" for i in range(8)])
+        try:
+            r1 = pdf_read_all(path, max_pages=3, start_page=1)
+            assert r1["truncated_pages"] is True
+            assert r1["next_page"] == 4
+            r2 = pdf_read_all(path, max_pages=3, start_page=r1["next_page"])
+            assert r2["start_page"] == 4
+            assert r2["next_page"] == 7
+            r3 = pdf_read_all(path, max_pages=3, start_page=r2["next_page"])
+            assert r3["start_page"] == 7
+            assert r3["next_page"] is None  # only 2 pages left, fits in 3
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+
 class TestSectionSearchByteCap:
     def test_long_title_truncated(self, isolated_server, monkeypatch):
         from pdf_mcp import server as server_module

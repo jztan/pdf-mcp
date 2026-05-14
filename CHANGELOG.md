@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `[limits].max_response_bytes` config option (default 200 KB, max 2 MB)
+  capping `pdf_read_all` and section-granularity `pdf_search` response
+  payloads. New response fields: `truncated`, `truncated_pages`,
+  `truncated_bytes`, `bytes_returned`, `bytes_available`, `next_page`
+  (on `pdf_read_all`) and `matches_omitted` (on section search).
+- Untrusted-content security preamble on every MCP tool that returns
+  PDF-derived text/OCR/section content, visible to non-Claude-Code
+  clients via the tool `description` field.
+
+### Security
+- `url_fetcher` now rejects non-PDF content-types (`text/*`,
+  `application/json`, image/audio/video, etc.) before buffering bytes.
+- Expanded IPv6 SSRF deny list: `::ffff:0:0/96` (IPv4-mapped),
+  `64:ff9b::/96`, `100::/64`, `2001:db8::/32`, `fd00:ec2::254/128`
+  (AWS IMDS over IPv6), and `::/128` (unspecified). IPv4-mapped IPv6
+  addresses are unwrapped and re-tested against the IPv4 deny list.
+- `url_fetcher` now pins the DNS-resolved IP per redirect hop,
+  closing the TOCTOU gap between SSRF validation and TCP connect.
+
 ## [1.12.1] - 2026-05-12
 ### Fixed
 - `pdf_search` `total_matches` in keyword mode could disagree with `len(matches)` after the 1.12.0 tokenisation fix — multi-word queries like `pgvector latency` returned 4 matches with `total_matches: 0` because the literal phrase didn't appear anywhere even though both tokens did. `total_matches` now equals `len(matches)` in every mode, and `get_fts_page_counts` counts token occurrences (not literal-phrase) so `page_match_counts` keeps its per-page intensity signal in keyword mode.

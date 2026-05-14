@@ -1,5 +1,6 @@
 """Regression tests for url_fetcher security fixes (v1.13.0)."""
 
+import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -47,3 +48,28 @@ def test_rejects_text_html_content_type(fetcher, monkeypatch):
             fetcher.fetch("https://example.com/x.pdf")
 
     resp.iter_bytes.assert_not_called()
+
+
+def _addrinfo_for(ip: str):
+    family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+    return [(family, socket.SOCK_STREAM, 0, "", (ip, 0))]
+
+
+def test_blocks_ipv4_mapped_ipv6_loopback(fetcher):
+    """::ffff:127.0.0.1 must be rejected as loopback after unwrapping."""
+    with patch(
+        "pdf_mcp.url_fetcher.socket.getaddrinfo",
+        return_value=_addrinfo_for("::ffff:127.0.0.1"),
+    ):
+        with pytest.raises(ValueError, match="blocked"):
+            fetcher.fetch("https://malicious.example/x.pdf")
+
+
+def test_blocks_aws_imds_ipv6(fetcher):
+    """fd00:ec2::254 (AWS IMDS over IPv6) must be rejected."""
+    with patch(
+        "pdf_mcp.url_fetcher.socket.getaddrinfo",
+        return_value=_addrinfo_for("fd00:ec2::254"),
+    ):
+        with pytest.raises(ValueError, match="blocked"):
+            fetcher.fetch("https://malicious.example/x.pdf")

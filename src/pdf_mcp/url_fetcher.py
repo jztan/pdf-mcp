@@ -39,15 +39,21 @@ _DENIED_CONTENT_TYPE_PREFIXES = (
 MAX_REDIRECTS = 10
 
 _BLOCKED_NETWORKS = (
-    ipaddress.ip_network("127.0.0.0/8"),  # loopback
+    ipaddress.ip_network("127.0.0.0/8"),  # IPv4 loopback
     ipaddress.ip_network("10.0.0.0/8"),  # RFC 1918
     ipaddress.ip_network("172.16.0.0/12"),  # RFC 1918
     ipaddress.ip_network("192.168.0.0/16"),  # RFC 1918
     ipaddress.ip_network("169.254.0.0/16"),  # link-local / cloud metadata
     ipaddress.ip_network("0.0.0.0/8"),  # reserved
     ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("::/128"),  # IPv6 unspecified
+    ipaddress.ip_network("::ffff:0:0/96"),  # IPv4-mapped IPv6
+    ipaddress.ip_network("64:ff9b::/96"),  # NAT64 well-known
+    ipaddress.ip_network("100::/64"),  # IPv6 discard prefix
+    ipaddress.ip_network("2001:db8::/32"),  # IPv6 documentation
     ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
     ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+    ipaddress.ip_network("fd00:ec2::254/128"),  # AWS IMDS via IPv6
 )
 
 
@@ -82,7 +88,13 @@ class URLFetcher:
 
     @staticmethod
     def _is_blocked_ip(hostname: str) -> bool:
-        """Check if hostname resolves to any blocked IP range."""
+        """Check if hostname resolves to any blocked IP range.
+
+        Also unwraps IPv4-mapped IPv6 addresses (`::ffff:1.2.3.4`) and
+        re-tests the IPv4 form against the IPv4 blocked networks, so
+        `::ffff:127.0.0.1` is rejected even if the `::ffff:0:0/96`
+        network were ever removed.
+        """
         try:
             addr_infos = socket.getaddrinfo(hostname, None)
             for addr_info in addr_infos:
@@ -92,6 +104,12 @@ class URLFetcher:
                     ip in net for net in _BLOCKED_NETWORKS if ip.version == net.version
                 ):
                     return True
+                mapped = getattr(ip, "ipv4_mapped", None)
+                if mapped is not None:
+                    if any(
+                        mapped in net for net in _BLOCKED_NETWORKS if net.version == 4
+                    ):
+                        return True
         except (OSError, ValueError):
             return True
         return False

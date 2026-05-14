@@ -1,5 +1,6 @@
 """Tests for pdf_mcp.config module."""
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -131,3 +132,36 @@ class TestUrlRules:
         config.check_url_host("docs.example.com")
         with pytest.raises(ValueError, match="denied"):
             config.check_url_host("bad.example.com")
+
+
+def _write_config(text: str) -> Path:
+    f = tempfile.NamedTemporaryFile(
+        suffix=".toml", delete=False, mode="w", encoding="utf-8"
+    )
+    f.write(text)
+    f.close()
+    return Path(f.name)
+
+
+def test_max_response_bytes_default_when_missing():
+    cfg_path = _write_config("")
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.max_response_bytes == 200_000
+
+
+def test_max_response_bytes_honored():
+    cfg_path = _write_config("[limits]\nmax_response_bytes = 50000\n")
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.max_response_bytes == 50_000
+
+
+def test_max_response_bytes_clamped_to_ceiling():
+    cfg_path = _write_config("[limits]\nmax_response_bytes = 999999999\n")
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.max_response_bytes == 2_000_000
+
+
+def test_max_response_bytes_clamped_to_floor():
+    cfg_path = _write_config("[limits]\nmax_response_bytes = 10\n")
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.max_response_bytes == 4_096

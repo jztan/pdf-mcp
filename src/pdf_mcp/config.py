@@ -21,6 +21,10 @@ else:
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".config" / "pdf-mcp" / "config.toml"
 
+_DEFAULT_MAX_RESPONSE_BYTES = 200_000
+_MAX_RESPONSE_BYTES_CEILING = 2_000_000
+_MIN_RESPONSE_BYTES = 4_096
+
 
 class PDFConfig:
     def __init__(self, config_path: Path | None = None) -> None:
@@ -65,6 +69,26 @@ class PDFConfig:
         """Return configured embedding model, or the default bge-small model."""
         model: str = self._data.get("embedding", {}).get("model", DEFAULT_MODEL)
         return model
+
+    @property
+    def max_response_bytes(self) -> int:
+        """
+        Maximum UTF-8 byte size of text payloads returned by
+        `pdf_read_all` and section-granularity `pdf_search`.
+
+        Loaded from `[limits].max_response_bytes` in config.toml. Values
+        above `_MAX_RESPONSE_BYTES_CEILING` are clamped down; values below
+        `_MIN_RESPONSE_BYTES` are clamped up.
+        """
+        raw = self._data.get("limits", {}).get(
+            "max_response_bytes", _DEFAULT_MAX_RESPONSE_BYTES
+        )
+        if not isinstance(raw, int):
+            raise ValueError(
+                f"[limits].max_response_bytes must be an integer, "
+                f"got {type(raw).__name__}"
+            )
+        return max(_MIN_RESPONSE_BYTES, min(_MAX_RESPONSE_BYTES_CEILING, raw))
 
     def check_url_host(self, hostname: str) -> None:
         """Enforce [urls] allow/deny rules. Raises ValueError if denied."""

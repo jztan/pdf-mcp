@@ -18,6 +18,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 Walk through the three main tools (`pdf_info`, `pdf_search`, `pdf_read_pages`) with any PDF. 100% client-side, no install required.
 
+[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.png" alt="pdf-mcp browser demo: pdf_search returns page-level matches with highlighted excerpts" width="720">](https://pdf-mcp.jztan.com/)
+
 ## Features
 
 Give your agent surgical access to PDFs instead of flooding context with raw text.

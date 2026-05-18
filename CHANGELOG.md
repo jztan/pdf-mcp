@@ -9,24 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 - `pdf_read_pages` response shape: per-image dicts now carry `image_id`
-  (opaque basename) instead of `path` (absolute filesystem path), and
-  the per-page `render_path` field is replaced by `render_id` (also
-  basename). Callers that need the bytes can resolve the basename
-  against `images_dir` / `renders_dir` returned by `pdf_cache_stats`,
-  or call `pdf_render_pages` (which inlines PNG content blocks for
-  vision models). Rationale: the previous absolute-path emission
-  leaked the server's local username and OS prefix into LLM
-  transcripts — a wire-format issue worth fixing before tagging. No
-  compatibility shim, since these keys have never appeared in a
-  released version.
+  (content-addressed basename) instead of `path` (absolute filesystem
+  path), and the per-page `render_path` field is replaced by
+  `render_id`. Rationale: API hygiene. The previous `path` field
+  embedded the current cache directory, so the value was unstable
+  across runs and across `PDF_MCP_CACHE_DIR` changes; the new IDs are
+  stable opaque tokens. Callers that need bytes resolve the ID against
+  `images_dir` / `renders_dir` from `pdf_cache_stats`, or call
+  `pdf_render_pages` (which inlines PNG content blocks for vision
+  models). No compatibility shim, since these keys have never
+  appeared in a released version.
 
 ### Added
 - `pdf_cache_stats` response now includes `images_dir` and
-  `renders_dir` (local cache directories) so callers can reconstruct
-  absolute paths for the opaque `image_id` / `render_id` returned by
-  `pdf_read_pages`. These directory paths are local filesystem paths;
-  the tool description flags `pdf_cache_stats` as cache diagnostics
-  not intended for forwarding to remote agents.
+  `renders_dir` so callers can resolve the opaque `image_id` /
+  `render_id` returned by `pdf_read_pages` to disk paths when they
+  need to read bytes directly. The tool description marks
+  `pdf_cache_stats` as cache diagnostics.
 - `[limits].max_response_bytes` config option (default 200 KB, max 2 MB)
   capping `pdf_read_all` and section-granularity `pdf_search` response
   payloads. New response fields: `truncated`, `truncated_pages`,

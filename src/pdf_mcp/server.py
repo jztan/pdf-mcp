@@ -623,12 +623,12 @@ def pdf_read_pages(
             total_images += len(page_images)
             total_tables += len(page_tables)
 
-            # Strip absolute disk paths from image entries before they cross
-            # the wire. Internal cache rows still carry `path`; we only
-            # surface the basename as an opaque `image_id` so the response
-            # doesn't leak the server's local username / home prefix into
-            # the LLM transcript. Callers that need the bytes can locate
-            # the file under `cache.images_dir` (reported by pdf_cache_stats).
+            # Surface the basename only as a stable opaque `image_id`.
+            # The previous `path` field embedded the current cache dir,
+            # so its value was unstable across runs and across
+            # PDF_MCP_CACHE_DIR changes; basenames are content-addressed
+            # and stable. Callers that need bytes locate the file under
+            # `cache.images_dir` (reported by pdf_cache_stats).
             sanitized_images = [
                 {
                     **{k: v for k, v in img.items() if k != "path"},

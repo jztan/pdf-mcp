@@ -1884,8 +1884,10 @@ class TestPdfReadPagesRender:
         self, sample_pdf_with_images, isolated_server
     ):
         """Wire-format invariant: pdf_read_pages response carries no
-        absolute filesystem paths. Guards against re-introducing the
-        /Users/<name>/... leak fixed in this release."""
+        absolute filesystem paths. The image/render IDs are content-
+        addressed basenames; absolute paths are unstable across runs
+        and across PDF_MCP_CACHE_DIR changes, so they shouldn't be
+        part of the public response shape."""
         import json
 
         result = pdf_read_pages(sample_pdf_with_images, "1", render_dpi=72)

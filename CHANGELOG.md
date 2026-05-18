@@ -53,6 +53,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   framework version (e.g. `3.2.4`) because no explicit `version=`
   was passed to `FastMCP(...)`, so MCP clients could not tell
   pdf-mcp releases apart from the handshake alone.
+- SSRF rejection now surfaces a self-describing error
+  ("URL host resolves to a blocked IP on the SSRF deny list (loopback /
+  RFC 1918 / link-local / IMDS / IPv6 ULA): …") instead of the previous
+  generic "URL does not point to a valid PDF file" wrapper, so security
+  blocks are no longer indistinguishable from format problems or
+  filesystem 404s.
+- `URLFetcher.is_url` now recognises `http://` URLs as well as
+  `https://`, routing them through the validator so callers get a clear
+  "Only HTTPS URLs are supported" error rather than the misleading
+  "PDF file not found" path-resolution error.
+- `pdf_search` section-mode docstring clarifies that `matches_omitted`
+  counts byte-cap drops only — drops caused by a low `max_results` are
+  not counted there (re-query with a higher `max_results` to see them).
+- `pdf_info` docstring clarifies that the `toc` field is gated by
+  `toc_entry_count <= 50`, independent of the `detail` flag (which only
+  controls per-page `text_coverage` arrays).
 
 ### Documentation
 - Clarified `[limits].max_response_bytes` docstring: the cap bounds

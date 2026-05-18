@@ -78,7 +78,10 @@ def _pick_pinned_ip(hostname: str) -> tuple[str, socket.AddressFamily]:
         ):
             continue
         return ip_str, info[0]  # family is socket.AF_INET / AF_INET6
-    raise ValueError(f"All resolved addresses for {hostname} are blocked")
+    raise ValueError(
+        f"URL host resolves to a blocked IP on the SSRF deny list "
+        f"(loopback / RFC 1918 / link-local / IMDS / IPv6 ULA): {hostname}"
+    )
 
 
 class URLFetcher:
@@ -165,7 +168,8 @@ class URLFetcher:
 
         if self._is_blocked_ip(hostname):
             raise ValueError(
-                f"URL resolves to a blocked IP range and is not allowed: {url}"
+                f"URL host resolves to a blocked IP on the SSRF deny list "
+                f"(loopback / RFC 1918 / link-local / IMDS / IPv6 ULA): {url}"
             )
 
         if self._config is not None:
@@ -215,8 +219,15 @@ class URLFetcher:
         return f"{url_hash}.pdf"
 
     def is_url(self, source: str) -> bool:
-        """Check if source is an HTTPS URL."""
-        return source.startswith("https://")
+        """Check if source looks like an HTTP(S) URL.
+
+        Returns True for both http:// and https:// so that http URLs are
+        routed through the fetch validator (which rejects them with a
+        clear "HTTPS only" message) rather than silently falling through
+        to the local-path branch and producing a misleading
+        "PDF file not found" error.
+        """
+        return source.startswith("https://") or source.startswith("http://")
 
     def get_local_path(self, url: str) -> Path | None:
         """

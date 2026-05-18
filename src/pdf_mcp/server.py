@@ -154,7 +154,12 @@ def _resolve_path(source: str) -> str:
                 f"Check that the URL is accessible and points to a valid PDF."
             ) from e
         except ValueError as e:
-            raise ValueError(f"URL does not point to a valid PDF file. {e}") from e
+            # Surface validator messages verbatim. The fetcher already
+            # composes self-describing errors (SSRF deny list, HTTPS-only,
+            # disallowed content-type, etc.); wrapping them in a generic
+            # "URL does not point to a valid PDF file" prefix made
+            # security blocks indistinguishable from format problems.
+            raise ValueError(str(e)) from e
 
     # Local path - resolve to absolute
     path = Path(source)
@@ -364,7 +369,11 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
         - page_count: Total number of pages
         - metadata: Author, title, creation date, etc.
         - toc_entry_count: Total number of TOC entries
-        - toc: TOC entries (only when toc_entry_count <= 50)
+        - toc: TOC entries — included when toc_entry_count <= 50,
+          regardless of the `detail` flag. (TOC inclusion is gated by
+          entry count, not by `detail`; `detail` only controls the
+          per-page `text_coverage` arrays.) For PDFs with more than 50
+          entries, call pdf_get_toc instead.
         - toc_truncated: True when TOC was omitted due to size (use pdf_get_toc)
         - file_size_mb: File size in megabytes
         - estimated_tokens: Rough estimate of total tokens
@@ -1047,7 +1056,11 @@ def pdf_search(
             - truncated_bytes (bool): True if trailing matches were dropped
               to keep the response under the byte cap.
             - matches_omitted (int): number of trailing matches dropped due
-              to the byte cap (0 when truncated_bytes is False).
+              to the byte cap (0 when truncated_bytes is False). This
+              counts byte-cap drops only — matches dropped because
+              `max_results` was lower than the total candidate count are
+              NOT counted here. To see those, re-query with a higher
+              `max_results`.
             - estimated_bytes_returned (int): approximate serialized byte
               size of the included matches (title bytes + ~80 bytes overhead
               per match; not exact serialized size).

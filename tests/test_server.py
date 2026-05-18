@@ -1178,12 +1178,17 @@ class TestResolvePath:
                     _resolve_path("https://example.com/unreachable.pdf")
 
     def test_url_value_error(self, isolated_server):
-        """ValueError from URL fetch (e.g. not a PDF) re-raises."""
+        """ValueError from URL fetch re-raises verbatim (no generic wrapper).
+
+        The fetcher composes self-describing errors (SSRF deny list,
+        HTTPS-only, content-type mismatch, etc.); _resolve_path surfaces
+        them directly so security blocks don't look like format problems.
+        """
         error = ValueError("URL does not appear to be a PDF")
 
         with patch.object(URLFetcher, "is_url", return_value=True):
             with patch.object(URLFetcher, "fetch", side_effect=error):
-                with pytest.raises(ValueError, match="valid PDF file"):
+                with pytest.raises(ValueError, match="does not appear to be a PDF"):
                     _resolve_path("https://example.com/fake.pdf")
 
 

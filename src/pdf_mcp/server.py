@@ -339,7 +339,9 @@ def _apply_byte_cap(
     description=_tool_description(
         "Get PDF document information including metadata, page count, and"
         " table of contents. Always call this first to understand the"
-        " document structure before reading content."
+        " document structure before reading content. `toc` is inlined"
+        " when `toc_entry_count <= 50` (independent of `detail`); for"
+        " larger TOCs call `pdf_get_toc`."
     )
 )
 def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
@@ -500,7 +502,10 @@ def pdf_read_pages(
             with source='ocr' and become searchable via pdf_search.
         ocr_lang: Tesseract language code (default 'eng'). Only used when ocr=True.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
-            The render path is included in each page dict as render_path.
+            Each page dict carries an opaque `render_id` (basename only,
+            never an absolute path). To obtain the rendered PNG bytes,
+            call `pdf_render_pages` — it inlines MCP image content
+            blocks. pdf_read_pages itself does not return render bytes.
 
     Returns:
         - pages: List of {page, text, chars, images, image_count, tables, table_count} objects  # noqa: E501
@@ -618,12 +623,25 @@ def pdf_read_pages(
             total_images += len(page_images)
             total_tables += len(page_tables)
 
+            # Strip absolute disk paths from image entries before they cross
+            # the wire. Internal cache rows still carry `path`; we only
+            # surface the basename as an opaque `image_id` so the response
+            # doesn't leak the server's local username / home prefix into
+            # the LLM transcript. Callers that need the bytes can locate
+            # the file under `cache.images_dir` (reported by pdf_cache_stats).
+            sanitized_images = [
+                {
+                    **{k: v for k, v in img.items() if k != "path"},
+                    "image_id": Path(img["path"]).name,
+                }
+                for img in page_images
+            ]
             page_result: dict[str, Any] = {
                 "page": page_num + 1,
                 "text": text,
                 "chars": len(text),
-                "images": page_images,
-                "image_count": len(page_images),
+                "images": sanitized_images,
+                "image_count": len(sanitized_images),
                 "tables": page_tables,
                 "table_count": len(page_tables),
             }
@@ -649,7 +667,11 @@ def pdf_read_pages(
                         clamped_dpi,
                         render_info,
                     )
-                page_result["render_path"] = render_info["file_path_on_disk"]
+                # Surface the basename only; the absolute path stays
+                # server-side. To get the rendered PNG bytes, callers
+                # should use pdf_render_pages (which inlines image
+                # content blocks) rather than reading from disk.
+                page_result["render_id"] = Path(render_info["file_path_on_disk"]).name
                 page_result["render_size_bytes"] = render_info["size_bytes"]
 
             results.append(page_result)
@@ -984,8 +1006,10 @@ def _pdf_search_section_mode(
 
 @mcp.tool(
     description=_tool_description(
-        "Search the PDF using keyword, semantic, or hybrid (RRF) modes,"
-        " at page or section granularity. Returns ranked matches."
+        "Search the PDF using keyword, semantic, or auto (hybrid RRF)"
+        " modes, at page or section granularity. Returns ranked"
+        " matches. Section-mode `matches_omitted` counts byte-cap"
+        " drops only — raise `max_results` to surface more candidates."
     )
 )
 def pdf_search(
@@ -1514,10 +1538,18 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
 # ============================================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    description=_tool_description(
+        "Cache diagnostics: file counts, sizes, and the local cache"
+        " directories pdf-mcp is using. Intended for debugging the local"
+        " install — the directory paths in the response are local"
+        " filesystem paths (single-user STDIO deployment) and should"
+        " not be forwarded to remote agents."
+    )
+)
 def pdf_cache_stats() -> dict[str, Any]:
     """
-    Get PDF cache statistics and optionally clear expired entries.
+    Get PDF cache statistics.
 
     Returns:
         - total_files: Number of cached PDF files
@@ -1525,6 +1557,11 @@ def pdf_cache_stats() -> dict[str, Any]:
         - total_images: Number of cached images
         - cache_size_mb: Total cache size in MB
         - url_cache: Statistics about downloaded URL cache
+        - images_dir: Local directory where extracted page images are
+          cached. Reconstructs absolute paths for the opaque `image_id`
+          values returned by `pdf_read_pages`.
+        - renders_dir: Local directory where rendered page PNGs are
+          cached. Same role for `render_id` values.
     """
     stats = cache.get_stats()
     url_stats = url_fetcher.get_cache_stats()
@@ -1533,6 +1570,8 @@ def pdf_cache_stats() -> dict[str, Any]:
         **stats,
         "embedding_model": pdf_config.embedding_model,
         "url_cache": url_stats,
+        "images_dir": str(cache.images_dir),
+        "renders_dir": str(cache.renders_dir),
     }
 
 

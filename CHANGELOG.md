@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+- `pdf_read_pages` response shape: per-image dicts now carry `image_id`
+  (opaque basename) instead of `path` (absolute filesystem path), and
+  the per-page `render_path` field is replaced by `render_id` (also
+  basename). Callers that need the bytes can resolve the basename
+  against `images_dir` / `renders_dir` returned by `pdf_cache_stats`,
+  or call `pdf_render_pages` (which inlines PNG content blocks for
+  vision models). Rationale: the previous absolute-path emission
+  leaked the server's local username and OS prefix into LLM
+  transcripts — a wire-format issue worth fixing before tagging. No
+  compatibility shim, since these keys have never appeared in a
+  released version.
+
 ### Added
+- `pdf_cache_stats` response now includes `images_dir` and
+  `renders_dir` (local cache directories) so callers can reconstruct
+  absolute paths for the opaque `image_id` / `render_id` returned by
+  `pdf_read_pages`. These directory paths are local filesystem paths;
+  the tool description flags `pdf_cache_stats` as cache diagnostics
+  not intended for forwarding to remote agents.
 - `[limits].max_response_bytes` config option (default 200 KB, max 2 MB)
   capping `pdf_read_all` and section-granularity `pdf_search` response
   payloads. New response fields: `truncated`, `truncated_pages`,
@@ -69,6 +88,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pdf_info` docstring clarifies that the `toc` field is gated by
   `toc_entry_count <= 50`, independent of the `detail` flag (which only
   controls per-page `text_coverage` arrays).
+- `pdf_search` `@mcp.tool` description corrected from "keyword,
+  semantic, or hybrid (RRF) modes" to "keyword, semantic, or auto
+  (hybrid RRF) modes" — the public mode name is `auto`, `hybrid` is
+  rejected. The runtime always accepted only `auto/keyword/semantic`;
+  the description was wrong, so a caller reading the tool description
+  would try `mode="hybrid"` and get an inline error.
+- `pdf_search` and `pdf_info` tool descriptions now carry the
+  `matches_omitted` byte-cap-only semantics and the `toc` ≤50 gating
+  note. Previously these clarifications lived only in function
+  docstrings, which FastMCP does not surface as `description=` on the
+  wire — so LLM callers couldn't see them.
 
 ### Documentation
 - Clarified `[limits].max_response_bytes` docstring: the cap bounds

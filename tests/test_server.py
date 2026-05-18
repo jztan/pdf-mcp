@@ -7,7 +7,6 @@ import tempfile
 import numpy as np
 import pytest
 
-from pathlib import Path
 from unittest.mock import patch, Mock
 
 import httpx
@@ -730,12 +729,16 @@ class TestPdfReadPages:
         assert len(result["pages"]) == 2
 
     def test_read_pages_with_images(self, sample_pdf_with_images, isolated_server):
-        """Pages with images include per-page images with file paths."""
+        """Pages with images surface an opaque image_id, never the disk path."""
         result = pdf_read_pages(sample_pdf_with_images, "1")
         page = result["pages"][0]
         assert page["image_count"] > 0
         img = page["images"][0]
-        assert "path" in img
+        # Wire-format invariant: image_id is the basename, no absolute path
+        # crosses the wire.
+        assert "image_id" in img
+        assert "path" not in img
+        assert "/" not in img["image_id"] and "\\" not in img["image_id"]
         assert "data" not in img
 
 
@@ -1242,7 +1245,9 @@ class TestReadPagesCachedImages:
     """Tests for cached image retrieval in pdf_read_pages."""
 
     def test_images_served_from_cache(self, sample_pdf_with_images, isolated_server):
-        """Second call returns cached images with file paths."""
+        """Second call returns cached images; image_id resolves to the disk PNG."""
+        import pdf_mcp.server as srv
+
         result1 = pdf_read_pages(sample_pdf_with_images, "1")
         imgs1 = result1["pages"][0]["images"]
 
@@ -1252,9 +1257,10 @@ class TestReadPagesCachedImages:
         assert len(imgs1) > 0
         assert len(imgs2) == len(imgs1)
         for img in imgs2:
-            assert "path" in img
+            assert "image_id" in img
+            assert "path" not in img
             assert "data" not in img
-            assert Path(img["path"]).exists()
+            assert (srv.cache.images_dir / img["image_id"]).exists()
 
 
 class TestReadPagesInlineImages:
@@ -1298,7 +1304,7 @@ class TestReadPagesInlineImages:
     def test_read_pages_image_dict_structure(
         self, sample_pdf_with_images, isolated_server
     ):
-        """Each image dict has expected keys and no redundant 'page' key."""
+        """Each image dict has expected keys; no absolute disk path crosses the wire."""
         result = pdf_read_pages(sample_pdf_with_images, "1")
         page = result["pages"][0]
         assert page["image_count"] > 0
@@ -1307,7 +1313,11 @@ class TestReadPagesInlineImages:
         assert "width" in img
         assert "height" in img
         assert "format" in img
-        assert "path" in img
+        assert "image_id" in img
+        assert "path" not in img  # absolute path no longer on the wire
+        # Basename only — no slash, no parent dirs, no home prefix.
+        assert "/" not in img["image_id"]
+        assert "\\" not in img["image_id"]
         assert "size_bytes" in img
         assert "page" not in img  # stripped — redundant with parent
 
@@ -1322,14 +1332,16 @@ class TestReadPagesInlineImages:
         self, sample_pdf_with_images, isolated_server
     ):
         """If cached PNG deleted from disk, re-extraction occurs via pdf_read_pages."""
+        import pdf_mcp.server as srv
+
         result1 = pdf_read_pages(sample_pdf_with_images, "1")
         for img in result1["pages"][0]["images"]:
-            Path(img["path"]).unlink()
+            (srv.cache.images_dir / img["image_id"]).unlink()
 
         result2 = pdf_read_pages(sample_pdf_with_images, "1")
         assert result2["pages"][0]["image_count"] == result1["pages"][0]["image_count"]
         for img in result2["pages"][0]["images"]:
-            assert Path(img["path"]).exists()
+            assert (srv.cache.images_dir / img["image_id"]).exists()
 
     def test_imageless_page_sentinel_cached(self, sample_pdf, isolated_server):
         """extract_images_from_page called only once for imageless page."""
@@ -1346,8 +1358,13 @@ class TestReadPagesInlineImages:
         self, sample_pdf_with_images, isolated_server
     ):
         """pdf_cache_clear removes image files extracted by pdf_read_pages."""
+        import pdf_mcp.server as srv
+
         result = pdf_read_pages(sample_pdf_with_images, "1")
-        paths = [Path(img["path"]) for img in result["pages"][0]["images"]]
+        paths = [
+            srv.cache.images_dir / img["image_id"]
+            for img in result["pages"][0]["images"]
+        ]
         assert all(p.exists() for p in paths)
 
         pdf_cache_clear(expired_only=False)
@@ -1793,24 +1810,30 @@ class TestPdfInfoTextCoverage:
 class TestPdfReadPagesRender:
     """Tests for render_dpi parameter on pdf_read_pages."""
 
-    def test_render_dpi_adds_render_path(self, sample_pdf, isolated_server):
-        """render_dpi set -> each page dict has render_path."""
+    def test_render_dpi_adds_render_id(self, sample_pdf, isolated_server):
+        """render_dpi set -> each page dict has opaque render_id (basename only)."""
+        import pdf_mcp.server as srv
+
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
         page = result["pages"][0]
-        assert "render_path" in page
-        assert Path(page["render_path"]).exists()
+        assert "render_id" in page
+        assert "render_path" not in page  # absolute path no longer on the wire
+        assert "/" not in page["render_id"]
+        assert "\\" not in page["render_id"]
+        assert (srv.cache.renders_dir / page["render_id"]).exists()
 
     def test_render_dpi_adds_render_size_bytes(self, sample_pdf, isolated_server):
         """render_dpi set -> each page dict has render_size_bytes > 0."""
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
         assert result["pages"][0]["render_size_bytes"] > 0
 
-    def test_render_path_in_renders_dir(self, sample_pdf, isolated_server):
-        """Rendered PNG lives under renders_dir, not images_dir."""
+    def test_render_id_resolves_under_renders_dir(self, sample_pdf, isolated_server):
+        """Rendered PNG (resolved via renders_dir) lives under renders_dir."""
         import pdf_mcp.server as srv
 
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
-        render_path = Path(result["pages"][0]["render_path"])
+        render_path = srv.cache.renders_dir / result["pages"][0]["render_id"]
+        assert render_path.exists()
         assert srv.cache.renders_dir in render_path.parents
 
     def test_render_dpi_response_includes_dpi_fields(self, sample_pdf, isolated_server):
@@ -1839,19 +1862,41 @@ class TestPdfReadPagesRender:
             pdf_read_pages(sample_pdf, "1", render_dpi=72)  # cache hit
             mock_render.assert_not_called()
 
-    def test_render_dpi_not_set_no_render_path(self, sample_pdf, isolated_server):
-        """Without render_dpi, pages have no render_path key."""
+    def test_render_dpi_not_set_no_render_id(self, sample_pdf, isolated_server):
+        """Without render_dpi, pages have no render_id key."""
         result = pdf_read_pages(sample_pdf, "1")
-        assert "render_path" not in result["pages"][0]
+        page = result["pages"][0]
+        assert "render_id" not in page
+        assert "render_path" not in page  # legacy absolute-path key also absent
         assert "render_dpi_used" not in result
 
     def test_cache_clear_removes_render_png(self, sample_pdf, isolated_server):
         """pdf_cache_clear removes PNGs created by pdf_read_pages render_dpi."""
+        import pdf_mcp.server as srv
+
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
-        png_path = Path(result["pages"][0]["render_path"])
+        png_path = srv.cache.renders_dir / result["pages"][0]["render_id"]
         assert png_path.exists()
         pdf_cache_clear(expired_only=False)
         assert not png_path.exists()
+
+    def test_no_absolute_paths_in_response(
+        self, sample_pdf_with_images, isolated_server
+    ):
+        """Wire-format invariant: pdf_read_pages response carries no
+        absolute filesystem paths. Guards against re-introducing the
+        /Users/<name>/... leak fixed in this release."""
+        import json
+
+        result = pdf_read_pages(sample_pdf_with_images, "1", render_dpi=72)
+        serialised = json.dumps(result)
+        # No POSIX absolute paths.
+        assert "/Users/" not in serialised
+        assert "/home/" not in serialised
+        assert "/tmp/" not in serialised
+        assert "/var/" not in serialised
+        # No Windows-style absolute paths.
+        assert ":\\\\" not in serialised
 
     def test_bidirectional_cache_read_then_render_tool(
         self, sample_pdf, isolated_server

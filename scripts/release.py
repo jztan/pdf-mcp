@@ -469,7 +469,9 @@ def wait_for_publish_workflow(new_version: str, max_wait: int = 900) -> bool:
     tag = f"v{new_version}"
     print("\n=== Publish Workflow ===\n")
 
-    sha_result = run_command(["git", "rev-parse", tag])
+    # Annotated tags have their own object SHA; GitHub Actions reports the
+    # commit SHA in headSha. Dereference with ^{commit} so the match works.
+    sha_result = run_command(["git", "rev-parse", f"{tag}^{{commit}}"])
     tag_sha = sha_result.stdout.strip()
     print(f"  Watching publish-pypi.yml for tag {tag} ({tag_sha[:7]})...")
 

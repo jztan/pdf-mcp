@@ -5,7 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.13.0] - 2026-05-21
+## [Unreleased]
+### Changed
+- Release automation (`scripts/release.py`) reordered: the GitHub
+  release is now created only after the `publish-pypi.yml` workflow
+  reports success and the version is live on PyPI, so the `pip install`
+  line in the release notes is never a lie. A new preflight step runs
+  the same `pip-audit` invocation CI uses, so a vulnerability that
+  would block publishing is caught locally before the tag is pushed.
+  When the publish step does fail post-tag, the script now prints the
+  exact recovery steps (rerun the workflow vs. burn the version)
+  instead of exiting silently.
+- The `pip-audit` ignore list now lives in a single
+  `scripts/audit.sh`, invoked by `ci.yml`,
+  `dependency-review.yml`, `publish-pypi.yml`, and the release
+  preflight, so the four call sites cannot drift.
+
+### Security
+- Bumped `idna` 3.11 → 3.15 to clear CVE-2026-45409.
+- Added `PYSEC-2025-183` (pyjwt, transitive via `mcp`, no upstream
+  fix yet) to the pip-audit ignore list, alongside the existing
+  `CVE-2026-4539` (pygments, dev-only) and `CVE-2026-3219` (pip,
+  build-time only) entries.
+
 ### BREAKING
 - `pdf_read_pages` response shape: per-image dicts now carry `image_id`
   (content-addressed basename) instead of `path` (absolute filesystem

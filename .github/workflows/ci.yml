@@ -37,10 +37,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
       - name: Audit dependencies for known vulnerabilities
-        # CVE-2026-4539: pygments (dev-only transitive dep via pytest/rich, not shipped)
-        # CVE-2026-3219: pip itself (build-time only; not a runtime dep of pdf-mcp)
-        # No fix available yet — ignore until upstream patches are released
-        run: uv run pip-audit --ignore-vuln CVE-2026-4539 --ignore-vuln CVE-2026-3219
+        # Ignore list lives in scripts/audit.sh so local preflight and CI stay in sync.
+        run: uv run bash scripts/audit.sh
       - name: Run linter
         run: uv run flake8 src/
       - name: Check formatting

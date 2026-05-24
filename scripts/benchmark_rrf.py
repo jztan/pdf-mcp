@@ -264,7 +264,10 @@ def run_qa_group(gt: dict) -> list[dict]:
       1c — mixed query with codes (router misroutes to keyword, hybrid recovers)
     """
     pdf_data = gt["pdfs"]["attention"]
-    pdf_path = _resolve_path(pdf_data["url"])
+    _path, _err = _resolve_path(pdf_data["url"])
+    if _err is not None:
+        raise RuntimeError(_err["error"])
+    pdf_path = _path
     k = 5
 
     _section("Task Group 1: Q&A")
@@ -358,7 +361,10 @@ def run_context_group(gt: dict) -> list[dict]:
       2b — broad theme, relevant pages scattered (TRUE FUSION scenario)
     """
     pdf_data = gt["pdfs"]["gpt3"]
-    pdf_path = _resolve_path(pdf_data["url"])
+    _path, _err = _resolve_path(pdf_data["url"])
+    if _err is not None:
+        raise RuntimeError(_err["error"])
+    pdf_path = _path
     k = 10
 
     _section("Task Group 2: Context Building")
@@ -430,7 +436,10 @@ def run_navigation_group(gt: dict) -> list[dict]:
       3b — cross-reference by concept (semantic needed; keyword finds nothing)
     """
     pdf_data = gt["pdfs"]["attention"]
-    pdf_path = _resolve_path(pdf_data["url"])
+    _path, _err = _resolve_path(pdf_data["url"])
+    if _err is not None:
+        raise RuntimeError(_err["error"])
+    pdf_path = _path
     k = 3  # Navigation: agent expects to land on the right page fast
 
     _section("Task Group 3: Navigation")

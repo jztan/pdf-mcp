@@ -243,7 +243,10 @@ def run_model(
             pdf_paths: dict[str, str] = {}
             first_query: dict[str, tuple[str, int]] = {}
             for pdf_key, pdf in gt["pdfs"].items():
-                pdf_paths[pdf_key] = _resolve_path(pdf["url"])
+                _path, _err = _resolve_path(pdf["url"])
+                if _err is not None:
+                    raise RuntimeError(_err["error"])
+                pdf_paths[pdf_key] = _path
                 first_sid = next(iter(pdf["scenarios"]))
                 s = pdf["scenarios"][first_sid]
                 k = scenario_k[first_sid]

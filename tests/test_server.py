@@ -600,10 +600,12 @@ class TestPdfInfo:
         assert result2["from_cache"] is True
         assert result2["page_count"] == result1["page_count"]
 
-    def test_pdf_info_file_not_found(self, isolated_server):
-        """Invalid path raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            pdf_info("/nonexistent/path.pdf")
+    def test_invalid_path_returns_inline_error(self, isolated_server):
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_info("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
     def test_pdf_info_metadata_fields(self, sample_pdf, isolated_server):
         """All metadata fields present."""
@@ -787,10 +789,12 @@ class TestPdfReadAll:
         assert "full_text" in result2
         assert result2["full_text"] == result1["full_text"]
 
-    def test_read_all_file_not_found(self, isolated_server):
-        """Invalid path raises error."""
-        with pytest.raises(FileNotFoundError):
-            pdf_read_all("/nonexistent/path.pdf")
+    def test_invalid_path_returns_inline_error(self, isolated_server):
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_read_all("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
     def test_read_all_docstring_mentions_images(self):
         """pdf_read_all docstring directs users to pdf_read_pages for images."""
@@ -889,9 +893,11 @@ class TestPdfGetToc:
         assert "page" in entry
 
     def test_get_toc_file_not_found(self, isolated_server):
-        """Invalid path raises error."""
-        with pytest.raises(FileNotFoundError):
-            pdf_get_toc("/nonexistent/path.pdf")
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_get_toc("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
 
 class TestPdfCacheStats:
@@ -1045,19 +1051,6 @@ class TestToolIntegration:
 class TestErrorCases:
     """Error handling tests."""
 
-    @pytest.mark.parametrize(
-        "tool_func",
-        [
-            pdf_info,
-            pdf_read_all,
-            pdf_get_toc,
-        ],
-    )
-    def test_file_not_found_parametrized(self, tool_func, isolated_server):
-        """All path-based tools raise FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            tool_func("/nonexistent/path.pdf")
-
     def test_corrupted_pdf(self, temp_cache_dir, isolated_server):
         """Corrupted file handled."""
         import os
@@ -1078,7 +1071,7 @@ class TestSecurityMitigations:
     """Tests for security hardening measures."""
 
     def test_non_pdf_extension_rejected(self, isolated_server):
-        """Non-PDF file extensions are rejected."""
+        """Non-PDF file extensions return inline error dict."""
         import tempfile
         import os
 
@@ -1087,8 +1080,10 @@ class TestSecurityMitigations:
             txt_path = f.name
 
         try:
-            with pytest.raises(ValueError, match="Only PDF files"):
-                pdf_info(txt_path)
+            result = pdf_info(txt_path)
+            assert "error" in result
+            assert "Only PDF files are supported" in result["error"]
+            assert "hint" in result
         finally:
             os.unlink(txt_path)
 

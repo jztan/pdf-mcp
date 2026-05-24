@@ -1201,6 +1201,39 @@ class TestResolvePath:
         assert err["error"] == "URL does not appear to be a PDF"
         assert "https://" in err["hint"]
 
+    @pytest.mark.parametrize(
+        "fetcher_msg,hint_keyword",
+        [
+            ("Only HTTPS URLs are supported (got: http)", "https://"),
+            (
+                "URL host resolves to a blocked IP on the SSRF deny list",
+                "SSRF deny list",
+            ),
+            ("URL host denied by config: evil.example.com", "[urls]"),
+            ("URL host not in allowed list: foo.example.com", "[urls]"),
+            ("URL content-type 'text/html' is not a PDF", "content-type"),
+            ("URL does not appear to be a PDF", "%PDF"),
+            ("PDF file too large: 999 bytes", "size limit"),
+            ("PDF download exceeded maximum size", "size limit"),
+            ("Too many redirects (max 5)", "redirects"),
+            ("DNS resolution failed for foo: ...", "resolve"),
+            ("Could not extract hostname from URL: ...", "resolve"),
+        ],
+    )
+    def test_url_value_error_per_cause_hint(
+        self, isolated_server, fetcher_msg, hint_keyword
+    ):
+        """Each fetcher ValueError variant maps to a per-cause hint."""
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(
+                URLFetcher, "fetch", side_effect=ValueError(fetcher_msg)
+            ):
+                local_path, err = _resolve_path("https://example.com/x.pdf")
+        assert local_path is None
+        assert err is not None
+        assert err["error"] == fetcher_msg
+        assert hint_keyword.lower() in err["hint"].lower()
+
     def test_bad_extension_inline(self, isolated_server, tmp_path):
         """Non-.pdf extension returns inline error dict."""
         not_pdf = tmp_path / "notes.txt"

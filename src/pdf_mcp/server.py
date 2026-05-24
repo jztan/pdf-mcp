@@ -183,14 +183,56 @@ def _resolve_path(
         except ValueError as e:
             # Surface validator messages verbatim. The fetcher already
             # composes self-describing errors (SSRF deny list,
-            # HTTPS-only, disallowed content-type, etc.).
-            return None, {
-                "error": str(e),
-                "hint": (
+            # HTTPS-only, disallowed content-type, etc.). Pick a hint
+            # by matching the message prefix so guidance is actionable.
+            msg = str(e)
+            if msg.startswith("Only HTTPS URLs are supported"):
+                hint = "Change the URL scheme to https://."
+            elif msg.startswith("URL host resolves to a blocked IP"):
+                hint = (
+                    "This host is on the SSRF deny list "
+                    "(loopback/private/link-local/IMDS). "
+                    "Use a public https:// URL."
+                )
+            elif msg.startswith("URL host denied by config") or msg.startswith(
+                "URL host not in allowed list"
+            ):
+                hint = (
+                    "Adjust [urls] allow/deny rules in "
+                    "~/.config/pdf-mcp/config.toml, or use an allowed host."
+                )
+            elif msg.startswith("URL content-type"):
+                hint = (
+                    "Server returned a non-PDF content-type. "
+                    "Confirm the URL serves application/pdf."
+                )
+            elif msg.startswith("URL does not appear to be a PDF"):
+                hint = (
+                    "Response body did not start with %PDF. "
+                    "Check the https:// URL points to a real PDF file."
+                )
+            elif msg.startswith("PDF file too large") or msg.startswith(
+                "PDF download exceeded maximum size"
+            ):
+                hint = (
+                    "The PDF exceeds the download size limit. "
+                    "Save it locally and pass a file path instead."
+                )
+            elif msg.startswith("Too many redirects"):
+                hint = "URL has too many redirects. Use a direct download link."
+            elif msg.startswith("DNS resolution failed") or msg.startswith(
+                "Could not extract hostname"
+            ):
+                hint = (
+                    "Couldn't resolve the URL host. "
+                    "Check the URL is well-formed and the host exists."
+                )
+            else:
+                hint = (
                     "Use an https:// URL that returns application/pdf "
                     "or has a .pdf extension."
-                ),
-            }
+                )
+            return None, {"error": msg, "hint": hint}
 
     # Local path - resolve to absolute
     path = Path(source)

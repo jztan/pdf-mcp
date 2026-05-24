@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `FastMCP(instructions=...)` rewritten to sharpen routing for agents
+  that have both pdf-mcp and an interactive PDF-viewer plugin
+  installed: leads with the extraction/search niche, explicitly
+  steers visual annotation / form-filling / signature workflows away
+  to a viewer, surfaces `pdf_search` mode and granularity options,
+  and inlines the 1-indexed-pages + mtime-cache + inline-error
+  invariants so callers see them on every MCP `initialize` handshake.
+  Untrusted-content warning preserved verbatim.
 - `pdf_render_pages` now returns `mcp.types.ImageContent` blocks
   (was `fastmcp.utilities.types.Image`). Each block carries
   `_meta={"page": N}` so consumers can correlate images to pages

@@ -46,6 +46,21 @@ _(empty — `pdf_render_pages` page-correlation contract landed; see `[Unrelease
 
 ### P1 — high-value, well-scoped
 
+- [ ] **Paragraph-aware excerpts in `pdf_search`.** The dominant agent
+  workflow is `pdf_search` → `pdf_read_pages`, because the current
+  ~120-char `context_chars` window is almost always too thin to ground
+  an answer. Add an opt-in mode (e.g. `passage=True` or
+  `excerpt_style="paragraph"`) that returns the full text block
+  containing the hit, using PyMuPDF's `get_text("blocks")` to find
+  paragraph boundaries. Cap per-excerpt at ~2000 chars and fall back
+  to the windowed snippet for oversized blocks. Dedupe overlapping
+  paragraphs when multiple hits land in the same block. Goal: cut the
+  most common follow-up `pdf_read_pages` call out of the loop in the
+  ~70% of cases where one paragraph is enough. Default preserves
+  current behavior (snippet) so the change is additive. Inspired by
+  comparing agent-side ergonomics against Anthropic's `pdf-viewer`
+  plugin, where the equivalent `get_text` returns full-page text by
+  design.
 - [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](docs/embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
 
 ### P2 — investigate before committing
@@ -76,4 +91,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-05-24 (MCP 2026-07-28 RC items added)
+**Last Updated:** 2026-05-24 (added P1 paragraph-aware excerpts)

@@ -418,6 +418,13 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             text_chars_per_page: int[] (only when detail=True),
             raster_images_per_page: int[] (only when detail=True),
           }
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
     _res = _resolve_path(path)
     if _res[1] is not None:
@@ -549,6 +556,13 @@ def pdf_read_pages(
         - cache_hits: Number of pages served from cache
         - total_images: Total number of images across all pages
         - total_tables: Total number of tables across all pages
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
     if ocr:
         try:
@@ -793,6 +807,13 @@ def pdf_read_all(
             present, calling this same tool with `start_page=next_page`
             continues the read on a page boundary.
         - estimated_tokens: Estimated token count
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
     _res = _resolve_path(path)
     if _res[1] is not None:
@@ -1134,10 +1155,12 @@ def pdf_search(
               MAX_SECTION_TITLE_BYTES.
 
     Error contract: validation failures (empty query, missing fastembed
-    in semantic mode, unknown mode) return an inline payload of the
-    form {"error": "...", ...} with the tool call still succeeding —
-    callers should check for an `error` key before reading other
-    fields rather than handling a raised exception.
+    in semantic mode, unknown mode, plus path/URL validation: file not
+    found, invalid extension, blocked URL, HTTP fetch error, allow/deny
+    rule) return an inline payload of the form {"error": "...", ...}
+    with the tool call still succeeding — callers should check for an
+    `error` key before reading other fields rather than handling a
+    raised exception.
     """
     # 1. Validate mode
     if mode not in ("auto", "keyword", "semantic"):
@@ -1545,6 +1568,13 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
         - toc: List of {level, title, page} entries
         - has_toc: Whether document has a table of contents
         - entry_count: Number of TOC entries
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
     _res = _resolve_path(path)
     if _res[1] is not None:
@@ -1693,6 +1723,13 @@ def pdf_render_pages(
         page summary["pages_rendered"][i] and also carries _meta={"page": N}.
         Failed pages are reported in summary["render_failed_pages"] and never
         appear in pages_rendered, so the two arrays stay aligned.
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on `result[0]` (the summary dict) before reading other
+    fields rather than handling a raised exception.
     """
     _res = _resolve_path(path)
     if _res[1] is not None:

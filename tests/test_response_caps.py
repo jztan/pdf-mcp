@@ -151,9 +151,7 @@ class TestPdfReadAllStartPage:
         assert result["bytes_returned"] == 0
         assert result["bytes_available"] == 0
 
-    def test_next_page_after_byte_cap_is_consumable(
-        self, isolated_server, monkeypatch
-    ):
+    def test_next_page_after_byte_cap_is_consumable(self, isolated_server, monkeypatch):
         """Property test: resuming with start_page=next_page eventually
         covers every page of the document exactly once, in order. This
         is the invariant the response contract promises — if next_page

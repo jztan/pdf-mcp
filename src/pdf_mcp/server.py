@@ -8,6 +8,7 @@ Usage:
     python -m pdf_mcp.server
 """
 
+import base64
 import hashlib
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ from typing import Any
 import httpx
 import pymupdf
 from fastmcp import FastMCP
-from fastmcp.utilities.types import Image
+from mcp.types import ImageContent
 
 from . import __version__
 from .cache import PDFCache
@@ -1641,6 +1642,11 @@ def pdf_render_pages(
         List where the first element is a JSON summary dict and subsequent
         elements are image content blocks (one per rendered page).
         Truncated to MAX_RENDER_INLINE_PAGES images per call.
+
+        Page correlation: the i-th image block (result[i+1]) corresponds to
+        page summary["pages_rendered"][i] and also carries _meta={"page": N}.
+        Failed pages are reported in summary["render_failed_pages"] and never
+        appear in pages_rendered, so the two arrays stay aligned.
     """
     local_path = _resolve_path(path)
     clamped_dpi = _clamp(dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
@@ -1711,8 +1717,14 @@ def pdf_render_pages(
             summary["render_failed_pages"] = render_failed
 
         result: list[Any] = [summary]
-        for _, png_bytes in images:
-            result.append(Image(data=png_bytes, format="png"))
+        for page_num, png_bytes in images:
+            block = ImageContent(
+                type="image",
+                data=base64.b64encode(png_bytes).decode("ascii"),
+                mimeType="image/png",
+            )
+            block.meta = {"page": page_num}
+            result.append(block)
 
         return result
 

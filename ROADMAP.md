@@ -18,12 +18,24 @@ No release branch open. Cut the next patch from develop via `python scripts/rele
 
 ## Under Consideration
 
+Ordered by leverage ÷ effort. P0 = ship next; P3 = methodology, fold into a P1/P2 item rather than tracking standalone.
+
+### P0 — ship next
+
+_(empty — `pdf_render_pages` page-correlation contract landed; see `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).)_
+
+### P1 — high-value, well-scoped
+
 - [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](docs/embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
 - [ ] **Unify `_resolve_path` errors with the inline-error contract.** Path/URL validation still raises `ToolError` while page-spec errors return inline `{"error", "hint"}`. Agents need two recovery paths. Migrate `_resolve_path` callers to the inline contract; ship with shape tests across every affected tool.
-- [ ] **Two-column / complex layout reading order.** PyMuPDF's `sort=True` doesn't understand columns, so academic two-column layouts interleave paragraphs. Investigate `pymupdf-pro` or GROBID / Marker / Surya as an optional `pdf-mcp[layout]` extra. Overlaps with the heuristic-detector escalation item below.
-- [ ] **`pdf_render_pages` page labels.** `ImageContent` blocks currently have no page annotation; if `render_failed_pages` fires, surviving images may be misaligned. Use FastMCP `Image.annotations` to embed `{"page": N}` so agents can correlate images to pages regardless of failures.
-- [ ] **Heuristic detector escalation for low-quality PDFs.** For OCR'd scans and layout-irregular preprints where the 7-signal detector underperforms, explore CRF / transformer layout models (GROBID, Marker, Surya) as an optional `pdf-mcp[layout]` extra.
-- [ ] **Agent-task evaluation for section vs page search.** Current benchmarks measure retrieval characteristics. Add a downstream eval (LLM-graded Q&A or agent-task completion) to measure whether section-granularity actually helps agents answer better questions.
+
+### P2 — investigate before committing
+
+- [ ] **Optional `pdf-mcp[layout]` extra (two-column reading order + heuristic detector escalation).** PyMuPDF's `sort=True` doesn't understand columns, so academic two-column layouts interleave paragraphs; the 7-signal section detector also underperforms on OCR'd scans and layout-irregular preprints. Both want the same dependency: a layout-aware model behind an optional extra. Spike on `pymupdf-pro` vs GROBID / Marker / Surya — install size, licensing, and accuracy lift — before budgeting delivery time.
+
+### P3 — methodology, fold into a P1/P2 item
+
+- [ ] **Agent-task evaluation for section vs page search.** Current benchmarks measure retrieval characteristics; this would measure whether section-granularity actually helps agents *answer better questions* (LLM-graded Q&A or agent-task completion). Not a deliverable on its own — bundle the harness into whichever P1/P2 item needs it first (likely the confidence-threshold calibration).
 
 ---
 

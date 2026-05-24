@@ -5,6 +5,7 @@ TestScanDetectionNoOcr: runs everywhere, no system deps.
 TestOcrIntegration: skipped if Tesseract is not installed.
 """
 
+import base64
 import io
 import os
 import tempfile
@@ -13,7 +14,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 from PIL import Image, ImageDraw
-from fastmcp.utilities.types import Image as McpImage
+from mcp.types import ImageContent as McpImage
 
 from pdf_mcp.extractor import check_tesseract_available
 from pdf_mcp.server import pdf_info, pdf_read_pages, pdf_render_pages, pdf_search
@@ -63,7 +64,8 @@ class TestScanDetectionNoOcr:
         assert len(result) >= 2
         assert "pages_rendered" in result[0]
         assert isinstance(result[1], McpImage)
-        pil_img = Image.open(io.BytesIO(result[1].data))
+        png_bytes = base64.b64decode(result[1].data)
+        pil_img = Image.open(io.BytesIO(png_bytes))
         assert pil_img.width > 0
         assert pil_img.height > 0
 
@@ -80,9 +82,9 @@ class TestOcrIntegration:
         assert page["source"] == "ocr"
         words = KNOWN_TEXT.lower().split()
         text_lower = page["text"].lower()
-        assert any(w in text_lower for w in words), (
-            f"None of {words} found in OCR output: {page['text']!r}"
-        )
+        assert any(
+            w in text_lower for w in words
+        ), f"None of {words} found in OCR output: {page['text']!r}"
 
     def test_ocr_text_is_searchable(self, sample_pdf_synthetic_scan):
         pdf_read_pages(sample_pdf_synthetic_scan, "1", ocr=True)

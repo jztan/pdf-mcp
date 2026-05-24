@@ -1933,12 +1933,12 @@ class TestPdfRenderPages:
         assert 1 in summary["pages_rendered"]
 
     def test_subsequent_elements_are_images(self, sample_pdf, isolated_server):
-        """Elements after the summary are FastMCP Image objects."""
-        from fastmcp.utilities.types import Image
+        """Elements after the summary are MCP ImageContent blocks."""
+        from mcp.types import ImageContent
 
         result = pdf_render_pages(sample_pdf, "1", dpi=72)
         assert len(result) == 2  # summary + 1 image
-        assert isinstance(result[1], Image)
+        assert isinstance(result[1], ImageContent)
 
     def test_dpi_clamped(self, sample_pdf, isolated_server):
         """DPI above 400 is clamped; dpi_requested vs dpi_used differ."""
@@ -1950,7 +1950,7 @@ class TestPdfRenderPages:
     def test_max_inline_pages_truncation(self, sample_pdf, isolated_server):
         """Requesting more than MAX_RENDER_INLINE_PAGES returns truncated_render."""
         import pdf_mcp.server as srv
-        from fastmcp.utilities.types import Image
+        from mcp.types import ImageContent
 
         original = srv.MAX_RENDER_INLINE_PAGES
         srv.MAX_RENDER_INLINE_PAGES = 2
@@ -1958,7 +1958,7 @@ class TestPdfRenderPages:
             result = pdf_render_pages(sample_pdf, "1-5", dpi=72)
         finally:
             srv.MAX_RENDER_INLINE_PAGES = original
-        image_count = sum(1 for x in result if isinstance(x, Image))
+        image_count = sum(1 for x in result if isinstance(x, ImageContent))
         assert image_count == 2
         assert result[0].get("truncated_render") is True
 
@@ -1996,6 +1996,50 @@ class TestPdfRenderPages:
         result = pdf_render_pages(sample_pdf, "100", dpi=72)
         assert result[0]["error"]
         assert len(result) == 1  # images list is empty in error case
+
+    def test_image_blocks_carry_page_in_meta(self, sample_pdf, isolated_server):
+        """Each image content block carries its page number in MCP _meta."""
+        result = pdf_render_pages(sample_pdf, "1-2", dpi=72)
+        blocks = result[1:]
+        assert len(blocks) == 2
+        assert blocks[0].meta == {"page": 1}
+        assert blocks[1].meta == {"page": 2}
+
+    def test_pages_rendered_aligns_with_image_blocks(self, sample_pdf, isolated_server):
+        """Lockstep invariant: pages_rendered[i] == _meta['page'] of result[i+1]."""
+        result = pdf_render_pages(sample_pdf, "1-3", dpi=72)
+        summary = result[0]
+        blocks = result[1:]
+        assert len(blocks) == len(summary["pages_rendered"])
+        for i, block in enumerate(blocks):
+            assert block.meta["page"] == summary["pages_rendered"][i]
+
+    def test_invariant_holds_when_one_page_read_fails(
+        self, sample_pdf, isolated_server
+    ):
+        """OSError on page 2 must not misalign pages_rendered or image _meta."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        real_read_bytes = Path.read_bytes
+        call_count = {"n": 0}
+
+        def fake_read_bytes(self):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise OSError("simulated disk failure")
+            return real_read_bytes(self)
+
+        with patch.object(Path, "read_bytes", fake_read_bytes):
+            result = pdf_render_pages(sample_pdf, "1-3", dpi=72)
+
+        summary = result[0]
+        blocks = result[1:]
+        assert summary["pages_rendered"] == [1, 3]
+        assert summary["render_failed_pages"] == [2]
+        assert len(blocks) == 2
+        assert blocks[0].meta["page"] == 1
+        assert blocks[1].meta["page"] == 3
 
 
 class TestPdfReadPagesOcr:

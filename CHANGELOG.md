@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- `pdf_render_pages` now returns `mcp.types.ImageContent` blocks
+  (was `fastmcp.utilities.types.Image`). Each block carries
+  `_meta={"page": N}` so consumers can correlate images to pages
+  without relying on positional alignment with
+  `summary["pages_rendered"]`. Wire format is unchanged
+  (`type=image`, `data=base64`, `mimeType=image/png`).
+
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address
   PYSEC-2026-161 (CI `pip-audit` failure).

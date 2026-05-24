@@ -385,3 +385,4 @@ MIT — see [LICENSE](LICENSE).
 - [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/) — How AI agents use pdf-mcp tools to read and navigate PDF documents
 - [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/) — Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
 - [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/) — Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
+- [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/) — Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use

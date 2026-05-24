@@ -3,6 +3,7 @@
 
 import os
 import tempfile
+from typing import Any
 
 import numpy as np
 import pytest
@@ -1218,6 +1219,70 @@ class TestResolvePath:
         assert err is not None
         assert "PDF file not found" in err["error"]
         assert "exists" in err["hint"]
+
+
+class TestResolvePathInlineParity:
+    """Every tool that calls _resolve_path returns the same inline
+    {error, hint} shape on path/URL failure.
+
+    Satisfies the ROADMAP deliverable "shape tests across every
+    affected tool" by exercising one local (not-found) failure and
+    one URL (HTTPStatusError) failure per tool.
+    """
+
+    # (tool, extra kwargs needed on top of `path`)
+    TOOLS: list[tuple[Any, dict[str, Any]]] = [
+        (pdf_info, {}),
+        (pdf_read_pages, {"pages": "1"}),
+        (pdf_read_all, {}),
+        (pdf_search, {"query": "anything"}),
+        (pdf_get_toc, {}),
+        (pdf_render_pages, {"pages": "1"}),
+    ]
+
+    @staticmethod
+    def _extract_err(result: Any) -> dict[str, Any]:
+        """pdf_render_pages wraps its error in a single-element list."""
+        if isinstance(result, list):
+            assert len(result) >= 1
+            return result[0]
+        assert isinstance(result, dict)
+        return result
+
+    @pytest.mark.parametrize(
+        "tool,extra",
+        TOOLS,
+        ids=[t.__name__ for t, _ in TOOLS],
+    )
+    def test_not_found_returns_inline_error(
+        self, isolated_server, tmp_path, tool, extra
+    ):
+        missing = tmp_path / "missing.pdf"
+        result = tool(path=str(missing), **extra)
+        err = self._extract_err(result)
+        assert "error" in err, f"{tool.__name__} did not return inline error"
+        assert "PDF file not found" in err["error"]
+        assert "hint" in err
+        assert "exists" in err["hint"].lower()
+
+    @pytest.mark.parametrize(
+        "tool,extra",
+        TOOLS,
+        ids=[t.__name__ for t, _ in TOOLS],
+    )
+    def test_url_http_status_returns_inline_error(self, isolated_server, tool, extra):
+        mock_response = Mock()
+        mock_response.status_code = 503
+        error = httpx.HTTPStatusError(
+            "Service Unavailable", request=Mock(), response=mock_response
+        )
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(URLFetcher, "fetch", side_effect=error):
+                result = tool(path="https://example.com/x.pdf", **extra)
+        err = self._extract_err(result)
+        assert "error" in err
+        assert "HTTP 503" in err["error"]
+        assert "hint" in err
 
 
 class TestSearchWordBoundaryAndEllipsis:

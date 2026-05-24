@@ -133,7 +133,7 @@ class TestRunModel:
             }
         }
         # Stub _resolve_path to skip URL fetching
-        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/fake.pdf")
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: ("/tmp/fake.pdf", None))
         # Stub pdf_search to return the relevant page first
         observed_models = []
 
@@ -177,7 +177,7 @@ class TestRunModel:
                 }
             }
         }
-        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/x.pdf")
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: ("/tmp/x.pdf", None))
         monkeypatch.setattr(
             bem, "pdf_search", lambda *a, **kw: {"matches": [{"page": 1}]}
         )
@@ -413,7 +413,7 @@ class TestMainIntegration:
             )
         )
         # Stub _resolve_path and pdf_search
-        monkeypatch.setattr(bem, "_resolve_path", lambda u: "/tmp/fake.pdf")
+        monkeypatch.setattr(bem, "_resolve_path", lambda u: ("/tmp/fake.pdf", None))
         monkeypatch.setattr(
             bem,
             "pdf_search",

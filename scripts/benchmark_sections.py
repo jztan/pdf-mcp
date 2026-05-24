@@ -808,7 +808,10 @@ def _print_summary(results: dict, calibrate: bool) -> tuple[bool, list[str]]:
 
 def _resolve_pdf_local_path(url: str) -> str:
     """Wrapper around server._resolve_path (kept separate so tests can stub it)."""
-    return _resolve_path(url)
+    path, err = _resolve_path(url)
+    if err is not None:
+        raise RuntimeError(err["error"])
+    return path
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -349,7 +349,10 @@ def run_all_cells(all_pdfs: dict, embedder) -> dict:
     accum: dict[str, dict[str, list[float]]] = {c: defaultdict(list) for c in CELLS}
 
     for pdf_key, pdf_data in all_pdfs.items():
-        local_path = _resolve_path(pdf_data["url"])
+        _path, _err = _resolve_path(pdf_data["url"])
+        if _err is not None:
+            raise RuntimeError(_err["error"])
+        local_path = _path
 
         sections = derive_sections(local_path)
         cache.index_sections(local_path, sections)

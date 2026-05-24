@@ -130,37 +130,52 @@ pdf_config = PDFConfig()
 url_fetcher = URLFetcher(config=pdf_config)
 
 
-def _resolve_path(source: str) -> str:
+def _resolve_path(
+    source: str,
+) -> tuple[str, None] | tuple[None, dict[str, str]]:
     """
-    Resolve source to local file path.
+    Resolve source to a local file path.
 
     Handles:
     - Local paths (absolute and relative)
     - URLs (downloads to local cache)
+
+    Returns (local_path, None) on success or (None, error_payload) on
+    failure. error_payload is shaped {"error": str, "hint": str} and is
+    intended to be returned directly from the calling tool.
 
     Security: Resolves symlinks and blocks path traversal attempts.
     """
     if url_fetcher.is_url(source):
         try:
             local_path = url_fetcher.fetch(source)
-            return str(local_path)
+            return str(local_path), None
         except httpx.HTTPStatusError as e:
-            raise ConnectionError(
-                f"Failed to download PDF from URL: HTTP {e.response.status_code}. "
-                f"Try a direct download link that doesn't redirect."
-            ) from e
+            return None, {
+                "error": (
+                    f"Failed to download PDF from URL: "
+                    f"HTTP {e.response.status_code}."
+                ),
+                "hint": ("Try a direct download link that doesn't redirect."),
+            }
         except httpx.HTTPError as e:
-            raise ConnectionError(
-                f"Failed to download PDF from URL: {type(e).__name__}. "
-                f"Check that the URL is accessible and points to a valid PDF."
-            ) from e
+            return None, {
+                "error": (f"Failed to download PDF from URL: {type(e).__name__}."),
+                "hint": (
+                    "Check that the URL is accessible and points to a " "valid PDF."
+                ),
+            }
         except ValueError as e:
             # Surface validator messages verbatim. The fetcher already
-            # composes self-describing errors (SSRF deny list, HTTPS-only,
-            # disallowed content-type, etc.); wrapping them in a generic
-            # "URL does not point to a valid PDF file" prefix made
-            # security blocks indistinguishable from format problems.
-            raise ValueError(str(e)) from e
+            # composes self-describing errors (SSRF deny list,
+            # HTTPS-only, disallowed content-type, etc.).
+            return None, {
+                "error": str(e),
+                "hint": (
+                    "Use an https:// URL that returns application/pdf "
+                    "or has a .pdf extension."
+                ),
+            }
 
     # Local path - resolve to absolute
     path = Path(source)
@@ -172,17 +187,33 @@ def _resolve_path(source: str) -> str:
 
     # Validate the file extension to prevent reading non-PDF files
     if resolved.suffix.lower() != ".pdf":
-        raise ValueError(
-            f"Only PDF files are supported. Got file with extension: {resolved.suffix}"
-        )
+        return None, {
+            "error": (
+                "Only PDF files are supported. Got file with "
+                f"extension: {resolved.suffix}"
+            ),
+            "hint": "Pass a path or URL whose file ends in .pdf.",
+        }
 
     # Enforce user-configured path allow/deny rules
-    pdf_config.check_path(str(resolved))
+    try:
+        pdf_config.check_path(str(resolved))
+    except ValueError as e:
+        return None, {
+            "error": str(e),
+            "hint": (
+                "Adjust [paths] allow/deny rules in "
+                "~/.config/pdf-mcp/config.toml, or pass an allowed path."
+            ),
+        }
 
     if not resolved.exists():
-        raise FileNotFoundError(f"PDF file not found: {source}")
+        return None, {
+            "error": f"PDF file not found: {source}",
+            "hint": "Check the path and that the file exists.",
+        }
 
-    return str(resolved)
+    return str(resolved), None
 
 
 def _clamp(value: int, minimum: int, maximum: int) -> int:
@@ -387,8 +418,18 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             text_chars_per_page: int[] (only when detail=True),
             raster_images_per_page: int[] (only when detail=True),
           }
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return _res[1]
+    local_path = _res[0]
 
     # Try cache first
     cached = cache.get_metadata(local_path)
@@ -515,6 +556,13 @@ def pdf_read_pages(
         - cache_hits: Number of pages served from cache
         - total_images: Total number of images across all pages
         - total_tables: Total number of tables across all pages
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
     if ocr:
         try:
@@ -528,7 +576,10 @@ def pdf_read_pages(
                 ),
             }
 
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return _res[1]
+    local_path = _res[0]
 
     clamped_dpi: int | None = None
     if render_dpi is not None:
@@ -756,8 +807,18 @@ def pdf_read_all(
             present, calling this same tool with `start_page=next_page`
             continues the read on a page boundary.
         - estimated_tokens: Estimated token count
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return _res[1]
+    local_path = _res[0]
 
     # Clamp max_pages to prevent resource exhaustion
     max_pages = _clamp(max_pages, 1, MAX_PAGES_LIMIT)
@@ -1094,10 +1155,12 @@ def pdf_search(
               MAX_SECTION_TITLE_BYTES.
 
     Error contract: validation failures (empty query, missing fastembed
-    in semantic mode, unknown mode) return an inline payload of the
-    form {"error": "...", ...} with the tool call still succeeding —
-    callers should check for an `error` key before reading other
-    fields rather than handling a raised exception.
+    in semantic mode, unknown mode, plus path/URL validation: file not
+    found, invalid extension, blocked URL, HTTP fetch error, allow/deny
+    rule) return an inline payload of the form {"error": "...", ...}
+    with the tool call still succeeding — callers should check for an
+    `error` key before reading other fields rather than handling a
+    raised exception.
     """
     # 1. Validate mode
     if mode not in ("auto", "keyword", "semantic"):
@@ -1137,7 +1200,10 @@ def pdf_search(
         except ValueError as exc:
             return {"error": str(exc)}
 
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return {**_res[1], "query": query}
+    local_path = _res[0]
     max_results = _clamp(max_results, 1, MAX_RESULTS_LIMIT)
     context_chars = _clamp(context_chars, 10, MAX_CONTEXT_CHARS_LIMIT)
 
@@ -1502,8 +1568,18 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
         - toc: List of {level, title, page} entries
         - has_toc: Whether document has a table of contents
         - entry_count: Number of TOC entries
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on the response before reading other fields rather than
+    handling a raised exception.
     """
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return _res[1]
+    local_path = _res[0]
 
     # Try cache first
     cached = cache.get_metadata(local_path)
@@ -1647,8 +1723,18 @@ def pdf_render_pages(
         page summary["pages_rendered"][i] and also carries _meta={"page": N}.
         Failed pages are reported in summary["render_failed_pages"] and never
         appear in pages_rendered, so the two arrays stay aligned.
+
+    Error contract: path/URL validation failures (file not found,
+    invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
+    return an inline payload of the form {"error": "...", "hint": "..."}
+    with the tool call still succeeding — callers should check for an
+    `error` key on `result[0]` (the summary dict) before reading other
+    fields rather than handling a raised exception.
     """
-    local_path = _resolve_path(path)
+    _res = _resolve_path(path)
+    if _res[1] is not None:
+        return [_res[1]]
+    local_path = _res[0]
     clamped_dpi = _clamp(dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
 
     doc = pymupdf.open(local_path)

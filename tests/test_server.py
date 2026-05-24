@@ -3,6 +3,7 @@
 
 import os
 import tempfile
+from typing import Any
 
 import numpy as np
 import pytest
@@ -600,10 +601,12 @@ class TestPdfInfo:
         assert result2["from_cache"] is True
         assert result2["page_count"] == result1["page_count"]
 
-    def test_pdf_info_file_not_found(self, isolated_server):
-        """Invalid path raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            pdf_info("/nonexistent/path.pdf")
+    def test_invalid_path_returns_inline_error(self, isolated_server):
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_info("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
     def test_pdf_info_metadata_fields(self, sample_pdf, isolated_server):
         """All metadata fields present."""
@@ -787,10 +790,12 @@ class TestPdfReadAll:
         assert "full_text" in result2
         assert result2["full_text"] == result1["full_text"]
 
-    def test_read_all_file_not_found(self, isolated_server):
-        """Invalid path raises error."""
-        with pytest.raises(FileNotFoundError):
-            pdf_read_all("/nonexistent/path.pdf")
+    def test_invalid_path_returns_inline_error(self, isolated_server):
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_read_all("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
     def test_read_all_docstring_mentions_images(self):
         """pdf_read_all docstring directs users to pdf_read_pages for images."""
@@ -889,9 +894,11 @@ class TestPdfGetToc:
         assert "page" in entry
 
     def test_get_toc_file_not_found(self, isolated_server):
-        """Invalid path raises error."""
-        with pytest.raises(FileNotFoundError):
-            pdf_get_toc("/nonexistent/path.pdf")
+        """Invalid path returns inline error dict (no raise)."""
+        result = pdf_get_toc("/nonexistent/path.pdf")
+        assert "error" in result
+        assert "PDF file not found" in result["error"]
+        assert "hint" in result
 
 
 class TestPdfCacheStats:
@@ -1045,19 +1052,6 @@ class TestToolIntegration:
 class TestErrorCases:
     """Error handling tests."""
 
-    @pytest.mark.parametrize(
-        "tool_func",
-        [
-            pdf_info,
-            pdf_read_all,
-            pdf_get_toc,
-        ],
-    )
-    def test_file_not_found_parametrized(self, tool_func, isolated_server):
-        """All path-based tools raise FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            tool_func("/nonexistent/path.pdf")
-
     def test_corrupted_pdf(self, temp_cache_dir, isolated_server):
         """Corrupted file handled."""
         import os
@@ -1078,7 +1072,7 @@ class TestSecurityMitigations:
     """Tests for security hardening measures."""
 
     def test_non_pdf_extension_rejected(self, isolated_server):
-        """Non-PDF file extensions are rejected."""
+        """Non-PDF file extensions return inline error dict."""
         import tempfile
         import os
 
@@ -1087,8 +1081,10 @@ class TestSecurityMitigations:
             txt_path = f.name
 
         try:
-            with pytest.raises(ValueError, match="Only PDF files"):
-                pdf_info(txt_path)
+            result = pdf_info(txt_path)
+            assert "error" in result
+            assert "Only PDF files are supported" in result["error"]
+            assert "hint" in result
         finally:
             os.unlink(txt_path)
 
@@ -1149,50 +1145,144 @@ class TestSecurityMitigations:
 
 
 class TestResolvePath:
-    """Tests for _resolve_path helper."""
+    """Tests for _resolve_path helper — inline-error contract.
+
+    _resolve_path returns (path, None) on success or
+    (None, {"error", "hint"}) on failure. It does not raise for
+    user-recoverable failures.
+    """
 
     def test_relative_path_resolved(self, sample_pdf, isolated_server):
-        """Relative path is resolved to absolute."""
-        # Use just the filename relative to cwd
+        """Relative path is resolved to an absolute string with no error."""
         rel_path = os.path.relpath(sample_pdf)
-        result = _resolve_path(rel_path)
-        assert os.path.isabs(result)
+        local_path, err = _resolve_path(rel_path)
+        assert err is None
+        assert local_path is not None
+        assert os.path.isabs(local_path)
 
-    def test_url_http_status_error(self, isolated_server):
-        """HTTPStatusError from URL fetch raises ConnectionError."""
+    def test_url_http_status_error_inline(self, isolated_server):
+        """HTTPStatusError from URL fetch returns inline error dict."""
         mock_response = Mock()
         mock_response.status_code = 404
         error = httpx.HTTPStatusError(
             "Not Found", request=Mock(), response=mock_response
         )
-
         with patch.object(URLFetcher, "is_url", return_value=True):
             with patch.object(URLFetcher, "fetch", side_effect=error):
-                with pytest.raises(ConnectionError, match="HTTP 404"):
-                    _resolve_path("https://example.com/missing.pdf")
+                local_path, err = _resolve_path("https://example.com/missing.pdf")
+        assert local_path is None
+        assert err is not None
+        assert "HTTP 404" in err["error"]
+        assert "redirect" in err["hint"].lower()
 
-    def test_url_http_error(self, isolated_server):
-        """Generic HTTPError from URL fetch raises ConnectionError."""
+    def test_url_http_error_inline(self, isolated_server):
+        """Generic HTTPError from URL fetch returns inline error dict."""
         error = httpx.ConnectError("Connection refused")
-
         with patch.object(URLFetcher, "is_url", return_value=True):
             with patch.object(URLFetcher, "fetch", side_effect=error):
-                with pytest.raises(ConnectionError, match="ConnectError"):
-                    _resolve_path("https://example.com/unreachable.pdf")
+                local_path, err = _resolve_path("https://example.com/unreachable.pdf")
+        assert local_path is None
+        assert err is not None
+        assert "ConnectError" in err["error"]
+        assert "accessible" in err["hint"].lower()
 
-    def test_url_value_error(self, isolated_server):
-        """ValueError from URL fetch re-raises verbatim (no generic wrapper).
+    def test_url_value_error_inline(self, isolated_server):
+        """ValueError from URL fetch surfaces fetcher message verbatim.
 
-        The fetcher composes self-describing errors (SSRF deny list,
-        HTTPS-only, content-type mismatch, etc.); _resolve_path surfaces
-        them directly so security blocks don't look like format problems.
+        Fetcher composes self-describing errors (SSRF deny list,
+        HTTPS-only, content-type mismatch). _resolve_path preserves them.
         """
         error = ValueError("URL does not appear to be a PDF")
-
         with patch.object(URLFetcher, "is_url", return_value=True):
             with patch.object(URLFetcher, "fetch", side_effect=error):
-                with pytest.raises(ValueError, match="does not appear to be a PDF"):
-                    _resolve_path("https://example.com/fake.pdf")
+                local_path, err = _resolve_path("https://example.com/fake.pdf")
+        assert local_path is None
+        assert err is not None
+        assert err["error"] == "URL does not appear to be a PDF"
+        assert "https://" in err["hint"]
+
+    def test_bad_extension_inline(self, isolated_server, tmp_path):
+        """Non-.pdf extension returns inline error dict."""
+        not_pdf = tmp_path / "notes.txt"
+        not_pdf.write_text("hi")
+        local_path, err = _resolve_path(str(not_pdf))
+        assert local_path is None
+        assert err is not None
+        assert "Only PDF files are supported" in err["error"]
+        assert ".pdf" in err["hint"]
+
+    def test_not_found_inline(self, isolated_server, tmp_path):
+        """Missing file returns inline error dict."""
+        missing = tmp_path / "does_not_exist.pdf"
+        local_path, err = _resolve_path(str(missing))
+        assert local_path is None
+        assert err is not None
+        assert "PDF file not found" in err["error"]
+        assert "exists" in err["hint"]
+
+
+class TestResolvePathInlineParity:
+    """Every tool that calls _resolve_path returns the same inline
+    {error, hint} shape on path/URL failure.
+
+    Satisfies the ROADMAP deliverable "shape tests across every
+    affected tool" by exercising one local (not-found) failure and
+    one URL (HTTPStatusError) failure per tool.
+    """
+
+    # (tool, extra kwargs needed on top of `path`)
+    TOOLS: list[tuple[Any, dict[str, Any]]] = [
+        (pdf_info, {}),
+        (pdf_read_pages, {"pages": "1"}),
+        (pdf_read_all, {}),
+        (pdf_search, {"query": "anything"}),
+        (pdf_get_toc, {}),
+        (pdf_render_pages, {"pages": "1"}),
+    ]
+
+    @staticmethod
+    def _extract_err(result: Any) -> dict[str, Any]:
+        """pdf_render_pages wraps its error in a single-element list."""
+        if isinstance(result, list):
+            assert len(result) >= 1
+            return result[0]
+        assert isinstance(result, dict)
+        return result
+
+    @pytest.mark.parametrize(
+        "tool,extra",
+        TOOLS,
+        ids=[t.__name__ for t, _ in TOOLS],
+    )
+    def test_not_found_returns_inline_error(
+        self, isolated_server, tmp_path, tool, extra
+    ):
+        missing = tmp_path / "missing.pdf"
+        result = tool(path=str(missing), **extra)
+        err = self._extract_err(result)
+        assert "error" in err, f"{tool.__name__} did not return inline error"
+        assert "PDF file not found" in err["error"]
+        assert "hint" in err
+        assert "exists" in err["hint"].lower()
+
+    @pytest.mark.parametrize(
+        "tool,extra",
+        TOOLS,
+        ids=[t.__name__ for t, _ in TOOLS],
+    )
+    def test_url_http_status_returns_inline_error(self, isolated_server, tool, extra):
+        mock_response = Mock()
+        mock_response.status_code = 503
+        error = httpx.HTTPStatusError(
+            "Service Unavailable", request=Mock(), response=mock_response
+        )
+        with patch.object(URLFetcher, "is_url", return_value=True):
+            with patch.object(URLFetcher, "fetch", side_effect=error):
+                result = tool(path="https://example.com/x.pdf", **extra)
+        err = self._extract_err(result)
+        assert "error" in err
+        assert "HTTP 503" in err["error"]
+        assert "hint" in err
 
 
 class TestSearchWordBoundaryAndEllipsis:

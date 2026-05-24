@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without relying on positional alignment with
   `summary["pages_rendered"]`. Wire format is unchanged
   (`type=image`, `data=base64`, `mimeType=image/png`).
+- Path/URL failures from `pdf_info`, `pdf_read_pages`, `pdf_read_all`,
+  `pdf_search`, `pdf_get_toc`, and `pdf_render_pages` are now returned
+  as inline `{"error", "hint"}` payloads in the tool result instead of
+  raising `ValueError` / `FileNotFoundError` / `ConnectionError`.
+  **Protocol-level behavior change:** the MCP response now carries
+  `isError: false` (the tool call succeeded; the dict communicates the
+  failure) where previously these errors produced `isError: true`.
+  Agents that branched on `isError` for path/URL failures will silently
+  see a "successful" response and must inspect `result.get("error")`
+  instead. This aligns the path/URL path with the existing inline-error
+  contract already used by other validators — callers should check
+  `result.get("error")` on every tool response regardless of `isError`.
+  `pdf_render_pages` wraps its error dict in a single-element list to
+  match its list return type.
 
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address

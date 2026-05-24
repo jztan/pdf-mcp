@@ -27,7 +27,6 @@ _(empty — `pdf_render_pages` page-correlation contract landed; see `[Unrelease
 ### P1 — high-value, well-scoped
 
 - [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](docs/embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
-- [ ] **Unify `_resolve_path` errors with the inline-error contract.** Path/URL validation still raises `ToolError` while page-spec errors return inline `{"error", "hint"}`. Agents need two recovery paths. Migrate `_resolve_path` callers to the inline contract; ship with shape tests across every affected tool.
 
 ### P2 — investigate before committing
 

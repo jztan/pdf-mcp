@@ -1485,5 +1485,92 @@ class TestExtractorRenderAndOcr:
         assert isinstance(result, str)
 
 
+from pdf_mcp.extractor import get_paragraph_for_offset
+
+
+class TestGetParagraphForOffset:
+    """Tests for get_paragraph_for_offset()."""
+
+    def test_offset_in_first_block(self):
+        """Offset 0 lands in the first block."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "First block text.")
+        page.insert_text((50, 200), "Second block text.")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 0)
+            assert text is not None
+            assert "First" in text
+            assert idx == 0
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_offset_in_second_block(self):
+        """Offset past first block lands in the second block."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "AAA")
+        page.insert_text((50, 200), "BBB")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            full_text = page2.get_text("blocks", sort=True)
+            text_blocks = [b[4] for b in full_text if b[6] == 0]
+            joined = "\n\n".join(text_blocks)
+            offset = joined.find("BBB")
+            text, idx = get_paragraph_for_offset(page2, offset)
+            assert text is not None
+            assert "BBB" in text
+            assert idx == 1
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_offset_beyond_text_returns_none(self):
+        """Offset past all text returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Short.")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 99999)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_oversized_block_returns_none(self):
+        """Block exceeding max_chars returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "X" * 100)
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 0, max_chars=10)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

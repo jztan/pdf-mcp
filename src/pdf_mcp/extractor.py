@@ -135,6 +135,37 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         return str(page.get_text())
 
 
+_PARAGRAPH_MAX_CHARS = 2000
+
+
+def get_paragraph_for_offset(
+    page: Any, char_offset: int, max_chars: int = _PARAGRAPH_MAX_CHARS
+) -> tuple[str | None, int | None]:
+    """
+    Find the text block containing char_offset in the page's joined text.
+
+    The joined text uses the same layout as extract_text_from_page
+    (blocks joined by "\\n\\n", text blocks only, sorted by position).
+
+    Returns (block_text, block_index) or (None, None) if the offset
+    is out of range or the matching block exceeds max_chars.
+    """
+    blocks = page.get_text("blocks", sort=True)
+    text_blocks = [block[4] for block in blocks if block[6] == 0]
+
+    cursor = 0
+    for idx, block_text in enumerate(text_blocks):
+        block_len = len(block_text)
+        if cursor + block_len > char_offset:
+            stripped = block_text.strip()
+            if len(stripped) > max_chars:
+                return None, None
+            return stripped, idx
+        cursor += block_len + 2  # +2 for "\n\n" separator
+
+    return None, None
+
+
 def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
     """
     Extract text with Y-coordinate information for content ordering.

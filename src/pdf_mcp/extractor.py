@@ -166,14 +166,23 @@ def get_paragraph_for_offset(
     return None, None
 
 
+_PARAGRAPH_MIN_CHARS = 80
+
+
 def get_best_paragraph_for_query(
-    page: Any, query: str, max_chars: int = _PARAGRAPH_MAX_CHARS
+    page: Any,
+    query: str,
+    max_chars: int = _PARAGRAPH_MAX_CHARS,
+    min_chars: int = 0,
 ) -> tuple[str | None, int | None]:
     """
     Find the text block on *page* best matching *query* by token overlap.
 
     Scores each block by the count of distinct query tokens found
     (case-insensitive substring) and returns the highest-scoring block.
+    Blocks shorter than *min_chars* (after stripping) are skipped —
+    this filters out section headings and figure captions that score
+    well on token overlap but carry no useful context.
 
     Works well for keyword and hybrid modes where query terms appear
     literally in the text.  For pure semantic queries (conceptual
@@ -196,6 +205,9 @@ def get_best_paragraph_for_query(
     best_text: str | None = None
 
     for idx, raw_text in enumerate(text_blocks):
+        stripped = raw_text.strip()
+        if len(stripped) < min_chars:
+            continue
         lower = raw_text.lower()
         score = sum(1 for t in tokens if t in lower)
         if score > best_score:

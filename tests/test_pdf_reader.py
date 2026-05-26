@@ -1633,6 +1633,42 @@ class TestGetBestParagraphForQuery:
             doc2.close()
             os.unlink(f.name)
 
+    def test_min_chars_skips_short_blocks(self):
+        """Blocks shorter than min_chars are skipped."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Short heading block (< 80 chars)
+        page.insert_text((50, 50), "Attention Mechanism")
+        # Longer body block (> 80 chars)
+        page.insert_text(
+            (50, 200),
+            (
+                "The attention mechanism computes a weighted sum"
+                " of values based on the compatibility function"
+                " applied to each query-key pair in the sequence."
+            ),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            # Without min_chars: heading wins (both have "attention",
+            # heading is first)
+            text_no_floor, _ = get_best_paragraph_for_query(
+                page2, "attention"
+            )
+            assert text_no_floor is not None
+            # With min_chars=80: heading skipped, body wins
+            text_with_floor, _ = get_best_paragraph_for_query(
+                page2, "attention", min_chars=80
+            )
+            assert text_with_floor is not None
+            assert len(text_with_floor) > 80
+            assert "weighted sum" in text_with_floor.lower()
+            doc2.close()
+            os.unlink(f.name)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

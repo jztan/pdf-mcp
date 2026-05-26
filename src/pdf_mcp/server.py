@@ -1071,10 +1071,17 @@ def _upgrade_excerpts_to_paragraphs(
     containment check).  Otherwise falls back to
     ``get_best_paragraph_for_query`` (query-token overlap).
 
+    Short blocks (headings, captions) are caught by a minimum-length
+    floor: if the chosen block is under ``_PARAGRAPH_MIN_CHARS``, the
+    picker retries with the floor applied so only substantive blocks
+    are candidates.
+
     Deduplicates matches sharing the same (page, block_index).  Falls
     back to the original snippet when the block exceeds the cap or
     can't be located.
     """
+    from .extractor import _PARAGRAPH_MIN_CHARS
+
     seen: dict[tuple[int, int], int] = {}  # (page, block_idx) -> index in upgraded
     upgraded: list[dict[str, Any]] = []
 
@@ -1100,6 +1107,13 @@ def _upgrade_excerpts_to_paragraphs(
 
         if block_text is None:
             block_text, block_idx = get_best_paragraph_for_query(page, query)
+
+        if block_text is not None and len(block_text) < _PARAGRAPH_MIN_CHARS:
+            alt_text, alt_idx = get_best_paragraph_for_query(
+                page, query, min_chars=_PARAGRAPH_MIN_CHARS
+            )
+            if alt_text is not None and alt_idx is not None:
+                block_text, block_idx = alt_text, alt_idx
 
         if block_text is not None and block_idx is not None:
             key = (m["page"], block_idx)

@@ -2788,3 +2788,44 @@ class TestExcerptStyle:
             assert "alpha" in upgraded[0]["excerpt"].lower()
             doc2.close()
             os.unlink(f.name)
+
+    def test_short_block_skipped_in_favor_of_body_paragraph(
+        self, isolated_server
+    ):
+        """Heading/caption blocks under the minimum-length floor are
+        skipped; the picker retries with the floor and finds a
+        substantive body block instead."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: short heading (< 80 chars) — has "attention"
+        page.insert_text((50, 50), "Scaled Dot-Product Attention")
+        # Block 1: body paragraph (> 80 chars) — also has "attention"
+        page.insert_text(
+            (50, 200),
+            (
+                "The attention mechanism computes a weighted sum of"
+                " values based on the compatibility of a query with"
+                " the corresponding keys using scaled dot products."
+            ),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "attention", "score": 0.5},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches, doc2, "attention"
+            )
+            assert len(upgraded) == 1
+            excerpt = upgraded[0]["excerpt"]
+            # Must pick the body paragraph, not the heading
+            assert len(excerpt) > 80
+            assert "weighted sum" in excerpt.lower()
+            doc2.close()
+            os.unlink(f.name)

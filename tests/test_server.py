@@ -2529,3 +2529,51 @@ class TestExcerptStyle:
     def test_explicit_snippet_style(self, sample_pdf, isolated_server):
         result = pdf_search(sample_pdf, "content", excerpt_style="snippet")
         assert "error" not in result
+
+    def test_keyword_paragraph_returns_longer_excerpt(
+        self, sample_pdf, isolated_server
+    ):
+        """paragraph mode returns excerpt containing hit in full block."""
+        result_para = pdf_search(
+            sample_pdf, "content", mode="keyword", excerpt_style="paragraph"
+        )
+        assert "error" not in result_para
+        assert result_para["excerpt_style"] == "paragraph"
+        assert len(result_para["matches"]) > 0
+        for m in result_para["matches"]:
+            assert "content" in m["excerpt"].lower() or "..." not in m["excerpt"]
+
+    def test_upgrade_deduplicates_same_block(self, isolated_server):
+        """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
+        import pymupdf
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "alpha beta gamma delta")
+        page.insert_text((50, 200), "epsilon zeta eta theta")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            # Simulate two matches on page 1 whose snippets land in block 0
+            fake_matches = [
+                {"page": 1, "excerpt": "alpha beta", "score": 0.9, "position": 0},
+                {"page": 1, "excerpt": "beta gamma", "score": 0.8, "position": 6},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches, doc2, "alpha", use_offset=True
+            )
+            # Both snippets are in block 0 → deduped to one match
+            assert len(upgraded) == 1
+            assert upgraded[0]["score"] == 0.9  # kept higher score
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_keyword_snippet_default_unchanged(self, sample_pdf, isolated_server):
+        """Default snippet mode behaviour is identical to before."""
+        result = pdf_search(sample_pdf, "content", mode="keyword")
+        assert "error" not in result
+        assert len(result["matches"]) > 0
+        assert result.get("excerpt_style", "snippet") == "snippet"

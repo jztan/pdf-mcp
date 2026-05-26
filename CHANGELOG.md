@@ -38,16 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `pdf_search` gains `excerpt_style` parameter: `"snippet"` (default,
-  existing behaviour) or `"paragraph"` — returns the full PyMuPDF text
-  block containing each hit instead of a short windowed snippet, capped
-  at 2000 chars with fallback to snippet for oversized blocks. Works
-  across all three search modes (keyword, semantic, hybrid) and the
-  Python fallback path. Matches landing in the same text block are
-  deduplicated (highest score kept). Response carries
+  existing behaviour) or `"paragraph"` — returns the PyMuPDF text block
+  containing each hit instead of a fixed-width snippet window. On
+  structured documents (bullets, numbered lists, headings), the result
+  is typically more focused than snippet mode — just the unit that
+  matched, not adjacent content. On long-form prose, the result may be
+  longer than snippet mode, capped at 2000 chars with snippet fallback.
+  Best results in `keyword` and `auto` (hybrid) modes, where query-term
+  overlap selects the block; pure `semantic` mode picks the
+  highest-overlap block on the page, which may not align with the
+  snippet a keyword search would highlight. Matches landing in the same
+  text block are deduplicated (highest score kept). Response carries
   `"excerpt_style": "paragraph"` when paragraph mode is active; absent
   for default snippet mode. `granularity="section"` ignores the
-  parameter. Goal: eliminate the follow-up `pdf_read_pages` call in the
-  ~70% of agent workflows where one paragraph is enough context.
+  parameter.
 
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address

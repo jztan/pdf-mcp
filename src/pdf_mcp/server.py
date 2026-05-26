@@ -1061,52 +1061,21 @@ def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: pymupdf.Document,
     query: str,
-    use_offset: bool,
 ) -> list[dict[str, Any]]:
     """
     Replace snippet excerpts with full paragraph text blocks.
 
-    For keyword/hybrid hits (use_offset=True), locates the block by
-    character offset derived from the snippet text. For semantic hits
-    (use_offset=False), picks the block with the best query-token
-    overlap.
-
-    Deduplicates matches sharing the same (page, block_index). Falls
-    back to the original snippet when the block exceeds the cap or
-    can't be located.
+    Picks the text block with the highest query-token overlap on each
+    match's page.  Deduplicates matches sharing the same (page,
+    block_index).  Falls back to the original snippet when the block
+    exceeds the cap or can't be located.
     """
     seen: dict[tuple[int, int], int] = {}  # (page, block_idx) -> index in upgraded
     upgraded: list[dict[str, Any]] = []
 
     for m in matches:
-        page_num_0 = m["page"] - 1
-        page = doc[page_num_0]
-
-        block_text: str | None = None
-        block_idx: int | None = None
-
-        if use_offset:
-            snippet = m.get("excerpt", "")
-            fragment = snippet.replace("...", "").strip()
-            if fragment:
-                blocks = page.get_text("blocks", sort=True)
-                text_blocks = [b[4] for b in blocks if b[6] == 0]
-                joined = "\n\n".join(text_blocks)
-                offset = joined.find(fragment)
-                if offset >= 0:
-                    # Walk blocks to find which one contains the offset
-                    # (inline to avoid redundant get_text call)
-                    cursor = 0
-                    for idx, bt in enumerate(text_blocks):
-                        if cursor + len(bt) > offset:
-                            stripped = bt.strip()
-                            if len(stripped) <= 2000:
-                                block_text = stripped
-                                block_idx = idx
-                            break
-                        cursor += len(bt) + 2  # +2 for "\n\n"
-        else:
-            block_text, block_idx = get_best_paragraph_for_query(page, query)
+        page = doc[m["page"] - 1]
+        block_text, block_idx = get_best_paragraph_for_query(page, query)
 
         if block_text is not None and block_idx is not None:
             key = (m["page"], block_idx)
@@ -1444,9 +1413,7 @@ def pdf_search(
                 m["source"] = sem_sources.get(m["page"] - 1, "extracted")
 
             if excerpt_style == "paragraph":
-                matches = _upgrade_excerpts_to_paragraphs(
-                    matches, doc, query, use_offset=False
-                )
+                matches = _upgrade_excerpts_to_paragraphs(matches, doc, query)
 
             sem_page_counts = {str(m["page"]): 1 for m in matches}
             all_results_low_confidence = bool(matches) and all(
@@ -1521,9 +1488,7 @@ def pdf_search(
                 m["source"] = kw_sources.get(m["page"] - 1, "extracted")
 
             if excerpt_style == "paragraph":
-                kw_matches = _upgrade_excerpts_to_paragraphs(
-                    kw_matches, doc, query, use_offset=True
-                )
+                kw_matches = _upgrade_excerpts_to_paragraphs(kw_matches, doc, query)
 
             response: dict[str, Any] = {
                 "content_warning": (
@@ -1556,9 +1521,7 @@ def pdf_search(
             for m in auto_kw:
                 m["source"] = auto_sources.get(m["page"] - 1, "extracted")
             if excerpt_style == "paragraph":
-                auto_kw = _upgrade_excerpts_to_paragraphs(
-                    auto_kw, doc, query, use_offset=True
-                )
+                auto_kw = _upgrade_excerpts_to_paragraphs(auto_kw, doc, query)
             response: dict[str, Any] = {
                 "content_warning": (
                     "Excerpts are untrusted content from the PDF."
@@ -1686,21 +1649,7 @@ def pdf_search(
             m["source"] = hybrid_sources.get(m["page"] - 1, "extracted")
 
         if excerpt_style == "paragraph":
-            kw_hits = [m for m in hybrid_matches if m["page"] - 1 in keyword_pages_set]
-            sem_hits = [
-                m for m in hybrid_matches if m["page"] - 1 not in keyword_pages_set
-            ]
-            upgraded_kw = _upgrade_excerpts_to_paragraphs(
-                kw_hits, doc, query, use_offset=True
-            )
-            upgraded_sem = _upgrade_excerpts_to_paragraphs(
-                sem_hits, doc, query, use_offset=False
-            )
-            hybrid_matches = sorted(
-                upgraded_kw + upgraded_sem,
-                key=lambda m: m.get("score", 0),
-                reverse=True,
-            )
+            hybrid_matches = _upgrade_excerpts_to_paragraphs(hybrid_matches, doc, query)
 
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}
         all_results_low_confidence = bool(hybrid_matches) and all(

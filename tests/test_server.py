@@ -2563,7 +2563,7 @@ class TestExcerptStyle:
                 {"page": 1, "excerpt": "beta gamma", "score": 0.8, "position": 6},
             ]
             upgraded = _upgrade_excerpts_to_paragraphs(
-                fake_matches, doc2, "alpha", use_offset=True
+                fake_matches, doc2, "alpha"
             )
             # Both snippets are in block 0 → deduped to one match
             assert len(upgraded) == 1

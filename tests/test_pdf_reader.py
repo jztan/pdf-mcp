@@ -2,7 +2,9 @@
 Tests for pdf-mcp server.
 """
 
+import os
 import sqlite3
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +19,8 @@ from pdf_mcp.extractor import (
     extract_metadata,
     extract_text_from_page,
     extract_toc,
+    get_best_paragraph_for_query,
+    get_paragraph_for_offset,
     parse_page_range,
 )
 
@@ -1485,9 +1489,6 @@ class TestExtractorRenderAndOcr:
         assert isinstance(result, str)
 
 
-from pdf_mcp.extractor import get_paragraph_for_offset
-
-
 class TestGetParagraphForOffset:
     """Tests for get_paragraph_for_offset()."""
 
@@ -1497,8 +1498,6 @@ class TestGetParagraphForOffset:
         page = doc.new_page()
         page.insert_text((50, 50), "First block text.")
         page.insert_text((50, 200), "Second block text.")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1517,8 +1516,6 @@ class TestGetParagraphForOffset:
         page = doc.new_page()
         page.insert_text((50, 50), "AAA")
         page.insert_text((50, 200), "BBB")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1540,8 +1537,6 @@ class TestGetParagraphForOffset:
         doc = pymupdf.open()
         page = doc.new_page()
         page.insert_text((50, 50), "Short.")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1558,8 +1553,6 @@ class TestGetParagraphForOffset:
         doc = pymupdf.open()
         page = doc.new_page()
         page.insert_text((50, 50), "X" * 100)
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1572,9 +1565,6 @@ class TestGetParagraphForOffset:
             os.unlink(f.name)
 
 
-from pdf_mcp.extractor import get_best_paragraph_for_query
-
-
 class TestGetBestParagraphForQuery:
     """Tests for get_best_paragraph_for_query()."""
 
@@ -1584,8 +1574,6 @@ class TestGetBestParagraphForQuery:
         page = doc.new_page()
         page.insert_text((50, 50), "The cat sat on the mat.")
         page.insert_text((50, 200), "Dogs run fast in the park.")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1602,8 +1590,6 @@ class TestGetBestParagraphForQuery:
         doc = pymupdf.open()
         page = doc.new_page()
         page.insert_text((50, 50), "The cat sat.")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1620,8 +1606,6 @@ class TestGetBestParagraphForQuery:
         doc = pymupdf.open()
         page = doc.new_page()
         page.insert_text((50, 50), "keyword " * 50)
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()
@@ -1638,8 +1622,6 @@ class TestGetBestParagraphForQuery:
         doc = pymupdf.open()
         page = doc.new_page()
         page.insert_text((50, 50), "Machine Learning is great.")
-        import tempfile, os
-
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             doc.save(f.name)
             doc.close()

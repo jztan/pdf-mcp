@@ -307,12 +307,16 @@ The first call on a new document embeds all pages or builds the section index (o
 - `granularity` (string, optional, default `"page"`):
   - `"page"` — returns matching pages. Best for pinpoint lookups. Honors `mode`.
   - `"section"` — returns matching sections (TOC-first with heuristic fallback). Sections come from the PDF's TOC when available (~95% of academic PDFs); the heuristic fallback uses 7 signals (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length). Validated on arxiv PDFs: detector F1 0.80–0.94.
+- `excerpt_style` (string, optional, default `"snippet"`):
+  - `"snippet"` — short context window around each hit (controlled by `context_chars`). Default, preserves existing behaviour.
+  - `"paragraph"` — returns the PyMuPDF text block containing the hit instead of a fixed-width window. On structured documents (bullets, numbered lists, headings), the result is typically more focused than snippet — just the unit that matched, without adjacent content. On long-form prose, the result may be longer than snippet, capped at 2000 chars with snippet fallback. Short blocks under 80 chars (headings, figure captions) are skipped in favor of substantive body blocks when available. On prose pages with prominent figure captions, the caption may be preferred over the body paragraph when both contain the query terms. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`. Best results with `mode="keyword"` or `mode="auto"` where the FTS5 keyword excerpt anchors block selection; pure `mode="semantic"` uses token overlap only, which may pick a topically related but not optimal block.
 
 **Returns (page mode, `granularity="page"`):**
 - `matches` (array) — Each entry has `{page, excerpt, position, score, source}`. Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
 - `total_matches`, `page_match_counts` (int / object).
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
+- `excerpt_style` (string, conditional) — present only when `excerpt_style="paragraph"` was requested. Confirms paragraph mode was used; absent for default snippet mode.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).
 - `semantic_unavailable` (bool, conditional) — set in `auto` mode when the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason`.

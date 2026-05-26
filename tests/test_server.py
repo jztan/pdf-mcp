@@ -1225,9 +1225,7 @@ class TestResolvePath:
     ):
         """Each fetcher ValueError variant maps to a per-cause hint."""
         with patch.object(URLFetcher, "is_url", return_value=True):
-            with patch.object(
-                URLFetcher, "fetch", side_effect=ValueError(fetcher_msg)
-            ):
+            with patch.object(URLFetcher, "fetch", side_effect=ValueError(fetcher_msg)):
                 local_path, err = _resolve_path("https://example.com/x.pdf")
         assert local_path is None
         assert err is not None
@@ -2514,3 +2512,320 @@ class TestCacheStatsEmbeddingModel:
 
         assert "embedding_model" in result
         assert result["embedding_model"] == "BAAI/bge-small-en-v1.5"
+
+
+class TestExcerptStyle:
+    """Tests for excerpt_style parameter in pdf_search."""
+
+    def test_invalid_excerpt_style_returns_error(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="bogus")
+        assert "error" in result
+        assert "excerpt_style" in result["error"]
+
+    def test_default_excerpt_style_is_snippet(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content")
+        assert result.get("excerpt_style", "snippet") == "snippet"
+
+    def test_explicit_snippet_style(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="snippet")
+        assert "error" not in result
+
+    def test_keyword_paragraph_excerpt_contains_query_terms(
+        self, sample_pdf, isolated_server
+    ):
+        """Paragraph excerpt must contain at least one query term."""
+        result = pdf_search(
+            sample_pdf, "content", mode="keyword", excerpt_style="paragraph"
+        )
+        assert "error" not in result
+        assert result["excerpt_style"] == "paragraph"
+        assert len(result["matches"]) > 0
+        for m in result["matches"]:
+            assert "content" in m["excerpt"].lower()
+
+    def test_paragraph_picks_correct_block_with_repeated_terms(
+        self, isolated_server
+    ):
+        """Regression: on a page with multiple blocks sharing a term,
+        paragraph mode must pick the block with the MOST query-term
+        overlap, not the first block on the page."""
+        import tempfile
+        import pymupdf
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: shares "engineering" but not the distinguishing terms
+        page.insert_text((50, 50), "Define the constructs of engineering.")
+        # Block 1: the target — has "engineering" AND "best practices"
+        page.insert_text(
+            (50, 200),
+            "Identify best practices for engineering improvement.",
+        )
+        # Block 2: unrelated
+        page.insert_text((50, 350), "Unrelated content about cooking.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            path = str(Path(f.name).resolve())
+            try:
+                result = pdf_search(
+                    path,
+                    "best practices engineering",
+                    mode="keyword",
+                    excerpt_style="paragraph",
+                )
+                assert "error" not in result
+                assert len(result["matches"]) > 0
+                excerpt = result["matches"][0]["excerpt"].lower()
+                assert "best practices" in excerpt
+            finally:
+                os.unlink(path)
+
+    def test_upgrade_deduplicates_same_block(self, isolated_server):
+        """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
+        import pymupdf
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "alpha beta gamma delta")
+        page.insert_text((50, 200), "epsilon zeta eta theta")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            # Simulate two matches on page 1 whose snippets land in block 0
+            fake_matches = [
+                {"page": 1, "excerpt": "alpha beta", "score": 0.9, "position": 0},
+                {"page": 1, "excerpt": "beta gamma", "score": 0.8, "position": 6},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches, doc2, "alpha"
+            )
+            # Both snippets are in block 0 → deduped to one match
+            assert len(upgraded) == 1
+            assert upgraded[0]["score"] == 0.9  # kept higher score
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_keyword_snippet_default_unchanged(self, sample_pdf, isolated_server):
+        """Default snippet mode behaviour is identical to before."""
+        result = pdf_search(sample_pdf, "content", mode="keyword")
+        assert "error" not in result
+        assert len(result["matches"]) > 0
+        assert result.get("excerpt_style", "snippet") == "snippet"
+
+    @staticmethod
+    def _make_encode(dim: int = 384):
+        import numpy as np
+
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            for i in range(len(texts)):
+                result[i, i % dim] = 1.0
+            return result
+
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        return encode, encode_query
+
+    def test_semantic_paragraph_excerpt_contains_query_terms(
+        self, sample_pdf, isolated_server
+    ):
+        """Semantic paragraph excerpt must contain at least one query term."""
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(
+                sample_pdf, "content", mode="semantic", excerpt_style="paragraph"
+            )
+            assert "error" not in result
+            assert result.get("excerpt_style") == "paragraph"
+            assert len(result["matches"]) > 0
+            for m in result["matches"]:
+                assert "content" in m["excerpt"].lower()
+
+    def test_hybrid_paragraph_excerpt_contains_query_terms(
+        self, sample_pdf, isolated_server
+    ):
+        """Hybrid paragraph excerpt must contain at least one query term."""
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(
+                sample_pdf, "content", mode="auto", excerpt_style="paragraph"
+            )
+            assert "error" not in result
+            assert result.get("excerpt_style") == "paragraph"
+            for m in result["matches"]:
+                assert "content" in m["excerpt"].lower()
+
+    def test_python_fallback_paragraph_mode(self, isolated_server):
+        """When FTS5 is unavailable, python fallback also supports paragraph mode."""
+        import pymupdf
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The quick brown fox jumps.")
+        page.insert_text((50, 200), "Lazy dog sleeps all day.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            path = str(Path(f.name).resolve())
+            try:
+                cache, _ = isolated_server
+                orig = cache.fts_available
+                cache.fts_available = False
+                result = pdf_search(
+                    path, "fox", mode="keyword", excerpt_style="paragraph"
+                )
+                cache.fts_available = orig
+                assert "error" not in result
+                if result["matches"]:
+                    assert result.get("excerpt_style") == "paragraph"
+            finally:
+                os.unlink(path)
+
+    def test_section_granularity_ignores_excerpt_style(
+        self, sample_pdf, isolated_server
+    ):
+        """Section mode ignores excerpt_style — no error, no excerpt_style key."""
+        result = pdf_search(
+            sample_pdf, "content", granularity="section", excerpt_style="paragraph"
+        )
+        assert "error" not in result
+        assert "excerpt_style" not in result
+
+    def test_auto_keyword_fallback_paragraph_mode(
+        self, sample_pdf, isolated_server
+    ):
+        """Auto mode falling back to keyword still applies paragraph upgrade."""
+        with patch("pdf_mcp.embedder.check_available", side_effect=ImportError):
+            result = pdf_search(
+                sample_pdf, "content", mode="auto", excerpt_style="paragraph"
+            )
+        assert "error" not in result
+        assert result.get("search_mode") == "keyword"
+        assert result.get("excerpt_style") == "paragraph"
+
+    def test_hybrid_keyword_excerpt_anchors_block_selection(self, isolated_server):
+        """In hybrid mode, keyword excerpt anchors paragraph to the
+        block containing the FTS5 snippet, not the first block with
+        the most token overlap."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: has "alpha" but not "beta"
+        page.insert_text((50, 50), "alpha concepts and constructs overview")
+        # Block 1: has "alpha" AND "beta" — the FTS5 snippet came from here
+        page.insert_text(
+            (50, 200), "alpha beta best practices for improvement"
+        )
+        # Block 2: unrelated
+        page.insert_text((50, 350), "unrelated content about cooking")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "alpha beta", "score": 0.9},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches,
+                doc2,
+                "alpha",
+                keyword_excerpts={0: "alpha beta"},
+            )
+            assert len(upgraded) == 1
+            assert "beta" in upgraded[0]["excerpt"].lower()
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_keyword_excerpt_not_found_falls_back_to_token_overlap(
+        self, isolated_server
+    ):
+        """When the FTS5 snippet doesn't appear verbatim in any block,
+        falls back to get_best_paragraph_for_query."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "alpha gamma delta")
+        page.insert_text((50, 200), "epsilon zeta eta")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "snippet", "score": 0.5},
+            ]
+            # keyword_excerpts has text that doesn't appear in any block
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches,
+                doc2,
+                "alpha gamma",
+                keyword_excerpts={0: "nonexistent snippet text"},
+            )
+            assert len(upgraded) == 1
+            # Falls back to token overlap — picks block with "alpha gamma"
+            assert "alpha" in upgraded[0]["excerpt"].lower()
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_short_block_skipped_in_favor_of_body_paragraph(
+        self, isolated_server
+    ):
+        """Heading/caption blocks under the minimum-length floor are
+        skipped; the picker retries with the floor and finds a
+        substantive body block instead."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: short heading (< 80 chars) — has "attention"
+        page.insert_text((50, 50), "Scaled Dot-Product Attention")
+        # Block 1: body paragraph (> 80 chars) — also has "attention"
+        page.insert_text(
+            (50, 200),
+            (
+                "The attention mechanism computes a weighted sum of"
+                " values based on the compatibility of a query with"
+                " the corresponding keys using scaled dot products."
+            ),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "attention", "score": 0.5},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches, doc2, "attention"
+            )
+            assert len(upgraded) == 1
+            excerpt = upgraded[0]["excerpt"]
+            # Must pick the body paragraph, not the heading
+            assert len(excerpt) > 80
+            assert "weighted sum" in excerpt.lower()
+            doc2.close()
+            os.unlink(f.name)

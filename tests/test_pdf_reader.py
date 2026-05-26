@@ -2,7 +2,9 @@
 Tests for pdf-mcp server.
 """
 
+import os
 import sqlite3
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +19,8 @@ from pdf_mcp.extractor import (
     extract_metadata,
     extract_text_from_page,
     extract_toc,
+    get_best_paragraph_for_query,
+    get_paragraph_for_offset,
     parse_page_range,
 )
 
@@ -1483,6 +1487,187 @@ class TestExtractorRenderAndOcr:
         finally:
             doc.close()
         assert isinstance(result, str)
+
+
+class TestGetParagraphForOffset:
+    """Tests for get_paragraph_for_offset()."""
+
+    def test_offset_in_first_block(self):
+        """Offset 0 lands in the first block."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "First block text.")
+        page.insert_text((50, 200), "Second block text.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 0)
+            assert text is not None
+            assert "First" in text
+            assert idx == 0
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_offset_in_second_block(self):
+        """Offset past first block lands in the second block."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "AAA")
+        page.insert_text((50, 200), "BBB")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            full_text = page2.get_text("blocks", sort=True)
+            text_blocks = [b[4] for b in full_text if b[6] == 0]
+            joined = "\n\n".join(text_blocks)
+            offset = joined.find("BBB")
+            text, idx = get_paragraph_for_offset(page2, offset)
+            assert text is not None
+            assert "BBB" in text
+            assert idx == 1
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_offset_beyond_text_returns_none(self):
+        """Offset past all text returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Short.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 99999)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_oversized_block_returns_none(self):
+        """Block exceeding max_chars returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "X" * 100)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_paragraph_for_offset(page2, 0, max_chars=10)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+
+class TestGetBestParagraphForQuery:
+    """Tests for get_best_paragraph_for_query()."""
+
+    def test_picks_block_with_most_token_overlap(self):
+        """Selects the block containing the most query tokens."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The cat sat on the mat.")
+        page.insert_text((50, 200), "Dogs run fast in the park.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "cat mat")
+            assert text is not None
+            assert "cat" in text
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_no_overlap_returns_none(self):
+        """No matching tokens returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The cat sat.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "xyz123")
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_oversized_block_returns_none(self):
+        """Best-matching block exceeding max_chars returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "keyword " * 50)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "keyword", max_chars=10)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_case_insensitive_matching(self):
+        """Token matching is case-insensitive."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Machine Learning is great.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "machine learning")
+            assert text is not None
+            assert "Machine" in text
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_min_chars_skips_short_blocks(self):
+        """Blocks shorter than min_chars are skipped."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Short heading block (< 80 chars)
+        page.insert_text((50, 50), "Attention Mechanism")
+        # Longer body block (> 80 chars)
+        page.insert_text(
+            (50, 200),
+            (
+                "The attention mechanism computes a weighted sum"
+                " of values based on the compatibility function"
+                " applied to each query-key pair in the sequence."
+            ),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            # Without min_chars: heading wins (both have "attention",
+            # heading is first)
+            text_no_floor, _ = get_best_paragraph_for_query(
+                page2, "attention"
+            )
+            assert text_no_floor is not None
+            # With min_chars=80: heading skipped, body wins
+            text_with_floor, _ = get_best_paragraph_for_query(
+                page2, "attention", min_chars=80
+            )
+            assert text_with_floor is not None
+            assert len(text_with_floor) > 80
+            assert "weighted sum" in text_with_floor.lower()
+            doc2.close()
+            os.unlink(f.name)
 
 
 if __name__ == "__main__":

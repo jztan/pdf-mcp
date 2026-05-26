@@ -36,6 +36,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_render_pages` wraps its error dict in a single-element list to
   match its list return type.
 
+### Added
+- `pdf_search` gains `excerpt_style` parameter: `"snippet"` (default,
+  existing behaviour) or `"paragraph"` — returns the PyMuPDF text block
+  containing each hit instead of a fixed-width snippet window. On
+  structured documents (bullets, numbered lists, headings), the result
+  is typically more focused than snippet mode — just the unit that
+  matched, not adjacent content. On long-form prose, the result may be
+  longer than snippet mode, capped at 2000 chars with snippet fallback.
+  Best results in `keyword` and `auto` (hybrid) modes; in hybrid mode,
+  the FTS5 keyword excerpt anchors block selection via direct
+  containment check, falling back to query-token overlap when the
+  snippet text doesn't appear verbatim in any block. Pure `semantic`
+  mode uses token overlap only, which may not align with the snippet a
+  keyword search would highlight. Short blocks under 80 chars
+  (headings, figure captions) are skipped in favor of substantive
+  body blocks when available. On prose pages with prominent figure
+  captions, the caption may be preferred over the body paragraph when
+  both contain the query terms — the caption is orientational; for
+  deeper context, use a follow-up `pdf_read_pages` call. Matches
+  landing in the same text block are deduplicated (highest score kept).
+  Response carries `"excerpt_style": "paragraph"` when paragraph mode
+  is active; absent for default snippet mode. `granularity="section"`
+  ignores the parameter.
+
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address
   PYSEC-2026-161 (CI `pip-audit` failure).

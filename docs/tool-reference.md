@@ -307,12 +307,16 @@ The first call on a new document embeds all pages or builds the section index (o
 - `granularity` (string, optional, default `"page"`):
   - `"page"` — returns matching pages. Best for pinpoint lookups. Honors `mode`.
   - `"section"` — returns matching sections (TOC-first with heuristic fallback). Sections come from the PDF's TOC when available (~95% of academic PDFs); the heuristic fallback uses 7 signals (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length). Validated on arxiv PDFs: detector F1 0.80–0.94.
+- `excerpt_style` (string, optional, default `"snippet"`):
+  - `"snippet"` — short context window around each hit (controlled by `context_chars`). Default, preserves existing behaviour.
+  - `"paragraph"` — returns the full PyMuPDF text block containing the hit, capped at 2000 chars. Falls back to snippet for oversized blocks. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`.
 
 **Returns (page mode, `granularity="page"`):**
 - `matches` (array) — Each entry has `{page, excerpt, position, score, source}`. Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
 - `total_matches`, `page_match_counts` (int / object).
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
+- `excerpt_style` (string, conditional) — present only when `excerpt_style="paragraph"` was requested. Confirms paragraph mode was used; absent for default snippet mode.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).
 - `semantic_unavailable` (bool, conditional) — set in `auto` mode when the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason`.

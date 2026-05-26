@@ -49,11 +49,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   containment check, falling back to query-token overlap when the
   snippet text doesn't appear verbatim in any block. Pure `semantic`
   mode uses token overlap only, which may not align with the snippet a
-  keyword search would highlight. Matches landing in the same
-  text block are deduplicated (highest score kept). Response carries
-  `"excerpt_style": "paragraph"` when paragraph mode is active; absent
-  for default snippet mode. `granularity="section"` ignores the
-  parameter.
+  keyword search would highlight. Short blocks under 80 chars
+  (headings, figure captions) are skipped in favor of substantive
+  body blocks when available. On prose pages with prominent figure
+  captions, the caption may be preferred over the body paragraph when
+  both contain the query terms — the caption is orientational; for
+  deeper context, use a follow-up `pdf_read_pages` call. Matches
+  landing in the same text block are deduplicated (highest score kept).
+  Response carries `"excerpt_style": "paragraph"` when paragraph mode
+  is active; absent for default snippet mode. `granularity="section"`
+  ignores the parameter.
 
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address

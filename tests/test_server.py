@@ -2577,3 +2577,35 @@ class TestExcerptStyle:
         assert "error" not in result
         assert len(result["matches"]) > 0
         assert result.get("excerpt_style", "snippet") == "snippet"
+
+    @staticmethod
+    def _make_encode(dim: int = 384):
+        import numpy as np
+
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            for i in range(len(texts)):
+                result[i, i % dim] = 1.0
+            return result
+
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
+            v = np.zeros(dim, dtype=np.float32)
+            v[0] = 1.0
+            return v
+
+        return encode, encode_query
+
+    def test_semantic_paragraph_uses_query_overlap(self, sample_pdf, isolated_server):
+        """Semantic mode with paragraph picks the best-matching block."""
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(
+                sample_pdf, "content", mode="semantic", excerpt_style="paragraph"
+            )
+            assert "error" not in result
+            assert result.get("excerpt_style") == "paragraph"
+            assert len(result["matches"]) > 0

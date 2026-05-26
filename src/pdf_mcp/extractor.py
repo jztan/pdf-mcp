@@ -172,10 +172,13 @@ def get_best_paragraph_for_query(
     """
     Find the text block on *page* best matching *query* by token overlap.
 
-    Used for semantic-mode hits where there is no character offset.
-    Tokenises query on whitespace, scores each block by the number of
-    query tokens found (case-insensitive substring), and returns the
-    highest-scoring block.
+    Scores each block by the count of distinct query tokens found
+    (case-insensitive substring) and returns the highest-scoring block.
+
+    Works well for keyword and hybrid modes where query terms appear
+    literally in the text.  For pure semantic queries (conceptual
+    paraphrases with few literal tokens), the winning block may be
+    topically related but not the strongest semantic match on the page.
 
     Returns (block_text, block_index) or (None, None) if no tokens
     match or the best block exceeds max_chars.

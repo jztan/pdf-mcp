@@ -1572,5 +1572,85 @@ class TestGetParagraphForOffset:
             os.unlink(f.name)
 
 
+from pdf_mcp.extractor import get_best_paragraph_for_query
+
+
+class TestGetBestParagraphForQuery:
+    """Tests for get_best_paragraph_for_query()."""
+
+    def test_picks_block_with_most_token_overlap(self):
+        """Selects the block containing the most query tokens."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The cat sat on the mat.")
+        page.insert_text((50, 200), "Dogs run fast in the park.")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "cat mat")
+            assert text is not None
+            assert "cat" in text
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_no_overlap_returns_none(self):
+        """No matching tokens returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The cat sat.")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "xyz123")
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_oversized_block_returns_none(self):
+        """Best-matching block exceeding max_chars returns (None, None)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "keyword " * 50)
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "keyword", max_chars=10)
+            assert text is None
+            assert idx is None
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_case_insensitive_matching(self):
+        """Token matching is case-insensitive."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Machine Learning is great.")
+        import tempfile, os
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            page2 = doc2[0]
+            text, idx = get_best_paragraph_for_query(page2, "machine learning")
+            assert text is not None
+            assert "Machine" in text
+            doc2.close()
+            os.unlink(f.name)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

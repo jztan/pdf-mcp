@@ -166,6 +166,50 @@ def get_paragraph_for_offset(
     return None, None
 
 
+def get_best_paragraph_for_query(
+    page: Any, query: str, max_chars: int = _PARAGRAPH_MAX_CHARS
+) -> tuple[str | None, int | None]:
+    """
+    Find the text block on *page* best matching *query* by token overlap.
+
+    Used for semantic-mode hits where there is no character offset.
+    Tokenises query on whitespace, scores each block by the number of
+    query tokens found (case-insensitive substring), and returns the
+    highest-scoring block.
+
+    Returns (block_text, block_index) or (None, None) if no tokens
+    match or the best block exceeds max_chars.
+    """
+    tokens = [t.strip(".,;:!?\"'()[]{}") for t in query.lower().split()]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return None, None
+
+    blocks = page.get_text("blocks", sort=True)
+    text_blocks = [(i, block[4]) for i, block in enumerate(blocks) if block[6] == 0]
+
+    best_score = 0
+    best_idx: int | None = None
+    best_text: str | None = None
+
+    for block_seq, (_, raw_text) in enumerate(text_blocks):
+        lower = raw_text.lower()
+        score = sum(1 for t in tokens if t in lower)
+        if score > best_score:
+            best_score = score
+            best_idx = block_seq
+            best_text = raw_text
+
+    if best_score == 0 or best_text is None:
+        return None, None
+
+    stripped = best_text.strip()
+    if len(stripped) > max_chars:
+        return None, None
+
+    return stripped, best_idx
+
+
 def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
     """
     Extract text with Y-coordinate information for content ordering.

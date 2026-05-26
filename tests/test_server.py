@@ -2530,18 +2530,57 @@ class TestExcerptStyle:
         result = pdf_search(sample_pdf, "content", excerpt_style="snippet")
         assert "error" not in result
 
-    def test_keyword_paragraph_returns_longer_excerpt(
+    def test_keyword_paragraph_excerpt_contains_query_terms(
         self, sample_pdf, isolated_server
     ):
-        """paragraph mode returns excerpt containing hit in full block."""
-        result_para = pdf_search(
+        """Paragraph excerpt must contain at least one query term."""
+        result = pdf_search(
             sample_pdf, "content", mode="keyword", excerpt_style="paragraph"
         )
-        assert "error" not in result_para
-        assert result_para["excerpt_style"] == "paragraph"
-        assert len(result_para["matches"]) > 0
-        for m in result_para["matches"]:
-            assert "content" in m["excerpt"].lower() or "..." not in m["excerpt"]
+        assert "error" not in result
+        assert result["excerpt_style"] == "paragraph"
+        assert len(result["matches"]) > 0
+        for m in result["matches"]:
+            assert "content" in m["excerpt"].lower()
+
+    def test_paragraph_picks_correct_block_with_repeated_terms(
+        self, isolated_server
+    ):
+        """Regression: on a page with multiple blocks sharing a term,
+        paragraph mode must pick the block with the MOST query-term
+        overlap, not the first block on the page."""
+        import tempfile
+        import pymupdf
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: shares "engineering" but not the distinguishing terms
+        page.insert_text((50, 50), "Define the constructs of engineering.")
+        # Block 1: the target — has "engineering" AND "best practices"
+        page.insert_text(
+            (50, 200),
+            "Identify best practices for engineering improvement.",
+        )
+        # Block 2: unrelated
+        page.insert_text((50, 350), "Unrelated content about cooking.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            path = str(Path(f.name).resolve())
+            try:
+                result = pdf_search(
+                    path,
+                    "best practices engineering",
+                    mode="keyword",
+                    excerpt_style="paragraph",
+                )
+                assert "error" not in result
+                assert len(result["matches"]) > 0
+                excerpt = result["matches"][0]["excerpt"].lower()
+                assert "best practices" in excerpt
+            finally:
+                os.unlink(path)
 
     def test_upgrade_deduplicates_same_block(self, isolated_server):
         """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
@@ -2595,8 +2634,10 @@ class TestExcerptStyle:
 
         return encode, encode_query
 
-    def test_semantic_paragraph_uses_query_overlap(self, sample_pdf, isolated_server):
-        """Semantic mode with paragraph picks the best-matching block."""
+    def test_semantic_paragraph_excerpt_contains_query_terms(
+        self, sample_pdf, isolated_server
+    ):
+        """Semantic paragraph excerpt must contain at least one query term."""
         encode, encode_query = self._make_encode()
         with (
             patch("pdf_mcp.embedder.check_available"),
@@ -2609,9 +2650,13 @@ class TestExcerptStyle:
             assert "error" not in result
             assert result.get("excerpt_style") == "paragraph"
             assert len(result["matches"]) > 0
+            for m in result["matches"]:
+                assert "content" in m["excerpt"].lower()
 
-    def test_hybrid_paragraph_mode(self, sample_pdf, isolated_server):
-        """Hybrid/auto mode with paragraph upgrades excerpts."""
+    def test_hybrid_paragraph_excerpt_contains_query_terms(
+        self, sample_pdf, isolated_server
+    ):
+        """Hybrid paragraph excerpt must contain at least one query term."""
         encode, encode_query = self._make_encode()
         with (
             patch("pdf_mcp.embedder.check_available"),
@@ -2623,6 +2668,8 @@ class TestExcerptStyle:
             )
             assert "error" not in result
             assert result.get("excerpt_style") == "paragraph"
+            for m in result["matches"]:
+                assert "content" in m["excerpt"].lower()
 
     def test_python_fallback_paragraph_mode(self, isolated_server):
         """When FTS5 is unavailable, python fallback also supports paragraph mode."""

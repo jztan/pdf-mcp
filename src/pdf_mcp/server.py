@@ -1248,9 +1248,13 @@ def pdf_search(
               'paragraph' — returns the PyMuPDF text block containing the hit
               instead of a fixed-width window. On structured documents (bullets,
               lists), typically more focused than snippet; on long prose, may be
-              longer, capped at 2000 chars with snippet fallback. Best with
-              keyword/auto modes; pure semantic may pick a topically related
-              but not optimal block. Ignored when granularity='section'.
+              longer, capped at 2000 chars with snippet fallback. In hybrid
+              mode, the FTS5 keyword excerpt anchors block selection; blocks
+              under 80 chars (headings, captions) are skipped in favor of
+              substantive body blocks. On prose pages with figure captions,
+              the caption may be preferred over body text when both contain
+              query terms. Pure semantic may pick a topically related but not
+              optimal block. Ignored when granularity='section'.
 
     Returns:
         Page mode (granularity='page'):

@@ -1259,6 +1259,9 @@ def pdf_search(
               embedding model could not be loaded; the response then
               degrades to search_mode='keyword' and carries a
               `semantic_unavailable_reason` string).
+            - excerpt_style (only present when excerpt_style='paragraph' was
+              requested): confirms paragraph mode was used. When absent,
+              snippets were used (default).
         Section mode (granularity='section'):
             - sections: List of {section_id, title, title_source,
                         start_page, end_page, score} sorted by descending

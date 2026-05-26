@@ -2624,6 +2624,33 @@ class TestExcerptStyle:
             assert "error" not in result
             assert result.get("excerpt_style") == "paragraph"
 
+    def test_python_fallback_paragraph_mode(self, isolated_server):
+        """When FTS5 is unavailable, python fallback also supports paragraph mode."""
+        import pymupdf
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "The quick brown fox jumps.")
+        page.insert_text((50, 200), "Lazy dog sleeps all day.")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            path = str(Path(f.name).resolve())
+            try:
+                cache, _ = isolated_server
+                orig = cache.fts_available
+                cache.fts_available = False
+                result = pdf_search(
+                    path, "fox", mode="keyword", excerpt_style="paragraph"
+                )
+                cache.fts_available = orig
+                assert "error" not in result
+                if result["matches"]:
+                    assert result.get("excerpt_style") == "paragraph"
+            finally:
+                os.unlink(path)
+
     def test_section_granularity_ignores_excerpt_style(
         self, sample_pdf, isolated_server
     ):

@@ -1061,21 +1061,45 @@ def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: pymupdf.Document,
     query: str,
+    keyword_excerpts: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Replace windowed snippet excerpts with structural text blocks.
 
-    Picks the text block with the highest query-token overlap on each
-    match's page.  Deduplicates matches sharing the same (page,
-    block_index).  Falls back to the original snippet when the block
-    exceeds the cap or can't be located.
+    When *keyword_excerpts* maps a 0-indexed page number to an FTS5
+    snippet, the block containing that snippet is preferred (direct
+    containment check).  Otherwise falls back to
+    ``get_best_paragraph_for_query`` (query-token overlap).
+
+    Deduplicates matches sharing the same (page, block_index).  Falls
+    back to the original snippet when the block exceeds the cap or
+    can't be located.
     """
     seen: dict[tuple[int, int], int] = {}  # (page, block_idx) -> index in upgraded
     upgraded: list[dict[str, Any]] = []
 
     for m in matches:
-        page = doc[m["page"] - 1]
-        block_text, block_idx = get_best_paragraph_for_query(page, query)
+        page_num_0 = m["page"] - 1
+        page = doc[page_num_0]
+
+        block_text: str | None = None
+        block_idx: int | None = None
+
+        if keyword_excerpts is not None and page_num_0 in keyword_excerpts:
+            fragment = keyword_excerpts[page_num_0].replace("...", "").strip()
+            if fragment:
+                blocks = page.get_text("blocks", sort=True)
+                text_blocks = [b[4] for b in blocks if b[6] == 0]
+                for idx, bt in enumerate(text_blocks):
+                    if fragment in bt:
+                        stripped = bt.strip()
+                        if len(stripped) <= 2000:
+                            block_text = stripped
+                            block_idx = idx
+                        break
+
+        if block_text is None:
+            block_text, block_idx = get_best_paragraph_for_query(page, query)
 
         if block_text is not None and block_idx is not None:
             key = (m["page"], block_idx)
@@ -1652,7 +1676,9 @@ def pdf_search(
             m["source"] = hybrid_sources.get(m["page"] - 1, "extracted")
 
         if excerpt_style == "paragraph":
-            hybrid_matches = _upgrade_excerpts_to_paragraphs(hybrid_matches, doc, query)
+            hybrid_matches = _upgrade_excerpts_to_paragraphs(
+                hybrid_matches, doc, query, keyword_excerpts=keyword_excerpts
+            )
 
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}
         all_results_low_confidence = bool(hybrid_matches) and all(

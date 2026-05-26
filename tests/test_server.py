@@ -2719,3 +2719,72 @@ class TestExcerptStyle:
         assert "error" not in result
         assert result.get("search_mode") == "keyword"
         assert result.get("excerpt_style") == "paragraph"
+
+    def test_hybrid_keyword_excerpt_anchors_block_selection(self, isolated_server):
+        """In hybrid mode, keyword excerpt anchors paragraph to the
+        block containing the FTS5 snippet, not the first block with
+        the most token overlap."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Block 0: has "alpha" but not "beta"
+        page.insert_text((50, 50), "alpha concepts and constructs overview")
+        # Block 1: has "alpha" AND "beta" — the FTS5 snippet came from here
+        page.insert_text(
+            (50, 200), "alpha beta best practices for improvement"
+        )
+        # Block 2: unrelated
+        page.insert_text((50, 350), "unrelated content about cooking")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "alpha beta", "score": 0.9},
+            ]
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches,
+                doc2,
+                "alpha",
+                keyword_excerpts={0: "alpha beta"},
+            )
+            assert len(upgraded) == 1
+            assert "beta" in upgraded[0]["excerpt"].lower()
+            doc2.close()
+            os.unlink(f.name)
+
+    def test_keyword_excerpt_not_found_falls_back_to_token_overlap(
+        self, isolated_server
+    ):
+        """When the FTS5 snippet doesn't appear verbatim in any block,
+        falls back to get_best_paragraph_for_query."""
+        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        import tempfile
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "alpha gamma delta")
+        page.insert_text((50, 200), "epsilon zeta eta")
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            doc.save(f.name)
+            doc.close()
+            doc2 = pymupdf.open(f.name)
+            fake_matches = [
+                {"page": 1, "excerpt": "snippet", "score": 0.5},
+            ]
+            # keyword_excerpts has text that doesn't appear in any block
+            upgraded = _upgrade_excerpts_to_paragraphs(
+                fake_matches,
+                doc2,
+                "alpha gamma",
+                keyword_excerpts={0: "nonexistent snippet text"},
+            )
+            assert len(upgraded) == 1
+            # Falls back to token overlap — picks block with "alpha gamma"
+            assert "alpha" in upgraded[0]["excerpt"].lower()
+            doc2.close()
+            os.unlink(f.name)

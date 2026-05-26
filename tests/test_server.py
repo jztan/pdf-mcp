@@ -2660,3 +2660,15 @@ class TestExcerptStyle:
         )
         assert "error" not in result
         assert "excerpt_style" not in result
+
+    def test_auto_keyword_fallback_paragraph_mode(
+        self, sample_pdf, isolated_server
+    ):
+        """Auto mode falling back to keyword still applies paragraph upgrade."""
+        with patch("pdf_mcp.embedder.check_available", side_effect=ImportError):
+            result = pdf_search(
+                sample_pdf, "content", mode="auto", excerpt_style="paragraph"
+            )
+        assert "error" not in result
+        assert result.get("search_mode") == "keyword"
+        assert result.get("excerpt_style") == "paragraph"

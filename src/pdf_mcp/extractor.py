@@ -186,18 +186,18 @@ def get_best_paragraph_for_query(
         return None, None
 
     blocks = page.get_text("blocks", sort=True)
-    text_blocks = [(i, block[4]) for i, block in enumerate(blocks) if block[6] == 0]
+    text_blocks = [block[4] for block in blocks if block[6] == 0]
 
     best_score = 0
     best_idx: int | None = None
     best_text: str | None = None
 
-    for block_seq, (_, raw_text) in enumerate(text_blocks):
+    for idx, raw_text in enumerate(text_blocks):
         lower = raw_text.lower()
         score = sum(1 for t in tokens if t in lower)
         if score > best_score:
             best_score = score
-            best_idx = block_seq
+            best_idx = idx
             best_text = raw_text
 
     if best_score == 0 or best_text is None:

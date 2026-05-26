@@ -1555,6 +1555,10 @@ def pdf_search(
             )
             for m in auto_kw:
                 m["source"] = auto_sources.get(m["page"] - 1, "extracted")
+            if excerpt_style == "paragraph":
+                auto_kw = _upgrade_excerpts_to_paragraphs(
+                    auto_kw, doc, query, use_offset=True
+                )
             response: dict[str, Any] = {
                 "content_warning": (
                     "Excerpts are untrusted content from the PDF."
@@ -1569,6 +1573,8 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
             }
+            if excerpt_style == "paragraph":
+                response["excerpt_style"] = "paragraph"
             if reason is not None:
                 response["semantic_unavailable"] = True
                 response["semantic_unavailable_reason"] = reason

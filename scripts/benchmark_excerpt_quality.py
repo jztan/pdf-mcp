@@ -2,21 +2,24 @@
 """
 scripts/benchmark_excerpt_quality.py
 
-Benchmark: excerpt_style="paragraph" vs "snippet" excerpt quality.
+Directional signal: excerpt_style="paragraph" vs "snippet" quality.
 
 Measures excerpt containment rate — whether the returned excerpt
 contains a known answer substring for each (query, page) pair.
-Uses local PDFs only (no network).
+n=10 queries on a single PDF (Transformer paper); treat results
+as a go/no-go signal, not a publishable benchmark.  Containment
+is a weak proxy: it catches wrong-block failures but can't
+distinguish "right block, noisy context" from "right block, clean
+context."  Expand to 30-50 queries across multiple doc types
+before citing externally.
 
     python scripts/benchmark_excerpt_quality.py
 
-Gate: paragraph must match or beat snippet containment rate overall,
-and beat it on at least one category (structured or prose).
+Gate: paragraph >= snippet containment, zero regressions.
 
 Always exits 0 (informational report, no CI gate).
 """
 
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -222,6 +225,24 @@ def print_report(results: dict) -> None:
         print(f"  Prose containment:   {sum(1 for r in prose if r['contains_answer'])}/{len(prose)} ({prose_rate:.0%})")
         print(f"  Structured containment: {sum(1 for r in structured if r['contains_answer'])}/{len(structured)} ({struct_rate:.0%})")
         print(f"  Avg excerpt length:  {avg_len:.0f} chars")
+
+        # Length distribution
+        lengths = sorted(r["excerpt_len"] for r in results[style] if r["excerpt_len"] > 0)
+        if lengths:
+            buckets = {"<100": 0, "100-299": 0, "300-499": 0, "500-999": 0, "1000+": 0}
+            for l in lengths:
+                if l < 100:
+                    buckets["<100"] += 1
+                elif l < 300:
+                    buckets["100-299"] += 1
+                elif l < 500:
+                    buckets["300-499"] += 1
+                elif l < 1000:
+                    buckets["500-999"] += 1
+                else:
+                    buckets["1000+"] += 1
+            dist = "  ".join(f"{k}:{v}" for k, v in buckets.items() if v > 0)
+            print(f"  Length distribution: {dist}")
 
     print(f"\nHead-to-head: paragraph wins {paragraph_wins}, snippet wins {snippet_wins}, ties {ties}")
 

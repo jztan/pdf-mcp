@@ -2609,3 +2609,27 @@ class TestExcerptStyle:
             assert "error" not in result
             assert result.get("excerpt_style") == "paragraph"
             assert len(result["matches"]) > 0
+
+    def test_hybrid_paragraph_mode(self, sample_pdf, isolated_server):
+        """Hybrid/auto mode with paragraph upgrades excerpts."""
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(
+                sample_pdf, "content", mode="auto", excerpt_style="paragraph"
+            )
+            assert "error" not in result
+            assert result.get("excerpt_style") == "paragraph"
+
+    def test_section_granularity_ignores_excerpt_style(
+        self, sample_pdf, isolated_server
+    ):
+        """Section mode ignores excerpt_style — no error, no excerpt_style key."""
+        result = pdf_search(
+            sample_pdf, "content", granularity="section", excerpt_style="paragraph"
+        )
+        assert "error" not in result
+        assert "excerpt_style" not in result

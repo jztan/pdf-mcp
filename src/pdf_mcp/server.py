@@ -1138,6 +1138,7 @@ def pdf_search(
     max_results: int = 10,
     context_chars: int = 200,
     granularity: str = "page",
+    excerpt_style: str = "snippet",
 ) -> dict[str, Any]:
     """
     Search for text within a PDF document.
@@ -1169,6 +1170,10 @@ def pdf_search(
                      heuristic fallback). The section index is built lazily
                      on first section-mode call per PDF and cached in SQLite
                      FTS5; subsequent calls reuse it.
+        excerpt_style: 'snippet' (default) — short context window around each hit.
+              'paragraph' — returns the full PyMuPDF text block containing the
+              hit (capped at 2000 chars; falls back to snippet for oversized
+              blocks). Ignored when granularity='section'.
 
     Returns:
         Page mode (granularity='page'):
@@ -1233,6 +1238,16 @@ def pdf_search(
         return {
             "error": (
                 f"Invalid granularity '{granularity}'. " "Must be 'page' or 'section'."
+            ),
+            "query": query,
+        }
+
+    # 1c. Validate excerpt_style
+    if excerpt_style not in ("snippet", "paragraph"):
+        return {
+            "error": (
+                f"Invalid excerpt_style '{excerpt_style}'. "
+                "Must be 'snippet' or 'paragraph'."
             ),
             "query": query,
         }

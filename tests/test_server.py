@@ -1225,9 +1225,7 @@ class TestResolvePath:
     ):
         """Each fetcher ValueError variant maps to a per-cause hint."""
         with patch.object(URLFetcher, "is_url", return_value=True):
-            with patch.object(
-                URLFetcher, "fetch", side_effect=ValueError(fetcher_msg)
-            ):
+            with patch.object(URLFetcher, "fetch", side_effect=ValueError(fetcher_msg)):
                 local_path, err = _resolve_path("https://example.com/x.pdf")
         assert local_path is None
         assert err is not None
@@ -2514,3 +2512,20 @@ class TestCacheStatsEmbeddingModel:
 
         assert "embedding_model" in result
         assert result["embedding_model"] == "BAAI/bge-small-en-v1.5"
+
+
+class TestExcerptStyle:
+    """Tests for excerpt_style parameter in pdf_search."""
+
+    def test_invalid_excerpt_style_returns_error(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="bogus")
+        assert "error" in result
+        assert "excerpt_style" in result["error"]
+
+    def test_default_excerpt_style_is_snippet(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content")
+        assert result.get("excerpt_style", "snippet") == "snippet"
+
+    def test_explicit_snippet_style(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="snippet")
+        assert "error" not in result

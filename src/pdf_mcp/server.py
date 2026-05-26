@@ -1063,7 +1063,7 @@ def _upgrade_excerpts_to_paragraphs(
     query: str,
 ) -> list[dict[str, Any]]:
     """
-    Replace snippet excerpts with full paragraph text blocks.
+    Replace windowed snippet excerpts with structural text blocks.
 
     Picks the text block with the highest query-token overlap on each
     match's page.  Deduplicates matches sharing the same (page,
@@ -1206,10 +1206,13 @@ def pdf_search(
                      heuristic fallback). The section index is built lazily
                      on first section-mode call per PDF and cached in SQLite
                      FTS5; subsequent calls reuse it.
-        excerpt_style: 'snippet' (default) — short context window around each hit.
-              'paragraph' — returns the full PyMuPDF text block containing the
-              hit (capped at 2000 chars; falls back to snippet for oversized
-              blocks). Ignored when granularity='section'.
+        excerpt_style: 'snippet' (default) — fixed-width context window around hit.
+              'paragraph' — returns the PyMuPDF text block containing the hit
+              instead of a fixed-width window. On structured documents (bullets,
+              lists), typically more focused than snippet; on long prose, may be
+              longer, capped at 2000 chars with snippet fallback. Best with
+              keyword/auto modes; pure semantic may pick a topically related
+              but not optimal block. Ignored when granularity='section'.
 
     Returns:
         Page mode (granularity='page'):

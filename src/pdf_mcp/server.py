@@ -1277,9 +1277,8 @@ def pdf_search(
               embedding model could not be loaded; the response then
               degrades to search_mode='keyword' and carries a
               `semantic_unavailable_reason` string).
-            - excerpt_style (only present when excerpt_style='paragraph' was
-              requested): confirms paragraph mode was used. When absent,
-              snippets were used (default).
+            - excerpt_style: 'paragraph' (default) or 'snippet' if
+              explicitly requested.
         Section mode (granularity='section'):
             - sections: List of {section_id, title, title_source,
                         start_page, end_page, score} sorted by descending
@@ -1484,8 +1483,7 @@ def pdf_search(
                 "search_mode": "semantic",
                 "model": _model_name,
             }
-            if excerpt_style == "paragraph":
-                sem_response["excerpt_style"] = "paragraph"
+            sem_response["excerpt_style"] = excerpt_style
             return sem_response
 
         # ── mode="keyword" or mode="auto" — run keyword search ───────────
@@ -1551,8 +1549,7 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
             }
-            if excerpt_style == "paragraph":
-                response["excerpt_style"] = "paragraph"
+            response["excerpt_style"] = excerpt_style
             return response
 
         # ── mode="auto": check fastembed, hybrid if available ─────────────
@@ -1585,8 +1582,7 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "search_mode": "keyword",
             }
-            if excerpt_style == "paragraph":
-                response["excerpt_style"] = "paragraph"
+            response["excerpt_style"] = excerpt_style
             if reason is not None:
                 response["semantic_unavailable"] = True
                 response["semantic_unavailable_reason"] = reason
@@ -1722,8 +1718,7 @@ def pdf_search(
             "search_mode": "hybrid",
             "model": _model_name,
         }
-        if excerpt_style == "paragraph":
-            hybrid_response["excerpt_style"] = "paragraph"
+        hybrid_response["excerpt_style"] = excerpt_style
         return hybrid_response
 
     finally:

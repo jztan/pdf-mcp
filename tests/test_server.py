@@ -2613,13 +2613,13 @@ class TestExcerptStyle:
             os.unlink(f.name)
 
     def test_keyword_explicit_snippet_mode(self, sample_pdf, isolated_server):
-        """Explicit snippet mode works and does not set excerpt_style."""
+        """Explicit snippet mode works and sets excerpt_style='snippet'."""
         result = pdf_search(
             sample_pdf, "content", mode="keyword", excerpt_style="snippet"
         )
         assert "error" not in result
         assert len(result["matches"]) > 0
-        assert "excerpt_style" not in result
+        assert result.get("excerpt_style") == "snippet"
 
     @staticmethod
     def _make_encode(dim: int = 384):

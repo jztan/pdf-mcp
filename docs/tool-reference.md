@@ -316,7 +316,7 @@ The first call on a new document embeds all pages or builds the section index (o
 - `total_matches`, `page_match_counts` (int / object).
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
-- `excerpt_style` (string, conditional) — present only when `excerpt_style="paragraph"` was requested. Confirms paragraph mode was used; absent for default snippet mode.
+- `excerpt_style` (string) — `"paragraph"` (default) or `"snippet"` if explicitly requested. Reflects which excerpt mode produced the results.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).
 - `semantic_unavailable` (bool, conditional) — set in `auto` mode when the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason`.

@@ -218,7 +218,7 @@ pdf-mcp --help
 
 ## Tools
 
-Eight specialized tools cover document introspection, content reading, search, and cache management. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate, then `pdf_read_pages` or `pdf_read_all` to consume.
+Eight specialized tools cover document introspection, content reading, search, and cache management. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
 
 | Tool | What it does |
 |------|--------------|
@@ -255,15 +255,15 @@ Agent workflow:
    → 200 pages, TOC shows "Risk Factors" on page 89
 
 2. pdf_search("report.pdf", "risk factors")
-   → Relevant pages: 89-110
+   → Matches with structural paragraph excerpts — each excerpt
+     is the bullet, paragraph, or heading that matched, not a
+     fixed-width window. Often enough to answer directly.
 
-3. pdf_read_pages("report.pdf", "89-100")
-   → First batch
+3. If excerpts are sufficient → synthesize answer
 
-4. pdf_read_pages("report.pdf", "101-110")
-   → Second batch
-
-5. Synthesize answer from chunks
+4. If more context needed:
+   pdf_read_pages("report.pdf", "89-95")
+   → Full page text for deeper reading
 ```
 
 ## Caching

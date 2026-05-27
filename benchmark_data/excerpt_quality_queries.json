@@ -71,7 +71,7 @@
           "id": "t10",
           "category": "structured",
           "query": "training data sentence pairs",
-          "page": 8,
+          "page": 7,
           "answer": "training"
         }
       ]
@@ -173,7 +173,7 @@
           "id": "l02",
           "category": "prose",
           "query": "mixed precision training FP16",
-          "page": 30,
+          "page": 29,
           "answer": "FP16"
         },
         {
@@ -214,7 +214,7 @@
           "id": "a02",
           "category": "structured",
           "query": "responsible AI fairness toxicity",
-          "page": 99,
+          "page": 46,
           "answer": "responsible"
         },
         {

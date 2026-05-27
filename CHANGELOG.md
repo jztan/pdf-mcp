@@ -37,8 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match its list return type.
 
 ### Added
-- `pdf_search` gains `excerpt_style` parameter: `"paragraph"` (default)
-  or `"snippet"`. Paragraph mode returns the PyMuPDF text block
+- Excerpts from `pdf_search` are now structural text blocks (the
+  bullet, paragraph, or heading that matched) instead of fixed-width
+  character windows. This makes excerpts more self-contained — agents
+  can often answer from the excerpt alone without a follow-up
+  `pdf_read_pages` call.
+  New `excerpt_style` parameter: `"paragraph"` (default) or
+  `"snippet"`. Paragraph mode returns the PyMuPDF text block
   containing each hit instead of a fixed-width snippet window. On
   structured documents (bullets, numbered lists, headings), the result
   is typically more focused than snippet mode — just the unit that

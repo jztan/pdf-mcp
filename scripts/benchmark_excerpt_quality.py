@@ -4,457 +4,359 @@ scripts/benchmark_excerpt_quality.py
 
 Directional signal: excerpt_style="paragraph" vs "snippet" quality.
 
-Measures excerpt containment rate — whether the returned excerpt
-contains a known answer substring for each (query, page) pair.
-Tests across multiple PDF types: academic prose (Transformer, GPT-3),
-survey papers (GNN review, LLM survey), and structured bullet-list
-documents (AWS exam guide).
+Compares two cells (snippet, paragraph) over a frozen query corpus
+across multiple PDFs. Measures excerpt containment rate — whether
+the returned excerpt contains a known answer substring.
 
-Treat results as a go/no-go signal, not a publishable benchmark.
-Containment is a weak proxy: it catches wrong-block failures but
-can't distinguish "right block, noisy context" from "right block,
-clean context."
+n~30 queries across 5 PDFs; treat results as a go/no-go signal,
+not a publishable benchmark.  Containment is a weak proxy: it
+catches wrong-block failures but can't distinguish "right block,
+noisy context" from "right block, clean context."
 
-    python scripts/benchmark_excerpt_quality.py
+Usage:
+    python scripts/benchmark_excerpt_quality.py              # gated run
+    python scripts/benchmark_excerpt_quality.py --calibrate  # report only
+    python scripts/benchmark_excerpt_quality.py --pdfs transformer,gpt3
+    python scripts/benchmark_excerpt_quality.py --output-json results.json
 
-Gate: paragraph >= snippet containment, zero regressions.
-
-Always exits 0 (informational report, no CI gate).
+Exit codes: 0 = PASS / calibrate, 1 = FAIL, 2 = setup error.
 """
 
+from __future__ import annotations
+
+import argparse
+import json
 import sys
-from datetime import datetime
+from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_mcp.server import pdf_search  # noqa: E402
 
-# Each PDF has a path (local or URL) and a list of queries.
-# answer: substring that MUST appear in a good excerpt.
-# category: "prose" or "structured"
-PDFS = {
-    "transformer": {
-        "path": "docs_internal/1706.03762v7.pdf",
-        "title": "Attention Is All You Need",
-        "queries": [
-            {
-                "query": "dropout rate",
-                "page": 8,
-                "answer": "apply dropout",
-                "category": "prose",
-            },
-            {
-                "query": "why self-attention is better than recurrent layers",
-                "page": 7,
-                "answer": "self-attention",
-                "category": "prose",
-            },
-            {
-                "query": "scale dot products by 1 over sqrt dk",
-                "page": 4,
-                "answer": "dot product",
-                "category": "prose",
-            },
-            {
-                "query": "positional encoding sinusoidal",
-                "page": 6,
-                "answer": "positional encoding",
-                "category": "prose",
-            },
-            {
-                "query": "multi-head attention parallel heads",
-                "page": 5,
-                "answer": "parallel attention",
-                "category": "prose",
-            },
-            {
-                "query": "label smoothing during training",
-                "page": 8,
-                "answer": "label smoothing",
-                "category": "prose",
-            },
-            {
-                "query": "encoder decoder stacks",
-                "page": 3,
-                "answer": "encoder",
-                "category": "prose",
-            },
-            {
-                "query": "BLEU score English to German",
-                "page": 8,
-                "answer": "BLEU",
-                "category": "structured",
-            },
-            {
-                "query": "Scaled Dot-Product Attention",
-                "page": 4,
-                "answer": "attention",
-                "category": "structured",
-            },
-            {
-                "query": "training data sentence pairs",
-                "page": 8,
-                "answer": "training",
-                "category": "structured",
-            },
-        ],
-    },
-    "gpt3": {
-        "path": "https://arxiv.org/pdf/2005.14165",
-        "title": "GPT-3: Language Models are Few-Shot Learners",
-        "queries": [
-            {
-                "query": "few-shot performance on LAMBADA",
-                "page": 12,
-                "answer": "LAMBADA",
-                "category": "structured",
-            },
-            {
-                "query": "bias fairness stereotyped content",
-                "page": 36,
-                "answer": "bias",
-                "category": "prose",
-            },
-            {
-                "query": "limitations of the pretraining objective",
-                "page": 34,
-                "answer": "limitation",
-                "category": "prose",
-            },
-            {
-                "query": "model size parameters 175 billion",
-                "page": 8,
-                "answer": "175",
-                "category": "structured",
-            },
-            {
-                "query": "data contamination benchmark overlap",
-                "page": 32,
-                "answer": "contamination",
-                "category": "prose",
-            },
-        ],
-    },
-    "gnn_review": {
-        "path": "https://arxiv.org/pdf/1812.08434",
-        "title": "Graph Neural Networks: A Review",
-        "queries": [
-            {
-                "query": "spectral methods graph convolution",
-                "page": 5,
-                "answer": "spectral",
-                "category": "prose",
-            },
-            {
-                "query": "pooling modules graph coarsening",
-                "page": 10,
-                "answer": "pooling",
-                "category": "prose",
-            },
-            {
-                "query": "static dynamic graphs time information",
-                "page": 3,
-                "answer": "dynamic graph",
-                "category": "prose",
-            },
-            {
-                "query": "message passing neural network",
-                "page": 7,
-                "answer": "message",
-                "category": "prose",
-            },
-            {
-                "query": "graph attention network",
-                "page": 7,
-                "answer": "attention",
-                "category": "prose",
-            },
-        ],
-    },
-    "llm_survey": {
-        "path": "https://arxiv.org/pdf/2303.18223",
-        "title": "A Survey of Large Language Models",
-        "queries": [
-            {
-                "query": "scaling laws emergent abilities",
-                "page": 5,
-                "answer": "scaling",
-                "category": "prose",
-            },
-            {
-                "query": "mixed precision training FP16",
-                "page": 30,
-                "answer": "FP16",
-                "category": "prose",
-            },
-            {
-                "query": "reinforcement learning from human feedback",
-                "page": 38,
-                "answer": "human feedback",
-                "category": "prose",
-            },
-            {
-                "query": "in-context learning demonstration examples",
-                "page": 45,
-                "answer": "in-context learning",
-                "category": "prose",
-            },
-            {
-                "query": "instruction tuning fine-tuning",
-                "page": 35,
-                "answer": "instruction",
-                "category": "prose",
-            },
-        ],
-    },
-    "aws_exam": {
-        "path": "docs_internal/AWS AIP-C01 107.pdf",
-        "title": "AWS AI Practitioner Exam Guide",
-        "queries": [
-            {
-                "query": "prompt engineering best practices",
-                "page": 50,
-                "answer": "prompt",
-                "category": "structured",
-            },
-            {
-                "query": "responsible AI fairness toxicity",
-                "page": 99,
-                "answer": "responsible",
-                "category": "structured",
-            },
-            {
-                "query": "Amazon Bedrock Knowledge Bases",
-                "page": 11,
-                "answer": "Bedrock",
-                "category": "structured",
-            },
-            {
-                "query": "model evaluation metrics accuracy",
-                "page": 28,
-                "answer": "evaluation",
-                "category": "structured",
-            },
-            {
-                "query": "generative AI use cases business",
-                "page": 114,
-                "answer": "generative",
-                "category": "structured",
-            },
-        ],
-    },
-}
+VALID_CATEGORIES = {"prose", "structured"}
+REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
 
 
-def _resolve_pdf_path(path: str) -> str:
-    """Resolve local paths relative to project root; pass URLs through."""
-    if path.startswith("http://") or path.startswith("https://"):
-        return path
-    resolved = Path(__file__).parent.parent / path
-    if not resolved.exists():
-        print(f"WARNING: local PDF not found: {resolved}")
-    return str(resolved)
+def load_queries(path: str) -> dict:
+    """Load and validate the frozen query corpus.
+
+    Returns: {pdf_key: {"path"|"url": str, "title": str,
+              "queries": [query_dict, ...]}}.
+    Raises ValueError on schema violations.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    if "pdfs" not in data:
+        raise ValueError("Query file missing top-level 'pdfs' key")
+
+    for pdf_key, pdf_data in data["pdfs"].items():
+        if "path" not in pdf_data and "url" not in pdf_data:
+            raise ValueError(f"PDF '{pdf_key}' must have 'path' or 'url'")
+        if "queries" not in pdf_data:
+            raise ValueError(f"PDF '{pdf_key}' must have 'queries'")
+        for q in pdf_data["queries"]:
+            for field in REQUIRED_QUERY_FIELDS:
+                if field not in q:
+                    raise ValueError(
+                        f"Query {q.get('id', '?')} missing field: {field}"
+                    )
+            if q["category"] not in VALID_CATEGORIES:
+                raise ValueError(
+                    f"Query {q['id']} has invalid category: {q['category']}"
+                )
+
+    return data["pdfs"]
 
 
-def run_benchmark() -> dict:
-    """Run the excerpt quality benchmark across all PDFs."""
-    results = {"snippet": [], "paragraph": []}
-    all_queries = []
+def _resolve_pdf_path(pdf_data: dict) -> str:
+    """Return the path or URL for a PDF entry."""
+    if "url" in pdf_data:
+        return pdf_data["url"]
+    path = pdf_data["path"]
+    if not path.startswith("/"):
+        path = str(Path(__file__).parent.parent / path)
+    return path
 
-    for pdf_key, pdf_info in PDFS.items():
-        pdf_path = _resolve_pdf_path(pdf_info["path"])
-        print(f"  Benchmarking: {pdf_info['title']} ...", flush=True)
 
-        for gt in pdf_info["queries"]:
-            gt_with_source = {**gt, "pdf": pdf_key}
-            all_queries.append(gt_with_source)
+def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
+    """Run snippet vs paragraph over every (pdf, query) pair.
 
-            for style in ("snippet", "paragraph"):
+    Returns:
+        cells: {cell_name: {category: containment_rate, "all": rate}}.
+        rows:  per-query detail for the report table.
+    """
+    CELLS = ("snippet", "paragraph")
+
+    accum: dict[str, dict[str, list[int]]] = {
+        c: defaultdict(list) for c in CELLS
+    }
+    rows: list[dict] = []
+
+    for pdf_key, pdf_data in all_pdfs.items():
+        pdf_path = _resolve_pdf_path(pdf_data)
+        print(f"  {pdf_data.get('title', pdf_key)} ...", flush=True)
+
+        for q in pdf_data["queries"]:
+            row: dict = {
+                "id": q["id"],
+                "pdf": pdf_key,
+                "query": q["query"],
+                "page": q["page"],
+                "category": q["category"],
+            }
+
+            for style in CELLS:
                 r = pdf_search(
                     pdf_path,
-                    gt["query"],
+                    q["query"],
                     excerpt_style=style,
                     max_results=5,
                 )
                 matches = r.get("matches", [])
-                target_match = None
-                for m in matches:
-                    if m["page"] == gt["page"]:
-                        target_match = m
-                        break
-
-                if target_match is None:
-                    contains = False
-                    excerpt_len = 0
-                    excerpt_preview = "(page not in results)"
-                else:
-                    excerpt = target_match["excerpt"]
-                    contains = gt["answer"].lower() in excerpt.lower()
-                    excerpt_len = len(excerpt)
-                    excerpt_preview = excerpt[:100]
-
-                results[style].append(
-                    {
-                        "query": gt["query"],
-                        "page": gt["page"],
-                        "category": gt["category"],
-                        "pdf": pdf_key,
-                        "contains_answer": contains,
-                        "excerpt_len": excerpt_len,
-                        "excerpt_preview": excerpt_preview,
-                    }
+                target = next(
+                    (m for m in matches if m["page"] == q["page"]), None
                 )
 
-    return results
-
-
-def _rate(items: list) -> str:
-    """Format containment rate as 'N/M (P%)'."""
-    total = len(items)
-    if total == 0:
-        return "0/0"
-    contained = sum(1 for r in items if r["contains_answer"])
-    return f"{contained}/{total} ({contained / total:.0%})"
-
-
-def print_report(results: dict) -> None:
-    """Print a formatted comparison report."""
-    total_queries = len(results["snippet"])
-    pdf_count = len(set(r["pdf"] for r in results["snippet"]))
-
-    print("=" * 80)
-    print("EXCERPT QUALITY BENCHMARK")
-    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"PDFs: {pdf_count}  Queries: {total_queries}")
-    print("=" * 80)
-
-    # Per-query table
-    print(
-        f"\n{'PDF':<12} {'Query':<45} {'Pg':>3}"
-        f"  {'Cat':<10} {'Snip':>4} {'Para':>4}"
-        f"  {'S.len':>5} {'P.len':>5}"
-    )
-    print("-" * 100)
-
-    snippet_wins = 0
-    paragraph_wins = 0
-    ties = 0
-
-    for i in range(total_queries):
-        s = results["snippet"][i]
-        p = results["paragraph"][i]
-        s_mark = "Y" if s["contains_answer"] else "N"
-        p_mark = "Y" if p["contains_answer"] else "N"
-
-        if s["contains_answer"] == p["contains_answer"]:
-            ties += 1
-        elif p["contains_answer"]:
-            paragraph_wins += 1
-        else:
-            snippet_wins += 1
-
-        print(
-            f"{s['pdf']:<12} {s['query']:<45} {s['page']:>3}"
-            f"  {s['category']:<10} {s_mark:>4} {p_mark:>4}"
-            f"  {s['excerpt_len']:>5} {p['excerpt_len']:>5}"
-        )
-
-    # Summary
-    print("\n" + "=" * 80)
-    print("SUMMARY")
-    print("=" * 80)
-
-    for style in ("snippet", "paragraph"):
-        items = results[style]
-        prose = [r for r in items if r["category"] == "prose"]
-        structured = [r for r in items if r["category"] == "structured"]
-        avg_len = (
-            sum(r["excerpt_len"] for r in items) / len(items) if items else 0
-        )
-
-        print(f"\n{style.upper()}")
-        print(f"  Overall containment:    {_rate(items)}")
-        print(f"  Prose containment:      {_rate(prose)}")
-        print(f"  Structured containment: {_rate(structured)}")
-        print(f"  Avg excerpt length:     {avg_len:.0f} chars")
-
-        lengths = sorted(
-            r["excerpt_len"] for r in items if r["excerpt_len"] > 0
-        )
-        if lengths:
-            buckets = {
-                "<100": 0,
-                "100-299": 0,
-                "300-499": 0,
-                "500-999": 0,
-                "1000+": 0,
-            }
-            for length in lengths:
-                if length < 100:
-                    buckets["<100"] += 1
-                elif length < 300:
-                    buckets["100-299"] += 1
-                elif length < 500:
-                    buckets["300-499"] += 1
-                elif length < 1000:
-                    buckets["500-999"] += 1
+                if target is None:
+                    contains = 0
+                    excerpt_len = 0
                 else:
-                    buckets["1000+"] += 1
-            dist = "  ".join(f"{k}:{v}" for k, v in buckets.items() if v > 0)
-            print(f"  Length distribution:     {dist}")
+                    excerpt = target["excerpt"]
+                    contains = (
+                        1 if q["answer"].lower() in excerpt.lower() else 0
+                    )
+                    excerpt_len = len(excerpt)
+
+                accum[style][q["category"]].append(contains)
+                row[f"{style}_contains"] = contains
+                row[f"{style}_len"] = excerpt_len
+
+            rows.append(row)
+
+    cells: dict[str, dict[str, float]] = {}
+    for cell in CELLS:
+        cell_out: dict[str, float] = {}
+        all_vals: list[int] = []
+        for cat in sorted(VALID_CATEGORIES):
+            vals = accum[cell][cat]
+            cell_out[cat] = sum(vals) / len(vals) if vals else 0.0
+            all_vals.extend(vals)
+        cell_out["all"] = sum(all_vals) / len(all_vals) if all_vals else 0.0
+        cells[cell] = cell_out
+
+    return cells, rows
+
+
+def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
+    """Evaluate the two-clause gate.
+
+    Clause 1: paragraph overall containment >= snippet.
+    Clause 2: zero regressions (no query where snippet contains
+              answer but paragraph doesn't).
+    """
+    clause_1_pass = cells["paragraph"]["all"] >= cells["snippet"]["all"]
+
+    regressions = [
+        r
+        for r in rows
+        if r["snippet_contains"] == 1 and r["paragraph_contains"] == 0
+    ]
+    clause_2_pass = len(regressions) == 0
+
+    return {
+        "pass": clause_1_pass and clause_2_pass,
+        "clause_1_containment": {
+            "pass": clause_1_pass,
+            "snippet": cells["snippet"]["all"],
+            "paragraph": cells["paragraph"]["all"],
+        },
+        "clause_2_regressions": {
+            "pass": clause_2_pass,
+            "count": len(regressions),
+            "ids": [r["id"] for r in regressions],
+        },
+    }
+
+
+def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
+    n = len(rows)
+    pdf_count = len(all_pdfs)
+
+    print()
+    print("=" * 78)
+    print("Excerpt quality: paragraph vs snippet containment rate")
+    print("=" * 78)
+
+    # Per-cell summary
+    cats = ("prose", "structured", "all")
+    print(f"\n{'cell':<14}" + "".join(f"{c:>14}" for c in cats))
+    for cell, scores in cells.items():
+        row_str = f"{cell:<14}" + "".join(
+            f"{scores.get(c, 0):>13.0%} " for c in cats
+        )
+        print(row_str)
+
+    # Per-query detail
+    print(f"\n{'ID':<6} {'PDF':<12} {'Query':<42} {'Pg':>3}"
+          f"  {'Cat':<10} {'Snip':>4} {'Para':>4}"
+          f"  {'S.len':>5} {'P.len':>5}")
+    print("-" * 104)
+
+    for r in rows:
+        s_mark = "Y" if r["snippet_contains"] else "N"
+        p_mark = "Y" if r["paragraph_contains"] else "N"
+        print(
+            f"{r['id']:<6} {r['pdf']:<12} {r['query']:<42} {r['page']:>3}"
+            f"  {r['category']:<10} {s_mark:>4} {p_mark:>4}"
+            f"  {r['snippet_len']:>5} {r['paragraph_len']:>5}"
+        )
+
+    # Length distribution
+    print()
+    for style in ("snippet", "paragraph"):
+        lengths = sorted(
+            r[f"{style}_len"] for r in rows if r[f"{style}_len"] > 0
+        )
+        if not lengths:
+            continue
+        avg = sum(lengths) / len(lengths)
+        buckets = {"<100": 0, "100-299": 0, "300-499": 0, "500-999": 0, "1000+": 0}
+        for length in lengths:
+            if length < 100:
+                buckets["<100"] += 1
+            elif length < 300:
+                buckets["100-299"] += 1
+            elif length < 500:
+                buckets["300-499"] += 1
+            elif length < 1000:
+                buckets["500-999"] += 1
+            else:
+                buckets["1000+"] += 1
+        dist = "  ".join(f"{k}:{v}" for k, v in buckets.items() if v > 0)
+        print(f"  {style:<10} avg={avg:.0f}  {dist}")
 
     # Per-PDF breakdown
-    print("\n" + "-" * 80)
-    print("PER-PDF BREAKDOWN")
-    print("-" * 80)
-    pdf_keys = list(dict.fromkeys(r["pdf"] for r in results["snippet"]))
-    for pdf_key in pdf_keys:
-        s_items = [r for r in results["snippet"] if r["pdf"] == pdf_key]
-        p_items = [r for r in results["paragraph"] if r["pdf"] == pdf_key]
-        title = PDFS[pdf_key]["title"]
-        print(f"  {title}: snippet {_rate(s_items)}  paragraph {_rate(p_items)}")
+    print()
+    pdf_keys = list(dict.fromkeys(r["pdf"] for r in rows))
+    for pk in pdf_keys:
+        s_items = [r for r in rows if r["pdf"] == pk]
+        s_rate = sum(r["snippet_contains"] for r in s_items) / len(s_items)
+        p_rate = sum(r["paragraph_contains"] for r in s_items) / len(s_items)
+        title = all_pdfs[pk].get("title", pk)
+        print(f"  {title}: snippet {s_rate:.0%}  paragraph {p_rate:.0%}")
 
-    print(
-        f"\nHead-to-head: paragraph wins {paragraph_wins},"
-        f" snippet wins {snippet_wins}, ties {ties}"
+    # Head-to-head
+    wins = sum(
+        1 for r in rows
+        if r["paragraph_contains"] and not r["snippet_contains"]
     )
+    losses = sum(
+        1 for r in rows
+        if r["snippet_contains"] and not r["paragraph_contains"]
+    )
+    ties = sum(
+        1 for r in rows
+        if r["snippet_contains"] == r["paragraph_contains"]
+    )
+    print(f"\n  Queries: {n} across {pdf_count} PDF(s).")
+    print(f"  Head-to-head: paragraph wins {wins},"
+          f" snippet wins {losses}, ties {ties}")
 
-    # Gate
-    s_total = len(results["snippet"])
-    p_total = len(results["paragraph"])
-    s_rate = (
-        sum(1 for r in results["snippet"] if r["contains_answer"]) / s_total
-    )
-    p_rate = (
-        sum(1 for r in results["paragraph"] if r["contains_answer"]) / p_total
-    )
-    passed = p_rate >= s_rate and snippet_wins == 0
-    print(
-        f"\nGate (paragraph >= snippet, zero regressions):"
-        f" {'PASS' if passed else 'FAIL'}"
-    )
-    print(f"  snippet={s_rate:.0%}  paragraph={p_rate:.0%}  regressions={snippet_wins}")
 
-    # Regressions
-    failures = []
-    for i in range(total_queries):
-        s = results["snippet"][i]
-        p = results["paragraph"][i]
-        if s["contains_answer"] and not p["contains_answer"]:
-            failures.append(
-                f"  REGRESSION: [{s['pdf']}] '{s['query']}'"
-                f" p{s['page']} — snippet has answer, paragraph doesn't"
-                f"\n    paragraph excerpt: {p['excerpt_preview']}"
+def print_gate_verdict(verdict: dict) -> None:
+    print()
+    print("=" * 60)
+    print(f"GATE VERDICT: {'PASS' if verdict['pass'] else 'FAIL'}")
+    print("=" * 60)
+    for clause_key in ("clause_1_containment", "clause_2_regressions"):
+        c = verdict[clause_key]
+        marker = "✓" if c["pass"] else "✗"
+        detail = {k: v for k, v in c.items() if k != "pass"}
+        print(f"  {marker} {clause_key}: {detail}")
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Excerpt quality: paragraph vs snippet containment"
+    )
+    p.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="Print numbers, no PASS/FAIL gating.",
+    )
+    p.add_argument(
+        "--pdfs",
+        default="",
+        help="Comma-separated PDF keys (default: all).",
+    )
+    p.add_argument(
+        "--categories",
+        default="",
+        help="Comma-separated categories (default: all).",
+    )
+    p.add_argument(
+        "--output-json",
+        default="",
+        help="Write structured results to this path.",
+    )
+    p.add_argument(
+        "--queries",
+        default="benchmark_data/excerpt_quality_queries.json",
+        help="Path to the query corpus file.",
+    )
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Returns exit code: 0 PASS / calibrate, 1 FAIL, 2 setup error."""
+    args = _build_parser().parse_args(argv)
+
+    try:
+        all_pdfs = load_queries(args.queries)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+
+    if args.pdfs:
+        keep = set(args.pdfs.split(","))
+        all_pdfs = {k: v for k, v in all_pdfs.items() if k in keep}
+    if args.categories:
+        cats = set(args.categories.split(","))
+        for v in all_pdfs.values():
+            v["queries"] = [q for q in v["queries"] if q["category"] in cats]
+
+    total_q = sum(len(v["queries"]) for v in all_pdfs.values())
+    if total_q == 0:
+        print(
+            "ERROR: no queries loaded — query file is empty or filters "
+            "excluded everything.",
+            file=sys.stderr,
+        )
+        return 2
+
+    print(f"Running excerpt quality benchmark ({total_q} queries)...\n")
+    cells, rows = run_all_cells(all_pdfs)
+    print_report(cells, rows, all_pdfs)
+
+    if args.output_json:
+        with open(args.output_json, "w") as f:
+            json.dump(
+                {"cells": cells, "rows": rows},
+                f,
+                indent=2,
+                default=str,
             )
-    if failures:
-        print(f"\nREGRESSIONS ({len(failures)}):")
-        for f in failures:
-            print(f)
+
+    if args.calibrate:
+        print("\n[--calibrate] Skipping gate. No exit-code gating.")
+        return 0
+
+    verdict = evaluate_gate(cells, rows)
+    print_gate_verdict(verdict)
+    return 0 if verdict["pass"] else 1
 
 
 if __name__ == "__main__":
-    print("Running excerpt quality benchmark...\n")
-    results = run_benchmark()
-    print()
-    print_report(results)
+    sys.exit(main())

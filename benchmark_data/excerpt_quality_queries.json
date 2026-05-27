@@ -1,0 +1,244 @@
+{
+  "pdfs": {
+    "transformer": {
+      "path": "docs_internal/1706.03762v7.pdf",
+      "title": "Attention Is All You Need",
+      "queries": [
+        {
+          "id": "t01",
+          "category": "prose",
+          "query": "dropout rate",
+          "page": 8,
+          "answer": "apply dropout"
+        },
+        {
+          "id": "t02",
+          "category": "prose",
+          "query": "why self-attention is better than recurrent layers",
+          "page": 7,
+          "answer": "self-attention"
+        },
+        {
+          "id": "t03",
+          "category": "prose",
+          "query": "scale dot products by 1 over sqrt dk",
+          "page": 4,
+          "answer": "dot product"
+        },
+        {
+          "id": "t04",
+          "category": "prose",
+          "query": "positional encoding sinusoidal",
+          "page": 6,
+          "answer": "positional encoding"
+        },
+        {
+          "id": "t05",
+          "category": "prose",
+          "query": "multi-head attention parallel heads",
+          "page": 5,
+          "answer": "parallel attention"
+        },
+        {
+          "id": "t06",
+          "category": "prose",
+          "query": "label smoothing during training",
+          "page": 8,
+          "answer": "label smoothing"
+        },
+        {
+          "id": "t07",
+          "category": "prose",
+          "query": "encoder decoder stacks",
+          "page": 3,
+          "answer": "encoder"
+        },
+        {
+          "id": "t08",
+          "category": "structured",
+          "query": "BLEU score English to German",
+          "page": 8,
+          "answer": "BLEU"
+        },
+        {
+          "id": "t09",
+          "category": "structured",
+          "query": "Scaled Dot-Product Attention",
+          "page": 4,
+          "answer": "attention"
+        },
+        {
+          "id": "t10",
+          "category": "structured",
+          "query": "training data sentence pairs",
+          "page": 8,
+          "answer": "training"
+        }
+      ]
+    },
+    "gpt3": {
+      "url": "https://arxiv.org/pdf/2005.14165",
+      "title": "GPT-3: Language Models are Few-Shot Learners",
+      "queries": [
+        {
+          "id": "g01",
+          "category": "structured",
+          "query": "few-shot performance on LAMBADA",
+          "page": 12,
+          "answer": "LAMBADA"
+        },
+        {
+          "id": "g02",
+          "category": "prose",
+          "query": "bias fairness stereotyped content",
+          "page": 36,
+          "answer": "bias"
+        },
+        {
+          "id": "g03",
+          "category": "prose",
+          "query": "limitations of the pretraining objective",
+          "page": 34,
+          "answer": "limitation"
+        },
+        {
+          "id": "g04",
+          "category": "structured",
+          "query": "model size parameters 175 billion",
+          "page": 8,
+          "answer": "175"
+        },
+        {
+          "id": "g05",
+          "category": "prose",
+          "query": "data contamination benchmark overlap",
+          "page": 32,
+          "answer": "contamination"
+        }
+      ]
+    },
+    "gnn_review": {
+      "url": "https://arxiv.org/pdf/1812.08434",
+      "title": "Graph Neural Networks: A Review",
+      "queries": [
+        {
+          "id": "n01",
+          "category": "prose",
+          "query": "spectral methods graph convolution",
+          "page": 5,
+          "answer": "spectral"
+        },
+        {
+          "id": "n02",
+          "category": "prose",
+          "query": "pooling modules graph coarsening",
+          "page": 10,
+          "answer": "pooling"
+        },
+        {
+          "id": "n03",
+          "category": "prose",
+          "query": "static dynamic graphs time information",
+          "page": 3,
+          "answer": "dynamic graph"
+        },
+        {
+          "id": "n04",
+          "category": "prose",
+          "query": "message passing neural network",
+          "page": 7,
+          "answer": "message"
+        },
+        {
+          "id": "n05",
+          "category": "prose",
+          "query": "graph attention network",
+          "page": 7,
+          "answer": "attention"
+        }
+      ]
+    },
+    "llm_survey": {
+      "url": "https://arxiv.org/pdf/2303.18223",
+      "title": "A Survey of Large Language Models",
+      "queries": [
+        {
+          "id": "l01",
+          "category": "prose",
+          "query": "scaling laws emergent abilities",
+          "page": 5,
+          "answer": "scaling"
+        },
+        {
+          "id": "l02",
+          "category": "prose",
+          "query": "mixed precision training FP16",
+          "page": 30,
+          "answer": "FP16"
+        },
+        {
+          "id": "l03",
+          "category": "prose",
+          "query": "reinforcement learning from human feedback",
+          "page": 38,
+          "answer": "human feedback"
+        },
+        {
+          "id": "l04",
+          "category": "prose",
+          "query": "in-context learning demonstration examples",
+          "page": 45,
+          "answer": "in-context learning"
+        },
+        {
+          "id": "l05",
+          "category": "prose",
+          "query": "instruction tuning fine-tuning",
+          "page": 35,
+          "answer": "instruction"
+        }
+      ]
+    },
+    "aws_exam": {
+      "path": "docs_internal/AWS AIP-C01 107.pdf",
+      "title": "AWS AI Practitioner Exam Guide",
+      "queries": [
+        {
+          "id": "a01",
+          "category": "structured",
+          "query": "prompt engineering best practices",
+          "page": 50,
+          "answer": "prompt"
+        },
+        {
+          "id": "a02",
+          "category": "structured",
+          "query": "responsible AI fairness toxicity",
+          "page": 99,
+          "answer": "responsible"
+        },
+        {
+          "id": "a03",
+          "category": "structured",
+          "query": "Amazon Bedrock Knowledge Bases",
+          "page": 11,
+          "answer": "Bedrock"
+        },
+        {
+          "id": "a04",
+          "category": "structured",
+          "query": "model evaluation metrics accuracy",
+          "page": 28,
+          "answer": "evaluation"
+        },
+        {
+          "id": "a05",
+          "category": "structured",
+          "query": "generative AI use cases business",
+          "page": 114,
+          "answer": "generative"
+        }
+      ]
+    }
+  }
+}

@@ -35,15 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `result.get("error")` on every tool response regardless of `isError`.
   `pdf_render_pages` wraps its error dict in a single-element list to
   match its list return type.
+- **BREAKING**: `pdf_search` default `excerpt_style` changed from
+  `"snippet"` to `"paragraph"`. Excerpts are now structural text blocks
+  (the bullet, paragraph, or section that matched) instead of
+  fixed-width windows. Callers that depend on the previous windowed
+  snippet behavior should pass `excerpt_style="snippet"` explicitly.
+  Benchmark: 97% vs 80% answer containment (n=30, 5 PDFs — research
+  papers, surveys, exam guide), zero regressions.
 
 ### Added
-- Excerpts from `pdf_search` are now structural text blocks (the
-  bullet, paragraph, or heading that matched) instead of fixed-width
-  character windows. This makes excerpts more self-contained — agents
-  can often answer from the excerpt alone without a follow-up
-  `pdf_read_pages` call.
-  New `excerpt_style` parameter: `"paragraph"` (default) or
-  `"snippet"`. Paragraph mode returns the PyMuPDF text block
+- `pdf_search` gains an `excerpt_style` parameter: `"paragraph"`
+  (default; see Changed) or `"snippet"` (legacy fixed-width window).
+  Paragraph mode returns the PyMuPDF text block
   containing each hit instead of a fixed-width snippet window. On
   structured documents (bullets, numbered lists, headings), the result
   is typically more focused than snippet mode — just the unit that
@@ -64,15 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Response carries `"excerpt_style": "paragraph"` when paragraph mode
   is active; absent when `excerpt_style="snippet"` is passed explicitly.
   `granularity="section"` ignores the parameter.
-
-### Changed
-- **BREAKING**: `pdf_search` default `excerpt_style` changed from
-  `"snippet"` to `"paragraph"`. Excerpts are now structural text blocks
-  (the bullet, paragraph, or section that matched) instead of
-  fixed-width windows. Callers that depend on the previous windowed
-  snippet behavior should pass `excerpt_style="snippet"` explicitly.
-  Benchmark: 97% vs 80% answer containment (n=30, 5 PDFs), zero
-  regressions.
 
 ### Security
 - Bumped transitive `starlette` from 1.0.0 to 1.1.0 to address

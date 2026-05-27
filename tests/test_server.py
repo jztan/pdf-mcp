@@ -1352,7 +1352,9 @@ class TestSearchWordBoundaryAndEllipsis:
 
     def test_search_excerpt_has_ellipsis(self, long_text_pdf, isolated_server):
         """Search match in middle of long text gets ellipsis on both sides."""
-        result = pdf_search(long_text_pdf, "UNIQUETARGET", context_chars=50)
+        result = pdf_search(
+            long_text_pdf, "UNIQUETARGET", context_chars=50, excerpt_style="snippet"
+        )
 
         assert result["total_matches"] >= 1
         match = result["matches"][0]
@@ -2522,9 +2524,9 @@ class TestExcerptStyle:
         assert "error" in result
         assert "excerpt_style" in result["error"]
 
-    def test_default_excerpt_style_is_snippet(self, sample_pdf, isolated_server):
+    def test_default_excerpt_style_is_paragraph(self, sample_pdf, isolated_server):
         result = pdf_search(sample_pdf, "content")
-        assert result.get("excerpt_style", "snippet") == "snippet"
+        assert result.get("excerpt_style") == "paragraph"
 
     def test_explicit_snippet_style(self, sample_pdf, isolated_server):
         result = pdf_search(sample_pdf, "content", excerpt_style="snippet")
@@ -2610,12 +2612,14 @@ class TestExcerptStyle:
             doc2.close()
             os.unlink(f.name)
 
-    def test_keyword_snippet_default_unchanged(self, sample_pdf, isolated_server):
-        """Default snippet mode behaviour is identical to before."""
-        result = pdf_search(sample_pdf, "content", mode="keyword")
+    def test_keyword_explicit_snippet_mode(self, sample_pdf, isolated_server):
+        """Explicit snippet mode works and does not set excerpt_style."""
+        result = pdf_search(
+            sample_pdf, "content", mode="keyword", excerpt_style="snippet"
+        )
         assert "error" not in result
         assert len(result["matches"]) > 0
-        assert result.get("excerpt_style", "snippet") == "snippet"
+        assert "excerpt_style" not in result
 
     @staticmethod
     def _make_encode(dim: int = 384):

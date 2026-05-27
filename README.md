@@ -227,7 +227,7 @@ Eight specialized tools cover document introspection, content reading, search, a
 | `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables |
 | `pdf_read_all` | Read entire document in one call (byte-capped for safety) |
 | `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |
-| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity |
+| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts |
 | `pdf_cache_stats` | Per-document cache breakdown + total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
 

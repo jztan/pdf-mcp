@@ -1201,8 +1201,11 @@ def _pdf_search_section_mode(
     description=_tool_description(
         "Search the PDF using keyword, semantic, or auto (hybrid RRF)"
         " modes, at page or section granularity. Returns ranked"
-        " matches. Section-mode `matches_omitted` counts byte-cap"
-        " drops only — raise `max_results` to surface more candidates."
+        " matches. Pass excerpt_style='paragraph' for structural"
+        " block excerpts instead of fixed-width snippets (best on"
+        " bulleted/structured docs). Section-mode `matches_omitted`"
+        " counts byte-cap drops only — raise `max_results` to"
+        " surface more candidates."
     )
 )
 def pdf_search(

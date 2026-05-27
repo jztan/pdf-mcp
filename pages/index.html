@@ -725,7 +725,7 @@
       <div class="step-num">2</div>
       <div class="step-title">
         <span class="step-tool">pdf_search(path, query)</span>
-        <span class="step-desc">Find relevant pages before loading content</span>
+        <span class="step-desc">Search with paragraph excerpts — often enough to answer directly</span>
       </div>
       <button class="step-json-toggle" data-target="json2">{ JSON }</button>
     </div>
@@ -820,7 +820,7 @@
 
     <h2>How agents use pdf-mcp</h2>
     <p>
-      The server exposes eight tools, but a typical agent workflow uses three of them in sequence. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) to find the pages that match the user's question. Finally, <code>pdf_read_pages</code> extracts text, images, and tables from just those pages. The other five tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code> — cover full-document reads, visual inspection of scanned pages, and cache management. (Embedded images and structured tables come back inline from <code>pdf_read_pages</code> rather than via a dedicated extraction tool.)
+      The server exposes eight tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other five tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code> — cover full-document reads, visual inspection of scanned pages, and cache management.
     </p>
 
     <h2>What the browser demo shows</h2>
@@ -839,7 +839,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.5</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.6</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>

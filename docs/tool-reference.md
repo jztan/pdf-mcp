@@ -336,19 +336,21 @@ The first call on a new document embeds all pages or builds the section index (o
 
 **Error contract:** validation failures (empty query, missing `fastembed` in semantic mode, unknown mode, unknown granularity) return an inline `{"error": "...", ...}` payload with the tool call still succeeding. Callers should check for an `error` key before reading other fields.
 
-**Example (page mode, hybrid):**
+**Example (page mode, hybrid, default paragraph excerpts):**
 
 ```python
 pdf_search("/path/to/paper.pdf", "training process", max_results=5)
 # {
 #   "matches": [
-#     {"page": 7, "excerpt": "...the training process used...",
+#     {"page": 7, "excerpt": "We trained the model using the Adam
+#        optimizer with β1 = 0.9, β2 = 0.98 and ε = 10−9.",
 #      "position": 412, "score": 0.0312, "source": "hybrid",
 #      "semantic_score": 0.81, "low_confidence": false},
 #     ...
 #   ],
 #   "total_matches": 5,
 #   "page_match_counts": {"7": 1, "12": 1, ...},
+#   "excerpt_style": "paragraph",
 #   "search_mode": "hybrid",
 #   "searched_pages": 28
 # }

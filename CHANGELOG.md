@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Docs
+- Browser demo (`pages/index.html`, served at `pdf-mcp.jztan.com`):
+  fixed stale results after "Try another PDF". Reset cleared the input
+  fields and payload vars but left the previous PDF's Step 2 (search)
+  and Step 3 (read) results painted on screen, and loading a new PDF
+  only repainted Step 1 — so the search/read panes and their `{ JSON }`
+  panels kept showing the old document until a fresh query ran. A shared
+  `resetSteps()` helper now clears both result panes, their JSON panels,
+  the suggested chips, and the payload vars whenever a new PDF loads and
+  on reset. Demo footer bumped to `v0.6.1`.
+- README: appended `utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp`
+  to the six `blog.jztan.com` article links so GitHub README clicks are
+  attributable in GA4 instead of folding into generic `github.com`
+  referral traffic. Mirrors the redmine-mcp-server README convention.
+
 ## [1.14.0] - 2026-05-29
 ### Changed
 - `FastMCP(instructions=...)` rewritten to sharpen routing for agents

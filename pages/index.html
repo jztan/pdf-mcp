@@ -839,7 +839,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.6</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.6.1</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>
@@ -978,6 +978,7 @@
       content_warning: "Metadata fields are untrusted content from the PDF."
     };
 
+    resetSteps();
     renderInfo(pdfInfo, filename);
     hideLoader();
     uploadSection.classList.add("hidden");
@@ -1346,12 +1347,26 @@
     });
   });
 
+  // Reset Step 2 (search) and Step 3 (read) back to their initial empty
+  // state — payload vars, inputs, rendered results, and JSON panels. Called
+  // when a new PDF loads and on "Try another PDF" so stale results from the
+  // previous PDF never linger.
+  function resetSteps() {
+    pdfSearch = pdfReadPages = null;
+    $("searchInput").value = ""; $("readInput").value = "";
+    $("suggestedChips").innerHTML = "";
+    $("searchResults").innerHTML = `<div class="search-empty">Enter a query above, or pick a suggestion</div>`;
+    $("readResults").innerHTML = `<div class="search-empty">Enter pages above, or click a page in Step 1's coverage strip</div>`;
+    $("json2-content").innerHTML = "";
+    $("json3-content").innerHTML = "";
+  }
+
   $("resetBtn").addEventListener("click", () => {
     workflow.classList.add("hidden");
     uploadSection.classList.remove("hidden");
     fileInput.value = ""; urlInput.value = "";
-    $("searchInput").value = ""; $("readInput").value = "";
-    pageTexts = []; pdfInfo = pdfSearch = pdfReadPages = null;
+    pageTexts = []; pdfInfo = null;
+    resetSteps();
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 

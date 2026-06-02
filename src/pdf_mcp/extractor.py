@@ -111,6 +111,21 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
     return unique_result
 
 
+def detect_column_boxes(page: Any) -> list[Any]:
+    """Return column bounding boxes in reading order, or [] if unavailable.
+
+    Wraps pymupdf4llm's column detector. Any failure — missing dependency,
+    its version-guard ImportError, or a detection error — degrades to [] so
+    callers fall back to positional-sort extraction.
+    """
+    try:
+        from pymupdf4llm.helpers.multi_column import column_boxes
+
+        return list(column_boxes(page, footer_margin=50, header_margin=50))
+    except Exception:
+        return []
+
+
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     Extract text from a PDF page.

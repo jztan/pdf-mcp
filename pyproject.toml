@@ -110,6 +110,14 @@ module = "fastembed"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "pymupdf4llm"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pymupdf4llm.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]
 disallow_untyped_calls = false
 warn_unused_ignores = false

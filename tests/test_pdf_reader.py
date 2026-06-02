@@ -1670,5 +1670,23 @@ class TestGetBestParagraphForQuery:
             os.unlink(f.name)
 
 
+def test_detect_column_boxes_returns_list_for_page():
+    import pymupdf
+    from pdf_mcp.extractor import detect_column_boxes
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "some body text on a page")
+    assert isinstance(detect_column_boxes(page), list)
+    doc.close()
+
+
+def test_detect_column_boxes_falls_back_to_empty_on_error():
+    from pdf_mcp.extractor import detect_column_boxes
+
+    # A non-page object makes the underlying detector raise -> [].
+    assert detect_column_boxes("not a page") == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

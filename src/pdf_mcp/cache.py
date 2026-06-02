@@ -40,6 +40,11 @@ _FTS5_SECTION_TABLE_SCHEMA = (
 )
 
 
+# Bump when text-extraction logic changes so cached text + everything derived
+# from it (embeddings, FTS indexes) is dropped and rebuilt. v1: column-aware
+# reading order for multi-column PDFs.
+_EXTRACTION_VERSION = 1
+
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
 
@@ -123,6 +128,21 @@ class PDFCache:
         the SQLite build supports FTS5 virtual tables.
         """
         with sqlite3.connect(self.db_path) as conn:
+            # Extraction-logic version: drop cached text and all text-derived
+            # tables when the extraction algorithm changes, forcing re-extract.
+            # Only runs when the DB is non-empty (user_version=0 on a brand-new
+            # DB is indistinguishable from a pre-v1 cache; guard on the
+            # presence of the page_text table to avoid wiping a fresh init).
+            (extraction_version,) = conn.execute("PRAGMA user_version").fetchone()
+            has_page_text = bool(_get_columns(conn, "page_text"))
+            if extraction_version < _EXTRACTION_VERSION and has_page_text:
+                conn.execute("DROP TABLE IF EXISTS page_text")
+                conn.execute("DROP TABLE IF EXISTS page_embeddings")
+                conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
+                conn.execute("DROP TABLE IF EXISTS pdf_section_fts")
+            if extraction_version < _EXTRACTION_VERSION:
+                conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
+
             # page_images: old schema stored binary data instead of file path
             cols = _get_columns(conn, "page_images")
             if "data" in cols or (cols and "file_path_on_disk" not in cols):

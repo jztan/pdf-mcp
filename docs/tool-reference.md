@@ -134,7 +134,7 @@ pdf_get_toc("/path/to/textbook.pdf")
 
 ### `pdf_read_pages`
 
-Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly.
+Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly. On multi-column pages, text is extracted in column reading order when `pdf-mcp[multicolumn]` is installed; without that extra, a positional sort is used, which can interleave columns.
 
 **Parameters:**
 - `path` (string, required) — Path to PDF file.

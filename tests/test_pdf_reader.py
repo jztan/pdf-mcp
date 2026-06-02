@@ -1655,9 +1655,7 @@ class TestGetBestParagraphForQuery:
             page2 = doc2[0]
             # Without min_chars: heading wins (both have "attention",
             # heading is first)
-            text_no_floor, _ = get_best_paragraph_for_query(
-                page2, "attention"
-            )
+            text_no_floor, _ = get_best_paragraph_for_query(page2, "attention")
             assert text_no_floor is not None
             # With min_chars=80: heading skipped, body wins
             text_with_floor, _ = get_best_paragraph_for_query(
@@ -1668,6 +1666,110 @@ class TestGetBestParagraphForQuery:
             assert "weighted sum" in text_with_floor.lower()
             doc2.close()
             os.unlink(f.name)
+
+
+def test_extraction_version_bump_drops_text_and_derived(tmp_path):
+    import sqlite3
+    from pdf_mcp.cache import PDFCache, _EXTRACTION_VERSION
+
+    cache = PDFCache(cache_dir=tmp_path)
+    db = cache.db_path
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO page_text "
+            "(file_path, page_num, file_mtime, text, text_length) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("/x.pdf", 1, 0.0, "old interleaved text", 20),
+        )
+        conn.execute("PRAGMA user_version = 0")  # simulate pre-upgrade cache
+        conn.commit()
+
+    PDFCache(cache_dir=tmp_path)  # re-init triggers the migration
+
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+        (version,) = conn.execute("PRAGMA user_version").fetchone()
+    assert rows == 0
+    assert version == _EXTRACTION_VERSION
+
+
+def test_extract_text_is_column_major_when_two_columns(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    for i, y in enumerate((100, 130, 160)):
+        page.insert_text((60, y), f"leftrow{i}")
+        page.insert_text((360, y), f"rightrow{i}")
+
+    # Force a two-column split: left half, then right half.
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+
+    # Column-major: the whole left column precedes the right column.
+    assert out.index("leftrow2") < out.index("rightrow0")
+
+
+def test_extract_text_unchanged_when_single_column(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "only one column of text here")
+    page.insert_text((60, 130), "second line of the column")
+
+    monkeypatch.setattr(extractor, "detect_column_boxes", lambda p: [])
+    out = extractor.extract_text_from_page(page)
+
+    expected = "\n\n".join(
+        b[4] for b in page.get_text("blocks", sort=True) if b[6] == 0
+    )
+    doc.close()
+    assert out == expected
+
+
+def test_detect_column_boxes_returns_list_for_page():
+    import pymupdf
+    from pdf_mcp.extractor import detect_column_boxes
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "some body text on a page")
+    assert isinstance(detect_column_boxes(page), list)
+    doc.close()
+
+
+def test_detect_column_boxes_falls_back_to_empty_on_error():
+    from pdf_mcp.extractor import detect_column_boxes
+
+    # A non-page object makes the underlying detector raise -> [].
+    assert detect_column_boxes("not a page") == []
+
+
+def test_extract_text_skips_empty_columns(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "left column has text")
+    # right half intentionally blank
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+    assert out == "left column has text"
+    assert "\n\n" not in out
 
 
 if __name__ == "__main__":

@@ -1655,9 +1655,7 @@ class TestGetBestParagraphForQuery:
             page2 = doc2[0]
             # Without min_chars: heading wins (both have "attention",
             # heading is first)
-            text_no_floor, _ = get_best_paragraph_for_query(
-                page2, "attention"
-            )
+            text_no_floor, _ = get_best_paragraph_for_query(page2, "attention")
             assert text_no_floor is not None
             # With min_chars=80: heading skipped, body wins
             text_with_floor, _ = get_best_paragraph_for_query(

@@ -43,6 +43,14 @@ For semantic search (adds `fastembed` and `numpy`, ~67 MB model download on firs
 pip install 'pdf-mcp[semantic]'
 ```
 
+For correct reading order on multi-column PDFs (adds `pymupdf4llm`, which pulls `pymupdf_layout`/`onnxruntime`):
+
+```bash
+pip install 'pdf-mcp[multicolumn]'
+```
+
+Without it, multi-column pages fall back to positional-sort extraction, which can interleave columns.
+
 For OCR on scanned PDFs (requires system Tesseract):
 
 ```bash
@@ -354,6 +362,7 @@ black src/ tests/
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
 | Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
 | Tables | Lost in raw text | Extracted and inlined per page |
+| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |

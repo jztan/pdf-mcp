@@ -50,7 +50,7 @@ _(empty — `pdf_render_pages` page-correlation contract landed; see `[Unrelease
 
 ### P2 — investigate before committing
 
-- [ ] **Optional `pdf-mcp[layout]` extra (two-column reading order + heuristic detector escalation).** PyMuPDF's `sort=True` doesn't understand columns, so academic two-column layouts interleave paragraphs; the 7-signal section detector also underperforms on OCR'd scans and layout-irregular preprints. Both want the same dependency: a layout-aware model behind an optional extra. Spike on `pymupdf-pro` vs GROBID / Marker / Surya — install size, licensing, and accuracy lift — before budgeting delivery time.
+- [ ] **Layout-aware section-detector escalation.** The 7-signal heuristic section detector underperforms on OCR'd scans and layout-irregular preprints. (The related two-column *reading-order* problem shipped separately as the optional `pdf-mcp[multicolumn]` extra — see `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) — using `pymupdf4llm`'s column detector behind a fail-safe wrapper; the detector-quality gap on scans is what remains.) If revisited, spike a layout-aware model (GROBID / Marker / Surya) on accuracy lift, install size, and licensing before budgeting.
 
 ### P3 — methodology, fold into a P1/P2 item
 

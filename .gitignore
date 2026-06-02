@@ -76,6 +76,9 @@ venv.bak/
 # Benchmark run artifacts
 benchmark_results/
 
+# Fetched benchmark PDFs (regenerable from corpus manifest; not redistributed)
+benchmark_data/.reading_order_pdfs/
+
 # Claude
 CLAUDE.md
 .claude/

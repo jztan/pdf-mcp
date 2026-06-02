@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `[multicolumn]` optional install extra
+  (`pip install 'pdf-mcp[multicolumn]'`) enabling column-aware reading
+  order for multi-column PDFs. It pulls `pymupdf4llm` (and transitively
+  `pymupdf_layout` / `onnxruntime`), kept out of the base install to
+  keep it light; without the extra, extraction falls back to the
+  positional-sort path. The detector wrapper degrades to that fallback
+  on any import, version-guard, or detection error, so the server runs
+  identically whether or not the extra is installed.
+- Reading-order fidelity benchmark
+  (`scripts/benchmark_reading_order.py`,
+  `benchmark_data/reading_order_corpus.json`): 22 two-column + 22
+  one-column arXiv documents scored against READoc ground truth, with a
+  PyMuPDF4LLM column-aware upper-bound reference. Committed baseline in
+  `benchmark_data/reading_order_results.md`. New deterministic helpers
+  (`normalize_tokens`, `reading_order_score`, `classify_columns`) are
+  unit-tested.
+
+### Fixed
+- Multi-column reading order: `extract_text_from_page` sorted text
+  blocks by position (`get_text("blocks", sort=True)`), which
+  interleaved columns top-to-bottom on two-column PDFs and scrambled the
+  text feeding search, excerpts, and embeddings. It now detects column
+  boxes (via the optional `pymupdf4llm` detector) and extracts each
+  column in reading order when more than one column is found;
+  single-column pages keep the prior positional-sort path byte-for-byte.
+  Reading-order fidelity vs READoc ground truth rose from **0.564 to
+  0.816** on 22 two-column arXiv papers (one-column unchanged: 0.821 →
+  0.836, no regression). Output stays plain text, so FTS / embeddings /
+  paragraph-excerpt logic is unaffected; running headers and footers are
+  retained (column boxes use zero header/footer margins).
+- Cache invalidation on extraction-logic change: a new
+  `PRAGMA user_version` marker (`_EXTRACTION_VERSION`) drops cached
+  `page_text`, `page_embeddings`, and the FTS tables on upgrade so
+  existing caches re-extract with column-aware reading order. Fresh
+  databases are marked current immediately to avoid a spurious one-time
+  re-extract on the second launch.
+
 ### Docs
 - Browser demo (`pages/index.html`, served at `pdf-mcp.jztan.com`):
   fixed stale results after "Try another PDF". Reset cleared the input

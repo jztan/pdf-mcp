@@ -1670,6 +1670,31 @@ class TestGetBestParagraphForQuery:
             os.unlink(f.name)
 
 
+def test_extraction_version_bump_drops_text_and_derived(tmp_path):
+    import sqlite3
+    from pdf_mcp.cache import PDFCache, _EXTRACTION_VERSION
+
+    cache = PDFCache(cache_dir=tmp_path)
+    db = cache.db_path
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO page_text "
+            "(file_path, page_num, file_mtime, text, text_length) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("/x.pdf", 1, 0.0, "old interleaved text", 20),
+        )
+        conn.execute("PRAGMA user_version = 0")  # simulate pre-upgrade cache
+        conn.commit()
+
+    PDFCache(cache_dir=tmp_path)  # re-init triggers the migration
+
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+        (version,) = conn.execute("PRAGMA user_version").fetchone()
+    assert rows == 0
+    assert version == _EXTRACTION_VERSION
+
+
 def test_extract_text_is_column_major_when_two_columns(monkeypatch):
     import pymupdf
     from pdf_mcp import extractor

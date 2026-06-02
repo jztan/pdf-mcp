@@ -54,6 +54,8 @@ _(empty — `pdf_render_pages` page-correlation contract landed; see `[Unrelease
 
 ### P3 — methodology, fold into a P1/P2 item
 
+- [ ] **Reading-order "coherence" metric to guard the column-detection path.** The containment-based excerpt benchmark is blind to reading-order scrambling — the answer substring survives column interleaving, so containment stayed flat through the two-column reading-order fix (shipped as `pdf-mcp[multicolumn]`). A coherence metric — embed a paragraph-mode excerpt, embed the same text in canonical order, compare — should be ~0 on single-column, large pre-fix on two-column, ~0 post-fix. Reuse the `benchmark_data/reading_order_corpus.json` corpus and `reading_order_score` scaffolding; swap the token-sequence scorer for an embedding-distance scorer. Catches future regressions in `detect_column_boxes` / column extraction that containment cannot see.
+
 - [ ] **Agent-task evaluation for section vs page search.** Current benchmarks measure retrieval characteristics; this would measure whether section-granularity actually helps agents *answer better questions* (LLM-graded Q&A or agent-task completion). Not a deliverable on its own — bundle the harness into whichever P1/P2 item needs it first (likely the confidence-threshold calibration).
 
 ---

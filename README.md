@@ -8,6 +8,8 @@
 [![codecov](https://codecov.io/gh/jztan/pdf-mcp/graph/badge.svg)](https://codecov.io/gh/jztan/pdf-mcp)
 [![Downloads](https://pepy.tech/badge/pdf-mcp)](https://pepy.tech/project/pdf-mcp)
 
+**Surgical PDF access for AI agents — search, read, and extract without flooding context.**
+
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that enables AI agents to read, search, and extract content from PDF files. Built with Python and PyMuPDF, with SQLite-based caching for persistence across server restarts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
@@ -20,6 +22,21 @@ Walk through the three main tools (`pdf_info`, `pdf_search`, `pdf_read_pages`) w
 
 [<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.png" alt="pdf-mcp browser demo: pdf_search returns page-level matches with highlighted excerpts" width="720">](https://pdf-mcp.jztan.com/)
 
+## Why pdf-mcp?
+
+| | Without pdf-mcp | With pdf-mcp |
+|---|---|---|
+| Large PDFs | Context overflow | Chunked reading |
+| Token budgeting | Guess and overflow | Estimated tokens before reading |
+| Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
+| Tables | Lost in raw text | Extracted and inlined per page |
+| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
+| Images | Ignored | Extracted as PNG files |
+| Repeated access | Re-parse every time | SQLite cache |
+| Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
+| Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
+| Tool design | Single monolithic tool | 8 specialized tools |
+
 ## Features
 
 Give your agent surgical access to PDFs instead of flooding context with raw text.
@@ -30,6 +47,19 @@ Give your agent surgical access to PDFs instead of flooding context with raw tex
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
+
+## Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Tools](#tools)
+- [Example Workflow](#example-workflow)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
 ## Installation
 
@@ -274,30 +304,6 @@ Agent workflow:
    → Full page text for deeper reading
 ```
 
-## Caching
-
-The server uses SQLite for persistent caching. This is necessary because MCP servers using STDIO transport are spawned as a new process for each conversation.
-
-**Cache location:** `~/.cache/pdf-mcp/cache.db`
-
-**What's cached:**
-
-| Data | Benefit |
-|------|---------|
-| Metadata + text coverage | Avoid re-parsing document info |
-| Page text | Skip re-extraction |
-| Images | Skip re-encoding |
-| Tables | Skip re-detection |
-| TOC | Skip re-parsing |
-| FTS5 index | O(log N) search with BM25 ranking after first query |
-| Embeddings | Instant semantic search after first indexing run |
-| Rendered PNGs | Skip re-rendering; shared between `pdf_render_pages` and `pdf_read_pages(render_dpi=…)` |
-
-**Cache invalidation:**
-- Automatic when file modification time changes
-- Manual via the `pdf_cache_clear` tool
-- TTL: 24 hours (configurable)
-
 ## Configuration
 
 ### Access control (optional)
@@ -329,6 +335,30 @@ PDF_MCP_CACHE_DIR=/path/to/cache
 PDF_MCP_CACHE_TTL=48
 ```
 
+### Caching
+
+The server uses SQLite for persistent caching. This is necessary because MCP servers using STDIO transport are spawned as a new process for each conversation.
+
+**Cache location:** `~/.cache/pdf-mcp/cache.db`
+
+**What's cached:**
+
+| Data | Benefit |
+|------|---------|
+| Metadata + text coverage | Avoid re-parsing document info |
+| Page text | Skip re-extraction |
+| Images | Skip re-encoding |
+| Tables | Skip re-detection |
+| TOC | Skip re-parsing |
+| FTS5 index | O(log N) search with BM25 ranking after first query |
+| Embeddings | Instant semantic search after first indexing run |
+| Rendered PNGs | Skip re-rendering; shared between `pdf_render_pages` and `pdf_read_pages(render_dpi=…)` |
+
+**Cache invalidation:**
+- Automatic when file modification time changes
+- Manual via the `pdf_cache_clear` tool
+- TTL: 24 hours (configurable)
+
 ## Development
 
 ```bash
@@ -353,21 +383,6 @@ flake8 src/ tests/
 # Formatting
 black src/ tests/
 ```
-
-## Why pdf-mcp?
-
-| | Without pdf-mcp | With pdf-mcp |
-|---|---|---|
-| Large PDFs | Context overflow | Chunked reading |
-| Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
-| Tables | Lost in raw text | Extracted and inlined per page |
-| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
-| Images | Ignored | Extracted as PNG files |
-| Repeated access | Re-parse every time | SQLite cache |
-| Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
-| Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
-| Tool design | Single monolithic tool | 8 specialized tools |
 
 ## Roadmap
 
@@ -409,3 +424,4 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 - [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — What we found when we audited an MCP server for security holes
 - [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
+```

@@ -121,7 +121,10 @@ def detect_column_boxes(page: Any) -> list[Any]:
     try:
         from pymupdf4llm.helpers.multi_column import column_boxes
 
-        return list(column_boxes(page, footer_margin=50, header_margin=50))
+        # margins=0 keeps running headers/footers/page numbers in the column
+        # boxes, matching the single-column path (which extracts the full page).
+        # Verified to not affect reading-order benchmark score.
+        return list(column_boxes(page, footer_margin=0, header_margin=0))
     except Exception:
         return []
 
@@ -142,9 +145,10 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         if len(boxes) > 1:
             # Multi-column: extract each column in reading order so the
             # text is not interleaved row-by-row across columns.
-            return "\n\n".join(
+            parts = (
                 page.get_text("text", clip=box, sort=True).strip() for box in boxes
             )
+            return "\n\n".join(part for part in parts if part)
         # Single-column (or detection unavailable): positional block sort.
         blocks = page.get_text("blocks", sort=True)
         # blocks format: (x0, y0, x1, y1, "text", block_no, block_type)

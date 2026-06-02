@@ -1753,5 +1753,24 @@ def test_detect_column_boxes_falls_back_to_empty_on_error():
     assert detect_column_boxes("not a page") == []
 
 
+def test_extract_text_skips_empty_columns(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "left column has text")
+    # right half intentionally blank
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+    assert out == "left column has text"
+    assert "\n\n" not in out
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

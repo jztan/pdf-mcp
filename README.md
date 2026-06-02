@@ -380,9 +380,23 @@ MIT — see [LICENSE](LICENSE).
 
 - [pdf-mcp on PyPI](https://pypi.org/project/pdf-mcp/)
 - [pdf-mcp on GitHub](https://github.com/jztan/pdf-mcp)
+
+## Blog posts
+
+Background, benchmarks, and design notes from building pdf-mcp:
+
+**Getting started**
+
 - [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — The problem with large PDFs in AI agents and a working solution
-- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — What we found when we audited an MCP server for security holes
 - [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — How AI agents use pdf-mcp tools to read and navigate PDF documents
+
+**Search & retrieval**
+
 - [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
 - [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
+- [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
+
+**Engineering & security**
+
+- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — What we found when we audited an MCP server for security holes
 - [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use

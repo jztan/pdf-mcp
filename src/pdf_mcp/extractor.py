@@ -138,13 +138,18 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         Extracted text content
     """
     if sort_by_position:
-        # Get text with position information
+        boxes = detect_column_boxes(page)
+        if len(boxes) > 1:
+            # Multi-column: extract each column in reading order so the
+            # text is not interleaved row-by-row across columns.
+            return "\n\n".join(
+                page.get_text("text", clip=box, sort=True).strip() for box in boxes
+            )
+        # Single-column (or detection unavailable): positional block sort.
         blocks = page.get_text("blocks", sort=True)
-
         # blocks format: (x0, y0, x1, y1, "text", block_no, block_type)
         # block_type: 0 = text, 1 = image
         text_blocks = [block[4] for block in blocks if block[6] == 0]
-
         return "\n\n".join(text_blocks)
     else:
         return str(page.get_text())

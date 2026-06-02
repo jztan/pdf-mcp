@@ -1670,6 +1670,48 @@ class TestGetBestParagraphForQuery:
             os.unlink(f.name)
 
 
+def test_extract_text_is_column_major_when_two_columns(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    for i, y in enumerate((100, 130, 160)):
+        page.insert_text((60, y), f"leftrow{i}")
+        page.insert_text((360, y), f"rightrow{i}")
+
+    # Force a two-column split: left half, then right half.
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+
+    # Column-major: the whole left column precedes the right column.
+    assert out.index("leftrow2") < out.index("rightrow0")
+
+
+def test_extract_text_unchanged_when_single_column(monkeypatch):
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "only one column of text here")
+    page.insert_text((60, 130), "second line of the column")
+
+    monkeypatch.setattr(extractor, "detect_column_boxes", lambda p: [])
+    out = extractor.extract_text_from_page(page)
+
+    expected = "\n\n".join(
+        b[4] for b in page.get_text("blocks", sort=True) if b[6] == 0
+    )
+    doc.close()
+    assert out == expected
+
+
 def test_detect_column_boxes_returns_list_for_page():
     import pymupdf
     from pdf_mcp.extractor import detect_column_boxes

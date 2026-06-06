@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Security
+- Pinned `pip>=26.1.2` in the `dev` extra to clear PYSEC-2026-196.
+  `pip 26.1.1` was pulled into the locked environment transitively
+  (`pip-audit` → `pip-api` → `pip`), so CI's `uv sync --frozen` +
+  `uv run bash scripts/audit.sh` step kept failing on the seeded pip
+  even though a fixed release exists. The explicit constraint forces
+  `26.1.2` into `uv.lock`, so local preflight, `ci.yml`, and
+  `publish-pypi.yml` all converge on the patched pip without growing
+  the audit ignore list (the vuln has a real upstream fix).
+
 ## [1.15.0] - 2026-06-06
 ### Added
 - `[multicolumn]` optional install extra

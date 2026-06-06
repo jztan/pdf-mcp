@@ -57,6 +57,8 @@ dev = [
     "flake8>=7.0",
     "black>=26.3.1",
     "pip-audit>=2.7.0",
+    # Pulled in transitively via pip-audit -> pip-api; pin to clear PYSEC-2026-196.
+    "pip>=26.1.2",
     "numpy>=1.24",
     "pre-commit>=3.5",
     "pymupdf4llm>=1.24.0",

@@ -34,8 +34,8 @@ from .extractor import (
     parse_page_range,
     render_page_as_png,
 )
-from .extractor import _ocr_page_worker, _render_page_worker  # noqa: F401
-from .parallel import PageError, resolve_workers, run_pages  # noqa: F401
+from .extractor import _ocr_page_worker, _render_page_worker
+from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 

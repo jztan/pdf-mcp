@@ -716,6 +716,32 @@ def pdf_read_pages(
                 for pn, res in run_pages(_ocr_page_worker, ocr_args, workers):
                     ocr_results[pn] = res
 
+        # --- Parallel dispatch: render cache-misses ---
+        render_failed_pages: list[int] = []
+        render_cached: dict[int, Any] = {}
+        render_results: dict[int, Any] = {}
+        if clamped_dpi is not None:
+            render_miss_pages: list[int] = []
+            for n in page_nums:
+                cr = cache.get_page_render(local_path, n, clamped_dpi)
+                if cr:
+                    render_cached[n] = cr
+                else:
+                    render_miss_pages.append(n)
+            if render_miss_pages:
+                workers = resolve_workers(
+                    len(render_miss_pages),
+                    _RENDER_PARALLEL_GATE,
+                    _MAX_PARALLEL_WORKERS,
+                )
+                pdf_hash = _pdf_hash(local_path)
+                render_args = [
+                    (local_path, n, str(cache.renders_dir), pdf_hash, clamped_dpi)
+                    for n in render_miss_pages
+                ]
+                for pn, res in run_pages(_render_page_worker, render_args, workers):
+                    render_results[pn] = res
+
         results = []
         cache_hits = 0
         total_chars = 0
@@ -808,30 +834,33 @@ def pdf_read_pages(
                 page_result["source"] = page_source
 
             if clamped_dpi is not None:
-                cached_render = cache.get_page_render(local_path, page_num, clamped_dpi)
-                if cached_render:
-                    render_info = cached_render
+                if page_num in render_cached:
+                    render_info = render_cached[page_num]
                 else:
-                    render_info = render_page_as_png(
-                        doc,
-                        page_num,
-                        cache.renders_dir,
-                        _pdf_hash(local_path),
-                        clamped_dpi,
-                    )
-                    cache.save_page_render(
-                        local_path,
-                        page_num,
-                        os.stat(local_path).st_mtime,
-                        clamped_dpi,
-                        render_info,
-                    )
+                    res = render_results.get(page_num)
+                    if res is None or isinstance(res, PageError):
+                        # Isolated failure: list it, omit render_id, do NOT
+                        # cache (keeps the page retryable).
+                        render_failed_pages.append(page_num + 1)
+                        render_info = None
+                    else:
+                        render_info = res
+                        cache.save_page_render(
+                            local_path,
+                            page_num,
+                            os.stat(local_path).st_mtime,
+                            clamped_dpi,
+                            render_info,
+                        )
                 # Surface the basename only; the absolute path stays
                 # server-side. To get the rendered PNG bytes, callers
                 # should use pdf_render_pages (which inlines image
                 # content blocks) rather than reading from disk.
-                page_result["render_id"] = Path(render_info["file_path_on_disk"]).name
-                page_result["render_size_bytes"] = render_info["size_bytes"]
+                if render_info is not None:
+                    page_result["render_id"] = Path(
+                        render_info["file_path_on_disk"]
+                    ).name
+                    page_result["render_size_bytes"] = render_info["size_bytes"]
 
             results.append(page_result)
 
@@ -850,6 +879,11 @@ def pdf_read_pages(
             "total_images": total_images,
             "total_tables": total_tables,
             **({"truncated_ocr": True} if ocr_truncated else {}),
+            **(
+                {"render_failed_pages": render_failed_pages}
+                if render_failed_pages
+                else {}
+            ),
             **(
                 {
                     "render_dpi_used": clamped_dpi,

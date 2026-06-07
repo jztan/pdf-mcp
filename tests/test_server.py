@@ -2907,3 +2907,50 @@ class TestOcrParallelOrchestration:
             result.keys()
         )
         assert len(result["pages"]) == 2
+
+
+class TestRenderParallelOrchestration:
+    def _multi_page_pdf(self, tmp_path, n=3):
+        import pymupdf
+
+        path = str(tmp_path / f"render{n}.pdf")
+        doc = pymupdf.open()
+        for i in range(n):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Render page {i + 1}.")
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_render_failure_listed_and_not_cached(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        cache_instance, _ = isolated_server
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        path = self._multi_page_pdf(tmp_path, 2)
+
+        import pdf_mcp.server as srv
+
+        monkeypatch.setattr(
+            srv,
+            "_render_page_worker",
+            lambda args: (args[1], PageError("RuntimeError('render exploded')")),
+        )
+
+        result = pdf_read_pages(path, "1-2", render_dpi=72)
+        assert "error" not in result
+        assert result["render_failed_pages"] == [1, 2]
+        # No render_id on failed pages
+        assert all("render_id" not in p for p in result["pages"])
+        # Failure not cached
+        assert cache_instance.get_page_render(path, 0, 72) is None
+
+    def test_render_success_shape_unchanged(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        path = self._multi_page_pdf(tmp_path, 2)
+        result = pdf_read_pages(path, "1-2", render_dpi=72)
+        assert "render_failed_pages" not in result  # absent when none failed
+        assert all("render_id" in p for p in result["pages"])
+        assert result["render_dpi_used"] == 72

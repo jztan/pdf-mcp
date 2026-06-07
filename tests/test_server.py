@@ -2972,3 +2972,44 @@ class TestRenderPagesStaysSequential:
             )
             == 1
         )
+
+
+class TestRenderRealSpawnCorrectness:
+    def _multi_page_pdf(self, tmp_path, n=4):
+        import pymupdf
+
+        path = str(tmp_path / f"spawn{n}.pdf")
+        doc = pymupdf.open()
+        for i in range(n):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Spawn render page {i + 1}.")
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_parallel_render_matches_sequential(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        import pdf_mcp.server as srv
+
+        # Lower the render gate so 4 pages actually spawn a real pool.
+        monkeypatch.setattr(srv, "_RENDER_PARALLEL_GATE", 2)
+        path = self._multi_page_pdf(tmp_path, 4)
+
+        # Sequential baseline.
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        seq = pdf_read_pages(path, "1-4", render_dpi=72)
+
+        # Clear renders so the parallel run recomputes, then go parallel.
+        cache_instance, _ = isolated_server
+        cache_instance.clear_all()
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "4")
+        par = pdf_read_pages(path, "1-4", render_dpi=72)
+
+        seq_ids = [p["render_id"] for p in seq["pages"]]
+        par_ids = [p["render_id"] for p in par["pages"]]
+        # Deterministic filenames (pdf_hash+page+dpi) -> identical ids + order.
+        assert par_ids == seq_ids
+        assert [p["render_size_bytes"] for p in par["pages"]] == [
+            p["render_size_bytes"] for p in seq["pages"]
+        ]

@@ -35,6 +35,8 @@ from .extractor import (
     parse_page_range,
     render_page_as_png,
 )
+from .extractor import _ocr_page_worker, _render_page_worker  # noqa: F401
+from .parallel import PageError, resolve_workers, run_pages  # noqa: F401
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -66,6 +68,15 @@ RENDER_DPI_MIN = 72
 RENDER_DPI_MAX = 400
 MAX_RENDER_INLINE_PAGES = 5
 MAX_OCR_PAGES_LIMIT = 20
+
+# Parallel page-processing gates (process pool for OCR/render).
+# OCR gate is fixed at 2 (work dwarfs ~0.5s/worker spawn at any page count).
+# Render gate is PROVISIONAL until an end-to-end re-benchmark sets it; a
+# sentinel >= MAX_PAGES_LIMIT disables render dispatch entirely (helper still
+# wired) if the measured end-to-end win does not clear ~1.3x.
+_OCR_PARALLEL_GATE = 2
+_RENDER_PARALLEL_GATE = 16
+_MAX_PARALLEL_WORKERS = 8
 
 # Initialize MCP server. `version` is propagated through the MCP
 # `initialize` handshake as `serverInfo.version`, so clients can tell

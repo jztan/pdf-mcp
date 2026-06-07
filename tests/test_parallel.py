@@ -3,7 +3,7 @@
 import subprocess
 import sys
 
-from pdf_mcp.parallel import PageError, resolve_workers
+from pdf_mcp.parallel import PageError, resolve_workers, run_pages
 
 
 def test_importing_extractor_does_not_import_server():
@@ -93,3 +93,39 @@ class TestResolveWorkers:
         monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 8)
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "not-a-number")
         assert resolve_workers(100, gate=2, cap=8) == 8
+
+
+def _square(n):
+    return n * n
+
+
+class TestRunPages:
+    def test_sequential_branch_preserves_order(self):
+        # max_workers <= 1 -> no pool
+        out = run_pages(_square, [1, 2, 3, 4], max_workers=1)
+        assert out == [1, 4, 9, 16]
+
+    def test_real_pool_preserves_order(self):
+        out = run_pages(_square, [1, 2, 3, 4, 5], max_workers=2)
+        assert out == [1, 4, 9, 16, 25]
+
+    def test_broken_pool_falls_back_to_sequential(self, monkeypatch):
+        from concurrent.futures.process import BrokenProcessPool
+
+        class _BoomPool:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def map(self, *a, **k):
+                raise BrokenProcessPool("worker died")
+
+        monkeypatch.setattr("pdf_mcp.parallel.ProcessPoolExecutor", _BoomPool)
+        # Falls back to in-parent sequential, still returns correct results.
+        out = run_pages(_square, [2, 3, 4], max_workers=4)
+        assert out == [4, 9, 16]

@@ -62,3 +62,25 @@ content, drove the earlier fork-vs-spawn discrepancy:
 
 OCR is always measured on a synthetic scanned PDF — real arXiv papers have a
 text layer, so `--corpus` skips OCR.
+
+## End-to-end `pdf_read_pages(render_dpi)` — same M4 Pro, spawn, 24 pages synthetic
+
+This section measures the **real shipped path**: render parallelism plus the
+serial per-page work that stays in the parent (`extract_images_from_page`,
+`extract_tables_from_page` / `find_tables`, cache writes). The isolated render
+numbers above overstate the gain; Amdahl's law applies here.
+
+### End-to-end pdf_read_pages(render_dpi=200): wall time including serial text/images/tables extraction per page.
+
+| workers | wall (s) | speedup |
+|--------:|---------:|--------:|
+| 1 | 4.155 | 1.00x |
+| 4 | 3.108 | 1.34x |
+| 8 | 2.919 | 1.42x |
+
+### Gate decision
+
+Both 4 and 8 workers clear the ~1.3x end-to-end threshold (1.34x and 1.42x
+respectively), so render dispatch is **enabled**. `_RENDER_PARALLEL_GATE = 16`:
+at ≥16 pages the ~0.5 s/worker spawn cost is well-amortized; below that the
+marginal gain does not justify the overhead.

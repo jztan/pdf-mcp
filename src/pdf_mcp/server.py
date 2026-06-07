@@ -70,9 +70,11 @@ MAX_OCR_PAGES_LIMIT = 20
 
 # Parallel page-processing gates (process pool for OCR/render).
 # OCR gate is fixed at 2 (work dwarfs ~0.5s/worker spawn at any page count).
-# Render gate is PROVISIONAL until an end-to-end re-benchmark sets it; a
-# sentinel >= MAX_PAGES_LIMIT disables render dispatch entirely (helper still
-# wired) if the measured end-to-end win does not clear ~1.3x.
+# Render gate set from end-to-end pdf_read_pages(render_dpi) benchmark on an
+# Apple M4 Pro (14 CPUs, spawn, 24 pages synthetic): 1 worker=4.16 s,
+# 4 workers=3.11 s (1.34x), 8 workers=2.92 s (1.42x). Both clear the ~1.3x
+# threshold, so render dispatch is enabled. Gate=16: at >=16 pages the spawn
+# cost (~0.5 s/worker) is well-amortized; below that the win is marginal.
 _OCR_PARALLEL_GATE = 2
 _RENDER_PARALLEL_GATE = 16
 _MAX_PARALLEL_WORKERS = 8

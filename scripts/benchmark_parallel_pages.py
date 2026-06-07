@@ -242,9 +242,7 @@ def _proc_ocr(args: tuple[str, int]) -> int:
         doc.close()
 
 
-def time_process_ocr(
-    path: str, page_nums: list[int], workers: int
-) -> float:
+def time_process_ocr(path: str, page_nums: list[int], workers: int) -> float:
     """True multi-core OCR: one process + Document per task. Wall seconds."""
     start = time.perf_counter()
     with ProcessPoolExecutor(max_workers=workers) as pool:
@@ -264,9 +262,7 @@ def _proc_text(args: tuple[str, int]) -> int:
         doc.close()
 
 
-def time_process_text(
-    path: str, page_nums: list[int], workers: int
-) -> float:
+def time_process_text(path: str, page_nums: list[int], workers: int) -> float:
     """Multi-core plain-text extraction. Returns wall seconds."""
     start = time.perf_counter()
     with ProcessPoolExecutor(max_workers=workers) as pool:
@@ -281,7 +277,7 @@ def _split_chunks(items: list[int], n: int) -> list[list[int]]:
     for j in range(n):
         size = k + (1 if j < m else 0)
         if size:
-            out.append(items[i:i + size])
+            out.append(items[i : i + size])
             i += size
     return out
 
@@ -324,14 +320,31 @@ def _proc_text_chunk(args: tuple[str, list[int]]) -> int:
         doc.close()
 
 
-def time_process_text_chunked(
-    path: str, page_nums: list[int], workers: int
-) -> float:
+def time_process_text_chunked(path: str, page_nums: list[int], workers: int) -> float:
     """Chunked text extraction: one open per worker. Returns wall seconds."""
     chunks = _split_chunks(page_nums, workers)
     start = time.perf_counter()
     with ProcessPoolExecutor(max_workers=workers) as pool:
         list(pool.map(_proc_text_chunk, [(path, c) for c in chunks]))
+    return time.perf_counter() - start
+
+
+def time_read_pages_render(path: str, n_pages: int, max_workers: int) -> float:
+    """End-to-end pdf_read_pages(render_dpi) wall time, incl. the serial
+    text/images/tables work that stays in the parent. This is the path that
+    actually ships render parallelism -- not render-in-isolation."""
+    import time
+
+    from pdf_mcp.server import cache, pdf_read_pages
+
+    os.environ["PDF_MCP_MAX_WORKERS"] = str(max_workers)
+    # NOTE: clears the module-level cache. PDF_MCP_CACHE_DIR must be set to a
+    # temp dir before this script imports anything from pdf_mcp.server (done in
+    # main() below) so the real user cache is never touched.
+    cache.clear_all()
+    pages = ",".join(str(i + 1) for i in range(n_pages))
+    start = time.perf_counter()
+    pdf_read_pages(path, pages, render_dpi=200)
     return time.perf_counter() - start
 
 
@@ -351,21 +364,15 @@ def text_benchmark(
     def task(doc: pymupdf.Document, n: int) -> Any:
         return extract_text_from_page(doc[n])
 
-    seq_min, seq_med = best_of(
-        lambda: time_sequential(pdf, page_nums, task), runs
-    )
+    seq_min, seq_med = best_of(lambda: time_sequential(pdf, page_nums, task), runs)
     rows = [_row("sequential", seq_min, seq_med, len(page_nums), seq_min)]
     for w in workers:
-        t_min, t_med = best_of(
-            lambda w=w: time_threaded(pdf, page_nums, task, w), runs
-        )
+        t_min, t_med = best_of(lambda w=w: time_threaded(pdf, page_nums, task, w), runs)
         rows.append(_row(f"threaded x{w}", t_min, t_med, len(page_nums), seq_min))
     for w in workers:
         if w == 1:
             continue
-        t_min, t_med = best_of(
-            lambda w=w: time_process_text(pdf, page_nums, w), runs
-        )
+        t_min, t_med = best_of(lambda w=w: time_process_text(pdf, page_nums, w), runs)
         rows.append(_row(f"process x{w}", t_min, t_med, len(page_nums), seq_min))
     for w in workers:
         if w == 1:
@@ -373,9 +380,7 @@ def text_benchmark(
         t_min, t_med = best_of(
             lambda w=w: time_process_text_chunked(pdf, page_nums, w), runs
         )
-        rows.append(
-            _row(f"process-chunk x{w}", t_min, t_med, len(page_nums), seq_min)
-        )
+        rows.append(_row(f"process-chunk x{w}", t_min, t_med, len(page_nums), seq_min))
     return rows
 
 
@@ -387,14 +392,10 @@ def render_benchmark(
     def task(doc: pymupdf.Document, n: int) -> Any:
         return render_page_as_png(doc, n, out, "bench", dpi=dpi)
 
-    seq_min, seq_med = best_of(
-        lambda: time_sequential(pdf, page_nums, task), runs
-    )
+    seq_min, seq_med = best_of(lambda: time_sequential(pdf, page_nums, task), runs)
     rows = [_row("sequential", seq_min, seq_med, len(page_nums), seq_min)]
     for w in workers:
-        t_min, t_med = best_of(
-            lambda w=w: time_threaded(pdf, page_nums, task, w), runs
-        )
+        t_min, t_med = best_of(lambda w=w: time_threaded(pdf, page_nums, task, w), runs)
         rows.append(_row(f"threaded x{w}", t_min, t_med, len(page_nums), seq_min))
     for w in workers:
         if w == 1:
@@ -410,9 +411,7 @@ def render_benchmark(
             lambda w=w: time_process_render_chunked(pdf, page_nums, dpi, w, out),
             runs,
         )
-        rows.append(
-            _row(f"process-chunk x{w}", t_min, t_med, len(page_nums), seq_min)
-        )
+        rows.append(_row(f"process-chunk x{w}", t_min, t_med, len(page_nums), seq_min))
     return rows
 
 
@@ -422,9 +421,7 @@ def ocr_benchmark(
     def task(doc: pymupdf.Document, n: int) -> Any:
         return ocr_page(doc, n, lang="eng", dpi=300)
 
-    seq_min, seq_med = best_of(
-        lambda: time_sequential(pdf, page_nums, task), runs
-    )
+    seq_min, seq_med = best_of(lambda: time_sequential(pdf, page_nums, task), runs)
     rows = [_row("sequential", seq_min, seq_med, len(page_nums), seq_min)]
     # No threaded mode for OCR: PyMuPDF's OCR goes through Leptonica, whose
     # global state is not thread-safe even across separate Document handles
@@ -433,9 +430,7 @@ def ocr_benchmark(
     for w in workers:
         if w == 1:
             continue  # process x1 == sequential + spawn overhead; uninformative
-        t_min, t_med = best_of(
-            lambda w=w: time_process_ocr(pdf, page_nums, w), runs
-        )
+        t_min, t_med = best_of(lambda w=w: time_process_ocr(pdf, page_nums, w), runs)
         rows.append(_row(f"process x{w}", t_min, t_med, len(page_nums), seq_min))
     return rows
 
@@ -469,10 +464,16 @@ def render_table(title: str, rows: list[dict[str, Any]]) -> str:
 
 
 def main() -> None:
+    # Set PDF_MCP_CACHE_DIR to a temp directory BEFORE any pdf_mcp.server import
+    # so the benchmark never touches the developer's real SQLite cache. The lazy
+    # import inside time_read_pages_render() picks this up at call time.
+    _bench_cache_dir = tempfile.mkdtemp(prefix="bench_pdf_mcp_cache_")
+    os.environ["PDF_MCP_CACHE_DIR"] = _bench_cache_dir
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pages", type=int, default=24, help="pages to process")
     parser.add_argument(
-        "--workers", default="1,2,4,8", help="comma-separated thread counts"
+        "--workers", default="1,2,4,8", help="comma-separated worker counts"
     )
     parser.add_argument("--runs", type=int, default=3, help="repeats per config")
     parser.add_argument("--dpi", type=int, default=200, help="render DPI")
@@ -526,9 +527,7 @@ def main() -> None:
         ]
         print("\n".join(header))
 
-        text_rows = text_benchmark(
-            str(text_pdf), page_nums, workers, args.runs
-        )
+        text_rows = text_benchmark(str(text_pdf), page_nums, workers, args.runs)
         text_md = render_table("Text extraction (non-OCR)", text_rows)
         print(text_md)
 
@@ -549,9 +548,7 @@ def main() -> None:
                 check_tesseract_available()
                 ocr_pdf = tmpdir / "scanned.pdf"
                 build_scanned_pdf(text_pdf, ocr_pdf, args.pages, dpi=150)
-                ocr_rows = ocr_benchmark(
-                    str(ocr_pdf), page_nums, workers, args.runs
-                )
+                ocr_rows = ocr_benchmark(str(ocr_pdf), page_nums, workers, args.runs)
                 ocr_md = render_table("OCR @ 300 DPI (Tesseract)", ocr_rows)
                 print(ocr_md)
                 sections.append(ocr_md)
@@ -559,6 +556,45 @@ def main() -> None:
                 note = f"_OCR benchmark skipped: {exc}_\n"
                 print(note)
                 sections.append(note)
+
+        # --- End-to-end pdf_read_pages(render_dpi) benchmark ---
+        # Measures the REAL tool path: render dispatch + serial text/images/tables
+        # per page (find_tables stays in the parent). The isolated render numbers
+        # above overstate the gain; this section shows the honest Amdahl result.
+        # Uses the same synthetic PDF (24 pages) as the render benchmark above.
+        # Always run 1/4/8 workers for comparability; not gated by --workers.
+        e2e_workers = [1, 4, 8]
+        e2e_note = (
+            "End-to-end pdf_read_pages(render_dpi=200): wall time including"
+            " serial text/images/tables extraction per page."
+        )
+        print(f"\n### {e2e_note}")
+        print("")
+        print("| workers | wall (s) | speedup |")
+        print("|--------:|---------:|--------:|")
+        e2e_baseline: float | None = None
+        e2e_rows: list[dict[str, Any]] = []
+        for w in e2e_workers:
+            t = time_read_pages_render(str(text_pdf), len(page_nums), w)
+            if e2e_baseline is None:
+                e2e_baseline = t
+            speedup = e2e_baseline / t if t else 0.0
+            print(f"| {w} | {t:.3f} | {speedup:.2f}x |")
+            e2e_rows.append({"workers": w, "wall_s": t, "speedup": speedup})
+        print("")
+        e2e_md_lines = [
+            f"### {e2e_note}",
+            "",
+            "| workers | wall (s) | speedup |",
+            "|--------:|---------:|--------:|",
+        ]
+        for r in e2e_rows:
+            e2e_md_lines.append(
+                f"| {r['workers']} | {r['wall_s']:.3f} | {r['speedup']:.2f}x |"
+            )
+        e2e_md_lines.append("")
+        e2e_md = "\n".join(e2e_md_lines)
+        sections.append(e2e_md)
 
     if args.output:
         args.output.write_text("\n".join(header) + "\n" + "\n".join(sections))

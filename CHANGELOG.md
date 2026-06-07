@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `pdf_read_pages` now parallelizes OCR (and, when it pays end-to-end, page
+  rendering) across cache-miss pages with a process pool, controlled by an
+  optional `PDF_MCP_MAX_WORKERS` env var (set to `1` to force sequential).
+  Worker count is `min(cpu_count, pages, 8)`; SQLite writes stay in the parent.
+
+### Changed
+- `pdf_read_pages` per-page OCR/render failures are now **isolated** instead of
+  aborting the whole call: a failed OCR page returns empty `text` with
+  `source="ocr_failed"`, and a failed render page is listed in a new
+  `render_failed_pages` field with `render_id` omitted. Failures are not cached,
+  so the page is retried on a later call.
+
 ### Security
 - Pinned `pip>=26.1.2` in the `dev` extra to clear PYSEC-2026-196.
   `pip 26.1.1` was pulled into the locked environment transitively

@@ -2885,6 +2885,9 @@ class TestOcrParallelOrchestration:
 
         import pdf_mcp.server as srv
 
+        # No-op the Tesseract gate so this orchestration test runs in CI
+        # without the binary; the worker is mocked anyway.
+        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
         monkeypatch.setattr(
             srv,
             "_ocr_page_worker",
@@ -2902,6 +2905,14 @@ class TestOcrParallelOrchestration:
     def test_ocr_response_shape_unchanged(self, isolated_server, tmp_path, monkeypatch):
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         path = self._two_page_scanned(tmp_path)
+
+        import pdf_mcp.server as srv
+
+        # No-op Tesseract + mock the worker so the response-shape check runs in
+        # CI without the binary or real OCR.
+        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(srv, "_ocr_page_worker", lambda args: (args[1], "ocr text"))
+
         result = pdf_read_pages(path, "1-2", ocr=True)
         assert set(["pages", "total_chars", "cache_hits", "cache_misses"]).issubset(
             result.keys()

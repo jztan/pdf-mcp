@@ -337,6 +337,23 @@ def _pdf_hash(path: str) -> str:
     return hashlib.sha256(path.encode()).hexdigest()[:16]
 
 
+def _is_ocr_cache_hit(
+    cached_src: str | None, cached_texts: dict[int, str], page_num: int
+) -> bool:
+    """True when page_num already has usable cached text in OCR mode: cached
+    OCR text, or non-empty cached 'extracted' text.
+
+    Single source of truth for the OCR hit/miss decision, used by both the
+    parallel dispatch (to skip already-cached pages) and the per-page assembly
+    loop. Keeping it in one place avoids the two predicates drifting apart.
+    """
+    return cached_src == "ocr" or (
+        cached_src == "extracted"
+        and page_num in cached_texts
+        and len(cached_texts[page_num]) > 0
+    )
+
+
 # ============================================================================
 # Tool 1: pdf_info - Get document information
 # ============================================================================
@@ -682,21 +699,14 @@ def pdf_read_pages(
         cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
 
         # --- Parallel dispatch: OCR cache-misses ---
-        # A page is an OCR-miss unless it has cached OCR text, or non-empty
-        # cached 'extracted' text. Mirror the in-loop predicate exactly.
+        # A page is an OCR-miss unless _is_ocr_cache_hit() is true. The same
+        # helper drives the in-loop hit branch, so the two stay in sync.
         ocr_results: dict[int, Any] = {}
         if ocr:
             ocr_miss_pages = [
                 n
                 for n in page_nums
-                if not (
-                    cached_sources.get(n) == "ocr"
-                    or (
-                        cached_sources.get(n) == "extracted"
-                        and n in cached_texts
-                        and len(cached_texts[n]) > 0
-                    )
-                )
+                if not _is_ocr_cache_hit(cached_sources.get(n), cached_texts, n)
             ]
             if ocr_miss_pages:
                 workers = resolve_workers(
@@ -717,11 +727,7 @@ def pdf_read_pages(
 
             if ocr:
                 cached_src = cached_sources.get(page_num)
-                if cached_src == "ocr" or (
-                    cached_src == "extracted"
-                    and page_num in cached_texts
-                    and len(cached_texts[page_num]) > 0
-                ):
+                if _is_ocr_cache_hit(cached_src, cached_texts, page_num):
                     # Cache hit — use existing text
                     text = cached_texts.get(page_num, "")
                     if page_num in cached_texts:

@@ -30,9 +30,9 @@ def resolve_workers(n_pages: int, gate: int, cap: int = 8) -> int:
 
     - n_pages < gate            -> 1 (sequential; no pool, no spawn cost)
     - else min(os.cpu_count() or 1, n_pages, cap)
-    - PDF_MCP_MAX_WORKERS env clamps: 0 or 1 forces sequential; a positive int
-      caps the pool (cannot raise above the computed value); invalid/absent
-      env is ignored.
+    - PDF_MCP_MAX_WORKERS env clamps: a value <= 1 (including negative) forces
+      sequential; a positive int caps the pool (cannot raise above the computed
+      value); invalid/absent env is ignored.
 
     No cgroup/affinity detection: single-user STDIO deployment, cap bounds
     oversubscription, env var is the constrained-host escape hatch.

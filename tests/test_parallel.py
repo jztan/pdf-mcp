@@ -78,6 +78,17 @@ class TestResolveWorkers:
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "100")
         assert resolve_workers(100, gate=2, cap=8) == 8
 
+    def test_env_cannot_raise_above_cpu_computed(self, monkeypatch):
+        # env between the cpu-computed value and cap must NOT raise the result
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 4)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "6")
+        assert resolve_workers(100, gate=2, cap=8) == 4
+
+    def test_negative_env_forces_sequential(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 8)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "-2")
+        assert resolve_workers(100, gate=2, cap=8) == 1
+
     def test_invalid_env_is_ignored(self, monkeypatch):
         monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 8)
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "not-a-number")

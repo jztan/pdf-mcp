@@ -20,7 +20,9 @@ def test_importing_extractor_does_not_import_server():
 
 
 def test_package_mcp_still_accessible():
-    # Lazy access must still work for `from pdf_mcp import mcp`.
+    # Lazy access must still work, via both attribute and from-import forms.
     import pdf_mcp
+    from pdf_mcp import mcp
 
     assert pdf_mcp.mcp is not None
+    assert mcp is pdf_mcp.mcp

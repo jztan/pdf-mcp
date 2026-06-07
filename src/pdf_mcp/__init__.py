@@ -29,9 +29,10 @@ from .cache import PDFCache  # noqa: E402
 __all__ = ["mcp", "PDFCache", "__version__"]
 
 
-def __getattr__(name: str) -> object:  # PEP 562 — expose `mcp` lazily so importing a
-    # submodule (e.g. a spawned worker importing extractor) does not build
-    # FastMCP or construct the module-level PDFCache in server.py.
+# PEP 562 module-level __getattr__: expose `mcp` lazily so importing a submodule
+# (e.g. a spawned worker importing extractor) does not build FastMCP or construct
+# the module-level PDFCache in server.py.
+def __getattr__(name: str) -> object:
     if name == "mcp":
         from .server import mcp
 

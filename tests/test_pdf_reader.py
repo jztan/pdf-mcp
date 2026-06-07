@@ -1772,5 +1772,64 @@ def test_extract_text_skips_empty_columns(monkeypatch):
     assert "\n\n" not in out
 
 
+class TestPageWorkers:
+    def _one_page_pdf(self, tmp_path):
+        path = str(tmp_path / "render_worker.pdf")
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Render worker page.")
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_render_worker_returns_info(self, tmp_path):
+        from pdf_mcp.extractor import _render_page_worker
+
+        path = self._one_page_pdf(tmp_path)
+        out_dir = tmp_path / "renders"
+        out_dir.mkdir()
+        page_num, info = _render_page_worker((path, 0, str(out_dir), "abc123", 72))
+        assert page_num == 0
+        assert isinstance(info, dict)
+        assert Path(info["file_path_on_disk"]).exists()
+        assert info["size_bytes"] > 0
+
+    def test_render_worker_isolates_bad_page(self, tmp_path):
+        from pdf_mcp.extractor import _render_page_worker
+        from pdf_mcp.parallel import PageError
+
+        path = self._one_page_pdf(tmp_path)
+        out_dir = tmp_path / "renders"
+        out_dir.mkdir()
+        # Page 99 does not exist -> worker returns a PageError, does not raise.
+        page_num, result = _render_page_worker((path, 99, str(out_dir), "abc", 72))
+        assert page_num == 99
+        assert isinstance(result, PageError)
+
+    def test_ocr_worker_isolates_bad_path(self, tmp_path):
+        from pdf_mcp.extractor import _ocr_page_worker
+        from pdf_mcp.parallel import PageError
+
+        # Nonexistent file -> pymupdf.open raises -> worker returns PageError.
+        page_num, result = _ocr_page_worker(
+            (str(tmp_path / "missing.pdf"), 0, "eng", 300)
+        )
+        assert page_num == 0
+        assert isinstance(result, PageError)
+
+    def test_render_worker_runs_through_real_pool(self, tmp_path):
+        # Picklability + spawn-safety: workers must survive a real pool.
+        from pdf_mcp.extractor import _render_page_worker
+        from pdf_mcp.parallel import run_pages
+
+        path = self._one_page_pdf(tmp_path)
+        out_dir = tmp_path / "renders"
+        out_dir.mkdir()
+        args = [(path, 0, str(out_dir), "abc", 72)]
+        results = run_pages(_render_page_worker, args, max_workers=2)
+        assert results[0][0] == 0
+        assert isinstance(results[0][1], dict)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

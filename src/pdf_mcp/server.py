@@ -31,10 +31,11 @@ from .extractor import (
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
-    ocr_page,
     parse_page_range,
     render_page_as_png,
 )
+from .extractor import _ocr_page_worker, _render_page_worker
+from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -66,6 +67,17 @@ RENDER_DPI_MIN = 72
 RENDER_DPI_MAX = 400
 MAX_RENDER_INLINE_PAGES = 5
 MAX_OCR_PAGES_LIMIT = 20
+
+# Parallel page-processing gates (process pool for OCR/render).
+# OCR gate is fixed at 2 (work dwarfs ~0.5s/worker spawn at any page count).
+# Render gate set from end-to-end pdf_read_pages(render_dpi) benchmark on an
+# Apple M4 Pro (14 CPUs, spawn, 24 pages synthetic): 1 worker=4.16 s,
+# 4 workers=3.11 s (1.34x), 8 workers=2.92 s (1.42x). Both clear the ~1.3x
+# threshold, so render dispatch is enabled. Gate=16: at >=16 pages the spawn
+# cost (~0.5 s/worker) is well-amortized; below that the win is marginal.
+_OCR_PARALLEL_GATE = 2
+_RENDER_PARALLEL_GATE = 16
+_MAX_PARALLEL_WORKERS = 8
 
 # Initialize MCP server. `version` is propagated through the MCP
 # `initialize` handshake as `serverInfo.version`, so clients can tell
@@ -325,6 +337,23 @@ def _rrf_fuse(
 def _pdf_hash(path: str) -> str:
     """Generate a short hash from a file path for deterministic image filenames."""
     return hashlib.sha256(path.encode()).hexdigest()[:16]
+
+
+def _is_ocr_cache_hit(
+    cached_src: str | None, cached_texts: dict[int, str], page_num: int
+) -> bool:
+    """True when page_num already has usable cached text in OCR mode: cached
+    OCR text, or non-empty cached 'extracted' text.
+
+    Single source of truth for the OCR hit/miss decision, used by both the
+    parallel dispatch (to skip already-cached pages) and the per-page assembly
+    loop. Keeping it in one place avoids the two predicates drifting apart.
+    """
+    return cached_src == "ocr" or (
+        cached_src == "extracted"
+        and page_num in cached_texts
+        and len(cached_texts[page_num]) > 0
+    )
 
 
 # ============================================================================
@@ -671,6 +700,50 @@ def pdf_read_pages(
         cached_texts = cache.get_pages_text(local_path, page_nums)
         cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
 
+        # --- Parallel dispatch: OCR cache-misses ---
+        # A page is an OCR-miss unless _is_ocr_cache_hit() is true. The same
+        # helper drives the in-loop hit branch, so the two stay in sync.
+        ocr_results: dict[int, Any] = {}
+        if ocr:
+            ocr_miss_pages = [
+                n
+                for n in page_nums
+                if not _is_ocr_cache_hit(cached_sources.get(n), cached_texts, n)
+            ]
+            if ocr_miss_pages:
+                workers = resolve_workers(
+                    len(ocr_miss_pages), _OCR_PARALLEL_GATE, _MAX_PARALLEL_WORKERS
+                )
+                ocr_args = [(local_path, n, ocr_lang, 300) for n in ocr_miss_pages]
+                for pn, res in run_pages(_ocr_page_worker, ocr_args, workers):
+                    ocr_results[pn] = res
+
+        # --- Parallel dispatch: render cache-misses ---
+        render_failed_pages: list[int] = []
+        render_cached: dict[int, Any] = {}
+        render_results: dict[int, Any] = {}
+        if clamped_dpi is not None:
+            render_miss_pages: list[int] = []
+            for n in page_nums:
+                cr = cache.get_page_render(local_path, n, clamped_dpi)
+                if cr:
+                    render_cached[n] = cr
+                else:
+                    render_miss_pages.append(n)
+            if render_miss_pages:
+                workers = resolve_workers(
+                    len(render_miss_pages),
+                    _RENDER_PARALLEL_GATE,
+                    _MAX_PARALLEL_WORKERS,
+                )
+                pdf_hash = _pdf_hash(local_path)
+                render_args = [
+                    (local_path, n, str(cache.renders_dir), pdf_hash, clamped_dpi)
+                    for n in render_miss_pages
+                ]
+                for pn, res in run_pages(_render_page_worker, render_args, workers):
+                    render_results[pn] = res
+
         results = []
         cache_hits = 0
         total_chars = 0
@@ -682,21 +755,24 @@ def pdf_read_pages(
 
             if ocr:
                 cached_src = cached_sources.get(page_num)
-                if cached_src == "ocr" or (
-                    cached_src == "extracted"
-                    and page_num in cached_texts
-                    and len(cached_texts[page_num]) > 0
-                ):
+                if _is_ocr_cache_hit(cached_src, cached_texts, page_num):
                     # Cache hit — use existing text
                     text = cached_texts.get(page_num, "")
                     if page_num in cached_texts:
                         cache_hits += 1
                     page_source = cached_src
                 else:
-                    # Run OCR
-                    text = ocr_page(doc, page_num, lang=ocr_lang, dpi=300)
-                    cache.save_page_text(local_path, page_num, text, source="ocr")
-                    page_source = "ocr"
+                    # Cache miss — consume the parallel OCR result.
+                    res = ocr_results.get(page_num)
+                    if res is None or isinstance(res, PageError):
+                        # Isolated failure: empty text, tagged, NOT cached
+                        # (keeps the page retryable on a later call).
+                        text = ""
+                        page_source = "ocr_failed"
+                    else:
+                        text = res
+                        cache.save_page_text(local_path, page_num, text, source="ocr")
+                        page_source = "ocr"
             elif page_num in cached_texts:
                 text = cached_texts[page_num]
                 cache_hits += 1
@@ -760,30 +836,33 @@ def pdf_read_pages(
                 page_result["source"] = page_source
 
             if clamped_dpi is not None:
-                cached_render = cache.get_page_render(local_path, page_num, clamped_dpi)
-                if cached_render:
-                    render_info = cached_render
+                if page_num in render_cached:
+                    render_info = render_cached[page_num]
                 else:
-                    render_info = render_page_as_png(
-                        doc,
-                        page_num,
-                        cache.renders_dir,
-                        _pdf_hash(local_path),
-                        clamped_dpi,
-                    )
-                    cache.save_page_render(
-                        local_path,
-                        page_num,
-                        os.stat(local_path).st_mtime,
-                        clamped_dpi,
-                        render_info,
-                    )
+                    res = render_results.get(page_num)
+                    if res is None or isinstance(res, PageError):
+                        # Isolated failure: list it, omit render_id, do NOT
+                        # cache (keeps the page retryable).
+                        render_failed_pages.append(page_num + 1)
+                        render_info = None
+                    else:
+                        render_info = res
+                        cache.save_page_render(
+                            local_path,
+                            page_num,
+                            os.stat(local_path).st_mtime,
+                            clamped_dpi,
+                            render_info,
+                        )
                 # Surface the basename only; the absolute path stays
                 # server-side. To get the rendered PNG bytes, callers
                 # should use pdf_render_pages (which inlines image
                 # content blocks) rather than reading from disk.
-                page_result["render_id"] = Path(render_info["file_path_on_disk"]).name
-                page_result["render_size_bytes"] = render_info["size_bytes"]
+                if render_info is not None:
+                    page_result["render_id"] = Path(
+                        render_info["file_path_on_disk"]
+                    ).name
+                    page_result["render_size_bytes"] = render_info["size_bytes"]
 
             results.append(page_result)
 
@@ -802,6 +881,11 @@ def pdf_read_pages(
             "total_images": total_images,
             "total_tables": total_tables,
             **({"truncated_ocr": True} if ocr_truncated else {}),
+            **(
+                {"render_failed_pages": render_failed_pages}
+                if render_failed_pages
+                else {}
+            ),
             **(
                 {
                     "render_dpi_used": clamped_dpi,

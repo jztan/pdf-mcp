@@ -26,6 +26,7 @@ from pdf_mcp.server import (
     pdf_render_pages,
 )
 from pdf_mcp.url_fetcher import URLFetcher
+from pdf_mcp.parallel import PageError
 
 
 class TestRrfFuse:
@@ -2197,76 +2198,101 @@ class TestPdfReadPagesOcr:
         result = pdf_read_pages(sample_pdf, "1")
         assert "source" not in result["pages"][0]
 
-    def test_ocr_true_page_has_source(self, sample_pdf, isolated_server):
+    def test_ocr_true_page_has_source(self, sample_pdf, isolated_server, monkeypatch):
         """ocr=True adds 'source' to each page dict."""
         from unittest.mock import patch
 
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", return_value="ocr text here"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "ocr text here"),
+            ):
                 result = pdf_read_pages(sample_pdf, "1", ocr=True)
         assert "source" in result["pages"][0]
 
-    def test_ocr_true_writes_source_ocr_to_cache(self, sample_pdf, isolated_server):
+    def test_ocr_true_writes_source_ocr_to_cache(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
         """OCR result is stored with source='ocr' in cache."""
         import pdf_mcp.server as srv
         from unittest.mock import patch
 
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", return_value="hello from ocr"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "hello from ocr"),
+            ):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
         source = srv.cache.get_page_source(sample_pdf, 0)
         assert source == "ocr"
 
-    def test_ocr_cache_hit_does_not_re_ocr(self, sample_pdf, isolated_server):
+    def test_ocr_cache_hit_does_not_re_ocr(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
         """Second ocr=True call does not re-run OCR if source='ocr' cached."""
         from unittest.mock import patch, MagicMock
 
-        mock_ocr = MagicMock(return_value="ocr result")
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        mock_worker = MagicMock(side_effect=lambda args: (args[1], "ocr result"))
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-                call_count_first = mock_ocr.call_count
+                call_count_first = mock_worker.call_count
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-                call_count_second = mock_ocr.call_count
+                call_count_second = mock_worker.call_count
         assert call_count_second == call_count_first  # not called again
 
     def test_ocr_empty_result_cached_and_not_retriggered(
-        self, sample_pdf, isolated_server
+        self, sample_pdf, isolated_server, monkeypatch
     ):
         """Empty OCR result is cached as source='ocr'; subsequent call skips re-OCR."""
         import pdf_mcp.server as srv
         from unittest.mock import patch, MagicMock
 
-        mock_ocr = MagicMock(return_value="")
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        mock_worker = MagicMock(side_effect=lambda args: (args[1], ""))
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
                 assert srv.cache.get_page_source(sample_pdf, 0) == "ocr"
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-        assert mock_ocr.call_count == 1  # not called a second time
+        assert mock_worker.call_count == 1  # not called a second time
 
-    def test_ocr_skip_page_with_native_text(self, sample_pdf, isolated_server):
+    def test_ocr_skip_page_with_native_text(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
         """Page with source='extracted' and non-empty text is not re-OCR'd."""
         import pdf_mcp.server as srv
         from unittest.mock import patch, MagicMock
 
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         srv.cache.save_page_text(sample_pdf, 0, "native text here", source="extracted")
-        mock_ocr = MagicMock(return_value="should not be called")
+        mock_worker = MagicMock(
+            side_effect=lambda args: (args[1], "should not be called")
+        )
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-        mock_ocr.assert_not_called()
+        mock_worker.assert_not_called()
 
-    def test_ocr_max_pages_limit_truncation(self, sample_pdf, isolated_server):
+    def test_ocr_max_pages_limit_truncation(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
         """Requesting more than MAX_OCR_PAGES_LIMIT pages sets truncated_ocr."""
         from unittest.mock import patch
         import pdf_mcp.server as srv
 
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")  # force sequential (no pickle)
         original = srv.MAX_OCR_PAGES_LIMIT
         srv.MAX_OCR_PAGES_LIMIT = 2
         try:
             with patch("pdf_mcp.server.check_tesseract_available"):
-                with patch("pdf_mcp.server.ocr_page", return_value="text"):
+                with patch(
+                    "pdf_mcp.server._ocr_page_worker",
+                    side_effect=lambda args: (args[1], "text"),
+                ):
                     result = pdf_read_pages(sample_pdf, "1-5", ocr=True)
         finally:
             srv.MAX_OCR_PAGES_LIMIT = original
@@ -2274,15 +2300,21 @@ class TestPdfReadPagesOcr:
         assert len(result["pages"]) == 2
 
     def test_ocr_lang_passed_to_ocr_page(self, sample_pdf, isolated_server):
-        """ocr_lang parameter is forwarded to ocr_page."""
-        from unittest.mock import patch, MagicMock
+        """ocr_lang parameter is forwarded to _ocr_page_worker args."""
+        from unittest.mock import patch
 
-        mock_ocr = MagicMock(return_value="text")
+        captured = []
+
+        def mock_worker(args):
+            captured.append(args)
+            return (args[1], "text")
+
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", mock_ocr):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
-        _, kwargs = mock_ocr.call_args
-        assert kwargs.get("lang") == "fra" or mock_ocr.call_args[0][2] == "fra"
+        assert len(captured) == 1
+        # args = (local_path, page_num, ocr_lang, dpi)
+        assert captured[0][2] == "fra"
 
     def test_ocr_text_searchable_via_pdf_search(
         self, sample_pdf_scanned, isolated_server
@@ -2291,7 +2323,10 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server.ocr_page", return_value="the quick brown fox"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "the quick brown fox"),
+            ):
                 pdf_read_pages(sample_pdf_scanned, "1", ocr=True)
         result = pdf_search(sample_pdf_scanned, "fox", mode="keyword")
         assert result["total_matches"] >= 1
@@ -2545,9 +2580,7 @@ class TestExcerptStyle:
         for m in result["matches"]:
             assert "content" in m["excerpt"].lower()
 
-    def test_paragraph_picks_correct_block_with_repeated_terms(
-        self, isolated_server
-    ):
+    def test_paragraph_picks_correct_block_with_repeated_terms(self, isolated_server):
         """Regression: on a page with multiple blocks sharing a term,
         paragraph mode must pick the block with the MOST query-term
         overlap, not the first block on the page."""
@@ -2603,9 +2636,7 @@ class TestExcerptStyle:
                 {"page": 1, "excerpt": "alpha beta", "score": 0.9, "position": 0},
                 {"page": 1, "excerpt": "beta gamma", "score": 0.8, "position": 6},
             ]
-            upgraded = _upgrade_excerpts_to_paragraphs(
-                fake_matches, doc2, "alpha"
-            )
+            upgraded = _upgrade_excerpts_to_paragraphs(fake_matches, doc2, "alpha")
             # Both snippets are in block 0 → deduped to one match
             assert len(upgraded) == 1
             assert upgraded[0]["score"] == 0.9  # kept higher score
@@ -2712,9 +2743,7 @@ class TestExcerptStyle:
         assert "error" not in result
         assert "excerpt_style" not in result
 
-    def test_auto_keyword_fallback_paragraph_mode(
-        self, sample_pdf, isolated_server
-    ):
+    def test_auto_keyword_fallback_paragraph_mode(self, sample_pdf, isolated_server):
         """Auto mode falling back to keyword still applies paragraph upgrade."""
         with patch("pdf_mcp.embedder.check_available", side_effect=ImportError):
             result = pdf_search(
@@ -2737,9 +2766,7 @@ class TestExcerptStyle:
         # Block 0: has "alpha" but not "beta"
         page.insert_text((50, 50), "alpha concepts and constructs overview")
         # Block 1: has "alpha" AND "beta" — the FTS5 snippet came from here
-        page.insert_text(
-            (50, 200), "alpha beta best practices for improvement"
-        )
+        page.insert_text((50, 200), "alpha beta best practices for improvement")
         # Block 2: unrelated
         page.insert_text((50, 350), "unrelated content about cooking")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
@@ -2793,9 +2820,7 @@ class TestExcerptStyle:
             doc2.close()
             os.unlink(f.name)
 
-    def test_short_block_skipped_in_favor_of_body_paragraph(
-        self, isolated_server
-    ):
+    def test_short_block_skipped_in_favor_of_body_paragraph(self, isolated_server):
         """Heading/caption blocks under the minimum-length floor are
         skipped; the picker retries with the floor and finds a
         substantive body block instead."""
@@ -2823,9 +2848,7 @@ class TestExcerptStyle:
             fake_matches = [
                 {"page": 1, "excerpt": "attention", "score": 0.5},
             ]
-            upgraded = _upgrade_excerpts_to_paragraphs(
-                fake_matches, doc2, "attention"
-            )
+            upgraded = _upgrade_excerpts_to_paragraphs(fake_matches, doc2, "attention")
             assert len(upgraded) == 1
             excerpt = upgraded[0]["excerpt"]
             # Must pick the body paragraph, not the heading
@@ -2833,3 +2856,160 @@ class TestExcerptStyle:
             assert "weighted sum" in excerpt.lower()
             doc2.close()
             os.unlink(f.name)
+
+
+class TestOcrParallelOrchestration:
+    def _two_page_scanned(self, tmp_path):
+        import base64
+        import pymupdf
+
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        path = str(tmp_path / "scanned2.pdf")
+        doc = pymupdf.open()
+        for _ in range(2):
+            page = doc.new_page()
+            page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png)
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_ocr_failure_is_isolated_and_not_cached(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        cache_instance, _ = isolated_server
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")  # force sequential path
+        path = self._two_page_scanned(tmp_path)
+
+        import pdf_mcp.server as srv
+
+        monkeypatch.setattr(
+            srv,
+            "_ocr_page_worker",
+            lambda args: (args[1], PageError("RuntimeError('ocr exploded')")),
+        )
+
+        result = pdf_read_pages(path, "1-2", ocr=True)
+        assert "error" not in result
+        sources = [p.get("source") for p in result["pages"]]
+        assert sources == ["ocr_failed", "ocr_failed"]
+        assert all(p["text"] == "" for p in result["pages"])
+        # Failure must NOT be cached -> page source still absent.
+        assert cache_instance.get_pages_source(path, [0, 1]) == {}
+
+    def test_ocr_response_shape_unchanged(self, isolated_server, tmp_path, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        path = self._two_page_scanned(tmp_path)
+        result = pdf_read_pages(path, "1-2", ocr=True)
+        assert set(["pages", "total_chars", "cache_hits", "cache_misses"]).issubset(
+            result.keys()
+        )
+        assert len(result["pages"]) == 2
+
+
+class TestRenderParallelOrchestration:
+    def _multi_page_pdf(self, tmp_path, n=3):
+        import pymupdf
+
+        path = str(tmp_path / f"render{n}.pdf")
+        doc = pymupdf.open()
+        for i in range(n):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Render page {i + 1}.")
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_render_failure_listed_and_not_cached(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        cache_instance, _ = isolated_server
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        path = self._multi_page_pdf(tmp_path, 2)
+
+        import pdf_mcp.server as srv
+
+        monkeypatch.setattr(
+            srv,
+            "_render_page_worker",
+            lambda args: (args[1], PageError("RuntimeError('render exploded')")),
+        )
+
+        result = pdf_read_pages(path, "1-2", render_dpi=72)
+        assert "error" not in result
+        assert result["render_failed_pages"] == [1, 2]
+        # No render_id on failed pages
+        assert all("render_id" not in p for p in result["pages"])
+        # Failure not cached
+        assert cache_instance.get_page_render(path, 0, 72) is None
+
+    def test_render_success_shape_unchanged(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        path = self._multi_page_pdf(tmp_path, 2)
+        result = pdf_read_pages(path, "1-2", render_dpi=72)
+        assert "render_failed_pages" not in result  # absent when none failed
+        assert all("render_id" in p for p in result["pages"])
+        assert result["render_dpi_used"] == 72
+
+
+class TestRenderPagesStaysSequential:
+    def test_inline_cap_is_below_render_gate(self):
+        # The 5-page inline cap must stay below the render gate, so
+        # resolve_workers returns 1 (sequential) for any pdf_render_pages call.
+        import pdf_mcp.server as srv
+        from pdf_mcp.parallel import resolve_workers
+
+        assert srv.MAX_RENDER_INLINE_PAGES < srv._RENDER_PARALLEL_GATE
+        assert (
+            resolve_workers(
+                srv.MAX_RENDER_INLINE_PAGES,
+                srv._RENDER_PARALLEL_GATE,
+                srv._MAX_PARALLEL_WORKERS,
+            )
+            == 1
+        )
+
+
+class TestRenderRealSpawnCorrectness:
+    def _multi_page_pdf(self, tmp_path, n=4):
+        import pymupdf
+
+        path = str(tmp_path / f"spawn{n}.pdf")
+        doc = pymupdf.open()
+        for i in range(n):
+            page = doc.new_page()
+            page.insert_text((50, 50), f"Spawn render page {i + 1}.")
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_parallel_render_matches_sequential(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        import pdf_mcp.server as srv
+
+        # Lower the render gate so 4 pages actually spawn a real pool.
+        monkeypatch.setattr(srv, "_RENDER_PARALLEL_GATE", 2)
+        path = self._multi_page_pdf(tmp_path, 4)
+
+        # Sequential baseline.
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        seq = pdf_read_pages(path, "1-4", render_dpi=72)
+
+        # Clear renders so the parallel run recomputes, then go parallel.
+        cache_instance, _ = isolated_server
+        cache_instance.clear_all()
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "4")
+        par = pdf_read_pages(path, "1-4", render_dpi=72)
+
+        seq_ids = [p["render_id"] for p in seq["pages"]]
+        par_ids = [p["render_id"] for p in par["pages"]]
+        # Deterministic filenames (pdf_hash+page+dpi) -> identical ids + order.
+        assert par_ids == seq_ids
+        assert [p["render_size_bytes"] for p in par["pages"]] == [
+            p["render_size_bytes"] for p in seq["pages"]
+        ]

@@ -92,3 +92,46 @@ class TestOcrIntegration:
         assert len(result["matches"]) > 0
         assert result["matches"][0]["page"] == 1
         assert result["matches"][0]["source"] == "ocr"
+
+
+class TestOcrRealSpawnCorrectness:
+    pytestmark = pytest.mark.skipif(
+        not _tesseract_available(),
+        reason="Tesseract not installed",
+    )
+
+    def _two_page_scanned(self, tmp_path):
+        import base64 as _base64
+
+        import pymupdf
+
+        png = _base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        path = str(tmp_path / "ocr_spawn2.pdf")
+        doc = pymupdf.open()
+        for _ in range(2):
+            page = doc.new_page()
+            page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png)
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_parallel_ocr_matches_sequential(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        path = self._two_page_scanned(tmp_path)
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        seq = pdf_read_pages(path, "1-2", ocr=True)
+
+        cache_instance, _ = isolated_server
+        cache_instance.clear_all()
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "2")  # gate is 2 -> spawns
+        par = pdf_read_pages(path, "1-2", ocr=True)
+
+        assert [p["text"] for p in par["pages"]] == [p["text"] for p in seq["pages"]]
+        assert [p["source"] for p in par["pages"]] == [
+            p["source"] for p in seq["pages"]
+        ]

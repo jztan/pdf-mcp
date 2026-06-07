@@ -92,3 +92,4 @@ docs/superpowers/
 .mcpregistry_registry_token
 .superpowers/
 AGENTS.md
+benchmark_data/.isri_cache/

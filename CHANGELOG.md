@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `pdf_read_pages` now parallelizes OCR (and, when it pays end-to-end, page
+  rendering) across cache-miss pages with a process pool, controlled by an
+  optional `PDF_MCP_MAX_WORKERS` env var (set to `1` to force sequential).
+  Worker count is `min(cpu_count, pages, 8)`; SQLite writes stay in the parent.
+  Measured OCR speedup is **~2–3x on typical real scanned documents** (UNLV/ISRI
+  corpus), up to ~6x on very dense pages and ~1.3x on sparse/light scans —
+  scaling with per-page OCR cost. See `benchmark_data/parallel_pages_results.md`.
+- `scripts/benchmark_ocr_corpus.py` — parallel-OCR benchmark + accuracy check on
+  the canonical UNLV/ISRI Tesseract corpus (downloads on demand into the
+  gitignored `benchmark_data/.isri_cache/`); reports per-class speedup,
+  parallel-equals-sequential verification, and word-recall vs ground truth.
+
+### Changed
+- `pdf_read_pages` per-page OCR/render failures are now **isolated** instead of
+  aborting the whole call: a failed OCR page returns empty `text` with
+  `source="ocr_failed"`, and a failed render page is listed in a new
+  `render_failed_pages` field with `render_id` omitted. Failures are not cached,
+  so the page is retried on a later call.
+
 ### Security
 - Pinned `pip>=26.1.2` in the `dev` extra to clear PYSEC-2026-196.
   `pip 26.1.1` was pulled into the locked environment transitively

@@ -25,6 +25,16 @@ Usage with Claude Desktop:
 __version__ = "1.15.0"
 
 from .cache import PDFCache  # noqa: E402
-from .server import mcp  # noqa: E402
 
 __all__ = ["mcp", "PDFCache", "__version__"]
+
+
+# PEP 562 module-level __getattr__: expose `mcp` lazily so importing a submodule
+# (e.g. a spawned worker importing extractor) does not build FastMCP or construct
+# the module-level PDFCache in server.py.
+def __getattr__(name: str) -> object:
+    if name == "mcp":
+        from .server import mcp
+
+        return mcp
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

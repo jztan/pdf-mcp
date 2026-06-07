@@ -423,6 +423,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 - [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
 - [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
 - [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
+- [Section-Level RAG: Why BM25 Beat Hybrid Search in My Benchmark](https://blog.jztan.com/bm25-vs-hybrid-search-section-rag/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why pdf-mcp's section-grain search is BM25-only: hybrid RRF caused a 33% lexical regression at section grain, so granularity decides the search technique
 
 **Engineering & security**
 

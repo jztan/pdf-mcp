@@ -2954,3 +2954,21 @@ class TestRenderParallelOrchestration:
         assert "render_failed_pages" not in result  # absent when none failed
         assert all("render_id" in p for p in result["pages"])
         assert result["render_dpi_used"] == 72
+
+
+class TestRenderPagesStaysSequential:
+    def test_inline_cap_is_below_render_gate(self):
+        # The 5-page inline cap must stay below the render gate, so
+        # resolve_workers returns 1 (sequential) for any pdf_render_pages call.
+        import pdf_mcp.server as srv
+        from pdf_mcp.parallel import resolve_workers
+
+        assert srv.MAX_RENDER_INLINE_PAGES < srv._RENDER_PARALLEL_GATE
+        assert (
+            resolve_workers(
+                srv.MAX_RENDER_INLINE_PAGES,
+                srv._RENDER_PARALLEL_GATE,
+                srv._MAX_PARALLEL_WORKERS,
+            )
+            == 1
+        )

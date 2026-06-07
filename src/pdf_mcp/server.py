@@ -31,7 +31,6 @@ from .extractor import (
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
-    ocr_page,
     parse_page_range,
     render_page_as_png,
 )
@@ -682,6 +681,31 @@ def pdf_read_pages(
         cached_texts = cache.get_pages_text(local_path, page_nums)
         cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
 
+        # --- Parallel dispatch: OCR cache-misses ---
+        # A page is an OCR-miss unless it has cached OCR text, or non-empty
+        # cached 'extracted' text. Mirror the in-loop predicate exactly.
+        ocr_results: dict[int, Any] = {}
+        if ocr:
+            ocr_miss_pages = [
+                n
+                for n in page_nums
+                if not (
+                    cached_sources.get(n) == "ocr"
+                    or (
+                        cached_sources.get(n) == "extracted"
+                        and n in cached_texts
+                        and len(cached_texts[n]) > 0
+                    )
+                )
+            ]
+            if ocr_miss_pages:
+                workers = resolve_workers(
+                    len(ocr_miss_pages), _OCR_PARALLEL_GATE, _MAX_PARALLEL_WORKERS
+                )
+                ocr_args = [(local_path, n, ocr_lang, 300) for n in ocr_miss_pages]
+                for pn, res in run_pages(_ocr_page_worker, ocr_args, workers):
+                    ocr_results[pn] = res
+
         results = []
         cache_hits = 0
         total_chars = 0
@@ -704,10 +728,17 @@ def pdf_read_pages(
                         cache_hits += 1
                     page_source = cached_src
                 else:
-                    # Run OCR
-                    text = ocr_page(doc, page_num, lang=ocr_lang, dpi=300)
-                    cache.save_page_text(local_path, page_num, text, source="ocr")
-                    page_source = "ocr"
+                    # Cache miss — consume the parallel OCR result.
+                    res = ocr_results.get(page_num)
+                    if res is None or isinstance(res, PageError):
+                        # Isolated failure: empty text, tagged, NOT cached
+                        # (keeps the page retryable on a later call).
+                        text = ""
+                        page_source = "ocr_failed"
+                    else:
+                        text = res
+                        cache.save_page_text(local_path, page_num, text, source="ocr")
+                        page_source = "ocr"
             elif page_num in cached_texts:
                 text = cached_texts[page_num]
                 cache_hits += 1

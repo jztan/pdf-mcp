@@ -41,6 +41,8 @@ sys.stderr = _StderrSwigFilter(sys.stderr)  # type: ignore[assignment]
 
 import pymupdf  # noqa: E402
 
+from .parallel import PageError  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -476,6 +478,48 @@ def ocr_page(
     page = doc[page_num]
     textpage = page.get_textpage_ocr(language=lang, dpi=dpi)
     return str(page.get_text(textpage=textpage))
+
+
+def _ocr_page_worker(
+    args: tuple[str, int, str, int],
+) -> tuple[int, "str | PageError"]:
+    """Picklable OCR worker for ProcessPoolExecutor.
+
+    Opens its OWN Document (PyMuPDF documents are not shareable across
+    processes) and isolates per-page failure as a PageError so one bad page
+    never crashes the batch. Lives in extractor.py (not server.py) so spawn
+    re-imports only PyMuPDF, never FastMCP.
+    """
+    path, page_num, lang, dpi = args
+    try:
+        doc = pymupdf.open(path)
+        try:
+            return page_num, ocr_page(doc, page_num, lang=lang, dpi=dpi)
+        finally:
+            doc.close()
+    except Exception as exc:  # noqa: BLE001 - deliberate per-page isolation
+        return page_num, PageError(repr(exc))
+
+
+def _render_page_worker(
+    args: tuple[str, int, str, str, int],
+) -> tuple[int, "dict[str, Any] | PageError"]:
+    """Picklable render worker for ProcessPoolExecutor.
+
+    Opens its own Document and writes the PNG to disk (filenames are
+    deterministic from pdf_hash+page+dpi, so concurrent workers never collide).
+    Returns the render_info dict; the parent records SQLite metadata.
+    """
+    path, page_num, out_dir, pdf_hash, dpi = args
+    try:
+        doc = pymupdf.open(path)
+        try:
+            info = render_page_as_png(doc, page_num, Path(out_dir), pdf_hash, dpi)
+            return page_num, info
+        finally:
+            doc.close()
+    except Exception as exc:  # noqa: BLE001 - deliberate per-page isolation
+        return page_num, PageError(repr(exc))
 
 
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:

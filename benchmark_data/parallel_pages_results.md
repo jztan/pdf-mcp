@@ -84,3 +84,62 @@ Both 4 and 8 workers clear the ~1.3x end-to-end threshold (1.34x and 1.42x
 respectively), so render dispatch is **enabled**. `_RENDER_PARALLEL_GATE = 16`:
 at ≥16 pages the ~0.5 s/worker spawn cost is well-amortized; below that the
 marginal gain does not justify the overhead.
+
+## Real-document OCR — UNLV/ISRI corpus (`scripts/benchmark_ocr_corpus.py`)
+
+The synthetic OCR number above (6.3x) is a *worst-case-dense upper bound*. To
+get honest, representative numbers we benchmark the canonical Tesseract corpus —
+**UNLV/ISRI** 300 dpi bitonal scans with ground truth, split by document class —
+on the **real shipped path** (`pdf_read_pages(ocr=True)`). The benchmark script
+imports `pdf_mcp.server` at module top *on purpose* so each spawned worker
+re-imports the server exactly like the real STDIO deployment does (see "Spawn
+regime" below); these are real-deployment numbers, not a library best case.
+Apple M4 Pro, spawn, 8 pages/class, 8 workers:
+
+| class | document type | sec/page (seq) | speedup ×8 | par==seq | word-recall vs GT |
+|-------|---------------|---------------:|-----------:|:--------:|------------------:|
+| bus   | business letters (sparse) | 0.76 s | **2.40x** | yes | 100% |
+| news  | newspapers                | 1.15 s | **2.32x** | yes |  94% |
+| mag   | magazines (dense)         | 1.58 s | **3.26x** | yes |  91% |
+
+**Speedup scales with per-page density** — denser pages give the pool more work
+to amortize spawn overhead against. `par==seq` confirms parallel OCR output is
+byte-identical to sequential; `word-recall` (order-insensitive multiset overlap
+of OCR vs ISRI ground truth) confirms Tesseract quality is unaffected.
+
+### Honest range (reconciling all three corpora)
+
+| corpus | sec/page | speedup | what it represents |
+|--------|---------:|--------:|--------------------|
+| synthetic scanned | ~6.7 s | 6.3x | artificially dense **upper bound** |
+| **UNLV/ISRI** | 0.76–1.58 s | **2.3–3.3x** | **typical real scanned documents** |
+| very sparse/light scans (e.g. low-res worksheets) | ~0.8 s | ~1.3x | low-end (spawn dominates; large color images add memory contention) |
+
+**Honest claim: parallel OCR delivers ~2–3x on typical real scanned documents**,
+up to ~6x on very dense pages, down to ~1.3x on sparse/light scans. The 6.3x
+figure alone overstates the typical case.
+
+### Spawn regime — why this is a separate script
+
+The isolation benchmarks above measure *cheap* worker spawns because their
+`__main__` (the benchmark script) imports only `pdf_mcp.extractor` (PyMuPDF).
+The **real STDIO server** is different: `__main__` is `server.py`, and the spawn
+start method re-imports `__main__` per worker, so every worker pays
+`import fastmcp` (~0.5 s). Measured 8-worker pool startup:
+
+| `__main__` regime | pool spawn |
+|---|---|
+| extractor-only (isolation benchmarks above) | 0.11 s |
+| server-loaded (real deployment, this corpus) | 0.78 s |
+
+Investigated mitigations: **lazy module-level singletons do *not* help** (the
+cost is `import fastmcp`, not constructing `PDFCache`/`PDFConfig`, which is
+~0.01 s). A **forkserver** start method cuts it to ~0.50 s (forks from a clean
+preloaded process instead of re-importing `__main__`) but adds cross-platform
+complexity (no Windows) and fork-safety risk for a modest ~0.28 s/call gain — not
+adopted. The ~0.5 s/call server-reload tax is largely inherent to running a
+process pool from inside an MCP server under `spawn`; it is bounded, only paid on
+cache-cold parallel calls, and is already reflected in the numbers above.
+
+Reproduce: `python scripts/benchmark_ocr_corpus.py` (downloads the ISRI corpus
+on first run into the gitignored `benchmark_data/.isri_cache/`; needs Tesseract).

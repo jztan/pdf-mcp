@@ -17,7 +17,9 @@ adds nothing — PDF opens are cheap; the cost is worker startup + compute.
 |-----------|---------------|---------------------|-------|
 | Text (non-OCR) | ~4 ms  | 0.13–0.24x (loses on spawn; ≤1.6x only on Linux/fork + many pages) | **No** |
 | Render         | ~60 ms | 1.6x (synthetic) – 2.2x (real arXiv) at 8 workers; sublinear, machine-sensitive | **Yes, modest** |
-| OCR            | ~2–9 s | **6.3x at 8 workers** (near-linear); threads impossible (Leptonica not thread-safe) | **Yes, biggest win** |
+| OCR            | ~2–9 s | **6.3x at 8 workers** on a synthetic dense scan; **~2–3x on typical real documents** (UNLV/ISRI — see last section); threads impossible (Leptonica not thread-safe) | **Yes, biggest win** |
+
+> The OCR figures below this table use a synthetic dense scan (worst-case, ~6.7 s/page) and are measured in the cheap *library* spawn regime. For honest, real-document numbers in the real-deployment spawn regime, see **"Real-document OCR — UNLV/ISRI corpus"** at the end.
 
 ## Apple M4 Pro — 14 CPUs, spawn, synthetic corpus (24 pages), runs=3
 

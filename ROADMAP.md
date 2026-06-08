@@ -6,7 +6,7 @@
 - **On Develop (unreleased):** `pip>=26.1.2` pin in the `dev` extra to clear PYSEC-2026-196 — see `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md)
 - **MCP Registry Status:** Published
 - **Test Suite:** 710 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent; benchmark tests are kept off the CI fast path.
-- **Tools:** 8 MCP tools — `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`
+- **Tools:** 9 MCP tools — `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
 
 ---
 

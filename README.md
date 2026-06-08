@@ -35,7 +35,7 @@ Walk through the three main tools (`pdf_info`, `pdf_search`, `pdf_read_pages`) w
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
-| Tool design | Single monolithic tool | 8 specialized tools |
+| Tool design | Single monolithic tool | 9 specialized tools |
 
 ## Features
 
@@ -256,7 +256,7 @@ pdf-mcp --help
 
 ## Tools
 
-Eight specialized tools cover document introspection, content reading, search, and cache management. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
+Nine specialized tools cover document introspection, content reading, search, cache management, and server feature discovery. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
 
 | Tool | What it does |
 |------|--------------|
@@ -268,6 +268,7 @@ Eight specialized tools cover document introspection, content reading, search, a
 | `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts |
 | `pdf_cache_stats` | Per-document cache breakdown + total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
+| `server_info` | Which optional features (column-aware, OCR, semantic) and config are active. **Call before feature-dependent calls.** |
 
 Example prompts:
 

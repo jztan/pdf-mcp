@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `server_info` tool: setup-time discovery of which optional features are
+  installed (column-aware extraction, OCR, semantic search) and which
+  configuration values are active (worker count, byte cap, cache settings).
+  Lets callers branch on feature presence before attempting feature-dependent
+  calls. Named without the `pdf_` prefix to signal that it operates on the
+  server, not on a PDF. See tool description for the recommended call pattern.
 - `pdf_read_pages` now parallelizes OCR (and, when it pays end-to-end, page
   rendering) across cache-miss pages with a process pool, controlled by an
   optional `PDF_MCP_MAX_WORKERS` env var (set to `1` to force sequential).

@@ -113,6 +113,34 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
     return unique_result
 
 
+def _import_column_boxes() -> Any:
+    """Import the optional column detector, or return None if unavailable.
+
+    Single source of truth for column-aware availability: both
+    ``detect_column_boxes`` (the extraction fallback path) and
+    ``column_detection_available`` (server_info feature discovery) go through
+    here, so the reported feature flag can never drift from what extraction
+    actually does. Any failure — missing dependency or its version-guard
+    ImportError — yields None.
+    """
+    try:
+        from pymupdf4llm.helpers.multi_column import column_boxes
+
+        return column_boxes
+    except Exception:
+        return None
+
+
+def column_detection_available() -> bool:
+    """True when the optional column detector is importable.
+
+    Mirrors the exact guard ``detect_column_boxes`` relies on (see
+    ``_import_column_boxes``), so server_info reports column-aware
+    availability that matches real extraction behaviour.
+    """
+    return _import_column_boxes() is not None
+
+
 def detect_column_boxes(page: Any) -> list[Any]:
     """Return column bounding boxes in reading order, or [] if unavailable.
 
@@ -120,9 +148,10 @@ def detect_column_boxes(page: Any) -> list[Any]:
     its version-guard ImportError, or a detection error — degrades to [] so
     callers fall back to positional-sort extraction.
     """
+    column_boxes = _import_column_boxes()
+    if column_boxes is None:
+        return []
     try:
-        from pymupdf4llm.helpers.multi_column import column_boxes
-
         # margins=0 keeps running headers/footers/page numbers in the column
         # boxes, matching the single-column path (which extracts the full page).
         # Verified to not affect reading-order benchmark score.

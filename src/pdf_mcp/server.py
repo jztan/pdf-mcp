@@ -339,6 +339,64 @@ def _pdf_hash(path: str) -> str:
     return hashlib.sha256(path.encode()).hexdigest()[:16]
 
 
+def _detect_features() -> dict[str, Any]:
+    """Probe optional-feature availability for server_info.
+
+    Pure process-state inspection — no PDF I/O. Computed once at startup
+    (see `_SERVER_FEATURES`) since results are stable for the server's
+    lifetime, but kept as a callable so tests can exercise the branches.
+
+    Column-aware availability comes from the extractor's own predicate
+    (`extractor.column_detection_available`) so the reported flag can never
+    drift from what extraction actually does.
+    """
+    import shutil
+
+    from . import embedder, extractor
+
+    column_aware = extractor.column_detection_available()
+    ocr_available = shutil.which("tesseract") is not None
+
+    search: dict[str, Any] = {
+        "modes_available": ["keyword"],
+        "default_mode": "auto",
+    }
+    model_name = pdf_config.embedding_model
+    try:
+        embedder.check_available(model_name)
+    except Exception:
+        # fastembed missing or model name unsupported: keyword-only.
+        pass
+    else:
+        search["modes_available"] = ["keyword", "semantic", "auto"]
+        search["embedding_model"] = model_name
+
+    return {
+        "extraction": {
+            "column_aware": {
+                "available": column_aware,
+                "description": (
+                    "Multi-column PDFs (academic papers, magazines) extract "
+                    "in correct reading order. Requires the 'multicolumn' "
+                    "extra."
+                ),
+            },
+            "ocr": {
+                "available": ocr_available,
+                "description": (
+                    "Scanned and image-only PDFs are auto-detected and OCR'd "
+                    "via Tesseract."
+                ),
+            },
+        },
+        "search": search,
+    }
+
+
+# Probed once at startup; stable for the process lifetime.
+_SERVER_FEATURES = _detect_features()
+
+
 def _is_ocr_cache_hit(
     cached_src: str | None, cached_texts: dict[int, str], page_num: int
 ) -> bool:
@@ -1914,6 +1972,63 @@ def pdf_cache_stats() -> dict[str, Any]:
         "url_cache": url_stats,
         "images_dir": str(cache.images_dir),
         "renders_dir": str(cache.renders_dir),
+    }
+
+
+# ============================================================================
+# Tool: server_info - Setup-time server introspection
+# ============================================================================
+
+
+@mcp.tool(
+    description=(
+        "Report which optional features are installed and what "
+        "configuration is active on this pdf-mcp server. Call this first "
+        "when about to use semantic search, OCR, or column-aware "
+        "extraction — if the feature isn't available, downstream calls "
+        "will either fall back silently (column-aware → positional sort) "
+        "or fail (semantic mode → error). Returns version, per-feature "
+        "availability with descriptions, search mode list, and active "
+        "config values. Cheap to call (no I/O beyond reading process "
+        "state). Results are stable for the server's lifetime."
+    )
+)
+def server_info() -> dict[str, Any]:
+    """
+    Report installed optional features and active configuration.
+
+    Setup-time server introspection — distinct from pdf_cache_stats, which
+    reports runtime cache state. This tool operates on the server itself
+    (no PDF argument), which is why it omits the `pdf_` prefix that all
+    PDF-operating tools carry.
+
+    Returns:
+        - version: pdf-mcp release version.
+        - features: {
+            extraction: {column_aware, ocr} — each {available, description},
+            search: {modes_available, default_mode, embedding_model?}
+                (embedding_model present only when semantic search is
+                 available).
+          }
+        - config: {max_workers, max_response_bytes, cache_ttl_hours,
+                   cache_dir}. cache_dir is a local filesystem path
+                   (single-user STDIO deployment, per the pdf_cache_stats
+                   precedent).
+    """
+    # max_workers: resolve the actually-in-effect cap (PDF_MCP_MAX_WORKERS
+    # override or the min(cpu_count, cap) default) by reusing resolve_workers
+    # rather than re-deriving the logic. A large page count and gate=0 keep
+    # those two from binding, leaving only the cpu/cap/env clamp.
+    max_workers = resolve_workers(10**6, gate=0, cap=_MAX_PARALLEL_WORKERS)
+    return {
+        "version": __version__,
+        "features": _SERVER_FEATURES,
+        "config": {
+            "max_workers": max_workers,
+            "max_response_bytes": pdf_config.max_response_bytes,
+            "cache_ttl_hours": cache.ttl_hours,
+            "cache_dir": str(cache.cache_dir),
+        },
     }
 
 

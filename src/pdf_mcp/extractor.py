@@ -131,6 +131,35 @@ def detect_column_boxes(page: Any) -> list[Any]:
         return []
 
 
+# A page is only treated as multi-column when at least two detected boxes are
+# "tall" — i.e. their height is at least this fraction of the tallest box on the
+# page. Genuine text columns run most of the page height; a sparse grid of
+# short cells (e.g. an academic paper's author/affiliation block laid out in a
+# visual grid above a full-width body) is NOT a reading-order column structure,
+# and extracting it column-by-column scrambles the intended row-by-row order.
+# 0.25 sits comfortably above the ratio such grids produce (the Transformer
+# title page's tallest author cell is ~0.22 of its full-width body box) while
+# staying well below genuine half-height columns.
+_COLUMN_MIN_HEIGHT_FRAC = 0.25
+
+
+def _is_multi_column_layout(boxes: list[Any]) -> bool:
+    """True only when >=2 detected boxes are tall enough to be real columns.
+
+    Guards against ``detect_column_boxes`` over-segmenting a single-column page
+    whose top is a visual grid (author/affiliation blocks, badge rows) into many
+    short side-by-side boxes — reading those column-by-column reorders content
+    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``.
+    """
+    if len(boxes) <= 1:
+        return False
+    max_height = max(box.height for box in boxes)
+    if max_height <= 0:
+        return False
+    tall = sum(1 for box in boxes if box.height >= _COLUMN_MIN_HEIGHT_FRAC * max_height)
+    return tall >= 2
+
+
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     Extract text from a PDF page.
@@ -144,7 +173,7 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     if sort_by_position:
         boxes = detect_column_boxes(page)
-        if len(boxes) > 1:
+        if _is_multi_column_layout(boxes):
             # Multi-column: extract each column in reading order so the
             # text is not interleaved row-by-row across columns.
             parts = (

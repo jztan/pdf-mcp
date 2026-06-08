@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gitignored `benchmark_data/.isri_cache/`); reports per-class speedup,
   parallel-equals-sequential verification, and word-recall vs ground truth.
 
+### Fixed
+- Text extraction no longer mis-reads sparse multi-block layouts column-major.
+  v1.15.0's column-aware reading order treated *any* page with >1 detected
+  column box as multi-column, so an academic paper's author/affiliation grid on
+  the title page was read down each column — scrambling author order (e.g. the
+  Transformer paper's first author came out as "Niki Parmar" instead of "Ashish
+  Vaswani"). The column path now requires ≥2 *tall* boxes (each ≥25% of the
+  tallest box's height); genuine text columns run most of the page height, while
+  grid cells do not, so such pages fall back to positional sort. Reading-order
+  benchmark is unchanged on two-column docs and flat on one-column docs. The
+  extraction-logic version is bumped, dropping v1.15.0's scrambled title-page
+  text, embeddings, and FTS rows so they re-extract on next read.
+
 ### Changed
 - `pdf_read_pages` per-page OCR/render failures are now **isolated** instead of
   aborting the whole call: a failed OCR page returns empty `text` with

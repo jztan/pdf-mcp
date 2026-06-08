@@ -42,8 +42,10 @@ _FTS5_SECTION_TABLE_SCHEMA = (
 
 # Bump when text-extraction logic changes so cached text + everything derived
 # from it (embeddings, FTS indexes) is dropped and rebuilt. v1: column-aware
-# reading order for multi-column PDFs.
-_EXTRACTION_VERSION = 1
+# reading order for multi-column PDFs. v2: suppress the column path on sparse
+# grids (e.g. author/affiliation blocks on academic title pages) that v1
+# mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
+_EXTRACTION_VERSION = 2
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'

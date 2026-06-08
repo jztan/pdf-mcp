@@ -1772,6 +1772,83 @@ def test_extract_text_skips_empty_columns(monkeypatch):
     assert "\n\n" not in out
 
 
+def test_is_multi_column_layout_rejects_short_grid():
+    """A sparse grid of short cells above a full-width body is NOT multi-column.
+
+    Mirrors an academic title page (e.g. the Transformer paper) whose
+    author/affiliation block is laid out in a visual grid: the column detector
+    over-segments it into short side-by-side cells alongside one tall full-width
+    body box. Reading those column-by-column scrambles the row-major order.
+    """
+    import pymupdf
+    from pdf_mcp.extractor import _is_multi_column_layout
+
+    # One tall full-width body box (h=408) + short author-grid cells (h~31).
+    boxes = [pymupdf.Rect(108, 334, 504, 742)]
+    for x0, x1 in ((116, 216), (230, 309), (323, 407)):
+        boxes.append(pymupdf.Rect(x0, 235, x1, 266))
+    assert _is_multi_column_layout(boxes) is False
+
+
+def test_is_multi_column_layout_accepts_tall_columns():
+    import pymupdf
+    from pdf_mcp.extractor import _is_multi_column_layout
+
+    boxes = [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)]
+    assert _is_multi_column_layout(boxes) is True
+
+
+def test_is_multi_column_layout_single_or_empty():
+    import pymupdf
+    from pdf_mcp.extractor import _is_multi_column_layout
+
+    assert _is_multi_column_layout([]) is False
+    assert _is_multi_column_layout([pymupdf.Rect(0, 0, 300, 800)]) is False
+
+
+def test_author_grid_title_page_reads_row_major(monkeypatch):
+    """Regression: a multi-author title-page grid extracts in visual row order.
+
+    Without grid suppression the column detector's boxes drive a column-major
+    read (down each column), placing the second-row author before later
+    first-row authors. The fix routes such a page through positional sort, which
+    preserves row order. Asserts a last-first-row name precedes a first
+    second-row name — the signature that distinguishes row- from column-major.
+    """
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    # 3-column x 2-row author grid near the top.
+    cols = (60, 230, 400)
+    row0 = ("Alpha", "Bravo", "Charlie")
+    row1 = ("Delta", "Echo", "Foxtrot")
+    for x, name in zip(cols, row0):
+        page.insert_text((x, 110), name, fontsize=11)
+    for x, name in zip(cols, row1):
+        page.insert_text((x, 150), name, fontsize=11)
+    # Full-width body paragraph below the grid.
+    page.insert_text((50, 400), "Body paragraph spanning the full page width.")
+
+    # Detector boxes mimic the real over-segmentation, ordered column-major so
+    # the unguarded path would interleave the grid wrongly: each author a short
+    # cell, plus one tall full-width body box.
+    cells = []
+    for x in cols:
+        cells.append(pymupdf.Rect(x - 5, 100, x + 80, 122))  # row0 cell
+        cells.append(pymupdf.Rect(x - 5, 140, x + 80, 162))  # row1 cell
+    body = pymupdf.Rect(40, 380, 560, 720)
+    monkeypatch.setattr(extractor, "detect_column_boxes", lambda p: cells + [body])
+
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+
+    # Row-major: the whole first row precedes the second row.
+    assert out.index("Charlie") < out.index("Delta")
+    assert out.index("Alpha") < out.index("Bravo") < out.index("Charlie")
+
+
 class TestPageWorkers:
     def _one_page_pdf(self, tmp_path):
         path = str(tmp_path / "render_worker.pdf")

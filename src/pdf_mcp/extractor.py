@@ -113,6 +113,34 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
     return unique_result
 
 
+def _import_column_boxes() -> Any:
+    """Import the optional column detector, or return None if unavailable.
+
+    Single source of truth for column-aware availability: both
+    ``detect_column_boxes`` (the extraction fallback path) and
+    ``column_detection_available`` (server_info feature discovery) go through
+    here, so the reported feature flag can never drift from what extraction
+    actually does. Any failure — missing dependency or its version-guard
+    ImportError — yields None.
+    """
+    try:
+        from pymupdf4llm.helpers.multi_column import column_boxes
+
+        return column_boxes
+    except Exception:
+        return None
+
+
+def column_detection_available() -> bool:
+    """True when the optional column detector is importable.
+
+    Mirrors the exact guard ``detect_column_boxes`` relies on (see
+    ``_import_column_boxes``), so server_info reports column-aware
+    availability that matches real extraction behaviour.
+    """
+    return _import_column_boxes() is not None
+
+
 def detect_column_boxes(page: Any) -> list[Any]:
     """Return column bounding boxes in reading order, or [] if unavailable.
 
@@ -120,15 +148,45 @@ def detect_column_boxes(page: Any) -> list[Any]:
     its version-guard ImportError, or a detection error — degrades to [] so
     callers fall back to positional-sort extraction.
     """
+    column_boxes = _import_column_boxes()
+    if column_boxes is None:
+        return []
     try:
-        from pymupdf4llm.helpers.multi_column import column_boxes
-
         # margins=0 keeps running headers/footers/page numbers in the column
         # boxes, matching the single-column path (which extracts the full page).
         # Verified to not affect reading-order benchmark score.
         return list(column_boxes(page, footer_margin=0, header_margin=0))
     except Exception:
         return []
+
+
+# A page is only treated as multi-column when at least two detected boxes are
+# "tall" — i.e. their height is at least this fraction of the tallest box on the
+# page. Genuine text columns run most of the page height; a sparse grid of
+# short cells (e.g. an academic paper's author/affiliation block laid out in a
+# visual grid above a full-width body) is NOT a reading-order column structure,
+# and extracting it column-by-column scrambles the intended row-by-row order.
+# 0.25 sits comfortably above the ratio such grids produce (the Transformer
+# title page's tallest author cell is ~0.22 of its full-width body box) while
+# staying well below genuine half-height columns.
+_COLUMN_MIN_HEIGHT_FRAC = 0.25
+
+
+def _is_multi_column_layout(boxes: list[Any]) -> bool:
+    """True only when >=2 detected boxes are tall enough to be real columns.
+
+    Guards against ``detect_column_boxes`` over-segmenting a single-column page
+    whose top is a visual grid (author/affiliation blocks, badge rows) into many
+    short side-by-side boxes — reading those column-by-column reorders content
+    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``.
+    """
+    if len(boxes) <= 1:
+        return False
+    max_height = max(box.height for box in boxes)
+    if max_height <= 0:
+        return False
+    tall = sum(1 for box in boxes if box.height >= _COLUMN_MIN_HEIGHT_FRAC * max_height)
+    return tall >= 2
 
 
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
@@ -144,7 +202,7 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     if sort_by_position:
         boxes = detect_column_boxes(page)
-        if len(boxes) > 1:
+        if _is_multi_column_layout(boxes):
             # Multi-column: extract each column in reading order so the
             # text is not interleaved row-by-row across columns.
             parts = (

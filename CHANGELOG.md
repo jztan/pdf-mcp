@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `server_info` tool: setup-time discovery of which optional features are
+  installed (column-aware extraction, OCR, semantic search) and which
+  configuration values are active (worker count, byte cap, cache settings).
+  Lets callers branch on feature presence before attempting feature-dependent
+  calls. Named without the `pdf_` prefix to signal that it operates on the
+  server, not on a PDF. See tool description for the recommended call pattern.
 - `pdf_read_pages` now parallelizes OCR (and, when it pays end-to-end, page
   rendering) across cache-miss pages with a process pool, controlled by an
   optional `PDF_MCP_MAX_WORKERS` env var (set to `1` to force sequential).
@@ -18,6 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the canonical UNLV/ISRI Tesseract corpus (downloads on demand into the
   gitignored `benchmark_data/.isri_cache/`); reports per-class speedup,
   parallel-equals-sequential verification, and word-recall vs ground truth.
+
+### Fixed
+- Text extraction no longer mis-reads sparse multi-block layouts column-major.
+  v1.15.0's column-aware reading order treated *any* page with >1 detected
+  column box as multi-column, so an academic paper's author/affiliation grid on
+  the title page was read down each column — scrambling author order (e.g. the
+  Transformer paper's first author came out as "Niki Parmar" instead of "Ashish
+  Vaswani"). The column path now requires ≥2 *tall* boxes (each ≥25% of the
+  tallest box's height); genuine text columns run most of the page height, while
+  grid cells do not, so such pages fall back to positional sort. Reading-order
+  benchmark is unchanged on two-column docs and flat on one-column docs. The
+  extraction-logic version is bumped, dropping v1.15.0's scrambled title-page
+  text, embeddings, and FTS rows so they re-extract on next read.
 
 ### Changed
 - `pdf_read_pages` per-page OCR/render failures are now **isolated** instead of

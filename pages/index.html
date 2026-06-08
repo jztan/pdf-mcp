@@ -793,10 +793,10 @@
     </button>
   </div>
   <p class="other-tools">
-    The demo shows 3 of pdf-mcp's 8 tools. The server also includes
+    The demo shows 3 of pdf-mcp's 9 tools. The server also includes
     <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
-    <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code>,
-    plus OCR, SQLite caching, and RRF hybrid search.
+    <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and
+    <code>server_info</code>, plus OCR, SQLite caching, and RRF hybrid search.
   </p>
   <div class="links">
     <a class="link-btn" href="https://github.com/jztan/pdf-mcp">GitHub</a>
@@ -820,7 +820,7 @@
 
     <h2>How agents use pdf-mcp</h2>
     <p>
-      The server exposes eight tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other five tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, and <code>pdf_cache_clear</code> — cover full-document reads, visual inspection of scanned pages, and cache management.
+      The server exposes nine tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other six tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, cache management, and discovery of which optional features are installed.
     </p>
 
     <h2>What the browser demo shows</h2>

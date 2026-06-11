@@ -18,9 +18,9 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that e
 
 **[See what your AI agent sees →](https://pdf-mcp.jztan.com/)**
 
-Walk through the three main tools (`pdf_info`, `pdf_search`, `pdf_read_pages`) with any PDF. 100% client-side, no install required.
+Drop in any PDF and watch an agent skim it, search it, and read only the pages that matter — using a fraction of the tokens. 100% client-side, no install required.
 
-[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.png" alt="pdf-mcp browser demo: pdf_search returns page-level matches with highlighted excerpts" width="720">](https://pdf-mcp.jztan.com/)
+[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages — using a fraction of the tokens" width="760">](https://pdf-mcp.jztan.com/)
 
 ## Why pdf-mcp?
 

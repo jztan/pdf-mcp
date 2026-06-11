@@ -495,6 +495,23 @@
   }
   .empty-fields code { color: var(--text-secondary); }
 
+  .askbar { display: flex; gap: 10px; margin: 26px 0 10px; }
+  .askbar input { flex: 1; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-strong);
+                  background: var(--bg); color: var(--text); font-size: 15px; font-family: var(--font-text); }
+  .askbar input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0,113,227,0.15); }
+  .result-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; background: var(--bg);
+                 opacity: 0; transform: translateY(6px); transition: all 0.5s ease; cursor: pointer; margin-bottom: 8px; }
+  .result-card.on { opacity: 1; transform: none; }
+  .result-card.reading { border-color: var(--accent); }
+  .inline-reader { margin-top: 10px; border-left: 2px solid var(--accent); padding: 4px 0 4px 14px;
+                   font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+                   max-height: 0; overflow: hidden; transition: max-height 0.6s ease; }
+  .inline-reader.open { max-height: 260px; overflow-y: auto; }
+  .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
+  details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
+  details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader { transition: none; } }
+
   .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
   .json-box {
@@ -732,10 +749,6 @@
 
 <section class="workflow hidden" id="workflow">
   <div class="inner">
-  <p class="workflow-intro">
-    An agent using pdf-mcp calls <strong>three tools in sequence</strong>. Each returns the JSON below.
-  </p>
-
   <p class="act-label">your document</p>
   <div class="doc-card" id="docCard">
     <div class="doc-head">
@@ -750,66 +763,35 @@
       <span><i style="background:var(--accent)"></i>match</span>
       <span class="tool-tag">pdf_info · <button class="step-json-toggle" data-target="json1" style="padding:0">{ JSON }</button></span>
     </div>
+    <div class="askbar">
+      <input type="text" id="searchInput" placeholder="Ask this document for something…" />
+      <button class="btn" id="searchBtn">Search</button>
+    </div>
+    <div class="suggested-chips" id="suggestedChips"></div>
+    <div class="search-results" id="searchResults"></div>
+    <div class="callout" id="kwCallout" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>. Images and tables are server-side only (PyMuPDF), so <code>images: []</code> and <code>tables: []</code> stay empty in this demo.</span>
+    </div>
+    <details class="dev-row">
+      <summary>For developers: read arbitrary pages · raw JSON</summary>
+      <div class="read-row" style="margin-top:12px">
+        <div class="read-input-wrap">
+          <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
+          <div class="read-hint">Ranges and lists supported · max 50 pages in this demo · <span class="tool-tag" style="margin-left:0">pdf_read_pages</span> <button class="step-json-toggle" data-target="json3" style="padding:0">{ JSON }</button> · <span class="tool-tag" style="margin-left:0">pdf_search</span> <button class="step-json-toggle" data-target="json2" style="padding:0">{ JSON }</button></div>
+        </div>
+        <button class="btn" id="readBtn">Read</button>
+      </div>
+      <div class="search-results" id="readResults"></div>
+      <div class="json-wrap" id="json2"><pre class="json-box" id="json2-content"></pre>
+        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div></div>
+      <div class="json-wrap" id="json3"><pre class="json-box" id="json3-content"></pre>
+        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div></div>
+    </details>
     <div id="infoCallouts"></div>
     <div class="json-wrap" id="json1">
       <pre class="json-box" id="json1-content"></pre>
       <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="1">Copy</button></div>
-    </div>
-  </div>
-
-  <div class="step-card" id="step2">
-    <div class="step-head">
-      <div class="step-num">2</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_search(path, query)</span>
-        <span class="step-desc">Search with paragraph excerpts — often enough to answer directly</span>
-      </div>
-      <button class="step-json-toggle" data-target="json2">{ JSON }</button>
-    </div>
-    <div class="search-row">
-      <input type="text" class="url-input" id="searchInput" placeholder="Search this PDF..." />
-      <button class="btn" id="searchBtn">Search</button>
-    </div>
-    <div class="suggested-chips" id="suggestedChips"></div>
-    <div class="search-results" id="searchResults">
-      <div class="search-empty">Enter a query above, or pick a suggestion</div>
-    </div>
-    <div class="callout">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>.</span>
-    </div>
-    <div class="json-wrap" id="json2">
-      <pre class="json-box" id="json2-content"></pre>
-      <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div>
-    </div>
-  </div>
-
-  <div class="step-card" id="step3">
-    <div class="step-head">
-      <div class="step-num">3</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_read_pages(path, pages)</span>
-        <span class="step-desc">Read only the pages that matter — targeted, not a dump</span>
-      </div>
-      <button class="step-json-toggle" data-target="json3">{ JSON }</button>
-    </div>
-    <div class="read-row">
-      <div class="read-input-wrap">
-        <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
-        <div class="read-hint">Ranges and lists supported · max 50 pages in this demo</div>
-      </div>
-      <button class="btn" id="readBtn">Read</button>
-    </div>
-    <div class="search-results" id="readResults">
-      <div class="search-empty">Enter pages above, or click a page in Step 1's coverage strip</div>
-    </div>
-    <div class="callout">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Images and tables run server-side only.</strong> pdf-mcp uses PyMuPDF to save images as PNG files on disk and detect tables via <code>page.find_tables()</code>. That's why <code>images: []</code> and <code>tables: []</code> are empty here.</span>
-    </div>
-    <div class="json-wrap" id="json3">
-      <pre class="json-box" id="json3-content"></pre>
-      <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div>
     </div>
   </div>
 
@@ -1167,11 +1149,26 @@
     }
   }
 
-  // Replaced with full inline-reader implementation in the next task.
+  // Implemented in the next task (token ledger).
+  function ledgerAdd(tokens) {}
+  function markPageRead(page, tokens) {}
+
   function readInline(page) {
-    $("readInput").value = String(page);
-    doReadPages(String(page));
-    $("step3") && $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
+    const text = pageTexts[page - 1] ?? "";
+    const tokens = Math.round(text.length / 4);
+    const card = document.querySelector(`.result-card[data-page="${page}"]`);
+    const reader = card ? $(`reader-${page}`) : null;
+    if (reader && !reader.classList.contains("open")) {
+      card.classList.add("reading");
+      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)"}`;
+      reader.classList.add("open");
+      markPageRead(page, tokens);
+    } else if (!reader) {
+      $("readInput").value = String(page);
+      doReadPages(String(page));
+      document.querySelector("details.dev-row").open = true;
+      markPageRead(page, tokens);
+    }
   }
 
 
@@ -1257,32 +1254,50 @@
     renderSearch(pdfSearch, query);
   }
 
+  // Pending animation timeouts, cleared before each new sweep/render so a
+  // rapid re-search or reset-then-load can't repaint the grid with stale
+  // results.
+  let sweepTimers = [];
+  function clearSweepTimers() {
+    sweepTimers.forEach(clearTimeout);
+    sweepTimers = [];
+  }
+
+  function sweepGrid(matchPages) {
+    clearSweepTimers();
+    const cols = window.matchMedia("(max-width: 640px)").matches ? 12 : 24;
+    [...$("liveGrid").children].forEach((c, i) => {
+      c.classList.remove("dim", "hit");
+      const apply = () => { if (matchPages.has(i + 1)) c.classList.add("hit"); else c.classList.add("dim"); };
+      if (REDUCED_MOTION) apply();
+      else sweepTimers.push(setTimeout(apply, 300 + (i % cols) * 60));
+    });
+  }
+  function clearSweep() {
+    clearSweepTimers();
+    [...$("liveGrid").children].forEach(c => c.classList.remove("dim", "hit"));
+  }
+
   function renderSearch(res, query) {
     const el = $("searchResults");
+    $("kwCallout").style.display = "flex";
+    sweepGrid(new Set(res.matches.map(m => m.page)));
     if (res.matches.length === 0) {
       el.innerHTML = `<div class="search-empty">No matches for "${escapeHtml(query)}"</div>`;
     } else {
-      el.innerHTML = `
-        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px;font-family:var(--font-mono);">
-          ${res.matches.length} match${res.matches.length !== 1 ? 'es' : ''} · ${Object.keys(res.page_match_counts).length} page${Object.keys(res.page_match_counts).length !== 1 ? 's' : ''}
-        </div>
-      ` + res.matches.map(m => `
-        <div class="match" data-page="${m.page}">
-          <div class="match-head">
-            <span class="match-page">page ${m.page}</span>
-            <span>score: ${m.score.toFixed(4)} · source: ${m.source}</span>
-          </div>
+      el.innerHTML = res.matches.map(m => `
+        <div class="result-card" data-page="${m.page}">
+          <div class="match-head"><span class="match-page">page ${m.page}</span>
+            <span>score: ${m.score.toFixed(4)} · ${escapeHtml(res.excerpt_style)} excerpt</span></div>
           <p class="match-excerpt">${highlightQuery(escapeHtml(m.excerpt), query)}</p>
+          <div class="inline-reader" id="reader-${m.page}"></div>
         </div>`).join("");
-
-      el.querySelectorAll(".match").forEach(mEl => {
-        mEl.addEventListener("click", () => {
-          const p = mEl.dataset.page;
-          $("readInput").value = p;
-          doReadPages(p);
-          $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+      el.querySelectorAll(".result-card").forEach((card, i) => {
+        if (REDUCED_MOTION) card.classList.add("on");
+        else sweepTimers.push(setTimeout(() => card.classList.add("on"), 1800 + i * 200));
+        card.addEventListener("click", () => readInline(parseInt(card.dataset.page, 10)));
       });
+      ledgerAdd(Math.round(res.matches.reduce((a, m) => a + m.excerpt.length, 0) / 4));
     }
     $("json2-content").innerHTML = syntaxHighlight(JSON.stringify(res, null, 2));
   }
@@ -1399,10 +1414,12 @@
     pdfSearch = pdfReadPages = null;
     $("searchInput").value = ""; $("readInput").value = "";
     $("suggestedChips").innerHTML = "";
-    $("searchResults").innerHTML = `<div class="search-empty">Enter a query above, or pick a suggestion</div>`;
-    $("readResults").innerHTML = `<div class="search-empty">Enter pages above, or click a page in Step 1's coverage strip</div>`;
+    $("searchResults").innerHTML = "";
+    $("readResults").innerHTML = "";
     $("json2-content").innerHTML = "";
     $("json3-content").innerHTML = "";
+    $("kwCallout").style.display = "none";
+    clearSweep();
   }
 
   $("resetBtn").addEventListener("click", () => {

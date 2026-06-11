@@ -185,8 +185,14 @@
      rows, not ~18), just a tighter gap. Fewer columns would balloon the cell
      size and make the grid dominate the viewport. Cells shrink via 1fr. */
   @media (max-width: 640px) { .hero-grid, .lgrid { gap: 3px; } }
-  .pgcell { aspect-ratio: 3/4; border-radius: 2.5px; background: var(--text-tertiary); opacity: 0.5;
-            transition: opacity 0.5s ease, background 0.5s ease, transform 0.5s ease, box-shadow 0.5s ease; }
+  /* 3:4 page cells via percentage-padding rather than `aspect-ratio`:
+     Safari fails to shrink aspect-ratio grid items back down after the
+     container narrows (it keeps an auto min-size from the wider layout),
+     which left cells oversized and touching the card edge after a resize.
+     Percentage padding is width-relative and reflows reliably everywhere. */
+  .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
+            background: var(--text-tertiary); opacity: 0.5;
+            transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
   .pgcell.dim { opacity: 0.13; }
   /* Matched pages stay full size (no scale — enlarging collides with
      neighbours and the card edge). They read as matches purely by colour:
@@ -824,10 +830,8 @@
     heroCells.forEach((c, i) => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"));
     heroStat.classList.add("on");
   } else {
-    // Play the reveal once, then rest in the resolved end state. Looping
-    // would periodically reset to all-grey and re-sweep, which reads as
-    // unstable when the page is glanced at or resized mid-cycle.
     heroLoop();
+    setInterval(heroLoop, 8500);
   }
 
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));

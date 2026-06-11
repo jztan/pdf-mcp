@@ -12,7 +12,7 @@
 
 <!-- Open Graph (LinkedIn, Facebook, Slack) -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="pdf-mcp · See what your AI agent sees" />
+<meta property="og:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
 <meta property="og:description" content="Drop in a PDF and watch an AI agent read only the pages that matter. Try it in your browser — no install required, 100% client-side." />
 <meta property="og:url" content="https://pdf-mcp.jztan.com/" />
 <meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png" />
@@ -22,7 +22,7 @@
 
 <!-- Twitter / X card -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="pdf-mcp · See what your AI agent sees" />
+<meta name="twitter:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
 <meta name="twitter:description" content="Watch an AI agent read only the pages that matter, in your browser. No install." />
 <meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 
@@ -181,7 +181,10 @@
   }
 
   .hero-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; max-width: 580px; margin: 40px auto 0; }
-  @media (max-width: 640px) { .hero-grid, .lgrid { grid-template-columns: repeat(12, 1fr); } }
+  /* Keep the grid compact on small screens: same 24 columns (so it stays ~9
+     rows, not ~18), just a tighter gap. Fewer columns would balloon the cell
+     size and make the grid dominate the viewport. Cells shrink via 1fr. */
+  @media (max-width: 640px) { .hero-grid, .lgrid { gap: 3px; } }
   .pgcell { aspect-ratio: 3/4; border-radius: 2.5px; background: var(--text-tertiary); opacity: 0.5;
             transition: opacity 0.5s ease, background 0.5s ease, transform 0.5s ease, box-shadow 0.5s ease; }
   .pgcell.dim { opacity: 0.13; }
@@ -572,8 +575,9 @@
     .url-row { flex-direction: column; }
     .btn:not(.btn-icon) { width: 100%; }
     section.workflow { padding: 8px 16px 40px; }
+    .doc-card { padding: 22px 16px; }
     .step-json-toggle { padding: 6px 8px; font-size: 11px; }
-    .read-row { flex-direction: column; }
+    .askbar, .read-row { flex-direction: column; }
     section.install { padding: 36px 20px 24px; }
     .install-title { font-size: 24px; }
     .json-box { font-size: 11px; padding: 12px 14px; }
@@ -779,6 +783,10 @@
 
   const $ = (id) => document.getElementById(id);
   function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
+  // Actual rendered column count of a grid (robust to CSS/breakpoint changes).
+  function gridCols(el) {
+    return getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length || 24;
+  }
   // Click + keyboard (Enter/Space) activation for role="button" divs.
   function onActivate(el, fn) {
     el.addEventListener("click", fn);
@@ -798,7 +806,7 @@
   const heroCells = [...heroGrid.children];
 
   function heroLoop() {
-    const cols = window.matchMedia("(max-width: 640px)").matches ? 12 : 24;
+    const cols = gridCols(heroGrid);
     heroCells.forEach(c => c.className = "pgcell");
     heroStat.classList.remove("on");
     setTimeout(() => {
@@ -1227,7 +1235,7 @@
 
   function sweepGrid(matchPages) {
     clearSweepTimers();
-    const cols = window.matchMedia("(max-width: 640px)").matches ? 12 : 24;
+    const cols = gridCols($("liveGrid"));
     [...$("liveGrid").children].forEach((c, i) => {
       c.classList.remove("dim", "hit");
       const apply = () => { if (matchPages.has(i + 1)) c.classList.add("hit"); else c.classList.add("dim"); };

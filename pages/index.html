@@ -824,8 +824,10 @@
     heroCells.forEach((c, i) => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"));
     heroStat.classList.add("on");
   } else {
+    // Play the reveal once, then rest in the resolved end state. Looping
+    // would periodically reset to all-grey and re-sweep, which reads as
+    // unstable when the page is glanced at or resized mid-cycle.
     heroLoop();
-    setInterval(heroLoop, 8500);
   }
 
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));

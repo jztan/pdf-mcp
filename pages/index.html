@@ -188,8 +188,11 @@
   .pgcell { aspect-ratio: 3/4; border-radius: 2.5px; background: var(--text-tertiary); opacity: 0.5;
             transition: opacity 0.5s ease, background 0.5s ease, transform 0.5s ease, box-shadow 0.5s ease; }
   .pgcell.dim { opacity: 0.13; }
-  .pgcell.hit { background: var(--accent); opacity: 1; transform: scale(1.7);
-                box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 45%, transparent); z-index: 2; position: relative; }
+  /* Matched pages stay full size (no scale — enlarging collides with
+     neighbours and the card edge). They read as matches purely by colour:
+     solid accent at full opacity while non-matches fade to 0.13. */
+  .pgcell.hit { background: var(--accent); opacity: 1;
+                box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent); z-index: 2; position: relative; }
   .pgcell.scanned { background: var(--warning); opacity: 0.45; }
   .hero-stat { margin-top: 34px; font-family: var(--font-display); font-size: clamp(20px, 3vw, 28px);
                font-weight: 600; letter-spacing: -0.02em; opacity: 0; transition: opacity 0.8s ease; }
@@ -575,7 +578,7 @@
     .url-row { flex-direction: column; }
     .btn:not(.btn-icon) { width: 100%; }
     section.workflow { padding: 8px 16px 40px; }
-    .doc-card { padding: 22px 16px; }
+    .doc-card { padding: 22px 20px; }
     .step-json-toggle { padding: 6px 8px; font-size: 11px; }
     .askbar, .read-row { flex-direction: column; }
     section.install { padding: 36px 20px 24px; }

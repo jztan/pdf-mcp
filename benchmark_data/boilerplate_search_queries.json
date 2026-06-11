@@ -1,0 +1,24 @@
+{
+  "_comment": "Query manifest for the search-impact benchmark (scripts/benchmark_search_impact.py), which measures whether stripping running headers/footers changes keyword (BM25/FTS5) ranking. Realistic relevance-labeled queries come from benchmark_data/ground_truth.json (attention, gpt3 — page-number-only boilerplate, so query terms never collide). This file adds GDPR queries, whose running header carries real words: `control` queries are ordinary content lookups (expected: no change), `collision` queries deliberately overlap the running header `Official Journal of the European Union` (expected: stripping removes header-driven noise pages). Distortion is measured label-free as top-K set change, so collision queries need no relevance labels.",
+  "realistic_pdf_files": {
+    "attention": "attention.pdf",
+    "gpt3": "gpt3.pdf"
+  },
+  "distortion": {
+    "gdpr": {
+      "file": "gdpr.pdf",
+      "boilerplate": "running header on every page: '<date> L 119/N Official Journal of the European Union EN'",
+      "control": [
+        "right to erasure",
+        "data protection officer",
+        "lawfulness of processing",
+        "consent of the data subject"
+      ],
+      "collision": [
+        "official journal european union",
+        "european union official journal",
+        "journal of the union"
+      ]
+    }
+  }
+}

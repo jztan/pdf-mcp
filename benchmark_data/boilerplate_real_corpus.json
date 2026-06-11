@@ -1,0 +1,32 @@
+{
+  "_comment": "Real-PDF corpus for the boilerplate-detection benchmark (scripts/benchmark_boilerplate.py --real). Real documents have no ground-truth labels, so each entry records (a) the public source for reproducibility, and (b) `known_boilerplate`: regexes for boilerplate confirmed by manual inspection of the margin bands, which the detector MUST catch (a recall check). PDFs themselves are gitignored under benchmark_data/.real_pdfs/ and re-fetched from `source`.",
+  "documents": [
+    {
+      "file": "attention.pdf",
+      "title": "Attention Is All You Need",
+      "source": "https://arxiv.org/pdf/1706.03762",
+      "known_boilerplate": [
+        {"pattern": "^#$", "desc": "bare page number, bottom-center"}
+      ],
+      "notes": "NIPS-2017 preprint format. Page numbers bottom-center; no running header. Page-1-only notices (Google attribution, NIPS footer) are NOT boilerplate and must be left in place."
+    },
+    {
+      "file": "gdpr.pdf",
+      "title": "Regulation (EU) 2016/679 (GDPR)",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:32016R0679",
+      "known_boilerplate": [
+        {"pattern": "official journal of the european union", "desc": "running header on every page; 'L 119/N' page-ref increments"}
+      ],
+      "notes": "Official Journal format. The bottom-of-page footnotes ('(1) OJ C 229, ...') vary per page and must NOT be stripped."
+    },
+    {
+      "file": "gpt3.pdf",
+      "title": "Language Models are Few-Shot Learners (GPT-3)",
+      "source": "https://arxiv.org/pdf/2005.14165",
+      "known_boilerplate": [
+        {"pattern": "^#$", "desc": "bare page number, bottom-center"}
+      ],
+      "notes": "Page numbers bottom-center; no running header. Page-1-only author notices must be left in place."
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "_comment": "Synthetic corpus for the running-header/footer (boilerplate) detection benchmark (scripts/benchmark_boilerplate.py). Each scenario is rendered to a real multi-page PDF in memory with PyMuPDF, with known headers/footers/page-numbers injected at known positions. Because the boilerplate is injected, per-block ground-truth labels are exact, so the benchmark can report true precision/recall/F1 with no network and no manual labeling. Scenarios are ordered roughly by the refinement they stress: simple repetition, digit-varying page numbers, odd/even (recto/verso) alternation, multi-line header blocks, section-scoped headers, plus two precision guardrails (a clean document and a number-heavy body) that must NOT be stripped.",
+  "seed": 20260611,
+  "scenarios": [
+    {
+      "name": "simple",
+      "pages": 12,
+      "header": "Acme Corporation Annual Report",
+      "footer": "Confidential",
+      "page_number": true,
+      "stresses": "Constant header + footer with a varying page number."
+    },
+    {
+      "name": "page_number_only",
+      "pages": 12,
+      "page_number_standalone": true,
+      "stresses": "Bare page number in the footer; only detectable after digit normalization."
+    },
+    {
+      "name": "odd_even",
+      "pages": 12,
+      "header_odd": "3. Methods and Materials",
+      "header_even": "Acme Corporation Annual Report",
+      "page_number": true,
+      "stresses": "Recto/verso alternating running headers; each appears on only ~50% of pages."
+    },
+    {
+      "name": "multiline",
+      "pages": 12,
+      "header": ["Acme Corporation", "2024 Annual Report"],
+      "footer": "All rights reserved",
+      "page_number": true,
+      "stresses": "Two-line header rendered as a single block."
+    },
+    {
+      "name": "section_scoped",
+      "pages": 16,
+      "section_headers": ["1. Introduction", "2. Background", "3. Methods", "4. Results"],
+      "section_size": 4,
+      "footer": "Acme Corporation",
+      "page_number": true,
+      "stresses": "Running header changes every section; no single header reaches a document-wide frequency."
+    },
+    {
+      "name": "clean_control",
+      "pages": 12,
+      "stresses": "Precision guardrail: no boilerplate at all. The detector must strip nothing."
+    },
+    {
+      "name": "numeric_body",
+      "pages": 12,
+      "footer": "Acme Corporation",
+      "page_number": true,
+      "body_numeric": true,
+      "stresses": "Precision guardrail: short numeric lines in the body (table refs, equations, figures) that a naive digit/short-line filter would wrongly delete."
+    }
+  ]
+}

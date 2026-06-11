@@ -6,14 +6,14 @@
 <meta name="color-scheme" content="light dark" />
 
 <title>pdf-mcp · PDF extraction for AI agents | Browser demo</title>
-<meta name="description" content="Try pdf-mcp in your browser. See the three tools an AI agent uses to read PDFs without blowing its context window — pdf_info, pdf_search, pdf_read_pages. 100% client-side." />
+<meta name="description" content="See what your AI agent sees. Drop a PDF into your browser and watch an agent skim, search, and read only the pages that matter — without blowing its context window. 100% client-side." />
 
 <link rel="canonical" href="https://pdf-mcp.jztan.com/" />
 
 <!-- Open Graph (LinkedIn, Facebook, Slack) -->
 <meta property="og:type" content="website" />
 <meta property="og:title" content="pdf-mcp · See what your AI agent sees" />
-<meta property="og:description" content="Walk through the three tools pdf-mcp gives your agent. Try it in your browser — no install required, 100% client-side." />
+<meta property="og:description" content="Drop in a PDF and watch an AI agent read only the pages that matter. Try it in your browser — no install required, 100% client-side." />
 <meta property="og:url" content="https://pdf-mcp.jztan.com/" />
 <meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
@@ -23,7 +23,7 @@
 <!-- Twitter / X card -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="pdf-mcp · See what your AI agent sees" />
-<meta name="twitter:description" content="The three tools pdf-mcp gives your agent, running in your browser. No install." />
+<meta name="twitter:description" content="Watch an AI agent read only the pages that matter, in your browser. No install." />
 <meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 
 <!-- Structured data: SoftwareApplication -->
@@ -282,35 +282,12 @@
   }
   section.workflow .inner { max-width: 820px; margin: 0 auto; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-  .workflow-intro { text-align: center; margin-bottom: 32px; color: var(--text-secondary); font-size: 15px; }
-  .workflow-intro strong { color: var(--text); font-weight: 500; }
-
-  .step-card {
-    background: var(--bg-elev); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 28px; margin-bottom: 20px;
-    box-shadow: var(--shadow-sm); position: relative;
-  }
-  .step-card + .step-card::before {
-    content: ""; position: absolute; top: -20px; left: 50px;
-    width: 1px; height: 20px; background: var(--border-strong);
-  }
-  .step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-  .step-num {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--accent); color: white;
-    display: grid; place-items: center;
-    font-family: var(--font-display); font-size: 15px; font-weight: 600; flex-shrink: 0;
-  }
-  .step-title { flex: 1; min-width: 0; }
-  .step-tool { display: block; font-family: var(--font-mono); font-size: 14px; color: var(--text); font-weight: 500; }
-  .step-desc { display: block; font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
   .step-json-toggle {
     font-size: 12px; color: var(--accent); cursor: pointer;
     background: none; border: none; padding: 8px 10px; border-radius: 6px;
     font-family: var(--font-mono);
   }
   .step-json-toggle:hover { background: var(--bg-subtle); }
-
   .callout {
     display: flex; gap: 10px; padding: 12px 14px;
     border-radius: var(--radius-sm);
@@ -324,63 +301,12 @@
     background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
   }
 
-  .info-stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 14px; margin-bottom: 18px;
-  }
-  .stat { background: var(--bg-subtle); border-radius: var(--radius-sm); padding: 12px 14px; }
-  .stat-label {
-    display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-tertiary); margin-bottom: 4px; font-weight: 500; font-family: var(--font-mono);
-  }
-  .stat-value {
-    display: block; font-family: var(--font-display); font-size: 19px;
-    font-weight: 500; color: var(--text); letter-spacing: -0.01em;
-  }
-  .stat-value small { font-size: 13px; color: var(--text-tertiary); font-weight: 400; margin-left: 4px; }
-
-  .meta-list {
-    margin: 0; padding: 0; list-style: none;
-    display: grid; grid-template-columns: 1fr; gap: 1px;
-    background: var(--border); border-radius: var(--radius-sm); overflow: hidden;
-    border: 1px solid var(--border);
-  }
-  .meta-list li {
-    display: grid; grid-template-columns: 160px 1fr;
-    background: var(--bg-elev); padding: 10px 14px; font-size: 13px; gap: 12px;
-  }
-  .meta-list .k { color: var(--text-secondary); font-weight: 500; font-family: var(--font-mono); font-size: 12px; }
-  .meta-list .v { color: var(--text); font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
-  .meta-list .v.null { color: var(--text-tertiary); font-style: italic; }
-
   .coverage { margin-top: 18px; overflow: hidden; }
   .coverage-label {
     display: flex; justify-content: space-between; align-items: baseline;
     font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; font-family: var(--font-mono);
   }
   .coverage-label strong { color: var(--text-secondary); font-weight: 500; }
-  .coverage-bars { display: flex; gap: 2px; align-items: flex-end; height: 60px; padding: 4px 0 0; width: 100%; }
-  .coverage-bar {
-    flex: 1 1 0; min-width: 0;
-    background: var(--accent); border-radius: 3px 3px 0 0; cursor: pointer;
-    transition: opacity 0.15s ease, transform 0.1s ease;
-    position: relative; opacity: 0.8;
-  }
-  .coverage-bar:hover { opacity: 1; transform: scaleY(1.03); transform-origin: bottom; }
-  .coverage-bar.scanned { background: var(--warning); }
-  .coverage-labels {
-    display: flex; gap: 2px;
-    margin-top: 6px;
-    font-size: 10px; color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    width: 100%;
-  }
-  .coverage-labels span {
-    flex: 1 1 0; min-width: 0;
-    text-align: center;
-    overflow: visible;
-    white-space: nowrap;
-  }
   .coverage-svg {
     position: relative;
     width: 100%;
@@ -415,33 +341,6 @@
     border: 4px solid transparent;
     border-top-color: var(--text);
   }
-  .coverage-tip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--text);
-    color: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 5px 8px;
-    border-radius: 6px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    z-index: 10;
-  }
-  .coverage-bar:hover .coverage-tip { opacity: 1; }
-  .coverage-tip::after {
-    content: "";
-    position: absolute; top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 4px solid transparent;
-    border-top-color: var(--text);
-  }
-
-  .search-row { display: flex; gap: 10px; margin-bottom: 12px; }
   .suggested-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; align-items: center; }
   .chip {
     display: inline-block; padding: 5px 12px; border-radius: 980px;
@@ -452,11 +351,6 @@
   .chip:hover { background: var(--bg-elev); color: var(--text); border-color: var(--border-strong); }
   .search-results { margin-top: 6px; }
   .search-empty { text-align: center; padding: 24px; color: var(--text-tertiary); font-size: 13px; font-family: var(--font-mono); }
-  .match {
-    padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease; background: var(--bg-elev);
-  }
-  .match:hover { border-color: var(--border-strong); transform: translateX(2px); box-shadow: var(--shadow-sm); }
   .match-head {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 6px; font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono);
@@ -684,16 +578,8 @@
     .url-row { flex-direction: column; }
     .btn:not(.btn-icon) { width: 100%; }
     section.workflow { padding: 8px 16px 40px; }
-    .step-card { padding: 20px 18px; }
-    .step-card + .step-card::before { left: 36px; }
-    .step-num { width: 32px; height: 32px; font-size: 14px; }
-    .step-head { flex-wrap: wrap; }
     .step-json-toggle { padding: 6px 8px; font-size: 11px; }
-    .info-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .stat { padding: 10px 12px; }
-    .stat-value { font-size: 17px; }
-    .meta-list li { grid-template-columns: 1fr; gap: 2px; padding: 10px 12px; }
-    .search-row, .read-row { flex-direction: column; }
+    .read-row { flex-direction: column; }
     section.install { padding: 36px 20px 24px; }
     .install-title { font-size: 24px; }
     .json-box { font-size: 11px; padding: 12px 14px; }
@@ -870,7 +756,7 @@
 
     <h2>What the browser demo shows</h2>
     <p>
-      This page is a faithful in-browser simulation of the three main tools. The JSON returned by each step matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
+      This page is a faithful in-browser simulation of pdf-mcp's three main tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
     </p>
 
     <h2>Install</h2>
@@ -884,7 +770,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.6.1</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.7.0</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>

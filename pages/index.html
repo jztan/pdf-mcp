@@ -193,7 +193,10 @@
   .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
             background: var(--text-tertiary); opacity: 0.5;
             transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
-  .pgcell.dim { opacity: 0.13; }
+  /* Non-matched pages stay faintly visible (a faded document) rather than
+     vanishing — so after a search the grid still reads as the whole doc
+     with matches highlighted, not an empty box with a few dots. */
+  .pgcell.dim { opacity: 0.28; }
   /* Matched pages stay full size (no scale — enlarging collides with
      neighbours and the card edge). They read as matches purely by colour:
      solid accent at full opacity while non-matches fade to 0.13. */

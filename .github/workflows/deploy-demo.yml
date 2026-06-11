@@ -23,6 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate sample PDF
+        run: |
+          pip install pymupdf
+          python scripts/generate_demo_sample_pdf.py pages/sample.pdf
       - name: Inject GA4 measurement ID
         run: sed -i 's/__GA_MEASUREMENT_ID__/${{ secrets.GA_MEASUREMENT_ID }}/g' pages/index.html
       - name: Inject pdf-mcp version

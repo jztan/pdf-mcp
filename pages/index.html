@@ -301,12 +301,6 @@
     background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
   }
 
-  .coverage { margin-top: 18px; overflow: hidden; }
-  .coverage-label {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; font-family: var(--font-mono);
-  }
-  .coverage-label strong { color: var(--text-secondary); font-weight: 500; }
   .coverage-svg {
     position: relative;
     width: 100%;
@@ -785,6 +779,13 @@
 
   const $ = (id) => document.getElementById(id);
   function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
+  // Click + keyboard (Enter/Space) activation for role="button" divs.
+  function onActivate(el, fn) {
+    el.addEventListener("click", fn);
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    });
+  }
   const dropzone = $("dropzone"), fileInput = $("fileInput"), urlInput = $("urlInput"), urlBtn = $("urlBtn");
   const loaderSection = $("loaderSection"), loaderText = $("loaderText");
   const uploadSection = $("uploadSection"), workflow = $("workflow"), toast = $("toast");
@@ -998,10 +999,10 @@
       gridEl.classList.remove("hidden");
       gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}"></div>`;
+        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}"></div>`;
       }).join("");
       gridEl.querySelectorAll(".pgcell").forEach(cell =>
-        cell.addEventListener("click", () => readInline(parseInt(cell.dataset.page, 10))));
+        onActivate(cell, () => readInline(parseInt(cell.dataset.page, 10))));
     } else {
       $("liveGrid").classList.add("hidden");
       svgEl.classList.remove("hidden");
@@ -1133,14 +1134,16 @@
   function renderSuggestedChips() {
     const words = pageTexts.join(" ").toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
     const freq = {};
-    const stop = new Set(["vaccine","venue","number","generated","computer","document","signature","required","pages","malaysia","thomson","history","there","which","their","about","would","could","should","these","those","other"]);
+    // Generic English/boilerplate filler so chips surface real topics, not
+    // stopwords. (Kept document-agnostic — no fixture-specific terms.)
+    const stop = new Set(["there","which","their","about","would","could","should","these","those","other","where","while","after","before","shall","being","under","above","between","within","including","pursuant","hereunder","herein","thereof","document","section","number","pages"]);
     words.forEach(w => { if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1; });
     const top = Object.entries(freq).sort((a,b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
 
     const chipsEl = $("suggestedChips");
     if (top.length === 0) { chipsEl.innerHTML = ""; return; }
     chipsEl.innerHTML = `<span style="font-size:11px;color:var(--text-tertiary);margin-right:2px;">try:</span>` +
-      top.map(w => `<span class="chip" data-q="${w}">${w}</span>`).join("");
+      top.map(w => `<span class="chip" data-q="${escapeHtml(w)}">${escapeHtml(w)}</span>`).join("");
     chipsEl.querySelectorAll(".chip").forEach(chip => {
       chip.addEventListener("click", () => {
         $("searchInput").value = chip.dataset.q;
@@ -1245,7 +1248,7 @@
       el.innerHTML = `<div class="search-empty">No matches for "${escapeHtml(query)}"</div>`;
     } else {
       el.innerHTML = res.matches.map(m => `
-        <div class="result-card" data-page="${m.page}">
+        <div class="result-card" data-page="${m.page}" role="button" tabindex="0" aria-label="Read page ${m.page}">
           <div class="match-head"><span class="match-page">page ${m.page}</span>
             <span>score: ${m.score.toFixed(4)} · ${escapeHtml(res.excerpt_style)} excerpt</span></div>
           <p class="match-excerpt">${highlightQuery(escapeHtml(m.excerpt), query)}</p>
@@ -1254,7 +1257,7 @@
       el.querySelectorAll(".result-card").forEach((card, i) => {
         if (REDUCED_MOTION) card.classList.add("on");
         else sweepTimers.push(setTimeout(() => card.classList.add("on"), 1800 + i * 200));
-        card.addEventListener("click", () => readInline(parseInt(card.dataset.page, 10)));
+        onActivate(card, () => readInline(parseInt(card.dataset.page, 10)));
       });
       ledgerAdd(Math.round(res.matches.reduce((a, m) => a + m.excerpt.length, 0) / 4));
     }

@@ -6,14 +6,14 @@
 <meta name="color-scheme" content="light dark" />
 
 <title>pdf-mcp · PDF extraction for AI agents | Browser demo</title>
-<meta name="description" content="Try pdf-mcp in your browser. See the three tools an AI agent uses to read PDFs without blowing its context window — pdf_info, pdf_search, pdf_read_pages. 100% client-side." />
+<meta name="description" content="See what your AI agent sees. Drop a PDF into your browser and watch an agent skim, search, and read only the pages that matter — without blowing its context window. 100% client-side." />
 
 <link rel="canonical" href="https://pdf-mcp.jztan.com/" />
 
 <!-- Open Graph (LinkedIn, Facebook, Slack) -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="pdf-mcp · See what your AI agent sees" />
-<meta property="og:description" content="Walk through the three tools pdf-mcp gives your agent. Try it in your browser — no install required, 100% client-side." />
+<meta property="og:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
+<meta property="og:description" content="Drop in a PDF and watch an AI agent read only the pages that matter. Try it in your browser — no install required, 100% client-side." />
 <meta property="og:url" content="https://pdf-mcp.jztan.com/" />
 <meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
@@ -22,8 +22,8 @@
 
 <!-- Twitter / X card -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="pdf-mcp · See what your AI agent sees" />
-<meta name="twitter:description" content="The three tools pdf-mcp gives your agent, running in your browser. No install." />
+<meta name="twitter:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
+<meta name="twitter:description" content="Watch an AI agent read only the pages that matter, in your browser. No install." />
 <meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 
 <!-- Structured data: SoftwareApplication -->
@@ -148,6 +148,10 @@
   nav.top ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
   nav.top ul a { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s ease; }
   nav.top ul a:hover { color: var(--text); }
+  .ledger { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+            border: 1px solid var(--border); border-radius: 980px; padding: 6px 14px; background: var(--bg-elev); }
+  .ledger b { color: var(--accent); font-weight: 500; }
+  @media (max-width: 820px) { .ledger { display: none; } }
 
   section.hero { background: var(--bg); padding: 88px 22px 32px; text-align: center; }
   section.hero .inner { max-width: 820px; margin: 0 auto; }
@@ -175,6 +179,56 @@
     background: var(--bg-elev); border: 1px solid var(--border);
     font-size: 13px; color: var(--text-secondary); box-shadow: var(--shadow-sm);
   }
+
+  .hero-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; max-width: 580px; margin: 40px auto 0; }
+  /* Keep the grid compact on small screens: same 24 columns (so it stays ~9
+     rows, not ~18), just a tighter gap. Fewer columns would balloon the cell
+     size and make the grid dominate the viewport. Cells shrink via 1fr. */
+  @media (max-width: 640px) { .hero-grid, .lgrid { gap: 3px; } }
+  /* 3:4 page cells via percentage-padding rather than `aspect-ratio`:
+     Safari fails to shrink aspect-ratio grid items back down after the
+     container narrows (it keeps an auto min-size from the wider layout),
+     which left cells oversized and touching the card edge after a resize.
+     Percentage padding is width-relative and reflows reliably everywhere. */
+  .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
+            background: var(--text-tertiary); opacity: 0.5;
+            transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
+  /* Non-matched pages stay faintly visible (a faded document) rather than
+     vanishing — so after a search the grid still reads as the whole doc
+     with matches highlighted, not an empty box with a few dots. */
+  .pgcell.dim { opacity: 0.28; }
+  /* Matched pages stay full size (no scale — enlarging collides with
+     neighbours and the card edge). They read as matches purely by colour:
+     solid accent at full opacity while non-matches fade to 0.13. */
+  .pgcell.hit { background: var(--accent); opacity: 1;
+                box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent); z-index: 2; position: relative; }
+  .pgcell.scanned { background: var(--warning); opacity: 0.45; }
+  .hero-stat { margin-top: 34px; font-family: var(--font-display); font-size: clamp(20px, 3vw, 28px);
+               font-weight: 600; letter-spacing: -0.02em; opacity: 0; transition: opacity 0.8s ease; }
+  .hero-stat.on { opacity: 1; }
+  .hero-stat span { color: var(--accent); }
+  .hero-ctas { margin-top: 36px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .hero-ctas .btn-ghost { padding: 12px 22px; font-size: 15px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); }
+  .hero-privacy { margin-top: 26px; }
+  @media (prefers-reduced-motion: reduce) {
+    .pgcell { transition: none; }
+    .hero-stat { transition: none; }
+  }
+
+  .doc-card { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--bg-elev);
+              padding: 36px 36px 30px; box-shadow: var(--shadow-md); }
+  .doc-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .doc-name { font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  .doc-name small { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); font-weight: 400; margin-left: 10px; }
+  .doc-cost { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+  .doc-cost b { color: var(--text); font-weight: 500; }
+  .lgrid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; }
+  .lgrid .pgcell { cursor: pointer; }
+  .grid-legend { display: flex; gap: 18px; margin-top: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); flex-wrap: wrap; }
+  .grid-legend i { display: inline-block; width: 8px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .tool-tag { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.06em; margin-left: auto; }
+  .act-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+               color: var(--text-tertiary); text-align: center; margin: 0 0 14px; }
 
   section.upload { background: var(--bg); padding: 8px 22px 48px; }
   section.upload .inner { max-width: 820px; margin: 0 auto; }
@@ -243,35 +297,12 @@
   }
   section.workflow .inner { max-width: 820px; margin: 0 auto; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-  .workflow-intro { text-align: center; margin-bottom: 32px; color: var(--text-secondary); font-size: 15px; }
-  .workflow-intro strong { color: var(--text); font-weight: 500; }
-
-  .step-card {
-    background: var(--bg-elev); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 28px; margin-bottom: 20px;
-    box-shadow: var(--shadow-sm); position: relative;
-  }
-  .step-card + .step-card::before {
-    content: ""; position: absolute; top: -20px; left: 50px;
-    width: 1px; height: 20px; background: var(--border-strong);
-  }
-  .step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-  .step-num {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--accent); color: white;
-    display: grid; place-items: center;
-    font-family: var(--font-display); font-size: 15px; font-weight: 600; flex-shrink: 0;
-  }
-  .step-title { flex: 1; min-width: 0; }
-  .step-tool { display: block; font-family: var(--font-mono); font-size: 14px; color: var(--text); font-weight: 500; }
-  .step-desc { display: block; font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
   .step-json-toggle {
     font-size: 12px; color: var(--accent); cursor: pointer;
     background: none; border: none; padding: 8px 10px; border-radius: 6px;
     font-family: var(--font-mono);
   }
   .step-json-toggle:hover { background: var(--bg-subtle); }
-
   .callout {
     display: flex; gap: 10px; padding: 12px 14px;
     border-radius: var(--radius-sm);
@@ -285,63 +316,6 @@
     background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
   }
 
-  .info-stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 14px; margin-bottom: 18px;
-  }
-  .stat { background: var(--bg-subtle); border-radius: var(--radius-sm); padding: 12px 14px; }
-  .stat-label {
-    display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-tertiary); margin-bottom: 4px; font-weight: 500; font-family: var(--font-mono);
-  }
-  .stat-value {
-    display: block; font-family: var(--font-display); font-size: 19px;
-    font-weight: 500; color: var(--text); letter-spacing: -0.01em;
-  }
-  .stat-value small { font-size: 13px; color: var(--text-tertiary); font-weight: 400; margin-left: 4px; }
-
-  .meta-list {
-    margin: 0; padding: 0; list-style: none;
-    display: grid; grid-template-columns: 1fr; gap: 1px;
-    background: var(--border); border-radius: var(--radius-sm); overflow: hidden;
-    border: 1px solid var(--border);
-  }
-  .meta-list li {
-    display: grid; grid-template-columns: 160px 1fr;
-    background: var(--bg-elev); padding: 10px 14px; font-size: 13px; gap: 12px;
-  }
-  .meta-list .k { color: var(--text-secondary); font-weight: 500; font-family: var(--font-mono); font-size: 12px; }
-  .meta-list .v { color: var(--text); font-family: var(--font-mono); font-size: 12px; word-break: break-word; }
-  .meta-list .v.null { color: var(--text-tertiary); font-style: italic; }
-
-  .coverage { margin-top: 18px; overflow: hidden; }
-  .coverage-label {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; font-family: var(--font-mono);
-  }
-  .coverage-label strong { color: var(--text-secondary); font-weight: 500; }
-  .coverage-bars { display: flex; gap: 2px; align-items: flex-end; height: 60px; padding: 4px 0 0; width: 100%; }
-  .coverage-bar {
-    flex: 1 1 0; min-width: 0;
-    background: var(--accent); border-radius: 3px 3px 0 0; cursor: pointer;
-    transition: opacity 0.15s ease, transform 0.1s ease;
-    position: relative; opacity: 0.8;
-  }
-  .coverage-bar:hover { opacity: 1; transform: scaleY(1.03); transform-origin: bottom; }
-  .coverage-bar.scanned { background: var(--warning); }
-  .coverage-labels {
-    display: flex; gap: 2px;
-    margin-top: 6px;
-    font-size: 10px; color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    width: 100%;
-  }
-  .coverage-labels span {
-    flex: 1 1 0; min-width: 0;
-    text-align: center;
-    overflow: visible;
-    white-space: nowrap;
-  }
   .coverage-svg {
     position: relative;
     width: 100%;
@@ -376,33 +350,6 @@
     border: 4px solid transparent;
     border-top-color: var(--text);
   }
-  .coverage-tip {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--text);
-    color: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 5px 8px;
-    border-radius: 6px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    z-index: 10;
-  }
-  .coverage-bar:hover .coverage-tip { opacity: 1; }
-  .coverage-tip::after {
-    content: "";
-    position: absolute; top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 4px solid transparent;
-    border-top-color: var(--text);
-  }
-
-  .search-row { display: flex; gap: 10px; margin-bottom: 12px; }
   .suggested-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; align-items: center; }
   .chip {
     display: inline-block; padding: 5px 12px; border-radius: 980px;
@@ -413,11 +360,6 @@
   .chip:hover { background: var(--bg-elev); color: var(--text); border-color: var(--border-strong); }
   .search-results { margin-top: 6px; }
   .search-empty { text-align: center; padding: 24px; color: var(--text-tertiary); font-size: 13px; font-family: var(--font-mono); }
-  .match {
-    padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    margin-bottom: 8px; cursor: pointer; transition: all 0.15s ease; background: var(--bg-elev);
-  }
-  .match:hover { border-color: var(--border-strong); transform: translateX(2px); box-shadow: var(--shadow-sm); }
   .match-head {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 6px; font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono);
@@ -460,6 +402,23 @@
   }
   .empty-fields code { color: var(--text-secondary); }
 
+  .askbar { display: flex; gap: 10px; margin: 26px 0 10px; }
+  .askbar input { flex: 1; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-strong);
+                  background: var(--bg); color: var(--text); font-size: 15px; font-family: var(--font-text); }
+  .askbar input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0,113,227,0.15); }
+  .result-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; background: var(--bg);
+                 opacity: 0; transform: translateY(6px); transition: all 0.5s ease; cursor: pointer; margin-bottom: 8px; }
+  .result-card.on { opacity: 1; transform: none; }
+  .result-card.reading { border-color: var(--accent); }
+  .inline-reader { margin-top: 10px; border-left: 2px solid var(--accent); padding: 4px 0 4px 14px;
+                   font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+                   max-height: 0; overflow: hidden; transition: max-height 0.6s ease; }
+  .inline-reader.open { max-height: 260px; overflow-y: auto; }
+  .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
+  details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
+  details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader { transition: none; } }
+
   .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
   .json-box {
@@ -471,6 +430,15 @@
     margin: 0; color: var(--text);
   }
   .json-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .receipt { text-align: center; padding: 60px 22px 30px; max-width: 820px; margin: 0 auto; }
+  .receipt h2 { font-family: var(--font-display); font-size: clamp(24px, 4vw, 38px); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .receipt h2 span { color: var(--accent); }
+  .receipt > p { color: var(--text-secondary); font-size: 16px; margin: 0 0 30px; }
+  .receipt-row { display: flex; gap: 26px; justify-content: center; font-family: var(--font-mono); font-size: 12px;
+                 color: var(--text-secondary); margin-bottom: 34px; flex-wrap: wrap; }
+  .receipt-row b { display: block; font-family: var(--font-display); font-size: 26px; color: var(--text);
+                   letter-spacing: -0.01em; margin-bottom: 2px; }
+
   .json-key { color: #9d5cff; }
   @media (prefers-color-scheme: dark) { .json-key { color: #d4a5ff; } }
   .json-string { color: #038a52; }
@@ -619,16 +587,9 @@
     .url-row { flex-direction: column; }
     .btn:not(.btn-icon) { width: 100%; }
     section.workflow { padding: 8px 16px 40px; }
-    .step-card { padding: 20px 18px; }
-    .step-card + .step-card::before { left: 36px; }
-    .step-num { width: 32px; height: 32px; font-size: 14px; }
-    .step-head { flex-wrap: wrap; }
+    .doc-card { padding: 22px 20px; }
     .step-json-toggle { padding: 6px 8px; font-size: 11px; }
-    .info-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .stat { padding: 10px 12px; }
-    .stat-value { font-size: 17px; }
-    .meta-list li { grid-template-columns: 1fr; gap: 2px; padding: 10px 12px; }
-    .search-row, .read-row { flex-direction: column; }
+    .askbar, .read-row { flex-direction: column; }
     section.install { padding: 36px 20px 24px; }
     .install-title { font-size: 24px; }
     .json-box { font-size: 11px; padding: 12px 14px; }
@@ -640,6 +601,7 @@
 <nav class="top">
   <div class="inner">
     <a href="https://github.com/jztan/pdf-mcp" class="brand">pdf-mcp<span>/demo</span></a>
+    <div class="ledger hidden" id="ledger">agent context used&nbsp;<b id="ledgerVal">0</b>&nbsp;/&nbsp;<span id="ledgerMax"></span> tokens</div>
     <ul>
       <li><a href="https://github.com/jztan/pdf-mcp">GitHub</a></li>
       <li><a href="https://pypi.org/project/pdf-mcp/">PyPI</a></li>
@@ -650,11 +612,19 @@
 
 <section class="hero">
   <div class="inner">
-    <p class="hero-title">See what your<br />AI agent sees.</p>
-    <p class="hero-sub">Drop in a PDF. Walk through the three tools <code>pdf-mcp</code> gives your agent.</p>
-    <div class="privacy-pill">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      100% client-side. Your PDFs never leave this tab.
+    <p class="hero-title">Your agent doesn’t need<br />the whole document.</p>
+    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents the tools to skim, search, and read only the pages that matter.</p>
+    <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
+    <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
+    <div class="hero-ctas">
+      <button class="btn" id="ctaOwn">Try it on your PDF</button>
+      <button class="btn btn-ghost" id="ctaSample">Use the sample — a 216-page contract</button>
+    </div>
+    <div class="hero-privacy">
+      <div class="privacy-pill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        100% client-side. Your PDFs never leave this tab.
+      </div>
     </div>
   </div>
 </section>
@@ -689,30 +659,45 @@
 
 <section class="workflow hidden" id="workflow">
   <div class="inner">
-  <p class="workflow-intro">
-    An agent using pdf-mcp calls <strong>three tools in sequence</strong>. Each returns the JSON below.
-  </p>
-
-  <div class="step-card" id="step1">
-    <div class="step-head">
-      <div class="step-num">1</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_info(path)</span>
-        <span class="step-desc">Agent calls this first — understand the document before reading</span>
-      </div>
-      <button class="step-json-toggle" data-target="json1">{ JSON }</button>
+  <p class="act-label">your document</p>
+  <div class="doc-card" id="docCard">
+    <div class="doc-head">
+      <div class="doc-name" id="docName"></div>
+      <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
     </div>
-    <div class="info-stats" id="infoStats"></div>
-    <ul class="meta-list" id="infoMeta"></ul>
-    <div class="coverage">
-      <div class="coverage-label">
-        <strong>text_coverage</strong>
-        <span>click a page → read in Step 3</span>
-      </div>
-      <div class="coverage-bars" id="coverageBars"></div>
-      <div class="coverage-labels" id="coverageLabels"></div>
-      <div class="coverage-svg hidden" id="coverageSvg"></div>
+    <div class="lgrid" id="liveGrid"></div>
+    <div class="coverage-svg hidden" id="coverageSvg"></div>
+    <div class="grid-legend">
+      <span><i style="background:var(--text-tertiary)"></i>text page</span>
+      <span><i style="background:var(--warning)"></i>scanned — OCR available server-side</span>
+      <span><i style="background:var(--accent)"></i>match</span>
+      <span class="tool-tag">pdf_info · <button class="step-json-toggle" data-target="json1" style="padding:0">{ JSON }</button></span>
     </div>
+    <div class="askbar">
+      <input type="text" id="searchInput" placeholder="Ask this document for something…" />
+      <button class="btn" id="searchBtn">Search</button>
+    </div>
+    <div class="suggested-chips" id="suggestedChips"></div>
+    <div class="search-results" id="searchResults"></div>
+    <div class="callout" id="kwCallout" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>. Images and tables are server-side only (PyMuPDF), so <code>images: []</code> and <code>tables: []</code> stay empty in this demo.</span>
+    </div>
+    <details class="dev-row">
+      <summary>For developers: read arbitrary pages · raw JSON</summary>
+      <div class="read-row" style="margin-top:12px">
+        <div class="read-input-wrap">
+          <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
+          <div class="read-hint">Ranges and lists supported · max 50 pages in this demo · <span class="tool-tag" style="margin-left:0">pdf_read_pages</span> <button class="step-json-toggle" data-target="json3" style="padding:0">{ JSON }</button> · <span class="tool-tag" style="margin-left:0">pdf_search</span> <button class="step-json-toggle" data-target="json2" style="padding:0">{ JSON }</button></div>
+        </div>
+        <button class="btn" id="readBtn">Read</button>
+      </div>
+      <div class="search-results" id="readResults"></div>
+      <div class="json-wrap" id="json2"><pre class="json-box" id="json2-content"></pre>
+        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div></div>
+      <div class="json-wrap" id="json3"><pre class="json-box" id="json3-content"></pre>
+        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div></div>
+    </details>
     <div id="infoCallouts"></div>
     <div class="json-wrap" id="json1">
       <pre class="json-box" id="json1-content"></pre>
@@ -720,66 +705,22 @@
     </div>
   </div>
 
-  <div class="step-card" id="step2">
-    <div class="step-head">
-      <div class="step-num">2</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_search(path, query)</span>
-        <span class="step-desc">Search with paragraph excerpts — often enough to answer directly</span>
-      </div>
-      <button class="step-json-toggle" data-target="json2">{ JSON }</button>
-    </div>
-    <div class="search-row">
-      <input type="text" class="url-input" id="searchInput" placeholder="Search this PDF..." />
-      <button class="btn" id="searchBtn">Search</button>
-    </div>
-    <div class="suggested-chips" id="suggestedChips"></div>
-    <div class="search-results" id="searchResults">
-      <div class="search-empty">Enter a query above, or pick a suggestion</div>
-    </div>
-    <div class="callout">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>.</span>
-    </div>
-    <div class="json-wrap" id="json2">
-      <pre class="json-box" id="json2-content"></pre>
-      <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div>
-    </div>
-  </div>
-
-  <div class="step-card" id="step3">
-    <div class="step-head">
-      <div class="step-num">3</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_read_pages(path, pages)</span>
-        <span class="step-desc">Read only the pages that matter — targeted, not a dump</span>
-      </div>
-      <button class="step-json-toggle" data-target="json3">{ JSON }</button>
-    </div>
-    <div class="read-row">
-      <div class="read-input-wrap">
-        <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
-        <div class="read-hint">Ranges and lists supported · max 50 pages in this demo</div>
-      </div>
-      <button class="btn" id="readBtn">Read</button>
-    </div>
-    <div class="search-results" id="readResults">
-      <div class="search-empty">Enter pages above, or click a page in Step 1's coverage strip</div>
-    </div>
-    <div class="callout">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Images and tables run server-side only.</strong> pdf-mcp uses PyMuPDF to save images as PNG files on disk and detect tables via <code>page.find_tables()</code>. That's why <code>images: []</code> and <code>tables: []</code> are empty here.</span>
-    </div>
-    <div class="json-wrap" id="json3">
-      <pre class="json-box" id="json3-content"></pre>
-      <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div>
-    </div>
-  </div>
-
   <div style="text-align:center; margin-top: 24px;">
     <button class="btn btn-ghost" id="resetBtn">↺ Try another PDF</button>
   </div>
   </div>
+</section>
+
+<section class="receipt hidden" id="receipt">
+  <p class="act-label">what just happened</p>
+  <h2 id="receiptHead"></h2>
+  <p>That&#x2019;s the whole point. An agent with pdf-mcp finds the answer &#x2014; it doesn&#x2019;t eat the document.</p>
+  <div class="receipt-row">
+    <span><b id="rTotal"></b>tokens, pasted whole</span>
+    <span><b id="rUsed"></b>tokens, with pdf-mcp</span>
+    <span><b id="rRatio"></b>of what pasting the whole document would cost</span>
+  </div>
+  <button class="btn btn-ghost" id="copyLinkBtn" style="border:1px solid var(--border-strong);border-radius:980px;">Copy a link to this demo</button>
 </section>
 
 <section class="install">
@@ -825,7 +766,7 @@
 
     <h2>What the browser demo shows</h2>
     <p>
-      This page is a faithful in-browser simulation of the three main tools. The JSON returned by each step matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
+      This page is a faithful in-browser simulation of pdf-mcp's three main tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
     </p>
 
     <h2>Install</h2>
@@ -839,7 +780,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.6.1</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.7.0</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>
@@ -849,12 +790,55 @@
   pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
   let pageTexts = [];
+  let docTokensTotal = 0;
   let pdfInfo = null, pdfSearch = null, pdfReadPages = null;
 
   const $ = (id) => document.getElementById(id);
+  function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
+  // Actual rendered column count of a grid (robust to CSS/breakpoint changes).
+  function gridCols(el) {
+    return getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length || 24;
+  }
+  // Click + keyboard (Enter/Space) activation for role="button" divs.
+  function onActivate(el, fn) {
+    el.addEventListener("click", fn);
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    });
+  }
   const dropzone = $("dropzone"), fileInput = $("fileInput"), urlInput = $("urlInput"), urlBtn = $("urlBtn");
   const loaderSection = $("loaderSection"), loaderText = $("loaderText");
   const uploadSection = $("uploadSection"), workflow = $("workflow"), toast = $("toast");
+
+  // ── Hero: canned looping grid animation (Act 1) ──────────────
+  const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const HERO_N = 216, HERO_HITS = [83, 178];
+  const heroGrid = $("heroGrid"), heroStat = $("heroStat");
+  for (let i = 0; i < HERO_N; i++) heroGrid.appendChild(Object.assign(document.createElement("div"), { className: "pgcell" }));
+  const heroCells = [...heroGrid.children];
+
+  function heroLoop() {
+    const cols = gridCols(heroGrid);
+    heroCells.forEach(c => c.className = "pgcell");
+    heroStat.classList.remove("on");
+    setTimeout(() => {
+      heroCells.forEach((c, i) => {
+        const col = i % cols;
+        setTimeout(() => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"), 600 + col * 70);
+      });
+    }, 900);
+    setTimeout(() => heroStat.classList.add("on"), 3400);
+  }
+  if (REDUCED_MOTION) {
+    heroCells.forEach((c, i) => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"));
+    heroStat.classList.add("on");
+  } else {
+    heroLoop();
+    setInterval(heroLoop, 8500);
+  }
+
+  $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
+  $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
   ["dragenter", "dragover"].forEach(ev =>
     dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("dragover"); }));
@@ -987,23 +971,15 @@
   }
 
   function renderInfo(info, filename) {
-    $("infoStats").innerHTML = `
-      <div class="stat"><span class="stat-label">page_count</span><span class="stat-value">${info.page_count}</span></div>
-      <div class="stat"><span class="stat-label">file_size_mb</span><span class="stat-value">${info.file_size_mb}<small>MB</small></span></div>
-      <div class="stat"><span class="stat-label">estimated_tokens</span><span class="stat-value">${info.estimated_tokens.toLocaleString()}</span></div>
-      <div class="stat"><span class="stat-label">toc_entries</span><span class="stat-value">${info.toc_entry_count}</span></div>`;
+    $("docName").innerHTML = `${escapeHtml(filename)} <small>${info.page_count} pages · ${info.file_size_mb} MB</small>`;
+    const totalChars = info.text_coverage.summary.total_text_chars;
+    docTokensTotal = Math.max(1, Math.round(totalChars / 4));
+    $("docCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
+    ledgerReset();
+    ledgerAdd(Math.round(JSON.stringify(info).length / 4));
 
-    const m = info.metadata;
-    const rows = [
-      ["filename", filename], ["title", m.title], ["author", m.author],
-      ["creator", m.creator], ["producer", m.producer],
-      ["creation_date", m.creation_date], ["modification_date", m.modification_date]
-    ];
-    $("infoMeta").innerHTML = rows.map(([k, v]) => `
-      <li><span class="k">${k}</span><span class="v ${v == null ? 'null' : ''}">${v == null ? 'null' : escapeHtml(String(v))}</span></li>`).join("");
-
-    // Coverage viz: bars for small PDFs (interactive per-page), SVG area chart for large PDFs (scalable)
-    const COVERAGE_BAR_THRESHOLD = 120;
+    // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
+    const COVERAGE_BAR_THRESHOLD = 500;
     renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
 
     const calloutsEl = $("infoCallouts");
@@ -1035,42 +1011,20 @@
     else if (n <= 500) step = 50;
     else step = Math.ceil(n / 10);
 
-    const labelsEl = $("coverageLabels");
-    const barsEl = $("coverageBars");
     const svgEl = $("coverageSvg");
-
-    const jumpToPage = (p) => {
-      $("readInput").value = String(p);
-      doReadPages(String(p));
-      $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
-    };
 
     if (useBars) {
       svgEl.classList.add("hidden");
-      barsEl.classList.remove("hidden");
-      labelsEl.classList.remove("hidden");
-
-      barsEl.innerHTML = textChars.map((chars, i) => {
-        const page = i + 1;
-        const h = Math.max(4, (chars / maxChars) * 100);
+      const gridEl = $("liveGrid");
+      gridEl.classList.remove("hidden");
+      gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        return `<div class="coverage-bar ${scanned ? 'scanned' : ''}" style="height:${h}%" data-page="${page}">
-          <div class="coverage-tip">page ${page} · ${chars} chars${scanned ? ' · scanned' : ''}</div>
-        </div>`;
+        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}"></div>`;
       }).join("");
-
-      labelsEl.innerHTML = textChars.map((_, i) => {
-        const page = i + 1;
-        const show = i === 0 || i === n - 1 || (page % step === 0);
-        return `<span>${show ? page : ''}</span>`;
-      }).join("");
-
-      barsEl.querySelectorAll(".coverage-bar").forEach(bar => {
-        bar.addEventListener("click", () => jumpToPage(bar.dataset.page));
-      });
+      gridEl.querySelectorAll(".pgcell").forEach(cell =>
+        onActivate(cell, () => readInline(parseInt(cell.dataset.page, 10))));
     } else {
-      barsEl.classList.add("hidden");
-      labelsEl.classList.add("hidden");
+      $("liveGrid").classList.add("hidden");
       svgEl.classList.remove("hidden");
 
       const W = 1000, H = 100;
@@ -1125,9 +1079,74 @@
         const r = svg.getBoundingClientRect();
         const rel = (e.clientX - r.left) / r.width;
         const idx = Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
-        jumpToPage(points[idx].page);
+        readInline(points[idx].page);
       });
       svg.style.cursor = "pointer";
+    }
+  }
+
+  // ── Token ledger: what the simulated agent has consumed ──────
+  let ledgerTokens = 0;
+  const pagesRead = new Set();
+
+  function ledgerAdd(tokens) {
+    ledgerTokens = Math.min(docTokensTotal, ledgerTokens + tokens);
+    const el = $("ledgerVal"), start = parseInt(el.textContent.replace(/,/g, "")) || 0;
+    if (REDUCED_MOTION) { el.textContent = ledgerTokens.toLocaleString(); return; }
+    const t0 = performance.now();
+    function tick(t) {
+      const k = Math.min(1, (t - t0) / 500);
+      el.textContent = Math.round(start + (ledgerTokens - start) * k).toLocaleString();
+      if (k < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // Owns all ledger state reset; renderInfo calls this on every load before
+  // showing the ledger, so resetSteps only needs to re-hide it.
+  function ledgerReset() {
+    ledgerTokens = 0;
+    pagesRead.clear();
+    $("ledgerVal").textContent = "0";
+    $("ledgerMax").textContent = docTokensTotal.toLocaleString();
+    $("ledger").classList.remove("hidden");
+  }
+
+  function markPageRead(page, tokens) {
+    if (pagesRead.has(page)) return;
+    pagesRead.add(page);
+    track("page_read", { page });
+    ledgerAdd(tokens);
+    updateReceipt();
+  }
+
+  let receiptShown = false;
+  function updateReceipt() {
+    if (pagesRead.size === 0) return;
+    $("receiptHead").innerHTML = `You read <span>${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""}</span> of ${pageTexts.length}.`;
+    $("rTotal").textContent = docTokensTotal.toLocaleString();
+    $("rUsed").textContent = ledgerTokens.toLocaleString();
+    const pct = docTokensTotal ? (100 * ledgerTokens / docTokensTotal) : 0;
+    $("rRatio").textContent = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
+    $("receipt").classList.remove("hidden");
+    if (!receiptShown) { receiptShown = true; track("receipt_shown"); }
+  }
+
+  function readInline(page) {
+    const text = pageTexts[page - 1] ?? "";
+    const tokens = Math.round(text.length / 4);
+    const card = document.querySelector(`.result-card[data-page="${page}"]`);
+    const reader = card ? $(`reader-${page}`) : null;
+    if (reader && !reader.classList.contains("open")) {
+      card.classList.add("reading");
+      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)"}`;
+      reader.classList.add("open");
+      markPageRead(page, tokens);
+    } else if (!reader) {
+      $("readInput").value = String(page);
+      doReadPages(String(page));
+      document.querySelector("details.dev-row").open = true;
+      markPageRead(page, tokens);
     }
   }
 
@@ -1135,14 +1154,16 @@
   function renderSuggestedChips() {
     const words = pageTexts.join(" ").toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
     const freq = {};
-    const stop = new Set(["vaccine","venue","number","generated","computer","document","signature","required","pages","malaysia","thomson","history","there","which","their","about","would","could","should","these","those","other"]);
+    // Generic English/boilerplate filler so chips surface real topics, not
+    // stopwords. (Kept document-agnostic — no fixture-specific terms.)
+    const stop = new Set(["there","which","their","about","would","could","should","these","those","other","where","while","after","before","shall","being","under","above","between","within","including","pursuant","hereunder","herein","thereof","document","section","number","pages"]);
     words.forEach(w => { if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1; });
     const top = Object.entries(freq).sort((a,b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
 
     const chipsEl = $("suggestedChips");
     if (top.length === 0) { chipsEl.innerHTML = ""; return; }
     chipsEl.innerHTML = `<span style="font-size:11px;color:var(--text-tertiary);margin-right:2px;">try:</span>` +
-      top.map(w => `<span class="chip" data-q="${w}">${w}</span>`).join("");
+      top.map(w => `<span class="chip" data-q="${escapeHtml(w)}">${escapeHtml(w)}</span>`).join("");
     chipsEl.querySelectorAll(".chip").forEach(chip => {
       chip.addEventListener("click", () => {
         $("searchInput").value = chip.dataset.q;
@@ -1212,34 +1233,53 @@
     };
 
     renderSearch(pdfSearch, query);
+    track("search_performed");
+  }
+
+  // Pending animation timeouts, cleared before each new sweep/render so a
+  // rapid re-search or reset-then-load can't repaint the grid with stale
+  // results.
+  let sweepTimers = [];
+  function clearSweepTimers() {
+    sweepTimers.forEach(clearTimeout);
+    sweepTimers = [];
+  }
+
+  function sweepGrid(matchPages) {
+    clearSweepTimers();
+    const cols = gridCols($("liveGrid"));
+    [...$("liveGrid").children].forEach((c, i) => {
+      c.classList.remove("dim", "hit");
+      const apply = () => { if (matchPages.has(i + 1)) c.classList.add("hit"); else c.classList.add("dim"); };
+      if (REDUCED_MOTION) apply();
+      else sweepTimers.push(setTimeout(apply, 300 + (i % cols) * 60));
+    });
+  }
+  function clearSweep() {
+    clearSweepTimers();
+    [...$("liveGrid").children].forEach(c => c.classList.remove("dim", "hit"));
   }
 
   function renderSearch(res, query) {
     const el = $("searchResults");
+    $("kwCallout").style.display = "flex";
+    sweepGrid(new Set(res.matches.map(m => m.page)));
     if (res.matches.length === 0) {
       el.innerHTML = `<div class="search-empty">No matches for "${escapeHtml(query)}"</div>`;
     } else {
-      el.innerHTML = `
-        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px;font-family:var(--font-mono);">
-          ${res.matches.length} match${res.matches.length !== 1 ? 'es' : ''} · ${Object.keys(res.page_match_counts).length} page${Object.keys(res.page_match_counts).length !== 1 ? 's' : ''}
-        </div>
-      ` + res.matches.map(m => `
-        <div class="match" data-page="${m.page}">
-          <div class="match-head">
-            <span class="match-page">page ${m.page}</span>
-            <span>score: ${m.score.toFixed(4)} · source: ${m.source}</span>
-          </div>
+      el.innerHTML = res.matches.map(m => `
+        <div class="result-card" data-page="${m.page}" role="button" tabindex="0" aria-label="Read page ${m.page}">
+          <div class="match-head"><span class="match-page">page ${m.page}</span>
+            <span>score: ${m.score.toFixed(4)} · ${escapeHtml(res.excerpt_style)} excerpt</span></div>
           <p class="match-excerpt">${highlightQuery(escapeHtml(m.excerpt), query)}</p>
+          <div class="inline-reader" id="reader-${m.page}"></div>
         </div>`).join("");
-
-      el.querySelectorAll(".match").forEach(mEl => {
-        mEl.addEventListener("click", () => {
-          const p = mEl.dataset.page;
-          $("readInput").value = p;
-          doReadPages(p);
-          $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+      el.querySelectorAll(".result-card").forEach((card, i) => {
+        if (REDUCED_MOTION) card.classList.add("on");
+        else sweepTimers.push(setTimeout(() => card.classList.add("on"), 1800 + i * 200));
+        onActivate(card, () => readInline(parseInt(card.dataset.page, 10)));
       });
+      ledgerAdd(Math.round(res.matches.reduce((a, m) => a + m.excerpt.length, 0) / 4));
     }
     $("json2-content").innerHTML = syntaxHighlight(JSON.stringify(res, null, 2));
   }
@@ -1356,10 +1396,15 @@
     pdfSearch = pdfReadPages = null;
     $("searchInput").value = ""; $("readInput").value = "";
     $("suggestedChips").innerHTML = "";
-    $("searchResults").innerHTML = `<div class="search-empty">Enter a query above, or pick a suggestion</div>`;
-    $("readResults").innerHTML = `<div class="search-empty">Enter pages above, or click a page in Step 1's coverage strip</div>`;
+    $("searchResults").innerHTML = "";
+    $("readResults").innerHTML = "";
     $("json2-content").innerHTML = "";
     $("json3-content").innerHTML = "";
+    $("kwCallout").style.display = "none";
+    $("ledger").classList.add("hidden");
+    $("receipt").classList.add("hidden");
+    receiptShown = false;
+    clearSweep();
   }
 
   $("resetBtn").addEventListener("click", () => {
@@ -1374,6 +1419,12 @@
   $("installCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText($("installCmd").textContent);
     showToast("Copied");
+  });
+
+  $("copyLinkBtn").addEventListener("click", () => {
+    navigator.clipboard.writeText(location.href);
+    showToast("Link copied");
+    track("copy_link");
   });
 
   function parsePdfDate(raw) {

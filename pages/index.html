@@ -196,6 +196,21 @@
     .hero-stat { transition: none; }
   }
 
+  .doc-card { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--bg-elev);
+              padding: 36px 36px 30px; box-shadow: var(--shadow-md); }
+  .doc-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .doc-name { font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  .doc-name small { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); font-weight: 400; margin-left: 10px; }
+  .doc-cost { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+  .doc-cost b { color: var(--text); font-weight: 500; }
+  .lgrid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; }
+  .lgrid .pgcell { cursor: pointer; }
+  .grid-legend { display: flex; gap: 18px; margin-top: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); flex-wrap: wrap; }
+  .grid-legend i { display: inline-block; width: 8px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .tool-tag { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.06em; margin-left: auto; }
+  .act-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+               color: var(--text-tertiary); text-align: center; margin: 0 0 14px; }
+
   section.upload { background: var(--bg); padding: 8px 22px 48px; }
   section.upload .inner { max-width: 820px; margin: 0 auto; }
   .dropzone {
@@ -721,25 +736,19 @@
     An agent using pdf-mcp calls <strong>three tools in sequence</strong>. Each returns the JSON below.
   </p>
 
-  <div class="step-card" id="step1">
-    <div class="step-head">
-      <div class="step-num">1</div>
-      <div class="step-title">
-        <span class="step-tool">pdf_info(path)</span>
-        <span class="step-desc">Agent calls this first — understand the document before reading</span>
-      </div>
-      <button class="step-json-toggle" data-target="json1">{ JSON }</button>
+  <p class="act-label">your document</p>
+  <div class="doc-card" id="docCard">
+    <div class="doc-head">
+      <div class="doc-name" id="docName"></div>
+      <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
     </div>
-    <div class="info-stats" id="infoStats"></div>
-    <ul class="meta-list" id="infoMeta"></ul>
-    <div class="coverage">
-      <div class="coverage-label">
-        <strong>text_coverage</strong>
-        <span>click a page → read in Step 3</span>
-      </div>
-      <div class="coverage-bars" id="coverageBars"></div>
-      <div class="coverage-labels" id="coverageLabels"></div>
-      <div class="coverage-svg hidden" id="coverageSvg"></div>
+    <div class="lgrid" id="liveGrid"></div>
+    <div class="coverage-svg hidden" id="coverageSvg"></div>
+    <div class="grid-legend">
+      <span><i style="background:var(--text-tertiary)"></i>text page</span>
+      <span><i style="background:var(--warning)"></i>scanned — OCR available server-side</span>
+      <span><i style="background:var(--accent)"></i>match</span>
+      <span class="tool-tag">pdf_info · <button class="step-json-toggle" data-target="json1" style="padding:0">{ JSON }</button></span>
     </div>
     <div id="infoCallouts"></div>
     <div class="json-wrap" id="json1">
@@ -877,6 +886,7 @@
   pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
   let pageTexts = [];
+  let docTokensTotal = 0;
   let pdfInfo = null, pdfSearch = null, pdfReadPages = null;
 
   const $ = (id) => document.getElementById(id);
@@ -1045,23 +1055,13 @@
   }
 
   function renderInfo(info, filename) {
-    $("infoStats").innerHTML = `
-      <div class="stat"><span class="stat-label">page_count</span><span class="stat-value">${info.page_count}</span></div>
-      <div class="stat"><span class="stat-label">file_size_mb</span><span class="stat-value">${info.file_size_mb}<small>MB</small></span></div>
-      <div class="stat"><span class="stat-label">estimated_tokens</span><span class="stat-value">${info.estimated_tokens.toLocaleString()}</span></div>
-      <div class="stat"><span class="stat-label">toc_entries</span><span class="stat-value">${info.toc_entry_count}</span></div>`;
+    $("docName").innerHTML = `${escapeHtml(filename)} <small>${info.page_count} pages · ${info.file_size_mb} MB</small>`;
+    const totalChars = info.text_coverage.summary.total_text_chars;
+    docTokensTotal = Math.max(1, Math.round(totalChars / 4));
+    $("docCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
 
-    const m = info.metadata;
-    const rows = [
-      ["filename", filename], ["title", m.title], ["author", m.author],
-      ["creator", m.creator], ["producer", m.producer],
-      ["creation_date", m.creation_date], ["modification_date", m.modification_date]
-    ];
-    $("infoMeta").innerHTML = rows.map(([k, v]) => `
-      <li><span class="k">${k}</span><span class="v ${v == null ? 'null' : ''}">${v == null ? 'null' : escapeHtml(String(v))}</span></li>`).join("");
-
-    // Coverage viz: bars for small PDFs (interactive per-page), SVG area chart for large PDFs (scalable)
-    const COVERAGE_BAR_THRESHOLD = 120;
+    // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
+    const COVERAGE_BAR_THRESHOLD = 500;
     renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
 
     const calloutsEl = $("infoCallouts");
@@ -1093,42 +1093,20 @@
     else if (n <= 500) step = 50;
     else step = Math.ceil(n / 10);
 
-    const labelsEl = $("coverageLabels");
-    const barsEl = $("coverageBars");
     const svgEl = $("coverageSvg");
-
-    const jumpToPage = (p) => {
-      $("readInput").value = String(p);
-      doReadPages(String(p));
-      $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
-    };
 
     if (useBars) {
       svgEl.classList.add("hidden");
-      barsEl.classList.remove("hidden");
-      labelsEl.classList.remove("hidden");
-
-      barsEl.innerHTML = textChars.map((chars, i) => {
-        const page = i + 1;
-        const h = Math.max(4, (chars / maxChars) * 100);
+      const gridEl = $("liveGrid");
+      gridEl.classList.remove("hidden");
+      gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        return `<div class="coverage-bar ${scanned ? 'scanned' : ''}" style="height:${h}%" data-page="${page}">
-          <div class="coverage-tip">page ${page} · ${chars} chars${scanned ? ' · scanned' : ''}</div>
-        </div>`;
+        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}"></div>`;
       }).join("");
-
-      labelsEl.innerHTML = textChars.map((_, i) => {
-        const page = i + 1;
-        const show = i === 0 || i === n - 1 || (page % step === 0);
-        return `<span>${show ? page : ''}</span>`;
-      }).join("");
-
-      barsEl.querySelectorAll(".coverage-bar").forEach(bar => {
-        bar.addEventListener("click", () => jumpToPage(bar.dataset.page));
-      });
+      gridEl.querySelectorAll(".pgcell").forEach(cell =>
+        cell.addEventListener("click", () => readInline(parseInt(cell.dataset.page, 10))));
     } else {
-      barsEl.classList.add("hidden");
-      labelsEl.classList.add("hidden");
+      $("liveGrid").classList.add("hidden");
       svgEl.classList.remove("hidden");
 
       const W = 1000, H = 100;
@@ -1183,10 +1161,17 @@
         const r = svg.getBoundingClientRect();
         const rel = (e.clientX - r.left) / r.width;
         const idx = Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
-        jumpToPage(points[idx].page);
+        readInline(points[idx].page);
       });
       svg.style.cursor = "pointer";
     }
+  }
+
+  // Replaced with full inline-reader implementation in the next task.
+  function readInline(page) {
+    $("readInput").value = String(page);
+    doReadPages(String(page));
+    $("step3") && $("step3").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
 

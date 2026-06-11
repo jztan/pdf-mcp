@@ -148,6 +148,10 @@
   nav.top ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
   nav.top ul a { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s ease; }
   nav.top ul a:hover { color: var(--text); }
+  .ledger { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+            border: 1px solid var(--border); border-radius: 980px; padding: 6px 14px; background: var(--bg-elev); }
+  .ledger b { color: var(--accent); font-weight: 500; }
+  @media (max-width: 820px) { .ledger { display: none; } }
 
   section.hero { background: var(--bg); padding: 88px 22px 32px; text-align: center; }
   section.hero .inner { max-width: 820px; margin: 0 auto; }
@@ -692,6 +696,7 @@
 <nav class="top">
   <div class="inner">
     <a href="https://github.com/jztan/pdf-mcp" class="brand">pdf-mcp<span>/demo</span></a>
+    <div class="ledger hidden" id="ledger">agent context used&nbsp;<b id="ledgerVal">0</b>&nbsp;/&nbsp;<span id="ledgerMax"></span> tokens</div>
     <ul>
       <li><a href="https://github.com/jztan/pdf-mcp">GitHub</a></li>
       <li><a href="https://pypi.org/project/pdf-mcp/">PyPI</a></li>
@@ -1041,6 +1046,8 @@
     const totalChars = info.text_coverage.summary.total_text_chars;
     docTokensTotal = Math.max(1, Math.round(totalChars / 4));
     $("docCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
+    ledgerReset();
+    ledgerAdd(Math.round(JSON.stringify(info).length / 4));
 
     // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
     const COVERAGE_BAR_THRESHOLD = 500;
@@ -1149,9 +1156,42 @@
     }
   }
 
-  // Implemented in the next task (token ledger).
-  function ledgerAdd(tokens) {}
-  function markPageRead(page, tokens) {}
+  // ── Token ledger: what the simulated agent has consumed ──────
+  let ledgerTokens = 0;
+  const pagesRead = new Set();
+
+  function ledgerAdd(tokens) {
+    ledgerTokens = Math.min(docTokensTotal, ledgerTokens + tokens);
+    const el = $("ledgerVal"), start = parseInt(el.textContent.replace(/,/g, "")) || 0;
+    if (REDUCED_MOTION) { el.textContent = ledgerTokens.toLocaleString(); return; }
+    const t0 = performance.now();
+    function tick(t) {
+      const k = Math.min(1, (t - t0) / 500);
+      el.textContent = Math.round(start + (ledgerTokens - start) * k).toLocaleString();
+      if (k < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // Owns all ledger state reset; renderInfo calls this on every load before
+  // showing the ledger, so resetSteps only needs to re-hide it.
+  function ledgerReset() {
+    ledgerTokens = 0;
+    pagesRead.clear();
+    $("ledgerVal").textContent = "0";
+    $("ledgerMax").textContent = docTokensTotal.toLocaleString();
+    $("ledger").classList.remove("hidden");
+  }
+
+  function markPageRead(page, tokens) {
+    if (pagesRead.has(page)) return;
+    pagesRead.add(page);
+    ledgerAdd(tokens);
+    updateReceipt();
+  }
+
+  // Implemented in the next task (receipt act).
+  function updateReceipt() {}
 
   function readInline(page) {
     const text = pageTexts[page - 1] ?? "";
@@ -1419,6 +1459,7 @@
     $("json2-content").innerHTML = "";
     $("json3-content").innerHTML = "";
     $("kwCallout").style.display = "none";
+    $("ledger").classList.add("hidden");
     clearSweep();
   }
 

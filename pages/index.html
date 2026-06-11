@@ -527,6 +527,15 @@
     margin: 0; color: var(--text);
   }
   .json-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .receipt { text-align: center; padding: 60px 22px 30px; max-width: 820px; margin: 0 auto; }
+  .receipt h2 { font-family: var(--font-display); font-size: clamp(24px, 4vw, 38px); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .receipt h2 span { color: var(--accent); }
+  .receipt > p { color: var(--text-secondary); font-size: 16px; margin: 0 0 30px; }
+  .receipt-row { display: flex; gap: 26px; justify-content: center; font-family: var(--font-mono); font-size: 12px;
+                 color: var(--text-secondary); margin-bottom: 34px; flex-wrap: wrap; }
+  .receipt-row b { display: block; font-family: var(--font-display); font-size: 26px; color: var(--text);
+                   letter-spacing: -0.01em; margin-bottom: 2px; }
+
   .json-key { color: #9d5cff; }
   @media (prefers-color-scheme: dark) { .json-key { color: #d4a5ff; } }
   .json-string { color: #038a52; }
@@ -806,6 +815,18 @@
   </div>
 </section>
 
+<section class="receipt hidden" id="receipt">
+  <p class="act-label">what just happened</p>
+  <h2 id="receiptHead"></h2>
+  <p>That&#x2019;s the whole point. An agent with pdf-mcp finds the answer &#x2014; it doesn&#x2019;t eat the document.</p>
+  <div class="receipt-row">
+    <span><b id="rTotal"></b>tokens, pasted whole</span>
+    <span><b id="rUsed"></b>tokens, with pdf-mcp</span>
+    <span><b id="rRatio"></b>of what pasting the whole document would cost</span>
+  </div>
+  <button class="btn btn-ghost" id="copyLinkBtn" style="border:1px solid var(--border-strong);border-radius:980px;">Copy a link to this demo</button>
+</section>
+
 <section class="install">
   <div class="inner">
   <h2 class="install-title">Wire it into your agent.</h2>
@@ -877,6 +898,7 @@
   let pdfInfo = null, pdfSearch = null, pdfReadPages = null;
 
   const $ = (id) => document.getElementById(id);
+  function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
   const dropzone = $("dropzone"), fileInput = $("fileInput"), urlInput = $("urlInput"), urlBtn = $("urlBtn");
   const loaderSection = $("loaderSection"), loaderText = $("loaderText");
   const uploadSection = $("uploadSection"), workflow = $("workflow"), toast = $("toast");
@@ -909,7 +931,7 @@
   }
 
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
-  $("ctaSample").addEventListener("click", () => handleUrl("sample.pdf"));
+  $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
   ["dragenter", "dragover"].forEach(ev =>
     dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("dragover"); }));
@@ -1186,12 +1208,22 @@
   function markPageRead(page, tokens) {
     if (pagesRead.has(page)) return;
     pagesRead.add(page);
+    track("page_read", { page });
     ledgerAdd(tokens);
     updateReceipt();
   }
 
-  // Implemented in the next task (receipt act).
-  function updateReceipt() {}
+  let receiptShown = false;
+  function updateReceipt() {
+    if (pagesRead.size === 0) return;
+    $("receiptHead").innerHTML = `You read <span>${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""}</span> of ${pageTexts.length}.`;
+    $("rTotal").textContent = docTokensTotal.toLocaleString();
+    $("rUsed").textContent = ledgerTokens.toLocaleString();
+    const pct = docTokensTotal ? (100 * ledgerTokens / docTokensTotal) : 0;
+    $("rRatio").textContent = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
+    $("receipt").classList.remove("hidden");
+    if (!receiptShown) { receiptShown = true; track("receipt_shown"); }
+  }
 
   function readInline(page) {
     const text = pageTexts[page - 1] ?? "";
@@ -1292,6 +1324,7 @@
     };
 
     renderSearch(pdfSearch, query);
+    track("search_performed");
   }
 
   // Pending animation timeouts, cleared before each new sweep/render so a
@@ -1460,6 +1493,8 @@
     $("json3-content").innerHTML = "";
     $("kwCallout").style.display = "none";
     $("ledger").classList.add("hidden");
+    $("receipt").classList.add("hidden");
+    receiptShown = false;
     clearSweep();
   }
 
@@ -1475,6 +1510,12 @@
   $("installCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText($("installCmd").textContent);
     showToast("Copied");
+  });
+
+  $("copyLinkBtn").addEventListener("click", () => {
+    navigator.clipboard.writeText(location.href);
+    showToast("Link copied");
+    track("copy_link");
   });
 
   function parsePdfDate(raw) {

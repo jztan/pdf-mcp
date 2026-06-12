@@ -282,7 +282,9 @@ def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> Non
     # "Version bump" placeholder produces vacuous GitHub release notes
     # (see v1.11.0 incident); fail loud instead so the user fills it in.
     unreleased_pattern = r"## \[Unreleased\]\s*\n(.*?)(?=^## \[|\Z)"
-    match = re.search(unreleased_pattern, content, re.IGNORECASE | re.DOTALL)
+    match = re.search(
+        unreleased_pattern, content, re.IGNORECASE | re.DOTALL | re.MULTILINE
+    )
     if not match:
         print(
             "Error: CHANGELOG.md has no [Unreleased] section.\n"
@@ -557,7 +559,8 @@ def approve_release_notes(
                 except (ValueError, OSError) as exc:
                     print(f"  ⚠ Could not launch editor: {exc}")
                     print("  Using the unedited draft as approved.")
-                print(f"  ✓ Using edited notes from {notes_path}")
+                else:
+                    print(f"  ✓ Using edited notes from {notes_path}")
                 return
             if choice == "r":
                 steering = input("  Any guidance? (enter to skip) ").strip() or None

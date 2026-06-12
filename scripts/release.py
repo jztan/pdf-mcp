@@ -699,6 +699,8 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
         title = stored_title or tag
     else:
         # Dry-run, or a real run where the notes step was somehow skipped.
+        if not config.dry_run:
+            print("  ⚠ Approved notes file missing; falling back to raw changelog")
         title = tag
         changelog_section = extract_changelog_section(config.project_root, new_version)
         notes = build_raw_release_body(changelog_section, new_version)
@@ -822,7 +824,7 @@ def print_recovery_instructions(
     if notes_path.exists():
         stored_title, _ = read_notes_file(notes_path)
         title = stored_title or tag
-        print(f'         gh release create {tag} --title "{title}" \\')
+        print(f"         gh release create {tag} --title {shlex.quote(title)} \\")
         print(f'           --notes-file "{notes_path}"')
         print(f"         (your approved notes are saved at {notes_path})")
     else:
@@ -1044,9 +1046,11 @@ Gitflow:
     # Step 10: Merge back to develop and cleanup
     merge_back_to_develop(config, release_branch)
 
-    # Release fully succeeded; the persisted notes draft is no longer needed.
+    # Release fully succeeded; the persisted notes drafts (including any
+    # orphans from previously burned versions) are no longer needed.
     if not config.dry_run:
-        notes_path.unlink(missing_ok=True)
+        for stale_notes in config.project_root.glob("release_notes_v*.md"):
+            stale_notes.unlink()
 
     # Done!
     print("\n" + "=" * 60)

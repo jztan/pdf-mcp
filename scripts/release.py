@@ -360,6 +360,96 @@ def build_raw_release_body(changelog_section: str, new_version: str) -> str:
 {_install_and_links_section(new_version)}"""
 
 
+NOTES_GENERATION_TIMEOUT = 120
+
+# Deny the tools `claude -p` could plausibly reach for (a pure text
+# transform needs none). The prompt also instructs it not to use tools.
+NOTES_DENIED_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,TodoWrite"
+
+RELEASE_NOTES_PROMPT = """\
+You are writing the GitHub release notes for pdf-mcp {tag}, an MCP server
+that gives AI agents tools to read, search, and extract content from PDFs.
+
+Rewrite the changelog section below into product-style release notes for
+users deciding whether to upgrade. Respond directly with the notes only --
+do not use any tools.
+
+Output contract (follow exactly):
+- First line: `TITLE: {tag} — <short headline, at most 8 words>`
+- Then a `## Highlights` section: 2-4 short paragraphs, at most 150 words
+  total. Lead with what is new and why a user would care; keep measurable
+  wins (speedups, accuracy numbers).
+- Then a `## Changes` section: condensed one-line bullets grouped under
+  `### Added` / `### Fixed` / `### Changed` / `### Security` (omit empty
+  groups). No internal mechanics: no PRAGMA names, no source file paths,
+  no helper function names.
+
+Hard rules:
+- Use only facts present in the changelog section. Never invent features,
+  benefits, or numbers.
+- Keep every number exactly as written in the changelog.
+- Plain markdown only. No H1 headings. Do not add Installation or Links
+  sections (they are appended separately).
+
+Changelog section for {tag}:
+
+{changelog_section}
+"""
+
+
+def _parse_title(output: str, tag: str) -> tuple[str, str]:
+    """Split the TITLE: first-line contract off the draft.
+
+    Malformed or missing title falls back to the bare tag with the full
+    output as body.
+    """
+    lines = output.splitlines()
+    first = lines[0].strip() if lines else ""
+    if first.upper().startswith("TITLE:"):
+        title = first[len("TITLE:") :].strip()
+        if title:
+            body = "\n".join(lines[1:]).strip()
+            return title, body
+    return tag, output
+
+
+def generate_release_notes(
+    new_version: str,
+    changelog_section: str,
+    steering: str | None = None,
+) -> tuple[str, str]:
+    """Draft release notes with `claude -p`. Returns (title, generated_body).
+
+    Raises RuntimeError on any failure (missing CLI, timeout, non-zero
+    exit, empty output) so callers can decide between retry and fallback.
+    """
+    tag = f"v{new_version}"
+    prompt = RELEASE_NOTES_PROMPT.format(tag=tag, changelog_section=changelog_section)
+    if steering:
+        prompt += f"\nAdditional guidance from the maintainer: {steering}\n"
+
+    try:
+        result = subprocess.run(
+            ["claude", "-p", "--disallowedTools", NOTES_DENIED_TOOLS],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=NOTES_GENERATION_TIMEOUT,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise RuntimeError("'claude' CLI not found on PATH")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude -p timed out after {NOTES_GENERATION_TIMEOUT}s")
+
+    if result.returncode != 0:
+        raise RuntimeError(f"claude -p failed: {result.stderr.strip()}")
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError("claude -p returned empty output")
+    return _parse_title(output, tag)
+
+
 def bump_version(config: ReleaseConfig) -> tuple[str, str]:
     """Update version in all files."""
     print("\n=== Version Bump ===\n")

@@ -366,6 +366,8 @@ NOTES_GENERATION_TIMEOUT = 120
 # transform needs none). The prompt also instructs it not to use tools.
 NOTES_DENIED_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,TodoWrite"
 
+# .format() template -- must contain no literal braces (a brace-containing
+# example added later would raise KeyError at release time).
 RELEASE_NOTES_PROMPT = """\
 You are writing the GitHub release notes for pdf-mcp {tag}, an MCP server
 that gives AI agents tools to read, search, and extract content from PDFs.
@@ -437,13 +439,19 @@ def generate_release_notes(
             timeout=NOTES_GENERATION_TIMEOUT,
             check=False,
         )
-    except FileNotFoundError:
-        raise RuntimeError("'claude' CLI not found on PATH")
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"claude -p timed out after {NOTES_GENERATION_TIMEOUT}s")
+    except FileNotFoundError as exc:
+        raise RuntimeError("'claude' CLI not found on PATH") from exc
+    except OSError as exc:
+        raise RuntimeError(f"failed to launch 'claude' CLI: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"claude -p timed out after {NOTES_GENERATION_TIMEOUT}s"
+        ) from exc
 
     if result.returncode != 0:
-        raise RuntimeError(f"claude -p failed: {result.stderr.strip()}")
+        raise RuntimeError(
+            f"claude -p exited {result.returncode}: {result.stderr.strip()}"
+        )
     output = result.stdout.strip()
     if not output:
         raise RuntimeError("claude -p returned empty output")

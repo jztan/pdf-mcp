@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- Embedding vectors are now L2-normalized in `embedder.encode`/`encode_query`
+  for all models, restoring the `dot == cosine` contract that semantic-search
+  scoring relies on. fastembed 0.8 returns unnormalized vectors for some models
+  (e.g. `intfloat/multilingual-e5-large`, norm ~28 after its CLS→mean pooling
+  change), which inflated semantic `score` values and left `low_confidence`
+  permanently `False` for those models. The default `bge-small-en-v1.5` was
+  unaffected (already unit-norm), so its results are unchanged.
+
 ## [1.16.0] - 2026-06-12
 ### Added
 - `server_info` tool: setup-time discovery of which optional features are

@@ -76,6 +76,68 @@ def test_encode_raises_when_fastembed_missing():
         emb._model_name_loaded = None
 
 
+def _make_unnormalized_mock(vec: list) -> MagicMock:
+    """Mock TextEmbedding that yields a fixed UNnormalized vector per text."""
+    mock = MagicMock()
+    mock.embed.side_effect = lambda texts: (
+        np.array(vec, dtype=np.float32) for _ in texts
+    )
+    return mock
+
+
+def test_encode_l2_normalizes_unnormalized_vectors():
+    """encode() returns unit-norm rows even when the model yields raw vectors.
+
+    Regression for fastembed 0.8 returning unnormalized e5 vectors (norm ~28),
+    which broke the dot==cosine contract in semantic scoring.
+    """
+    import pdf_mcp.embedder as emb
+
+    # norm-5 vector -> normalized should be [0.6, 0.8, 0, 0]
+    emb._model = _make_unnormalized_mock([3.0, 4.0, 0.0, 0.0])
+    emb._model_name_loaded = DEFAULT
+    try:
+        result = emb.encode(["a", "b"], DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    norms = np.linalg.norm(result, axis=1)
+    assert np.allclose(norms, 1.0, atol=1e-6)
+    assert np.allclose(result[0], [0.6, 0.8, 0.0, 0.0], atol=1e-6)
+
+
+def test_encode_query_returns_unit_vector():
+    """encode_query() returns a unit-norm vector regardless of model output norm."""
+    import pdf_mcp.embedder as emb
+
+    emb._model = _make_unnormalized_mock([0.0, 3.0, 4.0])
+    emb._model_name_loaded = DEFAULT
+    try:
+        result = emb.encode_query("q", DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result.shape == (3,)
+    assert np.isclose(np.linalg.norm(result), 1.0, atol=1e-6)
+
+
+def test_encode_empty_list_returns_empty_without_error():
+    """encode([]) returns an empty array, not a normalization crash."""
+    import pdf_mcp.embedder as emb
+
+    emb._model = _make_mock_model(384)
+    emb._model_name_loaded = DEFAULT
+    try:
+        result = emb.encode([], DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result.shape[0] == 0
+
+
 def test_singleton_model_constructed_once():
     """TextEmbedding constructor is called only once across multiple encode() calls."""
     import pdf_mcp.embedder as emb

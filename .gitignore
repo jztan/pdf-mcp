@@ -95,3 +95,6 @@ docs/superpowers/
 AGENTS.md
 benchmark_data/.isri_cache/
 pages/sample.pdf
+
+# Release-notes draft persisted by scripts/release.py (deleted on success)
+release_notes_v*.md

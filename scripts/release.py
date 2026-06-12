@@ -325,6 +325,41 @@ def extract_changelog_section(project_root: Path, version: str) -> str:
     return "Release " + version
 
 
+def notes_file_path(project_root: Path, new_version: str) -> Path:
+    """Path where approved release notes are persisted for crash recovery."""
+    return project_root / f"release_notes_v{new_version}.md"
+
+
+def _install_and_links_section(new_version: str) -> str:
+    """Deterministic Installation/Links tail shared by all notes formats."""
+    return f"""## Installation
+
+```bash
+pip install pdf-mcp=={new_version}
+```
+
+## Links
+- [PyPI Package](https://pypi.org/project/pdf-mcp/{new_version}/)
+- [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=pdf-mcp)
+- [Full Changelog](https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md)
+"""
+
+
+def build_release_body(generated: str, new_version: str) -> str:
+    """Compose final notes: Claude-generated sections + deterministic tail."""
+    return f"{generated.strip()}\n\n{_install_and_links_section(new_version)}"
+
+
+def build_raw_release_body(changelog_section: str, new_version: str) -> str:
+    """Today's raw-changelog notes format (fallback path)."""
+    tag = f"v{new_version}"
+    return f"""## What's New in {tag}
+
+{changelog_section}
+
+{_install_and_links_section(new_version)}"""
+
+
 def bump_version(config: ReleaseConfig) -> tuple[str, str]:
     """Update version in all files."""
     print("\n=== Version Bump ===\n")
@@ -428,23 +463,7 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
 
     tag = f"v{new_version}"
     changelog_section = extract_changelog_section(config.project_root, new_version)
-
-    # Build release notes
-    notes = f"""## What's New in {tag}
-
-{changelog_section}
-
-## Installation
-
-```bash
-pip install pdf-mcp=={new_version}
-```
-
-## Links
-- [PyPI Package](https://pypi.org/project/pdf-mcp/{new_version}/)
-- [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=pdf-mcp)
-- [Full Changelog](https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md)
-"""
+    notes = build_raw_release_body(changelog_section, new_version)
 
     if config.dry_run:
         print(f"  [DRY-RUN] Would create GitHub release: {tag}")

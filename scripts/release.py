@@ -25,7 +25,9 @@ Gitflow:
 
 import argparse
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -456,6 +458,26 @@ def generate_release_notes(
     if not output:
         raise RuntimeError("claude -p returned empty output")
     return _parse_title(output, tag)
+
+
+def write_notes_file(path: Path, title: str, body: str) -> None:
+    """Persist approved notes; first line is an invisible title comment."""
+    path.write_text(f"<!-- title: {title} -->\n{body.strip()}\n")
+
+
+def read_notes_file(path: Path) -> tuple[str | None, str]:
+    """Read persisted notes back. Returns (title or None, body)."""
+    content = path.read_text()
+    match = re.match(r"<!-- title: (.*?) -->\n", content)
+    if match:
+        return match.group(1), content[match.end() :].strip()
+    return None, content.strip()
+
+
+def _edit_notes_in_editor(path: Path) -> None:
+    """Open the notes file in $VISUAL/$EDITOR (fallback vi). Blocking."""
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
+    subprocess.run([*shlex.split(editor), str(path)], check=False)
 
 
 def bump_version(config: ReleaseConfig) -> tuple[str, str]:

@@ -177,7 +177,10 @@ def preflight_checks() -> None:
             sys.exit(1)
     print("  ✓ gh CLI available and authenticated")
 
-    # Check mcp-publisher is available and authenticated
+    # Check mcp-publisher is installed. Authentication is deferred to the
+    # publish step (publish_mcp_registry): the Registry JWT is short-lived,
+    # so a token minted here would expire during the publish-workflow and
+    # PyPI waits before publish actually runs.
     print("Checking mcp-publisher...")
     result = run_command(["which", "mcp-publisher"], check=False)
     if result.returncode != 0:
@@ -186,24 +189,7 @@ def preflight_checks() -> None:
         )
         print("         Install with: brew install mcp-publisher")
     else:
-        # Check if mcp-publisher is authenticated, prompt login if not
-        result = run_command(
-            ["mcp-publisher", "validate"],
-            check=False,
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            print("  ⚠ mcp-publisher not authenticated. Starting login...")
-            login_result = subprocess.run(
-                ["mcp-publisher", "login", "github"], check=False
-            )
-            if login_result.returncode != 0:
-                print("Warning: mcp-publisher authentication failed.")
-                print("         MCP Registry publish may be skipped.")
-            else:
-                print("  ✓ mcp-publisher authenticated")
-        else:
-            print("  ✓ mcp-publisher available")
+        print("  ✓ mcp-publisher available (auth happens at publish time)")
 
 
 def create_release_branch(new_version: str, dry_run: bool) -> str:
@@ -719,7 +705,7 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
                 new_version, f"release/v{new_version}", config.project_root
             )
             sys.exit(1)
-        print(f"  ✓ Created GitHub release: {tag} — {title}")
+        print(f"  ✓ Created GitHub release: {title}")
 
 
 def wait_for_publish_workflow(new_version: str, max_wait: int = 900) -> bool:
@@ -880,7 +866,13 @@ def wait_for_pypi(new_version: str, max_wait: int = 600) -> bool:
 
 
 def publish_mcp_registry(config: ReleaseConfig) -> None:
-    """Publish to MCP Registry."""
+    """Publish to MCP Registry.
+
+    Authenticates immediately before publishing. The Registry JWT is
+    short-lived, so logging in earlier (e.g. at preflight) leaves an
+    expired token by the time the publish-workflow and PyPI waits finish —
+    the failure mode that left v1.16.0 off the registry.
+    """
     print("\n=== MCP Registry ===\n")
 
     # Check if mcp-publisher is available
@@ -891,18 +883,42 @@ def publish_mcp_registry(config: ReleaseConfig) -> None:
         return
 
     if config.dry_run:
-        print("  [DRY-RUN] Would run: mcp-publisher publish")
-    else:
-        result = run_command(
-            ["mcp-publisher", "publish"],
+        print("  [DRY-RUN] Would authenticate, then run: mcp-publisher publish")
+        return
+
+    # Mint a fresh token right before publishing (GitHub device flow).
+    print("  Authenticating mcp-publisher (fresh token)...")
+    try:
+        login_result = subprocess.run(
+            ["mcp-publisher", "login", "github"],
             check=False,
-            capture_output=True,
+            timeout=300,
         )
-        if result.returncode == 0:
-            print("  ✓ Published to MCP Registry")
-        else:
-            print(f"  ⚠ MCP Registry publish failed: {result.stderr}")
-            print("  You may need to run 'mcp-publisher login github' first")
+    except subprocess.TimeoutExpired:
+        print("  ⚠ mcp-publisher login timed out. Skipping MCP Registry publish.")
+        print(
+            "  Run 'mcp-publisher login github' then "
+            "'mcp-publisher publish' manually."
+        )
+        return
+    if login_result.returncode != 0:
+        print("  ⚠ mcp-publisher login failed. Skipping MCP Registry publish.")
+        print(
+            "  Run 'mcp-publisher login github' then "
+            "'mcp-publisher publish' manually."
+        )
+        return
+
+    result = run_command(
+        ["mcp-publisher", "publish"],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        print("  ✓ Published to MCP Registry")
+    else:
+        print(f"  ⚠ MCP Registry publish failed: {result.stderr}")
+        print("  You may need to run 'mcp-publisher login github' first")
 
 
 def merge_back_to_develop(config: ReleaseConfig, release_branch: str) -> None:
@@ -1044,7 +1060,7 @@ Gitflow:
         publish_mcp_registry(config)
     else:
         print("\n=== MCP Registry ===\n")
-        print("  [DRY-RUN] Would run: mcp-publisher publish")
+        print("  [DRY-RUN] Would authenticate, then run: mcp-publisher publish")
 
     # Step 10: Merge back to develop and cleanup
     merge_back_to_develop(config, release_branch)

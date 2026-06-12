@@ -689,24 +689,32 @@ def merge_to_master_and_tag(
 
 
 def create_github_release(config: ReleaseConfig, new_version: str) -> None:
-    """Create GitHub release with changelog notes."""
+    """Create GitHub release from approved notes (fallback: raw changelog)."""
     print("\n=== GitHub Release ===\n")
 
     tag = f"v{new_version}"
-    changelog_section = extract_changelog_section(config.project_root, new_version)
-    notes = build_raw_release_body(changelog_section, new_version)
+    notes_path = notes_file_path(config.project_root, new_version)
+    if notes_path.exists():
+        stored_title, notes = read_notes_file(notes_path)
+        title = stored_title or tag
+    else:
+        # Dry-run, or a real run where the notes step was somehow skipped.
+        title = tag
+        changelog_section = extract_changelog_section(config.project_root, new_version)
+        notes = build_raw_release_body(changelog_section, new_version)
 
     if config.dry_run:
         print(f"  [DRY-RUN] Would create GitHub release: {tag}")
+        print(f"  [DRY-RUN] Title: {title}")
         print("  [DRY-RUN] Release notes preview:")
         for line in notes.split("\n")[:10]:
             print(f"    {line}")
         print("    ...")
     else:
         run_command(
-            ["gh", "release", "create", tag, "--title", tag, "--notes", notes],
+            ["gh", "release", "create", tag, "--title", title, "--notes", notes],
         )
-        print(f"  ✓ Created GitHub release: {tag}")
+        print(f"  ✓ Created GitHub release: {tag} — {title}")
 
 
 def wait_for_publish_workflow(new_version: str, max_wait: int = 900) -> bool:
@@ -786,7 +794,9 @@ def wait_for_publish_workflow(new_version: str, max_wait: int = 900) -> bool:
     return False
 
 
-def print_recovery_instructions(new_version: str, release_branch: str) -> None:
+def print_recovery_instructions(
+    new_version: str, release_branch: str, project_root: Path
+) -> None:
     """Print actionable recovery steps when the publish step fails after tagging."""
     tag = f"v{new_version}"
     print("\n" + "=" * 60)
@@ -808,7 +818,17 @@ def print_recovery_instructions(new_version: str, release_branch: str) -> None:
     print("    A) Fix the cause on develop, then rerun the existing tag's workflow:")
     print("         gh run rerun <run-id>")
     print("       On success, finish the remaining steps manually:")
-    print(f"         gh release create {tag} --title {tag} --notes-file <notes.md>")
+    notes_path = notes_file_path(project_root, new_version)
+    if notes_path.exists():
+        stored_title, _ = read_notes_file(notes_path)
+        title = stored_title or tag
+        print(f'         gh release create {tag} --title "{title}" \\')
+        print(f'           --notes-file "{notes_path}"')
+        print(f"         (your approved notes are saved at {notes_path})")
+    else:
+        print(
+            f"         gh release create {tag} --title {tag} " "--notes-file <notes.md>"
+        )
     print("         mcp-publisher publish")
     print(f"         git checkout develop && git merge {release_branch} && git push")
     print(f"         git branch -d {release_branch}")
@@ -976,6 +996,17 @@ Gitflow:
     # Step 5: Commit version bump on release branch
     commit_version_bump(config, new_version)
 
+    # Step 5b: Draft + approve release notes NOW, so the long unattended
+    # waits (publish workflow, PyPI) happen after the human interaction.
+    notes_path = notes_file_path(config.project_root, new_version)
+    if config.dry_run:
+        preview_release_notes(config, new_version)
+    else:
+        print("\n=== Release Notes ===\n")
+        changelog_section = extract_changelog_section(config.project_root, new_version)
+        approve_release_notes(new_version, changelog_section, notes_path)
+        print(f"  ✓ Approved notes saved to {notes_path}")
+
     # Step 6: Merge to master and tag (this push triggers publish-pypi.yml)
     merge_to_master_and_tag(config, new_version, release_branch)
 
@@ -984,11 +1015,15 @@ Gitflow:
     # line that does not yet (or may never) work.
     if not config.dry_run:
         if not wait_for_publish_workflow(new_version):
-            print_recovery_instructions(new_version, release_branch)
+            print_recovery_instructions(
+                new_version, release_branch, config.project_root
+            )
             sys.exit(1)
 
         if not wait_for_pypi(new_version):
-            print_recovery_instructions(new_version, release_branch)
+            print_recovery_instructions(
+                new_version, release_branch, config.project_root
+            )
             sys.exit(1)
     else:
         print("\n=== Publish Workflow ===\n")
@@ -1008,6 +1043,10 @@ Gitflow:
 
     # Step 10: Merge back to develop and cleanup
     merge_back_to_develop(config, release_branch)
+
+    # Release fully succeeded; the persisted notes draft is no longer needed.
+    if not config.dry_run:
+        notes_path.unlink(missing_ok=True)
 
     # Done!
     print("\n" + "=" * 60)

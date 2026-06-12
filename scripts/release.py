@@ -327,6 +327,17 @@ def extract_changelog_section(project_root: Path, version: str) -> str:
     return "Release " + version
 
 
+def extract_unreleased_section(project_root: Path) -> str:
+    """Extract the [Unreleased] body (dry-run preview source)."""
+    content = (project_root / "CHANGELOG.md").read_text()
+    match = re.search(
+        r"## \[Unreleased\]\s*\n(.*?)(?=^## \[|\Z)",
+        content,
+        re.IGNORECASE | re.DOTALL | re.MULTILINE,
+    )
+    return match.group(1).strip() if match else ""
+
+
 def notes_file_path(project_root: Path, new_version: str) -> Path:
     """Path where approved release notes are persisted for crash recovery."""
     return project_root / f"release_notes_v{new_version}.md"
@@ -478,6 +489,103 @@ def _edit_notes_in_editor(path: Path) -> None:
     """Open the notes file in $VISUAL/$EDITOR (fallback vi). Blocking."""
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
     subprocess.run([*shlex.split(editor), str(path)], check=False)
+
+
+def approve_release_notes(
+    new_version: str, changelog_section: str, notes_path: Path
+) -> None:
+    """Generate, approve, and persist release notes to notes_path.
+
+    Interactive (TTY): [y]es / [e]dit in $EDITOR (edit is final) /
+    [r]egenerate with optional steering / [f]allback to raw changelog.
+    Non-TTY: auto-accept the draft. Generation failure: prompt
+    retry/fallback on a TTY, silent fallback otherwise. Never blocks the
+    release on the LLM.
+    """
+    tag = f"v{new_version}"
+    interactive = sys.stdin.isatty()
+    steering: str | None = None
+
+    while True:
+        print("  Generating release notes draft (claude -p)...")
+        try:
+            title, generated = generate_release_notes(
+                new_version, changelog_section, steering
+            )
+        except RuntimeError as exc:
+            print(f"  ⚠ Notes generation failed: {exc}")
+            if interactive:
+                choice = (
+                    input("  [r]etry / [f]all back to raw changelog? ").strip().lower()
+                )
+                if choice == "r":
+                    continue
+            print("  Falling back to raw changelog notes.")
+            write_notes_file(
+                notes_path,
+                tag,
+                build_raw_release_body(changelog_section, new_version),
+            )
+            return
+
+        body = build_release_body(generated, new_version)
+        print("\n" + "-" * 60)
+        print(f"  Title: {title}")
+        print("-" * 60)
+        print(body)
+        print("-" * 60)
+
+        if not interactive:
+            print("  ⚠ Non-interactive run: auto-accepting generated notes.")
+            write_notes_file(notes_path, title, body)
+            return
+
+        while True:
+            choice = (
+                input("  [y]es publish / [e]dit / [r]egenerate / [f]allback? ")
+                .strip()
+                .lower()
+            )
+            if choice == "y":
+                write_notes_file(notes_path, title, body)
+                return
+            if choice == "e":
+                # Saving in the editor IS the approval -- no re-confirm.
+                write_notes_file(notes_path, title, body)
+                try:
+                    _edit_notes_in_editor(notes_path)
+                except (ValueError, OSError) as exc:
+                    print(f"  ⚠ Could not launch editor: {exc}")
+                    print("  Using the unedited draft as approved.")
+                print(f"  ✓ Using edited notes from {notes_path}")
+                return
+            if choice == "r":
+                steering = input("  Any guidance? (enter to skip) ").strip() or None
+                break
+            if choice == "f":
+                write_notes_file(
+                    notes_path,
+                    tag,
+                    build_raw_release_body(changelog_section, new_version),
+                )
+                return
+            print("  Please answer y, e, r, or f.")
+
+
+def preview_release_notes(config: ReleaseConfig, new_version: str) -> None:
+    """Dry-run: draft real notes from [Unreleased] and print them."""
+    print("\n=== Release Notes (Preview) ===\n")
+    section = extract_unreleased_section(config.project_root)
+    try:
+        title, generated = generate_release_notes(new_version, section)
+    except RuntimeError as exc:
+        print(f"  ⚠ Notes generation failed: {exc}")
+        print("  [DRY-RUN] Release would fall back to raw changelog notes.")
+        return
+    body = build_release_body(generated, new_version)
+    print(f"  [DRY-RUN] Title: {title}")
+    print("  [DRY-RUN] Notes preview:\n")
+    print(body)
 
 
 def bump_version(config: ReleaseConfig) -> tuple[str, str]:

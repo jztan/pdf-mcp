@@ -65,14 +65,20 @@ def encode(texts: list[str], model_name: str) -> Any:
     """
     Encode a list of texts into embedding vectors.
 
-    Returns an ndarray of shape (N, D), dtype float32.
-    Vectors are L2-normalized by fastembed (dot product == cosine similarity).
+    Returns an ndarray of shape (N, D), dtype float32, L2-normalized so that
+    a dot product equals cosine similarity. We normalize here rather than rely
+    on the model: fastembed 0.8 returns unnormalized vectors for some models
+    (e.g. multilingual-e5-large, norm ~28 after its CLS->mean pooling change),
+    which would otherwise break semantic scoring in server.py.
     """
     import numpy as np  # type: ignore[import-untyped]
 
     model = _get_model(model_name)
-    embeddings = list(model.embed(texts))
-    return np.array(embeddings, dtype=np.float32)
+    arr = np.array(list(model.embed(texts)), dtype=np.float32)
+    if arr.size == 0:
+        return arr
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    return arr / np.clip(norms, 1e-12, None)
 
 
 def encode_query(text: str, model_name: str) -> Any:

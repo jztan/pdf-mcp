@@ -2,10 +2,10 @@
 
 ## Project Status
 
-- **Current Version:** v1.15.0 (released 2026-06-06)
-- **On Develop (unreleased):** `pip>=26.1.2` pin in the `dev` extra to clear PYSEC-2026-196 — see `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md)
+- **Current Version:** v1.16.0 (released 2026-06-12)
+- **Unreleased (staged on `fix/embedding-normalization`, pending merge):** embedding vectors are now L2-normalized for all models, restoring the `dot == cosine` contract semantic scoring relies on. fastembed 0.8 returns unnormalized vectors for some models (e.g. `multilingual-e5-large`, norm ~28), which inflated semantic `score` and left `low_confidence` permanently `False`; the default `bge-small` was unaffected. See `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
 - **MCP Registry Status:** Published
-- **Test Suite:** 710 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent; benchmark tests are kept off the CI fast path.
+- **Test Suite:** 753 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent; benchmark tests are kept off the CI fast path.
 - **Tools:** 9 MCP tools — `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
 
 ---
@@ -42,11 +42,7 @@ Ordered by leverage ÷ effort. P0 = ship next; P3 = methodology, fold into a P1/
 
 ### P0 — ship next
 
-- [ ] **Parallel page processing for OCR and render (one shared process-pool helper).** _Implemented and corpus-benchmarked on `feature/speedup` (pending merge); designed 2026-06-07 via brainstorm → grill → fact-check._ OCR is the slowest op by far (~2–9 s/page; a multi-page scan blocks the whole call). A `ProcessPoolExecutor` over pages gives a large speedup — **~2–3x on typical real scanned documents (UNLV/ISRI), up to ~6x on very dense pages** (the 6.3x M4 Pro figure is a synthetic dense upper bound; [`benchmark_data/parallel_pages_results.md`](benchmark_data/parallel_pages_results.md)). Must be processes, not threads: PyMuPDF OCR goes through Leptonica, **not thread-safe even across separate `Document` handles** (crashes `Attempt to use Leptonica from 2 threads at once`). Design: a new `parallel.py` exposes a generic `run_pages` + `resolve_workers`; picklable per-page workers live in `extractor.py` (never `server.py`, so spawn re-import stays cheap — PyMuPDF only). Each worker opens its own `Document`; **all SQLite writes stay in the parent**; per-page failures are isolated and **never cached** (stay retryable); a hard worker death (`BrokenProcessPool` — segfault/OOM) falls back to sequential in-parent. Per-call pool; auto worker count `min(cpu_count, n_pages, 8)` with a `PDF_MCP_MAX_WORKERS` env override.
-
-    - **OCR ships unconditionally** (gate ≥ 2 pages — work dwarfs ~0.3–0.5 s/worker spawn). Corpus-validated real-world speedup is **~2–3x on typical scanned documents** (UNLV/ISRI), up to ~6x on very dense pages and ~1.3x on sparse/light scans — the 6.3x isolation figure is a dense upper bound. Workers also pay a ~0.5 s `import fastmcp` reload per spawn in the real STDIO deployment (inherent to spawn re-importing `__main__`; lazy singletons don't help, forkserver only marginally). Worker is OCR-only for v1; bundling images/tables to recover the serial tail is a deferred follow-up.
-    - **Render is conditional.** Its isolated number (1.6x synthetic / 2.2x real @ 8 workers) does **not** survive the only live path. `pdf_render_pages` stays sequential (5-page inline cap is below any sane gate), so render only fires in `pdf_read_pages(render_dpi)` — where the ~60 ms/page render is interleaved with *serial* per-page work, notably `find_tables()` (often costlier than the render itself). End-to-end gain is Amdahl-bound, possibly ~1.1x. The shared helper lands regardless; render **dispatch** ships only if a re-benchmark of the **full `pdf_read_pages` path** (not render-in-isolation) clears ~1.3x — otherwise render stays sequential behind a gated-off dispatch.
-    - **Text extraction stays sequential, and threads are out everywhere** — both benchmarked and rejected; see _Investigated / Rejected_ below. Only OCR (and conditionally render) parallelize.
+_Nothing queued._
 
 ### P1 — high-value, well-scoped
 
@@ -84,4 +80,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-06-07 (parallel page processing designed and promoted to P0 — OCR ships unconditionally, render conditional on an end-to-end re-benchmark; OCR/render parallelization consolidated from the former P1/P2 bullets, implementation in progress on `feature/speedup`)
+**Last Updated:** 2026-06-12 (v1.16.0 status refresh — parallel page processing shipped and cleared from Under Consideration; embedding-normalization fix staged on `fix/embedding-normalization`)

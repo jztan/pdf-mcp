@@ -15,12 +15,13 @@ Gitflow:
     1. Start from develop branch
     2. Pre-flight: clean tree, tests pass, dependency audit clean
     3. Create release/vX.Y.Z branch and bump versions
-    4. Merge to master, push tag (triggers publish-pypi.yml)
-    5. Wait for publish-pypi workflow to finish (poll gh run status)
-    6. Wait for the version to appear on PyPI
-    7. Create GitHub release (only after `pip install` will actually work)
-    8. Publish to MCP Registry
-    9. Merge back to develop, delete release branch
+    4. Draft + approve release notes via claude -p (persisted for recovery)
+    5. Merge to master, push tag (triggers publish-pypi.yml)
+    6. Wait for publish-pypi workflow to finish (poll gh run status)
+    7. Wait for the version to appear on PyPI
+    8. Create GitHub release (only after `pip install` will actually work)
+    9. Publish to MCP Registry
+    10. Merge back to develop, delete release branch, remove notes drafts
 """
 
 import argparse
@@ -517,9 +518,15 @@ def approve_release_notes(
         except RuntimeError as exc:
             print(f"  ⚠ Notes generation failed: {exc}")
             if interactive:
-                choice = (
-                    input("  [r]etry / [f]all back to raw changelog? ").strip().lower()
-                )
+                while True:
+                    choice = (
+                        input("  [r]etry / [f]all back to raw changelog? ")
+                        .strip()
+                        .lower()
+                    )
+                    if choice in ("r", "f"):
+                        break
+                    print("  Please answer r or f.")
                 if choice == "r":
                     continue
             print("  Falling back to raw changelog notes.")
@@ -589,24 +596,6 @@ def preview_release_notes(config: ReleaseConfig, new_version: str) -> None:
     print(f"  [DRY-RUN] Title: {title}")
     print("  [DRY-RUN] Notes preview:\n")
     print(body)
-
-
-def bump_version(config: ReleaseConfig) -> tuple[str, str]:
-    """Update version in all files."""
-    print("\n=== Version Bump ===\n")
-
-    current_version = get_current_version(config.project_root)
-    new_version = calculate_new_version(current_version, config.bump_type)
-
-    print(f"Version: {current_version} -> {new_version}")
-    print()
-
-    update_pyproject_toml(config.project_root, new_version, config.dry_run)
-    update_server_json(config.project_root, new_version, config.dry_run)
-    update_init_py(config.project_root, new_version, config.dry_run)
-    update_changelog(config.project_root, new_version, config.dry_run)
-
-    return current_version, new_version
 
 
 def regenerate_uv_lock(config: ReleaseConfig) -> None:
@@ -707,15 +696,29 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
 
     if config.dry_run:
         print(f"  [DRY-RUN] Would create GitHub release: {tag}")
-        print(f"  [DRY-RUN] Title: {title}")
-        print("  [DRY-RUN] Release notes preview:")
-        for line in notes.split("\n")[:10]:
-            print(f"    {line}")
-        print("    ...")
+        if notes_path.exists():
+            print(f"  [DRY-RUN] Title: {title}")
+            print("  [DRY-RUN] Release notes preview:")
+            for line in notes.split("\n")[:10]:
+                print(f"    {line}")
+            print("    ...")
+        else:
+            print(
+                "  [DRY-RUN] Title and notes would come from the approved "
+                "notes file (see the Release Notes preview above)."
+            )
     else:
-        run_command(
+        result = run_command(
             ["gh", "release", "create", tag, "--title", title, "--notes", notes],
+            check=False,
         )
+        if result.returncode != 0:
+            print("  ✗ gh release create failed:")
+            print(f"    {result.stderr.strip()}")
+            print_recovery_instructions(
+                new_version, f"release/v{new_version}", config.project_root
+            )
+            sys.exit(1)
         print(f"  ✓ Created GitHub release: {tag} — {title}")
 
 

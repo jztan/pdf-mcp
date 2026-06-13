@@ -1,0 +1,200 @@
+{
+  "pdfs": {
+    "attention": {
+      "url": "/tmp/e5_pdfs/attention.pdf",
+      "title": "Attention Is All You Need (Vaswani et al., 2017)",
+      "page_count": 15,
+      "scenarios": {
+        "1a": {
+          "query": "dropout rate",
+          "relevant_pages": [
+            8
+          ],
+          "notes": "Precise factual \u2014 keyword-friendly. Page 8 (Regularization section) explicitly states dropout rate values. Router picks semantic (all-lowercase query, no [A-Z0-9-]{4+} match), but all modes find page 8."
+        },
+        "1b": {
+          "query": "why self-attention is better than recurrent layers",
+          "relevant_pages": [
+            7
+          ],
+          "notes": "Conceptual \u2014 semantic-friendly. No verbatim phrase match; keyword returns 0 results. Semantic finds page 7 (Why Self-Attention section) at rank 1. Router picks semantic (all lowercase)."
+        },
+        "1c": {
+          "query": "WMT-2014 generalization capability",
+          "relevant_pages": [
+            8
+          ],
+          "notes": "Mixed \u2014 router trap. 'WMT-2014' contains W,M,T,-,2,0,1,4 which all match [A-Z0-9-]{4+}, so router routes to keyword. Keyword returns 0 matches (phrase not verbatim). Hybrid's semantic leg finds page 8 (Machine Translation results table, newstest2014)."
+        },
+        "3a": {
+          "query": "Scaled Dot-Product Attention",
+          "relevant_pages": [
+            4
+          ],
+          "notes": "Navigation \u2014 keyword wins with exact section heading match (rank 1, score 5.67). Router picks semantic (no 4+ consecutive uppercase/digit/hyphen in 'Scaled Dot-Product Attention'\u2014academic section headings don't trigger the code-pattern regex). Both semantic and keyword find page 4."
+        },
+        "3b": {
+          "query": "the parallelization advantage over sequential recurrence",
+          "relevant_pages": [
+            6
+          ],
+          "notes": "Navigation \u2014 cross-reference by concept. Keyword returns 0 matches. Semantic finds page 6 (Why Self-Attention: formal analysis of parallelization advantage vs recurrent layers) at rank 2. Router picks semantic (all lowercase)."
+        }
+      }
+    },
+    "gpt3": {
+      "url": "/tmp/e5_pdfs/gpt3.pdf",
+      "title": "Language Models are Few-Shot Learners (Brown et al., 2020)",
+      "page_count": 75,
+      "scenarios": {
+        "2a": {
+          "query": "few-shot performance",
+          "relevant_pages": [
+            12,
+            14,
+            16
+          ],
+          "notes": "Context building \u2014 clustered pages. Phrase 'few-shot performance' appears verbatim across Results section (pages 12=QA benchmarks, 14=Translation, 16=Winograd). Keyword@10 finds all three. Demonstrates: for precise terminology, keyword alone achieves full recall on nearby pages."
+        },
+        "2b": {
+          "query": "bias fairness",
+          "relevant_pages": [
+            34,
+            36,
+            39
+          ],
+          "notes": "Context building \u2014 TRUE FUSION scenario. Keyword finds page 34 (Broader Impacts section start, 'bias, fairness' appears in overview), misses pages 36 and 39. Semantic finds pages 36 (6.2 Fairness, Bias, and Representation subsection) and 39 (6.2.4 Future Bias and Fairness Challenges), misses page 34. Hybrid via RRF combines both signals and finds all three relevant pages."
+        }
+      }
+    },
+    "bert": {
+      "url": "/tmp/e5_pdfs/bert.pdf",
+      "title": "BERT: Pre-training of Deep Bidirectional Transformers (Devlin et al., 2018)",
+      "page_count": 16,
+      "scenarios": {
+        "b1": {
+          "query": "how many layers, hidden size, and attention heads does bert large have",
+          "relevant_pages": [
+            3
+          ],
+          "notes": "p3 'BERTLARGE (L=24, H=1024, A=16, Total Parameters=340M)'"
+        },
+        "b2": {
+          "query": "what percentage of wordpiece tokens does bert mask during pre-training",
+          "relevant_pages": [
+            4
+          ],
+          "notes": "p4 'we mask 15% of all WordPiece tokens in each sequence at random'"
+        },
+        "b3": {
+          "query": "why does bidirectional pre-training work better than a left-to-right language model",
+          "relevant_pages": [
+            8
+          ],
+          "notes": "p8 Sec 5.1 'The LTR model performs worse than the MLM model on all tasks'"
+        },
+        "b4": {
+          "query": "what corpus or data was bert pre-trained on",
+          "relevant_pages": [
+            5
+          ],
+          "notes": "p5 'BooksCorpus (800M words) ... and English Wikipedia (2,500M words)'"
+        },
+        "b5": {
+          "query": "table of glue benchmark results comparing bert base and bert large",
+          "relevant_pages": [
+            6
+          ],
+          "notes": "p6 Table 1 'GLUE Test results' with BERTBASE and BERTLARGE rows"
+        }
+      }
+    },
+    "resnet": {
+      "url": "/tmp/e5_pdfs/resnet.pdf",
+      "title": "Deep Residual Learning for Image Recognition (He et al., 2015)",
+      "page_count": 12,
+      "scenarios": {
+        "r1": {
+          "query": "what top-5 error did the resnet ensemble achieve on the imagenet test set",
+          "relevant_pages": [
+            6,
+            7
+          ],
+          "notes": "p6 Table 5 'ResNet (ILSVRC'15) 3.57'; p7 '3.57% top-5 error on the test set'"
+        },
+        "r2": {
+          "query": "how many flops does the 152-layer resnet have",
+          "relevant_pages": [
+            5,
+            7
+          ],
+          "notes": "p5 Table 1 11.3x10^9; p7 '152-layer ResNet (11.3 billion FLOPs)'"
+        },
+        "r3": {
+          "query": "why is it easier to optimize a residual mapping than the original unreferenced mapping",
+          "relevant_pages": [
+            3
+          ],
+          "notes": "p3 Sec 3.1 Residual Learning, identity-mapping argument"
+        },
+        "r4": {
+          "query": "why do deeper plain networks end up with higher training error than shallower ones",
+          "relevant_pages": [
+            2,
+            3
+          ],
+          "notes": "p2 names degradation problem; p3 explains it"
+        },
+        "r5": {
+          "query": "table of classification error on cifar-10 comparing resnet depths",
+          "relevant_pages": [
+            7
+          ],
+          "notes": "p7 Table 6 CIFAR-10 error by depth"
+        }
+      }
+    },
+    "adam": {
+      "url": "/tmp/e5_pdfs/adam.pdf",
+      "title": "Adam: A Method for Stochastic Optimization (Kingma & Ba, 2014)",
+      "page_count": 15,
+      "scenarios": {
+        "a1": {
+          "query": "what are the default values for beta1, beta2 and epsilon in adam",
+          "relevant_pages": [
+            2
+          ],
+          "notes": "p2 Algorithm 1 'alpha=0.001, beta1=0.9, beta2=0.999, epsilon=10^-8'"
+        },
+        "a2": {
+          "query": "default learning rate alpha for adamax",
+          "relevant_pages": [
+            9
+          ],
+          "notes": "p9 Algorithm 2 AdaMax 'alpha=0.002, beta1=0.9, beta2=0.999'"
+        },
+        "a3": {
+          "query": "how adam corrects for the bias in the moment estimates initialized at zero",
+          "relevant_pages": [
+            3
+          ],
+          "notes": "p3 Sec 3 'INITIALIZATION BIAS CORRECTION'"
+        },
+        "a4": {
+          "query": "why is the effective step size bounded by the stepsize and acts like a trust region",
+          "relevant_pages": [
+            3
+          ],
+          "notes": "p3 'effective ... steps ... bounded by the stepsize ... trust region'"
+        },
+        "a5": {
+          "query": "regret bound theorem and convergence analysis",
+          "relevant_pages": [
+            4
+          ],
+          "notes": "p4 Sec 4 'CONVERGENCE ANALYSIS' Theorem 4.1, O(sqrt(T)) regret"
+        }
+      }
+    }
+  }
+}

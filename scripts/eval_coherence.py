@@ -349,9 +349,7 @@ def main() -> int:
     calib = json.loads(
         (_DATA / "coherence_calibration.json").read_text(encoding="utf-8")
     )
-    corpus = json.loads(
-        (_DATA / "coherence_corpus.json").read_text(encoding="utf-8")
-    )
+    corpus = json.loads((_DATA / "coherence_corpus.json").read_text(encoding="utf-8"))
     judge = make_claude_judge(args.model)
 
     ok, failures = calibrate(calib["fixtures"], judge)

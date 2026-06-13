@@ -92,3 +92,30 @@ def compare(baseline: dict[str, str], current: dict[str, str]) -> dict[str, str]
 def has_regression(diff: dict[str, str]) -> bool:
     """True if any page regressed or errored (the guard's failing condition)."""
     return any(status in ("regressed", "error") for status in diff.values())
+
+
+def active_extras_config() -> dict[str, bool]:
+    """Snapshot which optional extras affect extraction output.
+
+    Uses the same predicates server_info uses, so the stamp matches real
+    extraction behaviour. Imported lazily so the module loads without pdf_mcp.
+    """
+    from pdf_mcp import extractor
+
+    cfg = {
+        "column_aware": extractor.column_detection_available(),
+        "vertical_aware": extractor.vertical_detection_available(),
+    }
+    try:
+        from pdf_mcp import config, embedder
+
+        embedder.check_available(config.PDFConfig().embedding_model)
+        cfg["semantic"] = True
+    except Exception:
+        cfg["semantic"] = False
+    return cfg
+
+
+def config_matches(a: dict[str, bool], b: dict[str, bool]) -> bool:
+    """True when two extras-config snapshots are identical."""
+    return a == b

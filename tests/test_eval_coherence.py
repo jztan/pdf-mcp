@@ -66,3 +66,14 @@ def test_has_regression_true_only_on_regress_or_error():
     assert ec.has_regression({"p": "regressed"}) is True
     assert ec.has_regression({"p": "error"}) is True
     assert ec.has_regression({"p": "improved", "q": "same"}) is False
+
+
+def test_config_matches_identical():
+    cfg = {"column_aware": True, "vertical_aware": False, "semantic": True}
+    assert ec.config_matches(cfg, dict(cfg)) is True
+
+
+def test_config_matches_difference():
+    a = {"column_aware": True, "vertical_aware": False}
+    b = {"column_aware": True, "vertical_aware": True}
+    assert ec.config_matches(a, b) is False

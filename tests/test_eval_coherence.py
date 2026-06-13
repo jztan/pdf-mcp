@@ -77,3 +77,90 @@ def test_config_matches_difference():
     a = {"column_aware": True, "vertical_aware": False}
     b = {"column_aware": True, "vertical_aware": True}
     assert ec.config_matches(a, b) is False
+
+
+# ---------------------------------------------------------------------------
+# T6: judge wiring + calibration (fake judge — no real CLI calls)
+# ---------------------------------------------------------------------------
+
+
+def _fake_judge(mapping):
+    """Return a judge(text, direction) that looks up a verdict by exact text."""
+
+    def judge(text, direction):
+        return ec.Verdict(mapping.get(text, "scrambled"))
+
+    return judge
+
+
+def test_calibrate_passes_when_judge_correct():
+    fixtures = [
+        {"id": "a", "text": "good", "direction": "ltr", "expected": "coherent"},
+        {"id": "b", "text": "bad", "direction": "ltr", "expected": "scrambled"},
+    ]
+    judge = _fake_judge({"good": "coherent", "bad": "scrambled"})
+    ok, failures = ec.calibrate(fixtures, judge)
+    assert ok is True
+    assert failures == []
+
+
+def test_calibrate_fails_when_judge_wrong():
+    fixtures = [{"id": "a", "text": "good", "direction": "ltr", "expected": "coherent"}]
+    judge = _fake_judge({"good": "scrambled"})
+    ok, failures = ec.calibrate(fixtures, judge)
+    assert ok is False
+    assert failures and failures[0]["id"] == "a"
+
+
+# ---------------------------------------------------------------------------
+# T7: resolve_pdf + extract_page_text (no network, monkeypatch)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_pdf_missing_local_returns_none():
+    entry = {"id": "x", "source": {"local": "/no/such/file.pdf"}, "page": 1}
+    assert ec.resolve_pdf(entry) is None  # -> 'unavailable' upstream
+
+
+def test_extract_page_text_unavailable_when_pdf_none(monkeypatch):
+    monkeypatch.setattr(ec, "resolve_pdf", lambda entry: None)
+    text, status = ec.extract_page_text({"id": "x", "source": {}, "page": 1})
+    assert text is None and status == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# T8: format_report
+# ---------------------------------------------------------------------------
+
+
+def test_format_report_lists_known_bad_section():
+    verdicts = {
+        "a": ec.Verdict("coherent", "ok"),
+        "b": ec.Verdict("scrambled", "soup"),
+    }
+    diff = {"a": "same", "b": "same"}
+    report = ec.format_report(verdicts, diff, {"vertical_aware": True})
+    assert "scrambled" in report
+    # known-bad section names the still-bad page
+    assert "Known-bad" in report and "b" in report
+    # green-ish diff must NOT hide that b is still scrambled
+    assert "a" in report
+
+
+# ---------------------------------------------------------------------------
+# T9: baseline round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_baseline_roundtrip(tmp_path):
+    path = tmp_path / "baseline.json"
+    cfg = {"vertical_aware": True}
+    ec.write_baseline(path, {"a": ec.Verdict("coherent")}, cfg, model="m")
+    verdicts, loaded_cfg = ec.read_baseline(path)
+    assert verdicts == {"a": "coherent"}
+    assert loaded_cfg == cfg
+
+
+def test_read_baseline_missing_returns_empty(tmp_path):
+    verdicts, cfg = ec.read_baseline(tmp_path / "nope.json")
+    assert verdicts == {} and cfg == {}

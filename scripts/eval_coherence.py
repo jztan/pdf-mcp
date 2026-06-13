@@ -10,7 +10,9 @@ docs_internal/specs/2026-06-13-coherence-eval-harness-design.md.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
+from typing import Callable, Sequence
 
 VERDICTS = ("coherent", "partial", "scrambled")
 # Ordinal for regression comparison; non-ordinal sentinels excluded from it.
@@ -38,3 +40,25 @@ def parse_verdict(raw: str) -> Verdict:
         str(data.get("rationale", "")),
         str(data.get("confidence", "")),
     )
+
+
+def majority_verdict(votes: Sequence[Verdict]) -> Verdict:
+    """Return the strict-majority verdict, else 'error'.
+
+    A label needs > half the votes to win. No majority (e.g. 3-way split, or
+    errors preventing a majority) -> 'error', surfaced for investigation. The
+    returned rationale is taken from the first vote carrying the winning label.
+    """
+    counts = Counter(v.verdict for v in votes)
+    label, n = counts.most_common(1)[0]
+    if label == "error" or n * 2 <= len(votes):
+        return Verdict("error", f"no majority: {dict(counts)}")
+    rationale = next(v.rationale for v in votes if v.verdict == label)
+    return Verdict(label, rationale)
+
+
+def judge_majority(
+    text: str, direction: str, judge: Callable[[str, str], Verdict], n: int = 3
+) -> Verdict:
+    """Call ``judge`` n times and return the majority verdict (n=3 default)."""
+    return majority_verdict([judge(text, direction) for _ in range(n)])

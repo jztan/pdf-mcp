@@ -1,0 +1,9 @@
+{
+  "pages": [
+    {"id": "transformer-p4-ltr-2col", "source": {"url": "https://arxiv.org/pdf/1706.03762"}, "page": 4, "direction": "horizontal-ltr", "layout": "academic-2col"},
+    {"id": "ibk-72-102-academic-2col", "source": {"url": "https://www.jstage.jst.go.jp/article/ibk/72/1/72_102/_pdf/-char/ja"}, "page": 2, "direction": "vertical-rtl", "layout": "academic-2col"},
+    {"id": "iwaki-p3-magazine-vert", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/iwaki_koho_2025-12_vertical-jp.pdf"}, "page": 3, "direction": "vertical-rtl", "layout": "magazine-mixed"},
+    {"id": "yamato-p10-pure-vert", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/yamato_koho_2025-02_vertical-jp_p10-95pct.pdf"}, "page": 10, "direction": "vertical-rtl", "layout": "magazine-vertical"},
+    {"id": "sodegaura-p4-mixed-orient", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/sodegaura_koho_2025-11_vertical-jp_p3-89pct.pdf"}, "page": 4, "direction": "mixed", "layout": "directory-mixed"}
+  ]
+}

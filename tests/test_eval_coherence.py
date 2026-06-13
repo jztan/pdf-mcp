@@ -39,3 +39,30 @@ def test_majority_no_winner_is_error():
 def test_majority_errors_dominate_to_error():
     votes = [ec.Verdict("error"), ec.Verdict("error"), ec.Verdict("coherent")]
     assert ec.majority_verdict(votes).verdict == "error"
+
+
+def test_compare_regression_detected():
+    diffs = ec.compare({"p": "coherent"}, {"p": "scrambled"})
+    assert diffs["p"] == "regressed"
+
+
+def test_compare_improvement_detected():
+    assert ec.compare({"p": "scrambled"}, {"p": "coherent"})["p"] == "improved"
+
+
+def test_compare_equal_is_same():
+    assert ec.compare({"p": "partial"}, {"p": "partial"})["p"] == "same"
+
+
+def test_compare_error_current_is_error():
+    assert ec.compare({"p": "coherent"}, {"p": "error"})["p"] == "error"
+
+
+def test_compare_unavailable_excluded():
+    assert ec.compare({"p": "coherent"}, {"p": "unavailable"})["p"] == "unavailable"
+
+
+def test_has_regression_true_only_on_regress_or_error():
+    assert ec.has_regression({"p": "regressed"}) is True
+    assert ec.has_regression({"p": "error"}) is True
+    assert ec.has_regression({"p": "improved", "q": "same"}) is False

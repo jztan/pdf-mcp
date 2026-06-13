@@ -62,3 +62,33 @@ def judge_majority(
 ) -> Verdict:
     """Call ``judge`` n times and return the majority verdict (n=3 default)."""
     return majority_verdict([judge(text, direction) for _ in range(n)])
+
+
+def compare(baseline: dict[str, str], current: dict[str, str]) -> dict[str, str]:
+    """Per-page diff status: regressed | improved | same | error | unavailable.
+
+    'error' and 'unavailable' are non-ordinal: 'error' (judge failed) is always
+    surfaced as a failure; 'unavailable' (source could not be fetched) is
+    reported and excluded from the regression decision.
+    """
+    out: dict[str, str] = {}
+    for page_id, cur in current.items():
+        base = baseline.get(page_id)
+        if cur == "error":
+            out[page_id] = "error"
+        elif cur == "unavailable":
+            out[page_id] = "unavailable"
+        elif base is None or base not in _ORDINAL:
+            out[page_id] = "new"
+        elif _ORDINAL[cur] < _ORDINAL[base]:
+            out[page_id] = "regressed"
+        elif _ORDINAL[cur] > _ORDINAL[base]:
+            out[page_id] = "improved"
+        else:
+            out[page_id] = "same"
+    return out
+
+
+def has_regression(diff: dict[str, str]) -> bool:
+    """True if any page regressed or errored (the guard's failing condition)."""
+    return any(status in ("regressed", "error") for status in diff.values())

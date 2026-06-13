@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 from collections import Counter
 from dataclasses import dataclass
@@ -194,6 +195,8 @@ def make_claude_judge(
             return Verdict("error", "'claude' CLI not found on PATH")
         except subprocess.TimeoutExpired:
             return Verdict("error", "claude -p timed out")
+        except OSError as exc:  # e.g. claude exists but isn't executable
+            return Verdict("error", f"failed to launch claude: {exc}")
         if result.returncode != 0:
             return Verdict("error", f"claude -p exited {result.returncode}")
         if not result.stdout.strip():
@@ -339,8 +342,16 @@ def main() -> int:
     ap.add_argument("--update-baseline", action="store_true")
     args = ap.parse_args()
 
-    calib = json.loads((_DATA / "coherence_calibration.json").read_text("utf-8"))
-    corpus = json.loads((_DATA / "coherence_corpus.json").read_text("utf-8"))
+    if shutil.which("claude") is None:
+        print("ERROR: the 'claude' CLI is not on PATH — the judge cannot run.")
+        return 2
+
+    calib = json.loads(
+        (_DATA / "coherence_calibration.json").read_text(encoding="utf-8")
+    )
+    corpus = json.loads(
+        (_DATA / "coherence_corpus.json").read_text(encoding="utf-8")
+    )
     judge = make_claude_judge(args.model)
 
     ok, failures = calibrate(calib["fixtures"], judge)

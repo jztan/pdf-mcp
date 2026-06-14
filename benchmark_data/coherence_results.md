@@ -4,11 +4,11 @@ Extras config: `{'column_aware': True, 'vertical_aware': False, 'semantic': True
 
 | Page | Verdict | vs baseline | Rationale |
 |---|---|---|---|
-| ibk-72-102-academic-2col | scrambled | new | Body-text columns and footnote/citation blocks are interleaved out of order — sentence threads break and resume in non-adjacent blocks (e.g. the 證空/隆寛 passage continues several blocks earlier), so it can't be read as sequential prose. |
-| iwaki-p3-magazine-vert | scrambled | new | Vertical-rtl body text is split into per-glyph lines and interleaved with duplicated horizontal paragraph blocks, breaking column reading order entirely. |
-| sodegaura-p4-mixed-orient | scrambled | new | Vertical-text columns are interleaved into glyph-by-glyph soup (e.g. 'い も 変  護 り か ま 活  ら') across most of the page; only a few isolated blocks read cleanly. |
-| transformer-p4-ltr-2col | coherent | new | Figure captions, section headings, equations, and prose all read in correct top-to-bottom order with the footnote properly trailing at the bottom. |
-| yamato-p10-pure-vert | scrambled | new | Vertical-rtl blocks are individually readable but page-level order interleaves unrelated articles/columns out of sequence, with glyph-soup mojibake fragments throughout. |
+| ibk-72-102-academic-2col | scrambled | same | Each per-character block is internally readable, but consecutive blocks jump between interleaved main-text and footnote/column threads (e.g. block ending 'である。' followed by 'て、先行研究…'), so top-to-bottom reading order is broken across the page. |
+| iwaki-p3-magazine-vert | scrambled | same | Vertical-rtl columns are interleaved—horizontal Interview-box prose (食に関わる...) duplicated and spliced between glyph-by-glyph vertical column fragments, breaking reading order. |
+| sodegaura-p4-mixed-orient | scrambled | same | Vertical-text columns are interleaved glyph-by-glyph across the page, producing single-character soup; only a few isolated blocks read coherently. |
+| transformer-p4-ltr-2col | coherent | same | Body prose flows in correct reading order; only the two figure-label lines and stacked equation/footnote fragments are minor artifacts. |
+| yamato-p10-pure-vert | scrambled | same | Multi-column vertical-rtl newspaper page with interleaved column blocks that don't form continuous prose, plus heavy mojibake from decorative headings — articles can't be read in order. |
 
 ## Known-bad / not-yet-fixed
 

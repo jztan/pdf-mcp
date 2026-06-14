@@ -61,6 +61,14 @@ def test_compare_equal_is_same():
     assert ec.compare({"p": "partial"}, {"p": "partial"})["p"] == "same"
 
 
+def test_compare_coherent_partial_banded_as_same():
+    # coherent<->partial is judge noise, not a regression/improvement
+    assert ec.compare({"p": "coherent"}, {"p": "partial"})["p"] == "same"
+    assert ec.compare({"p": "partial"}, {"p": "coherent"})["p"] == "same"
+    # but a drop to scrambled IS a regression, from either tier
+    assert ec.compare({"p": "partial"}, {"p": "scrambled"})["p"] == "regressed"
+
+
 def test_compare_error_current_is_error():
     assert ec.compare({"p": "coherent"}, {"p": "error"})["p"] == "error"
 

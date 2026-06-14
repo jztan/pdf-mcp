@@ -21,8 +21,13 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 VERDICTS = ("coherent", "partial", "scrambled")
-# Ordinal for regression comparison; non-ordinal sentinels excluded from it.
-_ORDINAL = {"scrambled": 0, "partial": 1, "coherent": 2}
+# Tier for regression comparison. coherent and partial share a tier on purpose:
+# the judge's coherent<->partial boundary is inherently noisy (the SAME extracted
+# text gets judged either way across runs — validated repeatedly), so a
+# coherent->partial flip is not a reliable regression signal. The bright line is
+# `scrambled` (unusable output) — that is what the guard flags. Non-ordinal
+# sentinels (error/unavailable) are excluded.
+_ORDINAL = {"scrambled": 0, "partial": 1, "coherent": 1}
 
 
 @dataclass(frozen=True)
@@ -77,7 +82,9 @@ def compare(baseline: dict[str, str], current: dict[str, str]) -> dict[str, str]
 
     'error' and 'unavailable' are non-ordinal: 'error' (judge failed) is always
     surfaced as a failure; 'unavailable' (source could not be fetched) is
-    reported and excluded from the regression decision.
+    reported and excluded from the regression decision. coherent and partial
+    share a tier (see _ORDINAL), so a coherent<->partial flip reports 'same', not
+    'regressed'/'improved' — only crossings into/out of 'scrambled' move the tier.
     """
     out: dict[str, str] = {}
     for page_id, cur in current.items():

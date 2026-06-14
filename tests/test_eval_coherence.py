@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -164,3 +167,36 @@ def test_baseline_roundtrip(tmp_path):
 def test_read_baseline_missing_returns_empty(tmp_path):
     verdicts, cfg = ec.read_baseline(tmp_path / "nope.json")
     assert verdicts == {} and cfg == {}
+
+
+# ---------------------------------------------------------------------------
+# Live guard: full corpus run vs the committed baseline (real claude CLI).
+# Slow + billed; skipped when the authenticated `claude` CLI is unavailable.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    shutil.which("claude") is None,
+    reason="coherence guard needs the authenticated claude CLI + network",
+)
+def test_coherence_no_regression_vs_baseline():
+    """Full run over the corpus; assert no page regressed vs the baseline."""
+    data = Path(__file__).parent.parent / "benchmark_data"
+    calib = ec.json.loads((data / "coherence_calibration.json").read_text("utf-8"))
+    corpus = ec.json.loads((data / "coherence_corpus.json").read_text("utf-8"))
+    judge = ec.make_claude_judge()
+    ok, failures = ec.calibrate(calib["fixtures"], judge)
+    assert ok, f"judge calibration failed — eval invalid: {failures}"
+    base_verdicts, _ = ec.read_baseline(data / "coherence_baseline.json")
+    current = {}
+    for entry in corpus["pages"]:
+        text, status = ec.extract_page_text(entry)
+        if status != "ok":
+            current[entry["id"]] = "unavailable"
+            continue
+        current[entry["id"]] = ec.judge_majority(
+            text, entry["direction"], judge
+        ).verdict
+    diff = ec.compare(base_verdicts, current)
+    regressions = {k: v for k, v in diff.items() if v in ("regressed", "error")}
+    assert not regressions, f"coherence regressions vs baseline: {regressions}"

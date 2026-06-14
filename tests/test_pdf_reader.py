@@ -1934,5 +1934,52 @@ class TestPageWorkers:
         assert isinstance(results[0][1], dict)
 
 
+def _fake_rawdict(lines):
+    # lines: list of (dir_tuple, n_chars)
+    return {
+        "blocks": [
+            {"lines": [{"dir": d, "spans": [{"chars": [{}] * n}]} for d, n in lines]}
+        ]
+    }
+
+
+class _FakeRawPage:
+    def __init__(self, data):
+        self._data = data
+
+    def get_text(self, kind):
+        assert kind == "rawdict"
+        return self._data
+
+
+def test_detect_writing_mode_vertical():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 100)]))
+    assert detect_writing_mode(page) == "vertical"
+
+
+def test_detect_writing_mode_horizontal():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((1.0, 0.0), 100)]))
+    assert detect_writing_mode(page) == "horizontal"
+
+
+def test_detect_writing_mode_mixed():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    # 60% vertical -> between 0.50 and 0.80 -> mixed
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 40)]))
+    assert detect_writing_mode(page) == "mixed"
+
+
+def test_detect_writing_mode_below_min_chars_is_horizontal():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 10)]))  # < _VERTICAL_MIN_CHARS
+    assert detect_writing_mode(page) == "horizontal"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

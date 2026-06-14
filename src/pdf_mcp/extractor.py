@@ -184,6 +184,44 @@ _COLUMN_MIN_HEIGHT_FRAC = 0.25
 _MAX_COLUMNS = 16
 
 
+# A page routes to the vertical reorder path when vertical glyphs are at least
+# this fraction of all glyphs (and there are at least _VERTICAL_MIN_CHARS of
+# them). Below the fraction, or too few vertical glyphs, it is treated as
+# horizontal and keeps the existing extraction path.
+_VERTICAL_MIN_FRACTION = 0.50
+_VERTICAL_MIN_CHARS = 30
+
+
+def detect_writing_mode(page: Any) -> str:
+    """Classify a page as 'vertical', 'mixed', or 'horizontal'.
+
+    Builds a glyph-orientation histogram from ``get_text("rawdict")``: a text
+    line whose direction vector is closer to vertical (|dy| > |dx|) contributes
+    its glyphs to the vertical count, otherwise horizontal. 'vertical' and
+    'mixed' route to the reorder path; 'horizontal' keeps the existing path.
+    """
+    vertical = 0
+    horizontal = 0
+    data = page.get_text("rawdict")
+    for block in data.get("blocks", []):
+        for line in block.get("lines", []):
+            dx, dy = line.get("dir", (1.0, 0.0))
+            nchars = sum(len(span.get("chars", [])) for span in line.get("spans", []))
+            if abs(dy) > abs(dx):
+                vertical += nchars
+            else:
+                horizontal += nchars
+    total = vertical + horizontal
+    if total == 0 or vertical < _VERTICAL_MIN_CHARS:
+        return "horizontal"
+    fraction = vertical / total
+    if fraction < _VERTICAL_MIN_FRACTION:
+        return "horizontal"
+    if fraction >= 0.8:
+        return "vertical"
+    return "mixed"
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 

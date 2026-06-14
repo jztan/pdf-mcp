@@ -2251,5 +2251,43 @@ def test_page_rules_finds_horizontal_and_vertical_rules():
     assert len(v) == 1 and round(v[0][0]) == 300
 
 
+def _hglyph(x, y, t="x"):
+    return {"text": t, "x0": x, "y0": y, "x1": x + 8, "y1": y + 10, "vertical": True}
+
+
+def test_segment_by_rules_vertical_rule_orders_right_then_left():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    # left column x=50, right column x=400; vertical rule at x=250 splits them.
+    # vertical reading order is right-to-left -> right region first.
+    left = [_hglyph(50, y, "L") for y in range(40, 200, 12)]
+    right = [_hglyph(400, y, "R") for y in range(40, 200, 12)]
+    regions = _segment_by_rules(left + right, [], [(250.0, 0.0, 800.0)], 600, 800)
+    assert len(regions) == 2
+    assert regions[0][0]["text"] == "R" and regions[1][0]["text"] == "L"
+
+
+def test_segment_by_rules_horizontal_rule_orders_top_then_bottom():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    top = [_hglyph(100, y, "T") for y in range(40, 200, 12)]
+    bot = [_hglyph(100, y, "B") for y in range(400, 560, 12)]
+    regions = _segment_by_rules(top + bot, [300.0], [], 600, 800)
+    assert len(regions) == 2
+    assert regions[0][0]["text"] == "T" and regions[1][0]["text"] == "B"
+
+
+def test_segment_by_rules_merges_close_rules_no_glyph_loss():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    # a cluster of rules <20pt apart (a table) must NOT shatter or drop glyphs
+    glyphs = [_hglyph(100, y, "x") for y in range(40, 560, 12)]
+    close_rules = [200.0, 205.0, 210.0, 215.0, 400.0]  # 4 within 20pt
+    regions = _segment_by_rules(glyphs, close_rules, [], 600, 800)
+    kept = sum(len(r) for r in regions)
+    assert kept == len(glyphs)  # no glyph dropped
+    assert len(regions) <= 3  # close rules merged, not 6 strips
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

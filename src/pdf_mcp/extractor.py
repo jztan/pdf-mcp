@@ -424,6 +424,51 @@ def _page_rules(
     return sorted(h_rules), v_rules
 
 
+# Bands thinner than this are merged with the previous band (over-segmentation
+# guard) — a dense run of rules (e.g. a 20-row table) must not shatter the page
+# into unreadable strips. Merging (vs dropping) ensures no glyph is lost.
+_MIN_BAND_PT = 20.0
+
+
+def _segment_by_rules(
+    glyphs: list[dict[str, Any]],
+    h_rules: list[float],
+    v_rules: list[tuple[float, float, float]],
+    page_w: float,
+    page_h: float,
+) -> list[list[dict[str, Any]]]:
+    """Partition glyphs into article regions in vertical reading order.
+
+    Horizontal rules split the page into bands (top-to-bottom); within a band,
+    vertical rules spanning it split into regions ordered right-to-left (vertical
+    RTL). Rules closer than _MIN_BAND_PT collapse so a glyph is never dropped.
+    Returns regions as glyph lists, already in reading order.
+    """
+    edges = [0.0]
+    for y in sorted(h_rules):
+        if y - edges[-1] >= _MIN_BAND_PT:
+            edges.append(y)
+    edges.append(page_h)
+    ordered: list[tuple[tuple[int, float], list[dict[str, Any]]]] = []
+    for bi in range(len(edges) - 1):
+        by0, by1 = edges[bi], edges[bi + 1]
+        band = [g for g in glyphs if by0 <= (g["y0"] + g["y1"]) / 2 < by1]
+        if not band:
+            continue
+        vxs = sorted(
+            {round(x) for x, vy0, vy1 in v_rules if vy0 < by1 - 5 and vy1 > by0 + 5}
+        )
+        xs = [0.0] + [float(x) for x in vxs] + [page_w]
+        for xi in range(len(xs) - 1):
+            region = [g for g in band if xs[xi] <= (g["x0"] + g["x1"]) / 2 < xs[xi + 1]]
+            if not region:
+                continue
+            cx = sum((g["x0"] + g["x1"]) / 2 for g in region) / len(region)
+            ordered.append(((bi, -cx), region))
+    ordered.sort(key=lambda item: item[0])
+    return [region for _, region in ordered]
+
+
 def vertical_detection_available() -> bool:
     """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
     return True

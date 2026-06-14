@@ -356,6 +356,11 @@ def reorder_vertical(page: Any) -> str:
     return reorder_vertical_glyphs(_collect_glyphs(page), page.rect.height)
 
 
+def vertical_detection_available() -> bool:
+    """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
+    return True
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 

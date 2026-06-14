@@ -44,6 +44,10 @@ def test_majority_errors_dominate_to_error():
     assert ec.majority_verdict(votes).verdict == "error"
 
 
+def test_majority_empty_votes_is_error():
+    assert ec.majority_verdict([]).verdict == "error"
+
+
 def test_compare_regression_detected():
     diffs = ec.compare({"p": "coherent"}, {"p": "scrambled"})
     assert diffs["p"] == "regressed"

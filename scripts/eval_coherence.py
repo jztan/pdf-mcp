@@ -54,6 +54,8 @@ def majority_verdict(votes: Sequence[Verdict]) -> Verdict:
     errors preventing a majority) -> 'error', surfaced for investigation. The
     returned rationale is taken from the first vote carrying the winning label.
     """
+    if not votes:
+        return Verdict("error", "no votes")
     counts = Counter(v.verdict for v in votes)
     label, n = counts.most_common(1)[0]
     if label == "error" or n * 2 <= len(votes):
@@ -388,6 +390,12 @@ def main() -> int:
     if args.update_baseline:
         write_baseline(_DATA / "coherence_baseline.json", verdicts, config, args.model)
         print("baseline updated")
+    new_pages = sorted(pid for pid, s in diff.items() if s == "new")
+    if new_pages and not args.update_baseline:
+        print(
+            f"NOTE: {len(new_pages)} page(s) not in baseline — passing green is "
+            f"not a quality signal until baselined: {', '.join(new_pages)}"
+        )
     for pid, status in sorted(diff.items()):
         print(f"  {pid}: {verdicts[pid].verdict} ({status})")
     return 1 if has_regression(diff) else 0

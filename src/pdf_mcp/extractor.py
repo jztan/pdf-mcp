@@ -431,15 +431,14 @@ def _page_rules(
     h_rules: list[float] = []
     v_rules: list[tuple[float, float, float]] = []
     try:
-        drawings = page.get_drawings()
+        for obj in page.get_drawings():
+            r = obj["rect"]
+            if r.width > pw * _RULE_MIN_H_FRAC and r.height < _RULE_MAX_THICK:
+                h_rules.append(r.y0)
+            elif r.height > ph * _RULE_MIN_V_FRAC and r.width < _RULE_MAX_THICK:
+                v_rules.append((r.x0, r.y0, r.y1))
     except Exception:
         return [], []
-    for obj in drawings:
-        r = obj["rect"]
-        if r.width > pw * _RULE_MIN_H_FRAC and r.height < _RULE_MAX_THICK:
-            h_rules.append(r.y0)
-        elif r.height > ph * _RULE_MIN_V_FRAC and r.width < _RULE_MAX_THICK:
-            v_rules.append((r.x0, r.y0, r.y1))
     return sorted(h_rules), v_rules
 
 

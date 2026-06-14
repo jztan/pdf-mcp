@@ -2251,6 +2251,18 @@ def test_page_rules_finds_horizontal_and_vertical_rules():
     assert len(v) == 1 and round(v[0][0]) == 300
 
 
+def test_page_rules_degrades_to_empty_on_drawing_error():
+    from pdf_mcp.extractor import _page_rules
+
+    class _BadDrawPage:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_drawings(self):
+            return [{"type": "s"}]  # malformed: missing "rect" -> must not crash
+
+    assert _page_rules(_BadDrawPage()) == ([], [])
+
+
 def _hglyph(x, y, t="x"):
     return {"text": t, "x0": x, "y0": y, "x1": x + 8, "y1": y + 10, "vertical": True}
 

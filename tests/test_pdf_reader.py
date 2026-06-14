@@ -1806,6 +1806,32 @@ def test_is_multi_column_layout_single_or_empty():
     assert _is_multi_column_layout([pymupdf.Rect(0, 0, 300, 800)]) is False
 
 
+def test_is_multi_column_layout_accepts_up_to_ceiling():
+    """Genuine multi-column (2..MAX) stays True — academic 2-col, dense ~3-4."""
+    import pymupdf
+    from pdf_mcp.extractor import _MAX_COLUMNS, _is_multi_column_layout
+
+    # MAX tall, full-height boxes -> still a real (if dense) column layout.
+    boxes = [pymupdf.Rect(i * 10, 0, i * 10 + 5, 800) for i in range(_MAX_COLUMNS)]
+    assert _is_multi_column_layout(boxes) is True
+
+
+def test_is_multi_column_layout_rejects_over_segmented():
+    """Degenerate over-segmentation (e.g. Sodegaura p4: 74 tall boxes) -> False.
+
+    The detector shatters some vertical/mixed pages into dozens of tall slivers;
+    clipping each would produce glyph-soup + duplication. More 'columns' than any
+    real layout has => treat as degenerate and fall back to positional sort.
+    """
+    import pymupdf
+    from pdf_mcp.extractor import _MAX_COLUMNS, _is_multi_column_layout
+
+    over = [pymupdf.Rect(i * 5, 0, i * 5 + 4, 800) for i in range(_MAX_COLUMNS + 1)]
+    assert _is_multi_column_layout(over) is False
+    soup = [pymupdf.Rect(i * 5, 0, i * 5 + 4, 800) for i in range(74)]
+    assert _is_multi_column_layout(soup) is False
+
+
 def test_author_grid_title_page_reads_row_major(monkeypatch):
     """Regression: a multi-author title-page grid extracts in visual row order.
 

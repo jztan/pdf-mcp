@@ -171,6 +171,18 @@ def detect_column_boxes(page: Any) -> list[Any]:
 # staying well below genuine half-height columns.
 _COLUMN_MIN_HEIGHT_FRAC = 0.25
 
+# Above this many detected "tall" columns, the layout is treated as degenerate
+# over-segmentation (the column detector shattering a vertical/mixed page into
+# dozens of slivers), NOT a real multi-column page. Clipping each sliver yields
+# glyph-soup + duplication, so such pages fall back to positional-sort
+# extraction. Set well above any genuine layout — academic 2-col = 2, dense
+# magazine ~3-4, even a broadsheet newspaper ~9-15 — yet far below the 74 that
+# motivated this. The 74-vs-real gap is wide, so 16 buys margin against
+# regressing dense layouts absent from our corpus (count alone can't tell a
+# legit dense layout from over-segmented garbage; the robust overlap signal is
+# deferred — see the design spec).
+_MAX_COLUMNS = 16
+
 
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
@@ -178,7 +190,9 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
     Guards against ``detect_column_boxes`` over-segmenting a single-column page
     whose top is a visual grid (author/affiliation blocks, badge rows) into many
     short side-by-side boxes — reading those column-by-column reorders content
-    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``.
+    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``. True
+    only when 2..``_MAX_COLUMNS`` boxes are tall enough to be real columns; above
+    the ceiling the layout is degenerate over-segmentation — see ``_MAX_COLUMNS``.
     """
     if len(boxes) <= 1:
         return False
@@ -186,7 +200,9 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
     if max_height <= 0:
         return False
     tall = sum(1 for box in boxes if box.height >= _COLUMN_MIN_HEIGHT_FRAC * max_height)
-    return tall >= 2
+    # Lower bound: need >=2 real columns. Upper bound (_MAX_COLUMNS): more than
+    # any genuine layout has => degenerate over-segmentation, use positional sort.
+    return 2 <= tall <= _MAX_COLUMNS
 
 
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:

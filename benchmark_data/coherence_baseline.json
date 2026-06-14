@@ -6,10 +6,25 @@
   },
   "model": "claude-opus-4-8",
   "pages": {
+    "arxiv-0705.4297-p4-ltr-1col": "coherent",
+    "arxiv-0706.0028-p4-ltr-1col": "coherent",
+    "arxiv-0707.0311-p4-ltr-1col": "coherent",
+    "arxiv-0709.4466-p4-ltr-2col": "coherent",
+    "arxiv-0710.2740-p4-ltr-1col": "coherent",
+    "arxiv-1307.7059-p2-ltr-2col": "coherent",
+    "arxiv-1808.03354-p2-ltr-2col": "coherent",
+    "chukobungaku-104-52-p7-academic": "scrambled",
     "ibk-72-102-academic-2col": "scrambled",
+    "ibk-72-102-p4-academic-2col": "scrambled",
+    "iwaki-p1-pure-vert": "scrambled",
     "iwaki-p3-magazine-vert": "scrambled",
+    "iwaki-p6-mixed-orient": "scrambled",
+    "nihonbungaku-64-11-p4-academic": "scrambled",
+    "sodegaura-p3-pure-vert": "scrambled",
     "sodegaura-p4-mixed-orient": "scrambled",
     "transformer-p4-ltr-2col": "coherent",
-    "yamato-p10-pure-vert": "scrambled"
+    "yamato-p10-pure-vert": "scrambled",
+    "yamato-p4-mixed-orient": "scrambled",
+    "yamato-p9-pure-vert": "scrambled"
   }
 }

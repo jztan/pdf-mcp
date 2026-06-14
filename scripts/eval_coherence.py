@@ -3,8 +3,8 @@
 Has Claude read pdf-mcp's extracted text and classify reading-order coherence as
 coherent / partial / scrambled. Calibrates the judge against fixed-text gold
 fixtures, judges a corpus via majority-of-3, and diffs against a committed
-baseline so extraction-quality regressions are caught. See
-docs_internal/specs/2026-06-13-coherence-eval-harness-design.md.
+baseline so extraction-quality regressions are caught. See the
+coherence-eval-harness design spec for the full rationale.
 """
 
 from __future__ import annotations

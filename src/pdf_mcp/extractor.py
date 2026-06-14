@@ -188,8 +188,13 @@ _MAX_COLUMNS = 16
 # A page routes to the vertical reorder path when vertical glyphs are at least
 # this fraction of all glyphs (and there are at least _VERTICAL_MIN_CHARS of
 # them). Below the fraction, or too few vertical glyphs, it is treated as
-# horizontal and keeps the existing extraction path.
-_VERTICAL_MIN_FRACTION = 0.50
+# horizontal and keeps the existing extraction path. 0.20 (not 0.50) so that
+# horizontal-DOMINANT mixed pages with a substantial vertical region (e.g. a
+# municipal-bulletin directory page that is 26% vertical interview + 74%
+# horizontal listing) still route to the orientation-aware reorder, which
+# handles both orientations — the positional path would scramble the vertical
+# region. 20%+ vertical glyphs is genuinely mixed, not incidental.
+_VERTICAL_MIN_FRACTION = 0.20
 _VERTICAL_MIN_CHARS = 30
 
 

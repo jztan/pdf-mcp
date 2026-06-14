@@ -1981,6 +1981,15 @@ def test_detect_writing_mode_below_min_chars_is_horizontal():
     assert detect_writing_mode(page) == "horizontal"
 
 
+def test_detect_writing_mode_horizontal_dominant_mixed_still_routes():
+    """A horizontal-dominant page with a substantial vertical region (30%, >=30
+    vertical chars) is 'mixed' -> reaches the reorder (gate lowered to 0.20)."""
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 140)]))
+    assert detect_writing_mode(page) == "mixed"
+
+
 def _fake_dict(lines):
     # lines: list of (text, dir, bbox)
     return {

@@ -2289,5 +2289,58 @@ def test_segment_by_rules_merges_close_rules_no_glyph_loss():
     assert len(regions) <= 3  # close rules merged, not 6 strips
 
 
+def test_reorder_vertical_no_rules_uses_single_region(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {"blocks": []}
+
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([], []))
+    calls = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical_glyphs",
+        lambda g, h: calls.setdefault("n", 0)
+        or calls.update(n=calls.get("n", 0) + 1)
+        or "SINGLE",
+    )
+    assert extractor.reorder_vertical(_Page()) == "SINGLE"
+
+
+def test_reorder_vertical_strips_mojibake_before_reorder(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {
+                "blocks": [
+                    {
+                        "lines": [
+                            {
+                                "dir": (0.0, -1.0),
+                                "bbox": (10, 10, 20, 22),
+                                "spans": [{"text": "人ୈ権"}],
+                            }
+                        ]
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([], []))
+    captured = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical_glyphs",
+        lambda g, h: captured.update(text=g[0]["text"]) or "",
+    )
+    extractor.reorder_vertical(_Page())
+    assert captured["text"] == "人権"  # mojibake glyph stripped
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

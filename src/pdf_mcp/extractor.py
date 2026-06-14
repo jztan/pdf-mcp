@@ -373,8 +373,23 @@ def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) ->
 
 
 def reorder_vertical(page: Any) -> str:
-    """Reorder a vertical/mixed page's text from its positioned glyphs."""
-    return reorder_vertical_glyphs(_collect_glyphs(page), page.rect.height)
+    """Reorder a vertical/mixed page's text from its positioned glyphs.
+
+    Strips decorative-font mojibake, then — if the page has page-space rules
+    delimiting articles — segments into regions and reorders each; otherwise
+    reorders the whole page as one region (byte-identical to the rule-free path).
+    """
+    glyphs = _collect_glyphs(page)
+    for g in glyphs:
+        g["text"] = _strip_mojibake(g["text"])
+    glyphs = [g for g in glyphs if g["text"].strip()]
+    page_h = page.rect.height
+    h_rules, v_rules = _page_rules(page)
+    if not h_rules and not v_rules:
+        return reorder_vertical_glyphs(glyphs, page_h)
+    regions = _segment_by_rules(glyphs, h_rules, v_rules, page.rect.width, page_h)
+    parts = [reorder_vertical_glyphs(region, page_h) for region in regions]
+    return "\n\n".join(p for p in parts if p)
 
 
 # Glyphs whose codepoints fall in scripts that never appear in Japanese

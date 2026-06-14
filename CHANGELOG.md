@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vertical-script (tategaki / 直排) reading-order reconstruction for Japanese
   and Chinese PDFs. Text laid out top-to-bottom in right-to-left columns is now
   recovered into correct reading order from PyMuPDF glyph geometry (no new
-  dependency). Works well on academic and bulletin layouts; dense
-  multi-article magazine pages and decorative-font mojibake remain known
-  limitations.
+  dependency). Dense multi-article 広報/magazine pages are segmented into
+  articles via page-layout rules, and decorative-font mojibake (glyphs with no
+  Unicode mapping) is filtered. Works on academic papers, bulletins, and most
+  dense layouts; pages delimited only by colored boxes/headers (not rules) and
+  whole-page font mojibake remain known limitations.
 
 ### Fixed
 - Embedding vectors are now L2-normalized in `embedder.encode`/`encode_query`

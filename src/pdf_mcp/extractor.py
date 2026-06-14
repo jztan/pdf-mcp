@@ -302,6 +302,55 @@ def _valley_tiers(
     return merged
 
 
+# Vertical glyphs within ~this fraction of a glyph-height in x belong to the
+# same column. 0.7 separates adjacent columns (spaced ~1.5x glyph size) while
+# tolerating intra-column kerning/punctuation jitter.
+_COLUMN_X_FRACTION = 0.7
+
+
+def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) -> str:
+    """Reconstruct reading order for a vertical/mixed page from positioned glyphs.
+
+    Vertical glyphs are split into tiers (valley detection), and within each tier
+    ordered into columns right-to-left, top-to-bottom. Horizontal lines are
+    positionally sorted into one region. Regions are emitted top-to-bottom by
+    their starting y. Pure function over the glyph list (no PyMuPDF).
+    """
+    vertical = [g for g in glyphs if g["vertical"]]
+    horizontal = [g for g in glyphs if not g["vertical"]]
+    regions: list[tuple[float, str]] = []  # (region_top_y, text)
+
+    if vertical:
+        unit = statistics.median([g["y1"] - g["y0"] for g in vertical])
+        bounds = _valley_tiers(vertical, page_height, unit)
+        edges = [0.0] + bounds + [page_height + 1.0]
+        for lo, hi in zip(edges, edges[1:]):
+            tier = [g for g in vertical if lo <= (g["y0"] + g["y1"]) / 2 < hi]
+            if not tier:
+                continue
+            tier.sort(
+                key=lambda g: (
+                    -round((g["x0"] + g["x1"]) / 2 / (unit * _COLUMN_X_FRACTION)),
+                    g["y0"],
+                )
+            )
+            regions.append(
+                (min(g["y0"] for g in tier), "".join(g["text"] for g in tier))
+            )
+
+    if horizontal:
+        horizontal.sort(key=lambda g: (round(g["y0"]), g["x0"]))
+        regions.append(
+            (
+                min(g["y0"] for g in horizontal),
+                "\n".join(g["text"] for g in horizontal),
+            )
+        )
+
+    regions.sort(key=lambda r: r[0])
+    return "\n\n".join(text for _, text in regions if text)
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 

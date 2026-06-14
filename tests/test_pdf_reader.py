@@ -2058,5 +2058,90 @@ def test_valley_tiers_two_bands_one_boundary():
     assert 300 < bounds[0] < 520
 
 
+def test_reorder_two_columns_right_to_left():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # left column x=10 reads "あい", right column x=40 reads "うえ"
+    # vertical reading order is right-to-left -> "うえ" then "あい"
+    gs = [
+        {"text": "あ", "x0": 10, "y0": 0, "x1": 18, "y1": 10, "vertical": True},
+        {"text": "い", "x0": 10, "y0": 12, "x1": 18, "y1": 22, "vertical": True},
+        {"text": "う", "x0": 40, "y0": 0, "x1": 48, "y1": 10, "vertical": True},
+        {"text": "え", "x0": 40, "y0": 12, "x1": 48, "y1": 22, "vertical": True},
+    ]
+    assert reorder_vertical_glyphs(gs, page_height=800) == "うえあい"
+
+
+def test_reorder_two_tiers_top_then_bottom():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # top tier (y~40-260) and bottom tier (y~520-740), each one column
+    top = [
+        {
+            "text": "上",
+            "x0": 20,
+            "y0": 40 + i * 10,
+            "x1": 28,
+            "y1": 50 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    bot = [
+        {
+            "text": "下",
+            "x0": 20,
+            "y0": 520 + i * 10,
+            "x1": 28,
+            "y1": 530 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    out = reorder_vertical_glyphs(top + bot, page_height=800)
+    assert out.replace("\n", "").startswith("上")
+    assert out.index("上") < out.index("下")  # top tier before bottom tier
+
+
+def test_reorder_no_vertical_falls_back_to_horizontal_positional():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    gs = [
+        {"text": "second", "x0": 0, "y0": 50, "x1": 60, "y1": 62, "vertical": False},
+        {"text": "first", "x0": 0, "y0": 10, "x1": 60, "y1": 22, "vertical": False},
+    ]
+    out = reorder_vertical_glyphs(gs, page_height=800)
+    assert out.index("first") < out.index("second")  # top-to-bottom
+
+
+def test_reorder_mixed_orders_regions_by_position():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # vertical interview at top, horizontal directory line at bottom
+    vtop = [
+        {
+            "text": "縦",
+            "x0": 20,
+            "y0": 40 + i * 10,
+            "x1": 28,
+            "y1": 50 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    hbot = [
+        {
+            "text": "directory",
+            "x0": 0,
+            "y0": 600,
+            "x1": 90,
+            "y1": 612,
+            "vertical": False,
+        }
+    ]
+    out = reorder_vertical_glyphs(vtop + hbot, page_height=800)
+    assert out.index("縦") < out.index("directory")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

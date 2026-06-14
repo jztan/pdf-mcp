@@ -135,7 +135,7 @@ pdf_get_toc("/path/to/textbook.pdf")
 
 ### `pdf_read_pages`
 
-Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly. On multi-column pages, text is extracted in column reading order when `pdf-mcp[multicolumn]` is installed; without that extra, a positional sort is used, which can interleave columns.
+Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly. On multi-column pages, text is extracted in column reading order when `pdf-mcp[multicolumn]` is installed; without that extra, a positional sort is used, which can interleave columns. Vertical-script pages (Japanese/Chinese tategaki / 直排) are detected automatically and reconstructed into correct top-to-bottom, right-to-left reading order from glyph geometry — no extra required; dense multi-article 広報/magazine pages are segmented into articles via page-layout rules, and decorative-font mojibake is filtered (see `server_info` `extraction.vertical_aware`).
 
 **Parameters:**
 - `path` (string, required) — Path to PDF file.
@@ -451,6 +451,7 @@ Reports which optional features are installed and which configuration values are
 - `version` (string) — `pdf-mcp` release version.
 - `features` (object):
   - `extraction.column_aware` — `{available, description}`. `available` is `true` when the column detector (the `[multicolumn]` extra) is importable; the same predicate the extractor uses, so it never reports a capability extraction doesn't have.
+  - `extraction.vertical_aware` — `{available, description}`. `available` is always `true`: vertical-script (tategaki / 直排) reading-order reconstruction is PyMuPDF-only and needs no extra.
   - `extraction.ocr` — `{available, description}`. `available` reflects `shutil.which("tesseract")`.
   - `search.modes_available` (array) — always includes `"keyword"`; includes `"semantic"` and `"auto"` only when `fastembed` is installed and the configured embedding model is valid.
   - `search.default_mode` (string) — `"auto"`.
@@ -472,6 +473,7 @@ server_info()
 #   "features": {
 #     "extraction": {
 #       "column_aware": {"available": true, "description": "Multi-column PDFs ..."},
+#       "vertical_aware": {"available": true, "description": "Vertical-script (tategaki / 直排) PDFs ..."},
 #       "ocr": {"available": true, "description": "Scanned and image-only PDFs ..."}
 #     },
 #     "search": {

@@ -222,6 +222,34 @@ def detect_writing_mode(page: Any) -> str:
     return "mixed"
 
 
+def _collect_glyphs(page: Any) -> list[dict[str, Any]]:
+    """Flatten ``get_text("dict")`` to glyph/line dicts with orientation.
+
+    For vertical text PyMuPDF emits one glyph per "line"; for horizontal text a
+    line is a full text run. Both become entries with the same shape; the
+    reorder works at this granularity.
+    """
+    glyphs: list[dict[str, Any]] = []
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            text = "".join(span.get("text", "") for span in line.get("spans", []))
+            if not text.strip():
+                continue
+            dx, dy = line.get("dir", (1.0, 0.0))
+            x0, y0, x1, y1 = line["bbox"]
+            glyphs.append(
+                {
+                    "text": text,
+                    "x0": x0,
+                    "y0": y0,
+                    "x1": x1,
+                    "y1": y1,
+                    "vertical": abs(dy) > abs(dx),
+                }
+            )
+    return glyphs
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 

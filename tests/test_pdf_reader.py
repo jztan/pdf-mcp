@@ -1981,5 +1981,52 @@ def test_detect_writing_mode_below_min_chars_is_horizontal():
     assert detect_writing_mode(page) == "horizontal"
 
 
+def _fake_dict(lines):
+    # lines: list of (text, dir, bbox)
+    return {
+        "blocks": [
+            {
+                "lines": [
+                    {"dir": d, "bbox": b, "spans": [{"text": t}]} for t, d, b in lines
+                ]
+            }
+        ]
+    }
+
+
+class _FakeDictPage:
+    def __init__(self, data):
+        self._data = data
+
+    def get_text(self, kind):
+        assert kind == "dict"
+        return self._data
+
+
+def test_collect_glyphs_tags_orientation_and_skips_blank():
+    from pdf_mcp.extractor import _collect_glyphs
+
+    page = _FakeDictPage(
+        _fake_dict(
+            [
+                ("あ", (0.0, -1.0), (10, 0, 20, 12)),  # vertical glyph
+                ("the", (1.0, 0.0), (0, 50, 40, 62)),  # horizontal line
+                ("   ", (1.0, 0.0), (0, 80, 5, 92)),  # blank -> skipped
+            ]
+        )
+    )
+    gs = _collect_glyphs(page)
+    assert len(gs) == 2
+    assert gs[0] == {
+        "text": "あ",
+        "x0": 10,
+        "y0": 0,
+        "x1": 20,
+        "y1": 12,
+        "vertical": True,
+    }
+    assert gs[1]["text"] == "the" and gs[1]["vertical"] is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

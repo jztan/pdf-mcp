@@ -2143,5 +2143,43 @@ def test_reorder_mixed_orders_regions_by_position():
     assert out.index("縦") < out.index("directory")
 
 
+def test_extract_routes_horizontal_to_existing_path(monkeypatch):
+    """A horizontal page must NOT touch the reorder path (Latin unchanged)."""
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"height": 800.0})()
+
+        def get_text(self, kind, **kw):
+            if kind == "blocks":
+                return [(0, 0, 10, 10, "hello world", 0, 0)]
+            return ""
+
+    monkeypatch.setattr(extractor, "detect_writing_mode", lambda p: "horizontal")
+    monkeypatch.setattr(extractor, "detect_column_boxes", lambda p: [])
+    out = extractor.extract_text_from_page(_Page())
+    assert out == "hello world"
+
+
+def test_extract_routes_vertical_to_reorder(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"height": 800.0})()
+
+        def get_text(self, kind, **kw):
+            return {"blocks": []}  # _collect_glyphs sees nothing
+
+    monkeypatch.setattr(extractor, "detect_writing_mode", lambda p: "vertical")
+    called = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical",
+        lambda p: called.update(hit=True) or "REORDERED",
+    )
+    out = extractor.extract_text_from_page(_Page())
+    assert out == "REORDERED" and called.get("hit")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

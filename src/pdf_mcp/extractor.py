@@ -351,6 +351,11 @@ def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) ->
     return "\n\n".join(text for _, text in regions if text)
 
 
+def reorder_vertical(page: Any) -> str:
+    """Reorder a vertical/mixed page's text from its positioned glyphs."""
+    return reorder_vertical_glyphs(_collect_glyphs(page), page.rect.height)
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 
@@ -384,6 +389,8 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         Extracted text content
     """
     if sort_by_position:
+        if detect_writing_mode(page) in ("vertical", "mixed"):
+            return reorder_vertical(page)
         boxes = detect_column_boxes(page)
         if _is_multi_column_layout(boxes):
             # Multi-column: extract each column in reading order so the

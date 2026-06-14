@@ -355,6 +355,7 @@ def _detect_features() -> dict[str, Any]:
     from . import embedder, extractor
 
     column_aware = extractor.column_detection_available()
+    vertical_aware = extractor.vertical_detection_available()
     ocr_available = shutil.which("tesseract") is not None
 
     search: dict[str, Any] = {
@@ -379,6 +380,14 @@ def _detect_features() -> dict[str, Any]:
                     "Multi-column PDFs (academic papers, magazines) extract "
                     "in correct reading order. Requires the 'multicolumn' "
                     "extra."
+                ),
+            },
+            "vertical_aware": {
+                "available": vertical_aware,
+                "description": (
+                    "Vertical-script (tategaki / 直排) PDFs in Japanese and "
+                    "Chinese are reconstructed into correct reading order from "
+                    "glyph geometry. PyMuPDF-only — no extra required."
                 ),
             },
             "ocr": {

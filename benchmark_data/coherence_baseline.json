@@ -20,11 +20,11 @@
     "iwaki-p3-magazine-vert": "coherent",
     "iwaki-p6-mixed-orient": "coherent",
     "nihonbungaku-64-11-p4-academic": "coherent",
-    "sodegaura-p3-pure-vert": "partial",
-    "sodegaura-p4-mixed-orient": "scrambled",
+    "sodegaura-p3-pure-vert": "coherent",
+    "sodegaura-p4-mixed-orient": "partial",
     "transformer-p4-ltr-2col": "coherent",
-    "yamato-p10-pure-vert": "partial",
+    "yamato-p10-pure-vert": "coherent",
     "yamato-p4-mixed-orient": "partial",
-    "yamato-p9-pure-vert": "scrambled"
+    "yamato-p9-pure-vert": "coherent"
   }
 }

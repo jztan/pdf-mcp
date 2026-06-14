@@ -5,6 +5,7 @@ PDF extraction utilities using PyMuPDF.
 import logging
 import os
 import re
+import statistics
 import sys
 import typing
 import warnings
@@ -248,6 +249,57 @@ def _collect_glyphs(page: Any) -> list[dict[str, Any]]:
                 }
             )
     return glyphs
+
+
+# A tier boundary is an interior low-coverage valley in the vertical-glyph
+# y-projection: a bin below this fraction of the median bin coverage, flanked by
+# substantially fuller bins. Dense JP layouts have no near-empty gutters, so we
+# split on relative minima, not absolute whitespace.
+_TIER_VALLEY_FRAC = 0.35
+
+
+def _valley_tiers(
+    vglyphs: list[dict[str, Any]], page_height: float, unit: float
+) -> list[float]:
+    """Y-positions that split vertical glyphs into tiers (段組), or [].
+
+    Splits at *interior* low-coverage valleys in the y-projection: a run of bins
+    below _TIER_VALLEY_FRAC of the median bin coverage that has substantial
+    content both BEFORE and AFTER it (a gutter between two content regions, NOT a
+    page margin / a band's trailing edge). The boundary is the run's midpoint.
+    """
+    nbins = max(20, int(page_height / (unit * 0.8)))
+    binw = page_height / nbins
+    cov = [0] * nbins
+    for g in vglyphs:
+        lo = int(g["y0"] // binw)
+        hi = int(g["y1"] // binw)
+        for i in range(max(0, lo), min(nbins, hi + 1)):
+            cov[i] += 1
+    nonzero = [c for c in cov if c > 0]
+    if not nonzero:
+        return []
+    median = statistics.median(nonzero)
+    threshold = median * _TIER_VALLEY_FRAC
+    bounds: list[float] = []
+    i = 0
+    while i < nbins:
+        if cov[i] < threshold:
+            j = i
+            while j < nbins and cov[j] < threshold:
+                j += 1
+            before = max(cov[:i], default=0)
+            after = max(cov[j:], default=0)
+            if before > median * 0.5 and after > median * 0.5:
+                bounds.append((i + j) / 2 * binw)
+            i = j
+        else:
+            i += 1
+    merged: list[float] = []
+    for b in bounds:
+        if not merged or b - merged[-1] > unit * 2:
+            merged.append(b)
+    return merged
 
 
 def _is_multi_column_layout(boxes: list[Any]) -> bool:

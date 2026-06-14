@@ -2028,5 +2028,35 @@ def test_collect_glyphs_tags_orientation_and_skips_blank():
     assert gs[1]["text"] == "the" and gs[1]["vertical"] is False
 
 
+def _vglyph(x, y0, h=10):
+    return {
+        "text": "x",
+        "x0": x,
+        "y0": y0,
+        "x1": x + 8,
+        "y1": y0 + h,
+        "vertical": True,
+    }
+
+
+def test_valley_tiers_single_band_no_split():
+    from pdf_mcp.extractor import _valley_tiers
+
+    # one dense band near the top, nothing else -> no interior valley
+    gs = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(0, 100, 10)]
+    assert _valley_tiers(gs, page_height=800, unit=10) == []
+
+
+def test_valley_tiers_two_bands_one_boundary():
+    from pdf_mcp.extractor import _valley_tiers
+
+    # two dense bands with an empty gap between ~300 and ~500
+    top = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(40, 300, 10)]
+    bot = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(500, 760, 10)]
+    bounds = _valley_tiers(top + bot, page_height=800, unit=10)
+    assert len(bounds) == 1
+    assert 300 < bounds[0] < 520
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

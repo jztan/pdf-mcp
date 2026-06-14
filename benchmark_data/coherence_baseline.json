@@ -1,0 +1,15 @@
+{
+  "extras_config": {
+    "column_aware": true,
+    "semantic": true,
+    "vertical_aware": false
+  },
+  "model": "claude-opus-4-8",
+  "pages": {
+    "ibk-72-102-academic-2col": "scrambled",
+    "iwaki-p3-magazine-vert": "scrambled",
+    "sodegaura-p4-mixed-orient": "scrambled",
+    "transformer-p4-ltr-2col": "coherent",
+    "yamato-p10-pure-vert": "scrambled"
+  }
+}

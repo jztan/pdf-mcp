@@ -107,9 +107,15 @@ def active_extras_config() -> dict[str, bool]:
     """
     from pdf_mcp import extractor
 
+    # vertical_detection_available exists only on a branch carrying the
+    # [vertical] feature; fall back to False so the harness runs on develop too.
     cfg = {
-        "column_aware": extractor.column_detection_available(),
-        "vertical_aware": extractor.vertical_detection_available(),
+        "column_aware": getattr(
+            extractor, "column_detection_available", lambda: False
+        )(),
+        "vertical_aware": getattr(
+            extractor, "vertical_detection_available", lambda: False
+        )(),
     }
     try:
         from pdf_mcp import config, embedder

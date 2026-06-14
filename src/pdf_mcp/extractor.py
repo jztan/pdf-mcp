@@ -391,6 +391,39 @@ def _strip_mojibake(text: str) -> str:
     return "".join(c for c in text if not (_MOJIBAKE_LO <= ord(c) <= _MOJIBAKE_HI))
 
 
+# A page-space drawing is a "rule" delimiting article regions when it is long
+# and thin. Horizontal rule: spans >=30% of page width, <3pt tall. Vertical
+# rule: spans >=25% of page height, <3pt wide.
+_RULE_MIN_H_FRAC = 0.30
+_RULE_MIN_V_FRAC = 0.25
+_RULE_MAX_THICK = 3.0
+
+
+def _page_rules(
+    page: Any,
+) -> tuple[list[float], list[tuple[float, float, float]]]:
+    """Return (horizontal-rule y-positions, vertical rules as (x, y0, y1)).
+
+    Reads page-space thin drawings from ``get_drawings``; any failure -> ([], []).
+    Nested/transformed drawings (negative coords) are naturally excluded by the
+    length thresholds, which are relative to the page rect.
+    """
+    pw, ph = page.rect.width, page.rect.height
+    h_rules: list[float] = []
+    v_rules: list[tuple[float, float, float]] = []
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return [], []
+    for obj in drawings:
+        r = obj["rect"]
+        if r.width > pw * _RULE_MIN_H_FRAC and r.height < _RULE_MAX_THICK:
+            h_rules.append(r.y0)
+        elif r.height > ph * _RULE_MIN_V_FRAC and r.width < _RULE_MAX_THICK:
+            v_rules.append((r.x0, r.y0, r.y1))
+    return sorted(h_rules), v_rules
+
+
 def vertical_detection_available() -> bool:
     """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
     return True

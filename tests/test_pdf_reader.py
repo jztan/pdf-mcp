@@ -2232,5 +2232,24 @@ def test_strip_mojibake_keeps_cjk_extension_a():
     assert _strip_mojibake("㐀䶿人") == "㐀䶿人"
 
 
+def test_page_rules_finds_horizontal_and_vertical_rules():
+    import pymupdf
+    from pdf_mcp.extractor import _page_rules
+
+    class _DrawPage:
+        rect = pymupdf.Rect(0, 0, 600, 800)
+
+        def get_drawings(self):
+            return [
+                {"rect": pymupdf.Rect(40, 300, 560, 302), "type": "s"},  # h-rule
+                {"rect": pymupdf.Rect(300, 60, 302, 590), "type": "s"},  # v-rule
+                {"rect": pymupdf.Rect(10, 10, 30, 30), "type": "f"},  # tiny: neither
+            ]
+
+    h, v = _page_rules(_DrawPage())
+    assert h == [300.0]
+    assert len(v) == 1 and round(v[0][0]) == 300
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

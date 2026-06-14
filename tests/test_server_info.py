@@ -49,6 +49,16 @@ class TestServerInfo:
                 feats = _detect_features()
                 assert feats["extraction"]["column_aware"]["available"] is state
 
+    def test_server_info_vertical_aware_matches_extractor(self):
+        """vertical_aware.available mirrors the extractor's capability predicate."""
+        result = server_info()
+        vertical = result["features"]["extraction"]["vertical_aware"]
+        assert vertical["available"] is True
+        assert vertical["available"] == extractor.vertical_detection_available()
+
+        feats = _detect_features()
+        assert feats["extraction"]["vertical_aware"]["available"] is True
+
     def test_server_info_semantic_mode_iff_fastembed(self):
         """No fastembed -> modes_available is ['keyword'] and no embedding_model."""
         with patch.object(

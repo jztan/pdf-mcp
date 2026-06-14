@@ -22,6 +22,7 @@ from pdf_mcp.extractor import (
     get_best_paragraph_for_query,
     get_paragraph_for_offset,
     parse_page_range,
+    reorder_vertical_glyphs,
 )
 
 # ============================================================================
@@ -1806,6 +1807,32 @@ def test_is_multi_column_layout_single_or_empty():
     assert _is_multi_column_layout([pymupdf.Rect(0, 0, 300, 800)]) is False
 
 
+def test_is_multi_column_layout_accepts_up_to_ceiling():
+    """Genuine multi-column (2..MAX) stays True — academic 2-col, dense ~3-4."""
+    import pymupdf
+    from pdf_mcp.extractor import _MAX_COLUMNS, _is_multi_column_layout
+
+    # MAX tall, full-height boxes -> still a real (if dense) column layout.
+    boxes = [pymupdf.Rect(i * 10, 0, i * 10 + 5, 800) for i in range(_MAX_COLUMNS)]
+    assert _is_multi_column_layout(boxes) is True
+
+
+def test_is_multi_column_layout_rejects_over_segmented():
+    """Degenerate over-segmentation (e.g. Sodegaura p4: 74 tall boxes) -> False.
+
+    The detector shatters some vertical/mixed pages into dozens of tall slivers;
+    clipping each would produce glyph-soup + duplication. More 'columns' than any
+    real layout has => treat as degenerate and fall back to positional sort.
+    """
+    import pymupdf
+    from pdf_mcp.extractor import _MAX_COLUMNS, _is_multi_column_layout
+
+    over = [pymupdf.Rect(i * 5, 0, i * 5 + 4, 800) for i in range(_MAX_COLUMNS + 1)]
+    assert _is_multi_column_layout(over) is False
+    soup = [pymupdf.Rect(i * 5, 0, i * 5 + 4, 800) for i in range(74)]
+    assert _is_multi_column_layout(soup) is False
+
+
 def test_author_grid_title_page_reads_row_major(monkeypatch):
     """Regression: a multi-author title-page grid extracts in visual row order.
 
@@ -1906,6 +1933,449 @@ class TestPageWorkers:
         results = run_pages(_render_page_worker, args, max_workers=2)
         assert results[0][0] == 0
         assert isinstance(results[0][1], dict)
+
+
+def _fake_rawdict(lines):
+    # lines: list of (dir_tuple, n_chars)
+    return {
+        "blocks": [
+            {"lines": [{"dir": d, "spans": [{"chars": [{}] * n}]} for d, n in lines]}
+        ]
+    }
+
+
+class _FakeRawPage:
+    def __init__(self, data):
+        self._data = data
+
+    def get_text(self, kind):
+        assert kind == "rawdict"
+        return self._data
+
+
+def test_detect_writing_mode_vertical():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 100)]))
+    assert detect_writing_mode(page) == "vertical"
+
+
+def test_detect_writing_mode_horizontal():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((1.0, 0.0), 100)]))
+    assert detect_writing_mode(page) == "horizontal"
+
+
+def test_detect_writing_mode_mixed():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    # 60% vertical -> between 0.50 and 0.80 -> mixed
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 40)]))
+    assert detect_writing_mode(page) == "mixed"
+
+
+def test_detect_writing_mode_below_min_chars_is_horizontal():
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 10)]))  # < _VERTICAL_MIN_CHARS
+    assert detect_writing_mode(page) == "horizontal"
+
+
+def test_detect_writing_mode_horizontal_dominant_mixed_still_routes():
+    """A horizontal-dominant page with a substantial vertical region (30%, >=30
+    vertical chars) is 'mixed' -> reaches the reorder (gate lowered to 0.20)."""
+    from pdf_mcp.extractor import detect_writing_mode
+
+    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 140)]))
+    assert detect_writing_mode(page) == "mixed"
+
+
+def _fake_dict(lines):
+    # lines: list of (text, dir, bbox)
+    return {
+        "blocks": [
+            {
+                "lines": [
+                    {"dir": d, "bbox": b, "spans": [{"text": t}]} for t, d, b in lines
+                ]
+            }
+        ]
+    }
+
+
+class _FakeDictPage:
+    def __init__(self, data):
+        self._data = data
+
+    def get_text(self, kind):
+        assert kind == "dict"
+        return self._data
+
+
+def test_collect_glyphs_tags_orientation_and_skips_blank():
+    from pdf_mcp.extractor import _collect_glyphs
+
+    page = _FakeDictPage(
+        _fake_dict(
+            [
+                ("あ", (0.0, -1.0), (10, 0, 20, 12)),  # vertical glyph
+                ("the", (1.0, 0.0), (0, 50, 40, 62)),  # horizontal line
+                ("   ", (1.0, 0.0), (0, 80, 5, 92)),  # blank -> skipped
+            ]
+        )
+    )
+    gs = _collect_glyphs(page)
+    assert len(gs) == 2
+    assert gs[0] == {
+        "text": "あ",
+        "x0": 10,
+        "y0": 0,
+        "x1": 20,
+        "y1": 12,
+        "vertical": True,
+    }
+    assert gs[1]["text"] == "the" and gs[1]["vertical"] is False
+
+
+def _vglyph(x, y0, h=10):
+    return {
+        "text": "x",
+        "x0": x,
+        "y0": y0,
+        "x1": x + 8,
+        "y1": y0 + h,
+        "vertical": True,
+    }
+
+
+def test_valley_tiers_single_band_no_split():
+    from pdf_mcp.extractor import _valley_tiers
+
+    # one dense band near the top, nothing else -> no interior valley
+    gs = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(0, 100, 10)]
+    assert _valley_tiers(gs, page_height=800, unit=10) == []
+
+
+def test_valley_tiers_two_bands_one_boundary():
+    from pdf_mcp.extractor import _valley_tiers
+
+    # two dense bands with an empty gap between ~300 and ~500
+    top = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(40, 300, 10)]
+    bot = [_vglyph(x, y) for x in range(0, 80, 8) for y in range(500, 760, 10)]
+    bounds = _valley_tiers(top + bot, page_height=800, unit=10)
+    assert len(bounds) == 1
+    assert 300 < bounds[0] < 520
+
+
+def test_reorder_two_columns_right_to_left():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # left column x=10 reads "あい", right column x=40 reads "うえ"
+    # vertical reading order is right-to-left -> "うえ" then "あい"
+    gs = [
+        {"text": "あ", "x0": 10, "y0": 0, "x1": 18, "y1": 10, "vertical": True},
+        {"text": "い", "x0": 10, "y0": 12, "x1": 18, "y1": 22, "vertical": True},
+        {"text": "う", "x0": 40, "y0": 0, "x1": 48, "y1": 10, "vertical": True},
+        {"text": "え", "x0": 40, "y0": 12, "x1": 48, "y1": 22, "vertical": True},
+    ]
+    assert reorder_vertical_glyphs(gs, page_height=800) == "うえあい"
+
+
+def test_reorder_two_tiers_top_then_bottom():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # top tier (y~40-260) and bottom tier (y~520-740), each one column
+    top = [
+        {
+            "text": "上",
+            "x0": 20,
+            "y0": 40 + i * 10,
+            "x1": 28,
+            "y1": 50 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    bot = [
+        {
+            "text": "下",
+            "x0": 20,
+            "y0": 520 + i * 10,
+            "x1": 28,
+            "y1": 530 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    out = reorder_vertical_glyphs(top + bot, page_height=800)
+    assert out.replace("\n", "").startswith("上")
+    assert out.index("上") < out.index("下")  # top tier before bottom tier
+
+
+def test_reorder_no_vertical_falls_back_to_horizontal_positional():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    gs = [
+        {"text": "second", "x0": 0, "y0": 50, "x1": 60, "y1": 62, "vertical": False},
+        {"text": "first", "x0": 0, "y0": 10, "x1": 60, "y1": 22, "vertical": False},
+    ]
+    out = reorder_vertical_glyphs(gs, page_height=800)
+    assert out.index("first") < out.index("second")  # top-to-bottom
+
+
+def test_reorder_mixed_orders_regions_by_position():
+    from pdf_mcp.extractor import reorder_vertical_glyphs
+
+    # vertical interview at top, horizontal directory line at bottom
+    vtop = [
+        {
+            "text": "縦",
+            "x0": 20,
+            "y0": 40 + i * 10,
+            "x1": 28,
+            "y1": 50 + i * 10,
+            "vertical": True,
+        }
+        for i in range(20)
+    ]
+    hbot = [
+        {
+            "text": "directory",
+            "x0": 0,
+            "y0": 600,
+            "x1": 90,
+            "y1": 612,
+            "vertical": False,
+        }
+    ]
+    out = reorder_vertical_glyphs(vtop + hbot, page_height=800)
+    assert out.index("縦") < out.index("directory")
+
+
+def test_extract_routes_horizontal_to_existing_path(monkeypatch):
+    """A horizontal page must NOT touch the reorder path (Latin unchanged)."""
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"height": 800.0})()
+
+        def get_text(self, kind, **kw):
+            if kind == "blocks":
+                return [(0, 0, 10, 10, "hello world", 0, 0)]
+            return ""
+
+    monkeypatch.setattr(extractor, "detect_writing_mode", lambda p: "horizontal")
+    monkeypatch.setattr(extractor, "detect_column_boxes", lambda p: [])
+    out = extractor.extract_text_from_page(_Page())
+    assert out == "hello world"
+
+
+def test_extract_routes_vertical_to_reorder(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"height": 800.0})()
+
+        def get_text(self, kind, **kw):
+            return {"blocks": []}  # _collect_glyphs sees nothing
+
+    monkeypatch.setattr(extractor, "detect_writing_mode", lambda p: "vertical")
+    called = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical",
+        lambda p: called.update(hit=True) or "REORDERED",
+    )
+    out = extractor.extract_text_from_page(_Page())
+    assert out == "REORDERED" and called.get("hit")
+
+
+def _zero_height_vglyph(text, x0, y0, x1):
+    return {"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y0, "vertical": True}
+
+
+def test_reorder_vertical_glyphs_zero_height_no_crash():
+    """Degenerate zero-height glyphs / zero page_height must not ZeroDivisionError."""
+    # All glyphs have zero height -> median unit == 0.
+    glyphs = [
+        _zero_height_vglyph("天", 100.0, 50.0, 110.0),
+        _zero_height_vglyph("地", 100.0, 60.0, 110.0),
+        _zero_height_vglyph("人", 80.0, 50.0, 90.0),
+    ]
+
+    # Both a positive and a non-positive page_height exercise the guards.
+    out = reorder_vertical_glyphs(glyphs, page_height=800.0)
+    assert isinstance(out, str)
+    for g in glyphs:
+        assert g["text"] in out
+
+    out_zero = reorder_vertical_glyphs(glyphs, page_height=0.0)
+    assert isinstance(out_zero, str)
+    for g in glyphs:
+        assert g["text"] in out_zero
+
+
+def test_strip_mojibake_removes_indic_keeps_japanese_and_latin():
+    from pdf_mcp.extractor import _strip_mojibake
+
+    # mojibake = Bengali/Tamil/Odia (broken-font garbage); keep CJK, kana, ASCII
+    assert _strip_mojibake("人ୈ権තදtext") == "人権text"
+    assert _strip_mojibake("こんにちは") == "こんにちは"  # kana untouched
+    assert _strip_mojibake("ABC123") == "ABC123"  # ASCII untouched
+
+
+def test_strip_mojibake_keeps_cjk_extension_a():
+    from pdf_mcp.extractor import _strip_mojibake
+
+    # rare kanji in CJK Ext-A (0x3400-0x4DBF) are legitimate, must NOT be dropped
+    assert _strip_mojibake("㐀䶿人") == "㐀䶿人"
+
+
+def test_page_rules_finds_horizontal_and_vertical_rules():
+    import pymupdf
+    from pdf_mcp.extractor import _page_rules
+
+    class _DrawPage:
+        rect = pymupdf.Rect(0, 0, 600, 800)
+
+        def get_drawings(self):
+            return [
+                {"rect": pymupdf.Rect(40, 300, 560, 302), "type": "s"},  # h-rule
+                {"rect": pymupdf.Rect(300, 60, 302, 590), "type": "s"},  # v-rule
+                {"rect": pymupdf.Rect(10, 10, 30, 30), "type": "f"},  # tiny: neither
+            ]
+
+    h, v = _page_rules(_DrawPage())
+    assert h == [300.0]
+    assert len(v) == 1 and round(v[0][0]) == 300
+
+
+def test_page_rules_degrades_to_empty_on_drawing_error():
+    from pdf_mcp.extractor import _page_rules
+
+    class _BadDrawPage:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_drawings(self):
+            return [{"type": "s"}]  # malformed: missing "rect" -> must not crash
+
+    assert _page_rules(_BadDrawPage()) == ([], [])
+
+
+def _hglyph(x, y, t="x"):
+    return {"text": t, "x0": x, "y0": y, "x1": x + 8, "y1": y + 10, "vertical": True}
+
+
+def test_segment_by_rules_vertical_rule_orders_right_then_left():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    # left column x=50, right column x=400; vertical rule at x=250 splits them.
+    # vertical reading order is right-to-left -> right region first.
+    left = [_hglyph(50, y, "L") for y in range(40, 200, 12)]
+    right = [_hglyph(400, y, "R") for y in range(40, 200, 12)]
+    regions = _segment_by_rules(left + right, [], [(250.0, 0.0, 800.0)], 600, 800)
+    assert len(regions) == 2
+    assert regions[0][0]["text"] == "R" and regions[1][0]["text"] == "L"
+
+
+def test_segment_by_rules_horizontal_rule_orders_top_then_bottom():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    top = [_hglyph(100, y, "T") for y in range(40, 200, 12)]
+    bot = [_hglyph(100, y, "B") for y in range(400, 560, 12)]
+    regions = _segment_by_rules(top + bot, [300.0], [], 600, 800)
+    assert len(regions) == 2
+    assert regions[0][0]["text"] == "T" and regions[1][0]["text"] == "B"
+
+
+def test_segment_by_rules_merges_close_rules_no_glyph_loss():
+    from pdf_mcp.extractor import _segment_by_rules
+
+    # a cluster of rules <20pt apart (a table) must NOT shatter or drop glyphs
+    glyphs = [_hglyph(100, y, "x") for y in range(40, 560, 12)]
+    close_rules = [200.0, 205.0, 210.0, 215.0, 400.0]  # 4 within 20pt
+    regions = _segment_by_rules(glyphs, close_rules, [], 600, 800)
+    kept = sum(len(r) for r in regions)
+    assert kept == len(glyphs)  # no glyph dropped
+    assert len(regions) <= 3  # close rules merged, not 6 strips
+
+
+def test_reorder_vertical_no_rules_uses_single_region(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {"blocks": []}
+
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([], []))
+    calls = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical_glyphs",
+        lambda g, h: calls.setdefault("n", 0)
+        or calls.update(n=calls.get("n", 0) + 1)
+        or "SINGLE",
+    )
+    assert extractor.reorder_vertical(_Page()) == "SINGLE"
+
+
+def test_reorder_vertical_horizontal_rules_only_does_not_segment(monkeypatch):
+    """Only a VERTICAL rule triggers segmentation; horizontal rules alone fall
+    through to the whole-page reorder (valley-tier handles horizontal tiering,
+    and banding on decorative h-rules scrambles content that flows across them).
+    """
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {"blocks": []}
+
+    # h-rules present, NO vertical rule -> must NOT segment
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([300.0, 500.0], []))
+    monkeypatch.setattr(extractor, "reorder_vertical_glyphs", lambda g, h: "SINGLE")
+
+    def _boom(*a, **k):
+        raise AssertionError("_segment_by_rules called for h-rules-only page")
+
+    monkeypatch.setattr(extractor, "_segment_by_rules", _boom)
+    assert extractor.reorder_vertical(_Page()) == "SINGLE"
+
+
+def test_reorder_vertical_strips_mojibake_before_reorder(monkeypatch):
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {
+                "blocks": [
+                    {
+                        "lines": [
+                            {
+                                "dir": (0.0, -1.0),
+                                "bbox": (10, 10, 20, 22),
+                                "spans": [{"text": "人ୈ権"}],
+                            }
+                        ]
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([], []))
+    captured = {}
+    monkeypatch.setattr(
+        extractor,
+        "reorder_vertical_glyphs",
+        lambda g, h: captured.update(text=g[0]["text"]) or "",
+    )
+    extractor.reorder_vertical(_Page())
+    assert captured["text"] == "人権"  # mojibake glyph stripped
 
 
 if __name__ == "__main__":

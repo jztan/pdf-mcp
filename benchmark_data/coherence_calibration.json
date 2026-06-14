@@ -1,0 +1,11 @@
+{
+  "note": "Calibration validates the judge on the UNAMBIGUOUS poles (coherent / scrambled) only. 'partial' is an inherently fuzzy middle band: two hand-crafted 'partial' fixtures were judged 'coherent' and 'scrambled' respectively, so a synthetic partial example can't reliably gate the judge. The eval still emits 'partial' as a corpus verdict; the regression guard cares about crossings into 'scrambled', not coherent<->partial jitter.",
+  "fixtures": [
+    {"id": "ja-coherent", "direction": "vertical-rtl", "expected": "coherent",
+     "text": "磐城農業高校は、市内唯一の農業高校です。その学びは多岐にわたり、野菜作り、園芸、畜産、食品加工から土木技術まで特色豊かな四つの学科に分かれています。生徒たちは、生産者が守ってきた食のバトンをつないでいます。"},
+    {"id": "ja-scrambled", "direction": "vertical-rtl", "expected": "scrambled",
+     "text": "い も 変  護 り か ま 活  ら\n介て し そ      職 が ち な を 番 れ\nも 変  護 り か ま 活  ら"},
+    {"id": "en-coherent", "direction": "horizontal-ltr", "expected": "coherent",
+     "text": "The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder, shown in the left and right halves respectively."}
+  ]
+}

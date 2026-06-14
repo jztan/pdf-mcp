@@ -31,6 +31,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
+| Vertical scripts (Japanese/Chinese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — no extra dependency |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
@@ -45,6 +46,7 @@ Give your agent surgical access to PDFs instead of flooding context with raw tex
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
 - **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
+- **Vertical-script reading order** — Japanese/Chinese vertical text (tategaki / 直排) is reconstructed into correct top-to-bottom, right-to-left order from glyph geometry (PyMuPDF-only, no extra dependency). Handles academic papers, bulletins, and dense multi-article 広報/magazine pages (articles are segmented via page-layout rules); decorative-font mojibake (glyphs that don't map to Unicode) is filtered out. Known limitations: pages whose articles are delimited only by colored boxes/headers rather than rules, and whole-page font mojibake
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
 
@@ -387,6 +389,32 @@ flake8 src/ tests/
 
 # Formatting
 black src/ tests/
+```
+
+### Coherence eval harness
+
+`scripts/eval_coherence.py` has Claude read pdf-mcp's extracted text and
+classify its reading-order coherence (coherent / partial / scrambled) across a
+fixed corpus of representative pages. It catches reading-order scrambling that
+aggregate containment / uniqueness metrics are blind to — those metrics guard
+*performance* regressions, this guards extraction *quality*.
+
+It uses the authenticated `claude` CLI (no API key, no extra dependency — the
+same mechanism as `scripts/release.py`), so the CLI must be installed and signed
+in. Run it from the repo root:
+
+```bash
+uv run python scripts/eval_coherence.py
+```
+
+The run judges each corpus page (majority-of-3), writes
+`benchmark_data/coherence_results.md`, and diffs the verdicts against the
+committed baseline (`benchmark_data/coherence_baseline.json`), exiting non-zero
+on any regression. To re-baseline after an *intended* extraction improvement,
+run the eval, review `benchmark_data/coherence_results.md`, and only then:
+
+```bash
+uv run python scripts/eval_coherence.py --update-baseline
 ```
 
 ## Roadmap

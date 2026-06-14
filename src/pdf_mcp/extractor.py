@@ -5,6 +5,7 @@ PDF extraction utilities using PyMuPDF.
 import logging
 import os
 import re
+import statistics
 import sys
 import typing
 import warnings
@@ -171,6 +172,325 @@ def detect_column_boxes(page: Any) -> list[Any]:
 # staying well below genuine half-height columns.
 _COLUMN_MIN_HEIGHT_FRAC = 0.25
 
+# Above this many detected "tall" columns, the layout is treated as degenerate
+# over-segmentation (the column detector shattering a vertical/mixed page into
+# dozens of slivers), NOT a real multi-column page. Clipping each sliver yields
+# glyph-soup + duplication, so such pages fall back to positional-sort
+# extraction. Set well above any genuine layout — academic 2-col = 2, dense
+# magazine ~3-4, even a broadsheet newspaper ~9-15 — yet far below the 74 that
+# motivated this. The 74-vs-real gap is wide, so 16 buys margin against
+# regressing dense layouts absent from our corpus (count alone can't tell a
+# legit dense layout from over-segmented garbage; the robust overlap signal is
+# deferred — see the design spec).
+_MAX_COLUMNS = 16
+
+
+# A page routes to the vertical reorder path when vertical glyphs are at least
+# this fraction of all glyphs (and there are at least _VERTICAL_MIN_CHARS of
+# them). Below the fraction, or too few vertical glyphs, it is treated as
+# horizontal and keeps the existing extraction path. 0.20 (not 0.50) so that
+# horizontal-DOMINANT mixed pages with a substantial vertical region (e.g. a
+# municipal-bulletin directory page that is 26% vertical interview + 74%
+# horizontal listing) still route to the orientation-aware reorder, which
+# handles both orientations — the positional path would scramble the vertical
+# region. 20%+ vertical glyphs is genuinely mixed, not incidental.
+_VERTICAL_MIN_FRACTION = 0.20
+_VERTICAL_MIN_CHARS = 30
+
+
+def detect_writing_mode(page: Any) -> str:
+    """Classify a page as 'vertical', 'mixed', or 'horizontal'.
+
+    Builds a glyph-orientation histogram from ``get_text("rawdict")``: a text
+    line whose direction vector is closer to vertical (|dy| > |dx|) contributes
+    its glyphs to the vertical count, otherwise horizontal. 'vertical' and
+    'mixed' route to the reorder path; 'horizontal' keeps the existing path.
+    """
+    vertical = 0
+    horizontal = 0
+    data = page.get_text("rawdict")
+    for block in data.get("blocks", []):
+        for line in block.get("lines", []):
+            dx, dy = line.get("dir", (1.0, 0.0))
+            nchars = sum(len(span.get("chars", [])) for span in line.get("spans", []))
+            if abs(dy) > abs(dx):
+                vertical += nchars
+            else:
+                horizontal += nchars
+    total = vertical + horizontal
+    if total == 0 or vertical < _VERTICAL_MIN_CHARS:
+        return "horizontal"
+    fraction = vertical / total
+    if fraction < _VERTICAL_MIN_FRACTION:
+        return "horizontal"
+    if fraction >= 0.8:
+        return "vertical"
+    return "mixed"
+
+
+def _collect_glyphs(page: Any) -> list[dict[str, Any]]:
+    """Flatten ``get_text("dict")`` to glyph/line dicts with orientation.
+
+    For vertical text PyMuPDF emits one glyph per "line"; for horizontal text a
+    line is a full text run. Both become entries with the same shape; the
+    reorder works at this granularity.
+    """
+    glyphs: list[dict[str, Any]] = []
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            text = "".join(span.get("text", "") for span in line.get("spans", []))
+            if not text.strip():
+                continue
+            dx, dy = line.get("dir", (1.0, 0.0))
+            x0, y0, x1, y1 = line["bbox"]
+            glyphs.append(
+                {
+                    "text": text,
+                    "x0": x0,
+                    "y0": y0,
+                    "x1": x1,
+                    "y1": y1,
+                    "vertical": abs(dy) > abs(dx),
+                }
+            )
+    return glyphs
+
+
+# A tier boundary is an interior low-coverage valley in the vertical-glyph
+# y-projection: a bin below this fraction of the median bin coverage, flanked by
+# substantially fuller bins. Dense JP layouts have no near-empty gutters, so we
+# split on relative minima, not absolute whitespace.
+_TIER_VALLEY_FRAC = 0.35
+
+
+def _valley_tiers(
+    vglyphs: list[dict[str, Any]], page_height: float, unit: float
+) -> list[float]:
+    """Y-positions that split vertical glyphs into tiers (段組), or [].
+
+    Splits at *interior* low-coverage valleys in the y-projection: a run of bins
+    below _TIER_VALLEY_FRAC of the median bin coverage that has substantial
+    content both BEFORE and AFTER it (a gutter between two content regions, NOT a
+    page margin / a band's trailing edge). The boundary is the run's midpoint.
+    """
+    if page_height <= 0 or unit <= 0:
+        return []
+    nbins = max(20, int(page_height / (unit * 0.8)))
+    binw = page_height / nbins
+    cov = [0] * nbins
+    for g in vglyphs:
+        lo = int(g["y0"] // binw)
+        hi = int(g["y1"] // binw)
+        for i in range(max(0, lo), min(nbins, hi + 1)):
+            cov[i] += 1
+    nonzero = [c for c in cov if c > 0]
+    if not nonzero:
+        return []
+    median = statistics.median(nonzero)
+    threshold = median * _TIER_VALLEY_FRAC
+    bounds: list[float] = []
+    i = 0
+    while i < nbins:
+        if cov[i] < threshold:
+            j = i
+            while j < nbins and cov[j] < threshold:
+                j += 1
+            before = max(cov[:i], default=0)
+            after = max(cov[j:], default=0)
+            if before > median * 0.5 and after > median * 0.5:
+                bounds.append((i + j) / 2 * binw)
+            i = j
+        else:
+            i += 1
+    merged: list[float] = []
+    for b in bounds:
+        if not merged or b - merged[-1] > unit * 2:
+            merged.append(b)
+    return merged
+
+
+# Vertical glyphs within ~this fraction of a glyph-height in x belong to the
+# same column. 0.7 separates adjacent columns (spaced ~1.5x glyph size) while
+# tolerating intra-column kerning/punctuation jitter.
+_COLUMN_X_FRACTION = 0.7
+
+
+def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) -> str:
+    """Reconstruct reading order for a vertical/mixed page from positioned glyphs.
+
+    Vertical glyphs are split into tiers (valley detection), and within each tier
+    ordered into columns right-to-left, top-to-bottom. Horizontal lines are
+    positionally sorted into one region. Regions are emitted top-to-bottom by
+    their starting y. Pure function over the glyph list (no PyMuPDF).
+    """
+    vertical = [g for g in glyphs if g["vertical"]]
+    horizontal = [g for g in glyphs if not g["vertical"]]
+    regions: list[tuple[float, str]] = []  # (region_top_y, text)
+
+    if vertical:
+        unit = statistics.median([g["y1"] - g["y0"] for g in vertical])
+        degenerate = unit <= 0 or page_height <= 0
+
+        def _column_key(g: dict[str, Any]) -> tuple[float, float]:
+            x_center = (g["x0"] + g["x1"]) / 2
+            if degenerate:
+                # No reliable glyph-height scale: order columns RTL by raw
+                # x-center, then top-to-bottom within a column.
+                return (-x_center, g["y0"])
+            return (-round(x_center / (unit * _COLUMN_X_FRACTION)), g["y0"])
+
+        if degenerate:
+            # A zero/negative unit or page_height makes binned valley detection
+            # meaningless (and unsafe to divide by) — emit one tier holding all
+            # vertical glyphs so the text is still returned.
+            tiers = [list(vertical)]
+        else:
+            bounds = _valley_tiers(vertical, page_height, unit)
+            edges = [0.0] + bounds + [page_height + 1.0]
+            tiers = [
+                [g for g in vertical if lo <= (g["y0"] + g["y1"]) / 2 < hi]
+                for lo, hi in zip(edges, edges[1:])
+            ]
+        for tier in tiers:
+            if not tier:
+                continue
+            tier.sort(key=_column_key)
+            regions.append(
+                (min(g["y0"] for g in tier), "".join(g["text"] for g in tier))
+            )
+
+    if horizontal:
+        horizontal.sort(key=lambda g: (round(g["y0"]), g["x0"]))
+        regions.append(
+            (
+                min(g["y0"] for g in horizontal),
+                "\n".join(g["text"] for g in horizontal),
+            )
+        )
+
+    regions.sort(key=lambda r: r[0])
+    return "\n\n".join(text for _, text in regions if text)
+
+
+def reorder_vertical(page: Any) -> str:
+    """Reorder a vertical/mixed page's text from its positioned glyphs.
+
+    Strips decorative-font mojibake, then — if the page has a page-space
+    VERTICAL rule (side-by-side articles that the valley-tier reorder can't
+    separate) — segments into regions and reorders each. Pages with only
+    horizontal rules (or none) fall through to the whole-page reorder: its
+    valley-tier detection already handles horizontal tiering, and banding on
+    horizontal rules that are decorative (not article separators) scrambles
+    content that flows across them.
+    """
+    glyphs = _collect_glyphs(page)
+    for g in glyphs:
+        g["text"] = _strip_mojibake(g["text"])
+    glyphs = [g for g in glyphs if g["text"].strip()]
+    page_h = page.rect.height
+    h_rules, v_rules = _page_rules(page)
+    if not v_rules:
+        return reorder_vertical_glyphs(glyphs, page_h)
+    regions = _segment_by_rules(glyphs, h_rules, v_rules, page.rect.width, page_h)
+    parts = [reorder_vertical_glyphs(region, page_h) for region in regions]
+    return "\n\n".join(p for p in parts if p)
+
+
+# Glyphs whose codepoints fall in scripts that never appear in Japanese
+# (Hebrew/Arabic + Indic + SE-Asian band). Broken decorative display fonts with
+# no Unicode map render titles as these; strip them so they don't interrupt the
+# reordered prose. A no-op on real Japanese/Latin text — does NOT touch CJK
+# (0x4E00+), CJK Ext-A (0x3400+), kana, ASCII, or fullwidth forms.
+_MOJIBAKE_LO = 0x0590
+_MOJIBAKE_HI = 0x1CFF
+
+
+def _strip_mojibake(text: str) -> str:
+    """Remove glyphs in the never-in-Japanese 0x0590-0x1CFF band."""
+    return "".join(c for c in text if not (_MOJIBAKE_LO <= ord(c) <= _MOJIBAKE_HI))
+
+
+# A page-space drawing is a "rule" delimiting article regions when it is long
+# and thin. Horizontal rule: spans >=30% of page width, <3pt tall. Vertical
+# rule: spans >=25% of page height, <3pt wide.
+_RULE_MIN_H_FRAC = 0.30
+_RULE_MIN_V_FRAC = 0.25
+_RULE_MAX_THICK = 3.0
+
+
+def _page_rules(
+    page: Any,
+) -> tuple[list[float], list[tuple[float, float, float]]]:
+    """Return (horizontal-rule y-positions, vertical rules as (x, y0, y1)).
+
+    Reads page-space thin drawings from ``get_drawings``; any failure -> ([], []).
+    Nested/transformed drawings (negative coords) are naturally excluded by the
+    length thresholds, which are relative to the page rect.
+    """
+    pw, ph = page.rect.width, page.rect.height
+    h_rules: list[float] = []
+    v_rules: list[tuple[float, float, float]] = []
+    try:
+        for obj in page.get_drawings():
+            r = obj["rect"]
+            if r.width > pw * _RULE_MIN_H_FRAC and r.height < _RULE_MAX_THICK:
+                h_rules.append(r.y0)
+            elif r.height > ph * _RULE_MIN_V_FRAC and r.width < _RULE_MAX_THICK:
+                v_rules.append((r.x0, r.y0, r.y1))
+    except Exception:
+        return [], []
+    return sorted(h_rules), v_rules
+
+
+# Bands thinner than this are merged with the previous band (over-segmentation
+# guard) — a dense run of rules (e.g. a 20-row table) must not shatter the page
+# into unreadable strips. Merging (vs dropping) ensures no glyph is lost.
+_MIN_BAND_PT = 20.0
+
+
+def _segment_by_rules(
+    glyphs: list[dict[str, Any]],
+    h_rules: list[float],
+    v_rules: list[tuple[float, float, float]],
+    page_w: float,
+    page_h: float,
+) -> list[list[dict[str, Any]]]:
+    """Partition glyphs into article regions in vertical reading order.
+
+    Horizontal rules split the page into bands (top-to-bottom); within a band,
+    vertical rules spanning it split into regions ordered right-to-left (vertical
+    RTL). Rules closer than _MIN_BAND_PT collapse so a glyph is never dropped.
+    Returns regions as glyph lists, already in reading order.
+    """
+    edges = [0.0]
+    for y in sorted(h_rules):
+        if y - edges[-1] >= _MIN_BAND_PT:
+            edges.append(y)
+    edges.append(page_h)
+    ordered: list[tuple[tuple[int, float], list[dict[str, Any]]]] = []
+    for bi in range(len(edges) - 1):
+        by0, by1 = edges[bi], edges[bi + 1]
+        band = [g for g in glyphs if by0 <= (g["y0"] + g["y1"]) / 2 < by1]
+        if not band:
+            continue
+        vxs = sorted(
+            {round(x) for x, vy0, vy1 in v_rules if vy0 < by1 - 5 and vy1 > by0 + 5}
+        )
+        xs = [0.0] + [float(x) for x in vxs] + [page_w]
+        for xi in range(len(xs) - 1):
+            region = [g for g in band if xs[xi] <= (g["x0"] + g["x1"]) / 2 < xs[xi + 1]]
+            if not region:
+                continue
+            cx = sum((g["x0"] + g["x1"]) / 2 for g in region) / len(region)
+            ordered.append(((bi, -cx), region))
+    ordered.sort(key=lambda item: item[0])
+    return [region for _, region in ordered]
+
+
+def vertical_detection_available() -> bool:
+    """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
+    return True
+
 
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
@@ -178,7 +498,9 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
     Guards against ``detect_column_boxes`` over-segmenting a single-column page
     whose top is a visual grid (author/affiliation blocks, badge rows) into many
     short side-by-side boxes — reading those column-by-column reorders content
-    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``.
+    that is meant to be read row-by-row. See ``_COLUMN_MIN_HEIGHT_FRAC``. True
+    only when 2..``_MAX_COLUMNS`` boxes are tall enough to be real columns; above
+    the ceiling the layout is degenerate over-segmentation — see ``_MAX_COLUMNS``.
     """
     if len(boxes) <= 1:
         return False
@@ -186,7 +508,9 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
     if max_height <= 0:
         return False
     tall = sum(1 for box in boxes if box.height >= _COLUMN_MIN_HEIGHT_FRAC * max_height)
-    return tall >= 2
+    # Lower bound: need >=2 real columns. Upper bound (_MAX_COLUMNS): more than
+    # any genuine layout has => degenerate over-segmentation, use positional sort.
+    return 2 <= tall <= _MAX_COLUMNS
 
 
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
@@ -201,6 +525,8 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         Extracted text content
     """
     if sort_by_position:
+        if detect_writing_mode(page) in ("vertical", "mixed"):
+            return reorder_vertical(page)
         boxes = detect_column_boxes(page)
         if _is_multi_column_layout(boxes):
             # Multi-column: extract each column in reading order so the

@@ -22,6 +22,7 @@ from pdf_mcp.extractor import (
     get_best_paragraph_for_query,
     get_paragraph_for_offset,
     parse_page_range,
+    reorder_vertical_glyphs,
 )
 
 # ============================================================================
@@ -2188,6 +2189,31 @@ def test_extract_routes_vertical_to_reorder(monkeypatch):
     )
     out = extractor.extract_text_from_page(_Page())
     assert out == "REORDERED" and called.get("hit")
+
+
+def _zero_height_vglyph(text, x0, y0, x1):
+    return {"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y0, "vertical": True}
+
+
+def test_reorder_vertical_glyphs_zero_height_no_crash():
+    """Degenerate zero-height glyphs / zero page_height must not ZeroDivisionError."""
+    # All glyphs have zero height -> median unit == 0.
+    glyphs = [
+        _zero_height_vglyph("天", 100.0, 50.0, 110.0),
+        _zero_height_vglyph("地", 100.0, 60.0, 110.0),
+        _zero_height_vglyph("人", 80.0, 50.0, 90.0),
+    ]
+
+    # Both a positive and a non-positive page_height exercise the guards.
+    out = reorder_vertical_glyphs(glyphs, page_height=800.0)
+    assert isinstance(out, str)
+    for g in glyphs:
+        assert g["text"] in out
+
+    out_zero = reorder_vertical_glyphs(glyphs, page_height=0.0)
+    assert isinstance(out_zero, str)
+    for g in glyphs:
+        assert g["text"] in out_zero
 
 
 if __name__ == "__main__":

@@ -273,6 +273,8 @@ def _valley_tiers(
     content both BEFORE and AFTER it (a gutter between two content regions, NOT a
     page margin / a band's trailing edge). The boundary is the run's midpoint.
     """
+    if page_height <= 0 or unit <= 0:
+        return []
     nbins = max(20, int(page_height / (unit * 0.8)))
     binw = page_height / nbins
     cov = [0] * nbins
@@ -327,18 +329,32 @@ def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) ->
 
     if vertical:
         unit = statistics.median([g["y1"] - g["y0"] for g in vertical])
-        bounds = _valley_tiers(vertical, page_height, unit)
-        edges = [0.0] + bounds + [page_height + 1.0]
-        for lo, hi in zip(edges, edges[1:]):
-            tier = [g for g in vertical if lo <= (g["y0"] + g["y1"]) / 2 < hi]
+        degenerate = unit <= 0 or page_height <= 0
+
+        def _column_key(g: dict[str, Any]) -> tuple[float, float]:
+            x_center = (g["x0"] + g["x1"]) / 2
+            if degenerate:
+                # No reliable glyph-height scale: order columns RTL by raw
+                # x-center, then top-to-bottom within a column.
+                return (-x_center, g["y0"])
+            return (-round(x_center / (unit * _COLUMN_X_FRACTION)), g["y0"])
+
+        if degenerate:
+            # A zero/negative unit or page_height makes binned valley detection
+            # meaningless (and unsafe to divide by) — emit one tier holding all
+            # vertical glyphs so the text is still returned.
+            tiers = [list(vertical)]
+        else:
+            bounds = _valley_tiers(vertical, page_height, unit)
+            edges = [0.0] + bounds + [page_height + 1.0]
+            tiers = [
+                [g for g in vertical if lo <= (g["y0"] + g["y1"]) / 2 < hi]
+                for lo, hi in zip(edges, edges[1:])
+            ]
+        for tier in tiers:
             if not tier:
                 continue
-            tier.sort(
-                key=lambda g: (
-                    -round((g["x0"] + g["x1"]) / 2 / (unit * _COLUMN_X_FRACTION)),
-                    g["y0"],
-                )
-            )
+            tier.sort(key=_column_key)
             regions.append(
                 (min(g["y0"] for g in tier), "".join(g["text"] for g in tier))
             )

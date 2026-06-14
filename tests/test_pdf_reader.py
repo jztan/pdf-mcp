@@ -2310,6 +2310,30 @@ def test_reorder_vertical_no_rules_uses_single_region(monkeypatch):
     assert extractor.reorder_vertical(_Page()) == "SINGLE"
 
 
+def test_reorder_vertical_horizontal_rules_only_does_not_segment(monkeypatch):
+    """Only a VERTICAL rule triggers segmentation; horizontal rules alone fall
+    through to the whole-page reorder (valley-tier handles horizontal tiering,
+    and banding on decorative h-rules scrambles content that flows across them).
+    """
+    from pdf_mcp import extractor
+
+    class _Page:
+        rect = type("R", (), {"width": 600.0, "height": 800.0})()
+
+        def get_text(self, kind):
+            return {"blocks": []}
+
+    # h-rules present, NO vertical rule -> must NOT segment
+    monkeypatch.setattr(extractor, "_page_rules", lambda p: ([300.0, 500.0], []))
+    monkeypatch.setattr(extractor, "reorder_vertical_glyphs", lambda g, h: "SINGLE")
+
+    def _boom(*a, **k):
+        raise AssertionError("_segment_by_rules called for h-rules-only page")
+
+    monkeypatch.setattr(extractor, "_segment_by_rules", _boom)
+    assert extractor.reorder_vertical(_Page()) == "SINGLE"
+
+
 def test_reorder_vertical_strips_mojibake_before_reorder(monkeypatch):
     from pdf_mcp import extractor
 

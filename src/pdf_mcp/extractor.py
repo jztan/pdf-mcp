@@ -375,9 +375,13 @@ def reorder_vertical_glyphs(glyphs: list[dict[str, Any]], page_height: float) ->
 def reorder_vertical(page: Any) -> str:
     """Reorder a vertical/mixed page's text from its positioned glyphs.
 
-    Strips decorative-font mojibake, then — if the page has page-space rules
-    delimiting articles — segments into regions and reorders each; otherwise
-    reorders the whole page as one region (byte-identical to the rule-free path).
+    Strips decorative-font mojibake, then — if the page has a page-space
+    VERTICAL rule (side-by-side articles that the valley-tier reorder can't
+    separate) — segments into regions and reorders each. Pages with only
+    horizontal rules (or none) fall through to the whole-page reorder: its
+    valley-tier detection already handles horizontal tiering, and banding on
+    horizontal rules that are decorative (not article separators) scrambles
+    content that flows across them.
     """
     glyphs = _collect_glyphs(page)
     for g in glyphs:
@@ -385,7 +389,7 @@ def reorder_vertical(page: Any) -> str:
     glyphs = [g for g in glyphs if g["text"].strip()]
     page_h = page.rect.height
     h_rules, v_rules = _page_rules(page)
-    if not h_rules and not v_rules:
+    if not v_rules:
         return reorder_vertical_glyphs(glyphs, page_h)
     regions = _segment_by_rules(glyphs, h_rules, v_rules, page.rect.width, page_h)
     parts = [reorder_vertical_glyphs(region, page_h) for region in regions]

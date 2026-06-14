@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
@@ -140,6 +141,10 @@ def config_matches(a: dict[str, bool], b: dict[str, bool]) -> bool:
 
 DEFAULT_MODEL = "claude-opus-4-8"
 _JUDGE_TIMEOUT_S = 120
+# Pages are judged concurrently — each judge call is an independent `claude -p`
+# subprocess (I/O-bound, releases the GIL), so threads give real parallelism.
+# Bounded so we don't spawn an unreasonable number of CLI processes at once.
+_JUDGE_WORKERS = 6
 # Deny every tool the judge could reach for — this is a pure read-and-classify
 # task. Mirror scripts/release.py's NOTES_DENIED_TOOLS (copy its exact list).
 DENIED_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,TodoWrite"
@@ -373,13 +378,17 @@ def main() -> int:
             f"(run={config}, baseline={base_config}); comparison is invalid."
         )
 
-    verdicts: dict[str, Verdict] = {}
-    for entry in corpus["pages"]:
+    def _judge_entry(entry: dict) -> tuple[str, Verdict]:
         text, status = extract_page_text(entry)
         if status != "ok" or text is None:
-            verdicts[entry["id"]] = Verdict("unavailable", "source unavailable")
-            continue
-        verdicts[entry["id"]] = judge_majority(text, entry["direction"], judge)
+            return entry["id"], Verdict("unavailable", "source unavailable")
+        return entry["id"], judge_majority(text, entry["direction"], judge)
+
+    # pool.map preserves input order, so verdicts keep corpus order.
+    verdicts: dict[str, Verdict] = {}
+    with ThreadPoolExecutor(max_workers=_JUDGE_WORKERS) as pool:
+        for pid, verdict in pool.map(_judge_entry, corpus["pages"]):
+            verdicts[pid] = verdict
 
     current = {pid: v.verdict for pid, v in verdicts.items()}
     diff = compare(base_verdicts, current)

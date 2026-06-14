@@ -389,6 +389,32 @@ flake8 src/ tests/
 black src/ tests/
 ```
 
+### Coherence eval harness
+
+`scripts/eval_coherence.py` has Claude read pdf-mcp's extracted text and
+classify its reading-order coherence (coherent / partial / scrambled) across a
+fixed corpus of representative pages. It catches reading-order scrambling that
+aggregate containment / uniqueness metrics are blind to — those metrics guard
+*performance* regressions, this guards extraction *quality*.
+
+It uses the authenticated `claude` CLI (no API key, no extra dependency — the
+same mechanism as `scripts/release.py`), so the CLI must be installed and signed
+in. Run it from the repo root:
+
+```bash
+uv run python scripts/eval_coherence.py
+```
+
+The run judges each corpus page (majority-of-3), writes
+`benchmark_data/coherence_results.md`, and diffs the verdicts against the
+committed baseline (`benchmark_data/coherence_baseline.json`), exiting non-zero
+on any regression. To re-baseline after an *intended* extraction improvement,
+run the eval, review `benchmark_data/coherence_results.md`, and only then:
+
+```bash
+uv run python scripts/eval_coherence.py --update-baseline
+```
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for planned features and release history.

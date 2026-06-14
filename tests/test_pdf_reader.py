@@ -2216,5 +2216,21 @@ def test_reorder_vertical_glyphs_zero_height_no_crash():
         assert g["text"] in out_zero
 
 
+def test_strip_mojibake_removes_indic_keeps_japanese_and_latin():
+    from pdf_mcp.extractor import _strip_mojibake
+
+    # mojibake = Bengali/Tamil/Odia (broken-font garbage); keep CJK, kana, ASCII
+    assert _strip_mojibake("人ୈ権තදtext") == "人権text"
+    assert _strip_mojibake("こんにちは") == "こんにちは"  # kana untouched
+    assert _strip_mojibake("ABC123") == "ABC123"  # ASCII untouched
+
+
+def test_strip_mojibake_keeps_cjk_extension_a():
+    from pdf_mcp.extractor import _strip_mojibake
+
+    # rare kanji in CJK Ext-A (0x3400-0x4DBF) are legitimate, must NOT be dropped
+    assert _strip_mojibake("㐀䶿人") == "㐀䶿人"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

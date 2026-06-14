@@ -377,6 +377,20 @@ def reorder_vertical(page: Any) -> str:
     return reorder_vertical_glyphs(_collect_glyphs(page), page.rect.height)
 
 
+# Glyphs whose codepoints fall in scripts that never appear in Japanese
+# (Hebrew/Arabic + Indic + SE-Asian band). Broken decorative display fonts with
+# no Unicode map render titles as these; strip them so they don't interrupt the
+# reordered prose. A no-op on real Japanese/Latin text — does NOT touch CJK
+# (0x4E00+), CJK Ext-A (0x3400+), kana, ASCII, or fullwidth forms.
+_MOJIBAKE_LO = 0x0590
+_MOJIBAKE_HI = 0x1CFF
+
+
+def _strip_mojibake(text: str) -> str:
+    """Remove glyphs in the never-in-Japanese 0x0590-0x1CFF band."""
+    return "".join(c for c in text if not (_MOJIBAKE_LO <= ord(c) <= _MOJIBAKE_HI))
+
+
 def vertical_detection_available() -> bool:
     """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
     return True

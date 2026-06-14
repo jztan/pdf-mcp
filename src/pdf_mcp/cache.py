@@ -45,7 +45,7 @@ _FTS5_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
-_EXTRACTION_VERSION = 4  # 4: vertical/mixed pages use reorder_vertical
+_EXTRACTION_VERSION = 5  # 5: dense-vertical article segmentation + mojibake filter
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'

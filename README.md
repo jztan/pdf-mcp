@@ -10,7 +10,7 @@
 
 **Surgical PDF access for AI agents — search, read, and extract without flooding context.**
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that enables AI agents to read, search, and extract content from PDF files. Built with Python and PyMuPDF, with SQLite-based caching for persistence across server restarts.
+A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with Python and PyMuPDF.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 
@@ -28,10 +28,10 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 |---|---|---|
 | Large PDFs | Context overflow | Chunked reading |
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Hybrid search — RRF fusion of BM25 keyword (FTS5) + semantic embeddings; never misses what either alone would |
+| Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
-| Vertical scripts (Japanese/Chinese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — no extra dependency |
+| Vertical scripts (Japanese/Chinese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
@@ -40,13 +40,11 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 
 ## Features
 
-Give your agent surgical access to PDFs instead of flooding context with raw text.
-
 - **Hybrid search** — find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
 - **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
-- **Vertical-script reading order** — Japanese/Chinese vertical text (tategaki / 直排) is reconstructed into correct top-to-bottom, right-to-left order from glyph geometry (PyMuPDF-only, no extra dependency). Handles academic papers, bulletins, and dense multi-article 広報/magazine pages (articles are segmented via page-layout rules); decorative-font mojibake (glyphs that don't map to Unicode) is filtered out. Known limitations: pages whose articles are delimited only by colored boxes/headers rather than rules, and whole-page font mojibake
+- **Vertical-script reading order** — Japanese/Chinese tategaki (直排) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
 
@@ -57,7 +55,6 @@ Give your agent surgical access to PDFs instead of flooding context with raw tex
 - [Tools](#tools)
 - [Example Workflow](#example-workflow)
 - [Configuration](#configuration)
-- [Development](#development)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [Security](#security)
@@ -258,7 +255,7 @@ pdf-mcp --help
 
 ## Tools
 
-Nine specialized tools cover document introspection, content reading, search, cache management, and server feature discovery. The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
+The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
 
 | Tool | What it does |
 |------|--------------|
@@ -344,7 +341,7 @@ PDF_MCP_MAX_WORKERS=8
 
 ### Caching
 
-The server uses SQLite for persistent caching. This is necessary because MCP servers using STDIO transport are spawned as a new process for each conversation.
+The server uses SQLite for persistent caching.
 
 **Cache location:** `~/.cache/pdf-mcp/cache.db`
 
@@ -366,64 +363,13 @@ The server uses SQLite for persistent caching. This is necessary because MCP ser
 - Manual via the `pdf_cache_clear` tool
 - TTL: 24 hours (configurable)
 
-## Development
-
-```bash
-git clone https://github.com/jztan/pdf-mcp.git
-cd pdf-mcp
-
-# Install with dev dependencies
-pip install -e ".[dev]"
-
-# One-time: install pre-commit hooks (auto-runs black/flake8/mypy on commit)
-pre-commit install
-
-# Run tests
-pytest tests/ -v
-
-# Type checking
-mypy src/
-
-# Linting
-flake8 src/ tests/
-
-# Formatting
-black src/ tests/
-```
-
-### Coherence eval harness
-
-`scripts/eval_coherence.py` has Claude read pdf-mcp's extracted text and
-classify its reading-order coherence (coherent / partial / scrambled) across a
-fixed corpus of representative pages. It catches reading-order scrambling that
-aggregate containment / uniqueness metrics are blind to — those metrics guard
-*performance* regressions, this guards extraction *quality*.
-
-It uses the authenticated `claude` CLI (no API key, no extra dependency — the
-same mechanism as `scripts/release.py`), so the CLI must be installed and signed
-in. Run it from the repo root:
-
-```bash
-uv run python scripts/eval_coherence.py
-```
-
-The run judges each corpus page (majority-of-3), writes
-`benchmark_data/coherence_results.md`, and diffs the verdicts against the
-committed baseline (`benchmark_data/coherence_baseline.json`), exiting non-zero
-on any regression. To re-baseline after an *intended* extraction improvement,
-run the eval, review `benchmark_data/coherence_results.md`, and only then:
-
-```bash
-uv run python scripts/eval_coherence.py --update-baseline
-```
-
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for planned features and release history.
 
 ## Contributing
 
-Contributions are welcome. Please submit a pull request.
+Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** for setup, checks, the coherence eval harness, and quality-loop guidelines.
 
 ## Security
 
@@ -458,4 +404,3 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 - [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — What we found when we audited an MCP server for security holes
 - [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
-```

@@ -2,12 +2,15 @@
 
 ## Project Status
 
-- **Current Version:** v1.16.0 (released 2026-06-12)
-- **Unreleased (staged on `fix/embedding-normalization`, pending merge):** embedding vectors are now L2-normalized for all models, restoring the `dot == cosine` contract semantic scoring relies on. fastembed 0.8 returns unnormalized vectors for some models (e.g. `multilingual-e5-large`, norm ~28), which inflated semantic `score` and left `low_confidence` permanently `False`; the default `bge-small` was unaffected. See `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
-- **Merged to `develop` (pending release) — vertical-script support:** Japanese/Chinese vertical text (tategaki / 直排) reading-order reconstruction (PyMuPDF-only, no new dependency), including dense multi-article 広報/magazine segmentation + decorative-font mojibake filtering, plus the content-judged coherence eval harness and an arXiv reading-order benchmark. Validated: coherence corpus 17 coherent / 2 partial / 1 scrambled; horizontal extraction unchanged; `_EXTRACTION_VERSION` 2→5. The 4-branch chain was consolidated into develop. See `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md). Known limits: whole-page font mojibake, box/header-only-delimited card-grids, Traditional Chinese (corpus-unvalidated).
-- **MCP Registry Status:** Published
-- **Test Suite:** 753 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent; benchmark tests are kept off the CI fast path.
-- **Tools:** 9 MCP tools — `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
+- **Current version:** v1.16.0 (released 2026-06-12)
+- **MCP Registry:** Published
+- **Test suite:** 753 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent; benchmark tests are kept off the CI fast path.
+- **Tools:** `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
+
+### Pending release
+
+- **On `develop`** — vertical-script support: Japanese/Chinese tategaki (直排) reading-order reconstruction, dense 広報/magazine article segmentation, mojibake filtering, coherence eval harness, arXiv reading-order benchmark. Validated: coherence corpus 17 coherent / 2 partial / 1 scrambled; `_EXTRACTION_VERSION` 2→5. Known limits in [`docs/tool-reference.md`](docs/tool-reference.md); Traditional Chinese corpus-unvalidated. See `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
+- **On `fix/embedding-normalization`** (pending merge to develop) — embedding vectors L2-normalized for all models, restoring the `dot == cosine` contract. fastembed 0.8 returns unnormalized vectors for some models (e.g. `multilingual-e5-large`, norm ~28), inflating semantic `score` and leaving `low_confidence` permanently `False`; default `bge-small` unaffected. See `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -81,4 +84,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-06-12 (v1.16.0 status refresh — parallel page processing shipped and cleared from Under Consideration; embedding-normalization fix staged on `fix/embedding-normalization`)
+**Last Updated:** 2026-06-15 (docs reorganisation — Development section moved to `docs/contributing.md`; vertical-script known limits documented in `docs/tool-reference.md`)

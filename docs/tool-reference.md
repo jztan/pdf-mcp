@@ -141,7 +141,7 @@ Reading order depends on page layout:
 
 - **Standard pages** — positional block sort.
 - **Multi-column pages** — column reading order when `pdf-mcp[multicolumn]` is installed; falls back to positional sort without it (columns may interleave).
-- **Vertical-script pages** (Japanese/Chinese tategaki / 直排) — auto-detected; reconstructed top-to-bottom, right-to-left from glyph geometry. Dense magazine layouts are segmented by drawn rules; decorative-font mojibake is filtered. See `server_info` → `extraction.vertical_aware`. Limitations: pages delimited only by colored boxes or header styles are not segmented; whole-page decorative fonts produce no extractable text.
+- **Vertical-script pages** (Japanese/Chinese tategaki / 直排) — auto-detected; reconstructed top-to-bottom, right-to-left from glyph geometry. Dense magazine layouts are segmented by drawn rules; decorative-font mojibake is filtered. See `server_info` → `extraction.vertical_aware`. Limitations: pages delimited only by colored boxes or header styles are not segmented; whole-page decorative fonts produce no extractable text; Traditional Chinese has not been validated against a corpus.
 
 **Parameters:**
 - `path` (string, required) — Path to PDF file.

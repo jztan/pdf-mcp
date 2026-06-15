@@ -10,7 +10,7 @@
 
 **Surgical PDF access for AI agents — search, read, and extract without flooding context.**
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server built with Python and PyMuPDF.
+An [MCP](https://modelcontextprotocol.io/) server with hybrid BM25 + semantic search, token-budgeted paginated reading, structured table extraction, OCR, and support for multi-column and vertical-script layouts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 

@@ -10,6 +10,7 @@ Usage:
 
 import base64
 import hashlib
+import math  # noqa: F401
 import os
 from pathlib import Path
 from typing import Any
@@ -67,6 +68,13 @@ RENDER_DPI_MIN = 72
 RENDER_DPI_MAX = 400
 MAX_RENDER_INLINE_PAGES = 5
 MAX_OCR_PAGES_LIMIT = 20
+
+# Conservative ceiling on the sum of base64-encoded image bytes a single
+# pdf_render_pages result may carry. The real ~1 MB cap is enforced by the MCP
+# *client* (not this server) and is unknowable at runtime, so this is a fixed
+# guess with ~10% headroom for JSON framing + the summary dict. No env override:
+# raising it past the client cap would just resurrect the opaque transport error.
+RENDER_RESULT_BYTE_BUDGET = 900_000
 
 # Parallel page-processing gates (process pool for OCR/render).
 # OCR gate is fixed at 2 (work dwarfs ~0.5s/worker spawn at any page count).
@@ -290,6 +298,11 @@ def _resolve_path(
 def _clamp(value: int, minimum: int, maximum: int) -> int:
     """Clamp a value between minimum and maximum."""
     return max(minimum, min(value, maximum))
+
+
+def _encoded_len(png_bytes: bytes) -> int:
+    """Exact base64-encoded length of raw bytes (4 * ceil(n/3))."""
+    return 4 * ((len(png_bytes) + 2) // 3)
 
 
 _CJK_RANGES = (

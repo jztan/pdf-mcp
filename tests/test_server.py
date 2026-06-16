@@ -3134,3 +3134,19 @@ class TestCJKWarningSection:
             sample_pdf_with_toc_sections, "Chapter", granularity="section"
         )
         assert "cjk_keyword_warning" not in result
+
+
+class TestEncodedLen:
+    def test_matches_base64_formula(self):
+        from pdf_mcp.server import _encoded_len
+
+        for n in (0, 1, 2, 3, 4, 1000, 1001, 1002):
+            raw = b"x" * n
+            import base64
+
+            assert _encoded_len(raw) == len(base64.b64encode(raw))
+
+    def test_budget_is_conservative(self):
+        from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET
+
+        assert RENDER_RESULT_BYTE_BUDGET == 900_000

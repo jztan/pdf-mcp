@@ -3201,3 +3201,45 @@ class TestEncodedLen:
         from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET
 
         assert RENDER_RESULT_BYTE_BUDGET == 900_000
+
+
+class TestRenderClip:
+    def test_clip_renders_inline_subregion(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", dpi=150, clip=[0.0, 0.0, 0.5, 0.5])
+        summary = result[0]
+        assert summary["clip"] == [0.0, 0.0, 0.5, 0.5]
+        assert summary["pages_rendered"] == [1]
+        block = result[1]
+        assert block.meta["clip"] == [0.0, 0.0, 0.5, 0.5]
+        assert block.meta["dpi"] == 150
+
+    def test_clip_clamps_out_of_range(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 1.03, 1.0])
+        summary = result[0]
+        assert summary["clip"] == [0.0, 0.0, 1.0, 1.0]
+
+    def test_clip_bad_length_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 1.0])
+        assert "error" in result[0]
+
+    def test_clip_non_numeric_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, "x", 1.0])
+        assert "error" in result[0]
+
+    def test_clip_multipage_errors(self, sample_pdf_with_toc, isolated_server):
+        result = pdf_render_pages(sample_pdf_with_toc, "1-2", clip=[0.0, 0.0, 0.5, 0.5])
+        assert "error" in result[0]
+        assert "hint" in result[0]
+
+    def test_clip_zero_area_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.5, 0.0, 0.5, 1.0])
+        assert "error" in result[0]
+
+    def test_clip_bypasses_render_cache(self, sample_pdf, isolated_server):
+        import pdf_mcp.server as srv
+
+        before = srv.cache.get_stats()["total_renders"]
+        pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 0.5, 0.5])
+        after = srv.cache.get_stats()["total_renders"]
+        # no page_renders row written for the clip
+        assert after == before

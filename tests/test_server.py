@@ -3111,3 +3111,26 @@ class TestCJKWarningWiring:
         if "error" in result:
             pytest.skip("fastembed not installed in this env")
         assert "cjk_keyword_warning" not in result
+
+
+class TestCJKWarningSection:
+    def test_section_cjk_adds_page_steering_warning(
+        self, sample_pdf_with_toc_sections, isolated_server
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "厚木", granularity="section"
+        )
+        assert "cjk_keyword_warning" in result
+        # section variant steers to page granularity OR install hint
+        assert (
+            "granularity='page'" in result["cjk_keyword_warning"]
+            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
+        )
+
+    def test_section_ascii_no_warning(
+        self, sample_pdf_with_toc_sections, isolated_server
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "Chapter", granularity="section"
+        )
+        assert "cjk_keyword_warning" not in result

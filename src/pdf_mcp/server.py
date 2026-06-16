@@ -1363,14 +1363,27 @@ def _pdf_search_section_mode(
        "search_mode": "section",
        "total_sections": int (count of indexed sections for this PDF)}
     """
+    # Probe availability only for CJK queries (section search runs on every
+    # call; don't import fastembed for ASCII queries).
+    _cjk_warn = (
+        _cjk_keyword_warning(
+            query, semantic_available=_semantic_available(), section=True
+        )
+        if _contains_cjk(query)
+        else None
+    )
+
     if cache.get_section_fts_coverage(local_path) == 0:
         sections = derive_sections(local_path)
         if not sections:
-            return {
+            empty: dict[str, Any] = {
                 "sections": [],
                 "search_mode": "section",
                 "total_sections": 0,
             }
+            if _cjk_warn is not None:
+                empty["cjk_keyword_warning"] = _cjk_warn
+            return empty
         cache.index_sections(local_path, sections)
 
     matches = cache.search_section_fts(local_path, query, max_results)
@@ -1397,7 +1410,7 @@ def _pdf_search_section_mode(
         cumulative += entry_bytes
 
     truncated_bytes = matches_omitted > 0
-    return {
+    result: dict[str, Any] = {
         "sections": kept,
         "search_mode": "section",
         "total_sections": total_sections,
@@ -1405,6 +1418,9 @@ def _pdf_search_section_mode(
         "matches_omitted": matches_omitted,
         "estimated_bytes_returned": cumulative,
     }
+    if _cjk_warn is not None:
+        result["cjk_keyword_warning"] = _cjk_warn
+    return result
 
 
 @mcp.tool(

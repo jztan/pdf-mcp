@@ -940,8 +940,14 @@
       loaderText.textContent = `Page ${i + 1} of ${pdf.numPages}...`;
     }
 
-    // Honest-degradation flag: does this doc read as CJK/vertical script?
-    const scriptUnsupported = cjkRatio(pageTexts.join("")) > CJK_RATIO_THRESHOLD;
+    // Honest-degradation flags (mutually exclusive). An undecodable text layer
+    // (font-mojibake) extracts as control-char garbage with zero CJK codepoints,
+    // so check it first; the CJK/vertical flag only applies to decodable text.
+    const allPageText = pageTexts.join("");
+    const textUndecodable =
+      controlCharRatio(allPageText) > CONTROL_CHAR_THRESHOLD;
+    const scriptUnsupported =
+      !textUndecodable && cjkRatio(allPageText) > CJK_RATIO_THRESHOLD;
 
     const meta = await pdf.getMetadata();
     const info = meta.info || {};
@@ -995,14 +1001,14 @@
     };
 
     resetSteps();
-    renderInfo(pdfInfo, filename, scriptUnsupported);
+    renderInfo(pdfInfo, filename, scriptUnsupported, textUndecodable);
     hideLoader();
     uploadSection.classList.add("hidden");
     workflow.classList.remove("hidden");
     setTimeout(() => workflow.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
-  function renderInfo(info, filename, scriptUnsupported) {
+  function renderInfo(info, filename, scriptUnsupported, textUndecodable) {
     $("docName").innerHTML = `${escapeHtml(filename)} <small>${info.page_count} pages · ${info.file_size_mb} MB</small>`;
     const totalChars = info.text_coverage.summary.total_text_chars;
     docTokensTotal = Math.max(1, Math.round(totalChars / 4));
@@ -1014,10 +1020,18 @@
     const COVERAGE_BAR_THRESHOLD = 500;
     renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
 
-    // Honest-degradation banner: render on CJK/vertical docs, clear otherwise so
-    // re-uploading a Latin PDF removes a previously shown banner.
+    // Honest-degradation banner: render on CJK/vertical or undecodable docs,
+    // clear otherwise so re-uploading a Latin PDF removes a previously shown one.
     const swEl = $("scriptWarning");
-    if (scriptUnsupported) {
+    if (textUndecodable) {
+      // Property of the PDF, not a demo limitation → warning (orange) style with
+      // a triangle icon. The server can't recover this either; only OCR can.
+      swEl.innerHTML = `
+        <div class="callout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span><strong>Undecodable text layer.</strong> This PDF's fonts carry no Unicode mapping, so its text extracts as glyph-index garbage — not just in this demo, but in any text extractor, including the <strong>pdf-mcp server</strong>. Recovering it requires OCR on the rendered pages (<code>pdf_read_pages(ocr=True)</code>). This is a property of the PDF, not a demo limitation.</span>
+        </div>`;
+    } else if (scriptUnsupported) {
       swEl.innerHTML = `
         <div class="callout info">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
@@ -1517,6 +1531,21 @@
     const nonSpace = text.replace(/[ \t\r\n\f　]+/g, "");
     if (nonSpace.length === 0) return 0;
     return (text.match(CJK_RE) || []).length / nonSpace.length;
+  }
+
+  // Undecodable text layer: when a font carries no Unicode map (e.g. embedded
+  // Type1/CFF subsets), pdf.js emits raw glyph indices as control characters
+  // (U+0001–U+001F, excl. tab/newline/CR). Real text PDFs sit at ~0; whole-page
+  // font-mojibake docs run 30%+. Neither the demo nor the server can recover
+  // this without OCR, so it gets its own notice rather than the CJK one.
+  const CONTROL_CHAR_THRESHOLD = 0.05;
+  const CONTROL_CHAR_RE = new RegExp(
+    "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]",
+    "g"
+  );
+  function controlCharRatio(text) {
+    if (text.length === 0) return 0;
+    return (text.match(CONTROL_CHAR_RE) || []).length / text.length;
   }
 
   function escapeHtml(s) {

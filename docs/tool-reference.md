@@ -34,7 +34,7 @@ Many responses also include an inline `content_warning` field as a runtime remin
 
 `pdf_read_all` and section-granularity `pdf_search` payloads are bounded by `[limits].max_response_bytes` in `~/.config/pdf-mcp/config.toml` (default 200,000 UTF-8 bytes; clamped to `[4_096, 2_000_000]`). When the cap fires, responses include explicit truncation signals so callers can paginate deliberately. See the response-shape sections of each affected tool below.
 
-`pdf_read_pages` is **not** size-capped — the caller controls the page span. `pdf_render_pages` is bounded by a fixed image-count cap (`MAX_RENDER_INLINE_PAGES`) rather than bytes.
+`pdf_read_pages` is **not** size-capped — the caller controls the page span. `pdf_render_pages` is bounded by both a fixed image-count cap (`MAX_RENDER_INLINE_PAGES`) and a per-result byte budget (`RENDER_RESULT_BYTE_BUDGET`), with graceful downsample and oversized-page fallback.
 
 ### URL Fetching (SSRF)
 
@@ -135,7 +135,7 @@ pdf_get_toc("/path/to/textbook.pdf")
 
 ### `pdf_read_pages`
 
-Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly.
+Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly. Detections that span at least 80% of the page in both width and height are suppressed as false positives (the table finder mistaking a dense prose page's body block for a table); genuine full-width or full-height tables are unaffected.
 
 Reading order depends on page layout:
 
@@ -259,6 +259,13 @@ Render PDF pages as PNG images for vision-capable models. Use when you need to *
 - `path` (string, required) — Path to PDF file.
 - `pages` (string, required) — Page specification (e.g. `"1"`, `"1-3"`, `"1,3,5"`).
 - `dpi` (int, optional, default `200`) — Render resolution. Clamped to `[72, 400]`.
+- `clip` (list of 4 floats, optional) — `[x0, y0, x1, y1]` region as page
+  fractions in `[0, 1]`, top-left origin. Renders a high-DPI crop of just that
+  region — the right tool for dense pages that exceed the transport cap whole.
+  Workflow: render a low-DPI whole-page overview, identify the region by eye,
+  then re-call with `clip`. Single page only; out-of-range values are clamped.
+  Clipped renders are never downsampled and bypass the render cache. The summary
+  echoes the clamped `clip`; each image block's `_meta` carries `clip` and `dpi`.
 
 **Returns:**
 
@@ -274,10 +281,16 @@ Conditional fields:
 - `truncated_render` (bool) — Present and `true` when the request exceeded the inline-image cap.
 - `truncated_at` (int) — Present when truncated; the cap value (`MAX_RENDER_INLINE_PAGES`).
 - `render_failed_pages` (array of int) — Present when one or more pages could not be rendered.
+- `render_downsampled` (list, optional) — Present when pages were re-rendered at
+  a lower DPI to fit the transport byte budget. Each entry: `{page, dpi_used,
+  dpi_requested}`.
+- `render_oversized_pages` (list, optional) — Present when a page can't fit even
+  at the 72-DPI floor. Each entry: `{page, file_path_on_disk, size_bytes, reason,
+  suggestions}`. The page is not inlined; `file_path_on_disk` is the full-res PNG.
 
 Image content blocks: untrusted — they encode whatever the PDF page wants to show.
 
-**Example:**
+**Examples:**
 
 ```python
 pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
@@ -286,6 +299,9 @@ pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
 #    "pages_rendered": [5], "dpi_used": 300, "dpi_requested": 300},
 #   <MCP image content block — PNG bytes of page 5>
 # ]
+
+pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.5])
+#    -> high-DPI crop of the top-right quarter of page 10
 ```
 
 ---
@@ -309,6 +325,12 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"keyword"` — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
+
+> **CJK queries (Japanese/Chinese/Korean):** FTS5 keyword matching is unreliable
+> on unspaced CJK text, so `mode='auto'`/`'keyword'` may miss embedded terms. The
+> tool attaches a `cjk_keyword_warning` advisory and steers you to
+> `mode='semantic'` (`pip install 'pdf-mcp[cjk]'`).
+
 - `max_results` (int, optional, default `10`) — Maximum number of matches. Clamped to `[1, 100]`.
 - `context_chars` (int, optional, default `200`) — Characters of context around each match. Clamped to `[10, 2000]`.
 - `granularity` (string, optional, default `"page"`):

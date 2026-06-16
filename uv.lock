@@ -1866,6 +1866,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+cjk = [
+    { name = "fastembed" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
 dev = [
     { name = "black" },
     { name = "flake8" },
@@ -1900,6 +1905,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.24" },
     { name = "numpy", marker = "extra == 'semantic'", specifier = ">=1.24" },
+    { name = "pdf-mcp", extras = ["semantic"], marker = "extra == 'cjk'" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=10.0" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=26.1.2" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7.0" },
@@ -1913,7 +1919,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
 ]
-provides-extras = ["dev", "semantic", "multicolumn"]
+provides-extras = ["dev", "semantic", "cjk", "multicolumn"]
 
 [[package]]
 name = "pillow"

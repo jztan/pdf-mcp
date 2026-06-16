@@ -16,6 +16,8 @@ from pdf_mcp.server import (
     _resolve_path,
     _python_search,
     _rrf_fuse,
+    _contains_cjk,
+    _cjk_keyword_warning,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -27,6 +29,65 @@ from pdf_mcp.server import (
 )
 from pdf_mcp.url_fetcher import URLFetcher
 from pdf_mcp.parallel import PageError
+
+
+class TestContainsCJK:
+    def test_kanji_true(self):
+        assert _contains_cjk("厚木基地") is True
+
+    def test_hiragana_true(self):
+        assert _contains_cjk("おわり") is True
+
+    def test_katakana_true(self):
+        assert _contains_cjk("カタカナ") is True
+
+    def test_pure_kana_heading_true(self):
+        assert _contains_cjk("終活") is True
+
+    def test_hangul_true(self):
+        assert _contains_cjk("한국어") is True
+
+    def test_cjk_ext_a_true(self):
+        assert _contains_cjk("㐀") is True  # U+3400
+
+    def test_ascii_false(self):
+        assert _contains_cjk("hello world") is False
+
+    def test_digits_punct_false(self):
+        assert _contains_cjk("123 - 456 (a.b)") is False
+
+    def test_mixed_latin_cjk_true(self):
+        assert _contains_cjk("base 基地") is True
+
+    def test_empty_false(self):
+        assert _contains_cjk("") is False
+
+
+class TestCJKWarningText:
+    def test_none_when_no_cjk(self):
+        assert _cjk_keyword_warning("hello", semantic_available=True) is None
+        assert _cjk_keyword_warning("hello", semantic_available=False) is None
+
+    def test_available_page_steers_to_semantic(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=True)
+        assert msg is not None
+        assert "mode='semantic'" in msg
+        assert "granularity" not in msg  # page variant
+
+    def test_available_section_steers_to_page_semantic(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=True, section=True)
+        assert msg is not None
+        assert "granularity='page'" in msg
+        assert "mode='semantic'" in msg
+
+    def test_unavailable_names_cjk_extra(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=False)
+        assert msg is not None
+        assert "pdf-mcp[cjk]" in msg
+
+    def test_unavailable_section_also_names_extra(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=False, section=True)
+        assert "pdf-mcp[cjk]" in msg
 
 
 class TestRrfFuse:
@@ -2126,8 +2187,8 @@ class TestPdfRenderPages:
         result = pdf_render_pages(sample_pdf, "1-2", dpi=72)
         blocks = result[1:]
         assert len(blocks) == 2
-        assert blocks[0].meta == {"page": 1}
-        assert blocks[1].meta == {"page": 2}
+        assert blocks[0].meta == {"page": 1, "dpi": 72}
+        assert blocks[1].meta == {"page": 2, "dpi": 72}
 
     def test_pages_rendered_aligns_with_image_blocks(self, sample_pdf, isolated_server):
         """Lockstep invariant: pages_rendered[i] == _meta['page'] of result[i+1]."""
@@ -2164,6 +2225,59 @@ class TestPdfRenderPages:
         assert len(blocks) == 2
         assert blocks[0].meta["page"] == 1
         assert blocks[1].meta["page"] == 3
+
+
+class TestRenderBudget:
+    def test_common_case_summary_byte_identical(self, sample_pdf, isolated_server):
+        """Generous budget: no downsample/oversized keys; dpi_used == requested."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        summary = result[0]
+        assert summary["dpi_used"] == 72
+        assert "render_downsampled" not in summary
+        assert "render_oversized_pages" not in summary
+        # image block carries _meta.dpi (intentional always-on addition)
+        block = result[1]
+        assert block.meta["page"] == 1
+        assert block.meta["dpi"] == 72
+
+    def test_total_encoded_bytes_within_budget(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        total = sum(len(b.data) for b in result[1:])  # b.data is already base64 ascii
+        assert total <= 50_000
+
+    def test_downsample_reported(self, sample_pdf, isolated_server, monkeypatch):
+        # sample_pdf page 1 encodes to ~66k base64 at 300 DPI but only ~8.8k at
+        # the 72-DPI floor, so a 50k budget deterministically forces a
+        # downsample-to-fit (not the common case, not the oversized fallback).
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        summary = result[0]
+        assert summary["pages_rendered"] == [1]
+        assert "render_downsampled" in summary
+        ds = summary["render_downsampled"][0]
+        assert ds["page"] == 1
+        assert ds["dpi_requested"] == 300
+        assert ds["dpi_used"] < ds["dpi_requested"]
+        # the inline image block reports the actual (downsampled) render DPI
+        assert result[1].meta["dpi"] == ds["dpi_used"]
+
+    def test_oversized_fallback(self, sample_pdf, isolated_server, monkeypatch):
+        """Tiny budget: page can't fit at 72 -> oversized entry, no image block."""
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 500)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        summary = result[0]
+        assert summary["pages_rendered"] == []
+        assert len(result) == 1  # no image blocks
+        assert "render_oversized_pages" in summary
+        entry = summary["render_oversized_pages"][0]
+        assert entry["page"] == 1
+        assert os.path.exists(entry["file_path_on_disk"])
+        assert isinstance(entry["suggestions"], list)
+        assert any("file_path_on_disk" in s for s in entry["suggestions"])
+        assert any("clip=" in s for s in entry["suggestions"])
 
 
 class TestPdfReadPagesOcr:
@@ -3024,3 +3138,108 @@ class TestRenderRealSpawnCorrectness:
         assert [p["render_size_bytes"] for p in par["pages"]] == [
             p["render_size_bytes"] for p in seq["pages"]
         ]
+
+
+class TestCJKWarningWiring:
+    def test_keyword_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "厚木", mode="keyword")
+        assert "cjk_keyword_warning" in result
+        # keyword path: steers to semantic OR to install, never crashes
+        assert (
+            "mode='semantic'" in result["cjk_keyword_warning"]
+            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
+        )
+
+    def test_keyword_mode_ascii_no_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", mode="keyword")
+        assert "cjk_keyword_warning" not in result
+
+    def test_auto_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "厚木", mode="auto")
+        assert "cjk_keyword_warning" in result
+
+    def test_semantic_mode_cjk_no_warning(self, sample_pdf, isolated_server):
+        # page semantic is already the right path; no advisory.
+        result = pdf_search(sample_pdf, "厚木", mode="semantic")
+        if "error" in result:
+            pytest.skip("fastembed not installed in this env")
+        assert "cjk_keyword_warning" not in result
+
+
+class TestCJKWarningSection:
+    def test_section_cjk_adds_page_steering_warning(
+        self, sample_pdf_with_toc_sections, isolated_server
+    ):
+        result = pdf_search(sample_pdf_with_toc_sections, "厚木", granularity="section")
+        assert "cjk_keyword_warning" in result
+        # section variant steers to page granularity OR install hint
+        assert (
+            "granularity='page'" in result["cjk_keyword_warning"]
+            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
+        )
+
+    def test_section_ascii_no_warning(
+        self, sample_pdf_with_toc_sections, isolated_server
+    ):
+        result = pdf_search(
+            sample_pdf_with_toc_sections, "Chapter", granularity="section"
+        )
+        assert "cjk_keyword_warning" not in result
+
+
+class TestEncodedLen:
+    def test_matches_base64_formula(self):
+        from pdf_mcp.server import _encoded_len
+
+        for n in (0, 1, 2, 3, 4, 1000, 1001, 1002):
+            raw = b"x" * n
+            import base64
+
+            assert _encoded_len(raw) == len(base64.b64encode(raw))
+
+    def test_budget_is_conservative(self):
+        from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET
+
+        assert RENDER_RESULT_BYTE_BUDGET == 900_000
+
+
+class TestRenderClip:
+    def test_clip_renders_inline_subregion(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", dpi=150, clip=[0.0, 0.0, 0.5, 0.5])
+        summary = result[0]
+        assert summary["clip"] == [0.0, 0.0, 0.5, 0.5]
+        assert summary["pages_rendered"] == [1]
+        block = result[1]
+        assert block.meta["clip"] == [0.0, 0.0, 0.5, 0.5]
+        assert block.meta["dpi"] == 150
+
+    def test_clip_clamps_out_of_range(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 1.03, 1.0])
+        summary = result[0]
+        assert summary["clip"] == [0.0, 0.0, 1.0, 1.0]
+
+    def test_clip_bad_length_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 1.0])
+        assert "error" in result[0]
+
+    def test_clip_non_numeric_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, "x", 1.0])
+        assert "error" in result[0]
+
+    def test_clip_multipage_errors(self, sample_pdf_with_toc, isolated_server):
+        result = pdf_render_pages(sample_pdf_with_toc, "1-2", clip=[0.0, 0.0, 0.5, 0.5])
+        assert "error" in result[0]
+        assert "hint" in result[0]
+
+    def test_clip_zero_area_errors(self, sample_pdf, isolated_server):
+        result = pdf_render_pages(sample_pdf, "1", clip=[0.5, 0.0, 0.5, 1.0])
+        assert "error" in result[0]
+
+    def test_clip_bypasses_render_cache(self, sample_pdf, isolated_server):
+        import pdf_mcp.server as srv
+
+        before = srv.cache.get_stats()["total_renders"]
+        pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 0.5, 0.5])
+        after = srv.cache.get_stats()["total_renders"]
+        # no page_renders row written for the clip
+        assert after == before

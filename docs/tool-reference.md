@@ -34,7 +34,7 @@ Many responses also include an inline `content_warning` field as a runtime remin
 
 `pdf_read_all` and section-granularity `pdf_search` payloads are bounded by `[limits].max_response_bytes` in `~/.config/pdf-mcp/config.toml` (default 200,000 UTF-8 bytes; clamped to `[4_096, 2_000_000]`). When the cap fires, responses include explicit truncation signals so callers can paginate deliberately. See the response-shape sections of each affected tool below.
 
-`pdf_read_pages` is **not** size-capped — the caller controls the page span. `pdf_render_pages` is bounded by a fixed image-count cap (`MAX_RENDER_INLINE_PAGES`) rather than bytes.
+`pdf_read_pages` is **not** size-capped — the caller controls the page span. `pdf_render_pages` is bounded by both a fixed image-count cap (`MAX_RENDER_INLINE_PAGES`) and a per-result byte budget (`RENDER_RESULT_BYTE_BUDGET`), with graceful downsample and oversized-page fallback.
 
 ### URL Fetching (SSRF)
 
@@ -274,6 +274,12 @@ Conditional fields:
 - `truncated_render` (bool) — Present and `true` when the request exceeded the inline-image cap.
 - `truncated_at` (int) — Present when truncated; the cap value (`MAX_RENDER_INLINE_PAGES`).
 - `render_failed_pages` (array of int) — Present when one or more pages could not be rendered.
+- `render_downsampled` (list, optional) — Present when pages were re-rendered at
+  a lower DPI to fit the transport byte budget. Each entry: `{page, dpi_used,
+  dpi_requested}`.
+- `render_oversized_pages` (list, optional) — Present when a page can't fit even
+  at the 72-DPI floor. Each entry: `{page, file_path_on_disk, size_bytes, reason,
+  suggestions}`. The page is not inlined; `file_path_on_disk` is the full-res PNG.
 
 Image content blocks: untrusted — they encode whatever the PDF page wants to show.
 

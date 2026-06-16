@@ -2244,6 +2244,20 @@ def pdf_render_pages(
         Failed pages are reported in summary["render_failed_pages"] and never
         appear in pages_rendered, so the two arrays stay aligned.
 
+        Each page lands in one of three outcomes to stay under the MCP
+        transport size cap:
+          - inline at the requested DPI (fits the per-page byte budget);
+          - inline downsampled — reported in summary["render_downsampled"]
+            as [{page, dpi_used, dpi_requested}]; the block's _meta.dpi is
+            the actual render DPI;
+          - oversized fallback — reported in summary["render_oversized_pages"]
+            as [{page, file_path_on_disk, size_bytes, reason, suggestions}]
+            when the page can't fit even at the 72-DPI floor. The page does
+            NOT appear as an inline image block; read the full-res PNG from
+            file_path_on_disk, or render a high-DPI region with `clip`.
+        summary["dpi_used"] remains the clamped requested DPI; per-page
+        actual DPI is in render_downsampled and each block's _meta.dpi.
+
     Error contract: path/URL validation failures (file not found,
     invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
     return an inline payload of the form {"error": "...", "hint": "..."}

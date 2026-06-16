@@ -10,7 +10,7 @@
 
 **Surgical PDF access for AI agents — search, read, and extract without flooding context.**
 
-An [MCP](https://modelcontextprotocol.io/) server with hybrid BM25 + semantic search, token-budgeted paginated reading, structured table extraction, OCR, and support for multi-column and vertical-script layouts.
+An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search a PDF by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text — even from multi-column and Japanese/Chinese layouts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 

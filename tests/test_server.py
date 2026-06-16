@@ -2187,8 +2187,8 @@ class TestPdfRenderPages:
         result = pdf_render_pages(sample_pdf, "1-2", dpi=72)
         blocks = result[1:]
         assert len(blocks) == 2
-        assert blocks[0].meta == {"page": 1}
-        assert blocks[1].meta == {"page": 2}
+        assert blocks[0].meta == {"page": 1, "dpi": 72}
+        assert blocks[1].meta == {"page": 2, "dpi": 72}
 
     def test_pages_rendered_aligns_with_image_blocks(self, sample_pdf, isolated_server):
         """Lockstep invariant: pages_rendered[i] == _meta['page'] of result[i+1]."""
@@ -2225,6 +2225,59 @@ class TestPdfRenderPages:
         assert len(blocks) == 2
         assert blocks[0].meta["page"] == 1
         assert blocks[1].meta["page"] == 3
+
+
+class TestRenderBudget:
+    def test_common_case_summary_byte_identical(self, sample_pdf, isolated_server):
+        """Generous budget: no downsample/oversized keys; dpi_used == requested."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=72)
+        summary = result[0]
+        assert summary["dpi_used"] == 72
+        assert "render_downsampled" not in summary
+        assert "render_oversized_pages" not in summary
+        # image block carries _meta.dpi (intentional always-on addition)
+        block = result[1]
+        assert block.meta["page"] == 1
+        assert block.meta["dpi"] == 72
+
+    def test_total_encoded_bytes_within_budget(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        total = sum(len(b.data) for b in result[1:])  # b.data is already base64 ascii
+        assert total <= 50_000
+
+    def test_downsample_reported(self, sample_pdf, isolated_server, monkeypatch):
+        # sample_pdf page 1 encodes to ~66k base64 at 300 DPI but only ~8.8k at
+        # the 72-DPI floor, so a 50k budget deterministically forces a
+        # downsample-to-fit (not the common case, not the oversized fallback).
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        summary = result[0]
+        assert summary["pages_rendered"] == [1]
+        assert "render_downsampled" in summary
+        ds = summary["render_downsampled"][0]
+        assert ds["page"] == 1
+        assert ds["dpi_requested"] == 300
+        assert ds["dpi_used"] < ds["dpi_requested"]
+        # the inline image block reports the actual (downsampled) render DPI
+        assert result[1].meta["dpi"] == ds["dpi_used"]
+
+    def test_oversized_fallback(self, sample_pdf, isolated_server, monkeypatch):
+        """Tiny budget: page can't fit at 72 -> oversized entry, no image block."""
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 500)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        summary = result[0]
+        assert summary["pages_rendered"] == []
+        assert len(result) == 1  # no image blocks
+        assert "render_oversized_pages" in summary
+        entry = summary["render_oversized_pages"][0]
+        assert entry["page"] == 1
+        assert os.path.exists(entry["file_path_on_disk"])
+        assert isinstance(entry["suggestions"], list)
+        assert any("file_path_on_disk" in s for s in entry["suggestions"])
+        assert any("clip=" in s for s in entry["suggestions"])
 
 
 class TestPdfReadPagesOcr:
@@ -3117,9 +3170,7 @@ class TestCJKWarningSection:
     def test_section_cjk_adds_page_steering_warning(
         self, sample_pdf_with_toc_sections, isolated_server
     ):
-        result = pdf_search(
-            sample_pdf_with_toc_sections, "厚木", granularity="section"
-        )
+        result = pdf_search(sample_pdf_with_toc_sections, "厚木", granularity="section")
         assert "cjk_keyword_warning" in result
         # section variant steers to page granularity OR install hint
         assert (

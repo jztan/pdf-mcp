@@ -1760,6 +1760,14 @@ def pdf_search(
                 "search_mode": "keyword",
             }
             response["excerpt_style"] = excerpt_style
+            # Probe availability only for CJK queries (avoids a fastembed
+            # import on every ASCII keyword search).
+            if _contains_cjk(query):
+                _warn = _cjk_keyword_warning(
+                    query, semantic_available=_semantic_available()
+                )
+                if _warn is not None:
+                    response["cjk_keyword_warning"] = _warn
             return response
 
         # ── mode="auto": check fastembed, hybrid if available ─────────────
@@ -1796,6 +1804,10 @@ def pdf_search(
             if reason is not None:
                 response["semantic_unavailable"] = True
                 response["semantic_unavailable_reason"] = reason
+            # Auto fallback always means semantic did not run.
+            _warn = _cjk_keyword_warning(query, semantic_available=False)
+            if _warn is not None:
+                response["cjk_keyword_warning"] = _warn
             return response
 
         try:
@@ -1929,6 +1941,9 @@ def pdf_search(
             "model": _model_name,
         }
         hybrid_response["excerpt_style"] = excerpt_style
+        _warn = _cjk_keyword_warning(query, semantic_available=True)
+        if _warn is not None:
+            hybrid_response["cjk_keyword_warning"] = _warn
         return hybrid_response
 
     finally:

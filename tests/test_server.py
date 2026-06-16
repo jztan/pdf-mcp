@@ -3085,3 +3085,29 @@ class TestRenderRealSpawnCorrectness:
         assert [p["render_size_bytes"] for p in par["pages"]] == [
             p["render_size_bytes"] for p in seq["pages"]
         ]
+
+
+class TestCJKWarningWiring:
+    def test_keyword_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "厚木", mode="keyword")
+        assert "cjk_keyword_warning" in result
+        # keyword path: steers to semantic OR to install, never crashes
+        assert (
+            "mode='semantic'" in result["cjk_keyword_warning"]
+            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
+        )
+
+    def test_keyword_mode_ascii_no_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", mode="keyword")
+        assert "cjk_keyword_warning" not in result
+
+    def test_auto_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "厚木", mode="auto")
+        assert "cjk_keyword_warning" in result
+
+    def test_semantic_mode_cjk_no_warning(self, sample_pdf, isolated_server):
+        # page semantic is already the right path; no advisory.
+        result = pdf_search(sample_pdf, "厚木", mode="semantic")
+        if "error" in result:
+            pytest.skip("fastembed not installed in this env")
+        assert "cjk_keyword_warning" not in result

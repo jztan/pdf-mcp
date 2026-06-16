@@ -915,6 +915,31 @@ def _render_page_worker(
         return page_num, PageError(repr(exc))
 
 
+# A detected "table" whose bounding box spans almost the entire page body in
+# BOTH dimensions is almost always a false positive: the table finder latched
+# onto the page's main text block. This is common on dense CJK / academic prose
+# pages, where it emits many phantom columns of broken (sometimes reversed)
+# text. Real tables fill at most one dimension of the page body — never both
+# (corpus calibration: real tables top out at min(width_frac, height_frac)
+# ~0.65, while the observed false positive spans 0.82 wide x 0.88 tall). Drop a
+# table only when it exceeds this fraction in width AND height.
+_FULL_PAGE_TABLE_FRAC = 0.8
+
+
+def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
+    """Return True when ``bbox`` covers >= 80% of the page in both dimensions.
+
+    Defensive against non-numeric / degenerate inputs (returns False) so the
+    caller never drops a table on a measurement error.
+    """
+    try:
+        width_frac = (float(bbox[2]) - float(bbox[0])) / float(page_rect.width)
+        height_frac = (float(bbox[3]) - float(bbox[1])) / float(page_rect.height)
+    except (TypeError, ValueError, ZeroDivisionError, IndexError):
+        return False
+    return width_frac >= _FULL_PAGE_TABLE_FRAC and height_frac >= _FULL_PAGE_TABLE_FRAC
+
+
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     """
     Extract tables from a PDF page using PyMuPDF's table finder.
@@ -934,10 +959,16 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
         - header: list of header cell strings (first row)
         - rows: list of data rows (excludes header); each row is a list of cell strings
     """
-    tables = []
+    tables: list[dict[str, Any]] = []
     try:
         found = page.find_tables()
-        for i, table in enumerate(found.tables):
+        for table in found.tables:
+            if _table_spans_full_page(table.bbox, page.rect):
+                logger.debug(
+                    "Skipping full-page false-positive table: bbox=%s",
+                    list(table.bbox),
+                )
+                continue
             extracted = table.extract()
             if not extracted:
                 continue
@@ -948,7 +979,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
             ]
             tables.append(
                 {
-                    "index": i,
+                    "index": len(tables),
                     "bbox": list(table.bbox),
                     "row_count": len(extracted),
                     "col_count": len(extracted[0]),

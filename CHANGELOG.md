@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to read dense magazine pages that exceed the transport cap whole.
 
 ### Fixed
+- Table detection no longer reports a false-positive "table" on dense prose
+  pages. When PyMuPDF's table finder latches onto a page's entire body text
+  block — common on vertical-script CJK and academic pages, where it emits
+  phantom columns of broken (sometimes reversed) text — the result is now
+  suppressed. A detection is dropped only when its bounding box spans at least
+  80% of the page in *both* width and height; real tables fill at most one
+  dimension, so genuine full-width or full-height tables are unaffected
+  (corpus-calibrated: 2 of 96 detected tables dropped, both confirmed false
+  positives).
 - Embedding vectors are now L2-normalized in `embedder.encode`/`encode_query`
   for all models, restoring the `dot == cosine` contract that semantic-search
   scoring relies on. fastembed 0.8 returns unnormalized vectors for some models

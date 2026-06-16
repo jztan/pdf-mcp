@@ -135,7 +135,7 @@ pdf_get_toc("/path/to/textbook.pdf")
 
 ### `pdf_read_pages`
 
-Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly.
+Read text, embedded images, and tables from selected pages. Each page entry includes `text`, `images`/`image_count`, and `tables`/`table_count`. Tables are extracted as structured data (header + rows) and inlined directly. Detections that span at least 80% of the page in both width and height are suppressed as false positives (the table finder mistaking a dense prose page's body block for a table); genuine full-width or full-height tables are unaffected.
 
 Reading order depends on page layout:
 

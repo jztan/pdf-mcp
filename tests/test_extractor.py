@@ -427,3 +427,74 @@ class TestExtractTablesFromPage:
 
         assert result == []
         assert "Failed to extract tables" in caplog.text
+
+    @staticmethod
+    def _page_with_tables(page_rect, tables):
+        page = MagicMock()
+        page.rect = page_rect
+        page.find_tables.return_value.tables = tables
+        return page
+
+    @staticmethod
+    def _table(bbox, extracted):
+        t = MagicMock()
+        t.bbox = bbox
+        t.extract.return_value = extracted
+        return t
+
+    def test_drops_full_page_false_positive_table(self):
+        """A 'table' spanning ~full page in both dimensions is a false positive.
+
+        Geometry taken from a real IBK vertical-JP academic page (419.5x595.3):
+        the table finder latched onto the whole body text block (82% wide,
+        88% tall) and emitted phantom columns of broken text. Drop it.
+        """
+        page_rect = pymupdf.Rect(0, 0, 419.5, 595.3)
+        fp = self._table(
+            [48.89, 41.76, 392.24, 565.46],
+            [["a", "b"], ["c", "d"]],
+        )
+        page = self._page_with_tables(page_rect, [fp])
+
+        assert extract_tables_from_page(page) == []
+
+    def test_keeps_normal_table_and_reindexes_after_drop(self):
+        """When a full-page false positive is dropped, surviving tables keep
+        sequential 0-based indices (no gaps)."""
+        page_rect = pymupdf.Rect(0, 0, 419.5, 595.3)
+        fp = self._table([48.89, 41.76, 392.24, 565.46], [["x"], ["y"]])
+        normal = self._table(
+            [50, 50, 250, 150],
+            [["Name", "Value"], ["Alpha", "1"]],
+        )
+        page = self._page_with_tables(page_rect, [fp, normal])
+
+        result = extract_tables_from_page(page)
+
+        assert len(result) == 1
+        assert result[0]["index"] == 0
+        assert result[0]["col_count"] == 2
+        assert result[0]["header"] == ["Name", "Value"]
+
+    def test_wide_but_short_table_kept(self):
+        """A table spanning 92% width but only 65% height is a real table
+        (matches AWS-cert corpus geometry); it must be kept."""
+        page_rect = pymupdf.Rect(0, 0, 612, 792)
+        wide = self._table(
+            [20, 100, 583, 615],
+            [["h1", "h2"], ["a", "b"]],
+        )
+        page = self._page_with_tables(page_rect, [wide])
+
+        assert len(extract_tables_from_page(page)) == 1
+
+    def test_real_bordered_table_not_dropped(self, sample_pdf_with_table):
+        """End-to-end guard: a genuine small bordered table survives the
+        full-page suppression heuristic."""
+        doc = pymupdf.open(sample_pdf_with_table)
+        try:
+            result = extract_tables_from_page(doc[0])
+        finally:
+            doc.close()
+
+        assert len(result) >= 1

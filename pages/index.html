@@ -328,6 +328,10 @@
     font-family: var(--font-mono); font-size: 12px;
     background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
   }
+  /* Blue "info" variant — demo limitation notices (vs. orange document warnings) */
+  .callout.info { background: rgba(0, 113, 227, 0.07); border-color: rgba(0, 113, 227, 0.22); }
+  .callout.info svg { color: var(--accent); }
+  .callout.info code { background: rgba(0, 113, 227, 0.13); }
 
   .coverage-svg {
     position: relative;
@@ -678,6 +682,7 @@
       <div class="doc-name" id="docName"></div>
       <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
     </div>
+    <div id="scriptWarning"></div>
     <div class="lgrid" id="liveGrid"></div>
     <div class="coverage-svg hidden" id="coverageSvg"></div>
     <div class="grid-legend">
@@ -807,6 +812,11 @@
 <script type="module">
   import * as pdfjs from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.mjs";
   pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
+  // Predefined CJK CMaps (cdnjs omits them; jsdelivr ships the npm package's cmaps/).
+  // Without these, pdf.js can't decode CID fonts that use Adobe CMaps like
+  // 90ms-RKSJ-H/V (non-embedded MS Gothic/Mincho) and extracts zero text — so a
+  // vertical-JP PDF would silently yield no text and never trip the CJK notice.
+  const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/cmaps/";
 
   let pageTexts = [];
   let docTokensTotal = 0;
@@ -891,7 +901,7 @@
   }
 
   async function runWorkflow(data, filename, sizeBytes) {
-    const loadingTask = pdfjs.getDocument({ data });
+    const loadingTask = pdfjs.getDocument({ data, cMapUrl: CMAP_URL, cMapPacked: true });
     loadingTask.onProgress = p => {
       if (p.total) loaderText.textContent = `Loading... ${Math.round(p.loaded / p.total * 100)}%`;
     };
@@ -929,6 +939,15 @@
       rasterImagesPerPage.push(rasterCount);
       loaderText.textContent = `Page ${i + 1} of ${pdf.numPages}...`;
     }
+
+    // Honest-degradation flags (mutually exclusive). An undecodable text layer
+    // (font-mojibake) extracts as control-char garbage with zero CJK codepoints,
+    // so check it first; the CJK/vertical flag only applies to decodable text.
+    const allPageText = pageTexts.join("");
+    const textUndecodable =
+      controlCharRatio(allPageText) > CONTROL_CHAR_THRESHOLD;
+    const scriptUnsupported =
+      !textUndecodable && cjkRatio(allPageText) > CJK_RATIO_THRESHOLD;
 
     const meta = await pdf.getMetadata();
     const info = meta.info || {};
@@ -982,14 +1001,14 @@
     };
 
     resetSteps();
-    renderInfo(pdfInfo, filename);
+    renderInfo(pdfInfo, filename, scriptUnsupported, textUndecodable);
     hideLoader();
     uploadSection.classList.add("hidden");
     workflow.classList.remove("hidden");
     setTimeout(() => workflow.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
-  function renderInfo(info, filename) {
+  function renderInfo(info, filename, scriptUnsupported, textUndecodable) {
     $("docName").innerHTML = `${escapeHtml(filename)} <small>${info.page_count} pages · ${info.file_size_mb} MB</small>`;
     const totalChars = info.text_coverage.summary.total_text_chars;
     docTokensTotal = Math.max(1, Math.round(totalChars / 4));
@@ -1000,6 +1019,27 @@
     // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
     const COVERAGE_BAR_THRESHOLD = 500;
     renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
+
+    // Honest-degradation banner: render on CJK/vertical or undecodable docs,
+    // clear otherwise so re-uploading a Latin PDF removes a previously shown one.
+    const swEl = $("scriptWarning");
+    if (textUndecodable) {
+      // Property of the PDF, not a demo limitation → warning (orange) style with
+      // a triangle icon. The server can't recover this either; only OCR can.
+      swEl.innerHTML = `
+        <div class="callout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span><strong>Undecodable text layer.</strong> This PDF's fonts carry no Unicode mapping, so its text extracts as glyph-index garbage — not just in this demo, but in any text extractor, including the <strong>pdf-mcp server</strong>. Recovering it requires OCR on the rendered pages (<code>pdf_read_pages(ocr=True)</code>). This is a property of the PDF, not a demo limitation.</span>
+        </div>`;
+    } else if (scriptUnsupported) {
+      swEl.innerHTML = `
+        <div class="callout info">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span><strong>Vertical-script / CJK PDF detected.</strong> This in-browser demo uses pdf.js with a simplified extraction path — it can't reproduce reading order for vertical (tategaki) or unspaced CJK text, so the extracted text and search results may appear scrambled. The <strong>pdf-mcp server</strong> handles these correctly via writing-mode detection and reading-order reconstruction. <a href="https://github.com/jztan/pdf-mcp#readme" target="_blank" rel="noopener">See how →</a></span>
+        </div>`;
+    } else {
+      swEl.innerHTML = "";
+    }
 
     const calloutsEl = $("infoCallouts");
     calloutsEl.innerHTML = "";
@@ -1474,6 +1514,40 @@
     const [, y, mo, d, h, mi, s] = m;
     return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
   }
+  // Detect CJK by codepoint ratio over extracted text. The in-browser pdf.js
+  // path joins text items with spaces in raw order, which scrambles vertical
+  // (tategaki) and unspaced CJK reading order — the server fixes this; the demo
+  // can't. Threshold is whole-doc and conservative (no false banner on Latin
+  // docs with a stray kanji). Does NOT catch font-mojibake docs (glyphs extract
+  // as ASCII garbage, zero CJK codepoints) — documented out-of-scope.
+  // CJK punctuation (excl. U+3000 ideographic space, treated as whitespace) ·
+  // kana · CJK Ext-A · CJK Unified · Hangul syllables
+  const CJK_RE = new RegExp(
+    "[\\u3001-\\u303f\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uac00-\\ud7af]",
+    "g"
+  );
+  const CJK_RATIO_THRESHOLD = 0.10;
+  function cjkRatio(text) {
+    const nonSpace = text.replace(/[ \t\r\n\f　]+/g, "");
+    if (nonSpace.length === 0) return 0;
+    return (text.match(CJK_RE) || []).length / nonSpace.length;
+  }
+
+  // Undecodable text layer: when a font carries no Unicode map (e.g. embedded
+  // Type1/CFF subsets), pdf.js emits raw glyph indices as control characters
+  // (U+0001–U+001F, excl. tab/newline/CR). Real text PDFs sit at ~0; whole-page
+  // font-mojibake docs run 30%+. Neither the demo nor the server can recover
+  // this without OCR, so it gets its own notice rather than the CJK one.
+  const CONTROL_CHAR_THRESHOLD = 0.05;
+  const CONTROL_CHAR_RE = new RegExp(
+    "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]",
+    "g"
+  );
+  function controlCharRatio(text) {
+    if (text.length === 0) return 0;
+    return (text.match(CONTROL_CHAR_RE) || []).length / text.length;
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   }

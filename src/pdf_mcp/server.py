@@ -292,6 +292,25 @@ def _clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
 
+_CJK_RANGES = (
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Extension A
+    (0x3040, 0x309F),  # Hiragana
+    (0x30A0, 0x30FF),  # Katakana
+    (0xAC00, 0xD7AF),  # Hangul Syllables
+)
+
+
+def _contains_cjk(query: str) -> bool:
+    """True if the query contains any common CJK/kana/Hangul character.
+
+    Used only to attach an advisory (Part 1 of the vertical-script release):
+    a missed detection merely suppresses a warning, never a failure, so the
+    high-frequency core set is deliberate.
+    """
+    return any(lo <= ord(ch) <= hi for ch in query for lo, hi in _CJK_RANGES)
+
+
 _RRF_K = 60
 
 # Cosine-similarity threshold below which a semantic match is flagged as

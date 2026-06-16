@@ -25,6 +25,6 @@
     {"id": "ibk-72-102-p4-academic-2col", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/ibk_72-102_vertical-jp-academic_99pct.pdf"}, "page": 4, "direction": "vertical-rtl", "layout": "academic-2col"},
 
     {"id": "nihonbungaku-64-11-p4-academic", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/nihonbungaku_64-11_vertical-jp-academic.pdf"}, "page": 4, "direction": "vertical-rtl", "layout": "academic-2col"},
-    {"id": "chukobungaku-104-52-p7-academic", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/chukobungaku_104-52_vertical-jp-academic.pdf"}, "page": 7, "direction": "vertical-rtl", "layout": "academic-2col"}
+    {"id": "nihonbungaku-64-11-p3-academic", "source": {"local": "docs_internal/sample_pdfs/vertical-jp/nihonbungaku_64-11_vertical-jp-academic.pdf"}, "page": 3, "direction": "vertical-rtl", "layout": "academic-2col"}
   ]
 }

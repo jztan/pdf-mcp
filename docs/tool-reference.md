@@ -309,6 +309,12 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"keyword"` — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
+
+> **CJK queries (Japanese/Chinese/Korean):** FTS5 keyword matching is unreliable
+> on unspaced CJK text, so `mode='auto'`/`'keyword'` may miss embedded terms. The
+> tool attaches a `cjk_keyword_warning` advisory and steers you to
+> `mode='semantic'` (`pip install 'pdf-mcp[cjk]'`).
+
 - `max_results` (int, optional, default `10`) — Maximum number of matches. Clamped to `[1, 100]`.
 - `context_chars` (int, optional, default `200`) — Characters of context around each match. Clamped to `[10, 2000]`.
 - `granularity` (string, optional, default `"page"`):

@@ -69,6 +69,12 @@ semantic = [
     "numpy>=1.24",
 ]
 
+# CJK (Japanese/Chinese/Korean) search. FTS5 keyword matching is unreliable on
+# unspaced CJK, so semantic search is effectively required for usable CJK
+# retrieval. Extraction itself (read/render) needs no extra. Self-referential
+# extra → pulls exactly fastembed + numpy.
+cjk = ["pdf-mcp[semantic]"]
+
 # Column-aware reading order for multi-column PDFs. Optional because it pulls
 # pymupdf_layout/onnxruntime; without it, extraction gracefully falls back to
 # the positional-sort path (which interleaves columns on multi-column pages).

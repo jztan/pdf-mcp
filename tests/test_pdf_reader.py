@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pymupdf
 import pytest
 
+from pdf_mcp import extractor
 from pdf_mcp.cache import PDFCache
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
@@ -2376,6 +2377,35 @@ def test_reorder_vertical_strips_mojibake_before_reorder(monkeypatch):
     )
     extractor.reorder_vertical(_Page())
     assert captured["text"] == "人権"  # mojibake glyph stripped
+
+
+class TestRenderPageClip:
+    def _doc(self):
+        doc = pymupdf.open()
+        doc.new_page(width=600, height=800)
+        return doc
+
+    def test_clip_produces_smaller_pixmap(self, tmp_path):
+        doc = self._doc()
+        page = doc[0]
+        r = page.rect
+        rect = pymupdf.Rect(r.x0, r.y0, r.x0 + r.width * 0.5, r.y0 + r.height * 0.5)
+        full = extractor.render_page_as_png(doc, 0, tmp_path, "hash", dpi=72)
+        crop = extractor.render_page_as_png(doc, 0, tmp_path, "hash", dpi=72, clip=rect)
+        assert crop["width"] < full["width"]
+        assert crop["height"] < full["height"]
+        doc.close()
+
+    def test_clip_filename_distinct_from_full(self, tmp_path):
+        doc = self._doc()
+        page = doc[0]
+        r = page.rect
+        rect = pymupdf.Rect(r.x0, r.y0, r.x0 + r.width * 0.5, r.y0 + r.height * 0.5)
+        full = extractor.render_page_as_png(doc, 0, tmp_path, "hash", dpi=72)
+        crop = extractor.render_page_as_png(doc, 0, tmp_path, "hash", dpi=72, clip=rect)
+        assert full["file_path_on_disk"] != crop["file_path_on_disk"]
+        assert "clip" in crop["file_path_on_disk"]
+        doc.close()
 
 
 if __name__ == "__main__":

@@ -775,9 +775,10 @@ def render_page_as_png(
     output_dir: Path,
     pdf_hash: str,
     dpi: int = 200,
+    clip: "pymupdf.Rect | None" = None,
 ) -> dict[str, Any]:
     """
-    Render a PDF page as a PNG file.
+    Render a PDF page (or a clipped region of it) as a PNG file.
 
     Args:
         doc: PyMuPDF document object
@@ -785,14 +786,22 @@ def render_page_as_png(
         output_dir: Directory to save the PNG
         pdf_hash: Hash prefix for deterministic filenames
         dpi: Render resolution (default 200)
+        clip: Optional region rectangle (page points). When set, only that
+            region is rendered at `dpi`, and the filename carries a clip token
+            so clipped and full renders never collide on disk.
 
     Returns:
         Dict with file_path_on_disk, size_bytes, width, height
     """
     page = doc[page_num]
-    pix = page.get_pixmap(dpi=dpi)
+    if clip is not None:
+        pix = page.get_pixmap(dpi=dpi, clip=clip)
+        token = f"_clip{int(clip.x0)}-{int(clip.y0)}-{int(clip.x1)}-{int(clip.y1)}"
+    else:
+        pix = page.get_pixmap(dpi=dpi)
+        token = ""
 
-    file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi.png"
+    file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi{token}.png"
     file_path = output_dir / file_name
     try:
         pix.save(str(file_path))

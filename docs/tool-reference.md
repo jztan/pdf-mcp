@@ -259,6 +259,13 @@ Render PDF pages as PNG images for vision-capable models. Use when you need to *
 - `path` (string, required) — Path to PDF file.
 - `pages` (string, required) — Page specification (e.g. `"1"`, `"1-3"`, `"1,3,5"`).
 - `dpi` (int, optional, default `200`) — Render resolution. Clamped to `[72, 400]`.
+- `clip` (list of 4 floats, optional) — `[x0, y0, x1, y1]` region as page
+  fractions in `[0, 1]`, top-left origin. Renders a high-DPI crop of just that
+  region — the right tool for dense pages that exceed the transport cap whole.
+  Workflow: render a low-DPI whole-page overview, identify the region by eye,
+  then re-call with `clip`. Single page only; out-of-range values are clamped.
+  Clipped renders are never downsampled and bypass the render cache. The summary
+  echoes the clamped `clip`; each image block's `_meta` carries `clip` and `dpi`.
 
 **Returns:**
 
@@ -283,7 +290,7 @@ Conditional fields:
 
 Image content blocks: untrusted — they encode whatever the PDF page wants to show.
 
-**Example:**
+**Examples:**
 
 ```python
 pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
@@ -292,6 +299,9 @@ pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
 #    "pages_rendered": [5], "dpi_used": 300, "dpi_requested": 300},
 #   <MCP image content block — PNG bytes of page 5>
 # ]
+
+pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.5])
+#    -> high-DPI crop of the top-right quarter of page 10
 ```
 
 ---

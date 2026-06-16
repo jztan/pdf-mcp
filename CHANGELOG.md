@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Unicode mapping) is filtered. Works on academic papers, bulletins, and most
   dense layouts; pages delimited only by colored boxes/headers (not rules) and
   whole-page font mojibake remain known limitations.
+- CJK (Japanese/Chinese/Korean) keyword-search advisory on `pdf_search`: queries
+  containing CJK now carry a `cjk_keyword_warning` steering callers to
+  `mode='semantic'` (FTS5 keyword matching is unreliable on unspaced CJK). New
+  `pdf-mcp[cjk]` install extra. Warn-only — results, scoring, and mode are
+  unchanged.
+- `pdf_render_pages` now enforces a per-result transport byte budget: dense
+  pages are auto-downsampled to fit (reported in `render_downsampled`), and
+  pages that can't fit even at 72 DPI fall back gracefully to a full-res file
+  reference (`render_oversized_pages`) instead of an opaque "result too large"
+  failure. Each image block now reports its actual render DPI in `_meta.dpi`.
+- `pdf_render_pages` region rendering: optional `clip=[x0,y0,x1,y1]` (page
+  fractions, 0..1) renders a high-DPI crop of a single page's region — the way
+  to read dense magazine pages that exceed the transport cap whole.
 
 ### Fixed
 - Embedding vectors are now L2-normalized in `embedder.encode`/`encode_query`

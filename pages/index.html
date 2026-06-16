@@ -328,6 +328,10 @@
     font-family: var(--font-mono); font-size: 12px;
     background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
   }
+  /* Blue "info" variant — demo limitation notices (vs. orange document warnings) */
+  .callout.info { background: rgba(0, 113, 227, 0.07); border-color: rgba(0, 113, 227, 0.22); }
+  .callout.info svg { color: var(--accent); }
+  .callout.info code { background: rgba(0, 113, 227, 0.13); }
 
   .coverage-svg {
     position: relative;
@@ -678,6 +682,7 @@
       <div class="doc-name" id="docName"></div>
       <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
     </div>
+    <div id="scriptWarning"></div>
     <div class="lgrid" id="liveGrid"></div>
     <div class="coverage-svg hidden" id="coverageSvg"></div>
     <div class="grid-legend">
@@ -930,6 +935,9 @@
       loaderText.textContent = `Page ${i + 1} of ${pdf.numPages}...`;
     }
 
+    // Honest-degradation flag: does this doc read as CJK/vertical script?
+    const scriptUnsupported = cjkRatio(pageTexts.join("")) > CJK_RATIO_THRESHOLD;
+
     const meta = await pdf.getMetadata();
     const info = meta.info || {};
 
@@ -982,14 +990,14 @@
     };
 
     resetSteps();
-    renderInfo(pdfInfo, filename);
+    renderInfo(pdfInfo, filename, scriptUnsupported);
     hideLoader();
     uploadSection.classList.add("hidden");
     workflow.classList.remove("hidden");
     setTimeout(() => workflow.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
-  function renderInfo(info, filename) {
+  function renderInfo(info, filename, scriptUnsupported) {
     $("docName").innerHTML = `${escapeHtml(filename)} <small>${info.page_count} pages · ${info.file_size_mb} MB</small>`;
     const totalChars = info.text_coverage.summary.total_text_chars;
     docTokensTotal = Math.max(1, Math.round(totalChars / 4));
@@ -1000,6 +1008,19 @@
     // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
     const COVERAGE_BAR_THRESHOLD = 500;
     renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
+
+    // Honest-degradation banner: render on CJK/vertical docs, clear otherwise so
+    // re-uploading a Latin PDF removes a previously shown banner.
+    const swEl = $("scriptWarning");
+    if (scriptUnsupported) {
+      swEl.innerHTML = `
+        <div class="callout info">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span><strong>Vertical-script / CJK PDF detected.</strong> This in-browser demo uses pdf.js with a simplified extraction path — it can't reproduce reading order for vertical (tategaki) or unspaced CJK text, so the extracted text and search results may appear scrambled. The <strong>pdf-mcp server</strong> handles these correctly via writing-mode detection and reading-order reconstruction. <a href="https://github.com/jztan/pdf-mcp#readme" target="_blank" rel="noopener">See how →</a></span>
+        </div>`;
+    } else {
+      swEl.innerHTML = "";
+    }
 
     const calloutsEl = $("infoCallouts");
     calloutsEl.innerHTML = "";
@@ -1474,6 +1495,25 @@
     const [, y, mo, d, h, mi, s] = m;
     return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
   }
+  // Detect CJK by codepoint ratio over extracted text. The in-browser pdf.js
+  // path joins text items with spaces in raw order, which scrambles vertical
+  // (tategaki) and unspaced CJK reading order — the server fixes this; the demo
+  // can't. Threshold is whole-doc and conservative (no false banner on Latin
+  // docs with a stray kanji). Does NOT catch font-mojibake docs (glyphs extract
+  // as ASCII garbage, zero CJK codepoints) — documented out-of-scope.
+  // CJK punctuation (excl. U+3000 ideographic space, treated as whitespace) ·
+  // kana · CJK Ext-A · CJK Unified · Hangul syllables
+  const CJK_RE = new RegExp(
+    "[\\u3001-\\u303f\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uac00-\\ud7af]",
+    "g"
+  );
+  const CJK_RATIO_THRESHOLD = 0.10;
+  function cjkRatio(text) {
+    const nonSpace = text.replace(/[ \t\r\n\f　]+/g, "");
+    if (nonSpace.length === 0) return 0;
+    return (text.match(CJK_RE) || []).length / nonSpace.length;
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   }

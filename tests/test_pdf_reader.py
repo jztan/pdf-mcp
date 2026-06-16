@@ -1936,35 +1936,49 @@ class TestPageWorkers:
         assert isinstance(results[0][1], dict)
 
 
-def _fake_rawdict(lines):
-    # lines: list of (dir_tuple, n_chars)
+def _fake_mode_dict(lines):
+    # lines: list of (dir_tuple, n_chars). detect_writing_mode reads each
+    # line's "dir" and counts characters from span text length. Spans carry a
+    # CJK filler glyph so the CJK pre-gate passes and the dir histogram (not the
+    # short-circuit) is what these tests exercise.
     return {
         "blocks": [
-            {"lines": [{"dir": d, "spans": [{"chars": [{}] * n}]} for d, n in lines]}
+            {"lines": [{"dir": d, "spans": [{"text": "あ" * n}]} for d, n in lines]}
         ]
     }
 
 
-class _FakeRawPage:
+class _FakeModePage:
+    """Page double exposing both get_text('text') (for the CJK gate) and
+    get_text('dict') (for the dir histogram)."""
+
     def __init__(self, data):
         self._data = data
+        self._text = "".join(
+            span["text"]
+            for block in data["blocks"]
+            for line in block["lines"]
+            for span in line["spans"]
+        )
 
     def get_text(self, kind):
-        assert kind == "rawdict"
+        if kind == "text":
+            return self._text
+        assert kind == "dict"
         return self._data
 
 
 def test_detect_writing_mode_vertical():
     from pdf_mcp.extractor import detect_writing_mode
 
-    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 100)]))
+    page = _FakeModePage(_fake_mode_dict([((0.0, -1.0), 100)]))
     assert detect_writing_mode(page) == "vertical"
 
 
 def test_detect_writing_mode_horizontal():
     from pdf_mcp.extractor import detect_writing_mode
 
-    page = _FakeRawPage(_fake_rawdict([((1.0, 0.0), 100)]))
+    page = _FakeModePage(_fake_mode_dict([((1.0, 0.0), 100)]))
     assert detect_writing_mode(page) == "horizontal"
 
 
@@ -1972,14 +1986,14 @@ def test_detect_writing_mode_mixed():
     from pdf_mcp.extractor import detect_writing_mode
 
     # 60% vertical -> between 0.50 and 0.80 -> mixed
-    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 40)]))
+    page = _FakeModePage(_fake_mode_dict([((0.0, -1.0), 60), ((1.0, 0.0), 40)]))
     assert detect_writing_mode(page) == "mixed"
 
 
 def test_detect_writing_mode_below_min_chars_is_horizontal():
     from pdf_mcp.extractor import detect_writing_mode
 
-    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 10)]))  # < _VERTICAL_MIN_CHARS
+    page = _FakeModePage(_fake_mode_dict([((0.0, -1.0), 10)]))  # < _MIN_CHARS
     assert detect_writing_mode(page) == "horizontal"
 
 
@@ -1988,8 +2002,22 @@ def test_detect_writing_mode_horizontal_dominant_mixed_still_routes():
     vertical chars) is 'mixed' -> reaches the reorder (gate lowered to 0.20)."""
     from pdf_mcp.extractor import detect_writing_mode
 
-    page = _FakeRawPage(_fake_rawdict([((0.0, -1.0), 60), ((1.0, 0.0), 140)]))
+    page = _FakeModePage(_fake_mode_dict([((0.0, -1.0), 60), ((1.0, 0.0), 140)]))
     assert detect_writing_mode(page) == "mixed"
+
+
+def test_detect_writing_mode_non_cjk_skips_dict_parse():
+    """A page with no CJK characters is horizontal without paying for the
+    expensive dict parse (vertical/tategaki layout is a CJK phenomenon)."""
+    from pdf_mcp.extractor import detect_writing_mode
+
+    class _NoDictPage:
+        def get_text(self, kind):
+            if kind == "text":
+                return "The quick brown fox jumps over the lazy dog. " * 50
+            raise AssertionError("dict parse must be skipped for non-CJK pages")
+
+    assert detect_writing_mode(_NoDictPage()) == "horizontal"
 
 
 def _fake_dict(lines):

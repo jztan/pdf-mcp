@@ -17,7 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole-page font mojibake remain known limitations. Validated against a
   Japanese coherence corpus (academic, bulletin, and magazine layouts);
   Traditional Chinese vertical is script-agnostic by the same geometry but is
-  not yet validated against a corpus.
+  not yet validated against a corpus. Writing-mode detection short-circuits on a
+  cheap CJK pre-gate so horizontal-only (e.g. Latin) PDFs skip the per-glyph
+  layout parse this path would otherwise run on every page — the writing-mode
+  step is ~2.9× faster on a non-CJK document (≈30% off the full reading-order
+  extraction on a 216-page Latin synthetic), with classification unchanged on
+  CJK pages.
 - CJK (Japanese/Chinese/Korean) keyword-search advisory on `pdf_search`: queries
   containing CJK now carry a `cjk_keyword_warning` steering callers to
   `mode='semantic'` (FTS5 keyword matching is unreliable on unspaced CJK). New

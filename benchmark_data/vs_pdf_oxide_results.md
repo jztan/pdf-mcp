@@ -15,9 +15,10 @@ reproducible anywhere.
   - **pdf-mcp (reading-order)** — our production `pdf_read_all` path,
     `extract_text_from_page(page, sort_by_position=True)`. With the
     `multicolumn` extra installed (it is here) this runs column detection per
-    page so multi-column text is not interleaved. As of the vertical-script
-    merge it *also* runs `detect_writing_mode` on every page — see the per-stage
-    breakdown below.
+    page so multi-column text is not interleaved. The vertical-script merge also
+    added `detect_writing_mode`, but a CJK pre-gate now skips its per-glyph parse
+    on non-CJK (e.g. this Latin synthetic) pages — see the per-stage breakdown
+    below.
   - **pdf-mcp (raw)** — bare `page.get_text()`, the PyMuPDF floor with no
     reading-order work. This is the apples-to-apples engine comparison.
   - **pdf_oxide** — `PdfDocument(path)[i].text` joined over all pages.
@@ -32,10 +33,10 @@ reproducible anywhere.
 
 | PDF (pages) | pdf-mcp reading-order | pdf-mcp raw | pdf_oxide | pdfminer.six |
 |-------------|----------------------:|------------:|----------:|-------------:|
-| synthetic (15)  | 85.2 ms   | 9.1 ms   | 3.4 ms  | 109.0 ms  |
-| synthetic (26)  | 148.7 ms  | 15.6 ms  | 6.0 ms  | 188.6 ms  |
-| synthetic (75)  | 429.7 ms  | 44.2 ms  | 18.9 ms | 555.7 ms  |
-| synthetic (216) | 1257.3 ms | 130.5 ms | 53.2 ms | 1631.3 ms |
+| synthetic (15)  | 56.0 ms   | 9.3 ms   | 3.4 ms  | 112.0 ms  |
+| synthetic (26)  | 96.8 ms   | 16.1 ms  | 6.1 ms  | 188.8 ms  |
+| synthetic (75)  | 279.0 ms  | 44.0 ms  | 19.1 ms | 555.5 ms  |
+| synthetic (216) | 818.6 ms  | 129.5 ms | 53.1 ms | 1629.3 ms |
 
 Output chars (216p): reading-order 443338 · raw 442042 · pdf_oxide 442474 ·
 pdfminer.six 477354.
@@ -44,35 +45,40 @@ pdfminer.six 477354.
 
 | PDF (pages) | pdf_oxide vs reading-order | pdf_oxide vs raw | pdfminer.six vs pdf_oxide |
 |-------------|---------------------------:|-----------------:|--------------------------:|
-| synthetic (15)  | **25.1x** | 2.68x | **32x slower** |
-| synthetic (26)  | **24.8x** | 2.60x | **31x slower** |
-| synthetic (75)  | **22.7x** | 2.34x | **29x slower** |
-| synthetic (216) | **23.6x** | 2.45x | **31x slower** |
+| synthetic (15)  | **16.4x** | 2.71x | **33x slower** |
+| synthetic (26)  | **15.8x** | 2.62x | **31x slower** |
+| synthetic (75)  | **14.6x** | 2.30x | **29x slower** |
+| synthetic (216) | **15.4x** | 2.44x | **31x slower** |
 
 > **Hardware note:** these ratios differ sharply from the earlier 4-core Linux
 > run, where pdf_oxide was ~3.2x faster than reading-order and ~at parity with
 > raw PyMuPDF. On native-ARM Apple Silicon, the pure-Rust pdf_oxide pulls much
-> further ahead: ~2.5x faster than raw PyMuPDF and ~24x faster than our
-> reading-order path. Absolute numbers and ratios are machine-specific; output
-> is identical (deterministic corpus), so only the timings move.
+> further ahead: ~2.5x faster than raw PyMuPDF and ~15x faster than our
+> reading-order path. (The reading-order gap was ~24x before the CJK pre-gate
+> dropped `detect_writing_mode` to a near-no-op on this Latin corpus — see the
+> stage breakdown.) Absolute numbers and ratios are machine-specific; output is
+> identical (deterministic corpus), so only the timings move.
 
 ## Where the reading-order time goes (216p, best-of-7)
 
-The reading-order path is ~24x slower than pdf_oxide, but that is **not** the
+The reading-order path is ~15x slower than pdf_oxide, but that is **not** the
 base engine — it is the two per-page analysis passes layered on top:
 
 | stage | min ms (216p) | note |
 |-------|--------------:|------|
-| raw `get_text` x216            | 263.6 ms  | the PyMuPDF floor |
-| `detect_writing_mode` x216     | **822.8 ms** | full per-page glyph scan (vertical-script merge) |
-| `detect_column_boxes` x216     | 559.9 ms  | onnxruntime column detection (`multicolumn` extra) |
-| full reading-order x216        | 1255.3 ms | the production path |
+| raw `get_text` x216            | 265.3 ms  | the PyMuPDF floor |
+| `detect_writing_mode` x216     | 268.0 ms  | CJK pre-gate short-circuits non-CJK pages (was 822.8 ms) |
+| `detect_column_boxes` x216     | **564.5 ms** | onnxruntime column detection (`multicolumn` extra) |
+| full reading-order x216        | 826.7 ms  | the production path |
 
-The single largest cost is now **`detect_writing_mode`** (added by the
-vertical-script feature), which scans every glyph on every page to classify
-orientation — it outweighs even the onnxruntime column detector. It is the
-clearest optimization target: short-circuit horizontal-dominant pages early, or
-cache the per-page decision.
+`detect_writing_mode` (added by the vertical-script feature) used to be the
+single largest cost at **822.8 ms** — it scanned every glyph on every page to
+classify orientation. A CJK pre-gate now returns `"horizontal"` after a cheap
+plain-text check whenever a page has no CJK characters (vertical/tategaki layout
+is a CJK phenomenon), so on this Latin corpus the expensive per-glyph parse is
+skipped and the stage collapses to ~the `get_text` floor. **`detect_column_boxes`
+(onnxruntime) is now the dominant pass** and the next optimization target if
+extraction latency matters (make it opt-in per call, or cache the decision).
 
 ## Takeaways
 
@@ -80,12 +86,13 @@ cache the per-page decision.
    on the old 4-core Linux box the two were near parity. The pure-Rust engine
    scales better on native ARM. pdf_oxide's headline "5x faster" still overstates
    the gap for plain text, but it is no longer a tie.
-2. **pdf_oxide is ~23–25x faster than pdf-mcp's production reading-order path.**
-   That entire gap is our two per-page passes — `detect_writing_mode` (the larger
-   share now) and onnxruntime column detection — *not* the base engine. We pay it
-   deliberately for correct multi-column and vertical reading order, but both are
-   optimization targets if extraction latency matters (sample pages, cache the
-   decision, make each pass opt-in per call).
+2. **pdf_oxide is ~15–16x faster than pdf-mcp's production reading-order path.**
+   That entire gap is our two per-page passes — onnxruntime column detection (now
+   the larger share) and `detect_writing_mode` — *not* the base engine. We pay it
+   deliberately for correct multi-column and vertical reading order. The CJK
+   pre-gate already removed `detect_writing_mode`'s cost on non-CJK docs (it was
+   the larger share, ~24x gap, before this change); column detection is the
+   remaining target (make it opt-in per call, or cache the decision).
 3. **pdfminer.six is ~29–32x slower than pdf_oxide** and ~12x slower than raw
    PyMuPDF — even our two-pass reading-order path edges it out. The pure-Python
    reference extractor is the clear loser on speed; both pdf_oxide and PyMuPDF

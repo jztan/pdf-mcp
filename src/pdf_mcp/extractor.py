@@ -197,22 +197,44 @@ _MAX_COLUMNS = 16
 _VERTICAL_MIN_FRACTION = 0.20
 _VERTICAL_MIN_CHARS = 30
 
+# Vertical (tategaki / 直排) layout is a CJK phenomenon, so a page with no CJK
+# characters cannot need the reorder path. We test plain ``get_text("text")``
+# (cheap) against this before paying for the per-line ``get_text("dict")`` parse
+# (which builds a nested dict for every block/line/span — the dominant cost of
+# the reading-order path, run on every page). Covers the CJK Unified Ideographs
+# (incl. Ext-A and the SIP Ext-B block), Hiragana, Katakana, Hangul, CJK
+# symbols/punctuation, and halfwidth/fullwidth forms.
+_CJK_RE = re.compile("[　-ヿ㐀-䶿一-鿿가-힯豈-﫿" "＀-￯]|[\U00020000-\U0002a6df]")
+
 
 def detect_writing_mode(page: Any) -> str:
     """Classify a page as 'vertical', 'mixed', or 'horizontal'.
 
-    Builds a glyph-orientation histogram from ``get_text("rawdict")``: a text
+    Builds a glyph-orientation histogram from ``get_text("dict")``: a text
     line whose direction vector is closer to vertical (|dy| > |dx|) contributes
     its glyphs to the vertical count, otherwise horizontal. 'vertical' and
     'mixed' route to the reorder path; 'horizontal' keeps the existing path.
+
+    Uses ``"dict"`` rather than ``"rawdict"``: we only need each line's ``dir``
+    vector and a character count, so the per-glyph bbox/origin data ``rawdict``
+    emits is pure overhead. ``"dict"`` parses the page several times faster and
+    runs on every page (including horizontal-only docs), so the difference
+    dominates the reading-order path's cost.
+
+    Before that parse we short-circuit on a cheap CJK pre-gate: a page with no
+    CJK characters cannot be vertical, so we skip the ``"dict"`` parse entirely
+    and return 'horizontal'. This keeps horizontal-only (e.g. Latin) docs off
+    the expensive path the vertical-script feature added.
     """
+    if not _CJK_RE.search(page.get_text("text")):
+        return "horizontal"
     vertical = 0
     horizontal = 0
-    data = page.get_text("rawdict")
+    data = page.get_text("dict")
     for block in data.get("blocks", []):
         for line in block.get("lines", []):
             dx, dy = line.get("dir", (1.0, 0.0))
-            nchars = sum(len(span.get("chars", [])) for span in line.get("spans", []))
+            nchars = sum(len(span.get("text", "")) for span in line.get("spans", []))
             if abs(dy) > abs(dx):
                 vertical += nchars
             else:

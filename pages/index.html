@@ -812,6 +812,11 @@
 <script type="module">
   import * as pdfjs from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.mjs";
   pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
+  // Predefined CJK CMaps (cdnjs omits them; jsdelivr ships the npm package's cmaps/).
+  // Without these, pdf.js can't decode CID fonts that use Adobe CMaps like
+  // 90ms-RKSJ-H/V (non-embedded MS Gothic/Mincho) and extracts zero text — so a
+  // vertical-JP PDF would silently yield no text and never trip the CJK notice.
+  const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/cmaps/";
 
   let pageTexts = [];
   let docTokensTotal = 0;
@@ -896,7 +901,7 @@
   }
 
   async function runWorkflow(data, filename, sizeBytes) {
-    const loadingTask = pdfjs.getDocument({ data });
+    const loadingTask = pdfjs.getDocument({ data, cMapUrl: CMAP_URL, cMapPacked: true });
     loadingTask.onProgress = p => {
       if (p.total) loaderText.textContent = `Loading... ${Math.round(p.loaded / p.total * 100)}%`;
     };

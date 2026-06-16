@@ -311,6 +311,45 @@ def _contains_cjk(query: str) -> bool:
     return any(lo <= ord(ch) <= hi for ch in query for lo, hi in _CJK_RANGES)
 
 
+def _semantic_available() -> bool:
+    """Probe whether semantic search can run (fastembed installed + model ok).
+
+    Used in keyword/section paths, which never otherwise load embeddings, to
+    choose the CJK advisory wording. Lightweight: check_available validates the
+    name/import only, it does not encode.
+    """
+    from . import embedder as _embedder
+
+    try:
+        _embedder.check_available(pdf_config.embedding_model)
+        return True
+    except (ImportError, ValueError):
+        return False
+
+
+def _cjk_keyword_warning(
+    query: str, *, semantic_available: bool, section: bool = False
+) -> str | None:
+    """Advisory string for CJK queries on keyword-bearing paths, else None.
+
+    Warn-only: never changes results, scoring, mode, or the error contract.
+    """
+    if not _contains_cjk(query):
+        return None
+    if semantic_available:
+        steer = "granularity='page', mode='semantic'" if section else "mode='semantic'"
+        return (
+            "Query contains CJK characters. FTS5 keyword matching is unreliable "
+            "for unspaced CJK text; results may be incomplete. For CJK, prefer "
+            f"{steer}."
+        )
+    return (
+        "Query contains CJK characters. FTS5 keyword matching is unreliable for "
+        "unspaced CJK text and semantic search is unavailable. Install "
+        "pdf-mcp[cjk] for usable CJK retrieval."
+    )
+
+
 _RRF_K = 60
 
 # Cosine-similarity threshold below which a semantic match is flagged as

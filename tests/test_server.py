@@ -17,6 +17,7 @@ from pdf_mcp.server import (
     _python_search,
     _rrf_fuse,
     _contains_cjk,
+    _cjk_keyword_warning,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -60,6 +61,33 @@ class TestContainsCJK:
 
     def test_empty_false(self):
         assert _contains_cjk("") is False
+
+
+class TestCJKWarningText:
+    def test_none_when_no_cjk(self):
+        assert _cjk_keyword_warning("hello", semantic_available=True) is None
+        assert _cjk_keyword_warning("hello", semantic_available=False) is None
+
+    def test_available_page_steers_to_semantic(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=True)
+        assert msg is not None
+        assert "mode='semantic'" in msg
+        assert "granularity" not in msg  # page variant
+
+    def test_available_section_steers_to_page_semantic(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=True, section=True)
+        assert msg is not None
+        assert "granularity='page'" in msg
+        assert "mode='semantic'" in msg
+
+    def test_unavailable_names_cjk_extra(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=False)
+        assert msg is not None
+        assert "pdf-mcp[cjk]" in msg
+
+    def test_unavailable_section_also_names_extra(self):
+        msg = _cjk_keyword_warning("厚木", semantic_available=False, section=True)
+        assert "pdf-mcp[cjk]" in msg
 
 
 class TestRrfFuse:

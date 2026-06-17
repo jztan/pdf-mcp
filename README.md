@@ -10,7 +10,7 @@
 
 **Surgical PDF access for AI agents — search, read, and extract without flooding context.**
 
-An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search a PDF by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text — even from multi-column and Japanese/Chinese layouts.
+An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search a PDF by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text — even from multi-column and Japanese layouts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 
@@ -31,7 +31,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
-| Vertical scripts (Japanese/Chinese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
+| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
@@ -44,7 +44,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
 - **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
-- **Vertical-script reading order** — Japanese/Chinese tategaki (直排) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
+- **Vertical-script reading order** — Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
 

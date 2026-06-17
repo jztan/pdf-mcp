@@ -34,7 +34,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Vertical scripts (Japanese/Chinese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
-| Scanned PDFs | No text extracted | OCR via Tesseract (`pdf_read_pages(ocr=True)`) |
+| Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
 | Tool design | Single monolithic tool | 9 specialized tools |
 
@@ -42,7 +42,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 
 - **Hybrid search** — find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
-- **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract
+- **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
 - **Vertical-script reading order** — Japanese/Chinese tategaki (直排) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
@@ -313,62 +313,11 @@ Agent workflow:
 
 ## Configuration
 
-### Access control (optional)
+pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.
 
-Create `~/.config/pdf-mcp/config.toml` to restrict which local paths and URL hosts the server will access. The file is optional — if absent, the server is permissive within the built-in SSRF floor (HTTPS-only, blocked private IP ranges).
-
-```toml
-[paths]
-allow = ["~/Documents/**", "/data/pdfs/**"]
-deny  = ["~/.ssh/**", "~/.aws/**"]
-
-[urls]
-allow = ["*.internal.example.com"]
-deny  = ["untrusted.example.com"]
-
-[limits]
-max_response_bytes = 200000
-```
-
-The `[limits]` block caps text-payload byte size on `pdf_read_all` and section-granularity `pdf_search` — see [docs/response-limits.md](docs/response-limits.md). Rules use shell-glob patterns (`*` matches across path separators). `deny` wins when both match. Path matching operates on the resolved path after symlink expansion. A malformed config file prevents the server from starting — it never silently falls back to permissive.
-
-### Environment variables
-
-```bash
-# Cache directory (default: ~/.cache/pdf-mcp)
-PDF_MCP_CACHE_DIR=/path/to/cache
-
-# Cache TTL in hours (default: 24)
-PDF_MCP_CACHE_TTL=48
-
-# Max worker processes for parallel OCR / rendering in pdf_read_pages
-# (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
-PDF_MCP_MAX_WORKERS=8
-```
-
-### Caching
-
-The server uses SQLite for persistent caching.
-
-**Cache location:** `~/.cache/pdf-mcp/cache.db`
-
-**What's cached:**
-
-| Data | Benefit |
-|------|---------|
-| Metadata + text coverage | Avoid re-parsing document info |
-| Page text | Skip re-extraction |
-| Images | Skip re-encoding |
-| Tables | Skip re-detection |
-| TOC | Skip re-parsing |
-| FTS5 index | O(log N) search with BM25 ranking after first query |
-| Embeddings | Instant semantic search after first indexing run |
-| Rendered PNGs | Skip re-rendering; shared between `pdf_render_pages` and `pdf_read_pages(render_dpi=…)` |
-
-**Cache invalidation:**
-- Automatic when file modification time changes
-- Manual via the `pdf_cache_clear` tool
-- TTL: 24 hours (configurable)
+- **Access control** — `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
+- **Environment variables** — cache directory, TTL, and parallel OCR/render worker count
+- **Caching** — SQLite-backed persistence, what's cached, and invalidation
 
 ## Roadmap
 

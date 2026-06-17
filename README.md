@@ -31,7 +31,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
-| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 直排) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
+| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |

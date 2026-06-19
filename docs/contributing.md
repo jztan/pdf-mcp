@@ -44,7 +44,9 @@ uv run flake8 src/ tests/ --max-line-length=88
 uv run black src/ tests/
 ```
 
-OCR tests skip automatically when system Tesseract is absent. Benchmark tests (`tests/test_benchmark_*.py`) are kept off the CI fast path — run them manually when working on search or extraction quality.
+OCR tests skip automatically when system Tesseract is absent. Benchmark tests (`tests/test_benchmark_*.py`) are fast unit tests for the benchmark scripts' helpers — they run by default and don't download models or run a benchmark.
+
+Tests marked `slow` are excluded from the release pre-flight gate (`scripts/release.py` runs `pytest tests/ -m "not slow"`). The only `slow` test today is the billed coherence-regression guard (`tests/test_eval_coherence.py::test_coherence_no_regression_vs_baseline`), which shells out to the real `claude` CLI over the corpus. Run slow tests deliberately with `pytest -m slow`, and tag any new billed or multi-minute test with `@pytest.mark.slow` so it stays out of the gate.
 
 ## Submitting a PR
 

@@ -187,6 +187,7 @@ def test_read_baseline_missing_returns_empty(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     shutil.which("claude") is None,
     reason="coherence guard needs the authenticated claude CLI + network",

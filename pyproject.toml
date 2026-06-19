@@ -104,6 +104,7 @@ filterwarnings = [
 ]
 markers = [
     "integration: end-to-end tests requiring system dependencies (e.g. Tesseract)",
+    "slow: billed and/or multi-minute tests excluded from the release gate (e.g. the claude-CLI coherence eval)",
 ]
 
 [tool.black]

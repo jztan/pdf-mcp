@@ -96,6 +96,19 @@ def calculate_new_version(current: str, bump_type: str) -> str:
     return f"{major}.{minor}.{patch + 1}"
 
 
+def preflight_pytest_cmd() -> list[str]:
+    """Pytest command for the release gate.
+
+    Deselects ``slow`` tests — notably the billed coherence-eval guard
+    (``test_coherence_no_regression_vs_baseline``), which shells out to the
+    real ``claude`` CLI over the whole corpus. That is a quality benchmark,
+    not a correctness gate: it runs for minutes and silently bills API calls.
+    A release pre-flight must be fast and side-effect-free, so it is excluded
+    here and run separately when quality regressions are being checked.
+    """
+    return ["pytest", "tests/", "-v", "-m", "not slow", "--tb=short"]
+
+
 def preflight_checks() -> None:
     """Verify prerequisites for release."""
     print("\n=== Pre-flight Checks ===\n")
@@ -129,7 +142,7 @@ def preflight_checks() -> None:
     # Check tests pass
     print("Running tests...")
     result = run_command(
-        ["pytest", "tests/", "-v", "--tb=short"],
+        preflight_pytest_cmd(),
         check=False,
         capture_output=True,
     )

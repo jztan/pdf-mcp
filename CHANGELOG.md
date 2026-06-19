@@ -55,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permanently `False` for those models. The default `bge-small-en-v1.5` was
   unaffected (already unit-norm), so its results are unchanged.
 
+### Security
+- Floor `pydantic-settings>=2.14.2` (pulled in transitively via `fastmcp` →
+  `mcp`) to clear GHSA-4xgf-cpjx-pc3j.
+
 ## [1.16.0] - 2026-06-12
 ### Added
 - `server_info` tool: setup-time discovery of which optional features are

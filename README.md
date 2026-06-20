@@ -31,7 +31,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
-| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き) — search CJK with mode='semantic' (pip install 'pdf-mcp[cjk]') |
+| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き); CJK keyword search works on unspaced Japanese/Chinese/Korean text via a char-split FTS index |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
@@ -80,8 +80,9 @@ pip install 'pdf-mcp[multicolumn]'
 
 Without it, multi-column pages fall back to positional-sort extraction, which can interleave columns.
 
-For Japanese/Chinese/Korean PDFs (recommended — CJK *search* needs semantic;
-extraction works without it):
+For Japanese/Chinese/Korean PDFs, CJK *keyword* search works out of the box
+(a char-split FTS index matches unspaced CJK terms). The `[cjk]` extra adds
+*semantic* CJK search (embeddings); extraction works without either:
 
 ```bash
 pip install 'pdf-mcp[cjk]'

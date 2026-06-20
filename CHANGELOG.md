@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bm25()` IDF is hermetic (unrelated cached PDFs no longer shift keyword
   ranking). One-time finding: hybrid/keyword/semantic NDCG = 0.767/0.625/0.656.
 
+### Fixed
+- CJK (Japanese / Chinese / Korean) keyword search now returns hits for terms
+  embedded in unspaced text. A parallel pair of character-split FTS5 indexes
+  (`unicode61`, one codepoint per token) is queried with phrase semantics for
+  CJK-containing queries, while English/Latin queries continue to use the
+  untouched `porter unicode61` index — so English keyword ranking is unchanged
+  (verified by the RRF v2 gate: NDCG@10 still 0.642/0.656/0.777). Excerpts are
+  sourced from the original page text, not the space-split index, and a
+  literal-substring post-filter drops rare cross-separator false positives.
+  Existing caches rebuild only the FTS layer on first open (no re-extraction,
+  no re-embedding). Measured CJK keyword recall on the local vertical-jp corpus:
+  1.00 across 13 graded queries; the previously-failing `厚木基地` recovers from
+  0 to 3 hits.
+
+### Removed
+- The `cjk_keyword_warning` advisory on `pdf_search` responses, which steered
+  CJK keyword queries to semantic mode. CJK keyword search now works directly,
+  so the advisory is gone from all modes (keyword / auto / semantic / section).
+
 ### Changed
 - `pdf_read_pages` extraction skips the onnxruntime column detector on
   confidently single-column pages via a cheap block-geometry pre-gate, cutting

@@ -1,0 +1,18 @@
+{
+  "description": "Graded CJK (Japanese) keyword-search queries over the local vertical-jp municipal-bulletin corpus. Ground-truth pages are NOT stored here; the benchmark derives them at run time by scanning each page's extracted text for the literal query substring (the honest ground truth). Each query lists a min_hits sanity floor. Anchor case: 厚木基地 returned 0 hits before the CJK FTS5 fix and must now return >=1.",
+  "queries": [
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "厚木基地", "mode": "keyword", "relevant_terms": ["厚木基地"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "終活", "mode": "keyword", "relevant_terms": ["終活"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "令和6年度", "mode": "keyword", "relevant_terms": ["令和6年度"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "10人", "mode": "keyword", "relevant_terms": ["10人"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "3月", "mode": "keyword", "relevant_terms": ["3月"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "健康", "mode": "keyword", "relevant_terms": ["健康"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "情報", "mode": "keyword", "relevant_terms": ["情報"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "子ども", "mode": "keyword", "relevant_terms": ["子ども"], "min_hits": 1},
+    {"pdf": "yamato_koho_2025-02_vertical-jp_p10-95pct.pdf", "query": "図書館", "mode": "keyword", "relevant_terms": ["図書館"], "min_hits": 1},
+    {"pdf": "sodegaura_koho_2025-11_vertical-jp_p3-89pct.pdf", "query": "令和", "mode": "keyword", "relevant_terms": ["令和"], "min_hits": 1},
+    {"pdf": "sodegaura_koho_2025-11_vertical-jp_p3-89pct.pdf", "query": "募集", "mode": "keyword", "relevant_terms": ["募集"], "min_hits": 1},
+    {"pdf": "sodegaura_koho_2025-11_vertical-jp_p3-89pct.pdf", "query": "イベント", "mode": "keyword", "relevant_terms": ["イベント"], "min_hits": 1},
+    {"pdf": "sodegaura_koho_2025-11_vertical-jp_p3-89pct.pdf", "query": "申込", "mode": "keyword", "relevant_terms": ["申込"], "min_hits": 1}
+  ]
+}

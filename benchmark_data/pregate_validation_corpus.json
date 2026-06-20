@@ -1,0 +1,31 @@
+{
+  "_comment": "Pages the pre-gate must NOT wrongly call single-column. arXiv two-column is already covered by reading_order_corpus.json; these cover non-academic layouts the heuristic was never tuned on.",
+  "must_not_short_circuit": [
+    {
+      "url": "https://www.cdc.gov/mmwr/volumes/73/wr/pdfs/mm7339-H.pdf",
+      "page": 2,
+      "layout": "two-column-government-report",
+      "notes": "CDC MMWR Vol 73 Issue 39 (Oct 2024). Classic two-column government medical report produced with Adobe InDesign. Page 2 has 36 text blocks split left/right with column x-midpoints near 36-296 (left col) and 305-576 (right col); wide-block fraction is 2/36 = 0.056, well below the 0.6 majority threshold."
+    },
+    {
+      "url": "https://www.irs.gov/pub/irs-irbs/irb24-01.pdf",
+      "page": 2,
+      "layout": "two-column-government-bulletin",
+      "notes": "IRS Internal Revenue Bulletin 2024-01. Classic two-column government bulletin. Page 2 has 16 text blocks split left/right; blocks span x0~30-285 (left col) and x0~306-561 (right col); wide-block fraction is 2/16 = 0.125, well below threshold."
+    },
+    {
+      "url": "https://www.cdc.gov/vitalsigns/pdf/vs-0518-vector-borne-H.pdf",
+      "page": 4,
+      "layout": "two-column-magazine-style",
+      "notes": "CDC VitalSigns May 2018 infographic-style two-column report. Page 4 has 24 text blocks arranged in two columns; wide-block fraction is 0/24 = 0.0, well below threshold."
+    }
+  ],
+  "cjk_horizontal_classify": [
+    {
+      "url": "https://www.soumu.go.jp/main_content/000956732.pdf",
+      "page": 2,
+      "expected_single_column": true,
+      "notes": "Japan Ministry of Internal Affairs and Communications (総務省) 2024 Information and Communication White Paper summary, landscape A4 (780x540 pt). Page 2 is a Japanese-language (CJK horizontal) single-column table-of-contents page; 8 text blocks all spanning roughly the full text width (750 pt); wide-block fraction 5/8 = 0.625, above the 0.6 threshold => correctly classified as single-column."
+    }
+  ]
+}

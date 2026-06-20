@@ -47,3 +47,26 @@ def test_corpus_schema_and_coverage():
 
     assert by_class["stemming"] >= 5, "need >=5 stemming-sensitive queries"
     assert by_class["substring"] >= 5, "need >=5 substring-sensitive queries"
+
+
+sys.path.insert(0, str(REPO / "src"))
+
+
+def test_rrf_fusion_surfaces_union_of_both_arms():
+    # keyword finds {A=1, B=2}; semantic finds {B=2, C=3}; gold = {1,2,3}
+    from pdf_mcp.server import _rrf_fuse
+
+    fused = _rrf_fuse([1, 2], [2, 3], 10)
+    pages = [p for p, _ in fused]
+    assert set(pages) >= {1, 2, 3}
+    # B appears in both arms -> highest fused score
+    assert pages[0] == 2
+
+
+def test_rrf_does_not_promote_single_signal_distractor_above_gold():
+    # gold page 2 is mid-rank in both arms; distractor 9 tops only keyword.
+    from pdf_mcp.server import _rrf_fuse
+
+    fused = _rrf_fuse([9, 5, 2], [2, 5], 10)
+    ranks = {p: i for i, (p, _) in enumerate(fused)}
+    assert ranks[2] < ranks[9]  # gold outranks the keyword-only distractor

@@ -70,3 +70,11 @@ def test_rrf_does_not_promote_single_signal_distractor_above_gold():
     fused = _rrf_fuse([9, 5, 2], [2, 5], 10)
     ranks = {p: i for i, (p, _) in enumerate(fused)}
     assert ranks[2] < ranks[9]  # gold outranks the keyword-only distractor
+
+
+def test_ranked_gains_maps_pages_to_grades_in_rank_order():
+    import benchmark_rrf as br
+
+    matches = [{"page": 5}, {"page": 1}, {"page": 9}]
+    labels = {"5": 2, "1": 3}  # page 9 unlabelled -> 0
+    assert br._ranked_gains(matches, labels) == [2.0, 3.0, 0.0]

@@ -16,8 +16,6 @@ from pdf_mcp.server import (
     _resolve_path,
     _python_search,
     _rrf_fuse,
-    _contains_cjk,
-    _cjk_keyword_warning,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -43,65 +41,6 @@ class TestURLDownloadCacheWiring:
             server_module.url_fetcher.cache_dir
             == server_module.cache.cache_dir / "downloads"
         )
-
-
-class TestContainsCJK:
-    def test_kanji_true(self):
-        assert _contains_cjk("厚木基地") is True
-
-    def test_hiragana_true(self):
-        assert _contains_cjk("おわり") is True
-
-    def test_katakana_true(self):
-        assert _contains_cjk("カタカナ") is True
-
-    def test_pure_kana_heading_true(self):
-        assert _contains_cjk("終活") is True
-
-    def test_hangul_true(self):
-        assert _contains_cjk("한국어") is True
-
-    def test_cjk_ext_a_true(self):
-        assert _contains_cjk("㐀") is True  # U+3400
-
-    def test_ascii_false(self):
-        assert _contains_cjk("hello world") is False
-
-    def test_digits_punct_false(self):
-        assert _contains_cjk("123 - 456 (a.b)") is False
-
-    def test_mixed_latin_cjk_true(self):
-        assert _contains_cjk("base 基地") is True
-
-    def test_empty_false(self):
-        assert _contains_cjk("") is False
-
-
-class TestCJKWarningText:
-    def test_none_when_no_cjk(self):
-        assert _cjk_keyword_warning("hello", semantic_available=True) is None
-        assert _cjk_keyword_warning("hello", semantic_available=False) is None
-
-    def test_available_page_steers_to_semantic(self):
-        msg = _cjk_keyword_warning("厚木", semantic_available=True)
-        assert msg is not None
-        assert "mode='semantic'" in msg
-        assert "granularity" not in msg  # page variant
-
-    def test_available_section_steers_to_page_semantic(self):
-        msg = _cjk_keyword_warning("厚木", semantic_available=True, section=True)
-        assert msg is not None
-        assert "granularity='page'" in msg
-        assert "mode='semantic'" in msg
-
-    def test_unavailable_names_cjk_extra(self):
-        msg = _cjk_keyword_warning("厚木", semantic_available=False)
-        assert msg is not None
-        assert "pdf-mcp[cjk]" in msg
-
-    def test_unavailable_section_also_names_extra(self):
-        msg = _cjk_keyword_warning("厚木", semantic_available=False, section=True)
-        assert "pdf-mcp[cjk]" in msg
 
 
 class TestRrfFuse:
@@ -3154,51 +3093,11 @@ class TestRenderRealSpawnCorrectness:
         ]
 
 
-class TestCJKWarningWiring:
-    def test_keyword_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
-        result = pdf_search(sample_pdf, "厚木", mode="keyword")
-        assert "cjk_keyword_warning" in result
-        # keyword path: steers to semantic OR to install, never crashes
-        assert (
-            "mode='semantic'" in result["cjk_keyword_warning"]
-            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
-        )
-
-    def test_keyword_mode_ascii_no_warning(self, sample_pdf, isolated_server):
-        result = pdf_search(sample_pdf, "content", mode="keyword")
-        assert "cjk_keyword_warning" not in result
-
-    def test_auto_mode_cjk_adds_warning(self, sample_pdf, isolated_server):
-        result = pdf_search(sample_pdf, "厚木", mode="auto")
-        assert "cjk_keyword_warning" in result
-
-    def test_semantic_mode_cjk_no_warning(self, sample_pdf, isolated_server):
-        # page semantic is already the right path; no advisory.
-        result = pdf_search(sample_pdf, "厚木", mode="semantic")
-        if "error" in result:
-            pytest.skip("fastembed not installed in this env")
-        assert "cjk_keyword_warning" not in result
-
-
-class TestCJKWarningSection:
-    def test_section_cjk_adds_page_steering_warning(
-        self, sample_pdf_with_toc_sections, isolated_server
-    ):
-        result = pdf_search(sample_pdf_with_toc_sections, "厚木", granularity="section")
-        assert "cjk_keyword_warning" in result
-        # section variant steers to page granularity OR install hint
-        assert (
-            "granularity='page'" in result["cjk_keyword_warning"]
-            or "pdf-mcp[cjk]" in result["cjk_keyword_warning"]
-        )
-
-    def test_section_ascii_no_warning(
-        self, sample_pdf_with_toc_sections, isolated_server
-    ):
-        result = pdf_search(
-            sample_pdf_with_toc_sections, "Chapter", granularity="section"
-        )
-        assert "cjk_keyword_warning" not in result
+class TestNoCJKKeywordWarning:
+    def test_no_cjk_keyword_warning_in_any_mode(self, sample_pdf, isolated_server):
+        for mode in ("keyword", "semantic", "auto"):
+            resp = pdf_search(sample_pdf, "厚木基地", mode=mode)
+            assert "cjk_keyword_warning" not in resp
 
 
 class TestEncodedLen:

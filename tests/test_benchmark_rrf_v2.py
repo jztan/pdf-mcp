@@ -78,3 +78,28 @@ def test_ranked_gains_maps_pages_to_grades_in_rank_order():
     matches = [{"page": 5}, {"page": 1}, {"page": 9}]
     labels = {"5": 2, "1": 3}  # page 9 unlabelled -> 0
     assert br._ranked_gains(matches, labels) == [2.0, 3.0, 0.0]
+
+
+def test_keyword_regression_flags_drop_beyond_tolerance():
+    import benchmark_rrf as br
+
+    base = {"per_query": {"q1": {"keyword": 0.90}, "q2": {"keyword": 0.50}}}
+    cur = {"per_query": {"q1": {"keyword": 0.80}, "q2": {"keyword": 0.49}}}
+    msgs = br.keyword_regressions(cur, base, br._TOLERANCE)
+    assert any("q1" in m for m in msgs)   # 0.10 drop > 0.02
+    assert not any("q2" in m for m in msgs)  # 0.01 drop within tolerance
+
+
+def test_keyword_regression_ignores_semantic_only_drop():
+    import benchmark_rrf as br
+
+    base = {"per_query": {"q1": {"keyword": 0.9, "semantic": 0.9}}}
+    cur = {"per_query": {"q1": {"keyword": 0.9, "semantic": 0.1}}}
+    assert br.keyword_regressions(cur, base, br._TOLERANCE) == []
+
+
+def test_check_fastembed_mismatch_warns():
+    import benchmark_rrf as br
+
+    assert br.check_fastembed("0.9.0", "0.8.0") is not None
+    assert br.check_fastembed("0.8.0", "0.8.0") is None

@@ -40,10 +40,42 @@ except ImportError:
 
 import _retrieval_metrics as _rm  # noqa: E402
 
+_TOLERANCE = 0.02
+
+_BASELINE = Path("benchmark_data/rrf_v2_baseline.json")
+
 
 def _ranked_gains(matches: list[dict], labels: dict) -> list[float]:
     """Graded relevance of each retrieved page, in rank order. 0 if unlabelled."""
     return [float(labels.get(str(m["page"]), 0)) for m in matches]
+
+
+def keyword_regressions(current: dict, baseline: dict, tolerance: float) -> list[str]:
+    """Queries whose keyword-mode NDCG regressed beyond tolerance vs baseline."""
+    msgs: list[str] = []
+    base_pq = baseline["per_query"]
+    cur_pq = current["per_query"]
+    for qid, base_modes in base_pq.items():
+        if qid not in cur_pq:
+            msgs.append(f"{qid}: missing from current run")
+            continue
+        drop = base_modes.get("keyword", 0.0) - cur_pq[qid].get("keyword", 0.0)
+        if drop > tolerance:
+            msgs.append(
+                f"{qid}: keyword NDCG dropped {drop:.3f} "
+                f"({base_modes['keyword']:.3f} -> {cur_pq[qid]['keyword']:.3f})"
+            )
+    return msgs
+
+
+def check_fastembed(current_version: str, baseline_version: str) -> str | None:
+    """Warn if the embedding library version differs from the baseline's."""
+    if current_version != baseline_version:
+        return (
+            f"fastembed version changed ({baseline_version} -> {current_version}); "
+            "embeddings may shift. Re-run with --update-baseline after review."
+        )
+    return None
 
 
 def run_graded(corpus, ground_truth, modes=("keyword", "semantic", "auto"), k=10):
@@ -728,6 +760,31 @@ def _save_results(
     base.with_suffix(".json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def run_gate(update_baseline: bool) -> int:
+    """Run gate: load baseline, check fastembed, check keyword regressions."""
+    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
+    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
+    current = run_graded(corpus, gt)
+    if update_baseline or not _BASELINE.exists():
+        _BASELINE.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+        fb_ver = current["fastembed_version"]
+        print(f"Baseline written to {_BASELINE} (fastembed {fb_ver})")
+        return 0
+    baseline = json.loads(_BASELINE.read_text("utf-8"))
+    warn = check_fastembed(current["fastembed_version"], baseline["fastembed_version"])
+    if warn:
+        print("ERROR:", warn)
+        return 1
+    regressions = keyword_regressions(current, baseline, _TOLERANCE)
+    if regressions:
+        print("Keyword-mode NDCG regressions:")
+        for msg in regressions:
+            print("  -", msg)
+        return 1
+    print("RRF v2 gate: keyword-mode NDCG within tolerance. OK.")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -741,7 +798,20 @@ def main() -> None:
         default="benchmark_data/ground_truth.json",
         help="Path to ground truth JSON (default: benchmark_data/ground_truth.json)",
     )
+    parser.add_argument(
+        "--graded",
+        action="store_true",
+        help="Run gate: compare keyword-mode NDCG against baseline",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Update baseline file when used with --graded",
+    )
     args = parser.parse_args()
+
+    if args.graded:
+        sys.exit(run_gate(args.update_baseline))
 
     now = datetime.now()
     file_ts = now.strftime("%Y%m%d_%H%M%S")

@@ -1,7 +1,7 @@
 [project]
 name = "pdf-mcp"
 version = "1.17.0"
-description = "Production-ready MCP server for PDF processing with intelligent caching. Extract text, search, and analyze PDFs with AI agents."
+description = "Surgical PDF access for AI agents: keyword, semantic & hybrid search; structured extraction of text, tables, images & TOC; OCR; and CJK/vertical-script support — with SQLite caching."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"

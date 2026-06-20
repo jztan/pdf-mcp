@@ -4,14 +4,20 @@
 
 - **Current version:** v1.17.0 (released 2026-06-19)
 - **MCP Registry:** Published
-- **Test suite:** 857 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; the billed coherence eval (`test_coherence_no_regression_vs_baseline`, marked `slow`) is excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Test suite:** 880 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
 - **Tools:** `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
 
 ---
 
-## Next Release
+## Next Release (1.18.0)
 
-No release branch open. Queued on `develop` (metadata-only, not in 1.17.0): four `chore(packaging)` commits — py3.13 classifier, `Development Status` Beta→Production/Stable, refreshed package description, and author/maintainer email switched to a GitHub noreply address. They ride the next release. Cut it from develop via `python scripts/release.py patch|minor` per [`RELEASE_SOP.md`](RELEASE_SOP.md) once the `[Unreleased]` block is ready.
+No release branch open. Merged on `develop`, awaiting the cut:
+
+- **RRF benchmark v2** — a deterministic, `slow`-marked retrieval-quality gate asserting **keyword-mode** NDCG@10 against a committed pre-CJK baseline, over a stemming/substring-targeted graded corpus. Built as the English-regression guardrail for the planned CJK FTS5 tokenizer change. One-time finding: **hybrid RRF beats single modes — NDCG@10 0.777 vs 0.642 keyword / 0.656 semantic** (see [`benchmark_data/rrf_v2_results.md`](benchmark_data/rrf_v2_results.md)).
+- **Single-column pre-gate** — `extract_text_from_page` skips the onnxruntime column detector (~565 ms/216p, first-extraction only) on confidently single-column pages via a conservative block-geometry heuristic. Validated safe on real non-arXiv two-column + CJK-horizontal PDFs; reading order unchanged.
+- Four metadata-only `chore(packaging)` commits — py3.13 classifier, `Development Status` Beta→Production/Stable, refreshed package description, author/maintainer email switched to a GitHub noreply address.
+
+Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](RELEASE_SOP.md) — the `[Unreleased]` block already documents the RRF/pre-gate entries.
 
 ---
 
@@ -80,4 +86,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-06-20 (post-v1.17.0 — vertical-script CJK and the embedding L2-norm fix shipped; removed the Pending-release section; refreshed status/test count; reworded the P3 coherence item around the now-shipped LLM-judge harness; logged the rejected MLX fork)
+**Last Updated:** 2026-06-20 (RRF benchmark v2 keyword-NDCG gate + single-column pre-gate merged to develop (`863c347`) for 1.18.0 — hybrid RRF validated 0.777 vs 0.642/0.656; test count 857→880; Next Release section now lists the merged features alongside the packaging commits)

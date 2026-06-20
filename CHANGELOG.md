@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Guards the planned CJK FTS5 tokenizer change against silent English keyword
   regression. One-time finding: hybrid/keyword/semantic NDCG = 0.777/0.642/0.656.
 
+### Changed
+- `pdf_read_pages` extraction skips the onnxruntime column detector on
+  confidently single-column pages via a cheap block-geometry pre-gate, cutting
+  the dominant first-extraction cost (~565 ms/216p with `[multicolumn]`) on
+  single-column documents. Conservative by design — ambiguous or multi-column
+  pages still run the full detector, so reading order is unchanged.
+
 ## [1.17.0] - 2026-06-20
 ### Added
 - Vertical-script (tategaki / 直排) reading-order reconstruction for Japanese

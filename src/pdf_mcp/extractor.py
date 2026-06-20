@@ -514,6 +514,38 @@ def vertical_detection_available() -> bool:
     return True
 
 
+# A page is "confidently single-column" only when the strong majority of text
+# blocks run nearly the full text width. Two-column blocks span ~half the width
+# and fail this test, so the heuristic errs toward False (pay the detector)
+# rather than risk scrambling a real two-column page.
+_SINGLE_COL_WIDTH_FRAC = 0.6
+_SINGLE_COL_MAJORITY = 0.8
+
+
+def is_confidently_single_column(blocks: list[Any]) -> bool:
+    """True only when block geometry is unmistakably single-column.
+
+    Conservative by design: ambiguous or multi-column-looking pages return
+    False so the full ``detect_column_boxes`` path runs unchanged.
+    """
+    text_blocks = [
+        b
+        for b in blocks
+        if len(b) >= 7 and b[6] == 0 and isinstance(b[4], str) and b[4].strip()
+    ]
+    if len(text_blocks) < 2:
+        return False
+    left = min(b[0] for b in text_blocks)
+    right = max(b[2] for b in text_blocks)
+    text_width = right - left
+    if text_width <= 0:
+        return False
+    wide = sum(
+        1 for b in text_blocks if (b[2] - b[0]) >= _SINGLE_COL_WIDTH_FRAC * text_width
+    )
+    return wide >= _SINGLE_COL_MAJORITY * len(text_blocks)
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 

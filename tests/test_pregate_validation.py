@@ -24,7 +24,7 @@ def test_non_arxiv_two_column_pages_are_not_short_circuited():
         doc = pymupdf.open(path)
         page = doc[entry["page"] - 1]
         blocks = page.get_text("blocks", sort=True)
-        assert is_confidently_single_column(blocks) is False, (
-            f"{entry['layout']} p{entry['page']} wrongly short-circuited"
-        )
+        assert (
+            is_confidently_single_column(blocks) is False
+        ), f"{entry['layout']} p{entry['page']} wrongly short-circuited"
         doc.close()

@@ -105,7 +105,7 @@ def test_check_fastembed_mismatch_warns():
     assert br.check_fastembed("0.8.0", "0.8.0") is None
 
 
-import pytest
+import pytest  # noqa: E402
 
 _FASTEMBED = None
 try:

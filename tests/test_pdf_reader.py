@@ -2557,5 +2557,30 @@ def test_english_search_unchanged_by_cjk_path(tmp_path):
     assert [r["page"] for r in results] == [1]
 
 
+def test_migration_backfills_cjk_from_existing_page_text(tmp_path):
+    from pdf_mcp.cache import PDFCache, _cjk_split
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "厚木基地の記事")
+
+    # Simulate a pre-feature cache: drop the CJK tables, keep page_text.
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute("DROP TABLE pdf_search_fts_cjk")
+        conn.execute("DROP TABLE pdf_section_fts_cjk")
+        pt_before = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+
+    # Re-open: migration should rebuild the CJK table from page_text.
+    cache2 = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache2.db_path) as conn:
+        rows = conn.execute(
+            "SELECT text FROM pdf_search_fts_cjk WHERE file_path = ?", (str(pdf),)
+        ).fetchall()
+        pt_after = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+    assert rows == [(_cjk_split("厚木基地の記事"),)]
+    assert pt_after == pt_before  # page_text preserved, no re-extraction
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

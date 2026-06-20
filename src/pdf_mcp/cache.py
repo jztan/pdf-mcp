@@ -416,6 +416,12 @@ class PDFCache:
                     # Leave fts_available=True since page search still works.
                     pass
 
+                cjk_existed = bool(
+                    conn.execute(
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='pdf_search_fts_cjk'"
+                    ).fetchone()
+                )
                 try:
                     conn.execute(_FTS5_CJK_TABLE_SCHEMA)
                     conn.execute(_FTS5_CJK_SECTION_TABLE_SCHEMA)
@@ -423,8 +429,50 @@ class PDFCache:
                     # CJK tables failed but porter tables succeeded — leave
                     # fts_available=True; CJK queries degrade to no-match.
                     pass
+                else:
+                    if not cjk_existed and bool(_get_columns(conn, "page_text")):
+                        self._backfill_cjk_tables(conn)
 
         self.clear_expired()
+
+    def _backfill_cjk_tables(self, conn: sqlite3.Connection) -> None:
+        """One-time rebuild of CJK FTS tables from already-cached text.
+
+        Reads original page_text and porter section rows; inserts char-split
+        copies for CJK-containing rows only. No re-extraction, no re-embedding.
+        """
+        page_rows = conn.execute(
+            "SELECT file_path, page_num, text FROM page_text"
+        ).fetchall()
+        page_inserts = [
+            (fp, pn, _cjk_split(txt))
+            for fp, pn, txt in page_rows
+            if txt and _contains_cjk(txt)
+        ]
+        if page_inserts:
+            conn.executemany(
+                "INSERT INTO pdf_search_fts_cjk (file_path, page_num, text)"
+                " VALUES (?, ?, ?)",
+                page_inserts,
+            )
+        if bool(_get_columns(conn, "pdf_section_fts")):
+            sec_rows = conn.execute(
+                "SELECT file_path, section_id, title, text, start_page,"
+                " end_page, title_source FROM pdf_section_fts"
+            ).fetchall()
+            sec_inserts = [
+                (fp, sid, _cjk_split(title or ""), _cjk_split(text or ""), sp, ep, ts)
+                for fp, sid, title, text, sp, ep, ts in sec_rows
+                if _contains_cjk(title or "") or _contains_cjk(text or "")
+            ]
+            if sec_inserts:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts_cjk"
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    sec_inserts,
+                )
 
     def _get_file_info(self, path: str) -> tuple[float, int]:
         """Get file modification time and size."""

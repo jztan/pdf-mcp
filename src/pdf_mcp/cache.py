@@ -50,6 +50,46 @@ _EXTRACTION_VERSION = 5  # 5: dense-vertical article segmentation + mojibake fil
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
 
+# Unicode blocks treated as CJK for character-split FTS tokenization. Covers
+# the high-frequency core; rarer blocks (CJK Ext-B+, Hangul Jamo) intentionally
+# fall through to whole-token (old behavior) — a documented gap, not a surprise.
+_CJK_RANGES: tuple[tuple[int, int], ...] = (
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Extension A
+    (0x3040, 0x309F),  # Hiragana
+    (0x30A0, 0x30FF),  # Katakana
+    (0xAC00, 0xD7AF),  # Hangul Syllables
+    (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+    (0xFF00, 0xFFEF),  # Halfwidth/Fullwidth Forms
+)
+
+
+def _is_cjk_char(ch: str) -> bool:
+    o = ord(ch)
+    return any(lo <= o <= hi for lo, hi in _CJK_RANGES)
+
+
+def _contains_cjk(text: str) -> bool:
+    """True if text contains any character in _CJK_RANGES."""
+    return any(_is_cjk_char(ch) for ch in text)
+
+
+def _cjk_split(text: str) -> str:
+    """Insert a space around every CJK codepoint; other runs pass through.
+
+    Defines the CJK/Latin token boundary for BOTH the write path and the
+    query escaper, so the two token streams cannot diverge. Idempotent.
+    """
+    out: list[str] = []
+    for ch in text:
+        if _is_cjk_char(ch):
+            out.append(" ")
+            out.append(ch)
+            out.append(" ")
+        else:
+            out.append(ch)
+    return " ".join("".join(out).split())
+
 
 def _escape_fts5_query(query: str) -> str:
     """

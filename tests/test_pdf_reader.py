@@ -2438,5 +2438,45 @@ class TestRenderPageClip:
         doc.close()
 
 
+class TestCJKHelpers:
+    def test_contains_cjk_true_for_kanji_kana_hangul(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert _contains_cjk("厚木基地")
+        assert _contains_cjk("終活")
+        assert _contains_cjk("한국")
+        assert _contains_cjk("カタカナ")
+
+    def test_contains_cjk_true_for_fullwidth_and_compat(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert _contains_cjk("１２３")  # fullwidth digits 0xFF10-19
+        assert _contains_cjk("豈")  # compatibility ideograph
+
+    def test_contains_cjk_false_for_latin_and_empty(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert not _contains_cjk("hello world 2024")
+        assert not _contains_cjk("")
+
+    def test_cjk_split_spaces_each_cjk_char_keeps_latin_whole(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("厚木基地をめぐる") == "厚 木 基 地 を め ぐ る"
+        assert _cjk_split("2024年") == "2024 年"
+        assert _cjk_split("PDF形式") == "PDF 形 式"
+        assert _cjk_split("令和6年度") == "令 和 6 年 度"
+
+    def test_cjk_split_idempotent_on_spaced_input(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("終 活") == "終 活"
+
+    def test_cjk_split_pure_latin_unchanged(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("machine learning") == "machine learning"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

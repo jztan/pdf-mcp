@@ -534,10 +534,11 @@ class TestIsSingleColumnConfident:
         assert is_confidently_single_column(blocks) is True
 
     def test_majority_full_width_with_one_short_caption_is_single_column(self):
+        # 3 full-width body blocks + 1 short TEXT caption: 3/4 = 0.75 >= 0.6 -> True
         blocks = [
             self._blk(50, 500),
             self._blk(50, 500),
             self._blk(50, 500),
-            self._blk(50, 120, ""),
+            self._blk(50, 120),
         ]
         assert is_confidently_single_column(blocks) is True

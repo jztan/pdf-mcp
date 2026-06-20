@@ -519,7 +519,13 @@ def vertical_detection_available() -> bool:
 # and fail this test, so the heuristic errs toward False (pay the detector)
 # rather than risk scrambling a real two-column page.
 _SINGLE_COL_WIDTH_FRAC = 0.6
-_SINGLE_COL_MAJORITY = 0.8
+# Width-fraction check is the real two-column guard — genuine two-column blocks
+# span ~0.44 of the text width and never count as "wide", so they're rejected
+# regardless of this majority value. The majority threshold only governs
+# single-column pages that contain some narrow blocks like captions/headings,
+# which we DO want to short-circuit. 0.6 keeps two-column safety while not
+# forgoing single-column-with-captions pages.
+_SINGLE_COL_MAJORITY = 0.6
 
 
 def is_confidently_single_column(blocks: list[Any]) -> bool:

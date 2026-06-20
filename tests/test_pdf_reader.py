@@ -2510,5 +2510,52 @@ def test_save_page_text_populates_cjk_table(tmp_path):
     assert cjk_rows[0][1] == _cjk_split("厚木基地をめぐる活動")
 
 
+def test_escape_fts5_query_cjk_builds_phrases():
+    from pdf_mcp.cache import _escape_fts5_query_cjk
+
+    assert _escape_fts5_query_cjk("厚木基地") == '"厚 木 基 地"'
+    assert _escape_fts5_query_cjk("2024年") == '"2024 年"'
+    # multiple whitespace tokens AND-joined
+    assert _escape_fts5_query_cjk("終活 健康") == '"終 活" "健 康"'
+
+
+def test_cjk_keyword_search_finds_embedded_term(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    # embedded (not whitespace-delimited) — the porter path returns 0 here
+    cache.save_page_text(str(pdf), 0, "本紙は厚木基地をめぐる課題を扱う。")
+    results = cache.search_fts(str(pdf), "厚木基地", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+    # excerpt is original text, NOT space-mangled split text
+    assert "厚 木 基 地" not in results[0]["excerpt"]
+    assert "厚木基地" in results[0]["excerpt"]
+
+
+def test_cjk_keyword_search_two_char_term(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "今月の特集は終活についてです。")
+    results = cache.search_fts(str(pdf), "終活", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+
+
+def test_english_search_unchanged_by_cjk_path(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "machine learning models")
+    # Porter stemming still works: query 'model' matches 'models'
+    results = cache.search_fts(str(pdf), "model", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

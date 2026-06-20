@@ -136,6 +136,25 @@ def _escape_fts5_query(query: str) -> str:
     return " ".join(tokens)
 
 
+def _escape_fts5_query_cjk(query: str) -> str:
+    """Escape a query for the char-split CJK FTS index.
+
+    Delegates each whitespace token to _cjk_split (the same function the write
+    path uses, guaranteeing identical tokenization), strips FTS5 reserved
+    characters, and wraps the split token in one double-quoted phrase so the
+    chars must be positionally adjacent. Tokens are AND-joined.
+    """
+    phrases: list[str] = []
+    for raw in query.split():
+        split = _cjk_split(raw)
+        cleaned = _FTS_TOKEN_STRIP.sub("", split).strip()
+        if cleaned:
+            phrases.append(f'"{cleaned}"')
+    if not phrases:
+        return _NO_MATCH_SENTINEL
+    return " ".join(phrases)
+
+
 def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
     """Return column names for a table, or empty set if the table does not exist."""
     cursor = conn.execute(f"PRAGMA table_info({table_name})")
@@ -1266,6 +1285,28 @@ class PDFCache:
 
     # ==================== FTS5 Search Operations ====================
 
+    def _cjk_excerpt(
+        self, path: str, page_num: int, query: str, context_chars: int
+    ) -> str | None:
+        """Build an excerpt from ORIGINAL page text for a CJK match.
+
+        Returns a context window centered on the literal query substring (query
+        chars rejoined, whitespace removed). Returns None when the literal
+        substring is absent — the contiguity post-filter that drops rare
+        cross-separator false positives.
+        """
+        text = self.get_page_text(path, page_num) or ""
+        needle = "".join(query.split())
+        idx = text.find(needle)
+        if idx < 0:
+            return None
+        half = max(0, (context_chars - len(needle)) // 2)
+        start = max(0, idx - half)
+        end = min(len(text), idx + len(needle) + half)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+        return f"{prefix}{text[start:end]}{suffix}"
+
     def search_fts(
         self,
         path: str,
@@ -1288,6 +1329,34 @@ class PDFCache:
         """
         if not self.fts_available:
             return []
+
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT page_num, -bm25(pdf_search_fts_cjk)"
+                        " FROM pdf_search_fts_cjk"
+                        " WHERE pdf_search_fts_cjk MATCH ? AND file_path = ?"
+                        " ORDER BY bm25(pdf_search_fts_cjk)"
+                        " LIMIT ?",
+                        (escaped, path, max_results),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+            out: list[dict[str, Any]] = []
+            for page_num, score in rows:
+                excerpt = self._cjk_excerpt(path, int(page_num), query, context_chars)
+                if excerpt is None:
+                    continue  # contiguity post-filter: cross-separator false hit
+                out.append(
+                    {
+                        "page": int(page_num) + 1,
+                        "excerpt": excerpt,
+                        "score": float(score),
+                    }
+                )
+            return out
 
         escaped = _escape_fts5_query(query)
         # Map context_chars to FTS5 snippet token count (approximate)
@@ -1334,6 +1403,26 @@ class PDFCache:
         """
         if not self.fts_available:
             return {}
+
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            needle = "".join(query.split())
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT page_num FROM pdf_search_fts_cjk"
+                        " WHERE pdf_search_fts_cjk MATCH ? AND file_path = ?",
+                        (escaped, path),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return {}
+            counts: dict[int, int] = {}
+            for (page_num,) in rows:
+                text = self.get_page_text(path, int(page_num)) or ""
+                count = text.count(needle)
+                if count > 0:
+                    counts[int(page_num)] = count
+            return counts
 
         tokens_lower = [_FTS_TOKEN_STRIP.sub("", tok).lower() for tok in query.split()]
         tokens_lower = [t for t in tokens_lower if t]
@@ -1462,6 +1551,40 @@ class PDFCache:
         """
         if not self.fts_available:
             return []
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT section_id, title, start_page, end_page,"
+                        " title_source, -bm25(pdf_section_fts_cjk)"
+                        " FROM pdf_section_fts_cjk"
+                        " WHERE pdf_section_fts_cjk MATCH ? AND file_path = ?"
+                        " ORDER BY bm25(pdf_section_fts_cjk)"
+                        " LIMIT ?",
+                        (escaped, path, max_results),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+                # Replace each row's split title with the original from the
+                # porter section table (same section_id), so display is clean.
+                orig = conn.execute(
+                    "SELECT section_id, title FROM pdf_section_fts"
+                    " WHERE file_path = ?",
+                    (path,),
+                ).fetchall()
+                title_by_id = {int(s): t for s, t in orig}
+            return [
+                {
+                    "section_id": int(sid),
+                    "title": title_by_id.get(int(sid), title),
+                    "start_page": int(sp),
+                    "end_page": int(ep),
+                    "title_source": title_source,
+                    "score": float(score),
+                }
+                for sid, title, sp, ep, title_source, score in rows
+            ]
         escaped = _escape_fts5_query(query)
         with sqlite3.connect(self.db_path) as conn:
             try:

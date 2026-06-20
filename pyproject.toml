@@ -6,10 +6,10 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
-    { name = "Kevin Tan", email = "jingzheng.tan@gmail.com" }
+    { name = "Kevin Tan", email = "6021013+jztan@users.noreply.github.com" }
 ]
 maintainers = [
-    { name = "Kevin Tan", email = "jingzheng.tan@gmail.com" }
+    { name = "Kevin Tan", email = "6021013+jztan@users.noreply.github.com" }
 ]
 keywords = [
     "mcp",

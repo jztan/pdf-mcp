@@ -13,7 +13,7 @@ maintainers = [
 ]
 keywords = [
     "mcp",
-    "pdf", 
+    "pdf",
     "ai",
     "claude",
     "llm",
@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: General",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -66,7 +67,9 @@ dev = [
     "msgpack>=1.2.1",
     "numpy>=1.24",
     "pre-commit>=3.5",
-    "pymupdf4llm>=1.24.0",
+    # Column-aware extraction tests need the real detector; reference the
+    # extra so its version floor lives in one place (see `multicolumn`).
+    "pdf-mcp[multicolumn]",
 ]
 
 semantic = [

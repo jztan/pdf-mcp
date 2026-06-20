@@ -2491,5 +2491,24 @@ def test_cjk_fts_tables_created(tmp_path):
     assert "pdf_section_fts_cjk" in names
 
 
+def test_save_page_text_populates_cjk_table(tmp_path):
+    from pdf_mcp.cache import PDFCache, _cjk_split
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")  # path must exist for mtime
+    cache.save_page_text(str(pdf), 0, "厚木基地をめぐる活動")
+    cache.save_page_text(str(pdf), 1, "English only page")
+
+    with sqlite3.connect(cache.db_path) as conn:
+        cjk_rows = conn.execute(
+            "SELECT page_num, text FROM pdf_search_fts_cjk"
+        ).fetchall()
+    # CJK page stored split; English page absent from CJK table
+    assert len(cjk_rows) == 1
+    assert cjk_rows[0][0] == 0
+    assert cjk_rows[0][1] == _cjk_split("厚木基地をめぐる活動")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

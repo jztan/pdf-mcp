@@ -585,6 +585,17 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     (path, page_num, text),
                 )
+                if _contains_cjk(text):
+                    conn.execute(
+                        "DELETE FROM pdf_search_fts_cjk"
+                        " WHERE file_path = ? AND page_num = ?",
+                        (path, page_num),
+                    )
+                    conn.execute(
+                        "INSERT INTO pdf_search_fts_cjk"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        (path, page_num, _cjk_split(text)),
+                    )
 
     def get_page_source(self, path: str, page_num: int) -> str | None:
         """Return 'extracted', 'ocr', or None (page not cached)."""
@@ -1405,6 +1416,28 @@ class PDFCache:
                         )
                         for i, s in enumerate(sections)
                     ],
+                )
+            conn.execute("DELETE FROM pdf_section_fts_cjk WHERE file_path = ?", (path,))
+            cjk_sections = [
+                (
+                    path,
+                    i,
+                    _cjk_split(s.title or ""),
+                    _cjk_split(s.text or ""),
+                    s.start_page,
+                    s.end_page,
+                    s.title_source,
+                )
+                for i, s in enumerate(sections)
+                if _contains_cjk(s.title or "") or _contains_cjk(s.text or "")
+            ]
+            if cjk_sections:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts_cjk"
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    cjk_sections,
                 )
 
     def search_section_fts(

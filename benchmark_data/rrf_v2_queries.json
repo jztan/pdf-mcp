@@ -1,0 +1,229 @@
+{
+  "_rubric": "Graded relevance per (query,page): 3=directly answers, 2=partially answers, 1=tangential mention, 0=irrelevant (omit 0s; unlabelled pages score 0). Classes: 'stemming' (query term is a morphological variant of the gold page's term, e.g. 'training' vs 'trained' — ranks under porter, breaks under trigram); 'substring' (token-based BM25 vs trigram-substring matching diverge, e.g. hyphenated/compound terms); 'fusion' (true fusion scenario: keyword finds pages A,B but misses C; semantic finds B,C but misses A; hybrid via RRF finds all); 'distractor' (query where a naive lexical match would rank a wrong page high).",
+  "queries": [
+    {
+      "id": "stem-01",
+      "pdf": "attention",
+      "query": "training the models",
+      "class": "stemming",
+      "labels": {"7": 3, "8": 2, "1": 1},
+      "notes": "Gold pages use 'trained'/'training schedule'. Page 7 describes Training Data and Batching plus Hardware/Schedule sections. Page 8 mentions 'training cost' in Table 2 and Label Smoothing during training. Page 1 abstract mentions 'less time to train'. Porter stems 'training'/'trained'/'train' to a common root; trigram on 'training' would not match 'trained'."
+    },
+    {
+      "id": "stem-02",
+      "pdf": "attention",
+      "query": "regularize the network",
+      "class": "stemming",
+      "labels": {"7": 3, "8": 2},
+      "notes": "Page 7 has explicit 'Regularization' section heading ('We employ three types of regularization during training'). Page 8 details 'Residual Dropout' and 'Label Smoothing'. Query uses 'regularize' (verb); pages use 'regularization' (noun). Porter stems both to 'regular*'; trigram on 'regularize' would not match 'regularization'."
+    },
+    {
+      "id": "stem-03",
+      "pdf": "attention",
+      "query": "encoded positional information",
+      "class": "stemming",
+      "labels": {"6": 3, "3": 2},
+      "notes": "Page 6 describes Positional Encoding section: 'we add positional encodings to the input embeddings'. Page 3 also mentions encoder and positional encodings in passing. Query uses 'encoded' (past-tense verb); page uses 'encoding' (gerund/noun). Porter both stem to 'encod*'."
+    },
+    {
+      "id": "stem-04",
+      "pdf": "bert",
+      "query": "masked tokens prediction",
+      "class": "stemming",
+      "labels": {"4": 3, "1": 2, "2": 2},
+      "notes": "Page 4 contains the Masked LM task: 'we simply mask some percentage of the input tokens at random, and then predict those masked tokens'. Page 1 introduces 'masked language model (MLM) pre-training objective'. Page 2 references 'masked language models'. Query uses 'masked' and 'prediction'; pages use 'masking', 'predicting', 'predict'. Porter stems match."
+    },
+    {
+      "id": "stem-05",
+      "pdf": "resnet",
+      "query": "skip connections learned features",
+      "class": "stemming",
+      "labels": {"2": 3, "3": 2},
+      "notes": "Page 2 defines shortcut connections and describes identity shortcuts: 'shortcut connections simply perform identity mapping'. Page 3 expands on residual learning with identity mapping shortcuts. Query uses 'skip' (casual synonym) and 'learned'; pages use 'learning' and 'shortcut'. Porter stems 'learned'/'learning' to 'learn*'."
+    },
+    {
+      "id": "stem-06",
+      "pdf": "gpt3",
+      "query": "scaled language models generalize",
+      "class": "stemming",
+      "labels": {"1": 3, "39": 2, "6": 2},
+      "notes": "Page 1 abstract: 'scaling up language models greatly improves task-agnostic, few-shot performance'. Page 39 discusses 'scaling up parameters and FLOPS-per-token'. Page 6 says 'for most tasks we find relatively smooth scaling with model capacity'. Query uses 'scaled' (past participle); pages use 'scaling'. Porter stems both to 'scal*'."
+    },
+    {
+      "id": "stem-07",
+      "pdf": "bert",
+      "query": "fine-tuned downstream performance",
+      "class": "stemming",
+      "labels": {"5": 3, "3": 2, "9": 2},
+      "notes": "Page 5 explains fine-tuning: 'Fine-tuning is straightforward since the self-attention mechanism... BERT to model many downstream tasks'. Page 3 describes the fine-tuning procedure in the BERT framework. Page 9 discusses feature-based vs fine-tuning approaches. Query uses 'fine-tuned'; pages use 'fine-tuning'. Porter stems to 'fine-tun*'."
+    },
+    {
+      "id": "sub-01",
+      "pdf": "attention",
+      "query": "multi-head attention",
+      "class": "substring",
+      "labels": {"4": 3, "5": 2, "3": 1},
+      "notes": "Page 4 contains the 'Multi-Head Attention' section header and full definition ('MultiHead(Q,K,V)'). Page 5 continues describing multi-head attention applications. Page 3 mentions 'multi-head self-attention mechanism' in the encoder description. Hyphenated 'multi-head': token BM25 treats as two tokens 'multi' + 'head'; trigram would match the hyphenated substring differently."
+    },
+    {
+      "id": "sub-02",
+      "pdf": "attention",
+      "query": "feed-forward network",
+      "class": "substring",
+      "labels": {"5": 3, "3": 2, "4": 1},
+      "notes": "Page 5 has the Position-wise Feed-Forward Networks section: 'each of the layers in our encoder and decoder contains a fully connected feed-forward network'. Page 3 says 'position-wise fully connected feed-forward network'. Page 4 mentions 'feed-forward network with a single hidden layer'. Hyphenated 'feed-forward' tests substring vs token split."
+    },
+    {
+      "id": "sub-03",
+      "pdf": "attention",
+      "query": "self-attention layer",
+      "class": "substring",
+      "labels": {"6": 3, "5": 2, "3": 2},
+      "notes": "Page 6 has the 'Why Self-Attention' section and Table 1 comparing self-attention to other layer types. Page 5 describes self-attention layers in encoder and decoder. Page 3 introduces self-attention in the architecture. Hyphenated 'self-attention' tests substring behavior."
+    },
+    {
+      "id": "sub-04",
+      "pdf": "bert",
+      "query": "pre-training objective",
+      "class": "substring",
+      "labels": {"1": 3, "4": 3, "2": 2},
+      "notes": "Page 1 defines 'masked language model (MLM) pre-training objective'. Page 4 elaborates 'we pre-train BERT using two unsupervised tasks' as pre-training objectives. Page 2 says 'importance of bidirectional pre-training for language representations'. Hyphenated 'pre-training' vs token 'pre' + 'training'."
+    },
+    {
+      "id": "sub-05",
+      "pdf": "bert",
+      "query": "WordPiece tokenization",
+      "class": "substring",
+      "labels": {"13": 3, "4": 2},
+      "notes": "Page 13 explicitly uses 'WordPiece tokenization': 'The LM masking is applied after WordPiece tokenization'. Page 4 references 'We use WordPiece embeddings'. CamelCase compound 'WordPiece' tests substring matching vs token split."
+    },
+    {
+      "id": "sub-06",
+      "pdf": "resnet",
+      "query": "shortcut connections",
+      "class": "substring",
+      "labels": {"2": 3, "3": 2, "4": 2, "6": 2},
+      "notes": "Page 2 defines shortcut connections extensively: 'Shortcut connections are those skipping one or more layers. In our case, the shortcut connections simply perform identity mapping'. Page 3 formalizes shortcut connection math. Page 4 describes inserting shortcut connections. Page 6 analyzes projection vs identity shortcuts. Two-word compound 'shortcut connections' may match differently than trigram on 'shortcut'."
+    },
+    {
+      "id": "sub-07",
+      "pdf": "gpt3",
+      "query": "zero-shot task performance",
+      "class": "substring",
+      "labels": {"7": 3, "6": 2, "5": 2},
+      "notes": "Page 7 defines Zero-Shot setting: 'Zero-Shot (0S) is the same as one-shot except that no demonstrations are allowed'. Page 6 contrasts zero-shot with few-shot and one-shot in the approach section. Page 5 shows aggregate performance graph for zero-shot. Hyphenated 'zero-shot' tests substring vs token behavior."
+    },
+    {
+      "id": "sub-08",
+      "pdf": "gpt3",
+      "query": "in-context learning",
+      "class": "substring",
+      "labels": {"4": 3, "5": 3, "24": 2},
+      "notes": "Page 4 has Figure 1.2 caption: 'Larger models make increasingly efficient use of in-context information. We show in-context learning performance'. Page 5 Figure 1.3: 'few-shot performance increases more rapidly, demonstrating that larger models are more proficient at in-context learning'. Page 24 discusses in-context learning curves. Hyphenated 'in-context' tests substring behavior."
+    },
+    {
+      "id": "fusion-01",
+      "pdf": "gpt3",
+      "query": "bias fairness",
+      "class": "fusion",
+      "labels": {"34": 3, "36": 3, "39": 2},
+      "notes": "True fusion scenario from ground_truth.json scenario 2b. Keyword finds page 34 (Broader Impacts intro with 'bias, fairness' in overview) but misses 36 and 39. Semantic finds 36 (section 6.2 Fairness, Bias, and Representation) and 39 (6.2.4 Future Bias and Fairness Challenges) but misses 34. Hybrid RRF combines both signals."
+    },
+    {
+      "id": "fusion-02",
+      "pdf": "bert",
+      "query": "bidirectional context representation",
+      "class": "fusion",
+      "labels": {"1": 3, "4": 3, "8": 2},
+      "notes": "Keyword finds pages with 'bidirectional' literally (pages 1, 4, 8). Semantic additionally finds pages where the concept of context-aware representations is described without the exact word. Page 1 introduces BERT as 'Bidirectional Encoder Representations'. Page 4 trains 'deep bidirectional representation'. Page 8 discusses strengths of bidirectional vs LTR models."
+    },
+    {
+      "id": "fusion-03",
+      "pdf": "resnet",
+      "query": "network depth optimization difficulty",
+      "class": "fusion",
+      "labels": {"1": 3, "2": 2, "3": 2},
+      "notes": "Page 1 introduces the degradation problem: 'with the network depth increasing, accuracy gets saturated and then degrades rapidly'. Page 2 presents the residual solution. Page 3 provides theoretical explanation. Keyword matches 'depth' and 'difficulty' (or 'problem'); semantic captures the conceptual relationship."
+    },
+    {
+      "id": "distractor-01",
+      "pdf": "attention",
+      "query": "BLEU score results",
+      "class": "distractor",
+      "labels": {"8": 3, "10": 2, "1": 1},
+      "notes": "Page 8 contains Table 2 with BLEU scores: 'big transformer model achieves BLEU score of 28.4'. Page 10 has Table 4 English Constituency Parsing results (different metric, tangential). Page 1 abstract mentions '28.4 BLEU'. Distractor: a naive match on 'BLEU' finds many pages; gold is page 8 where results are actually discussed."
+    },
+    {
+      "id": "distractor-02",
+      "pdf": "gpt3",
+      "query": "translation performance between languages",
+      "class": "distractor",
+      "labels": {"15": 3, "16": 2, "14": 2},
+      "notes": "Page 15 focuses on translation: 'GPT-3 achieves roughly equivalent performance in translation across languages'. Page 16 shows multi-language translation results. Page 14 shows performance curves for translation. Distractor: the word 'translation' appears broadly throughout the paper; gold pages are where translation results are specifically reported."
+    },
+    {
+      "id": "distractor-03",
+      "pdf": "resnet",
+      "query": "convolutional layer filter size",
+      "class": "distractor",
+      "labels": {"3": 3, "4": 2, "5": 1},
+      "notes": "Page 3 describes network architectures: 'convolutional layers mostly have 3x3 filters'. Page 4 shows Figure 3 with detailed architecture showing filter sizes. Page 5 shows Table 1 with all layer filter sizes. Distractor: the term 'convolutional' appears on many pages, but gold pages are where design rules are stated."
+    },
+    {
+      "id": "distractor-04",
+      "pdf": "bert",
+      "query": "SQuAD question answering benchmark",
+      "class": "distractor",
+      "labels": {"6": 3, "7": 3, "5": 2},
+      "notes": "Page 6 reports BERT results on SQuAD: 'BERTBASE and BERTLARGE outperform all systems'. Page 7 has Table 2 'SQuAD 1.1 results'. Page 5 describes the SQuAD fine-tuning setup. Distractor: 'SQuAD' or 'question answering' appear in many pages; gold is where benchmark results are actually presented."
+    },
+    {
+      "id": "stem-08",
+      "pdf": "resnet",
+      "query": "optimizing deep residual networks",
+      "class": "stemming",
+      "labels": {"3": 3, "1": 2, "2": 2},
+      "notes": "Page 3 explains residual learning reformulation: 'rather than expect stacked layers to approximate H(x), we explicitly let these layers approximate a residual function'. Page 1 abstract: 'residual networks are easier to optimize'. Page 2 introduces residual learning framework for optimization. Query uses 'optimizing'; pages use 'optimize', 'optimization'. Porter stems to 'optim*'."
+    },
+    {
+      "id": "stem-09",
+      "pdf": "gpt3",
+      "query": "pretrained model adapted",
+      "class": "stemming",
+      "labels": {"6": 3, "1": 2, "39": 2},
+      "notes": "Page 6 discusses 'pre-training approach' and how it is adapted. Page 1 abstract: 'pre-training on a large corpus of text followed by fine-tuning'. Page 39 discusses pretraining for parameter scaling. Query uses 'pretrained' (compound, no hyphen); pages use 'pre-training'/'pre-trained' (hyphenated). Also a substring class candidate, classed stemming since the morphological gap (adapt/adapted) is primary."
+    },
+    {
+      "id": "sub-09",
+      "pdf": "bert",
+      "query": "next-sentence prediction",
+      "class": "substring",
+      "labels": {"4": 3, "13": 3, "8": 2},
+      "notes": "Page 4 defines 'Next Sentence Prediction (NSP)' task. Page 13 has the 'Next Sentence Prediction' example section. Page 8 ablates the NSP task contribution. The compound 'next sentence prediction' / 'next-sentence' tests whether hyphenated vs space-separated forms match under trigram vs token BM25."
+    },
+    {
+      "id": "sub-10",
+      "pdf": "resnet",
+      "query": "bottleneck architecture",
+      "class": "substring",
+      "labels": {"6": 3, "8": 2},
+      "notes": "Page 6 describes 'Deeper Bottleneck Architectures': '1x1, 3x3, and 1x1 convolutions, where the 1x1 layers are responsible for reducing and then increasing (restoring) dimensions, leaving the 3x3 layer a bottleneck'. Page 8 references bottleneck in analysis. Single compound word 'bottleneck' tests substring matching precision."
+    },
+    {
+      "id": "fusion-04",
+      "pdf": "attention",
+      "query": "WMT-2014 generalization capability",
+      "class": "fusion",
+      "labels": {"8": 3, "7": 2},
+      "notes": "From ground_truth.json scenario 1c. 'WMT-2014' triggers the keyword router (matches [A-Z0-9-]{4+}), but the phrase is not verbatim in the text (paper uses 'WMT 2014' without hyphen). Keyword returns 0 matches. Semantic leg finds page 8 (Machine Translation results with newstest2014 table). Page 7 describes training on WMT 2014 dataset. Hybrid RRF correctly surfaces both via semantic."
+    },
+    {
+      "id": "distractor-05",
+      "pdf": "gpt3",
+      "query": "model size number of parameters 175 billion",
+      "class": "distractor",
+      "labels": {"1": 3, "8": 2, "39": 2},
+      "notes": "Page 1 abstract: 'GPT-3, an autoregressive language model with 175 billion parameters'. Page 8 discusses model sizes in the main evaluation section. Page 39 compares parameter counts of various models. Distractor: '175 billion' appears on multiple pages; the gold page is the abstract where the model size is authoritatively stated as a defining property."
+    }
+  ]
+}

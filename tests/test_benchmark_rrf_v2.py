@@ -86,7 +86,7 @@ def test_keyword_regression_flags_drop_beyond_tolerance():
     base = {"per_query": {"q1": {"keyword": 0.90}, "q2": {"keyword": 0.50}}}
     cur = {"per_query": {"q1": {"keyword": 0.80}, "q2": {"keyword": 0.49}}}
     msgs = br.keyword_regressions(cur, base, br._TOLERANCE)
-    assert any("q1" in m for m in msgs)   # 0.10 drop > 0.02
+    assert any("q1" in m for m in msgs)  # 0.10 drop > 0.02
     assert not any("q2" in m for m in msgs)  # 0.01 drop within tolerance
 
 

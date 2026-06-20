@@ -39,6 +39,28 @@ _FTS5_SECTION_TABLE_SCHEMA = (
     ")"
 )
 
+_FTS5_CJK_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_search_fts_cjk USING fts5("
+    "file_path UNINDEXED, "
+    "page_num UNINDEXED, "
+    "text, "
+    "tokenize='unicode61'"
+    ")"
+)
+
+_FTS5_CJK_SECTION_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_section_fts_cjk USING fts5("
+    "file_path UNINDEXED, "
+    "section_id UNINDEXED, "
+    "title, "
+    "text, "
+    "start_page UNINDEXED, "
+    "end_page UNINDEXED, "
+    "title_source UNINDEXED, "
+    "tokenize='unicode61'"
+    ")"
+)
+
 
 # Bump when text-extraction logic changes so cached text + everything derived
 # from it (embeddings, FTS indexes) is dropped and rebuilt. v1: column-aware
@@ -373,6 +395,14 @@ class PDFCache:
                 except sqlite3.OperationalError:
                     # Section table failed but page table succeeded — unusual.
                     # Leave fts_available=True since page search still works.
+                    pass
+
+                try:
+                    conn.execute(_FTS5_CJK_TABLE_SCHEMA)
+                    conn.execute(_FTS5_CJK_SECTION_TABLE_SCHEMA)
+                except sqlite3.OperationalError:
+                    # CJK tables failed but porter tables succeeded — leave
+                    # fts_available=True; CJK queries degrade to no-match.
                     pass
 
         self.clear_expired()

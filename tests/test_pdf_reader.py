@@ -2478,5 +2478,18 @@ class TestCJKHelpers:
         assert _cjk_split("machine learning") == "machine learning"
 
 
+def test_cjk_fts_tables_created(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache.db_path) as conn:
+        names = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+    assert "pdf_search_fts_cjk" in names
+    assert "pdf_section_fts_cjk" in names
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pymupdf
 
+import pdf_mcp.extractor as extractor
 from pdf_mcp.extractor import (
     parse_page_range,
     extract_text_from_page,
@@ -542,3 +543,34 @@ class TestIsSingleColumnConfident:
             self._blk(50, 120),
         ]
         assert is_confidently_single_column(blocks) is True
+
+
+class TestExtractTextFromPageWiring:
+    """Tests that the confident-single-column pre-gate is wired correctly."""
+
+    def test_confident_single_column_skips_detector(self, sample_pdf):
+        import pymupdf
+
+        doc = pymupdf.open(sample_pdf)
+        page = doc[0]
+        with (
+            patch.object(extractor, "is_confidently_single_column", return_value=True),
+            patch.object(extractor, "detect_column_boxes") as detector,
+        ):
+            text = extractor.extract_text_from_page(page)
+        detector.assert_not_called()
+        assert text.strip()
+        doc.close()
+
+    def test_ambiguous_page_still_calls_detector(self, sample_pdf):
+        import pymupdf
+
+        doc = pymupdf.open(sample_pdf)
+        page = doc[0]
+        with (
+            patch.object(extractor, "is_confidently_single_column", return_value=False),
+            patch.object(extractor, "detect_column_boxes", return_value=[]) as detector,
+        ):
+            extractor.extract_text_from_page(page)
+        detector.assert_called_once()
+        doc.close()

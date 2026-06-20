@@ -589,6 +589,8 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
             return reorder_vertical(page)
         blocks = page.get_text("blocks", sort=True)
         if is_confidently_single_column(blocks):
+            # Single-column join keeps all text blocks (byte-identical to fallback),
+            # distinct from the heuristic vote which filters to non-empty blocks.
             text_blocks = [block[4] for block in blocks if block[6] == 0]
             return "\n\n".join(text_blocks)
         boxes = detect_column_boxes(page)

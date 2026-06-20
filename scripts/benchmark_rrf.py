@@ -762,6 +762,12 @@ def _save_results(
 
 def run_gate(update_baseline: bool) -> int:
     """Run gate: load baseline, check fastembed, check keyword regressions."""
+    if not _FASTEMBED_AVAILABLE:
+        print(
+            "ERROR: the RRF v2 graded gate requires fastembed. "
+            "Install with: pip install 'pdf-mcp[semantic]'"
+        )
+        return 1
     corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
     gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
     current = run_graded(corpus, gt)

@@ -103,3 +103,20 @@ def test_check_fastembed_mismatch_warns():
 
     assert br.check_fastembed("0.9.0", "0.8.0") is not None
     assert br.check_fastembed("0.8.0", "0.8.0") is None
+
+
+import pytest
+
+_FASTEMBED = None
+try:
+    import fastembed as _FASTEMBED  # noqa: F401
+except ImportError:
+    pass
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(_FASTEMBED is None, reason="rrf v2 gate needs fastembed")
+def test_rrf_v2_no_regression_vs_baseline():
+    import benchmark_rrf as br
+
+    assert br.run_gate(update_baseline=False) == 0

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- RRF benchmark v2: a deterministic, `slow`-marked retrieval-quality gate
+  (`scripts/benchmark_rrf.py --graded`) asserting keyword-mode NDCG@10 against a
+  committed pre-CJK baseline, with a stemming/substring-targeted graded corpus.
+  Guards the planned CJK FTS5 tokenizer change against silent English keyword
+  regression. One-time finding: hybrid/keyword/semantic NDCG = 0.777/0.642/0.656.
+
 ## [1.17.0] - 2026-06-20
 ### Added
 - Vertical-script (tategaki / 直排) reading-order reconstruction for Japanese

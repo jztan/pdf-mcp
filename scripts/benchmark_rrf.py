@@ -32,10 +32,84 @@ from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
 
 # Detect fastembed once at import time.
 try:
-    import fastembed  # type: ignore  # noqa: F401
+    import fastembed  # type: ignore
+
     _FASTEMBED_AVAILABLE = True
 except ImportError:
     _FASTEMBED_AVAILABLE = False
+
+import _retrieval_metrics as _rm  # noqa: E402
+
+_TOLERANCE = 0.02
+
+_BASELINE = Path("benchmark_data/rrf_v2_baseline.json")
+
+
+def _ranked_gains(matches: list[dict], labels: dict) -> list[float]:
+    """Graded relevance of each retrieved page, in rank order. 0 if unlabelled."""
+    return [float(labels.get(str(m["page"]), 0)) for m in matches]
+
+
+def keyword_regressions(current: dict, baseline: dict, tolerance: float) -> list[str]:
+    """Queries whose keyword-mode NDCG regressed beyond tolerance vs baseline."""
+    msgs: list[str] = []
+    base_pq = baseline["per_query"]
+    cur_pq = current["per_query"]
+    for qid, base_modes in base_pq.items():
+        if qid not in cur_pq:
+            msgs.append(f"{qid}: missing from current run")
+            continue
+        drop = base_modes.get("keyword", 0.0) - cur_pq[qid].get("keyword", 0.0)
+        if drop > tolerance:
+            msgs.append(
+                f"{qid}: keyword NDCG dropped {drop:.3f} "
+                f"({base_modes['keyword']:.3f} -> {cur_pq[qid]['keyword']:.3f})"
+            )
+    return msgs
+
+
+def check_fastembed(current_version: str, baseline_version: str) -> str | None:
+    """Warn if the embedding library version differs from the baseline's."""
+    if current_version != baseline_version:
+        return (
+            f"fastembed version changed ({baseline_version} -> {current_version}); "
+            "embeddings may shift. Re-run with --update-baseline after review."
+        )
+    return None
+
+
+def run_graded(corpus, ground_truth, modes=("keyword", "semantic", "auto"), k=10):
+    """Per-query and overall NDCG@k for each search mode over the graded corpus."""
+    from pdf_mcp.server import _resolve_path, pdf_search
+
+    per_query: dict[str, dict[str, float]] = {}
+    for q in corpus["queries"]:
+        pdf_meta = ground_truth["pdfs"][q["pdf"]]
+        # _resolve_path returns (path, None) on success or (None, error_dict).
+        path, err = _resolve_path(pdf_meta["url"])
+        if err:
+            raise RuntimeError(f"resolve failed for {q['pdf']}: {err['error']}")
+        ideal = [float(g) for g in q["labels"].values()]
+        per_query[q["id"]] = {}
+        for mode in modes:
+            res = pdf_search(path, q["query"], mode=mode, max_results=max(k, 10))
+            matches = res.get("matches", []) if not res.get("error") else []
+            gains = _ranked_gains(matches, q["labels"])
+            per_query[q["id"]][mode] = _rm.ndcg_at_k(gains, ideal, k)
+
+    overall = {
+        mode: (
+            sum(per_query[qid][mode] for qid in per_query) / len(per_query)
+            if per_query
+            else 0.0
+        )
+        for mode in modes
+    }
+    return {
+        "per_query": per_query,
+        "overall": overall,
+        "fastembed_version": fastembed.__version__,
+    }
 
 
 def load_ground_truth(path: str = "benchmark_data/ground_truth.json") -> dict:
@@ -116,9 +190,7 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
-def _compute_metrics(
-    matches: list[dict], relevant_pages: set[int], k: int
-) -> dict:
+def _compute_metrics(matches: list[dict], relevant_pages: set[int], k: int) -> dict:
     """
     Compute recall@K, RR (Reciprocal Rank), and rank-of-first-hit.
 
@@ -146,9 +218,7 @@ def _compute_metrics(
     return {"recall": recall, "rr": rr, "rank_first_hit": rank_first_hit}
 
 
-def _run_mode(
-    pdf_path: str, query: str, api_mode: str, max_results: int
-) -> list[dict]:
+def _run_mode(pdf_path: str, query: str, api_mode: str, max_results: int) -> list[dict]:
     """
     Call pdf_search for one mode and return the matches list.
 
@@ -184,7 +254,10 @@ def run_latency_timing(
     Cache must already be warm before calling this.
     """
     samples: dict[str, list[float]] = {
-        "keyword": [], "semantic": [], "hybrid": [], "router": []
+        "keyword": [],
+        "semantic": [],
+        "hybrid": [],
+        "router": [],
     }
     router_api = _router_api_mode(query)
 
@@ -199,10 +272,7 @@ def run_latency_timing(
         _, ms = _run_mode_timed(pdf_path, query, router_api, k)
         samples["router"].append(ms)
 
-    return {
-        mode: sorted(times)[len(times) // 2]
-        for mode, times in samples.items()
-    }
+    return {mode: sorted(times)[len(times) // 2] for mode, times in samples.items()}
 
 
 def _print_latency_table(latency: dict[str, float], label: str) -> None:
@@ -228,8 +298,7 @@ def run_k_sensitivity(
     if k_values is None:
         k_values = [10, 30, 60, 120]
     return [
-        _run_scenario(f"k={k}", pdf_path, query, relevant_pages, k)
-        for k in k_values
+        _run_scenario(f"k={k}", pdf_path, query, relevant_pages, k) for k in k_values
     ]
 
 
@@ -412,10 +481,7 @@ def run_context_group(gt: dict) -> list[dict]:
                 green("✓") if assertion_result else red("✗"),
             )
         router_sel = result["modes"]["router"]["selected_mode"]
-        _p(
-            f"  router recall: {router_recall * 100:.0f}%"
-            f"  (routed to {router_sel})"
-        )
+        _p(f"  router recall: {router_recall * 100:.0f}%" f"  (routed to {router_sel})")
 
     # Latency on 2b (scattered query — more representative)
     s2b = pdf_data["scenarios"]["2b"]
@@ -473,9 +539,7 @@ def run_navigation_group(gt: dict) -> list[dict]:
             )
             assertion_key = "hybrid_recall_at_1_gte_keyword"
         else:
-            assertion_result = (
-                hy_recall > kw_recall if _FASTEMBED_AVAILABLE else None
-            )
+            assertion_result = hy_recall > kw_recall if _FASTEMBED_AVAILABLE else None
             assertion_key = "hybrid_recall_gt_keyword"
         result["assertions"] = {assertion_key: assertion_result}
         results.append(result)
@@ -506,10 +570,7 @@ def run_navigation_group(gt: dict) -> list[dict]:
             )
         router_sel = result["modes"]["router"]["selected_mode"]
         router_r1 = 1.0 if router_rank == 1 else 0.0
-        _p(
-            f"  router Recall@1: {router_r1:.0f}"
-            f"  (routed to {router_sel})"
-        )
+        _p(f"  router Recall@1: {router_r1:.0f}" f"  (routed to {router_sel})")
 
     # Latency on 3a (section heading — short, representative)
     s3a = pdf_data["scenarios"]["3a"]
@@ -613,9 +674,7 @@ def _print_scenario_table(result: dict, assertions: dict) -> None:
             hybrid_assertions = {
                 key: val for key, val in assertions.items() if "hybrid" in key
             }
-            if hybrid_assertions and all(
-                v is True for v in hybrid_assertions.values()
-            ):
+            if hybrid_assertions and all(v is True for v in hybrid_assertions.values()):
                 suffix = f"  {green('✓')}"
 
         _p(
@@ -698,9 +757,38 @@ def _save_results(
         "fastembed_available": _FASTEMBED_AVAILABLE,
         "scenarios": all_results,
     }
-    base.with_suffix(".json").write_text(
-        json.dumps(data, indent=2), encoding="utf-8"
-    )
+    base.with_suffix(".json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def run_gate(update_baseline: bool) -> int:
+    """Run gate: load baseline, check fastembed, check keyword regressions."""
+    if not _FASTEMBED_AVAILABLE:
+        print(
+            "ERROR: the RRF v2 graded gate requires fastembed. "
+            "Install with: pip install 'pdf-mcp[semantic]'"
+        )
+        return 1
+    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
+    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
+    current = run_graded(corpus, gt)
+    if update_baseline or not _BASELINE.exists():
+        _BASELINE.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+        fb_ver = current["fastembed_version"]
+        print(f"Baseline written to {_BASELINE} (fastembed {fb_ver})")
+        return 0
+    baseline = json.loads(_BASELINE.read_text("utf-8"))
+    warn = check_fastembed(current["fastembed_version"], baseline["fastembed_version"])
+    if warn:
+        print("ERROR:", warn)
+        return 1
+    regressions = keyword_regressions(current, baseline, _TOLERANCE)
+    if regressions:
+        print("Keyword-mode NDCG regressions:")
+        for msg in regressions:
+            print("  -", msg)
+        return 1
+    print("RRF v2 gate: keyword-mode NDCG within tolerance. OK.")
+    return 0
 
 
 def main() -> None:
@@ -716,7 +804,20 @@ def main() -> None:
         default="benchmark_data/ground_truth.json",
         help="Path to ground truth JSON (default: benchmark_data/ground_truth.json)",
     )
+    parser.add_argument(
+        "--graded",
+        action="store_true",
+        help="Run gate: compare keyword-mode NDCG against baseline",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Update baseline file when used with --graded",
+    )
     args = parser.parse_args()
+
+    if args.graded:
+        sys.exit(run_gate(args.update_baseline))
 
     now = datetime.now()
     file_ts = now.strftime("%Y%m%d_%H%M%S")
@@ -726,10 +827,12 @@ def main() -> None:
     _p("─" * 68)
 
     if not _FASTEMBED_AVAILABLE:
-        _p(yellow(
-            "  Note: fastembed not installed — "
-            "semantic and hybrid running in keyword-fallback mode"
-        ))
+        _p(
+            yellow(
+                "  Note: fastembed not installed — "
+                "semantic and hybrid running in keyword-fallback mode"
+            )
+        )
 
     gt = load_ground_truth(args.ground_truth)
 

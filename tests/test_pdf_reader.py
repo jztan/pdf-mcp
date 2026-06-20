@@ -1705,7 +1705,9 @@ def test_extract_text_is_column_major_when_two_columns(monkeypatch):
         page.insert_text((60, y), f"leftrow{i}")
         page.insert_text((360, y), f"rightrow{i}")
 
+    # Mock the pre-gate to return False (ambiguous layout) so the detector runs.
     # Force a two-column split: left half, then right half.
+    monkeypatch.setattr(extractor, "is_confidently_single_column", lambda b: False)
     monkeypatch.setattr(
         extractor,
         "detect_column_boxes",

@@ -514,6 +514,44 @@ def vertical_detection_available() -> bool:
     return True
 
 
+# A page is "confidently single-column" only when the strong majority of text
+# blocks run nearly the full text width. Two-column blocks span ~half the width
+# and fail this test, so the heuristic errs toward False (pay the detector)
+# rather than risk scrambling a real two-column page.
+_SINGLE_COL_WIDTH_FRAC = 0.6
+# Width-fraction check is the real two-column guard — genuine two-column blocks
+# span ~0.44 of the text width and never count as "wide", so they're rejected
+# regardless of this majority value. The majority threshold only governs
+# single-column pages that contain some narrow blocks like captions/headings,
+# which we DO want to short-circuit. 0.6 keeps two-column safety while not
+# forgoing single-column-with-captions pages.
+_SINGLE_COL_MAJORITY = 0.6
+
+
+def is_confidently_single_column(blocks: list[Any]) -> bool:
+    """True only when block geometry is unmistakably single-column.
+
+    Conservative by design: ambiguous or multi-column-looking pages return
+    False so the full ``detect_column_boxes`` path runs unchanged.
+    """
+    text_blocks = [
+        b
+        for b in blocks
+        if len(b) >= 7 and b[6] == 0 and isinstance(b[4], str) and b[4].strip()
+    ]
+    if len(text_blocks) < 2:
+        return False
+    left = min(b[0] for b in text_blocks)
+    right = max(b[2] for b in text_blocks)
+    text_width = right - left
+    if text_width <= 0:
+        return False
+    wide = sum(
+        1 for b in text_blocks if (b[2] - b[0]) >= _SINGLE_COL_WIDTH_FRAC * text_width
+    )
+    return wide >= _SINGLE_COL_MAJORITY * len(text_blocks)
+
+
 def _is_multi_column_layout(boxes: list[Any]) -> bool:
     """True only when >=2 detected boxes are tall enough to be real columns.
 
@@ -549,6 +587,12 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     if sort_by_position:
         if detect_writing_mode(page) in ("vertical", "mixed"):
             return reorder_vertical(page)
+        blocks = page.get_text("blocks", sort=True)
+        if is_confidently_single_column(blocks):
+            # Single-column join keeps all text blocks (byte-identical to fallback),
+            # distinct from the heuristic vote which filters to non-empty blocks.
+            text_blocks = [block[4] for block in blocks if block[6] == 0]
+            return "\n\n".join(text_blocks)
         boxes = detect_column_boxes(page)
         if _is_multi_column_layout(boxes):
             # Multi-column: extract each column in reading order so the
@@ -558,9 +602,7 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
             )
             return "\n\n".join(part for part in parts if part)
         # Single-column (or detection unavailable): positional block sort.
-        blocks = page.get_text("blocks", sort=True)
         # blocks format: (x0, y0, x1, y1, "text", block_no, block_type)
-        # block_type: 0 = text, 1 = image
         text_blocks = [block[4] for block in blocks if block[6] == 0]
         return "\n\n".join(text_blocks)
     else:

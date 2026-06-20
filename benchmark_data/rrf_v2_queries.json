@@ -36,10 +36,10 @@
     {
       "id": "stem-05",
       "pdf": "resnet",
-      "query": "skip connections learned features",
+      "query": "learning residual functions",
       "class": "stemming",
       "labels": {"2": 3, "3": 2},
-      "notes": "Page 2 defines shortcut connections and describes identity shortcuts: 'shortcut connections simply perform identity mapping'. Page 3 expands on residual learning with identity mapping shortcuts. Query uses 'skip' (casual synonym) and 'learned'; pages use 'learning' and 'shortcut'. Porter stems 'learned'/'learning' to 'learn*'."
+      "notes": "Page 2 says 'our formulation always learns residual functions' and 'additional residual functions to be learned'. Page 3 says 'the residual mapping to be learned' and 'the learned residual functions in general have small responses'. Query uses 'learning' (gerund); pages use 'learns' (verb), 'learned' (past participle), and 'to be learned' (infinitive). Porter stems all to 'learn*'; trigram on 'learning' would not match 'learns' or 'learned'."
     },
     {
       "id": "stem-06",

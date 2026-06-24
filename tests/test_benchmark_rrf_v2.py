@@ -114,6 +114,29 @@ except ImportError:
     pass
 
 
+def test_isolated_corpus_cache_swaps_and_restores(tmp_path):
+    """The gate must run against a corpus-only cache so bm25() IDF is hermetic.
+
+    FTS5 bm25() derives IDF from the whole shared table, so unrelated cached
+    PDFs shift keyword ranking and make the baseline unreproducible across
+    machines. The gate isolates the server onto a dedicated cache and restores
+    the originals afterward.
+    """
+    import benchmark_rrf as br
+    import pdf_mcp.server as server_module
+
+    before_cache = server_module.cache
+    before_fetcher = server_module.url_fetcher
+
+    with br._isolated_corpus_cache(tmp_path / "gate"):
+        assert server_module.cache is not before_cache
+        assert server_module.cache.cache_dir == tmp_path / "gate"
+        assert server_module.url_fetcher.cache_dir == tmp_path / "gate" / "downloads"
+
+    assert server_module.cache is before_cache
+    assert server_module.url_fetcher is before_fetcher
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(_FASTEMBED is None, reason="rrf v2 gate needs fastembed")
 def test_rrf_v2_no_regression_vs_baseline():

@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`scripts/benchmark_rrf.py --graded`) asserting keyword-mode NDCG@10 against a
   committed pre-CJK baseline, with a stemming/substring-targeted graded corpus.
   Guards the planned CJK FTS5 tokenizer change against silent English keyword
-  regression. One-time finding: hybrid/keyword/semantic NDCG = 0.777/0.642/0.656.
+  regression. The gate runs against an isolated corpus-only cache so FTS5
+  `bm25()` IDF is hermetic (unrelated cached PDFs no longer shift keyword
+  ranking). One-time finding: hybrid/keyword/semantic NDCG = 0.767/0.625/0.656.
 
 ### Changed
 - `pdf_read_pages` extraction skips the onnxruntime column detector on

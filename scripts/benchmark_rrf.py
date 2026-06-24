@@ -16,6 +16,7 @@ Always exits 0 (informational report, no CI gate).
 """
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -760,6 +761,43 @@ def _save_results(
     base.with_suffix(".json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+# Dedicated, corpus-only cache for the gate. FTS5 bm25() derives IDF from the
+# whole shared table, so a PDF's keyword ranking depends on every OTHER cached
+# document. Running the gate against the user's normal ~/.cache/pdf-mcp would
+# make keyword NDCG depend on whatever else they happen to have cached, so the
+# committed baseline would not reproduce on CI or a fresh clone. Isolating onto
+# a dedicated cache that only ever holds the benchmark corpus makes IDF — and
+# therefore the baseline — hermetic. Per-user path (not /tmp) so concurrent
+# users don't collide.
+_GATE_CACHE_DIR = Path.home() / ".cache" / "pdf-mcp-rrf-gate"
+
+
+@contextlib.contextmanager
+def _isolated_corpus_cache(cache_dir: Path = _GATE_CACHE_DIR):
+    """Point the server at a corpus-only cache for the duration of the gate.
+
+    Swaps the server-module ``cache`` and ``url_fetcher`` globals (the same
+    ones pdf_search/_resolve_path read) onto ``cache_dir`` and restores the
+    originals on exit, so bm25() IDF is computed over the benchmark corpus
+    alone — see the module note above and the cross-document leakage issue.
+    """
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.url_fetcher import URLFetcher
+    import pdf_mcp.server as server_module
+
+    prev_cache = server_module.cache
+    prev_fetcher = server_module.url_fetcher
+    server_module.cache = PDFCache(cache_dir=cache_dir)
+    server_module.url_fetcher = URLFetcher(
+        cache_dir=cache_dir / "downloads", config=server_module.pdf_config
+    )
+    try:
+        yield
+    finally:
+        server_module.cache = prev_cache
+        server_module.url_fetcher = prev_fetcher
+
+
 def run_gate(update_baseline: bool) -> int:
     """Run gate: load baseline, check fastembed, check keyword regressions."""
     if not _FASTEMBED_AVAILABLE:
@@ -770,7 +808,8 @@ def run_gate(update_baseline: bool) -> int:
         return 1
     corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
     gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
-    current = run_graded(corpus, gt)
+    with _isolated_corpus_cache():
+        current = run_graded(corpus, gt)
     if update_baseline or not _BASELINE.exists():
         _BASELINE.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
         fb_ver = current["fastembed_version"]

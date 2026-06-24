@@ -74,7 +74,7 @@ If you need any of these (long contexts, multilingual, larger English models), p
 
 Measured on the existing arxiv ground-truth corpus (Attention paper + GPT-3 paper, 7 hand-annotated scenarios). MRR aggregated across all 7 scenarios at each scenario's native k. Latency = p50 query time on a warm embedding cache. Run via `scripts/benchmark_embedding_models.py`.
 
-> For a comparison of **search modes** (keyword vs semantic vs hybrid RRF) rather than embedding models, see [`benchmark_data/rrf_v2_results.md`](../benchmark_data/rrf_v2_results.md) — hybrid `auto` scores NDCG@10 0.78 vs 0.64 keyword / 0.66 semantic on a stemming/substring-stress corpus.
+> For a comparison of **search modes** (keyword vs semantic vs hybrid RRF) rather than embedding models, see [`benchmark_data/rrf_v2_results.md`](../benchmark_data/rrf_v2_results.md) — hybrid `auto` scores NDCG@10 0.77 vs 0.63 keyword / 0.66 semantic on a stemming/substring-stress corpus.
 
 | Model | MRR | p50 latency | Size | MTEB |
 |-------|-----|-------------|------|------|

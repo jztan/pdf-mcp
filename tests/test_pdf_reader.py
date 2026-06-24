@@ -12,7 +12,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp import extractor
-from pdf_mcp.cache import PDFCache
+from pdf_mcp.cache import PDFCache, _contains_cjk
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
     estimate_tokens,
@@ -63,6 +63,43 @@ class TestParsePageRange:
     def test_trailing_comma_skips_empty(self):
         result = parse_page_range("1,2,", 10)
         assert result == [0, 1]
+
+
+# ============================================================================
+# Cache Helper Tests
+# ============================================================================
+
+
+class TestContainsCJK:
+    def test_kanji_true(self):
+        assert _contains_cjk("厚木基地") is True
+
+    def test_hiragana_true(self):
+        assert _contains_cjk("おわり") is True
+
+    def test_katakana_true(self):
+        assert _contains_cjk("カタカナ") is True
+
+    def test_pure_kana_heading_true(self):
+        assert _contains_cjk("終活") is True
+
+    def test_hangul_true(self):
+        assert _contains_cjk("한국어") is True
+
+    def test_cjk_ext_a_true(self):
+        assert _contains_cjk("㐀") is True  # U+3400
+
+    def test_ascii_false(self):
+        assert _contains_cjk("hello world") is False
+
+    def test_digits_punct_false(self):
+        assert _contains_cjk("123 - 456 (a.b)") is False
+
+    def test_mixed_latin_cjk_true(self):
+        assert _contains_cjk("base 基地") is True
+
+    def test_empty_false(self):
+        assert _contains_cjk("") is False
 
 
 # ============================================================================

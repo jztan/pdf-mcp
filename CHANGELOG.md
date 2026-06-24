@@ -28,9 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path, and honor `PDF_MCP_CACHE_DIR` like every other cache artifact. On
   shared hosts two local users no longer collide on the same `/tmp` path, and
   the cache-dir permission tightening is now fail-soft so a foreign-owned
-  directory can't crash startup (issue #15, reported by @Summer907). Existing
-  downloads under the old `/tmp` path are simply re-fetched on demand; no
-  migration needed.
+  directory can't crash startup ([#15](https://github.com/jztan/pdf-mcp/issues/15)).
+  Existing downloads under the old `/tmp` path are simply re-fetched on demand;
+  no migration needed.
 - URL downloads no longer fail TLS verification when a server issues a
   *relative* HTTP redirect. The IP-pinning path rewrites each request to the
   resolved IP, so httpx resolved a relative `Location` against the IP URL and
@@ -38,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   IP literal and failed with `CERTIFICATE_VERIFY_FAILED`. The redirect target
   is now resolved against the hostname-based URL; each hop is still
   re-validated and re-pinned, so SSRF / DNS-rebinding protection is unchanged
-  (issue #16).
+  ([#16](https://github.com/jztan/pdf-mcp/issues/16)).
+
+### Contributors
+- @Summer907 — reported per-user cache directory collision on shared hosts ([#15](https://github.com/jztan/pdf-mcp/issues/15))
 
 ## [1.17.0] - 2026-06-20
 ### Added

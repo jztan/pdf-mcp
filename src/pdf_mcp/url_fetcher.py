@@ -320,10 +320,19 @@ class URLFetcher:
                     extensions=request_extensions,
                 ) as response:
                     if response.is_redirect:
-                        next_req = response.next_request
-                        if next_req is None:
+                        location = response.headers.get("location")
+                        if not location:
                             raise ValueError("Redirect with no target URL")
-                        current_url = str(next_req.url)
+                        # Resolve the Location against the hostname-based
+                        # current_url, NOT response.next_request.url. We rewrote
+                        # this hop's request to the pinned IP, so httpx resolves
+                        # a *relative* Location against that IP URL and drops the
+                        # hostname — the next hop would then verify the TLS cert
+                        # against the IP literal and fail (issue #16). Joining
+                        # against current_url preserves the hostname; the next
+                        # loop iteration re-validates and re-pins it, so the
+                        # SSRF / DNS-rebinding protection is fully intact.
+                        current_url = str(httpx.URL(current_url).join(location))
                         continue
 
                     response.raise_for_status()

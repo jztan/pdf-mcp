@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the cache-dir permission tightening is now fail-soft so a foreign-owned
   directory can't crash startup (issue #15). Existing downloads under the old
   `/tmp` path are simply re-fetched on demand; no migration needed.
+- URL downloads no longer fail TLS verification when a server issues a
+  *relative* HTTP redirect. The IP-pinning path rewrites each request to the
+  resolved IP, so httpx resolved a relative `Location` against the IP URL and
+  dropped the hostname — the next hop then verified the certificate against the
+  IP literal and failed with `CERTIFICATE_VERIFY_FAILED`. The redirect target
+  is now resolved against the hostname-based URL; each hop is still
+  re-validated and re-pinned, so SSRF / DNS-rebinding protection is unchanged
+  (issue #16).
 
 ## [1.17.0] - 2026-06-20
 ### Added

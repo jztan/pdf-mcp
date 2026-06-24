@@ -15,9 +15,11 @@ No release branch open. Merged on `develop`, awaiting the cut:
 
 - **RRF benchmark v2** — a deterministic, `slow`-marked retrieval-quality gate asserting **keyword-mode** NDCG@10 against a committed pre-CJK baseline, over a stemming/substring-targeted graded corpus. Built as the English-regression guardrail for the planned CJK FTS5 tokenizer change. One-time finding: **hybrid RRF beats single modes — NDCG@10 0.767 vs 0.625 keyword / 0.656 semantic** (see [`benchmark_data/rrf_v2_results.md`](benchmark_data/rrf_v2_results.md)).
 - **Single-column pre-gate** — `extract_text_from_page` skips the onnxruntime column detector (~565 ms/216p, first-extraction only) on confidently single-column pages via a conservative block-geometry heuristic. Validated safe on real non-arXiv two-column + CJK-horizontal PDFs; reading order unchanged.
+- **URL downloads to per-user cache root** — `~/.cache/pdf-mcp/downloads` instead of `/tmp/pdf-mcp/downloads`, honoring `PDF_MCP_CACHE_DIR`; cache-dir permission tightening is fail-soft so a foreign-owned dir can't crash startup (issue #15).
+- **Relative-redirect TLS fix** — IP-pinning path now resolves relative `Location` headers against the hostname URL; TLS cert verification no longer fails against IP literals, SSRF/DNS-rebinding protection unchanged (issue #16).
 - Four metadata-only `chore(packaging)` commits — py3.13 classifier, `Development Status` Beta→Production/Stable, refreshed package description, author/maintainer email switched to a GitHub noreply address.
 
-Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](RELEASE_SOP.md) — the `[Unreleased]` block already documents the RRF/pre-gate entries.
+Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](RELEASE_SOP.md) — the `[Unreleased]` block already documents all entries.
 
 ---
 

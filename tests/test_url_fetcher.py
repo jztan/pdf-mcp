@@ -1,6 +1,8 @@
 # tests/test_url_fetcher.py
 """Tests for pdf_mcp.url_fetcher module."""
 
+import socket
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
@@ -22,10 +24,24 @@ def valid_pdf_bytes():
     return b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
 
 
-def _mock_stream_response(content, headers=None, is_redirect=False, redirect_url=None):
-    """Create a mock streaming response for httpx.Client.stream()."""
+def _mock_stream_response(
+    content, headers=None, is_redirect=False, redirect_url=None, location=None
+):
+    """Create a mock streaming response for httpx.Client.stream().
+
+    Mirrors real httpx on a redirect: it exposes both a ``Location`` header
+    and a computed ``next_request.url``. ``location`` sets the raw header
+    (used to model relative redirects); ``redirect_url`` sets
+    ``next_request.url`` (used to model httpx resolving that Location against
+    the request URL, which our pinning path rewrites to the IP). When only
+    ``redirect_url`` is given, it doubles as the header (the common
+    absolute-redirect case).
+    """
     if headers is None:
         headers = {}
+    header_location = location if location is not None else redirect_url
+    if is_redirect and header_location is not None:
+        headers = {**headers, "location": header_location}
     mock_response = MagicMock()
     mock_response.headers = headers
     mock_response.url = "https://example.com/test.pdf"
@@ -34,9 +50,9 @@ def _mock_stream_response(content, headers=None, is_redirect=False, redirect_url
     mock_response.iter_bytes = Mock(return_value=iter([content]))
     mock_response.__enter__ = Mock(return_value=mock_response)
     mock_response.__exit__ = Mock(return_value=False)
-    if is_redirect and redirect_url:
+    if is_redirect and (redirect_url or location):
         mock_next_request = MagicMock()
-        mock_next_request.url = redirect_url
+        mock_next_request.url = redirect_url if redirect_url is not None else location
         mock_response.next_request = mock_next_request
     return mock_response
 
@@ -455,6 +471,42 @@ class TestSSRFProtection:
                     url_fetcher._validate_url(url)
 
 
+class TestDefaultCacheDir:
+    """Default download cache must be per-user, not the shared system temp dir."""
+
+    def test_default_is_under_per_user_cache_root(self, tmp_path, monkeypatch):
+        """URLFetcher() with no cache_dir defaults to ~/.cache/pdf-mcp/downloads."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        fetcher = URLFetcher()
+        assert fetcher.cache_dir == tmp_path / ".cache" / "pdf-mcp" / "downloads"
+
+    def test_default_not_the_old_shared_tmp_path(self, tmp_path, monkeypatch):
+        """The default must not be the fixed /tmp/pdf-mcp/downloads path.
+
+        That shared path is what made two local users each spawning pdf-mcp
+        collide (issue #15). The default must instead anchor on the user's
+        home, not tempfile.gettempdir().
+        """
+        monkeypatch.setenv("HOME", str(tmp_path))
+        fetcher = URLFetcher()
+        old_shared = Path(tempfile.gettempdir()) / "pdf-mcp" / "downloads"
+        assert fetcher.cache_dir != old_shared
+        assert fetcher.cache_dir == Path.home() / ".cache" / "pdf-mcp" / "downloads"
+
+    def test_chmod_failure_does_not_crash_init(self, tmp_path):
+        """A foreign-owned cache dir whose chmod fails must not crash __init__.
+
+        On a shared host the dir may already exist owned by another user;
+        the unconditional chmod would raise PermissionError. Init must
+        degrade gracefully instead of crashing the server at startup.
+        """
+        target = tmp_path / "downloads"
+        with patch("pdf_mcp.url_fetcher.os.chmod", side_effect=PermissionError):
+            fetcher = URLFetcher(cache_dir=target)
+        assert fetcher.cache_dir == target
+        assert target.exists()
+
+
 class TestFloorStillApplies:
     def test_config_wildcard_allow_cannot_bypass_cidr(self, tmp_path):
         """config url.allow=['*'] cannot bypass the CIDR block floor."""
@@ -598,6 +650,55 @@ class TestRedirectSSRFValidation:
 
         assert result.exists()
         assert result.read_bytes() == valid_pdf_bytes
+
+    @patch.object(URLFetcher, "_validate_url_no_dns")
+    def test_relative_redirect_preserves_hostname(
+        self, mock_validate, url_fetcher, valid_pdf_bytes
+    ):
+        """A relative Location must resolve against the original hostname.
+
+        Regression for issue #16: the IP-pinning path rewrites each request to
+        the resolved IP, so httpx resolves a relative Location against the IP
+        URL and drops the hostname — the next hop then verifies the TLS cert
+        against the IP and fails. The fix resolves Location against the
+        hostname-based current_url, so every hop pins the real host.
+        """
+        url = "https://arxiv.org/pdf/1706.03762.pdf"
+        # 301 with a RELATIVE Location (the real arxiv case). next_request.url
+        # models httpx's wrong resolution against the pinned-IP request URL.
+        redirect_response = _mock_stream_response(
+            b"",
+            is_redirect=True,
+            location="/pdf/1706.03762",
+            redirect_url="https://203.0.113.9/pdf/1706.03762",
+        )
+        final_response = _mock_stream_response(
+            valid_pdf_bytes, {"content-type": "application/pdf"}
+        )
+
+        seen_hosts: list[str] = []
+
+        def fake_pin(hostname):
+            seen_hosts.append(hostname)
+            return ("203.0.113.1", socket.AF_INET)
+
+        with patch("pdf_mcp.url_fetcher._pick_pinned_ip", side_effect=fake_pin):
+            with patch("httpx.Client") as mock_client:
+                mock_client.return_value.__enter__ = Mock(
+                    return_value=mock_client.return_value
+                )
+                mock_client.return_value.__exit__ = Mock(return_value=False)
+                mock_client.return_value.stream.side_effect = [
+                    redirect_response,
+                    final_response,
+                ]
+
+                result = url_fetcher.fetch(url)
+
+        assert result.exists()
+        assert result.read_bytes() == valid_pdf_bytes
+        # Both hops must pin the real hostname, never the pinned IP literal.
+        assert seen_hosts == ["arxiv.org", "arxiv.org"]
 
     @patch.object(URLFetcher, "_validate_url_no_dns")
     def test_redirect_with_no_target_url(self, mock_validate, url_fetcher):

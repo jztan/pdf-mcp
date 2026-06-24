@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`scripts/benchmark_rrf.py --graded`) asserting keyword-mode NDCG@10 against a
   committed pre-CJK baseline, with a stemming/substring-targeted graded corpus.
   Guards the planned CJK FTS5 tokenizer change against silent English keyword
-  regression. One-time finding: hybrid/keyword/semantic NDCG = 0.777/0.642/0.656.
+  regression. The gate runs against an isolated corpus-only cache so FTS5
+  `bm25()` IDF is hermetic (unrelated cached PDFs no longer shift keyword
+  ranking). One-time finding: hybrid/keyword/semantic NDCG = 0.767/0.625/0.656.
 
 ### Changed
 - `pdf_read_pages` extraction skips the onnxruntime column detector on
@@ -19,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the dominant first-extraction cost (~565 ms/216p with `[multicolumn]`) on
   single-column documents. Conservative by design — ambiguous or multi-column
   pages still run the full detector, so reading order is unchanged.
+
+### Fixed
+- URL downloads now default to the per-user cache root
+  (`~/.cache/pdf-mcp/downloads`) instead of a fixed `/tmp/pdf-mcp/downloads`
+  path, and honor `PDF_MCP_CACHE_DIR` like every other cache artifact. On
+  shared hosts two local users no longer collide on the same `/tmp` path, and
+  the cache-dir permission tightening is now fail-soft so a foreign-owned
+  directory can't crash startup (issue #15). Existing downloads under the old
+  `/tmp` path are simply re-fetched on demand; no migration needed.
+- URL downloads no longer fail TLS verification when a server issues a
+  *relative* HTTP redirect. The IP-pinning path rewrites each request to the
+  resolved IP, so httpx resolved a relative `Location` against the IP URL and
+  dropped the hostname — the next hop then verified the certificate against the
+  IP literal and failed with `CERTIFICATE_VERIFY_FAILED`. The redirect target
+  is now resolved against the hostname-based URL; each hop is still
+  re-validated and re-pinned, so SSRF / DNS-rebinding protection is unchanged
+  (issue #16).
 
 ## [1.17.0] - 2026-06-20
 ### Added

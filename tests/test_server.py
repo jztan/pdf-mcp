@@ -31,6 +31,20 @@ from pdf_mcp.url_fetcher import URLFetcher
 from pdf_mcp.parallel import PageError
 
 
+class TestURLDownloadCacheWiring:
+    """The server wires URL downloads under the main cache root."""
+
+    def test_url_downloads_live_under_cache_root(self):
+        """url_fetcher.cache_dir is cache.cache_dir/downloads, so it tracks
+        PDF_MCP_CACHE_DIR like every other cache artifact (issue #15)."""
+        import pdf_mcp.server as server_module
+
+        assert (
+            server_module.url_fetcher.cache_dir
+            == server_module.cache.cache_dir / "downloads"
+        )
+
+
 class TestContainsCJK:
     def test_kanji_true(self):
         assert _contains_cjk("厚木基地") is True

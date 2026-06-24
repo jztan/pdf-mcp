@@ -13,7 +13,7 @@
 
 No release branch open. Merged on `develop`, awaiting the cut:
 
-- **RRF benchmark v2** — a deterministic, `slow`-marked retrieval-quality gate asserting **keyword-mode** NDCG@10 against a committed pre-CJK baseline, over a stemming/substring-targeted graded corpus. Built as the English-regression guardrail for the planned CJK FTS5 tokenizer change. One-time finding: **hybrid RRF beats single modes — NDCG@10 0.777 vs 0.642 keyword / 0.656 semantic** (see [`benchmark_data/rrf_v2_results.md`](benchmark_data/rrf_v2_results.md)).
+- **RRF benchmark v2** — a deterministic, `slow`-marked retrieval-quality gate asserting **keyword-mode** NDCG@10 against a committed pre-CJK baseline, over a stemming/substring-targeted graded corpus. Built as the English-regression guardrail for the planned CJK FTS5 tokenizer change. One-time finding: **hybrid RRF beats single modes — NDCG@10 0.767 vs 0.625 keyword / 0.656 semantic** (see [`benchmark_data/rrf_v2_results.md`](benchmark_data/rrf_v2_results.md)).
 - **Single-column pre-gate** — `extract_text_from_page` skips the onnxruntime column detector (~565 ms/216p, first-extraction only) on confidently single-column pages via a conservative block-geometry heuristic. Validated safe on real non-arXiv two-column + CJK-horizontal PDFs; reading order unchanged.
 - Four metadata-only `chore(packaging)` commits — py3.13 classifier, `Development Status` Beta→Production/Stable, refreshed package description, author/maintainer email switched to a GitHub noreply address.
 
@@ -86,4 +86,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-06-20 (RRF benchmark v2 keyword-NDCG gate + single-column pre-gate merged to develop (`863c347`) for 1.18.0 — hybrid RRF validated 0.777 vs 0.642/0.656; test count 857→880; Next Release section now lists the merged features alongside the packaging commits)
+**Last Updated:** 2026-06-24 (RRF benchmark v2 keyword-NDCG gate + single-column pre-gate merged to develop (`863c347`) for 1.18.0; gate made hermetic via an isolated corpus-only cache — hybrid RRF validated 0.767 vs 0.625/0.656 (reproducible); test count 857→880; Next Release section now lists the merged features alongside the packaging commits)

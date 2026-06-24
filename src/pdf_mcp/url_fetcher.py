@@ -8,7 +8,6 @@ import hashlib
 import ipaddress
 import os
 import socket
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -99,16 +98,25 @@ class URLFetcher:
         Initialize URL fetcher.
 
         Args:
-            cache_dir: Directory to store downloaded PDFs. Defaults to temp dir.
+            cache_dir: Directory to store downloaded PDFs. Defaults to the
+                per-user cache root (~/.cache/pdf-mcp/downloads), matching the
+                main SQLite cache so all artifacts share one configurable root
+                and two local users never collide on a fixed /tmp path.
             timeout: HTTP timeout in seconds
         """
         if cache_dir is None:
-            cache_dir = Path(tempfile.gettempdir()) / "pdf-mcp" / "downloads"
+            cache_dir = Path.home() / ".cache" / "pdf-mcp" / "downloads"
 
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        # Restrict permissions on cache directory so other users can't read downloads
-        os.chmod(self.cache_dir, 0o700)
+        # Restrict permissions so other local users can't read downloads.
+        # Fail-soft: on a shared host the dir may already exist owned by a
+        # different user, where chmod raises PermissionError. A best-effort
+        # tightening must not crash startup (issue #15).
+        try:
+            os.chmod(self.cache_dir, 0o700)
+        except OSError:
+            pass
         self.timeout = timeout
         self._config = config
         self._url_to_path: dict[str, Path] = {}
@@ -312,10 +320,19 @@ class URLFetcher:
                     extensions=request_extensions,
                 ) as response:
                     if response.is_redirect:
-                        next_req = response.next_request
-                        if next_req is None:
+                        location = response.headers.get("location")
+                        if not location:
                             raise ValueError("Redirect with no target URL")
-                        current_url = str(next_req.url)
+                        # Resolve the Location against the hostname-based
+                        # current_url, NOT response.next_request.url. We rewrote
+                        # this hop's request to the pinned IP, so httpx resolves
+                        # a *relative* Location against that IP URL and drops the
+                        # hostname — the next hop would then verify the TLS cert
+                        # against the IP literal and fail (issue #16). Joining
+                        # against current_url preserves the hostname; the next
+                        # loop iteration re-validates and re-pins it, so the
+                        # SSRF / DNS-rebinding protection is fully intact.
+                        current_url = str(httpx.URL(current_url).join(location))
                         continue
 
                     response.raise_for_status()

@@ -8,7 +8,6 @@ import hashlib
 import ipaddress
 import os
 import socket
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -99,16 +98,25 @@ class URLFetcher:
         Initialize URL fetcher.
 
         Args:
-            cache_dir: Directory to store downloaded PDFs. Defaults to temp dir.
+            cache_dir: Directory to store downloaded PDFs. Defaults to the
+                per-user cache root (~/.cache/pdf-mcp/downloads), matching the
+                main SQLite cache so all artifacts share one configurable root
+                and two local users never collide on a fixed /tmp path.
             timeout: HTTP timeout in seconds
         """
         if cache_dir is None:
-            cache_dir = Path(tempfile.gettempdir()) / "pdf-mcp" / "downloads"
+            cache_dir = Path.home() / ".cache" / "pdf-mcp" / "downloads"
 
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        # Restrict permissions on cache directory so other users can't read downloads
-        os.chmod(self.cache_dir, 0o700)
+        # Restrict permissions so other local users can't read downloads.
+        # Fail-soft: on a shared host the dir may already exist owned by a
+        # different user, where chmod raises PermissionError. A best-effort
+        # tightening must not crash startup (issue #15).
+        try:
+            os.chmod(self.cache_dir, 0o700)
+        except OSError:
+            pass
         self.timeout = timeout
         self._config = config
         self._url_to_path: dict[str, Path] = {}

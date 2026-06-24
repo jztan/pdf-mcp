@@ -164,7 +164,7 @@ cache = PDFCache(
     ttl_hours=_ttl_hours_from_env(),
 )
 pdf_config = PDFConfig()
-url_fetcher = URLFetcher(config=pdf_config)
+url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
 
 
 def _resolve_path(

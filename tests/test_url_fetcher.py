@@ -1,6 +1,7 @@
 # tests/test_url_fetcher.py
 """Tests for pdf_mcp.url_fetcher module."""
 
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
@@ -453,6 +454,42 @@ class TestSSRFProtection:
             ):
                 with pytest.raises(ValueError, match="blocked IP"):
                     url_fetcher._validate_url(url)
+
+
+class TestDefaultCacheDir:
+    """Default download cache must be per-user, not the shared system temp dir."""
+
+    def test_default_is_under_per_user_cache_root(self, tmp_path, monkeypatch):
+        """URLFetcher() with no cache_dir defaults to ~/.cache/pdf-mcp/downloads."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        fetcher = URLFetcher()
+        assert fetcher.cache_dir == tmp_path / ".cache" / "pdf-mcp" / "downloads"
+
+    def test_default_not_the_old_shared_tmp_path(self, tmp_path, monkeypatch):
+        """The default must not be the fixed /tmp/pdf-mcp/downloads path.
+
+        That shared path is what made two local users each spawning pdf-mcp
+        collide (issue #15). The default must instead anchor on the user's
+        home, not tempfile.gettempdir().
+        """
+        monkeypatch.setenv("HOME", str(tmp_path))
+        fetcher = URLFetcher()
+        old_shared = Path(tempfile.gettempdir()) / "pdf-mcp" / "downloads"
+        assert fetcher.cache_dir != old_shared
+        assert fetcher.cache_dir == Path.home() / ".cache" / "pdf-mcp" / "downloads"
+
+    def test_chmod_failure_does_not_crash_init(self, tmp_path):
+        """A foreign-owned cache dir whose chmod fails must not crash __init__.
+
+        On a shared host the dir may already exist owned by another user;
+        the unconditional chmod would raise PermissionError. Init must
+        degrade gracefully instead of crashing the server at startup.
+        """
+        target = tmp_path / "downloads"
+        with patch("pdf_mcp.url_fetcher.os.chmod", side_effect=PermissionError):
+            fetcher = URLFetcher(cache_dir=target)
+        assert fetcher.cache_dir == target
+        assert target.exists()
 
 
 class TestFloorStillApplies:

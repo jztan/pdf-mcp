@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single-column documents. Conservative by design — ambiguous or multi-column
   pages still run the full detector, so reading order is unchanged.
 
+### Fixed
+- URL downloads now default to the per-user cache root
+  (`~/.cache/pdf-mcp/downloads`) instead of a fixed `/tmp/pdf-mcp/downloads`
+  path, and honor `PDF_MCP_CACHE_DIR` like every other cache artifact. On
+  shared hosts two local users no longer collide on the same `/tmp` path, and
+  the cache-dir permission tightening is now fail-soft so a foreign-owned
+  directory can't crash startup (issue #15). Existing downloads under the old
+  `/tmp` path are simply re-fetched on demand; no migration needed.
+
 ## [1.17.0] - 2026-06-20
 ### Added
 - Vertical-script (tategaki / 直排) reading-order reconstruction for Japanese

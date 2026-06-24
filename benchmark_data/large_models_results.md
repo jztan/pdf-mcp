@@ -6,7 +6,7 @@ Quality-first re-benchmark of large **mean-pooled** embedding models vs the
 `bge-small` default, on the 22-scenario corpus (`e5_prefix_corpus.json`). Run to
 answer "is there a model worth switching the default to?" — a backend (MLX)
 never justifies a model; only retrieval does. Harness:
-`scripts/benchmark_large_models.py` (reuses `benchmark_embedding_models.run_model`).
+`scripts/archive/benchmark_large_models.py` (reuses `benchmark_embedding_models.run_model`).
 Gate: MRR lift ≥ 0.05. Decision metric: MRR.
 
 ## Results
@@ -53,7 +53,7 @@ if the integration is fixed later.
 ## Per-scenario drill-down (bge vs gte-large)
 
 `gte-large` is the clean comparison (symmetric, no prompt confound), so a
-per-scenario drill-down (`scripts/benchmark_drilldown.py`) checks whether the
+per-scenario drill-down (`scripts/archive/benchmark_drilldown.py`) checks whether the
 0.052 MRR gap is one fluke or systematic. Of 22 scenarios: **10 ties, bge
 wins 8, gte-large wins 4.**
 

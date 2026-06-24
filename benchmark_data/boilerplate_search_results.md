@@ -1,6 +1,6 @@
 # Search-impact benchmark: does stripping boilerplate change ranking?
 
-Keyword (BM25 / FTS5) ranking with boilerplate left in vs stripped, via the real `pdf_search` path on a fresh index each run (`scripts/benchmark_search_impact.py`). The only variable is boilerplate removal. Semantic leg is offline here (model download); BM25 is the leg where boilerplate-on-every-page would plausibly distort ranking.
+Keyword (BM25 / FTS5) ranking with boilerplate left in vs stripped, via the real `pdf_search` path on a fresh index each run (`scripts/archive/benchmark_search_impact.py`). The only variable is boilerplate removal. Semantic leg is offline here (model download); BM25 is the leg where boilerplate-on-every-page would plausibly distort ranking.
 
 ## 1. Realistic labeled queries (MRR, rank stability)
 

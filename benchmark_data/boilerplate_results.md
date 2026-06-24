@@ -1,6 +1,6 @@
 # Boilerplate (running header/footer) detection benchmark
 
-F1 of per-block boilerplate classification on a synthetic corpus where headers/footers/page-numbers are injected at known positions, so labels are exact (`scripts/benchmark_boilerplate.py`, `benchmark_data/boilerplate_corpus.json`). Each row adds one refinement; `freq_runs` is the full proposed method. `clean_control` and `numeric_body` are precision guardrails — the detector must strip nothing real there.
+F1 of per-block boilerplate classification on a synthetic corpus where headers/footers/page-numbers are injected at known positions, so labels are exact (`scripts/archive/benchmark_boilerplate.py`, `benchmark_data/boilerplate_corpus.json`). Each row adds one refinement; `freq_runs` is the full proposed method. `clean_control` and `numeric_body` are precision guardrails — the detector must strip nothing real there.
 
 ## F1 by scenario
 

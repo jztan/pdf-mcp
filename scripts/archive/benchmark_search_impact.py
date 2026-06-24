@@ -46,7 +46,7 @@ from typing import Any
 import pymupdf
 
 SCRIPTS = Path(__file__).parent
-ROOT = SCRIPTS.parent
+ROOT = SCRIPTS.parent.parent  # archive/ -> scripts/ -> repo root
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCRIPTS))
 

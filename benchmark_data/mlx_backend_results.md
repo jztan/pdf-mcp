@@ -7,7 +7,7 @@ it. MLX is a *performance* backend (it does not change the prefixes/model), so
 it is judged on two axes: embedding latency, and output equivalence vs the
 fastembed/ONNX path.
 
-Harness: `scripts/benchmark_mlx_backend.py` — implements the MLX encode path
+Harness: `scripts/archive/benchmark_mlx_backend.py` — implements the MLX encode path
 faithfully (single `batch_encode_plus`, mean-pooled `text_embeds`) and compares
 against the production fastembed path on 58 real page-text chunks from 4 PDFs.
 **No production code changed.** Host: Apple M4 Pro.
@@ -45,7 +45,7 @@ before cosine (do not assume either backend returns unit vectors — see below).
 ### Proof of the pooling cause (not just the symptom)
 
 The table above shows bge *diverges* but does not by itself prove *why*.
-`scripts/benchmark_pooling_attribution.py` settles it: it reconstructs both a
+`scripts/archive/benchmark_pooling_attribution.py` settles it: it reconstructs both a
 CLS-pooled and a mean-pooled sentence vector from the model's own
 `last_hidden_state`, then checks which pooling each backend reproduces.
 
@@ -88,7 +88,7 @@ unnormalized. The MLX path already normalizes, so it incidentally avoids this.
 Before concluding, the simpler alternative was measured: pass
 `providers=['CoreMLExecutionProvider', 'CPUExecutionProvider']` to fastembed,
 keeping its own model + pooling (so no divergence risk) and adding no
-dependency. Harness: `scripts/benchmark_coreml_provider.py`.
+dependency. Harness: `scripts/archive/benchmark_coreml_provider.py`.
 
 | Model | CPU EP | CoreML EP | Speedup | row cosine vs CPU |
 |-------|--------|-----------|---------|-------------------|
@@ -108,7 +108,7 @@ So the safe path doesn't accelerate, and the fast path (MLX) isn't safe.
 If MLX mean-pools everything, pair it with a model whose *native* pooling is
 mean — then MLX is correct and the pooling-parity layer disappears. Candidate:
 `sentence-transformers/all-MiniLM-L6-v2` (384-dim, 92 MB, mean pooled). Harness:
-`scripts/benchmark_minilm_mlx.py`. All three axes measured:
+`scripts/archive/benchmark_minilm_mlx.py`. All three axes measured:
 
 1. **Equivalence: perfect.** fastembed pools MiniLM by mean (cosine 1.0000 vs
    mean, 0.55 vs CLS), unit-norm; fastembed vs MLX = **1.0000**. MLX *is* correct

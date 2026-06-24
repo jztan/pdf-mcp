@@ -4,7 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent))  # scripts/archive (this dir)
+sys.path.insert(0, str(Path(__file__).parent.parent))  # scripts/ (active modules)
 
 import benchmark_mlx_backend as bmb  # noqa: E402
 

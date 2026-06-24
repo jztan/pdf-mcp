@@ -10,7 +10,7 @@ passages embedded as `passage: <text>`, queries as `query: <text>`. fastembed's
 `.embed()` does not apply these. This measures whether adding them lifts
 retrieval on our ground-truth corpus.
 
-Harness: `scripts/benchmark_e5_prefix.py` runs the same model two ways
+Harness: `scripts/archive/benchmark_e5_prefix.py` runs the same model two ways
 (verbatim vs. prefixed) via monkeypatch — **no production code changed**. Each
 run uses a fresh cache, so embeddings never leak across conditions. Metric: MRR
 over all scenarios at each scenario's native k. Model:

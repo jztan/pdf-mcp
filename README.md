@@ -348,6 +348,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 - [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — The problem with large PDFs in AI agents and a working solution
 - [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — How AI agents use pdf-mcp tools to read and navigate PDF documents
+- [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Five production-tested patterns for how agents should navigate PDFs at scale
 
 **Search & retrieval**
 

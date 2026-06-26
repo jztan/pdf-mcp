@@ -206,6 +206,10 @@
   .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
             background: var(--text-tertiary); opacity: 0.5;
             transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
+  /* Crisper hero tiles: a hairline edge gives each page definition on the white
+     card, so the field reads as intentional pages rather than a flat skeleton. */
+  .hero-grid .pgcell { border-radius: 2px;
+            box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--text-tertiary) 26%, transparent); }
   /* Non-matched pages stay faintly visible (a faded document) rather than
      vanishing — so after a search the grid still reads as the whole doc
      with matches highlighted, not an empty box with a few dots. */
@@ -215,6 +219,10 @@
      solid accent at full opacity while non-matches fade to 0.13. */
   .pgcell.hit { background: var(--accent); opacity: 1;
                 box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent); z-index: 2; position: relative; }
+  /* Elevated hero match: a soft accent ring + lift so a found page reads as a
+     crafted highlight, not a flat blue square. */
+  .hero-grid .pgcell.hit { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 22%, transparent),
+                0 3px 9px color-mix(in srgb, var(--accent) 32%, transparent); }
   .pgcell.scanned { background: var(--warning); opacity: 0.45; }
   .hero-stat { margin-top: 34px; font-family: var(--font-display); font-size: clamp(20px, 3vw, 28px);
                font-weight: 600; letter-spacing: -0.02em; opacity: 0; transition: opacity 0.8s ease; }

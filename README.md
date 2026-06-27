@@ -322,7 +322,7 @@ pdf-mcp works out of the box with no configuration. To restrict which paths and 
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for planned features and release history.
+See [ROADMAP.md](docs/ROADMAP.md) for planned features and release history.
 
 ## Contributing
 

@@ -2,24 +2,22 @@
 
 ## Project Status
 
-- **Current version:** v1.17.0 (released 2026-06-19)
+- **Current version:** v1.18.0 (released 2026-06-27)
 - **MCP Registry:** Published
-- **Test suite:** 880 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Test suite:** 890 tests across unit, integration, and retrieval-quality benchmarks. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
 - **Tools:** `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
 
 ---
 
-## Next Release (1.18.0)
+## Next Release (1.19.0)
 
-No release branch open. Merged on `develop`, awaiting the cut:
+No release branch open. Merged on `develop` (CHANGELOG `[Unreleased]`), awaiting the cut:
 
-- **RRF benchmark v2** — a deterministic, `slow`-marked retrieval-quality gate asserting **keyword-mode** NDCG@10 against a committed pre-CJK baseline, over a stemming/substring-targeted graded corpus. Built as the English-regression guardrail for the planned CJK FTS5 tokenizer change. One-time finding: **hybrid RRF beats single modes — NDCG@10 0.767 vs 0.625 keyword / 0.656 semantic** (see [`benchmark_data/rrf_v2_results.md`](benchmark_data/rrf_v2_results.md)).
-- **Single-column pre-gate** — `extract_text_from_page` skips the onnxruntime column detector (~565 ms/216p, first-extraction only) on confidently single-column pages via a conservative block-geometry heuristic. Validated safe on real non-arXiv two-column + CJK-horizontal PDFs; reading order unchanged.
-- **URL downloads to per-user cache root** — `~/.cache/pdf-mcp/downloads` instead of `/tmp/pdf-mcp/downloads`, honoring `PDF_MCP_CACHE_DIR`; cache-dir permission tightening is fail-soft so a foreign-owned dir can't crash startup (issue #15).
-- **Relative-redirect TLS fix** — IP-pinning path now resolves relative `Location` headers against the hostname URL; TLS cert verification no longer fails against IP literals, SSRF/DNS-rebinding protection unchanged (issue #16).
-- Four metadata-only `chore(packaging)` commits — py3.13 classifier, `Development Status` Beta→Production/Stable, refreshed package description, author/maintainer email switched to a GitHub noreply address.
+- **CJK keyword search fix** — Japanese / Chinese / Korean keyword queries now return hits for terms embedded in unspaced text. A parallel pair of character-split FTS5 indexes (`pdf_search_fts_cjk` / `pdf_section_fts_cjk`, `unicode61`, one codepoint per token) is queried with phrase semantics for CJK-containing queries, while English/Latin queries stay on the untouched `porter unicode61` index — **English keyword ranking is unchanged** (verified by the RRF v2 gate: NDCG@10 still 0.625/0.656/0.767). Excerpts come from original page text; existing caches rebuild only the FTS layer on first open (no re-extract, no re-embed). Measured CJK keyword recall on the local vertical-jp corpus: 1.00 across 13 graded queries; `厚木基地` recovers 0→3 hits. Chosen over the trigram/segmenter redesign originally scoped, which would have dropped Porter stemming for English. The `cjk_keyword_warning` advisory is removed (no longer needed).
 
-Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](RELEASE_SOP.md) — the `[Unreleased]` block already documents all entries.
+Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md) — the `[Unreleased]` block already documents all entries.
+
+> **Shipped in v1.18.0** (2026-06-27): RRF benchmark v2 keyword-NDCG gate (one-time finding: hybrid RRF beats single modes, **0.767 vs 0.625 keyword / 0.656 semantic**), single-column extraction pre-gate, per-user URL download cache (issue #15), relative-redirect TLS fix (issue #16), and the metadata `chore(packaging)` commits. See [`CHANGELOG.md`](../CHANGELOG.md).
 
 ---
 
@@ -53,7 +51,7 @@ _Nothing queued._
 
 ### P1 — high-value, well-scoped
 
-- [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](docs/embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
+- [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
 
 ### P2 — investigate before committing
 
@@ -72,8 +70,8 @@ _Nothing queued._
 Items prototyped or benchmarked and then deliberately closed:
 
 - **Hybrid (BM25 + semantic) section search** (2026-05-04) — Built full Phase-1 validation on `feature/hybrid-section-validation` (15 commits, 550 tests) plus a 45-query confirmation calibration. Hybrid RRF gave only ~5% lift over BM25 on scientific papers (below the 0.10 MRR gate) and caused a severe lexical regression at section grain (0.93 → 0.63 MRR, −33%) because RRF dilutes BM25's clean rank-1 on title-style queries. v1.8.0 page-grain hybrid is 3× better on paraphrase queries. No query class where hybrid-section wins. SOTA systems (PaperQA2) use semantic + LLM rerank instead.
-- **Default embedding model benchmark** (2026-05-09) — Live MRR + latency benchmark of 4 fast English fastembed models on the 7-scenario arxiv ground truth via `scripts/benchmark_embedding_models.py`. Gate: MRR lift ≥ 0.05 AND p50 latency ≤ 1.5× baseline. `bge-small-en-v1.5` won by 0.116 MRR over the best challenger; no challenger met the lift threshold. arctic-embed-m collapsed to MRR 0.029 (likely missing query/passage prefix protocol). Default kept; numbers in [`docs/embedding-models.md`](docs/embedding-models.md).
-- **Parallelize text extraction; threads for any page op** (2026-06-06) — The parallel page-processing benchmark (`scripts/benchmark_parallel_pages.py`, [`benchmark_data/parallel_pages_results.md`](benchmark_data/parallel_pages_results.md)) closed two paths. **Text extraction:** at ~4 ms/page it is too cheap to parallelize — the process pool loses (0.13–0.24x; spawn cost plus cross-process pickling of the extracted text dominate), reaching ~1.6x only on Linux/fork with many pages, never worth the spawn cost and the lost shared SQLite cache. **Threads anywhere:** GIL/native-lock bound (0.7–1.0x on render), and PyMuPDF OCR crashes under threads (Leptonica not thread-safe). Only OCR (and conditionally render) survived — promoted to P0.
+- **Default embedding model benchmark** (2026-05-09) — Live MRR + latency benchmark of 4 fast English fastembed models on the 7-scenario arxiv ground truth via `scripts/benchmark_embedding_models.py`. Gate: MRR lift ≥ 0.05 AND p50 latency ≤ 1.5× baseline. `bge-small-en-v1.5` won by 0.116 MRR over the best challenger; no challenger met the lift threshold. arctic-embed-m collapsed to MRR 0.029 (likely missing query/passage prefix protocol). Default kept; numbers in [`docs/embedding-models.md`](embedding-models.md).
+- **Parallelize text extraction; threads for any page op** (2026-06-06) — The parallel page-processing benchmark (`scripts/benchmark_parallel_pages.py`, [`benchmark_data/parallel_pages_results.md`](../benchmark_data/parallel_pages_results.md)) closed two paths. **Text extraction:** at ~4 ms/page it is too cheap to parallelize — the process pool loses (0.13–0.24x; spawn cost plus cross-process pickling of the extracted text dominate), reaching ~1.6x only on Linux/fork with many pages, never worth the spawn cost and the lost shared SQLite cache. **Threads anywhere:** GIL/native-lock bound (0.7–1.0x on render), and PyMuPDF OCR crashes under threads (Leptonica not thread-safe). Only OCR (and conditionally render) survived — promoted to P0.
 - **MLX/Apple-Silicon embedding backend fork** (`pdf-mcp-mlx`) — Benchmarked an MLX-backed embedding path (with E5 query/passage prefixes) against the shipped `fastembed`-CPU + `bge-small-en-v1.5` default. The fork did not beat the CPU baseline; `bge-small` + `fastembed`-CPU remained optimal, so the fork was rejected. The one genuine deliverable surfaced — fastembed 0.8 returning unnormalized vectors for some models (e.g. `multilingual-e5-large`) — was the embedding L2-normalization fix, since **shipped in v1.17.0**.
 - **Running-header/footer (boilerplate) stripping** (2026-06-11) — Prototyped a frequency-based detector (positional margin bands + digit-normalized signatures + odd/even parity + consecutive-run rule) and benchmarked detection and downstream impact across three scripts. **Detection works:** on a synthetic corpus with injected boilerplate the full method hit F1 1.00 across all edge cases, and on real PDFs (`scripts/archive/benchmark_boilerplate.py --real`: Attention, GPT-3, GDPR) it reached recall 1/1 with zero precision suspects — collapsing GDPR's varying `L 119/N Official Journal …` header to one signature and removing it from 100% of 88 pages, vs a RAG-on-PDF-style naive filter that would strip `Abstract`/`CHAPTER I`/section headings. **But the payoff doesn't justify it:** token savings were only 0.2–1.6%, and the search-impact benchmark (`scripts/archive/benchmark_search_impact.py`) showed BM25's IDF already neutralizes per-page boilerplate — realistic queries were unchanged (MRR 0.571 → 0.571, 0/7 top-10 changes; GDPR control jaccard 1.00). The only movement was on contrived queries whose terms overlap a word-bearing running header (GDPR collision jaccard ~0.41). Real but narrow value (legal/standards/journal docs only); shelved as a possible future opt-in, index-side only.
 
@@ -83,9 +81,9 @@ Items prototyped or benchmarked and then deliberately closed:
 
 For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
-- [`CHANGELOG.md`](CHANGELOG.md) — canonical changelog, every version since v1.0
+- [`CHANGELOG.md`](../CHANGELOG.md) — canonical changelog, every version since v1.0
 - [GitHub Releases](https://github.com/jztan/pdf-mcp/releases) — release notes with installation instructions
 
 ---
 
-**Last Updated:** 2026-06-24 (RRF benchmark v2 keyword-NDCG gate + single-column pre-gate merged to develop (`863c347`) for 1.18.0; gate made hermetic via an isolated corpus-only cache — hybrid RRF validated 0.767 vs 0.625/0.656 (reproducible); test count 857→880; Next Release section now lists the merged features alongside the packaging commits)
+**Last Updated:** 2026-06-27 (v1.18.0 released — RRF v2 gate, single-column pre-gate, per-user URL cache #15, relative-redirect TLS #16, packaging commits all shipped; CJK keyword search fix merged to develop (`8d24850`) for 1.19.0, advisory removed; test count 880→890)

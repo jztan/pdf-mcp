@@ -194,6 +194,33 @@ def test_summarize_hides_spans_without_detail():
     doc.close()
 
 
+def test_summarize_content_warning_present_when_suspicious():
+    """content_warning key must appear when hidden text is found."""
+    doc = _doc(
+        lambda p: p.insert_text(
+            (72, 72), "white hidden secret content", fontsize=12, color=(1, 1, 1)
+        )
+    )
+    scan = scan_document(doc)
+    assert scan["suspicious"] is True
+    block = summarize(scan, detail=False)
+    assert "content_warning" in block
+    assert isinstance(block["content_warning"], str) and block["content_warning"]
+    doc.close()
+
+
+def test_summarize_no_content_warning_when_clean():
+    """content_warning must NOT appear on a clean document."""
+    doc = _doc(
+        lambda p: p.insert_text((72, 72), "ordinary visible body text", fontsize=12)
+    )
+    scan = scan_document(doc)
+    assert scan["suspicious"] is False
+    block = summarize(scan, detail=False)
+    assert "content_warning" not in block
+    doc.close()
+
+
 def test_summarize_includes_capped_spans_with_detail():
     doc = _doc(
         lambda p: p.insert_text(

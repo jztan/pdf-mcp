@@ -274,8 +274,14 @@ class PDFCache:
                     toc JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    content_trust_json TEXT DEFAULT NULL,
-                    trust_version INTEGER DEFAULT 0
+                    content_trust_json TEXT DEFAULT NULL
+                );
+
+                -- Global content-trust version stamp (single row, id=0).
+                -- Replaces per-document trust_version in pdf_metadata.
+                CREATE TABLE IF NOT EXISTS content_trust_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 0),
+                    trust_version INTEGER NOT NULL
                 );
 
                 -- Page text cache
@@ -388,17 +394,13 @@ class PDFCache:
                     " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
                 )
 
-            # pdf_metadata: content-trust scan cache + its version stamp
+            # pdf_metadata: content-trust scan cache (migrate old tables that
+            # lack the column; trust_version column dropped — now global).
             cols = _get_columns(conn, "pdf_metadata")
             if cols and "content_trust_json" not in cols:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
-                )
-            if cols and "trust_version" not in cols:
-                conn.execute(
-                    "ALTER TABLE pdf_metadata"
-                    " ADD COLUMN trust_version INTEGER DEFAULT 0"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -409,22 +411,29 @@ class PDFCache:
                     " ADD COLUMN has_hidden_text INTEGER DEFAULT NULL"
                 )
 
-            # Unified content-trust invalidation: if any cached row predates the
-            # current detector, null BOTH content-trust caches and re-stamp.
-            # Lighter than _EXTRACTION_VERSION (no table drops). Guard on a
-            # populated cache so a fresh DB isn't touched.
-            if _get_columns(conn, "pdf_metadata"):
-                row = conn.execute(
-                    "SELECT MIN(trust_version) FROM pdf_metadata"
-                ).fetchone()
-                current_tv = content_trust._TRUST_VERSION
-                if row is not None and row[0] is not None and row[0] < current_tv:
-                    conn.execute("UPDATE page_text SET has_hidden_text = NULL")
-                    conn.execute(
-                        "UPDATE pdf_metadata SET content_trust_json = NULL,"
-                        " trust_version = ?",
-                        (current_tv,),
-                    )
+            # Global content-trust invalidation via content_trust_meta.
+            # On a fresh/never-stamped DB: record the current version (nothing
+            # to wipe). When the stored version is below current: null both
+            # caches and advance the stamp. Runs after page_text and
+            # pdf_metadata tables exist.
+            cur_tv = content_trust._TRUST_VERSION
+            row = conn.execute(
+                "SELECT trust_version FROM content_trust_meta WHERE id = 0"
+            ).fetchone()
+            stored_tv = row[0] if row else None
+            if stored_tv is None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO content_trust_meta (id, trust_version)"
+                    " VALUES (0, ?)",
+                    (cur_tv,),
+                )
+            elif stored_tv < cur_tv:
+                conn.execute("UPDATE page_text SET has_hidden_text = NULL")
+                conn.execute("UPDATE pdf_metadata SET content_trust_json = NULL")
+                conn.execute(
+                    "UPDATE content_trust_meta SET trust_version = ? WHERE id = 0",
+                    (cur_tv,),
+                )
 
             # page_embeddings: add model column to existing tables
             cols = _get_columns(conn, "page_embeddings")
@@ -613,14 +622,11 @@ class PDFCache:
             )
 
     def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:
-        """Persist the content-trust scan without touching other metadata.
-        (Param is named `scan` to avoid shadowing the imported content_trust
-        module used for the version stamp.)"""
+        """Persist the content-trust scan without touching other metadata."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "UPDATE pdf_metadata SET content_trust_json = ?,"
-                " trust_version = ? WHERE file_path = ?",
-                (json.dumps(scan), content_trust._TRUST_VERSION, path),
+                "UPDATE pdf_metadata SET content_trust_json = ? WHERE file_path = ?",
+                (json.dumps(scan), path),
             )
 
     def get_content_trust(self, path: str) -> dict[str, Any] | None:
@@ -634,7 +640,7 @@ class PDFCache:
             return None
         if not self._is_cache_valid(path, row[1]):
             return None
-        return dict(json.loads(row[0]))
+        return cast(dict[str, Any], json.loads(row[0]))
 
     def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
         """Persist per-page hidden-text booleans (page_num is 0-indexed)."""

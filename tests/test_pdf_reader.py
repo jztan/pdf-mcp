@@ -2627,29 +2627,36 @@ def _cols(db_path, table):
 def test_migration_adds_content_trust_columns(tmp_path):
     cache = PDFCache(cache_dir=tmp_path)
     assert "content_trust_json" in _cols(cache.db_path, "pdf_metadata")
-    assert "trust_version" in _cols(cache.db_path, "pdf_metadata")
     assert "has_hidden_text" in _cols(cache.db_path, "page_text")
+    # Global version table must exist (replaces per-row trust_version).
+    assert _cols(cache.db_path, "content_trust_meta") != set()
 
 
 def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
+    """Global content_trust_meta version triggers cache wipe on upgrade."""
     from pdf_mcp import content_trust
 
+    # First open: stamps content_trust_meta with the current version.
     cache = PDFCache(cache_dir=tmp_path)
     db = cache.db_path
+
+    # Seed a metadata row and a page row with stale content-trust data.
     with sqlite3.connect(db) as conn:
-        # Seed a metadata row + a page row carrying stale content-trust data
-        # at an old trust_version.
         conn.execute(
             "INSERT INTO pdf_metadata (file_path, file_mtime, file_size,"
-            " page_count, content_trust_json, trust_version)"
-            " VALUES ('p.pdf', 1.0, 10, 1, '{\"suspicious\": true}', 0)"
+            " page_count, content_trust_json)"
+            " VALUES ('p.pdf', 1.0, 10, 1, '{\"suspicious\": true}')"
         )
         conn.execute(
             "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
             " text_length, has_hidden_text) VALUES ('p.pdf', 0, 1.0, 'x', 1, 1)"
         )
+        # Backdate the global stamp so the next open sees stored < current.
+        conn.execute("UPDATE content_trust_meta SET trust_version = 0 WHERE id = 0")
+
     monkeypatch.setattr(content_trust, "_TRUST_VERSION", 99)
-    PDFCache(cache_dir=tmp_path)  # reopen triggers invalidation
+    PDFCache(cache_dir=tmp_path)  # reopen triggers global invalidation
+
     with sqlite3.connect(db) as conn:
         ct = conn.execute(
             "SELECT content_trust_json FROM pdf_metadata WHERE file_path='p.pdf'"
@@ -2657,12 +2664,13 @@ def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
         hh = conn.execute(
             "SELECT has_hidden_text FROM page_text WHERE file_path='p.pdf'"
         ).fetchone()[0]
-        ver = conn.execute(
-            "SELECT trust_version FROM pdf_metadata WHERE file_path='p.pdf'"
+        meta_ver = conn.execute(
+            "SELECT trust_version FROM content_trust_meta WHERE id = 0"
         ).fetchone()[0]
+
     assert ct is None
     assert hh is None
-    assert ver == 99
+    assert meta_ver == 99
 
 
 def _seed_meta_and_page(cache, path="d.pdf"):

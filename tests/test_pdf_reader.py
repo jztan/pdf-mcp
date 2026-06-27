@@ -2619,5 +2619,51 @@ def test_migration_backfills_cjk_from_existing_page_text(tmp_path):
     assert pt_after == pt_before  # page_text preserved, no re-extraction
 
 
+def _cols(db_path, table):
+    with sqlite3.connect(db_path) as conn:
+        return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def test_migration_adds_content_trust_columns(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    assert "content_trust_json" in _cols(cache.db_path, "pdf_metadata")
+    assert "trust_version" in _cols(cache.db_path, "pdf_metadata")
+    assert "has_hidden_text" in _cols(cache.db_path, "page_text")
+
+
+def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
+    from pdf_mcp import content_trust
+
+    cache = PDFCache(cache_dir=tmp_path)
+    db = cache.db_path
+    with sqlite3.connect(db) as conn:
+        # Seed a metadata row + a page row carrying stale content-trust data
+        # at an old trust_version.
+        conn.execute(
+            "INSERT INTO pdf_metadata (file_path, file_mtime, file_size,"
+            " page_count, content_trust_json, trust_version)"
+            " VALUES ('p.pdf', 1.0, 10, 1, '{\"suspicious\": true}', 0)"
+        )
+        conn.execute(
+            "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
+            " text_length, has_hidden_text) VALUES ('p.pdf', 0, 1.0, 'x', 1, 1)"
+        )
+    monkeypatch.setattr(content_trust, "_TRUST_VERSION", 99)
+    PDFCache(cache_dir=tmp_path)  # reopen triggers invalidation
+    with sqlite3.connect(db) as conn:
+        ct = conn.execute(
+            "SELECT content_trust_json FROM pdf_metadata WHERE file_path='p.pdf'"
+        ).fetchone()[0]
+        hh = conn.execute(
+            "SELECT has_hidden_text FROM page_text WHERE file_path='p.pdf'"
+        ).fetchone()[0]
+        ver = conn.execute(
+            "SELECT trust_version FROM pdf_metadata WHERE file_path='p.pdf'"
+        ).fetchone()[0]
+    assert ct is None
+    assert hh is None
+    assert ver == 99
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

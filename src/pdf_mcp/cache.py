@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from pdf_mcp import content_trust
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -272,7 +273,9 @@ class PDFCache:
                     metadata JSON,
                     toc JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    content_trust_json TEXT DEFAULT NULL,
+                    trust_version INTEGER DEFAULT 0
                 );
 
                 -- Page text cache
@@ -283,6 +286,7 @@ class PDFCache:
                     text TEXT NOT NULL,
                     text_length INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    has_hidden_text INTEGER DEFAULT NULL,
                     PRIMARY KEY (file_path, page_num)
                 );
 
@@ -383,6 +387,44 @@ class PDFCache:
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
                 )
+
+            # pdf_metadata: content-trust scan cache + its version stamp
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "content_trust_json" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
+                )
+            if cols and "trust_version" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN trust_version INTEGER DEFAULT 0"
+                )
+
+            # page_text: per-page hidden-text flag (NULL = not yet computed)
+            cols = _get_columns(conn, "page_text")
+            if cols and "has_hidden_text" not in cols:
+                conn.execute(
+                    "ALTER TABLE page_text"
+                    " ADD COLUMN has_hidden_text INTEGER DEFAULT NULL"
+                )
+
+            # Unified content-trust invalidation: if any cached row predates the
+            # current detector, null BOTH content-trust caches and re-stamp.
+            # Lighter than _EXTRACTION_VERSION (no table drops). Guard on a
+            # populated cache so a fresh DB isn't touched.
+            if _get_columns(conn, "pdf_metadata"):
+                row = conn.execute(
+                    "SELECT MIN(trust_version) FROM pdf_metadata"
+                ).fetchone()
+                current_tv = content_trust._TRUST_VERSION
+                if row is not None and row[0] is not None and row[0] < current_tv:
+                    conn.execute("UPDATE page_text SET has_hidden_text = NULL")
+                    conn.execute(
+                        "UPDATE pdf_metadata SET content_trust_json = NULL,"
+                        " trust_version = ?",
+                        (current_tv,),
+                    )
 
             # page_embeddings: add model column to existing tables
             cols = _get_columns(conn, "page_embeddings")

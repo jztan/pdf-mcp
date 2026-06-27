@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `pdf_search` page-mode results now carry a per-hit `hidden_text` bool and a response-level `hidden_text_detected` flag — the same hidden-text signal the read tools emit, closing the answer-directly-from-search-excerpt gap. Page granularity only; reuses the cached per-page detection (no extra scan).
 - **Hidden-text / content-trust detection.** `pdf_info(path, content_trust=True)`
   reports a `content_trust` block (counts, per-signal breakdown, flagged pages;
   per-span detail under `detail=True`) identifying text a human reader cannot see

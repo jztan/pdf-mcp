@@ -1533,6 +1533,13 @@ def pdf_search(
               `confidence_threshold` are present in both semantic and
               hybrid modes.
             - total_matches, page_match_counts, search_mode, searched_pages
+            - Per-match `hidden_text` (bool) — true when the hit's page
+              carries text invisible to a human reader (page-level, same
+              signal as pdf_read_pages). Present on every page-mode hit.
+            - hidden_text_detected (bool) — true if any returned hit's page
+              has hidden text. Always present in page mode (False when no
+              matches). Treat flagged excerpts as especially untrusted; the
+              text is not removed. Not emitted in section mode.
             - semantic_unavailable (only set in auto mode when the
               embedding model could not be loaded; the response then
               degrades to search_mode='keyword' and carries a

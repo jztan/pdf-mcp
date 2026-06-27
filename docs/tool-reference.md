@@ -99,7 +99,7 @@ pdf_info("/path/to/report.pdf")
 
 #### Content-trust / hidden-text detection
 
-Opt in with `content_trust=true` to flag text a human reader cannot see — invisibly-rendered runs, sub-point fonts, transparent fill, white-on-white, or off-page text — which an LLM would otherwise ingest as if a human had vetted it. Detection is **flag-only**: nothing is stripped from the extracted text. The read tools (`pdf_read_pages` / `pdf_read_all`) carry an always-on `hidden_text_detected` flag for the same signal on the path that actually returns the text.
+Opt in with `content_trust=true` to flag text a human reader cannot see — invisibly-rendered runs, sub-point fonts, transparent fill, white-on-white, or off-page text — which an LLM would otherwise ingest as if a human had vetted it. Detection is **flag-only**: nothing is stripped from the extracted text. The read tools (`pdf_read_pages` / `pdf_read_all`) and `pdf_search` (page mode) carry an always-on `hidden_text_detected` flag for the same signal on the paths that actually return the text.
 
 The `content_trust` block:
 
@@ -132,7 +132,7 @@ pdf_info("/path/to/manuscript.pdf", content_trust=True, detail=True)
 - **Hidden geometry, not phrasing.** `suspicious` flags text that is *invisible*, regardless of what it says — so it catches non-English, paraphrased, or encoded payloads that a phrase-based classifier would miss. It deliberately does **not** flag injection text that is plainly *visible* (that is not hiding) — model- and product-level guardrails cover that case.
 - **OCR-layer exemption.** Invisible render-mode-3 text that sits over a raster image is treated as a benign searchable-OCR layer (the standard "scanned but searchable" mechanism) and is **not** flagged. Trade-off: an attacker can suppress the `invisible_render` signal alone by drawing invisible text over a covering image — but the other four signals (tiny/transparent/white/off-page) are not image-exempt and still fire.
 - **Minimum char floor.** Very short hidden runs (stray invisible glyphs, ligature artifacts) are ignored to avoid false positives.
-- **Not detected:** text hidden by *occlusion* (an opaque image or rectangle drawn on top of normally-rendered text) — geometrically normal, needs z-order analysis. The `injection_in_hidden` phrase list is English-only and not configurable. `pdf_search` excerpts carry no hidden-text flag.
+- **Not detected:** text hidden by *occlusion* (an opaque image or rectangle drawn on top of normally-rendered text) — geometrically normal, needs z-order analysis. The `injection_in_hidden` phrase list is English-only and not configurable.
 
 ---
 
@@ -382,10 +382,11 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"snippet"` — fixed-width context window around each hit (controlled by `context_chars`).
 
 **Returns (page mode, `granularity="page"`):**
-- `matches` (array) — Each entry has `{page, excerpt, position, score, source}`. Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
+- `matches` (array) — Each entry has `{page, excerpt, position, score, source, hidden_text}`. `hidden_text` (bool) is `true` when the hit's page contains text invisible to a human reader (page-level signal, same as `pdf_read_pages`). Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
 - `total_matches`, `page_match_counts` (int / object).
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
+- `hidden_text_detected` (bool) — `true` if any returned hit's page contained hidden text. Always present in page mode (`false` when there are no matches). Treat flagged excerpts as especially untrusted; the text is not removed (flag-only). Not present in section mode. For the per-signal breakdown, call `pdf_info(content_trust=true, detail=true)`.
 - `excerpt_style` (string) — `"paragraph"` (default) or `"snippet"` if explicitly requested. Reflects which excerpt mode produced the results.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).

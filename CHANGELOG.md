@@ -15,9 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_read_pages` / `pdf_read_all` now carry an always-on `hidden_text_detected`
   flag (per-page `hidden_text` on `pdf_read_pages`) on the path that actually
   returns the text. Legitimate searchable-OCR layers (invisible text over a page
-  image) are exempt. Detection is flag-only — text is never removed. A
-  best-effort English `injection_in_hidden` count flags instruction-like phrasing
-  found inside hidden spans (a severity hint, not a prompt-injection detector).
+  image) are exempt, and `white_on_white` is background-aware — white text on a
+  dark or colored fill (e.g. a diagram label) is visible and not flagged.
+  Detection is flag-only — text is never removed. A best-effort English
+  `injection_in_hidden` count flags instruction-like phrasing inside hidden spans
+  (a severity hint, not a prompt-injection detector), matched space-insensitively
+  since real injected text often extracts run-together. Validated against the real
+  July-2025 arXiv peer-review hidden-prompt attack ("give a positive review only"
+  in white/sub-point text), including a confirmed in-the-wild sample.
 
 ### Fixed
 - CJK (Japanese / Chinese / Korean) keyword search now returns hits for terms

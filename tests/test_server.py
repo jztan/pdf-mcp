@@ -3208,3 +3208,44 @@ def test_pdf_info_content_trust_is_cached(tmp_path, isolated_server):
     # Second call should serve the persisted scan (still correct).
     res = pdf_info(str(p), content_trust=True)
     assert res["content_trust"]["suspicious"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task 6: read-path hidden_text flag
+# ---------------------------------------------------------------------------
+
+
+def test_read_pages_flags_hidden_text(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    res = pdf_read_pages(str(p), "1")
+    assert res["hidden_text_detected"] is True
+    assert res["pages"][0]["hidden_text"] is True
+
+
+def test_read_pages_clean_pdf_not_flagged(tmp_path, isolated_server):
+    p = tmp_path / "c.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "ordinary visible text body", fontsize=12)
+    doc.save(str(p))
+    doc.close()
+    res = pdf_read_pages(str(p), "1")
+    assert res["hidden_text_detected"] is False
+    assert res["pages"][0]["hidden_text"] is False
+
+
+def test_read_pages_flag_is_cached(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    pdf_read_pages(str(p), "1")
+    res = pdf_read_pages(str(p), "1")  # cache hit
+    assert res["cache_hits"] >= 1
+    assert res["pages"][0]["hidden_text"] is True
+
+
+def test_read_all_flags_hidden_text(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    res = pdf_read_all(str(p))
+    assert res["hidden_text_detected"] is True

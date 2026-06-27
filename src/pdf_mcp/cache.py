@@ -545,7 +545,7 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc, text_coverage_json
+                   metadata, toc, text_coverage_json, content_trust_json
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -574,6 +574,11 @@ class PDFCache:
                 "text_coverage": (
                     json.loads(row["text_coverage_json"])
                     if row["text_coverage_json"]
+                    else None
+                ),
+                "content_trust": (
+                    json.loads(row["content_trust_json"])
+                    if row["content_trust_json"]
                     else None
                 ),
             }
@@ -606,6 +611,62 @@ class PDFCache:
                     json.dumps(text_coverage) if text_coverage is not None else None,
                 ),
             )
+
+    def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:
+        """Persist the content-trust scan without touching other metadata.
+        (Param is named `scan` to avoid shadowing the imported content_trust
+        module used for the version stamp.)"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET content_trust_json = ?,"
+                " trust_version = ? WHERE file_path = ?",
+                (json.dumps(scan), content_trust._TRUST_VERSION, path),
+            )
+
+    def get_content_trust(self, path: str) -> dict[str, Any] | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT content_trust_json, file_mtime FROM pdf_metadata"
+                " WHERE file_path = ?",
+                (path,),
+            ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        if not self._is_cache_valid(path, row[1]):
+            return None
+        return dict(json.loads(row[0]))
+
+    def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
+        """Persist per-page hidden-text booleans (page_num is 0-indexed)."""
+        if not flags:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "UPDATE page_text SET has_hidden_text = ?"
+                " WHERE file_path = ? AND page_num = ?",
+                [(1 if v else 0, path, pn) for pn, v in flags.items()],
+            )
+
+    def get_pages_hidden_flag(
+        self, path: str, page_nums: list[int]
+    ) -> dict[int, bool | None]:
+        """Per-page flag: True/False if computed, None if not yet computed.
+        Missing or stale pages are omitted."""
+        if not page_nums:
+            return {}
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, has_hidden_text, file_mtime FROM page_text"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+        out: dict[int, bool | None] = {}
+        for page_num, flag, mtime in rows:
+            if not self._is_cache_valid(path, mtime):
+                continue
+            out[int(page_num)] = None if flag is None else bool(flag)
+        return out
 
     # ==================== Page Text Operations ====================
 

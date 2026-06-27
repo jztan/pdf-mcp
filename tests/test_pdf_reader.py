@@ -2665,5 +2665,44 @@ def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
     assert ver == 99
 
 
+def _seed_meta_and_page(cache, path="d.pdf"):
+    import os
+
+    # Create a real file so _is_cache_valid passes (mtime comparison).
+    p = os.path.join(os.path.dirname(cache.db_path), "d.pdf")
+    with open(p, "wb") as fh:
+        fh.write(b"%PDF-1.4\n%%EOF\n")
+    cache.save_metadata(p, page_count=1, metadata={}, toc=[])
+    cache.save_page_text(p, 0, "hello world")
+    return p
+
+
+def test_save_and_get_content_trust(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    assert cache.get_content_trust(p) is None
+    cache.save_content_trust(p, {"suspicious": True, "hidden_text_runs": 2})
+    got = cache.get_content_trust(p)
+    assert got["suspicious"] is True
+    # Saving content-trust must not clobber existing metadata.
+    assert cache.get_metadata(p)["page_count"] == 1
+
+
+def test_per_page_hidden_flag_roundtrip(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    # Not computed yet => None
+    assert cache.get_pages_hidden_flag(p, [0]) == {0: None}
+    cache.save_pages_hidden_flag(p, {0: True})
+    assert cache.get_pages_hidden_flag(p, [0]) == {0: True}
+
+
+def test_get_metadata_exposes_content_trust(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    cache.save_content_trust(p, {"suspicious": False})
+    assert cache.get_metadata(p)["content_trust"] == {"suspicious": False}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

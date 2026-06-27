@@ -139,7 +139,7 @@ def run_ranking(tmpdir: Path) -> bool:
     )
 
     print()
-    print(f"  Setup: 5-page PDF — page 1 has 1×'alpha', page 5 has 10×'alpha'")
+    print("  Setup: 5-page PDF — page 1 has 1×'alpha', page 5 has 10×'alpha'")
     print(f"  Query: {bold('alpha')}")
     print()
 
@@ -372,7 +372,11 @@ def run_performance(tmpdir: Path) -> bool:
 
     print()
     print(f"  {bold('Verdict')}")
-    _row("FTS5 ≥3x faster in all scenarios", green("yes") if all_ok else red("no"), all_ok)
+    _row(
+        "FTS5 \u22653x faster in all scenarios",
+        green("yes") if all_ok else red("no"),
+        all_ok,
+    )
 
     os.unlink(pdf_path)
     return all_ok
@@ -395,9 +399,21 @@ def main() -> None:
 
     _section("Summary")
     print()
-    _row("1. Relevance ranking (BM25 > page order)", green("PASS") if r1 else red("FAIL"), r1)
-    _row("2. Porter stemming (cross-form matching)", green("PASS") if r2 else red("FAIL"), r2)
-    _row("3. Performance (≥3x speedup)",             green("PASS") if r3 else red("FAIL"), r3)
+    _row(
+        "1. Relevance ranking (BM25 > page order)",
+        green("PASS") if r1 else red("FAIL"),
+        r1,
+    )
+    _row(
+        "2. Porter stemming (cross-form matching)",
+        green("PASS") if r2 else red("FAIL"),
+        r2,
+    )
+    _row(
+        "3. Performance (\u22653x speedup)",
+        green("PASS") if r3 else red("FAIL"),
+        r3,
+    )
     print()
 
     if r1 and r2 and r3:

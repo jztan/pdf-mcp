@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from pdf_mcp import content_trust
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -272,7 +273,15 @@ class PDFCache:
                     metadata JSON,
                     toc JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    content_trust_json TEXT DEFAULT NULL
+                );
+
+                -- Global content-trust version stamp (single row, id=0).
+                -- Replaces per-document trust_version in pdf_metadata.
+                CREATE TABLE IF NOT EXISTS content_trust_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 0),
+                    trust_version INTEGER NOT NULL
                 );
 
                 -- Page text cache
@@ -283,6 +292,7 @@ class PDFCache:
                     text TEXT NOT NULL,
                     text_length INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    has_hidden_text INTEGER DEFAULT NULL,
                     PRIMARY KEY (file_path, page_num)
                 );
 
@@ -382,6 +392,47 @@ class PDFCache:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN text_coverage_json TEXT DEFAULT NULL"
+                )
+
+            # pdf_metadata: content-trust scan cache (migrate old tables that
+            # lack the column; trust_version column dropped — now global).
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "content_trust_json" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
+                )
+
+            # page_text: per-page hidden-text flag (NULL = not yet computed)
+            cols = _get_columns(conn, "page_text")
+            if cols and "has_hidden_text" not in cols:
+                conn.execute(
+                    "ALTER TABLE page_text"
+                    " ADD COLUMN has_hidden_text INTEGER DEFAULT NULL"
+                )
+
+            # Global content-trust invalidation via content_trust_meta.
+            # On a fresh/never-stamped DB: record the current version (nothing
+            # to wipe). When the stored version is below current: null both
+            # caches and advance the stamp. Runs after page_text and
+            # pdf_metadata tables exist.
+            cur_tv = content_trust._TRUST_VERSION
+            row = conn.execute(
+                "SELECT trust_version FROM content_trust_meta WHERE id = 0"
+            ).fetchone()
+            stored_tv = row[0] if row else None
+            if stored_tv is None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO content_trust_meta (id, trust_version)"
+                    " VALUES (0, ?)",
+                    (cur_tv,),
+                )
+            elif stored_tv < cur_tv:
+                conn.execute("UPDATE page_text SET has_hidden_text = NULL")
+                conn.execute("UPDATE pdf_metadata SET content_trust_json = NULL")
+                conn.execute(
+                    "UPDATE content_trust_meta SET trust_version = ? WHERE id = 0",
+                    (cur_tv,),
                 )
 
             # page_embeddings: add model column to existing tables
@@ -503,7 +554,7 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc, text_coverage_json
+                   metadata, toc, text_coverage_json, content_trust_json
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -532,6 +583,11 @@ class PDFCache:
                 "text_coverage": (
                     json.loads(row["text_coverage_json"])
                     if row["text_coverage_json"]
+                    else None
+                ),
+                "content_trust": (
+                    json.loads(row["content_trust_json"])
+                    if row["content_trust_json"]
                     else None
                 ),
             }
@@ -564,6 +620,59 @@ class PDFCache:
                     json.dumps(text_coverage) if text_coverage is not None else None,
                 ),
             )
+
+    def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:
+        """Persist the content-trust scan without touching other metadata."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET content_trust_json = ? WHERE file_path = ?",
+                (json.dumps(scan), path),
+            )
+
+    def get_content_trust(self, path: str) -> dict[str, Any] | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT content_trust_json, file_mtime FROM pdf_metadata"
+                " WHERE file_path = ?",
+                (path,),
+            ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        if not self._is_cache_valid(path, row[1]):
+            return None
+        return cast(dict[str, Any], json.loads(row[0]))
+
+    def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
+        """Persist per-page hidden-text booleans (page_num is 0-indexed)."""
+        if not flags:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "UPDATE page_text SET has_hidden_text = ?"
+                " WHERE file_path = ? AND page_num = ?",
+                [(1 if v else 0, path, pn) for pn, v in flags.items()],
+            )
+
+    def get_pages_hidden_flag(
+        self, path: str, page_nums: list[int]
+    ) -> dict[int, bool | None]:
+        """Per-page flag: True/False if computed, None if not yet computed.
+        Missing or stale pages are omitted."""
+        if not page_nums:
+            return {}
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, has_hidden_text, file_mtime FROM page_text"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+        out: dict[int, bool | None] = {}
+        for page_num, flag, mtime in rows:
+            if not self._is_cache_valid(path, mtime):
+                continue
+            out[int(page_num)] = None if flag is None else bool(flag)
+        return out
 
     # ==================== Page Text Operations ====================
 

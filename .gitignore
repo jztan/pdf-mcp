@@ -80,6 +80,9 @@ benchmark_results/
 benchmark_data/.reading_order_pdfs/
 benchmark_data/.real_pdfs/
 
+# Content-trust corpus PDFs (regenerable via content_trust_corpus/generate.py)
+benchmark_data/content_trust_corpus/*.pdf
+
 # Claude
 CLAUDE.md
 .claude/

@@ -2619,5 +2619,98 @@ def test_migration_backfills_cjk_from_existing_page_text(tmp_path):
     assert pt_after == pt_before  # page_text preserved, no re-extraction
 
 
+def _cols(db_path, table):
+    with sqlite3.connect(db_path) as conn:
+        return {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def test_migration_adds_content_trust_columns(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    assert "content_trust_json" in _cols(cache.db_path, "pdf_metadata")
+    assert "has_hidden_text" in _cols(cache.db_path, "page_text")
+    # Global version table must exist (replaces per-row trust_version).
+    assert _cols(cache.db_path, "content_trust_meta") != set()
+
+
+def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
+    """Global content_trust_meta version triggers cache wipe on upgrade."""
+    from pdf_mcp import content_trust
+
+    # First open: stamps content_trust_meta with the current version.
+    cache = PDFCache(cache_dir=tmp_path)
+    db = cache.db_path
+
+    # Seed a metadata row and a page row with stale content-trust data.
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO pdf_metadata (file_path, file_mtime, file_size,"
+            " page_count, content_trust_json)"
+            " VALUES ('p.pdf', 1.0, 10, 1, '{\"suspicious\": true}')"
+        )
+        conn.execute(
+            "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
+            " text_length, has_hidden_text) VALUES ('p.pdf', 0, 1.0, 'x', 1, 1)"
+        )
+        # Backdate the global stamp so the next open sees stored < current.
+        conn.execute("UPDATE content_trust_meta SET trust_version = 0 WHERE id = 0")
+
+    monkeypatch.setattr(content_trust, "_TRUST_VERSION", 99)
+    PDFCache(cache_dir=tmp_path)  # reopen triggers global invalidation
+
+    with sqlite3.connect(db) as conn:
+        ct = conn.execute(
+            "SELECT content_trust_json FROM pdf_metadata WHERE file_path='p.pdf'"
+        ).fetchone()[0]
+        hh = conn.execute(
+            "SELECT has_hidden_text FROM page_text WHERE file_path='p.pdf'"
+        ).fetchone()[0]
+        meta_ver = conn.execute(
+            "SELECT trust_version FROM content_trust_meta WHERE id = 0"
+        ).fetchone()[0]
+
+    assert ct is None
+    assert hh is None
+    assert meta_ver == 99
+
+
+def _seed_meta_and_page(cache, path="d.pdf"):
+    import os
+
+    # Create a real file so _is_cache_valid passes (mtime comparison).
+    p = os.path.join(os.path.dirname(cache.db_path), "d.pdf")
+    with open(p, "wb") as fh:
+        fh.write(b"%PDF-1.4\n%%EOF\n")
+    cache.save_metadata(p, page_count=1, metadata={}, toc=[])
+    cache.save_page_text(p, 0, "hello world")
+    return p
+
+
+def test_save_and_get_content_trust(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    assert cache.get_content_trust(p) is None
+    cache.save_content_trust(p, {"suspicious": True, "hidden_text_runs": 2})
+    got = cache.get_content_trust(p)
+    assert got["suspicious"] is True
+    # Saving content-trust must not clobber existing metadata.
+    assert cache.get_metadata(p)["page_count"] == 1
+
+
+def test_per_page_hidden_flag_roundtrip(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    # Not computed yet => None
+    assert cache.get_pages_hidden_flag(p, [0]) == {0: None}
+    cache.save_pages_hidden_flag(p, {0: True})
+    assert cache.get_pages_hidden_flag(p, [0]) == {0: True}
+
+
+def test_get_metadata_exposes_content_trust(tmp_path):
+    cache = PDFCache(cache_dir=tmp_path)
+    p = _seed_meta_and_page(cache)
+    cache.save_content_trust(p, {"suspicious": False})
+    assert cache.get_metadata(p)["content_trust"] == {"suspicious": False}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

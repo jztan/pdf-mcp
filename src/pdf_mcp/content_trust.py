@@ -42,7 +42,10 @@ def _is_white(color: Any) -> bool:
 def _image_bboxes(page: pymupdf.Page) -> list[pymupdf.Rect]:
     try:
         return [pymupdf.Rect(im["bbox"]) for im in page.get_image_info()]
-    except Exception:
+    except (RuntimeError, AttributeError, KeyError, TypeError, ValueError):
+        # Best-effort guard: RuntimeError covers PyMuPDF/mupdf-level errors;
+        # the rest cover a malformed image-info dict. A flaky page must not
+        # break detection, so fall back to "no images".
         return []
 
 

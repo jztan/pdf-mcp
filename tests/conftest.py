@@ -264,6 +264,31 @@ def sample_pdf_rgba():
 
 
 @pytest.fixture
+def pdf_with_hidden_text():
+    """Two-page PDF. Page 1: visible body PLUS a white-on-white hidden span
+    carrying a unique token ('zebra'). Page 2: clean body with its own token
+    ('omega'). Unique per-page tokens make keyword targeting deterministic."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        p1 = doc.new_page()
+        p1.insert_text((50, 50), "alpha visible body text on page one", fontsize=12)
+        p1.insert_text(
+            (50, 90),
+            "zebra hidden injected secret instructions text here",
+            fontsize=12,
+            color=(1, 1, 1),
+        )
+        p2 = doc.new_page()
+        p2.insert_text(
+            (50, 50), "omega clean visible body text on page two", fontsize=12
+        )
+        doc.save(f.name)
+        doc.close()
+        yield f.name
+    os.unlink(f.name)
+
+
+@pytest.fixture
 def sample_pdf_with_table():
     """Create a PDF with a detectable table.
 

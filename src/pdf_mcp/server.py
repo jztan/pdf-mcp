@@ -305,64 +305,6 @@ def _encoded_len(png_bytes: bytes) -> int:
     return 4 * ((len(png_bytes) + 2) // 3)
 
 
-_CJK_RANGES = (
-    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
-    (0x3400, 0x4DBF),  # CJK Extension A
-    (0x3040, 0x309F),  # Hiragana
-    (0x30A0, 0x30FF),  # Katakana
-    (0xAC00, 0xD7AF),  # Hangul Syllables
-)
-
-
-def _contains_cjk(query: str) -> bool:
-    """True if the query contains any common CJK/kana/Hangul character.
-
-    Used only to attach an advisory (Part 1 of the vertical-script release):
-    a missed detection merely suppresses a warning, never a failure, so the
-    high-frequency core set is deliberate.
-    """
-    return any(lo <= ord(ch) <= hi for ch in query for lo, hi in _CJK_RANGES)
-
-
-def _semantic_available() -> bool:
-    """Probe whether semantic search can run (fastembed installed + model ok).
-
-    Used in keyword/section paths, which never otherwise load embeddings, to
-    choose the CJK advisory wording. Lightweight: check_available validates the
-    name/import only, it does not encode.
-    """
-    from . import embedder as _embedder
-
-    try:
-        _embedder.check_available(pdf_config.embedding_model)
-        return True
-    except (ImportError, ValueError):
-        return False
-
-
-def _cjk_keyword_warning(
-    query: str, *, semantic_available: bool, section: bool = False
-) -> str | None:
-    """Advisory string for CJK queries on keyword-bearing paths, else None.
-
-    Warn-only: never changes results, scoring, mode, or the error contract.
-    """
-    if not _contains_cjk(query):
-        return None
-    if semantic_available:
-        steer = "granularity='page', mode='semantic'" if section else "mode='semantic'"
-        return (
-            "Query contains CJK characters. FTS5 keyword matching is unreliable "
-            "for unspaced CJK text; results may be incomplete. For CJK, prefer "
-            f"{steer}."
-        )
-    return (
-        "Query contains CJK characters. FTS5 keyword matching is unreliable for "
-        "unspaced CJK text and semantic search is unavailable. Install "
-        "pdf-mcp[cjk] for usable CJK retrieval."
-    )
-
-
 _RRF_K = 60
 
 # Cosine-similarity threshold below which a semantic match is flagged as
@@ -1376,16 +1318,6 @@ def _pdf_search_section_mode(
        "search_mode": "section",
        "total_sections": int (count of indexed sections for this PDF)}
     """
-    # Probe availability only for CJK queries (section search runs on every
-    # call; don't import fastembed for ASCII queries).
-    _cjk_warn = (
-        _cjk_keyword_warning(
-            query, semantic_available=_semantic_available(), section=True
-        )
-        if _contains_cjk(query)
-        else None
-    )
-
     if cache.get_section_fts_coverage(local_path) == 0:
         sections = derive_sections(local_path)
         if not sections:
@@ -1394,8 +1326,6 @@ def _pdf_search_section_mode(
                 "search_mode": "section",
                 "total_sections": 0,
             }
-            if _cjk_warn is not None:
-                empty["cjk_keyword_warning"] = _cjk_warn
             return empty
         cache.index_sections(local_path, sections)
 
@@ -1431,8 +1361,6 @@ def _pdf_search_section_mode(
         "matches_omitted": matches_omitted,
         "estimated_bytes_returned": cumulative,
     }
-    if _cjk_warn is not None:
-        result["cjk_keyword_warning"] = _cjk_warn
     return result
 
 
@@ -1789,14 +1717,6 @@ def pdf_search(
                 "search_mode": "keyword",
             }
             response["excerpt_style"] = excerpt_style
-            # Probe availability only for CJK queries (avoids a fastembed
-            # import on every ASCII keyword search).
-            if _contains_cjk(query):
-                _warn = _cjk_keyword_warning(
-                    query, semantic_available=_semantic_available()
-                )
-                if _warn is not None:
-                    response["cjk_keyword_warning"] = _warn
             return response
 
         # ── mode="auto": check fastembed, hybrid if available ─────────────
@@ -1833,10 +1753,6 @@ def pdf_search(
             if reason is not None:
                 response["semantic_unavailable"] = True
                 response["semantic_unavailable_reason"] = reason
-            # Auto fallback always means semantic did not run.
-            _warn = _cjk_keyword_warning(query, semantic_available=False)
-            if _warn is not None:
-                response["cjk_keyword_warning"] = _warn
             return response
 
         try:
@@ -1970,9 +1886,6 @@ def pdf_search(
             "model": _model_name,
         }
         hybrid_response["excerpt_style"] = excerpt_style
-        _warn = _cjk_keyword_warning(query, semantic_available=True)
-        if _warn is not None:
-            hybrid_response["cjk_keyword_warning"] = _warn
         return hybrid_response
 
     finally:

@@ -39,6 +39,28 @@ _FTS5_SECTION_TABLE_SCHEMA = (
     ")"
 )
 
+_FTS5_CJK_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_search_fts_cjk USING fts5("
+    "file_path UNINDEXED, "
+    "page_num UNINDEXED, "
+    "text, "
+    "tokenize='unicode61'"
+    ")"
+)
+
+_FTS5_CJK_SECTION_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_section_fts_cjk USING fts5("
+    "file_path UNINDEXED, "
+    "section_id UNINDEXED, "
+    "title, "
+    "text, "
+    "start_page UNINDEXED, "
+    "end_page UNINDEXED, "
+    "title_source UNINDEXED, "
+    "tokenize='unicode61'"
+    ")"
+)
+
 
 # Bump when text-extraction logic changes so cached text + everything derived
 # from it (embeddings, FTS indexes) is dropped and rebuilt. v1: column-aware
@@ -49,6 +71,46 @@ _EXTRACTION_VERSION = 5  # 5: dense-vertical article segmentation + mojibake fil
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
+
+# Unicode blocks treated as CJK for character-split FTS tokenization. Covers
+# the high-frequency core; rarer blocks (CJK Ext-B+, Hangul Jamo) intentionally
+# fall through to whole-token (old behavior) — a documented gap, not a surprise.
+_CJK_RANGES: tuple[tuple[int, int], ...] = (
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Extension A
+    (0x3040, 0x309F),  # Hiragana
+    (0x30A0, 0x30FF),  # Katakana
+    (0xAC00, 0xD7AF),  # Hangul Syllables
+    (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+    (0xFF00, 0xFFEF),  # Halfwidth/Fullwidth Forms
+)
+
+
+def _is_cjk_char(ch: str) -> bool:
+    o = ord(ch)
+    return any(lo <= o <= hi for lo, hi in _CJK_RANGES)
+
+
+def _contains_cjk(text: str) -> bool:
+    """True if text contains any character in _CJK_RANGES."""
+    return any(_is_cjk_char(ch) for ch in text)
+
+
+def _cjk_split(text: str) -> str:
+    """Insert a space around every CJK codepoint; other runs pass through.
+
+    Defines the CJK/Latin token boundary for BOTH the write path and the
+    query escaper, so the two token streams cannot diverge. Idempotent.
+    """
+    out: list[str] = []
+    for ch in text:
+        if _is_cjk_char(ch):
+            out.append(" ")
+            out.append(ch)
+            out.append(" ")
+        else:
+            out.append(ch)
+    return " ".join("".join(out).split())
 
 
 def _escape_fts5_query(query: str) -> str:
@@ -72,6 +134,25 @@ def _escape_fts5_query(query: str) -> str:
     if not tokens:
         return _NO_MATCH_SENTINEL
     return " ".join(tokens)
+
+
+def _escape_fts5_query_cjk(query: str) -> str:
+    """Escape a query for the char-split CJK FTS index.
+
+    Delegates each whitespace token to _cjk_split (the same function the write
+    path uses, guaranteeing identical tokenization), strips FTS5 reserved
+    characters, and wraps the split token in one double-quoted phrase so the
+    chars must be positionally adjacent. Tokens are AND-joined.
+    """
+    phrases: list[str] = []
+    for raw in query.split():
+        split = _cjk_split(raw)
+        cleaned = _FTS_TOKEN_STRIP.sub("", split).strip()
+        if cleaned:
+            phrases.append(f'"{cleaned}"')
+    if not phrases:
+        return _NO_MATCH_SENTINEL
+    return " ".join(phrases)
 
 
 def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
@@ -335,7 +416,63 @@ class PDFCache:
                     # Leave fts_available=True since page search still works.
                     pass
 
+                cjk_existed = bool(
+                    conn.execute(
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='pdf_search_fts_cjk'"
+                    ).fetchone()
+                )
+                try:
+                    conn.execute(_FTS5_CJK_TABLE_SCHEMA)
+                    conn.execute(_FTS5_CJK_SECTION_TABLE_SCHEMA)
+                except sqlite3.OperationalError:
+                    # CJK tables failed but porter tables succeeded — leave
+                    # fts_available=True; CJK queries degrade to no-match.
+                    pass
+                else:
+                    if not cjk_existed and bool(_get_columns(conn, "page_text")):
+                        self._backfill_cjk_tables(conn)
+
         self.clear_expired()
+
+    def _backfill_cjk_tables(self, conn: sqlite3.Connection) -> None:
+        """One-time rebuild of CJK FTS tables from already-cached text.
+
+        Reads original page_text and porter section rows; inserts char-split
+        copies for CJK-containing rows only. No re-extraction, no re-embedding.
+        """
+        page_rows = conn.execute(
+            "SELECT file_path, page_num, text FROM page_text"
+        ).fetchall()
+        page_inserts = [
+            (fp, pn, _cjk_split(txt))
+            for fp, pn, txt in page_rows
+            if txt and _contains_cjk(txt)
+        ]
+        if page_inserts:
+            conn.executemany(
+                "INSERT INTO pdf_search_fts_cjk (file_path, page_num, text)"
+                " VALUES (?, ?, ?)",
+                page_inserts,
+            )
+        if bool(_get_columns(conn, "pdf_section_fts")):
+            sec_rows = conn.execute(
+                "SELECT file_path, section_id, title, text, start_page,"
+                " end_page, title_source FROM pdf_section_fts"
+            ).fetchall()
+            sec_inserts = [
+                (fp, sid, _cjk_split(title or ""), _cjk_split(text or ""), sp, ep, ts)
+                for fp, sid, title, text, sp, ep, ts in sec_rows
+                if _contains_cjk(title or "") or _contains_cjk(text or "")
+            ]
+            if sec_inserts:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts_cjk"
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    sec_inserts,
+                )
 
     def _get_file_info(self, path: str) -> tuple[float, int]:
         """Get file modification time and size."""
@@ -515,6 +652,17 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     (path, page_num, text),
                 )
+                if _contains_cjk(text):
+                    conn.execute(
+                        "DELETE FROM pdf_search_fts_cjk"
+                        " WHERE file_path = ? AND page_num = ?",
+                        (path, page_num),
+                    )
+                    conn.execute(
+                        "INSERT INTO pdf_search_fts_cjk"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        (path, page_num, _cjk_split(text)),
+                    )
 
     def get_page_source(self, path: str, page_num: int) -> str | None:
         """Return 'extracted', 'ocr', or None (page not cached)."""
@@ -1185,6 +1333,28 @@ class PDFCache:
 
     # ==================== FTS5 Search Operations ====================
 
+    def _cjk_excerpt(
+        self, path: str, page_num: int, query: str, context_chars: int
+    ) -> str | None:
+        """Build an excerpt from ORIGINAL page text for a CJK match.
+
+        Returns a context window centered on the literal query substring (query
+        chars rejoined, whitespace removed). Returns None when the literal
+        substring is absent — the contiguity post-filter that drops rare
+        cross-separator false positives.
+        """
+        text = self.get_page_text(path, page_num) or ""
+        needle = "".join(query.split())
+        idx = text.find(needle)
+        if idx < 0:
+            return None
+        half = max(0, (context_chars - len(needle)) // 2)
+        start = max(0, idx - half)
+        end = min(len(text), idx + len(needle) + half)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+        return f"{prefix}{text[start:end]}{suffix}"
+
     def search_fts(
         self,
         path: str,
@@ -1207,6 +1377,34 @@ class PDFCache:
         """
         if not self.fts_available:
             return []
+
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT page_num, -bm25(pdf_search_fts_cjk)"
+                        " FROM pdf_search_fts_cjk"
+                        " WHERE pdf_search_fts_cjk MATCH ? AND file_path = ?"
+                        " ORDER BY bm25(pdf_search_fts_cjk)"
+                        " LIMIT ?",
+                        (escaped, path, max_results),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+            out: list[dict[str, Any]] = []
+            for page_num, score in rows:
+                excerpt = self._cjk_excerpt(path, int(page_num), query, context_chars)
+                if excerpt is None:
+                    continue  # contiguity post-filter: cross-separator false hit
+                out.append(
+                    {
+                        "page": int(page_num) + 1,
+                        "excerpt": excerpt,
+                        "score": float(score),
+                    }
+                )
+            return out
 
         escaped = _escape_fts5_query(query)
         # Map context_chars to FTS5 snippet token count (approximate)
@@ -1253,6 +1451,26 @@ class PDFCache:
         """
         if not self.fts_available:
             return {}
+
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            needle = "".join(query.split())
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT page_num FROM pdf_search_fts_cjk"
+                        " WHERE pdf_search_fts_cjk MATCH ? AND file_path = ?",
+                        (escaped, path),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return {}
+            counts: dict[int, int] = {}
+            for (page_num,) in rows:
+                text = self.get_page_text(path, int(page_num)) or ""
+                count = text.count(needle)
+                if count > 0:
+                    counts[int(page_num)] = count
+            return counts
 
         tokens_lower = [_FTS_TOKEN_STRIP.sub("", tok).lower() for tok in query.split()]
         tokens_lower = [t for t in tokens_lower if t]
@@ -1336,6 +1554,28 @@ class PDFCache:
                         for i, s in enumerate(sections)
                     ],
                 )
+            conn.execute("DELETE FROM pdf_section_fts_cjk WHERE file_path = ?", (path,))
+            cjk_sections = [
+                (
+                    path,
+                    i,
+                    _cjk_split(s.title or ""),
+                    _cjk_split(s.text or ""),
+                    s.start_page,
+                    s.end_page,
+                    s.title_source,
+                )
+                for i, s in enumerate(sections)
+                if _contains_cjk(s.title or "") or _contains_cjk(s.text or "")
+            ]
+            if cjk_sections:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts_cjk"
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    cjk_sections,
+                )
 
     def search_section_fts(
         self,
@@ -1359,6 +1599,40 @@ class PDFCache:
         """
         if not self.fts_available:
             return []
+        if _contains_cjk(query):
+            escaped = _escape_fts5_query_cjk(query)
+            with sqlite3.connect(self.db_path) as conn:
+                try:
+                    rows = conn.execute(
+                        "SELECT section_id, title, start_page, end_page,"
+                        " title_source, -bm25(pdf_section_fts_cjk)"
+                        " FROM pdf_section_fts_cjk"
+                        " WHERE pdf_section_fts_cjk MATCH ? AND file_path = ?"
+                        " ORDER BY bm25(pdf_section_fts_cjk)"
+                        " LIMIT ?",
+                        (escaped, path, max_results),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+                # Replace each row's split title with the original from the
+                # porter section table (same section_id), so display is clean.
+                orig = conn.execute(
+                    "SELECT section_id, title FROM pdf_section_fts"
+                    " WHERE file_path = ?",
+                    (path,),
+                ).fetchall()
+                title_by_id = {int(s): t for s, t in orig}
+            return [
+                {
+                    "section_id": int(sid),
+                    "title": title_by_id.get(int(sid), title),
+                    "start_page": int(sp),
+                    "end_page": int(ep),
+                    "title_source": title_source,
+                    "score": float(score),
+                }
+                for sid, title, sp, ep, title_source, score in rows
+            ]
         escaped = _escape_fts5_query(query)
         with sqlite3.connect(self.db_path) as conn:
             try:

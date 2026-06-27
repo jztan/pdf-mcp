@@ -12,7 +12,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp import extractor
-from pdf_mcp.cache import PDFCache
+from pdf_mcp.cache import PDFCache, _contains_cjk
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
     estimate_tokens,
@@ -63,6 +63,43 @@ class TestParsePageRange:
     def test_trailing_comma_skips_empty(self):
         result = parse_page_range("1,2,", 10)
         assert result == [0, 1]
+
+
+# ============================================================================
+# Cache Helper Tests
+# ============================================================================
+
+
+class TestContainsCJK:
+    def test_kanji_true(self):
+        assert _contains_cjk("厚木基地") is True
+
+    def test_hiragana_true(self):
+        assert _contains_cjk("おわり") is True
+
+    def test_katakana_true(self):
+        assert _contains_cjk("カタカナ") is True
+
+    def test_pure_kana_heading_true(self):
+        assert _contains_cjk("終活") is True
+
+    def test_hangul_true(self):
+        assert _contains_cjk("한국어") is True
+
+    def test_cjk_ext_a_true(self):
+        assert _contains_cjk("㐀") is True  # U+3400
+
+    def test_ascii_false(self):
+        assert _contains_cjk("hello world") is False
+
+    def test_digits_punct_false(self):
+        assert _contains_cjk("123 - 456 (a.b)") is False
+
+    def test_mixed_latin_cjk_true(self):
+        assert _contains_cjk("base 基地") is True
+
+    def test_empty_false(self):
+        assert _contains_cjk("") is False
 
 
 # ============================================================================
@@ -2436,6 +2473,150 @@ class TestRenderPageClip:
         assert full["file_path_on_disk"] != crop["file_path_on_disk"]
         assert "clip" in crop["file_path_on_disk"]
         doc.close()
+
+
+class TestCJKHelpers:
+    def test_contains_cjk_true_for_kanji_kana_hangul(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert _contains_cjk("厚木基地")
+        assert _contains_cjk("終活")
+        assert _contains_cjk("한국")
+        assert _contains_cjk("カタカナ")
+
+    def test_contains_cjk_true_for_fullwidth_and_compat(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert _contains_cjk("１２３")  # fullwidth digits 0xFF10-19
+        assert _contains_cjk("豈")  # compatibility ideograph
+
+    def test_contains_cjk_false_for_latin_and_empty(self):
+        from pdf_mcp.cache import _contains_cjk
+
+        assert not _contains_cjk("hello world 2024")
+        assert not _contains_cjk("")
+
+    def test_cjk_split_spaces_each_cjk_char_keeps_latin_whole(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("厚木基地をめぐる") == "厚 木 基 地 を め ぐ る"
+        assert _cjk_split("2024年") == "2024 年"
+        assert _cjk_split("PDF形式") == "PDF 形 式"
+        assert _cjk_split("令和6年度") == "令 和 6 年 度"
+
+    def test_cjk_split_idempotent_on_spaced_input(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("終 活") == "終 活"
+
+    def test_cjk_split_pure_latin_unchanged(self):
+        from pdf_mcp.cache import _cjk_split
+
+        assert _cjk_split("machine learning") == "machine learning"
+
+
+def test_cjk_fts_tables_created(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache.db_path) as conn:
+        names = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+    assert "pdf_search_fts_cjk" in names
+    assert "pdf_section_fts_cjk" in names
+
+
+def test_save_page_text_populates_cjk_table(tmp_path):
+    from pdf_mcp.cache import PDFCache, _cjk_split
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")  # path must exist for mtime
+    cache.save_page_text(str(pdf), 0, "厚木基地をめぐる活動")
+    cache.save_page_text(str(pdf), 1, "English only page")
+
+    with sqlite3.connect(cache.db_path) as conn:
+        cjk_rows = conn.execute(
+            "SELECT page_num, text FROM pdf_search_fts_cjk"
+        ).fetchall()
+    # CJK page stored split; English page absent from CJK table
+    assert len(cjk_rows) == 1
+    assert cjk_rows[0][0] == 0
+    assert cjk_rows[0][1] == _cjk_split("厚木基地をめぐる活動")
+
+
+def test_escape_fts5_query_cjk_builds_phrases():
+    from pdf_mcp.cache import _escape_fts5_query_cjk
+
+    assert _escape_fts5_query_cjk("厚木基地") == '"厚 木 基 地"'
+    assert _escape_fts5_query_cjk("2024年") == '"2024 年"'
+    # multiple whitespace tokens AND-joined
+    assert _escape_fts5_query_cjk("終活 健康") == '"終 活" "健 康"'
+
+
+def test_cjk_keyword_search_finds_embedded_term(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    # embedded (not whitespace-delimited) — the porter path returns 0 here
+    cache.save_page_text(str(pdf), 0, "本紙は厚木基地をめぐる課題を扱う。")
+    results = cache.search_fts(str(pdf), "厚木基地", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+    # excerpt is original text, NOT space-mangled split text
+    assert "厚 木 基 地" not in results[0]["excerpt"]
+    assert "厚木基地" in results[0]["excerpt"]
+
+
+def test_cjk_keyword_search_two_char_term(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "今月の特集は終活についてです。")
+    results = cache.search_fts(str(pdf), "終活", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+
+
+def test_english_search_unchanged_by_cjk_path(tmp_path):
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "machine learning models")
+    # Porter stemming still works: query 'model' matches 'models'
+    results = cache.search_fts(str(pdf), "model", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+
+
+def test_migration_backfills_cjk_from_existing_page_text(tmp_path):
+    from pdf_mcp.cache import PDFCache, _cjk_split
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "厚木基地の記事")
+
+    # Simulate a pre-feature cache: drop the CJK tables, keep page_text.
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute("DROP TABLE pdf_search_fts_cjk")
+        conn.execute("DROP TABLE pdf_section_fts_cjk")
+        pt_before = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+
+    # Re-open: migration should rebuild the CJK table from page_text.
+    cache2 = PDFCache(cache_dir=tmp_path)
+    with sqlite3.connect(cache2.db_path) as conn:
+        rows = conn.execute(
+            "SELECT text FROM pdf_search_fts_cjk WHERE file_path = ?", (str(pdf),)
+        ).fetchall()
+        pt_after = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+    assert rows == [(_cjk_split("厚木基地の記事"),)]
+    assert pt_after == pt_before  # page_text preserved, no re-extraction
 
 
 if __name__ == "__main__":

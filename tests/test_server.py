@@ -622,6 +622,53 @@ class TestPdfSearchModes:
         assert all("hidden_text" in m for m in result["matches"])
         assert result["hidden_text_detected"] is True
 
+    def test_hybrid_hidden_hit_is_flagged(self, pdf_with_hidden_text, isolated_server):
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_with_hidden_text, "zebra", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        assert all("hidden_text" in m for m in result["matches"])
+        hit = next(m for m in result["matches"] if m["page"] == 1)
+        assert hit["hidden_text"] is True
+        assert result["hidden_text_detected"] is True
+
+    def test_semantic_hidden_hit_is_flagged(
+        self, pdf_with_hidden_text, isolated_server
+    ):
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(pdf_with_hidden_text, "zebra", mode="semantic")
+        assert all("hidden_text" in m for m in result["matches"])
+        assert any(m["page"] == 1 and m["hidden_text"] for m in result["matches"])
+        assert result["hidden_text_detected"] is True
+
+    def test_semantic_empty_embeddings_parity(self, isolated_server, tmp_path):
+        # A blank page yields no extractable text -> no embeddings -> the
+        # semantic `if not cached_embeddings` early return. It must still
+        # carry hidden_text_detected for response-shape parity.
+        path = str(tmp_path / "blank.pdf")
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(path)
+        doc.close()
+        encode, encode_query = self._make_encode()
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            result = pdf_search(path, "anything", mode="semantic")
+        assert result["matches"] == []
+        assert result["hidden_text_detected"] is False
+
 
 class TestPdfInfo:
     """Tests for pdf_info tool."""

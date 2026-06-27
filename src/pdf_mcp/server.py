@@ -1702,6 +1702,7 @@ def pdf_search(
                     "searched_pages": doc_pages,
                     "search_mode": "semantic",
                     "model": _model_name,
+                    "hidden_text_detected": False,
                 }
 
             query_vec: Any = _embedder.encode_query(query, _model_name)
@@ -1737,6 +1738,7 @@ def pdf_search(
             if excerpt_style == "paragraph":
                 matches = _upgrade_excerpts_to_paragraphs(matches, doc, query)
 
+            hidden_detected = _attach_hidden(matches)
             sem_page_counts = {str(m["page"]): 1 for m in matches}
             all_results_low_confidence = bool(matches) and all(
                 m["low_confidence"] for m in matches
@@ -1756,6 +1758,7 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "search_mode": "semantic",
                 "model": _model_name,
+                "hidden_text_detected": hidden_detected,
             }
             sem_response["excerpt_style"] = excerpt_style
             return sem_response
@@ -1977,6 +1980,7 @@ def pdf_search(
                 hybrid_matches, doc, query, keyword_excerpts=keyword_excerpts
             )
 
+        hidden_detected = _attach_hidden(hybrid_matches)
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}
         all_results_low_confidence = bool(hybrid_matches) and all(
             m["low_confidence"] for m in hybrid_matches
@@ -1996,6 +2000,7 @@ def pdf_search(
             "searched_pages": doc_pages,
             "search_mode": "hybrid",
             "model": _model_name,
+            "hidden_text_detected": hidden_detected,
         }
         hybrid_response["excerpt_style"] = excerpt_style
         return hybrid_response

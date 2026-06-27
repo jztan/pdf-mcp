@@ -98,3 +98,7 @@ pages/sample.pdf
 
 # Release-notes draft persisted by scripts/release.py (deleted on success)
 release_notes_v*.md
+
+# Node tooling (demo GIF recorder)
+scripts/demo-recorder/node_modules/
+scripts/demo-recorder/package-lock.json

@@ -1,0 +1,13 @@
+{
+  "name": "pdf-mcp-demo-recorder",
+  "private": true,
+  "type": "module",
+  "description": "Records docs/images/demo.gif from the live browser demo (pages/index.html).",
+  "scripts": {
+    "record": "node record.mjs"
+  },
+  "dependencies": {
+    "gifsicle": "^7.0.1",
+    "playwright": "^1.49.0"
+  }
+}

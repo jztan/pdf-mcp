@@ -206,6 +206,14 @@
   .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
             background: var(--text-tertiary); opacity: 0.5;
             transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
+  /* Crisper hero tiles: a hairline edge gives each page definition so the field
+     reads as intentional pages rather than a flat skeleton. */
+  .hero-grid .pgcell { border-radius: 2px;
+            box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--text-tertiary) 26%, transparent); }
+  /* Scan line: as the agent sweeps the document, each column briefly glows
+     accent before settling — the reveal reads as a search, not a fade-in. */
+  .hero-grid .pgcell.scan { opacity: 0.95;
+            background: color-mix(in srgb, var(--accent) 24%, var(--text-tertiary)); }
   /* Non-matched pages stay faintly visible (a faded document) rather than
      vanishing — so after a search the grid still reads as the whole doc
      with matches highlighted, not an empty box with a few dots. */
@@ -215,6 +223,17 @@
      solid accent at full opacity while non-matches fade to 0.13. */
   .pgcell.hit { background: var(--accent); opacity: 1;
                 box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent); z-index: 2; position: relative; }
+  /* Elevated hero match: a soft accent ring + lift so a found page reads as a
+     crafted highlight, not a flat blue square. */
+  .hero-grid .pgcell.hit { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 22%, transparent),
+                0 3px 9px color-mix(in srgb, var(--accent) 32%, transparent); }
+  /* Found pages ripple once as the agent locates them. */
+  .hero-grid .pgcell.hit::after { content: ""; position: absolute; inset: 0;
+                border-radius: inherit; pointer-events: none; animation: hitRipple 1.1s ease-out; }
+  @keyframes hitRipple {
+    from { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); opacity: 1; }
+    to   { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); opacity: 0; }
+  }
   .pgcell.scanned { background: var(--warning); opacity: 0.45; }
   .hero-stat { margin-top: 34px; font-family: var(--font-display); font-size: clamp(20px, 3vw, 28px);
                font-weight: 600; letter-spacing: -0.02em; opacity: 0; transition: opacity 0.8s ease; }
@@ -226,6 +245,7 @@
   @media (prefers-reduced-motion: reduce) {
     .pgcell { transition: none; }
     .hero-stat { transition: none; }
+    .hero-grid .pgcell.hit::after { animation: none; display: none; }
   }
 
   .doc-card { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--bg-elev);
@@ -888,7 +908,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.8.0</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.9.0</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>
@@ -934,13 +954,17 @@
     const cols = gridCols(heroGrid);
     heroCells.forEach(c => c.className = "pgcell");
     heroStat.classList.remove("on");
-    setTimeout(() => {
-      heroCells.forEach((c, i) => {
-        const col = i % cols;
-        setTimeout(() => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"), 600 + col * 70);
-      });
-    }, 900);
-    setTimeout(() => heroStat.classList.add("on"), 3400);
+    // A scan line sweeps left→right; as it passes each column the document
+    // settles — non-matches dim, the two matched pages light up and pulse.
+    heroCells.forEach((c, i) => {
+      const d = 700 + (i % cols) * 55;
+      setTimeout(() => c.classList.add("scan"), d);
+      setTimeout(() => {
+        c.classList.remove("scan");
+        c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim");
+      }, d + 260);
+    });
+    setTimeout(() => heroStat.classList.add("on"), 700 + (cols - 1) * 55 + 700);
   }
   if (REDUCED_MOTION) {
     heroCells.forEach((c, i) => c.classList.add(HERO_HITS.includes(i) ? "hit" : "dim"));

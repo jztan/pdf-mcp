@@ -6,6 +6,7 @@ import tempfile
 from typing import Any
 
 import numpy as np
+import pymupdf
 import pytest
 
 from unittest.mock import patch, Mock
@@ -3156,3 +3157,54 @@ class TestRenderClip:
         after = srv.cache.get_stats()["total_renders"]
         # no page_renders row written for the clip
         assert after == before
+
+
+# ---------------------------------------------------------------------------
+# content_trust integration tests
+# ---------------------------------------------------------------------------
+
+
+def _make_pdf_with_hidden_text(path):
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "visible body paragraph text here", fontsize=12)
+    page.insert_text(
+        (72, 200), "white hidden secret content", fontsize=12, color=(1, 1, 1)
+    )
+    doc.save(str(path))
+    doc.close()
+
+
+def test_pdf_info_default_has_no_content_trust(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    res = pdf_info(str(p))
+    assert "content_trust" not in res
+
+
+def test_pdf_info_content_trust_flags_hidden(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    res = pdf_info(str(p), content_trust=True)
+    ct = res["content_trust"]
+    assert ct["suspicious"] is True
+    assert ct["signals"]["white_on_white"] >= 1
+    assert "spans" not in ct  # detail=False
+
+
+def test_pdf_info_content_trust_detail_includes_spans(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    res = pdf_info(str(p), content_trust=True, detail=True)
+    ct = res["content_trust"]
+    assert ct["detail_included"] is True
+    assert isinstance(ct["spans"], list) and ct["spans"]
+
+
+def test_pdf_info_content_trust_is_cached(tmp_path, isolated_server):
+    p = tmp_path / "h.pdf"
+    _make_pdf_with_hidden_text(p)
+    pdf_info(str(p), content_trust=True)
+    # Second call should serve the persisted scan (still correct).
+    res = pdf_info(str(p), content_trust=True)
+    assert res["content_trust"]["suspicious"] is True

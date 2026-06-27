@@ -21,6 +21,7 @@ from fastmcp import FastMCP
 from mcp.types import ImageContent
 
 from . import __version__
+from . import content_trust
 from .cache import PDFCache
 from .config import PDFConfig
 from .extractor import (
@@ -504,6 +505,24 @@ def _compact_text_coverage(
     return result
 
 
+def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
+    """Return the content_trust block: cached scan if present, else scan
+    the doc once and persist. Best-effort — never raises."""
+    cached = cache.get_content_trust(local_path)
+    if cached is not None:
+        return content_trust.summarize(cached, detail=detail)
+    try:
+        doc = pymupdf.open(local_path)
+        try:
+            scan = content_trust.scan_document(doc)
+        finally:
+            doc.close()
+        cache.save_content_trust(local_path, scan)
+        return content_trust.summarize(scan, detail=detail)
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"error": f"content-trust scan failed: {exc}", "suspicious": False}
+
+
 def _apply_byte_cap(
     parts: list[str], cap: int, separator: str = "\n\n"
 ) -> tuple[str, int, int, int]:
@@ -544,7 +563,9 @@ def _apply_byte_cap(
         " larger TOCs call `pdf_get_toc`."
     )
 )
-def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
+def pdf_info(
+    path: str, detail: bool = False, content_trust: bool = False
+) -> dict[str, Any]:
     """
     Get PDF document information including metadata,
     page count, and table of contents.
@@ -565,6 +586,16 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             large documents (a 3000-page PDF otherwise ships ~6000
             ints just for coverage). Opt in only when you need
             per-page char/image counts.
+        content_trust: When True, include a `content_trust` key in the
+            response with a scan of hidden-text signals. The scan result
+            is cached alongside the document metadata so subsequent calls
+            are cheap. `suspicious=True` means some text in the document
+            was not visible to a human reader (e.g. white-on-white text,
+            zero-opacity spans, tiny font sizes). Hidden text is never
+            removed or altered — this is purely informational. When
+            `detail=True`, the block also includes a `spans` list with
+            per-span signal detail. Default False — omitted entirely
+            unless requested so routine calls stay lightweight.
 
     Returns:
         Document info including:
@@ -585,6 +616,12 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             detail_included: bool (mirrors the `detail` argument),
             text_chars_per_page: int[] (only when detail=True),
             raster_images_per_page: int[] (only when detail=True),
+          }
+        - content_trust (only when content_trust=True): {
+            suspicious: bool — True if hidden text was detected,
+            signals: dict of signal counts (e.g. white_on_white, tiny_font),
+            detail_included: bool,
+            spans: list of per-span detail dicts (only when detail=True),
           }
 
     Error contract: path/URL validation failures (file not found,
@@ -624,7 +661,7 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
                 cached.get("toc", []),
                 text_coverage=coverage,
             )
-        return {
+        result = {
             "page_count": cached["page_count"],
             "metadata": cached.get("metadata", {}),
             **_toc_fields(cached.get("toc", [])),
@@ -635,6 +672,9 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             "file_size_mb": round(cached["file_size"] / (1024 * 1024), 2),
             "content_warning": "Metadata fields are untrusted content from the PDF.",
         }
+        if content_trust:
+            result["content_trust"] = _content_trust_block(local_path, detail)
+        return result
 
     # Parse PDF
     doc = pymupdf.open(local_path)
@@ -659,7 +699,7 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             local_path, page_count, metadata, toc, text_coverage=coverage
         )
 
-        return {
+        result = {
             "page_count": page_count,
             "metadata": metadata,
             **_toc_fields(toc),
@@ -670,6 +710,9 @@ def pdf_info(path: str, detail: bool = False) -> dict[str, Any]:
             "from_cache": False,
             "content_warning": "Metadata fields are untrusted content from the PDF.",
         }
+        if content_trust:
+            result["content_trust"] = _content_trust_block(local_path, detail)
+        return result
     finally:
         doc.close()
 

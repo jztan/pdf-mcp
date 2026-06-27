@@ -845,11 +845,19 @@ class TestPageEmbeddingsLifecycle:
 
     def test_clear_expired_removes_stale_embeddings(self, temp_cache_dir, sample_pdf):
         """clear_expired() removes embedding rows for expired files."""
-        cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=0)
+        cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=24)
         cache.save_metadata(sample_pdf, 5, {}, [])
         cache.save_page_embeddings(
             sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5"
         )
+        # Backdate access well beyond the TTL so the entry is unambiguously
+        # expired — avoids the same-second boundary where accessed_at == now.
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET accessed_at = datetime('now', '-48 hours')"
+                " WHERE file_path = ?",
+                (sample_pdf,),
+            )
 
         cleared = cache.clear_expired()
 

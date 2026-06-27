@@ -2673,6 +2673,34 @@ def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
     assert meta_ver == 99
 
 
+def test_clear_expired_keeps_freshly_accessed_entry(tmp_path):
+    """clear_expired must not purge an entry accessed 'now'.
+
+    Regression: the cutoff was datetime.now().isoformat() — local timezone,
+    'T' date/time separator — string-compared against accessed_at stored via
+    SQLite CURRENT_TIMESTAMP (UTC, space separator). On a host ahead of UTC
+    the space-vs-'T' ordering (0x20 < 0x54) made same-date fresh rows sort as
+    expired, deleting them on startup. Fixed by computing the cutoff with
+    SQLite's own clock so both sides are UTC with identical formatting.
+    """
+    cache = PDFCache(cache_dir=tmp_path)  # default ttl_hours = 24
+    with sqlite3.connect(cache.db_path) as conn:
+        # accessed_at defaults to CURRENT_TIMESTAMP — 'now' in the DB clock.
+        conn.execute(
+            "INSERT INTO pdf_metadata (file_path, file_mtime, file_size,"
+            " page_count) VALUES ('fresh.pdf', 1.0, 10, 1)"
+        )
+
+    cleared = cache.clear_expired()
+
+    with sqlite3.connect(cache.db_path) as conn:
+        row = conn.execute(
+            "SELECT file_path FROM pdf_metadata WHERE file_path = 'fresh.pdf'"
+        ).fetchone()
+    assert row is not None, "a just-accessed entry must not be expired"
+    assert cleared == 0
+
+
 def _seed_meta_and_page(cache, path="d.pdf"):
     import os
 

@@ -1,7 +1,7 @@
 # scripts/archive/ — superseded benchmark experiments (kept for provenance)
 
 These scripts and their unit tests back **investigated-and-rejected / shelved** lines of
-work recorded in [`ROADMAP.md`](../../docs/ROADMAP.md)'s "Investigated / Rejected" log. They no
+work recorded in the [Investigated / Rejected](../../docs/investigated-rejected.md) log. They no
 longer guard any shipping feature, so they are **not** collected by CI (`pytest tests/ -v`
 only walks `tests/`). They are kept — not deleted — because they generated the
 `benchmark_data/*.md` results cited in the ROADMAP and blog posts; removing them would

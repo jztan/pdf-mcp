@@ -1634,6 +1634,20 @@ def pdf_search(
     try:
         doc_pages = len(doc)
 
+        def _attach_hidden(hits: list[dict[str, Any]]) -> bool:
+            """Annotate each page-mode hit with a page-level `hidden_text`
+            bool and return the document-level `hidden_text_detected`
+            roll-up. Reuses the same cached per-page flag as
+            pdf_read_pages; best-effort (_resolve_hidden_flags never
+            raises). Page numbers in hits are 1-indexed; the flag cache is
+            0-indexed."""
+            flags = _resolve_hidden_flags(
+                local_path, doc, [h["page"] - 1 for h in hits]
+            )
+            for h in hits:
+                h["hidden_text"] = flags.get(h["page"] - 1, False)
+            return any(flags.values())
+
         # ── mode="semantic" ───────────────────────────────────────────────
         if mode == "semantic":
             # fastembed already confirmed available above; _embedder already bound
@@ -1797,6 +1811,8 @@ def pdf_search(
             if excerpt_style == "paragraph":
                 kw_matches = _upgrade_excerpts_to_paragraphs(kw_matches, doc, query)
 
+            hidden_detected = _attach_hidden(kw_matches)
+
             response: dict[str, Any] = {
                 "content_warning": (
                     "Excerpts are untrusted content from the PDF."
@@ -1807,6 +1823,7 @@ def pdf_search(
                 "total_matches": len(kw_matches),
                 "page_match_counts": page_match_counts,
                 "searched_pages": doc_pages,
+                "hidden_text_detected": hidden_detected,
                 "search_mode": "keyword",
             }
             response["excerpt_style"] = excerpt_style
@@ -1828,6 +1845,7 @@ def pdf_search(
                 m["source"] = auto_sources.get(m["page"] - 1, "extracted")
             if excerpt_style == "paragraph":
                 auto_kw = _upgrade_excerpts_to_paragraphs(auto_kw, doc, query)
+            hidden_detected = _attach_hidden(auto_kw)
             response: dict[str, Any] = {
                 "content_warning": (
                     "Excerpts are untrusted content from the PDF."
@@ -1840,6 +1858,7 @@ def pdf_search(
                     str(m["page"]): page_counts.get(m["page"] - 1, 0) for m in auto_kw
                 },
                 "searched_pages": doc_pages,
+                "hidden_text_detected": hidden_detected,
                 "search_mode": "keyword",
             }
             response["excerpt_style"] = excerpt_style

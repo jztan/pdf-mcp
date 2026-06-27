@@ -590,6 +590,38 @@ class TestPdfSearchModes:
                         f"len(matches)={len(result['matches'])}"
                     )
 
+    # ── hidden-text flag on keyword / auto hits ──────────────────────────
+
+    def test_keyword_hidden_hit_is_flagged(self, pdf_with_hidden_text, isolated_server):
+        result = pdf_search(pdf_with_hidden_text, "zebra", mode="keyword")
+        assert result["matches"], "expected a keyword hit on the hidden token"
+        hit = next(m for m in result["matches"] if m["page"] == 1)
+        assert hit["hidden_text"] is True
+        assert result["hidden_text_detected"] is True
+
+    def test_keyword_clean_hit_not_flagged(self, pdf_with_hidden_text, isolated_server):
+        result = pdf_search(pdf_with_hidden_text, "omega", mode="keyword")
+        hit = next(m for m in result["matches"] if m["page"] == 2)
+        assert hit["hidden_text"] is False
+        assert result["hidden_text_detected"] is False
+
+    def test_keyword_empty_result_parity(self, pdf_with_hidden_text, isolated_server):
+        result = pdf_search(pdf_with_hidden_text, "nosuchtoken", mode="keyword")
+        assert result["matches"] == []
+        assert result["hidden_text_detected"] is False
+
+    def test_auto_no_fastembed_carries_hidden_flag(
+        self, pdf_with_hidden_text, isolated_server
+    ):
+        with patch(
+            "pdf_mcp.embedder.check_available",
+            side_effect=ImportError("fastembed not installed"),
+        ):
+            result = pdf_search(pdf_with_hidden_text, "zebra", mode="auto")
+        assert result["search_mode"] == "keyword"
+        assert all("hidden_text" in m for m in result["matches"])
+        assert result["hidden_text_detected"] is True
+
 
 class TestPdfInfo:
     """Tests for pdf_info tool."""

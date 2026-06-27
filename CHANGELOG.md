@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Hidden-text / content-trust detection.** `pdf_info(path, content_trust=True)`
+  reports a `content_trust` block (counts, per-signal breakdown, flagged pages;
+  per-span detail under `detail=True`) identifying text a human reader cannot see
+  — invisible render mode, sub-point fonts, transparent fill, white-on-white,
+  and off-page runs — via PyMuPDF `get_texttrace()` geometry (zero new deps).
+  `pdf_read_pages` / `pdf_read_all` now carry an always-on `hidden_text_detected`
+  flag (per-page `hidden_text` on `pdf_read_pages`) on the path that actually
+  returns the text. Legitimate searchable-OCR layers (invisible text over a page
+  image) are exempt. Detection is flag-only — text is never removed. A
+  best-effort English `injection_in_hidden` count flags instruction-like phrasing
+  found inside hidden spans (a severity hint, not a prompt-injection detector).
+
 ### Fixed
 - CJK (Japanese / Chinese / Korean) keyword search now returns hits for terms
   embedded in unspaced text. A parallel pair of character-split FTS5 indexes

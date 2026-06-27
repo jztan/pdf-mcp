@@ -267,10 +267,10 @@ The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate 
 
 | Tool | What it does |
 |------|--------------|
-| `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
+| `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** Pass `content_trust=True` for a `content_trust` block (`suspicious`, `hidden_text_runs`, `hidden_chars`, `injection_in_hidden`, `pages_flagged`, `signals`); add `detail=True` for per-span `spans`. |
 | `pdf_get_toc` | Full table of contents for documents with >50 bookmarks |
-| `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables |
-| `pdf_read_all` | Read entire document in one call (byte-capped for safety) |
+| `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables. Always returns `hidden_text_detected` (response level) and per-page `hidden_text`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
+| `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |
 | `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts |
 | `pdf_cache_stats` | Per-document cache breakdown + total size |

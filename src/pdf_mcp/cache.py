@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import sqlite3
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -1251,12 +1250,17 @@ class PDFCache:
         Returns:
             Number of files cleared
         """
-        cutoff = (datetime.now() - timedelta(hours=self.ttl_hours)).isoformat()
-
         with sqlite3.connect(self.db_path) as conn:
-            # Get expired file paths
+            # Get expired file paths. Compute the cutoff with SQLite's own
+            # clock — accessed_at is written via CURRENT_TIMESTAMP (UTC,
+            # "YYYY-MM-DD HH:MM:SS"), so comparing it against a Python
+            # datetime.now().isoformat() (local timezone, "T" separator)
+            # mis-sorts fresh rows as expired. datetime('now', ?) keeps both
+            # sides in the same clock and format.
             expired = conn.execute(
-                "SELECT file_path FROM pdf_metadata WHERE accessed_at < ?", (cutoff,)
+                "SELECT file_path FROM pdf_metadata"
+                " WHERE accessed_at < datetime('now', ?)",
+                (f"-{self.ttl_hours} hours",),
             ).fetchall()
 
             expired_paths = [row[0] for row in expired]

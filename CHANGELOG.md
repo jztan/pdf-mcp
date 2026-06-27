@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in white/sub-point text), including a confirmed in-the-wild sample.
 
 ### Fixed
+- Cache TTL no longer prematurely expires fresh entries on hosts ahead of UTC.
+  `clear_expired()` compared `accessed_at` (written via SQLite `CURRENT_TIMESTAMP`
+  — UTC, space separator) against a Python `datetime.now().isoformat()` cutoff
+  (local timezone, `T` separator); the format/timezone mismatch made same-date
+  rows mis-sort as expired and get purged on startup. The cutoff is now computed
+  with SQLite's own clock (`datetime('now', '-N hours')`) so both sides share one
+  clock and format.
 - CJK (Japanese / Chinese / Korean) keyword search now returns hits for terms
   embedded in unspaced text. A parallel pair of character-split FTS5 indexes
   (`unicode61`, one codepoint per token) is queried with phrase semantics for

@@ -19,10 +19,12 @@ import pymupdf
 
 # Detection-logic version. Bump when geometry rules / thresholds change so the
 # cache layer (cache.py) re-scans. See cache._TRUST_VERSION wiring.
-_TRUST_VERSION = 1
+_TRUST_VERSION = 2
 
 # Tuned in the benchmark loop (scripts/benchmark_content_trust.py).
-_MIN_HIDDEN_CHARS = 8  # ignore stray invisible glyphs below this length
+# CJK text is split into short per-font spans by PyMuPDF (e.g. 4-char runs);
+# floor=3 catches meaningful CJK injections while ignoring 1-2 char strays.
+_MIN_HIDDEN_CHARS = 3  # ignore stray invisible glyphs below this length
 _TINY_FONT_PT = 1.0  # font size (pt) at/below which text is unreadable
 _OPACITY_EPS = 0.05  # opacity at/below this counts as transparent
 _WHITE_THRESHOLD = 0.95  # min per-channel value to call a color "white-ish"

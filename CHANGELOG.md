@@ -5,16 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.18.0] - 2026-06-27
-### Added
-- RRF benchmark v2: a deterministic, `slow`-marked retrieval-quality gate
-  (`scripts/benchmark_rrf.py --graded`) asserting keyword-mode NDCG@10 against a
-  committed pre-CJK baseline, with a stemming/substring-targeted graded corpus.
-  Guards the planned CJK FTS5 tokenizer change against silent English keyword
-  regression. The gate runs against an isolated corpus-only cache so FTS5
-  `bm25()` IDF is hermetic (unrelated cached PDFs no longer shift keyword
-  ranking). One-time finding: hybrid/keyword/semantic NDCG = 0.767/0.625/0.656.
-
+## [Unreleased]
 ### Fixed
 - CJK (Japanese / Chinese / Korean) keyword search now returns hits for terms
   embedded in unspaced text. A parallel pair of character-split FTS5 indexes
@@ -33,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `cjk_keyword_warning` advisory on `pdf_search` responses, which steered
   CJK keyword queries to semantic mode. CJK keyword search now works directly,
   so the advisory is gone from all modes (keyword / auto / semantic / section).
+
+## [1.18.0] - 2026-06-27
+### Added
+- RRF benchmark v2: a deterministic, `slow`-marked retrieval-quality gate
+  (`scripts/benchmark_rrf.py --graded`) asserting keyword-mode NDCG@10 against a
+  committed pre-CJK baseline, with a stemming/substring-targeted graded corpus.
+  Guards the planned CJK FTS5 tokenizer change against silent English keyword
+  regression. The gate runs against an isolated corpus-only cache so FTS5
+  `bm25()` IDF is hermetic (unrelated cached PDFs no longer shift keyword
+  ranking). One-time finding: hybrid/keyword/semantic NDCG = 0.767/0.625/0.656.
 
 ### Changed
 - `pdf_read_pages` extraction skips the onnxruntime column detector on

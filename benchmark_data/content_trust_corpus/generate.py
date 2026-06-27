@@ -59,6 +59,18 @@ def build(out_dir: str) -> list[tuple[str, str]]:
     pg = d.new_page()
     pg.insert_text((72, 72), CJK, fontsize=0.5)
     save(d, "attack_tiny_cjk.pdf", "attack")
+    d = pymupdf.open()
+    pg = d.new_page()
+    pg.insert_text((72, 72), CJK, fontsize=12, color=(1, 1, 1))
+    save(d, "attack_white_cjk.pdf", "attack")
+    d = pymupdf.open()
+    pg = d.new_page()
+    pg.insert_text((72, 2000), CJK, fontsize=12)
+    save(d, "attack_offpage_cjk.pdf", "attack")
+    d = pymupdf.open()
+    pg = d.new_page()
+    _invisible(pg, CJK, render_mode=0, opacity=0.0)
+    save(d, "attack_transparent_cjk.pdf", "attack")
 
     # --- clean controls ---
     d = pymupdf.open()

@@ -110,3 +110,109 @@ def _scan_page_geometry(page: pymupdf.Page, page_index: int) -> list[HiddenSpan]
         )
 
     return spans
+
+
+_SPAN_CAP = 200
+_SPAN_TEXT_CAP = 200
+
+# Best-effort English instruction patterns. NOT a detector — only counted
+# over already-hidden span text (severity hint). Conservative on purpose.
+_INJECTION_PHRASES: tuple[str, ...] = (
+    "ignore previous instructions",
+    "ignore all previous instructions",
+    "disregard the above",
+    "disregard previous",
+    "system prompt",
+    "you are now",
+    "new instructions",
+    "do not tell the user",
+)
+
+_SIGNAL_KEYS = (
+    "invisible_render",
+    "tiny_font",
+    "transparent",
+    "white_on_white",
+    "offpage",
+)
+
+
+def _normalize(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def _count_injection_in_hidden(spans: list[HiddenSpan]) -> int:
+    blob = _normalize(" ".join(s["text"] for s in spans))
+    return sum(1 for phrase in _INJECTION_PHRASES if phrase in blob)
+
+
+def scan_document(doc: pymupdf.Document) -> dict[str, Any]:
+    """Full document scan. Best-effort: a page that throws is counted in
+    pages_errored and contributes nothing."""
+    all_spans: list[HiddenSpan] = []
+    pages_flagged: set[int] = set()
+    signals = {k: 0 for k in _SIGNAL_KEYS}
+    pages_errored = 0
+
+    for i in range(doc.page_count):
+        try:
+            spans = _scan_page_geometry(doc[i], i)
+        except Exception:
+            pages_errored += 1
+            continue
+        if spans:
+            pages_flagged.add(i + 1)  # 1-indexed
+            for s in spans:
+                for r in s["reasons"]:
+                    signals[r] += 1
+            all_spans.extend(spans)
+
+    return {
+        "suspicious": bool(all_spans),
+        "hidden_text_runs": len(all_spans),
+        "hidden_chars": sum(s["char_count"] for s in all_spans),
+        "injection_in_hidden": _count_injection_in_hidden(all_spans),
+        "pages_flagged": sorted(pages_flagged),
+        "signals": signals,
+        "pages_errored": pages_errored,
+        "spans": all_spans,
+        "trust_version": _TRUST_VERSION,
+    }
+
+
+def summarize(scan: dict[str, Any], detail: bool) -> dict[str, Any]:
+    """Shape the public content_trust block from a raw scan()."""
+    block: dict[str, Any] = {
+        "suspicious": scan["suspicious"],
+        "hidden_text_runs": scan["hidden_text_runs"],
+        "hidden_chars": scan["hidden_chars"],
+        "injection_in_hidden": scan["injection_in_hidden"],
+        "pages_flagged": scan["pages_flagged"],
+        "signals": scan["signals"],
+        "pages_errored": scan["pages_errored"],
+        "detail_included": detail,
+    }
+    if detail:
+        raw = scan["spans"]
+        block["spans_truncated"] = len(raw) > _SPAN_CAP
+        block["spans"] = [
+            {
+                "page": s["page"] + 1,  # 1-indexed for the public payload
+                "reason": s["reasons"],
+                "text": s["text"][:_SPAN_TEXT_CAP],
+                "bbox": s["bbox"],
+                "font_size": s["font_size"],
+                "opacity": s["opacity"],
+            }
+            for s in raw[:_SPAN_CAP]
+        ]
+    return block
+
+
+def page_has_hidden_text(page: pymupdf.Page) -> bool:
+    """Lightweight geometry-only check for the read-path flag.
+    Page index is irrelevant here (no aggregation), pass 0."""
+    try:
+        return bool(_scan_page_geometry(page, 0))
+    except Exception:
+        return False

@@ -80,8 +80,11 @@ benchmark_results/
 benchmark_data/.reading_order_pdfs/
 benchmark_data/.real_pdfs/
 
-# Content-trust corpus PDFs (regenerable via content_trust_corpus/generate.py)
+# Content-trust corpus PDFs (synthetic ones are regenerable via
+# content_trust_corpus/generate.py; real/ holds third-party samples — never
+# committed, fetched on demand per real/README.md)
 benchmark_data/content_trust_corpus/*.pdf
+benchmark_data/content_trust_corpus/real/*.pdf
 
 # Claude
 CLAUDE.md

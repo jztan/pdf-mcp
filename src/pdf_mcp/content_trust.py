@@ -157,15 +157,15 @@ def scan_document(doc: pymupdf.Document) -> dict[str, Any]:
     for i in range(doc.page_count):
         try:
             spans = _scan_page_geometry(doc[i], i)
+            if spans:
+                pages_flagged.add(i + 1)  # 1-indexed
+                for s in spans:
+                    for r in s["reasons"]:
+                        signals[r] = signals.get(r, 0) + 1
+                all_spans.extend(spans)
         except Exception:
             pages_errored += 1
             continue
-        if spans:
-            pages_flagged.add(i + 1)  # 1-indexed
-            for s in spans:
-                for r in s["reasons"]:
-                    signals[r] += 1
-            all_spans.extend(spans)
 
     return {
         "suspicious": bool(all_spans),

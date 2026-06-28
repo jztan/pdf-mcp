@@ -106,7 +106,7 @@ The `content_trust` block:
 - `suspicious` (bool) — `true` if any hidden-text **geometry** signal fired. This is the safety boundary; it is language-agnostic and is **not** influenced by phrase matching.
 - `hidden_text_runs` (int) — Count of geometrically-hidden spans.
 - `hidden_chars` (int) — Total characters across hidden spans.
-- `injection_in_hidden` (int) — Best-effort count of English instruction-like phrases (e.g. "ignore previous instructions") found **inside hidden spans only**. A severity *hint*, not a detector — never flips `suspicious`.
+- `injection_in_hidden` (int) — Best-effort count of instruction-like phrases (e.g. "ignore previous instructions") found **inside hidden spans only**. A severity *hint*, not a detector — never flips `suspicious`. The built-in list is English; add your own phrases — including non-English — via `[content_trust].injection_phrases` in `config.toml` (they extend the built-ins). Counts are corpus-independent and recomputed from the cached scan on each read, so editing the list takes effect on the next server start with no re-scan.
 - `pages_flagged` (int array) — 1-indexed pages carrying a hidden-text signal.
 - `signals` (object) — Per-signal counts: `invisible_render`, `tiny_font`, `transparent`, `white_on_white`, `offpage`.
 - `pages_errored` (int) — Pages whose scan threw (so silence is not mistaken for "clean").

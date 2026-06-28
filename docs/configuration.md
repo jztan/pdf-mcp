@@ -23,6 +23,18 @@ The `[limits]` block caps text-payload byte size on `pdf_read_all` and section-g
 
 The embedding model is also set in this file (`[embedding] model = "..."`); see [docs/embedding-models.md](embedding-models.md).
 
+To extend the hidden-text `injection_in_hidden` severity hint with your own
+(including non-English) phrases, add a `[content_trust]` block:
+
+```toml
+[content_trust]
+injection_phrases = ["忽略以上所有指示", "ignorez les instructions"]
+```
+
+These **extend** the built-in English phrases (they never replace them). Each
+is matched case-insensitively, space-insensitively, inside already-hidden text
+only — it is a severity hint, never a trigger. A non-list value aborts startup.
+
 ## Environment variables
 
 ```bash

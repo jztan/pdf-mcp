@@ -317,6 +317,7 @@ Agent workflow:
 pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.
 
 - **Access control** — `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
+- **Content-trust phrases** — extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
 - **Environment variables** — cache directory, TTL, and parallel OCR/render worker count
 - **Caching** — SQLite-backed persistence, what's cached, and invalidation
 

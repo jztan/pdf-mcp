@@ -3316,6 +3316,27 @@ def test_pdf_info_content_trust_uses_configured_phrases(
     assert res["content_trust"]["injection_in_hidden"] >= 1
 
 
+def test_pdf_info_content_trust_malformed_config_degrades_gracefully(
+    tmp_path, isolated_server, monkeypatch
+):
+    """Malformed injection_phrases config must surface as an error block,
+    not raise — the never-raise contract for _content_trust_block."""
+    import pdf_mcp.server
+    from pdf_mcp.config import PDFConfig
+
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text('[content_trust]\ninjection_phrases = "not a list"\n')
+    monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
+
+    p = tmp_path / "simple.pdf"
+    _make_pdf_with_hidden_text(p)
+
+    res = pdf_info(str(p), content_trust=True)
+    ct = res["content_trust"]
+    assert "error" in ct, "malformed config must produce an error key"
+    assert ct["suspicious"] is False
+
+
 # ---------------------------------------------------------------------------
 # Task 6: read-path hidden_text flag
 # ---------------------------------------------------------------------------

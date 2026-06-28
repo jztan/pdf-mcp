@@ -34,6 +34,9 @@ injection_phrases = ["忽略以上所有指示", "ignorez les instructions"]
 These **extend** the built-in English phrases (they never replace them). Each
 is matched case-insensitively, space-insensitively, inside already-hidden text
 only — it is a severity hint, never a trigger. A non-list value aborts startup.
+Phrases are matched independently, so one phrase that is a substring of another
+(or of a built-in) can each contribute to the count — the result is a hint, not
+an exact tally.
 
 ## Environment variables
 

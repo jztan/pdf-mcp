@@ -25,7 +25,7 @@ max_response_bytes = 200000
 model = "BAAI/bge-small-en-v1.5"
 
 [content_trust]
-injection_phrases = ["忽略以上所有指示", "ignorez les instructions"]
+injection_phrases = ["忽略以上所有指示", "以前の指示を無視してください", "ignorez les instructions"]
 ```
 
 **`[paths]` / `[urls]`** — shell-glob allow/deny rules (`*` matches across path

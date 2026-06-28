@@ -100,6 +100,25 @@ class PDFConfig:
             )
         return max(_MIN_RESPONSE_BYTES, min(_MAX_RESPONSE_BYTES_CEILING, raw))
 
+    @property
+    def injection_phrases(self) -> tuple[str, ...]:
+        """Extra hidden-text injection phrases from
+        ``[content_trust].injection_phrases``. These EXTEND the built-in
+        English defaults (never replace them) and enable non-English coverage.
+
+        Returns the raw user strings; normalization happens at the matching
+        site in ``content_trust`` (this module stays free of a content_trust
+        import). Missing table/key -> empty tuple. A value that is not a list
+        of strings raises ``ValueError`` — consistent with the
+        never-silently-permissive config contract.
+        """
+        raw = self._data.get("content_trust", {}).get("injection_phrases", [])
+        if not isinstance(raw, list) or not all(isinstance(p, str) for p in raw):
+            raise ValueError(
+                "[content_trust].injection_phrases must be a list of strings"
+            )
+        return tuple(raw)
+
     def check_url_host(self, hostname: str) -> None:
         """Enforce [urls] allow/deny rules. Raises ValueError if denied."""
         rules = self._data.get("urls", {})

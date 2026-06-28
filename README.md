@@ -36,6 +36,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
+| Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted — hidden-text detection (`content_trust=True`) |
 | Tool design | Single monolithic tool | 9 specialized tools |
 
 ## Features
@@ -47,6 +48,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 - **Vertical-script reading order** — Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
+- **Content-trust / hidden-text detection** — flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. `pdf_info(content_trust=True)` reports it; the read tools carry a `hidden_text_detected` flag. Flag-only — nothing is stripped. Includes a configurable, non-English `injection_in_hidden` phrase hint
 
 ## Contents
 

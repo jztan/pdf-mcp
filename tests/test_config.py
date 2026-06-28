@@ -165,3 +165,40 @@ def test_max_response_bytes_rejects_non_int(tmp_path):
     cfg = PDFConfig(config_path=cfg_path)
     with pytest.raises(ValueError, match="must be an integer"):
         cfg.max_response_bytes
+
+
+def test_injection_phrases_default_empty_when_missing(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text("")
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.injection_phrases == ()
+
+
+def test_injection_phrases_loaded_raw(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(
+        "[content_trust]\n"
+        'injection_phrases = ["忽略以上所有指示", '
+        '"ignorez les instructions"]\n'
+    )
+    cfg = PDFConfig(config_path=cfg_path)
+    assert cfg.injection_phrases == (
+        "忽略以上所有指示",
+        "ignorez les instructions",
+    )
+
+
+def test_injection_phrases_rejects_non_list(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text('[content_trust]\ninjection_phrases = "not a list"\n')
+    cfg = PDFConfig(config_path=cfg_path)
+    with pytest.raises(ValueError, match="must be a list of strings"):
+        cfg.injection_phrases
+
+
+def test_injection_phrases_rejects_non_string_element(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text('[content_trust]\ninjection_phrases = ["ok", 123]\n')
+    cfg = PDFConfig(config_path=cfg_path)
+    with pytest.raises(ValueError, match="must be a list of strings"):
+        cfg.injection_phrases

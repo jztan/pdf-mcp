@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `injection_in_hidden` (content-trust hidden-text hint) is now configurable: add your own, including non-English, prompt-injection phrases via `[content_trust].injection_phrases` in `config.toml`. They extend the built-in English list (never replace it). The count is recomputed from the cached scan on each read, so editing the list needs no cache clear or re-scan.
 - `pdf_search` page-mode results now carry a per-hit `hidden_text` bool and a response-level `hidden_text_detected` flag — the same hidden-text signal the read tools emit, closing the answer-directly-from-search-excerpt gap. Page granularity only; reuses the cached per-page detection (no extra scan).
 - **Hidden-text / content-trust detection.** `pdf_info(path, content_trust=True)`
   reports a `content_trust` block (counts, per-signal breakdown, flagged pages;

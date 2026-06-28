@@ -507,18 +507,21 @@ def _compact_text_coverage(
 
 def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
     """Return the content_trust block: cached scan if present, else scan
-    the doc once and persist. Best-effort — never raises."""
-    cached = cache.get_content_trust(local_path)
-    if cached is not None:
-        return content_trust.summarize(cached, detail=detail)
+    the doc once and persist. `injection_in_hidden` is recomputed in
+    `summarize` from the configured phrases. Best-effort — never raises;
+    a malformed config surfaces as an error block."""
     try:
+        phrases = pdf_config.injection_phrases
+        cached = cache.get_content_trust(local_path)
+        if cached is not None:
+            return content_trust.summarize(cached, detail=detail, phrases=phrases)
         doc = pymupdf.open(local_path)
         try:
             scan = content_trust.scan_document(doc)
         finally:
             doc.close()
         cache.save_content_trust(local_path, scan)
-        return content_trust.summarize(scan, detail=detail)
+        return content_trust.summarize(scan, detail=detail, phrases=phrases)
     except Exception as exc:  # pragma: no cover - defensive
         return {"error": f"content-trust scan failed: {exc}", "suspicious": False}
 

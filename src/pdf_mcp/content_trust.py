@@ -199,7 +199,23 @@ def _normalize(text: str) -> str:
     return " ".join(text.lower().split())
 
 
-def _count_injection_in_hidden(spans: list[HiddenSpan]) -> int:
+def _effective_phrases(user_phrases: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Built-in English phrases EXTENDED with normalized user phrases,
+    order-preserving and de-duplicated. Dedup prevents a user phrase equal to
+    a built-in (or a repeat) from counting a matching span more than once;
+    empty/whitespace-only user phrases are dropped."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for phrase in (*_INJECTION_PHRASES, *(_normalize(u) for u in user_phrases)):
+        if phrase and phrase not in seen:
+            seen.add(phrase)
+            out.append(phrase)
+    return tuple(out)
+
+
+def _count_injection_in_hidden(
+    spans: list[HiddenSpan], phrases: tuple[str, ...]
+) -> int:
     # Real-world injected text frequently extracts run-together with no spaces
     # (e.g. "IGNOREALLPREVIOUSINSTRUCTIONS,NOW..."), so match BOTH the
     # whitespace-normalized form and a space-stripped form.
@@ -207,7 +223,7 @@ def _count_injection_in_hidden(spans: list[HiddenSpan]) -> int:
     despaced = spaced.replace(" ", "")
     return sum(
         1
-        for phrase in _INJECTION_PHRASES
+        for phrase in phrases
         if phrase in spaced or phrase.replace(" ", "") in despaced
     )
 
@@ -237,7 +253,9 @@ def scan_document(doc: pymupdf.Document) -> dict[str, Any]:
         "suspicious": bool(all_spans),
         "hidden_text_runs": len(all_spans),
         "hidden_chars": sum(s["char_count"] for s in all_spans),
-        "injection_in_hidden": _count_injection_in_hidden(all_spans),
+        "injection_in_hidden": _count_injection_in_hidden(
+            all_spans, _effective_phrases()
+        ),
         "pages_flagged": sorted(pages_flagged),
         "signals": signals,
         "pages_errored": pages_errored,
@@ -252,13 +270,27 @@ _CONTENT_WARNING = (
 )
 
 
-def summarize(scan: dict[str, Any], detail: bool) -> dict[str, Any]:
-    """Shape the public content_trust block from a raw scan()."""
+def summarize(
+    scan: dict[str, Any], detail: bool, phrases: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    """Shape the public content_trust block from a raw scan().
+
+    `injection_in_hidden` is recomputed here from the cached `spans` using the
+    currently-configured phrases (built-ins + user, extended), so a config edit
+    takes effect on the next read with no cache invalidation or geometry
+    re-scan. Defensive: if `spans` is absent (live blobs always carry it),
+    preserve the stored count rather than zeroing it.
+    """
+    spans = scan.get("spans")
+    if spans is None:
+        injection = scan.get("injection_in_hidden", 0)
+    else:
+        injection = _count_injection_in_hidden(spans, _effective_phrases(phrases))
     block: dict[str, Any] = {
         "suspicious": scan["suspicious"],
         "hidden_text_runs": scan["hidden_text_runs"],
         "hidden_chars": scan["hidden_chars"],
-        "injection_in_hidden": scan["injection_in_hidden"],
+        "injection_in_hidden": injection,
         "pages_flagged": scan["pages_flagged"],
         "signals": scan["signals"],
         "pages_errored": scan["pages_errored"],

@@ -6,6 +6,9 @@ pdf-mcp runs with sensible defaults and needs no configuration to work. The sett
 
 Create `~/.config/pdf-mcp/config.toml` to restrict which local paths and URL hosts the server will access. The file is optional — if absent, the server is permissive within the built-in SSRF floor (HTTPS-only, blocked private IP ranges).
 
+A complete `config.toml` — every section is optional; include only what you
+need:
+
 ```toml
 [paths]
 allow = ["~/Documents/**", "/data/pdfs/**"]
@@ -17,26 +20,32 @@ deny  = ["untrusted.example.com"]
 
 [limits]
 max_response_bytes = 200000
-```
 
-The `[limits]` block caps text-payload byte size on `pdf_read_all` and section-granularity `pdf_search` — see [docs/response-limits.md](response-limits.md). Rules use shell-glob patterns (`*` matches across path separators). `deny` wins when both match. Path matching operates on the resolved path after symlink expansion. A malformed config file prevents the server from starting — it never silently falls back to permissive.
+[embedding]
+model = "BAAI/bge-small-en-v1.5"
 
-The embedding model is also set in this file (`[embedding] model = "..."`); see [docs/embedding-models.md](embedding-models.md).
-
-To extend the hidden-text `injection_in_hidden` severity hint with your own
-(including non-English) phrases, add a `[content_trust]` block:
-
-```toml
 [content_trust]
 injection_phrases = ["忽略以上所有指示", "ignorez les instructions"]
 ```
 
-These **extend** the built-in English phrases (they never replace them). Each
-is matched case-insensitively, space-insensitively, inside already-hidden text
-only — it is a severity hint, never a trigger. A non-list value aborts startup.
-Phrases are matched independently, so one phrase that is a substring of another
-(or of a built-in) can each contribute to the count — the result is a hint, not
-an exact tally.
+**`[paths]` / `[urls]`** — shell-glob allow/deny rules (`*` matches across path
+separators); `deny` wins when both match. Path matching operates on the resolved
+path after symlink expansion. A malformed config file prevents the server from
+starting — it never silently falls back to permissive.
+
+**`[limits]`** — caps text-payload byte size on `pdf_read_all` and
+section-granularity `pdf_search`; see [docs/response-limits.md](response-limits.md).
+
+**`[embedding]`** — the semantic-search model; the default shown above is
+`BAAI/bge-small-en-v1.5`. See [docs/embedding-models.md](embedding-models.md).
+
+**`[content_trust]`** — extends the hidden-text `injection_in_hidden` severity
+hint with your own (including non-English) phrases. They **extend** the built-in
+English phrases (never replace them); each is matched case-insensitively,
+space-insensitively, inside already-hidden text only — a severity hint, never a
+trigger. A non-list value aborts startup. Phrases are matched independently, so
+one that is a substring of another (or of a built-in) can each contribute to the
+count — the result is a hint, not an exact tally.
 
 ## Environment variables
 

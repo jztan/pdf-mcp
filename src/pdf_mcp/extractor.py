@@ -769,9 +769,16 @@ def extract_images_from_page(
     images = []
 
     image_list = page.get_images(full=True)
+    seen: set[int] = set()
+    kept_index = 0
 
-    for img_index, img_info in enumerate(image_list):
+    for img_info in image_list:
         xref = img_info[0]
+        # get_images lists an image once per placement; extract each
+        # distinct xref only once (dedup by object reference).
+        if xref in seen:
+            continue
+        seen.add(xref)
 
         try:
             # Extract image as Pixmap
@@ -793,7 +800,7 @@ def extract_images_from_page(
 
             # Save to disk
             assert output_dir is not None
-            file_name = f"{pdf_hash}_p{page_num}_i{img_index}.png"
+            file_name = f"{pdf_hash}_p{page_num}_i{kept_index}.png"
             file_path = output_dir / file_name
             try:
                 pix.save(str(file_path))
@@ -804,8 +811,8 @@ def extract_images_from_page(
                 except Exception:
                     pass
                 logger.warning(
-                    "Failed to save image %d from page %d: %s",
-                    img_index,
+                    "Failed to save image xref %d from page %d: %s",
+                    xref,
                     page_num,
                     e,
                 )
@@ -814,7 +821,7 @@ def extract_images_from_page(
             images.append(
                 {
                     "page": page_num + 1,  # 1-indexed for output
-                    "index": img_index,
+                    "index": kept_index,
                     "width": pix.width,
                     "height": pix.height,
                     "format": color_format,
@@ -822,11 +829,15 @@ def extract_images_from_page(
                     "size_bytes": file_path.stat().st_size,
                 }
             )
+            kept_index += 1
 
         except (ValueError, RuntimeError, KeyError) as e:
             # Skip problematic images but log the issue
             logger.warning(
-                "Failed to extract image %d from page %d: %s", img_index, page_num, e
+                "Failed to extract image xref %d from page %d: %s",
+                xref,
+                page_num,
+                e,
             )
             continue
 

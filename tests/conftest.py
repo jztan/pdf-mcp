@@ -166,6 +166,49 @@ def sample_pdf_with_images():
 
 
 @pytest.fixture
+def sample_pdf_dup_image():
+    """PDF placing the SAME embedded image twice on one page.
+
+    One xref, two placements.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+        png_data = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        page.insert_image(pymupdf.Rect(50, 50, 80, 80), stream=png_data)
+        page.insert_image(pymupdf.Rect(120, 120, 150, 150), stream=png_data)
+        doc.save(f.name)
+        doc.close()
+        yield f.name
+        os.unlink(f.name)
+
+
+@pytest.fixture
+def sample_pdf_two_distinct_images():
+    """PDF with two DIFFERENT embedded images on one page (two distinct xrefs)."""
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+        red = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        blue = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAA7E"
+            "AAAOxAGVKw4bAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"
+        )
+        page.insert_image(pymupdf.Rect(50, 50, 80, 80), stream=red)
+        page.insert_image(pymupdf.Rect(120, 120, 150, 150), stream=blue)
+        doc.save(f.name)
+        doc.close()
+        yield f.name
+        os.unlink(f.name)
+
+
+@pytest.fixture
 def sample_pdf_scanned():
     """PDF with zero extractable text but raster images (scan simulation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:

@@ -1572,6 +1572,30 @@ class TestReadPagesInlineImages:
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1  # not called again
 
+    def test_pdf_read_pages_dedups_repeated_image(
+        self, sample_pdf_dup_image, isolated_server
+    ):
+        """An image placed twice yields a single images[] entry."""
+        result = pdf_read_pages(sample_pdf_dup_image, "1")
+        page = result["pages"][0]
+        assert page["image_count"] == 1
+        assert len(page["images"]) == 1
+        assert result["total_images"] == 1
+
+    def test_pdf_info_raster_count_is_distinct(
+        self, sample_pdf_dup_image, isolated_server
+    ):
+        """pdf_info counts distinct raster images, not placements."""
+        result = pdf_info(sample_pdf_dup_image, detail=True)
+        assert result["text_coverage"]["raster_images_per_page"][0] == 1
+
+    def test_pdf_info_raster_count_counts_distinct_images(
+        self, sample_pdf_two_distinct_images, isolated_server
+    ):
+        """Two different images on a page are both counted."""
+        result = pdf_info(sample_pdf_two_distinct_images, detail=True)
+        assert result["text_coverage"]["raster_images_per_page"][0] == 2
+
     def test_cache_clear_deletes_image_files_via_read_pages(
         self, sample_pdf_with_images, isolated_server
     ):

@@ -679,7 +679,7 @@ def pdf_info(
                     {
                         "page": pn + 1,
                         "text_chars": len(doc[pn].get_text()),
-                        "raster_images": len(doc[pn].get_images()),
+                        "raster_images": len({img[0] for img in doc[pn].get_images()}),
                     }
                     for pn in range(cached["page_count"])
                 ]
@@ -721,7 +721,7 @@ def pdf_info(
             {
                 "page": pn + 1,
                 "text_chars": len(doc[pn].get_text()),
-                "raster_images": len(doc[pn].get_images()),
+                "raster_images": len({img[0] for img in doc[pn].get_images()}),
             }
             for pn in range(page_count)
         ]

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- Repeated placements of the same embedded image no longer produce duplicate
+  extracted files. PyMuPDF's `get_images(full=True)` lists an image once per
+  *placement*, so a logo or watermark placed N times on a page came back as N
+  identical PNGs — inflating `image_count` / `total_images` in `pdf_read_pages`
+  and wasting cache disk. Images are now deduplicated by PDF object reference
+  (xref) with contiguous re-indexing, and `pdf_info`'s
+  `raster_images_per_page` counts distinct images the same way, keeping the
+  two tools consistent. Two *different* images that happen to share identical
+  pixels are still reported separately (dedup is by object identity, not
+  content).
+
 ## [1.19.1] - 2026-07-04
 ### Added
 - `injection_in_hidden` (content-trust hidden-text hint) is now configurable: add your own, including non-English, prompt-injection phrases via `[content_trust].injection_phrases` in `config.toml`. They extend the built-in English list (never replace it). The count is recomputed from the cached scan on each read, so editing the list needs no cache clear or re-scan.

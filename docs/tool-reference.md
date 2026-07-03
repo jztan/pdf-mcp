@@ -70,7 +70,7 @@ Returns page count, metadata, file size, estimated token count, and a `text_cove
 - `toc_entry_count` (int) — Number of TOC entries.
 - `toc` (array, conditional) — TOC entries `[{level, title, page}, ...]`. Present only when `toc_entry_count <= 50`.
 - `toc_truncated` (bool, conditional) — `true` when TOC was omitted due to size; use `pdf_get_toc` to retrieve the full outline.
-- `text_coverage` (object) — A constant-size `summary` with page-count rollups + a truncated OCR candidate list. With `detail=true`, also includes per-page arrays.
+- `text_coverage` (object) — A constant-size `summary` with page-count rollups + a truncated OCR candidate list. With `detail=true`, also includes per-page arrays. `raster_images_per_page` counts *distinct* raster images per page (an image placed multiple times counts once), matching `pdf_read_pages`.
 - `content_trust` (object, conditional) — Hidden-text detection block; present only when `content_trust=true`. See [Content-trust / hidden-text detection](#content-trust--hidden-text-detection) below.
 - `file_size_bytes`, `file_size_mb` (int / float).
 - `estimated_tokens` (int) — Rough estimate at `page_count * 800`.
@@ -199,6 +199,7 @@ Reading order depends on page layout:
 - `estimated_tokens` (int) — Based on `text` only; table content is not counted, so treat as a lower bound on table-heavy pages.
 - `cache_hits` (int).
 - `total_images`, `total_tables` (int).
+- **Image dedup** — when a PDF places the same embedded image more than once on a page, `images[]` contains it once (deduped by PDF object reference); `image_count` / `total_images` count distinct images. Two *different* images with identical pixels are not deduped.
 - `content_warning` (string).
 
 **Example:**

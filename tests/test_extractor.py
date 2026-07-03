@@ -272,6 +272,34 @@ class TestExtractImagesFromPage:
 
         assert images == []
 
+    def test_duplicate_xref_deduped_to_single_entry(
+        self, sample_pdf_dup_image, tmp_path
+    ):
+        """One image placed twice -> one entry (index 0) and one PNG on disk."""
+        doc = pymupdf.open(sample_pdf_dup_image)
+        raw = doc[0].get_images(full=True)
+        # Fixture sanity: two placements, one distinct xref.
+        assert len(raw) == 2
+        assert len({info[0] for info in raw}) == 1
+        images = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="dup")
+        doc.close()
+        assert len(images) == 1
+        assert images[0]["index"] == 0
+        assert len(list(tmp_path.glob("*.png"))) == 1
+
+    def test_distinct_images_not_deduped(
+        self, sample_pdf_two_distinct_images, tmp_path
+    ):
+        """Two different images are both kept with compacted indices 0 and 1."""
+        doc = pymupdf.open(sample_pdf_two_distinct_images)
+        raw = doc[0].get_images(full=True)
+        assert len({info[0] for info in raw}) == 2
+        images = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="two")
+        doc.close()
+        assert len(images) == 2
+        assert [img["index"] for img in images] == [0, 1]
+        assert len(list(tmp_path.glob("*.png"))) == 2
+
     def test_cmyk_image_converted_to_rgb(self, tmp_path):
         """CMYK images are converted to RGB colorspace."""
         from PIL import Image

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.0] - 2026-07-04
+## [Unreleased]
 ### Added
 - `injection_in_hidden` (content-trust hidden-text hint) is now configurable: add your own, including non-English, prompt-injection phrases via `[content_trust].injection_phrases` in `config.toml`. They extend the built-in English list (never replace it). The count is recomputed from the cached scan on each read, so editing the list needs no cache clear or re-scan.
 - `pdf_search` page-mode results now carry a per-hit `hidden_text` bool and a response-level `hidden_text_detected` flag — the same hidden-text signal the read tools emit, closing the answer-directly-from-search-excerpt gap. Page granularity only; reuses the cached per-page detection (no extra scan).
@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in white/sub-point text), including a confirmed in-the-wild sample.
 
 ### Fixed
+- Table extraction silently returned zero tables when pymupdf4llm 1.28.0 (the
+  `[multicolumn]` extra) was installed: importing pymupdf4llm now auto-activates
+  the new `pymupdf.layout` engine, which breaks PyMuPDF's `find_tables()`
+  process-wide (tables come back with empty cells and `Table.bbox` raises
+  `ValueError`). Capped the extra at `pymupdf4llm<1.28` until fixed upstream.
+  This regression also blocked the v1.19.0 PyPI publish — the v1.19.0 tag was
+  never published to PyPI, and its changes ship in this release instead.
 - Cache TTL no longer prematurely expires fresh entries on hosts ahead of UTC.
   `clear_expired()` compared `accessed_at` (written via SQLite `CURRENT_TIMESTAMP`
   — UTC, space separator) against a Python `datetime.now().isoformat()` cutoff

@@ -89,7 +89,10 @@ cjk = ["pdf-mcp[semantic]"]
 # pymupdf_layout/onnxruntime; without it, extraction gracefully falls back to
 # the positional-sort path (which interleaves columns on multi-column pages).
 multicolumn = [
-    "pymupdf4llm>=1.24.0",
+    # <1.28: importing pymupdf4llm 1.28.0 auto-activates pymupdf.layout, which
+    # breaks find_tables() process-wide (tables come back with empty cells and
+    # Table.bbox raises ValueError). Lift the cap once fixed upstream.
+    "pymupdf4llm>=1.24.0,<1.28",
 ]
 
 [project.urls]

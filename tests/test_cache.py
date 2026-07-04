@@ -1285,16 +1285,21 @@ class TestKeywordRankingCacheInvariance:
             target,
             {0: "alpha " * 12 + "beta", 1: "alpha " + "beta " * 12},
         )
-        before = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+        before = cache.search_fts(target, "alpha beta", 10, 100)
 
         for i in range(20):
             cache.save_pages_text(
                 _touch_pdf(tmp_path, f"noise_{i}.pdf"), {0: "beta " * 20}
             )
-        after = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+        after = cache.search_fts(target, "alpha beta", 10, 100)
 
-        assert before == after
-        assert before[0] == 2  # page 2 (beta-dense) ranks first, cache-invariant
+        # The full (page, score) result is cache-invariant: document-local IDF
+        # ignores the beta-dense noise. Absolute page order is deliberately not
+        # asserted — the two symmetric pages tie on score, and FTS5 breaks the
+        # tie by internal order, which varies by SQLite version.
+        before_pairs = [(r["page"], r["score"]) for r in before]
+        after_pairs = [(r["page"], r["score"]) for r in after]
+        assert before_pairs == after_pairs
 
     def test_cjk_page_order_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
         target = _touch_pdf(tmp_path, "cjk_target.pdf")

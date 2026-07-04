@@ -3160,11 +3160,15 @@ class TestSearchGeometry:
         # bbox's vertical position should be the lower (second) block
         assert hit["bbox"][1] > 300
 
-    def test_search_geometry_cjk_vertical(self, isolated_server, tmp_path):
+    def test_search_geometry_cjk(self, isolated_server, tmp_path):
+        # Geometry is writing-direction-agnostic (bbox comes from the block
+        # rect regardless of horizontal/vertical script), so a CJK block is
+        # sufficient coverage; a separate vertical fixture would exercise the
+        # same code path.
         pdf = tmp_path / "cjk.pdf"
         doc = pymupdf.open()
         page = doc.new_page(width=612, height=792)
-        # horizontal CJK block with a distinctive term
+        # CJK block with a distinctive term
         page.insert_text(
             (72, 200),
             "厚木基地 の 面積 と 歴史 について 説明 します。",

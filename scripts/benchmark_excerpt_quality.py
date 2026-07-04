@@ -217,7 +217,10 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     bbox_rows = [r for r in rows if r.get("bbox_present") == 1]
     scoped_bbox = sum(r["bbox_contains"] for r in bbox_rows)
     scoped_excerpt = sum(r["paragraph_contains"] for r in bbox_rows)
-    clause_3_pass = scoped_bbox >= scoped_excerpt
+    # Require at least one bbox-present hit: an empty subset would make the
+    # inequality vacuously true (0 >= 0), silently passing if a regression
+    # ever zeroed bbox emission across the whole corpus.
+    clause_3_pass = len(bbox_rows) > 0 and scoped_bbox >= scoped_excerpt
 
     return {
         "pass": clause_1_pass and clause_2_pass and clause_3_pass,

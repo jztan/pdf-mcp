@@ -1095,7 +1095,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
             tables.append(
                 {
                     "index": len(tables),
-                    "bbox": list(table.bbox),
+                    "bbox": [round(v, 1) for v in table.bbox],
                     "row_count": len(extracted),
                     "col_count": len(extracted[0]),
                     "header": header,

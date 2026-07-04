@@ -1270,3 +1270,28 @@ def test_get_section_embeddings_coverage(tmp_path):
         model="m",
     )
     assert cache.get_section_embeddings_coverage(str(pdf_path)) == 2
+
+
+def _touch_pdf(tmp_path, name):
+    p = tmp_path / name
+    p.write_bytes(b"%PDF-1.4\n")
+    return str(p)
+
+
+class TestKeywordRankingCacheInvariance:
+    def test_porter_page_order_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
+        target = _touch_pdf(tmp_path, "target.pdf")
+        cache.save_pages_text(
+            target,
+            {0: "alpha " * 12 + "beta", 1: "alpha " + "beta " * 12},
+        )
+        before = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+
+        for i in range(20):
+            cache.save_pages_text(
+                _touch_pdf(tmp_path, f"noise_{i}.pdf"), {0: "beta " * 20}
+            )
+        after = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+
+        assert before == after
+        assert before[0] == 2  # page 2 (beta-dense) ranks first, cache-invariant

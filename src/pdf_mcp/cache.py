@@ -226,9 +226,16 @@ class PDFCache:
             if extraction_version < _EXTRACTION_VERSION:
                 conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
 
-            # page_images: old schema stored binary data instead of file path
+            # page_images: drop if old binary schema OR missing geometry_json
+            # (adds bbox/placements). Column-presence drop re-extracts images
+            # only — deliberately NOT an _EXTRACTION_VERSION bump, which would
+            # also wipe page_text/page_embeddings/FTS and force a re-embed.
             cols = _get_columns(conn, "page_images")
-            if "data" in cols or (cols and "file_path_on_disk" not in cols):
+            if (
+                "data" in cols
+                or (cols and "file_path_on_disk" not in cols)
+                or (cols and "geometry_json" not in cols)
+            ):
                 conn.execute("DROP TABLE IF EXISTS page_images")
 
             # page_tables: introduced in v1.5.0 — older caches may lack 'data' column
@@ -306,6 +313,7 @@ class PDFCache:
                     format TEXT NOT NULL,
                     file_path_on_disk TEXT NOT NULL,
                     size_bytes INTEGER NOT NULL,
+                    geometry_json TEXT DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (file_path, page_num, image_index)
                 );
@@ -859,7 +867,8 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT image_index, width, height,
-                   format, file_path_on_disk, size_bytes, file_mtime
+                   format, file_path_on_disk, size_bytes, file_mtime,
+                   geometry_json
                    FROM page_images
                    WHERE file_path = ? AND page_num = ?
                    ORDER BY image_index""",
@@ -879,8 +888,9 @@ class PDFCache:
                 if not Path(row["file_path_on_disk"]).exists():
                     return None  # triggers re-extraction
 
-            return [
-                {
+            result = []
+            for row in real_rows:
+                d = {
                     "page": page_num + 1,
                     "index": row["image_index"],
                     "width": row["width"],
@@ -889,8 +899,13 @@ class PDFCache:
                     "path": row["file_path_on_disk"],
                     "size_bytes": row["size_bytes"],
                 }
-                for row in real_rows
-            ]
+                if row["geometry_json"]:
+                    g = json.loads(row["geometry_json"])
+                    d["bbox"] = g["bbox"]
+                    if "placements" in g:
+                        d["placements"] = g["placements"]
+                result.append(d)
+            return result
 
     def save_page_images(
         self, path: str, page_num: int, images: list[dict[str, Any]]
@@ -925,9 +940,9 @@ class PDFCache:
                 conn.execute(
                     "INSERT INTO page_images (file_path, page_num,"
                     " image_index, file_mtime, width, height, format,"
-                    " file_path_on_disk, size_bytes)"
+                    " file_path_on_disk, size_bytes, geometry_json)"
                     " VALUES (?, ?, -1, ?, 0, 0, 'sentinel',"
-                    " '__sentinel__', 0)",
+                    " '__sentinel__', 0, NULL)",
                     (path, page_num, mtime),
                 )
                 return
@@ -961,8 +976,8 @@ class PDFCache:
                 """INSERT INTO page_images
                    (file_path, page_num, image_index,
                     file_mtime, width, height, format,
-                    file_path_on_disk, size_bytes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    file_path_on_disk, size_bytes, geometry_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     (
                         path,
@@ -974,6 +989,20 @@ class PDFCache:
                         img["format"],
                         img["path"],
                         img["size_bytes"],
+                        (
+                            json.dumps(
+                                {
+                                    "bbox": img["bbox"],
+                                    **(
+                                        {"placements": img["placements"]}
+                                        if "placements" in img
+                                        else {}
+                                    ),
+                                }
+                            )
+                            if "bbox" in img
+                            else None
+                        ),
                     )
                     for i, img in enumerate(images)
                 ],

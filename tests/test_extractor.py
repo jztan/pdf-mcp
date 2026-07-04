@@ -300,6 +300,30 @@ class TestExtractImagesFromPage:
         assert [img["index"] for img in images] == [0, 1]
         assert len(list(tmp_path.glob("*.png"))) == 2
 
+    def test_extract_images_single_placement_bbox(
+        self, sample_pdf_with_images, tmp_path
+    ):
+        """Single-placement image gets a bbox but no placements list."""
+        doc = pymupdf.open(sample_pdf_with_images)
+        imgs = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="h")
+        doc.close()
+        assert imgs
+        img = imgs[0]
+        assert "bbox" in img and len(img["bbox"]) == 4
+        # inserted at Rect(50,50,80,80)
+        assert abs(img["bbox"][0] - 50) < 2 and abs(img["bbox"][1] - 50) < 2
+        assert "placements" not in img  # single placement
+
+    def test_extract_images_multi_placement(self, sample_pdf_dup_image, tmp_path):
+        """Multi-placement image gets both bbox (first) and placements list."""
+        doc = pymupdf.open(sample_pdf_dup_image)
+        imgs = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="h")
+        doc.close()
+        assert len(imgs) == 1  # deduped by xref
+        img = imgs[0]
+        assert "bbox" in img
+        assert "placements" in img and len(img["placements"]) == 2
+
     def test_cmyk_image_converted_to_rgb(self, tmp_path):
         """CMYK images are converted to RGB colorspace."""
         from PIL import Image
@@ -602,3 +626,21 @@ class TestExtractTextFromPageWiring:
             extractor.extract_text_from_page(page)
         detector.assert_called_once()
         doc.close()
+
+
+def test_block_bbox_for_index_matches_block_enumeration():
+    import pymupdf
+    from pdf_mcp.extractor import block_bbox_for_index
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((72, 120), "First paragraph block with enough text here.")
+    page.insert_text((72, 400), "Second paragraph block sitting lower on page.")
+
+    blocks = [b for b in page.get_text("blocks", sort=True) if b[6] == 0]
+    expected = tuple(round(v, 1) for v in blocks[1][:4])
+
+    assert block_bbox_for_index(page, 1) == expected
+    assert block_bbox_for_index(page, 99) is None
+    assert block_bbox_for_index(page, -1) is None
+    doc.close()

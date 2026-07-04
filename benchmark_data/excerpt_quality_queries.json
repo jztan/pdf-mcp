@@ -77,7 +77,7 @@
       ]
     },
     "gpt3": {
-      "url": "https://arxiv.org/pdf/2005.14165",
+      "url": "https://arxiv.org/pdf/2005.14165v4",
       "title": "GPT-3: Language Models are Few-Shot Learners",
       "queries": [
         {
@@ -118,7 +118,7 @@
       ]
     },
     "gnn_review": {
-      "url": "https://arxiv.org/pdf/1812.08434",
+      "url": "https://arxiv.org/pdf/1812.08434v6",
       "title": "Graph Neural Networks: A Review",
       "queries": [
         {
@@ -159,7 +159,7 @@
       ]
     },
     "llm_survey": {
-      "url": "https://arxiv.org/pdf/2303.18223",
+      "url": "https://arxiv.org/pdf/2303.18223v13",
       "title": "A Survey of Large Language Models",
       "queries": [
         {
@@ -173,7 +173,7 @@
           "id": "l02",
           "category": "prose",
           "query": "mixed precision training FP16",
-          "page": 29,
+          "page": 31,
           "answer": "FP16"
         },
         {
@@ -187,7 +187,7 @@
           "id": "l04",
           "category": "prose",
           "query": "in-context learning demonstration examples",
-          "page": 45,
+          "page": 53,
           "answer": "in-context learning"
         },
         {
@@ -237,6 +237,33 @@
           "query": "generative AI use cases business",
           "page": 114,
           "answer": "generative"
+        }
+      ]
+    },
+    "bayesian_nn_2col": {
+      "path": "benchmark_data/.reading_order_pdfs/1811.03679.pdf",
+      "title": "Practical Bayesian Neural Networks via Adaptive Optimization Methods",
+      "queries": [
+        {
+          "id": "m01",
+          "category": "prose",
+          "query": "Maximum a Posteriori estimation neural networks",
+          "page": 1,
+          "answer": "Maximum a Posteriori"
+        },
+        {
+          "id": "m02",
+          "category": "prose",
+          "query": "expected value of a noisy stochastic objective function",
+          "page": 1,
+          "answer": "expected value"
+        },
+        {
+          "id": "m03",
+          "category": "prose",
+          "query": "Thompson sampling exploration exploitation dilemma",
+          "page": 4,
+          "answer": "Thompson sampling"
         }
       ]
     }

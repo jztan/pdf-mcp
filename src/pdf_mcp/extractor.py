@@ -699,6 +699,25 @@ def get_best_paragraph_for_query(
     return stripped, best_idx
 
 
+def block_bbox_for_index(
+    page: Any, block_idx: int
+) -> tuple[float, float, float, float] | None:
+    """
+    Return the bbox (absolute PDF points, 1 dp) of the block_idx-th text
+    block on the page.
+
+    Uses the same enumeration as get_best_paragraph_for_query and the
+    direct-containment branch in server._upgrade_excerpts_to_paragraphs:
+    text blocks only (block[6] == 0), sorted by position. Returns None if
+    block_idx is out of range.
+    """
+    blocks = [b for b in page.get_text("blocks", sort=True) if b[6] == 0]
+    if block_idx < 0 or block_idx >= len(blocks):
+        return None
+    b = blocks[block_idx]
+    return (round(b[0], 1), round(b[1], 1), round(b[2], 1), round(b[3], 1))
+
+
 def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
     """
     Extract text with Y-coordinate information for content ordering.
@@ -818,17 +837,38 @@ def extract_images_from_page(
                 )
                 continue
 
-            images.append(
-                {
-                    "page": page_num + 1,  # 1-indexed for output
-                    "index": kept_index,
-                    "width": pix.width,
-                    "height": pix.height,
-                    "format": color_format,
-                    "path": str(file_path),
-                    "size_bytes": file_path.stat().st_size,
-                }
-            )
+            img_dict: dict[str, Any] = {
+                "page": page_num + 1,  # 1-indexed for output
+                "index": kept_index,
+                "width": pix.width,
+                "height": pix.height,
+                "format": color_format,
+                "path": str(file_path),
+                "size_bytes": file_path.stat().st_size,
+            }
+            try:
+                rects = page.get_image_rects(xref)
+            except Exception:
+                rects = []
+            if rects:
+                p = rects[0]
+                img_dict["bbox"] = [
+                    round(p.x0, 1),
+                    round(p.y0, 1),
+                    round(p.x1, 1),
+                    round(p.y1, 1),
+                ]
+                if len(rects) > 1:
+                    img_dict["placements"] = [
+                        [
+                            round(r.x0, 1),
+                            round(r.y0, 1),
+                            round(r.x1, 1),
+                            round(r.y1, 1),
+                        ]
+                        for r in rects
+                    ]
+            images.append(img_dict)
             kept_index += 1
 
         except (ValueError, RuntimeError, KeyError) as e:
@@ -1055,7 +1095,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
             tables.append(
                 {
                     "index": len(tables),
-                    "bbox": list(table.bbox),
+                    "bbox": [round(v, 1) for v in table.bbox],
                     "row_count": len(extracted),
                     "col_count": len(extracted[0]),
                     "header": header,

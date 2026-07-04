@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `pdf_search` paragraph-style page-mode hits now carry source geometry:
+  `bbox` (absolute PDF points), `page_rect`, and a server-computed `clip`
+  (page fractions) that can be passed straight to `pdf_render_pages(clip=...)`
+  to render just that region — no client-side coordinate math. Snippet-style
+  and section hits are unchanged. This closes a gap surfaced while comparing
+  pdf-mcp against other PDF-tooling MCP servers: several competitors already
+  ship citable source coordinates on search hits.
+- `pdf_read_pages` images and tables now carry `bbox` (absolute PDF points)
+  and a paste-ready `clip`; each page carries `page_rect`. Image geometry
+  comes from placement rectangles (multi-placement images list all rects
+  under `placements`). Existing caches re-extract images once to populate
+  geometry (a `page_images`-only rebuild; cached text and embeddings are
+  untouched).
+
 ### Fixed
 - Repeated placements of the same embedded image no longer produce duplicate
   extracted files. PyMuPDF's `get_images(full=True)` lists an image once per

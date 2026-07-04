@@ -10,21 +10,24 @@ Usage:
 
 import base64
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import pymupdf
 from fastmcp import FastMCP
 from mcp.types import ImageContent
+from pydantic import BeforeValidator
 
 from . import __version__
 from . import content_trust
 from .cache import PDFCache
 from .config import PDFConfig
 from .extractor import (
+    block_bbox_for_index,
     check_tesseract_available,
     estimate_tokens,
     extract_images_from_page,
@@ -976,21 +979,40 @@ def pdf_read_pages(
             # PDF_MCP_CACHE_DIR changes; basenames are content-addressed
             # and stable. Callers that need bytes locate the file under
             # `cache.images_dir` (reported by pdf_cache_stats).
-            sanitized_images = [
-                {
+            _pr = doc[page_num].rect
+            page_rect_list = [
+                round(_pr.x0, 1),
+                round(_pr.y0, 1),
+                round(_pr.x1, 1),
+                round(_pr.y1, 1),
+            ]
+
+            sanitized_images = []
+            for img in page_images:
+                d = {
                     **{k: v for k, v in img.items() if k != "path"},
                     "image_id": Path(img["path"]).name,
                 }
-                for img in page_images
-            ]
+                if "bbox" in d:
+                    d["clip"] = _bbox_to_clip(d["bbox"], page_rect_list)
+                sanitized_images.append(d)
+
+            tables_out = []
+            for t in page_tables:
+                t2 = dict(t)
+                if "bbox" in t2:
+                    t2["clip"] = _bbox_to_clip(t2["bbox"], page_rect_list)
+                tables_out.append(t2)
+
             page_result: dict[str, Any] = {
                 "page": page_num + 1,
                 "text": text,
                 "chars": len(text),
                 "images": sanitized_images,
                 "image_count": len(sanitized_images),
-                "tables": page_tables,
-                "table_count": len(page_tables),
+                "tables": tables_out,
+                "table_count": len(tables_out),
+                "page_rect": page_rect_list,
             }
             if page_source is not None:
                 page_result["source"] = page_source
@@ -1377,14 +1399,29 @@ def _upgrade_excerpts_to_paragraphs(
                 block_text, block_idx = alt_text, alt_idx
 
         if block_text is not None and block_idx is not None:
+            geom: dict[str, Any] = {}
+            bbox = block_bbox_for_index(page, block_idx)
+            if bbox is not None:
+                r = page.rect
+                page_rect = [
+                    round(r.x0, 1),
+                    round(r.y0, 1),
+                    round(r.x1, 1),
+                    round(r.y1, 1),
+                ]
+                geom = {
+                    "bbox": list(bbox),
+                    "page_rect": page_rect,
+                    "clip": _bbox_to_clip(bbox, page_rect),
+                }
             key = (m["page"], block_idx)
             if key in seen:
                 existing_idx = seen[key]
                 if m.get("score", 0) > upgraded[existing_idx].get("score", 0):
-                    upgraded[existing_idx] = {**m, "excerpt": block_text}
+                    upgraded[existing_idx] = {**m, "excerpt": block_text, **geom}
                 continue
             seen[key] = len(upgraded)
-            upgraded.append({**m, "excerpt": block_text})
+            upgraded.append({**m, "excerpt": block_text, **geom})
         else:
             upgraded.append(m)
 
@@ -2256,6 +2293,31 @@ def _clamp_frac(value: float) -> float:
     return float(value)
 
 
+def _bbox_to_clip(
+    bbox: "list[float] | tuple[float, float, float, float]",
+    page_rect: "list[float] | tuple[float, float, float, float]",
+) -> list[float]:
+    """
+    Convert an absolute-point bbox to page-fraction clip coords in [0,1].
+
+    Top-left origin on both sides. Subtracts the page-rect origin so the
+    conversion is exact on non-zero-MediaBox-origin PDFs. Rounds to 3 dp.
+    This is the single place the points->fraction math lives.
+    """
+    px0, py0, px1, py1 = page_rect
+    width = px1 - px0
+    height = py1 - py0
+    if width <= 0 or height <= 0:
+        return [0.0, 0.0, 1.0, 1.0]
+    bx0, by0, bx1, by1 = bbox
+    return [
+        round(_clamp_frac((bx0 - px0) / width), 3),
+        round(_clamp_frac((by0 - py0) / height), 3),
+        round(_clamp_frac((bx1 - px0) / width), 3),
+        round(_clamp_frac((by1 - py0) / height), 3),
+    ]
+
+
 def _prepare_clip(
     clip: Any, page_nums: list[int]
 ) -> tuple[dict[str, Any] | None, tuple[float, float, float, float] | None]:
@@ -2374,6 +2436,28 @@ def _render_clip(
     return [summary]
 
 
+def _coerce_json_array(value: Any) -> Any:
+    """Coerce a JSON-string array (e.g. ``'[0.1, 0.2]'``) to a real list.
+
+    Some MCP clients stringify array-valued tool arguments. Without this, a
+    ``clip`` pasted back verbatim from a search/read result would fail
+    validation with "Input should be a valid list". Non-string input passes
+    through untouched; an unparseable string is returned unchanged so pydantic
+    still raises its normal, informative type error.
+    """
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return value
+    return value
+
+
+# clip accepts a real array or a stringified one (see _coerce_json_array); the
+# JSON schema still advertises array|null, so compliant clients are unaffected.
+_ClipArg = Annotated[list[float] | None, BeforeValidator(_coerce_json_array)]
+
+
 @mcp.tool(
     output_schema=None,
     description=_tool_description(
@@ -2385,7 +2469,7 @@ def pdf_render_pages(
     path: str,
     pages: str,
     dpi: int = 200,
-    clip: list[float] | None = None,
+    clip: _ClipArg = None,
 ) -> list[Any]:
     """
     Render PDF pages as images for visual inspection by vision-capable models.

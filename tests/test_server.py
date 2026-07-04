@@ -3029,6 +3029,163 @@ class TestExcerptStyle:
             os.unlink(f.name)
 
 
+class TestSearchGeometry:
+    """Paragraph-style pdf_search hits carry bbox/page_rect/clip evidence."""
+
+    def test_search_paragraph_hit_has_geometry(self, isolated_server, tmp_path):
+        from pdf_mcp import server
+
+        pdf = tmp_path / "geo.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Revenue recognition follows the transfer of control to the "
+            "customer over time as obligations are satisfied.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "Unrelated second block about depreciation schedules and "
+            "useful life estimates for fixed assets.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+
+        res = pdf_search(
+            str(pdf),
+            "revenue recognition control",
+            mode="keyword",
+            excerpt_style="paragraph",
+        )
+        hit = res["matches"][0]
+        assert "bbox" in hit and len(hit["bbox"]) == 4
+        assert "page_rect" in hit and hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
+        assert "clip" in hit and len(hit["clip"]) == 4
+        # clip is the server-computed fraction of bbox within page_rect
+        assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+        # bbox round-trips: clip region re-extracts the excerpt
+        # (punctuation-normalized)
+        d2 = pymupdf.open(str(pdf))
+        clip_txt = d2[0].get_text(clip=pymupdf.Rect(hit["bbox"]))
+        d2.close()
+
+        def norm(s: str) -> str:
+            return " ".join(s.lower().replace("-", " ").split())
+
+        assert norm(hit["excerpt"])[:40] in norm(clip_txt)
+
+    @pytest.mark.parametrize("mode", ["keyword", "semantic", "auto"])
+    def test_search_geometry_all_modes(self, isolated_server, tmp_path, mode):
+        if mode == "semantic":
+            try:
+                import fastembed  # noqa: F401
+            except ImportError:
+                pytest.skip("fastembed not installed")
+
+        pdf = tmp_path / f"geo_{mode}.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Transformer models use scaled dot product attention "
+            "across multiple heads in parallel.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "Convolutional networks apply learned filters over "
+            "local receptive fields of the input.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf),
+            "scaled dot product attention",
+            mode=mode,
+            excerpt_style="paragraph",
+        )
+        assert res["matches"], f"no matches in {mode} mode"
+        assert "bbox" in res["matches"][0]
+        assert "clip" in res["matches"][0]
+
+    def test_search_snippet_style_has_no_geometry(self, isolated_server, tmp_path):
+        pdf = tmp_path / "snip.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Alpha beta gamma delta epsilon revenue recognition zeta eta " "theta.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf), "revenue recognition", mode="keyword", excerpt_style="snippet"
+        )
+        assert "bbox" not in res["matches"][0]
+        assert "page_rect" not in res["matches"][0]
+        assert "clip" not in res["matches"][0]
+
+    def test_search_bbox_is_picked_block_not_first_term(
+        self, isolated_server, tmp_path
+    ):
+        # Two blocks both contain "model"; picker should choose the
+        # query-dense block and bbox must belong to THAT block.
+        pdf = tmp_path / "multi.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 150),
+            "The model is mentioned here once briefly.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "The language model was pretrained then the model was "
+            "fine-tuned and the model was evaluated.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf),
+            "model pretrained fine-tuned evaluated",
+            mode="keyword",
+            excerpt_style="paragraph",
+        )
+        hit = res["matches"][0]
+        # bbox's vertical position should be the lower (second) block
+        assert hit["bbox"][1] > 300
+
+    def test_search_geometry_cjk(self, isolated_server, tmp_path):
+        # Geometry is writing-direction-agnostic (bbox comes from the block
+        # rect regardless of horizontal/vertical script), so a CJK block is
+        # sufficient coverage; a separate vertical fixture would exercise the
+        # same code path.
+        pdf = tmp_path / "cjk.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        # CJK block with a distinctive term
+        page.insert_text(
+            (72, 200),
+            "厚木基地 の 面積 と 歴史 について 説明 します。",
+            fontsize=14,
+            fontname="japan-s",
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf), "厚木基地", mode="keyword", excerpt_style="paragraph"
+        )
+        assert res["matches"], "CJK keyword search returned no hits"
+        hit = res["matches"][0]
+        assert "bbox" in hit and len(hit["bbox"]) == 4
+        assert hit["bbox"][2] > hit["bbox"][0] and hit["bbox"][3] > hit["bbox"][1]
+
+
 class TestOcrParallelOrchestration:
     def _two_page_scanned(self, tmp_path):
         import base64
@@ -3400,3 +3557,197 @@ def test_read_all_flags_hidden_text(tmp_path, isolated_server):
     _make_pdf_with_hidden_text(p)
     res = pdf_read_all(str(p))
     assert res["hidden_text_detected"] is True
+
+
+def test_bbox_to_clip_zero_origin():
+    from pdf_mcp.server import _bbox_to_clip
+
+    # Letter page, origin (0,0)
+    clip = _bbox_to_clip([153.0, 396.0, 459.0, 594.0], [0.0, 0.0, 612.0, 792.0])
+    assert clip == [0.25, 0.5, 0.75, 0.75]
+
+
+def test_bbox_to_clip_nonzero_origin():
+    # MANDATORY: proves the origin subtraction. Without it, a non-zero
+    # MediaBox origin yields wrong fractions and every crop is off.
+    from pdf_mcp.server import _bbox_to_clip
+
+    # page rect origin (100, 200), size 612x792
+    clip = _bbox_to_clip([253.0, 596.0, 559.0, 794.0], [100.0, 200.0, 712.0, 992.0])
+    assert clip == [0.25, 0.5, 0.75, 0.75]
+
+
+def test_bbox_to_clip_clamps_and_rounds():
+    from pdf_mcp.server import _bbox_to_clip
+
+    clip = _bbox_to_clip([-10.0, -10.0, 700.0, 900.0], [0.0, 0.0, 612.0, 792.0])
+    assert clip == [0.0, 0.0, 1.0, 1.0]
+
+
+def test_read_pages_page_rect_and_image_clip(isolated_server, sample_pdf_with_images):
+    from pdf_mcp import server
+
+    res = server.pdf_read_pages(sample_pdf_with_images, "1")
+    page = res["pages"][0]
+    assert "page_rect" in page and len(page["page_rect"]) == 4
+    img = page["images"][0]
+    assert "bbox" in img
+    assert "clip" in img
+    assert img["clip"] == server._bbox_to_clip(img["bbox"], page["page_rect"])
+
+
+def test_read_pages_table_bbox_and_clip(isolated_server, tmp_path):
+    import pymupdf
+    from pdf_mcp import server
+
+    pdf = tmp_path / "tbl.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    # a simple ruled table PyMuPDF find_tables can detect
+    page.insert_text((72, 100), "Q1\tQ2\tQ3")
+    page.draw_line((72, 90), (300, 90))
+    page.draw_line((72, 130), (300, 130))
+    for x in (72, 148, 224, 300):
+        page.draw_line((x, 90), (x, 130))
+    doc.save(str(pdf))
+    doc.close()
+
+    res = server.pdf_read_pages(str(pdf), "1")
+    page0 = res["pages"][0]
+    if page0["tables"]:  # detection is heuristic; only assert when found
+        t = page0["tables"][0]
+        assert "bbox" in t
+        assert "clip" in t
+        assert t["clip"] == server._bbox_to_clip(t["bbox"], page0["page_rect"])
+
+
+def test_search_clip_renders_region(isolated_server, tmp_path):
+    from pdf_mcp import server
+    import pymupdf
+
+    pdf = tmp_path / "e2e.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text(
+        (72, 300),
+        "Distinctive marker phrase greppable target "
+        "sitting in the middle of the page body.",
+        fontsize=12,
+    )
+    doc.save(str(pdf))
+    doc.close()
+
+    hit = server.pdf_search(
+        str(pdf),
+        "distinctive marker phrase greppable",
+        mode="keyword",
+        excerpt_style="paragraph",
+    )["matches"][0]
+    out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
+    assert isinstance(out, list) and out
+    assert "error" not in out[0]
+
+
+def test_clip_arg_coerces_json_string_at_type_level():
+    # The _ClipArg type coerces a stringified array to a real list, so a
+    # client that stringifies the argument still validates.
+    from pydantic import TypeAdapter
+
+    from pdf_mcp.server import _ClipArg
+
+    ta = TypeAdapter(_ClipArg)
+    assert ta.validate_python("[0.1, 0.2, 0.3, 0.4]") == [0.1, 0.2, 0.3, 0.4]
+    assert ta.validate_python([0.1, 0.2]) == [0.1, 0.2]  # real list still ok
+    assert ta.validate_python(None) is None
+
+
+def test_clip_schema_still_advertises_array():
+    # Coercion must not degrade the published schema: compliant clients must
+    # still see clip typed as array|null, not a bare untyped default.
+    import asyncio
+
+    from pdf_mcp import server
+
+    async def _schema():
+        t = await server.mcp.get_tool("pdf_render_pages")
+        return getattr(t, "parameters", None) or getattr(t, "inputSchema", None)
+
+    props = asyncio.run(_schema())["properties"]["clip"]
+    variants = props.get("anyOf", [props])
+    assert any(v.get("type") == "array" for v in variants), props
+
+
+def test_render_clip_accepts_stringified_array_at_mcp_boundary(
+    isolated_server, tmp_path
+):
+    # A client that stringifies the array arg (observed in the wild) must not
+    # get a hard ValidationError — the paste-the-clip loop has to survive it.
+    import asyncio
+
+    import pymupdf
+
+    from pdf_mcp import server
+
+    pdf = tmp_path / "clip_str.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=612, height=792).insert_text((72, 200), "hello target")
+    doc.save(str(pdf))
+    doc.close()
+
+    async def _call():
+        t = await server.mcp.get_tool("pdf_render_pages")
+        return await t.run(
+            {"path": str(pdf), "pages": "1", "clip": "[0.1, 0.1, 0.5, 0.5]"}
+        )
+
+    result = asyncio.run(_call())  # must not raise ValidationError
+    assert result is not None
+
+
+def test_geometry_on_shifted_mediabox_pdf(isolated_server, tmp_path):
+    # A PDF whose MediaBox has a non-zero origin: PyMuPDF normalizes page.rect
+    # to (0,0) and reports get_text bboxes in that same normalized space, so
+    # the whole pipeline (bbox -> page_rect -> clip -> render) stays correct.
+    # This is the end-to-end backing for the coordinate-convention design; the
+    # raw origin-subtraction math is unit-tested in test_bbox_to_clip_*.
+    from pdf_mcp import server
+
+    pdf = tmp_path / "shifted.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text(
+        (150, 300),
+        "ORIGINSHIFT distinctive marker paragraph block with enough words "
+        "to be a real body paragraph here.",
+        fontsize=12,
+    )
+    doc.xref_set_key(page.xref, "MediaBox", "[100 200 712 992]")
+    doc.save(str(pdf))
+    doc.close()
+
+    # Confirm the fixture really has a non-zero MediaBox origin...
+    check = pymupdf.open(str(pdf))
+    assert check[0].mediabox.x0 == 100 and check[0].mediabox.y0 == 200
+    # ...yet PyMuPDF normalizes page.rect to origin (0,0).
+    assert check[0].rect.x0 == 0 and check[0].rect.y0 == 0
+    check.close()
+
+    hit = server.pdf_search(
+        str(pdf),
+        "ORIGINSHIFT distinctive marker paragraph",
+        mode="keyword",
+        excerpt_style="paragraph",
+    )["matches"][0]
+
+    assert hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
+    assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+
+    # bbox faithfully frames the excerpt in the normalized space
+    d2 = pymupdf.open(str(pdf))
+    clip_txt = d2[0].get_text(clip=pymupdf.Rect(hit["bbox"]))
+    d2.close()
+    assert "ORIGINSHIFT" in clip_txt
+
+    # the emitted clip renders without error
+    out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
+    assert isinstance(out, list) and "error" not in out[0]

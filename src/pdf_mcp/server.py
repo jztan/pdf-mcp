@@ -2256,6 +2256,31 @@ def _clamp_frac(value: float) -> float:
     return float(value)
 
 
+def _bbox_to_clip(
+    bbox: "list[float] | tuple[float, float, float, float]",
+    page_rect: "list[float] | tuple[float, float, float, float]",
+) -> list[float]:
+    """
+    Convert an absolute-point bbox to page-fraction clip coords in [0,1].
+
+    Top-left origin on both sides. Subtracts the page-rect origin so the
+    conversion is exact on non-zero-MediaBox-origin PDFs. Rounds to 3 dp.
+    This is the single place the points->fraction math lives.
+    """
+    px0, py0, px1, py1 = page_rect
+    width = px1 - px0
+    height = py1 - py0
+    if width <= 0 or height <= 0:
+        return [0.0, 0.0, 1.0, 1.0]
+    bx0, by0, bx1, by1 = bbox
+    return [
+        round(_clamp_frac((bx0 - px0) / width), 3),
+        round(_clamp_frac((by0 - py0) / height), 3),
+        round(_clamp_frac((bx1 - px0) / width), 3),
+        round(_clamp_frac((by1 - py0) / height), 3),
+    ]
+
+
 def _prepare_clip(
     clip: Any, page_nums: list[int]
 ) -> tuple[dict[str, Any] | None, tuple[float, float, float, float] | None]:

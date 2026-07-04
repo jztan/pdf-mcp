@@ -3400,3 +3400,28 @@ def test_read_all_flags_hidden_text(tmp_path, isolated_server):
     _make_pdf_with_hidden_text(p)
     res = pdf_read_all(str(p))
     assert res["hidden_text_detected"] is True
+
+
+def test_bbox_to_clip_zero_origin():
+    from pdf_mcp.server import _bbox_to_clip
+
+    # Letter page, origin (0,0)
+    clip = _bbox_to_clip([153.0, 396.0, 459.0, 594.0], [0.0, 0.0, 612.0, 792.0])
+    assert clip == [0.25, 0.5, 0.75, 0.75]
+
+
+def test_bbox_to_clip_nonzero_origin():
+    # MANDATORY: proves the origin subtraction. Without it, a non-zero
+    # MediaBox origin yields wrong fractions and every crop is off.
+    from pdf_mcp.server import _bbox_to_clip
+
+    # page rect origin (100, 200), size 612x792
+    clip = _bbox_to_clip([253.0, 596.0, 559.0, 794.0], [100.0, 200.0, 712.0, 992.0])
+    assert clip == [0.25, 0.5, 0.75, 0.75]
+
+
+def test_bbox_to_clip_clamps_and_rounds():
+    from pdf_mcp.server import _bbox_to_clip
+
+    clip = _bbox_to_clip([-10.0, -10.0, 700.0, 900.0], [0.0, 0.0, 612.0, 792.0])
+    assert clip == [0.0, 0.0, 1.0, 1.0]

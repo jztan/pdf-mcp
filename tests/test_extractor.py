@@ -602,3 +602,21 @@ class TestExtractTextFromPageWiring:
             extractor.extract_text_from_page(page)
         detector.assert_called_once()
         doc.close()
+
+
+def test_block_bbox_for_index_matches_block_enumeration():
+    import pymupdf
+    from pdf_mcp.extractor import block_bbox_for_index
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((72, 120), "First paragraph block with enough text here.")
+    page.insert_text((72, 400), "Second paragraph block sitting lower on page.")
+
+    blocks = [b for b in page.get_text("blocks", sort=True) if b[6] == 0]
+    expected = tuple(round(v, 1) for v in blocks[1][:4])
+
+    assert block_bbox_for_index(page, 1) == expected
+    assert block_bbox_for_index(page, 99) is None
+    assert block_bbox_for_index(page, -1) is None
+    doc.close()

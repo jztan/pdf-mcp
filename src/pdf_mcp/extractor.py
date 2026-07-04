@@ -699,6 +699,25 @@ def get_best_paragraph_for_query(
     return stripped, best_idx
 
 
+def block_bbox_for_index(
+    page: Any, block_idx: int
+) -> tuple[float, float, float, float] | None:
+    """
+    Return the bbox (absolute PDF points, 1 dp) of the block_idx-th text
+    block on the page.
+
+    Uses the same enumeration as get_best_paragraph_for_query and the
+    direct-containment branch in server._upgrade_excerpts_to_paragraphs:
+    text blocks only (block[6] == 0), sorted by position. Returns None if
+    block_idx is out of range.
+    """
+    blocks = [b for b in page.get_text("blocks", sort=True) if b[6] == 0]
+    if block_idx < 0 or block_idx >= len(blocks):
+        return None
+    b = blocks[block_idx]
+    return (round(b[0], 1), round(b[1], 1), round(b[2], 1), round(b[3], 1))
+
+
 def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
     """
     Extract text with Y-coordinate information for content ordering.

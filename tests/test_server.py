@@ -3702,3 +3702,52 @@ def test_render_clip_accepts_stringified_array_at_mcp_boundary(
 
     result = asyncio.run(_call())  # must not raise ValidationError
     assert result is not None
+
+
+def test_geometry_on_shifted_mediabox_pdf(isolated_server, tmp_path):
+    # A PDF whose MediaBox has a non-zero origin: PyMuPDF normalizes page.rect
+    # to (0,0) and reports get_text bboxes in that same normalized space, so
+    # the whole pipeline (bbox -> page_rect -> clip -> render) stays correct.
+    # This is the end-to-end backing for the coordinate-convention design; the
+    # raw origin-subtraction math is unit-tested in test_bbox_to_clip_*.
+    from pdf_mcp import server
+
+    pdf = tmp_path / "shifted.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text(
+        (150, 300),
+        "ORIGINSHIFT distinctive marker paragraph block with enough words "
+        "to be a real body paragraph here.",
+        fontsize=12,
+    )
+    doc.xref_set_key(page.xref, "MediaBox", "[100 200 712 992]")
+    doc.save(str(pdf))
+    doc.close()
+
+    # Confirm the fixture really has a non-zero MediaBox origin...
+    check = pymupdf.open(str(pdf))
+    assert check[0].mediabox.x0 == 100 and check[0].mediabox.y0 == 200
+    # ...yet PyMuPDF normalizes page.rect to origin (0,0).
+    assert check[0].rect.x0 == 0 and check[0].rect.y0 == 0
+    check.close()
+
+    hit = server.pdf_search(
+        str(pdf),
+        "ORIGINSHIFT distinctive marker paragraph",
+        mode="keyword",
+        excerpt_style="paragraph",
+    )["matches"][0]
+
+    assert hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
+    assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+
+    # bbox faithfully frames the excerpt in the normalized space
+    d2 = pymupdf.open(str(pdf))
+    clip_txt = d2[0].get_text(clip=pymupdf.Rect(hit["bbox"]))
+    d2.close()
+    assert "ORIGINSHIFT" in clip_txt
+
+    # the emitted clip renders without error
+    out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
+    assert isinstance(out, list) and "error" not in out[0]

@@ -1754,6 +1754,33 @@ class PDFCache:
                     cjk_sections,
                 )
 
+    def _build_temp_section_fts(
+        self, conn: sqlite3.Connection, path: str, cjk: bool
+    ) -> None:
+        """Build a connection-local section FTS index over one document.
+
+        Same document-local IDF rationale as ``_build_temp_page_fts`` (issue
+        #17). Rows are copied from the shared section table (already
+        tokenized at index time) for this ``path`` only. Dropped when
+        ``conn`` closes.
+        """
+        src = "pdf_section_fts_cjk" if cjk else "pdf_section_fts"
+        tokenizer = "unicode61" if cjk else "porter unicode61"
+        conn.execute("DROP TABLE IF EXISTS temp.doc_sec_fts")
+        conn.execute(
+            "CREATE VIRTUAL TABLE temp.doc_sec_fts USING fts5("
+            "section_id UNINDEXED, title, text,"
+            " start_page UNINDEXED, end_page UNINDEXED,"
+            f" title_source UNINDEXED, tokenize='{tokenizer}')"
+        )
+        conn.execute(
+            "INSERT INTO temp.doc_sec_fts"
+            " (section_id, title, text, start_page, end_page, title_source)"
+            " SELECT section_id, title, text, start_page, end_page,"
+            f" title_source FROM {src} WHERE file_path = ?",
+            (path,),
+        )
+
     def search_section_fts(
         self,
         path: str,
@@ -1780,19 +1807,20 @@ class PDFCache:
             escaped = _escape_fts5_query_cjk(query)
             with sqlite3.connect(self.db_path) as conn:
                 try:
+                    self._build_temp_section_fts(conn, path, cjk=True)
                     rows = conn.execute(
                         "SELECT section_id, title, start_page, end_page,"
-                        " title_source, -bm25(pdf_section_fts_cjk)"
-                        " FROM pdf_section_fts_cjk"
-                        " WHERE pdf_section_fts_cjk MATCH ? AND file_path = ?"
-                        " ORDER BY bm25(pdf_section_fts_cjk)"
+                        " title_source, -bm25(doc_sec_fts)"
+                        " FROM doc_sec_fts"
+                        " WHERE doc_sec_fts MATCH ?"
+                        " ORDER BY bm25(doc_sec_fts)"
                         " LIMIT ?",
-                        (escaped, path, max_results),
+                        (escaped, max_results),
                     ).fetchall()
                 except sqlite3.OperationalError:
                     return []
-                # Replace each row's split title with the original from the
-                # porter section table (same section_id), so display is clean.
+                # Restore original (unsplit) titles from the porter section
+                # table for clean display — unchanged from prior behavior.
                 orig = conn.execute(
                     "SELECT section_id, title FROM pdf_section_fts"
                     " WHERE file_path = ?",
@@ -1813,14 +1841,15 @@ class PDFCache:
         escaped = _escape_fts5_query(query)
         with sqlite3.connect(self.db_path) as conn:
             try:
+                self._build_temp_section_fts(conn, path, cjk=False)
                 rows = conn.execute(
                     "SELECT section_id, title, start_page, end_page,"
-                    " title_source, -bm25(pdf_section_fts)"
-                    " FROM pdf_section_fts"
-                    " WHERE pdf_section_fts MATCH ? AND file_path = ?"
-                    " ORDER BY bm25(pdf_section_fts)"
+                    " title_source, -bm25(doc_sec_fts)"
+                    " FROM doc_sec_fts"
+                    " WHERE doc_sec_fts MATCH ?"
+                    " ORDER BY bm25(doc_sec_fts)"
                     " LIMIT ?",
-                    (escaped, path, max_results),
+                    (escaped, max_results),
                 ).fetchall()
             except sqlite3.OperationalError:
                 return []

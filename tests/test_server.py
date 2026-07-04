@@ -3646,3 +3646,59 @@ def test_search_clip_renders_region(isolated_server, tmp_path):
     out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
     assert isinstance(out, list) and out
     assert "error" not in out[0]
+
+
+def test_clip_arg_coerces_json_string_at_type_level():
+    # The _ClipArg type coerces a stringified array to a real list, so a
+    # client that stringifies the argument still validates.
+    from pydantic import TypeAdapter
+
+    from pdf_mcp.server import _ClipArg
+
+    ta = TypeAdapter(_ClipArg)
+    assert ta.validate_python("[0.1, 0.2, 0.3, 0.4]") == [0.1, 0.2, 0.3, 0.4]
+    assert ta.validate_python([0.1, 0.2]) == [0.1, 0.2]  # real list still ok
+    assert ta.validate_python(None) is None
+
+
+def test_clip_schema_still_advertises_array():
+    # Coercion must not degrade the published schema: compliant clients must
+    # still see clip typed as array|null, not a bare untyped default.
+    import asyncio
+
+    from pdf_mcp import server
+
+    async def _schema():
+        t = await server.mcp.get_tool("pdf_render_pages")
+        return getattr(t, "parameters", None) or getattr(t, "inputSchema", None)
+
+    props = asyncio.run(_schema())["properties"]["clip"]
+    variants = props.get("anyOf", [props])
+    assert any(v.get("type") == "array" for v in variants), props
+
+
+def test_render_clip_accepts_stringified_array_at_mcp_boundary(
+    isolated_server, tmp_path
+):
+    # A client that stringifies the array arg (observed in the wild) must not
+    # get a hard ValidationError — the paste-the-clip loop has to survive it.
+    import asyncio
+
+    import pymupdf
+
+    from pdf_mcp import server
+
+    pdf = tmp_path / "clip_str.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=612, height=792).insert_text((72, 200), "hello target")
+    doc.save(str(pdf))
+    doc.close()
+
+    async def _call():
+        t = await server.mcp.get_tool("pdf_render_pages")
+        return await t.run(
+            {"path": str(pdf), "pages": "1", "clip": "[0.1, 0.1, 0.5, 0.5]"}
+        )
+
+    result = asyncio.run(_call())  # must not raise ValidationError
+    assert result is not None

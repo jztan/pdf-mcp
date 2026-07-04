@@ -10,15 +10,17 @@ Usage:
 
 import base64
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import pymupdf
 from fastmcp import FastMCP
 from mcp.types import ImageContent
+from pydantic import BeforeValidator
 
 from . import __version__
 from . import content_trust
@@ -2434,6 +2436,28 @@ def _render_clip(
     return [summary]
 
 
+def _coerce_json_array(value: Any) -> Any:
+    """Coerce a JSON-string array (e.g. ``'[0.1, 0.2]'``) to a real list.
+
+    Some MCP clients stringify array-valued tool arguments. Without this, a
+    ``clip`` pasted back verbatim from a search/read result would fail
+    validation with "Input should be a valid list". Non-string input passes
+    through untouched; an unparseable string is returned unchanged so pydantic
+    still raises its normal, informative type error.
+    """
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return value
+    return value
+
+
+# clip accepts a real array or a stringified one (see _coerce_json_array); the
+# JSON schema still advertises array|null, so compliant clients are unaffected.
+_ClipArg = Annotated[list[float] | None, BeforeValidator(_coerce_json_array)]
+
+
 @mcp.tool(
     output_schema=None,
     description=_tool_description(
@@ -2445,7 +2469,7 @@ def pdf_render_pages(
     path: str,
     pages: str,
     dpi: int = 200,
-    clip: list[float] | None = None,
+    clip: _ClipArg = None,
 ) -> list[Any]:
     """
     Render PDF pages as images for visual inspection by vision-capable models.

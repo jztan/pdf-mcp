@@ -30,12 +30,29 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import pymupdf
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from pdf_mcp.server import pdf_search  # noqa: E402
+from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
 
 VALID_CATEGORIES = {"prose", "structured"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
+
+
+def bbox_contains_answer(page, bbox, answer: str) -> bool:
+    """True if re-extracting the bbox region contains the gold answer.
+
+    Punctuation-normalized: lowercased, hyphens collapsed to spaces,
+    whitespace collapsed, so degenerate-encoding PDFs that drop
+    "-'\" at clip edges still match.
+    """
+    clip_text = page.get_text(clip=pymupdf.Rect(bbox))
+
+    def norm(s: str) -> str:
+        return " ".join(s.lower().replace("-", " ").split())
+
+    return norm(answer) in norm(clip_text)
 
 
 def load_queries(path: str) -> dict:
@@ -59,9 +76,7 @@ def load_queries(path: str) -> dict:
         for q in pdf_data["queries"]:
             for field in REQUIRED_QUERY_FIELDS:
                 if field not in q:
-                    raise ValueError(
-                        f"Query {q.get('id', '?')} missing field: {field}"
-                    )
+                    raise ValueError(f"Query {q.get('id', '?')} missing field: {field}")
             if q["category"] not in VALID_CATEGORIES:
                 raise ValueError(
                     f"Query {q['id']} has invalid category: {q['category']}"
@@ -83,20 +98,33 @@ def _resolve_pdf_path(pdf_data: dict) -> str:
 def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     """Run snippet vs paragraph over every (pdf, query) pair.
 
+    Also records `bbox_containment`: for the paragraph-style hit on the
+    graded page, whether re-extracting the hit's `bbox` region (the
+    literal geometry a caller would clip/render) still contains the
+    gold answer. This is the geometry-faithfulness counterpart to
+    `excerpt_containment` (the paragraph cell's text-only containment
+    rate) — it should never be lower, since the bbox is what produced
+    the excerpt in the first place.
+
     Returns:
         cells: {cell_name: {category: containment_rate, "all": rate}}.
+               Includes a synthetic "bbox" cell alongside "snippet"
+               and "paragraph".
         rows:  per-query detail for the report table.
     """
     CELLS = ("snippet", "paragraph")
 
     accum: dict[str, dict[str, list[int]]] = {
-        c: defaultdict(list) for c in CELLS
+        c: defaultdict(list) for c in CELLS + ("bbox",)
     }
     rows: list[dict] = []
 
     for pdf_key, pdf_data in all_pdfs.items():
         pdf_path = _resolve_pdf_path(pdf_data)
         print(f"  {pdf_data.get('title', pdf_key)} ...", flush=True)
+
+        local_path, _err = _resolve_path(pdf_path)
+        doc = pymupdf.open(local_path) if local_path else None
 
         for q in pdf_data["queries"]:
             row: dict = {
@@ -115,28 +143,41 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                     max_results=5,
                 )
                 matches = r.get("matches", [])
-                target = next(
-                    (m for m in matches if m["page"] == q["page"]), None
-                )
+                target = next((m for m in matches if m["page"] == q["page"]), None)
 
                 if target is None:
                     contains = 0
                     excerpt_len = 0
                 else:
                     excerpt = target["excerpt"]
-                    contains = (
-                        1 if q["answer"].lower() in excerpt.lower() else 0
-                    )
+                    contains = 1 if q["answer"].lower() in excerpt.lower() else 0
                     excerpt_len = len(excerpt)
 
                 accum[style][q["category"]].append(contains)
                 row[f"{style}_contains"] = contains
                 row[f"{style}_len"] = excerpt_len
 
+                if style == "paragraph":
+                    bbox = target.get("bbox") if target else None
+                    bbox_present = 1 if (target is not None and bbox is not None) else 0
+                    if bbox is not None and doc is not None:
+                        page = doc[q["page"] - 1]
+                        bbox_contains = (
+                            1 if bbox_contains_answer(page, bbox, q["answer"]) else 0
+                        )
+                    else:
+                        bbox_contains = 0
+                    accum["bbox"][q["category"]].append(bbox_contains)
+                    row["bbox_contains"] = bbox_contains
+                    row["bbox_present"] = bbox_present
+
             rows.append(row)
 
+        if doc is not None:
+            doc.close()
+
     cells: dict[str, dict[str, float]] = {}
-    for cell in CELLS:
+    for cell in CELLS + ("bbox",):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []
         for cat in sorted(VALID_CATEGORIES):
@@ -150,23 +191,36 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
 
 
 def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
-    """Evaluate the two-clause gate.
+    """Evaluate the three-clause gate.
 
     Clause 1: paragraph overall containment >= snippet.
     Clause 2: zero regressions (no query where snippet contains
               answer but paragraph doesn't).
+    Clause 3: bbox fidelity, scoped to hits that actually carry a bbox.
+              A hit with no bbox (e.g. the answer lives in a block that
+              exceeds the excerpt char cap, so the picker legitimately
+              falls back to the raw snippet with no block selected)
+              makes no geometry claim at all, so it must not count
+              against geometry fidelity. Scoring it as a "bbox failure"
+              would conflate "no geometry claim" with "geometry lost
+              information" — the global bbox_containment aggregate has
+              exactly that flaw, which is why it stays a reported
+              transparency metric only, not the gate.
     """
     clause_1_pass = cells["paragraph"]["all"] >= cells["snippet"]["all"]
 
     regressions = [
-        r
-        for r in rows
-        if r["snippet_contains"] == 1 and r["paragraph_contains"] == 0
+        r for r in rows if r["snippet_contains"] == 1 and r["paragraph_contains"] == 0
     ]
     clause_2_pass = len(regressions) == 0
 
+    bbox_rows = [r for r in rows if r.get("bbox_present") == 1]
+    scoped_bbox = sum(r["bbox_contains"] for r in bbox_rows)
+    scoped_excerpt = sum(r["paragraph_contains"] for r in bbox_rows)
+    clause_3_pass = scoped_bbox >= scoped_excerpt
+
     return {
-        "pass": clause_1_pass and clause_2_pass,
+        "pass": clause_1_pass and clause_2_pass and clause_3_pass,
         "clause_1_containment": {
             "pass": clause_1_pass,
             "snippet": cells["snippet"]["all"],
@@ -176,6 +230,12 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
             "pass": clause_2_pass,
             "count": len(regressions),
             "ids": [r["id"] for r in regressions],
+        },
+        "clause_3_bbox_fidelity": {
+            "pass": clause_3_pass,
+            "scoped_bbox": scoped_bbox,
+            "scoped_excerpt": scoped_excerpt,
+            "n_bbox_present": len(bbox_rows),
         },
     }
 
@@ -193,15 +253,15 @@ def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
     cats = ("prose", "structured", "all")
     print(f"\n{'cell':<14}" + "".join(f"{c:>14}" for c in cats))
     for cell, scores in cells.items():
-        row_str = f"{cell:<14}" + "".join(
-            f"{scores.get(c, 0):>13.0%} " for c in cats
-        )
+        row_str = f"{cell:<14}" + "".join(f"{scores.get(c, 0):>13.0%} " for c in cats)
         print(row_str)
 
     # Per-query detail
-    print(f"\n{'ID':<6} {'PDF':<12} {'Query':<42} {'Pg':>3}"
-          f"  {'Cat':<10} {'Snip':>4} {'Para':>4}"
-          f"  {'S.len':>5} {'P.len':>5}")
+    print(
+        f"\n{'ID':<6} {'PDF':<12} {'Query':<42} {'Pg':>3}"
+        f"  {'Cat':<10} {'Snip':>4} {'Para':>4}"
+        f"  {'S.len':>5} {'P.len':>5}"
+    )
     print("-" * 104)
 
     for r in rows:
@@ -216,9 +276,7 @@ def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
     # Length distribution
     print()
     for style in ("snippet", "paragraph"):
-        lengths = sorted(
-            r[f"{style}_len"] for r in rows if r[f"{style}_len"] > 0
-        )
+        lengths = sorted(r[f"{style}_len"] for r in rows if r[f"{style}_len"] > 0)
         if not lengths:
             continue
         avg = sum(lengths) / len(lengths)
@@ -248,21 +306,22 @@ def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
         print(f"  {title}: snippet {s_rate:.0%}  paragraph {p_rate:.0%}")
 
     # Head-to-head
-    wins = sum(
-        1 for r in rows
-        if r["paragraph_contains"] and not r["snippet_contains"]
-    )
+    wins = sum(1 for r in rows if r["paragraph_contains"] and not r["snippet_contains"])
     losses = sum(
-        1 for r in rows
-        if r["snippet_contains"] and not r["paragraph_contains"]
+        1 for r in rows if r["snippet_contains"] and not r["paragraph_contains"]
     )
-    ties = sum(
-        1 for r in rows
-        if r["snippet_contains"] == r["paragraph_contains"]
-    )
+    ties = sum(1 for r in rows if r["snippet_contains"] == r["paragraph_contains"])
     print(f"\n  Queries: {n} across {pdf_count} PDF(s).")
-    print(f"  Head-to-head: paragraph wins {wins},"
-          f" snippet wins {losses}, ties {ties}")
+    print(
+        f"  Head-to-head: paragraph wins {wins}," f" snippet wins {losses}, ties {ties}"
+    )
+
+    excerpt_containment = cells["paragraph"]["all"]
+    bbox_containment = cells["bbox"]["all"]
+    print(
+        f"\n  excerpt_containment={excerpt_containment:.3f}"
+        f"  bbox_containment={bbox_containment:.3f}"
+    )
 
 
 def print_gate_verdict(verdict: dict) -> None:
@@ -270,7 +329,11 @@ def print_gate_verdict(verdict: dict) -> None:
     print("=" * 60)
     print(f"GATE VERDICT: {'PASS' if verdict['pass'] else 'FAIL'}")
     print("=" * 60)
-    for clause_key in ("clause_1_containment", "clause_2_regressions"):
+    for clause_key in (
+        "clause_1_containment",
+        "clause_2_regressions",
+        "clause_3_bbox_fidelity",
+    ):
         c = verdict[clause_key]
         marker = "✓" if c["pass"] else "✗"
         detail = {k: v for k, v in c.items() if k != "pass"}

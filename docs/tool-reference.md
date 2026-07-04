@@ -366,7 +366,7 @@ The first call on a new document embeds all pages or builds the section index (o
 - `query` (string, required) — Text to search for.
 - `mode` (string, optional, default `"auto"`):
   - `"auto"` — hybrid Reciprocal Rank Fusion (RRF) when `pdf-mcp[semantic]` is installed; keyword-only otherwise. Transparent fallback.
-  - `"keyword"` — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms.
+  - `"keyword"` — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms. Ranking is document-local — BM25 reflects only the queried PDF, so page/section order is stable regardless of what else is cached.
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
 

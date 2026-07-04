@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two tools consistent. Two *different* images that happen to share identical
   pixels are still reported separately (dedup is by object identity, not
   content).
+- Keyword-mode `pdf_search` ranking is now document-local: page and section
+  order no longer depends on other PDFs in the cache. Previously FTS5 `bm25()`
+  computed IDF over the whole shared index, so the same query on the same PDF
+  could rank pages differently as the cache grew ([#17](https://github.com/jztan/pdf-mcp/issues/17)).
+
+### Contributors
+- @ebbsanchez — confirmed the bug on `develop` and supplied a minimal cache-only reproduction ([#17](https://github.com/jztan/pdf-mcp/issues/17))
 
 ## [1.19.1] - 2026-07-04
 ### Added

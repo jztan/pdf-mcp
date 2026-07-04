@@ -1270,3 +1270,146 @@ def test_get_section_embeddings_coverage(tmp_path):
         model="m",
     )
     assert cache.get_section_embeddings_coverage(str(pdf_path)) == 2
+
+
+def _touch_pdf(tmp_path, name):
+    p = tmp_path / name
+    p.write_bytes(b"%PDF-1.4\n")
+    return str(p)
+
+
+class TestKeywordRankingCacheInvariance:
+    def test_porter_page_order_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
+        target = _touch_pdf(tmp_path, "target.pdf")
+        cache.save_pages_text(
+            target,
+            {0: "alpha " * 12 + "beta", 1: "alpha " + "beta " * 12},
+        )
+        before = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+
+        for i in range(20):
+            cache.save_pages_text(
+                _touch_pdf(tmp_path, f"noise_{i}.pdf"), {0: "beta " * 20}
+            )
+        after = [r["page"] for r in cache.search_fts(target, "alpha beta", 10, 100)]
+
+        assert before == after
+        assert before[0] == 2  # page 2 (beta-dense) ranks first, cache-invariant
+
+    def test_cjk_page_order_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
+        target = _touch_pdf(tmp_path, "cjk_target.pdf")
+        # Both pages hold the contiguous phrase 厚木基地 (so both survive the
+        # CJK contiguity excerpt filter) but with asymmetric term frequency:
+        # page 0 is 厚木-dense, page 1 is 基地-dense.
+        cache.save_page_text(target, 0, "厚木基地 " + "厚木 " * 11)
+        cache.save_page_text(target, 1, "厚木基地 " + "基地 " * 11)
+        before = cache.search_fts(target, "厚木 基地", 10, 100)
+
+        # 基地-only noise inflates 基地's table-wide document frequency, which
+        # drops its IDF in the SHARED index and drifts the two-term ranking.
+        for i in range(20):
+            noise = _touch_pdf(tmp_path, f"cjk_noise_{i}.pdf")
+            cache.save_page_text(noise, 0, "基地 " * 20)
+        after = cache.search_fts(target, "厚木 基地", 10, 100)
+
+        before_pairs = [(r["page"], r["score"]) for r in before]
+        after_pairs = [(r["page"], r["score"]) for r in after]
+        assert before_pairs == after_pairs
+
+    def test_porter_section_scores_unaffected_by_other_cached_pdfs(
+        self, cache, tmp_path
+    ):
+        from pdf_mcp.section_detector import Section
+
+        target = "/tmp/sec_target.pdf"
+        cache.index_sections(
+            target,
+            [
+                Section(
+                    title="Intro",
+                    start_page=1,
+                    end_page=1,
+                    text="alpha " * 12 + "beta",
+                    title_source="heuristic",
+                ),
+                Section(
+                    title="Methods",
+                    start_page=2,
+                    end_page=2,
+                    text="alpha " + "beta " * 12,
+                    title_source="heuristic",
+                ),
+            ],
+        )
+        before = [
+            (r["section_id"], r["score"])
+            for r in cache.search_section_fts(target, "alpha beta", 10)
+        ]
+
+        for i in range(20):
+            cache.index_sections(
+                f"/tmp/sec_noise_{i}.pdf",
+                [
+                    Section(
+                        title="N",
+                        start_page=1,
+                        end_page=1,
+                        text="beta " * 20,
+                        title_source="heuristic",
+                    )
+                ],
+            )
+        after = [
+            (r["section_id"], r["score"])
+            for r in cache.search_section_fts(target, "alpha beta", 10)
+        ]
+
+        assert before == after
+
+    def test_cjk_section_scores_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
+        from pdf_mcp.section_detector import Section
+
+        target = "/tmp/cjk_sec_target.pdf"
+        cache.index_sections(
+            target,
+            [
+                Section(
+                    title="厚木セクション",
+                    start_page=1,
+                    end_page=1,
+                    text="厚木基地 " + "厚木 " * 11,
+                    title_source="heuristic",
+                ),
+                Section(
+                    title="基地セクション",
+                    start_page=2,
+                    end_page=2,
+                    text="厚木基地 " + "基地 " * 11,
+                    title_source="heuristic",
+                ),
+            ],
+        )
+        before = [
+            (r["section_id"], r["score"])
+            for r in cache.search_section_fts(target, "厚木 基地", 10)
+        ]
+
+        for i in range(20):
+            cache.index_sections(
+                f"/tmp/cjk_sec_noise_{i}.pdf",
+                [
+                    Section(
+                        title="N",
+                        start_page=1,
+                        end_page=1,
+                        text="基地 " * 20,
+                        title_source="heuristic",
+                    )
+                ],
+            )
+        after = [
+            (r["section_id"], r["score"])
+            for r in cache.search_section_fts(target, "厚木 基地", 10)
+        ]
+
+        assert before == after

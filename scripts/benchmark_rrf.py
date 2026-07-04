@@ -17,8 +17,10 @@ Always exits 0 (informational report, no CI gate).
 
 import argparse
 import contextlib
+import glob
 import json
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -830,6 +832,60 @@ def run_gate(update_baseline: bool) -> int:
     return 0
 
 
+def run_invariance() -> int:
+    """
+    Prove keyword-mode NDCG on the graded corpus is unaffected by unrelated PDFs
+    sharing the cache — an end-to-end (through pdf_search) invariance guard for
+    the per-document FTS/IDF fix (issue #17).
+
+    Runs fully offline: seeds from the already-warm gate cache (which holds the
+    graded corpus's text + embeddings + downloads) instead of hitting arXiv.
+    """
+    if not _GATE_CACHE_DIR.exists():
+        print(
+            f"ERROR: gate cache not found at {_GATE_CACHE_DIR}. "
+            "Run 'uv run python scripts/benchmark_rrf.py --graded' first "
+            "to warm it (requires network to fetch the corpus PDFs)."
+        )
+        return 1
+
+    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
+    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="pdf-mcp-invariance-"))
+    tmp_copy_dir = tmp_dir / "cache"
+    try:
+        shutil.copytree(_GATE_CACHE_DIR, tmp_copy_dir)
+        with _isolated_corpus_cache(tmp_copy_dir):
+            clean = run_graded(corpus, gt, modes=("keyword",))
+
+            noise_pdfs = sorted(glob.glob("benchmark_data/.reading_order_pdfs/*.pdf"))[
+                :20
+            ]
+            for p in noise_pdfs:
+                pdf_search(p, "the", mode="keyword", max_results=1)
+
+            noisy = run_graded(corpus, gt, modes=("keyword",))
+
+        drifted = []
+        for qid, clean_modes in clean["per_query"].items():
+            clean_ndcg = clean_modes["keyword"]
+            noisy_ndcg = noisy["per_query"][qid]["keyword"]
+            if abs(clean_ndcg - noisy_ndcg) >= 1e-9:
+                drifted.append((qid, clean_ndcg, noisy_ndcg))
+
+        if drifted:
+            print("Keyword ranking drifted when unrelated PDFs shared the cache:")
+            for qid, clean_ndcg, noisy_ndcg in drifted:
+                print(f"  - {qid}: {clean_ndcg:.6f} -> {noisy_ndcg:.6f}")
+            return 1
+
+        print("Keyword ranking is cache-invariant across the graded corpus. OK.")
+        return 0
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -853,7 +909,18 @@ def main() -> None:
         action="store_true",
         help="Update baseline file when used with --graded",
     )
+    parser.add_argument(
+        "--invariance",
+        action="store_true",
+        help=(
+            "Offline check: keyword NDCG on the graded corpus is unchanged when "
+            "unrelated PDFs share the cache (seeds from the warm gate cache)"
+        ),
+    )
     args = parser.parse_args()
+
+    if args.invariance:
+        sys.exit(run_invariance())
 
     if args.graded:
         sys.exit(run_gate(args.update_baseline))

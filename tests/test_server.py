@@ -3578,3 +3578,67 @@ def test_bbox_to_clip_clamps_and_rounds():
 
     clip = _bbox_to_clip([-10.0, -10.0, 700.0, 900.0], [0.0, 0.0, 612.0, 792.0])
     assert clip == [0.0, 0.0, 1.0, 1.0]
+
+
+def test_read_pages_page_rect_and_image_clip(isolated_server, sample_pdf_with_images):
+    from pdf_mcp import server
+
+    res = server.pdf_read_pages(sample_pdf_with_images, "1")
+    page = res["pages"][0]
+    assert "page_rect" in page and len(page["page_rect"]) == 4
+    img = page["images"][0]
+    assert "bbox" in img
+    assert "clip" in img
+    assert img["clip"] == server._bbox_to_clip(img["bbox"], page["page_rect"])
+
+
+def test_read_pages_table_bbox_and_clip(isolated_server, tmp_path):
+    import pymupdf
+    from pdf_mcp import server
+
+    pdf = tmp_path / "tbl.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    # a simple ruled table PyMuPDF find_tables can detect
+    page.insert_text((72, 100), "Q1\tQ2\tQ3")
+    page.draw_line((72, 90), (300, 90))
+    page.draw_line((72, 130), (300, 130))
+    for x in (72, 148, 224, 300):
+        page.draw_line((x, 90), (x, 130))
+    doc.save(str(pdf))
+    doc.close()
+
+    res = server.pdf_read_pages(str(pdf), "1")
+    page0 = res["pages"][0]
+    if page0["tables"]:  # detection is heuristic; only assert when found
+        t = page0["tables"][0]
+        assert "bbox" in t
+        assert "clip" in t
+        assert t["clip"] == server._bbox_to_clip(t["bbox"], page0["page_rect"])
+
+
+def test_search_clip_renders_region(isolated_server, tmp_path):
+    from pdf_mcp import server
+    import pymupdf
+
+    pdf = tmp_path / "e2e.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text(
+        (72, 300),
+        "Distinctive marker phrase greppable target "
+        "sitting in the middle of the page body.",
+        fontsize=12,
+    )
+    doc.save(str(pdf))
+    doc.close()
+
+    hit = server.pdf_search(
+        str(pdf),
+        "distinctive marker phrase greppable",
+        mode="keyword",
+        excerpt_style="paragraph",
+    )["matches"][0]
+    out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
+    assert isinstance(out, list) and out
+    assert "error" not in out[0]

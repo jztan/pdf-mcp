@@ -977,21 +977,40 @@ def pdf_read_pages(
             # PDF_MCP_CACHE_DIR changes; basenames are content-addressed
             # and stable. Callers that need bytes locate the file under
             # `cache.images_dir` (reported by pdf_cache_stats).
-            sanitized_images = [
-                {
+            _pr = doc[page_num].rect
+            page_rect_list = [
+                round(_pr.x0, 1),
+                round(_pr.y0, 1),
+                round(_pr.x1, 1),
+                round(_pr.y1, 1),
+            ]
+
+            sanitized_images = []
+            for img in page_images:
+                d = {
                     **{k: v for k, v in img.items() if k != "path"},
                     "image_id": Path(img["path"]).name,
                 }
-                for img in page_images
-            ]
+                if "bbox" in d:
+                    d["clip"] = _bbox_to_clip(d["bbox"], page_rect_list)
+                sanitized_images.append(d)
+
+            tables_out = []
+            for t in page_tables:
+                t2 = dict(t)
+                if "bbox" in t2:
+                    t2["clip"] = _bbox_to_clip(t2["bbox"], page_rect_list)
+                tables_out.append(t2)
+
             page_result: dict[str, Any] = {
                 "page": page_num + 1,
                 "text": text,
                 "chars": len(text),
                 "images": sanitized_images,
                 "image_count": len(sanitized_images),
-                "tables": page_tables,
-                "table_count": len(page_tables),
+                "tables": tables_out,
+                "table_count": len(tables_out),
+                "page_rect": page_rect_list,
             }
             if page_source is not None:
                 page_result["source"] = page_source

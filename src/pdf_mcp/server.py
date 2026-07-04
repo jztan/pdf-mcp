@@ -25,6 +25,7 @@ from . import content_trust
 from .cache import PDFCache
 from .config import PDFConfig
 from .extractor import (
+    block_bbox_for_index,
     check_tesseract_available,
     estimate_tokens,
     extract_images_from_page,
@@ -1377,14 +1378,29 @@ def _upgrade_excerpts_to_paragraphs(
                 block_text, block_idx = alt_text, alt_idx
 
         if block_text is not None and block_idx is not None:
+            geom: dict[str, Any] = {}
+            bbox = block_bbox_for_index(page, block_idx)
+            if bbox is not None:
+                r = page.rect
+                page_rect = [
+                    round(r.x0, 1),
+                    round(r.y0, 1),
+                    round(r.x1, 1),
+                    round(r.y1, 1),
+                ]
+                geom = {
+                    "bbox": list(bbox),
+                    "page_rect": page_rect,
+                    "clip": _bbox_to_clip(bbox, page_rect),
+                }
             key = (m["page"], block_idx)
             if key in seen:
                 existing_idx = seen[key]
                 if m.get("score", 0) > upgraded[existing_idx].get("score", 0):
-                    upgraded[existing_idx] = {**m, "excerpt": block_text}
+                    upgraded[existing_idx] = {**m, "excerpt": block_text, **geom}
                 continue
             seen[key] = len(upgraded)
-            upgraded.append({**m, "excerpt": block_text})
+            upgraded.append({**m, "excerpt": block_text, **geom})
         else:
             upgraded.append(m)
 

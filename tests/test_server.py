@@ -3029,6 +3029,159 @@ class TestExcerptStyle:
             os.unlink(f.name)
 
 
+class TestSearchGeometry:
+    """Paragraph-style pdf_search hits carry bbox/page_rect/clip evidence."""
+
+    def test_search_paragraph_hit_has_geometry(self, isolated_server, tmp_path):
+        from pdf_mcp import server
+
+        pdf = tmp_path / "geo.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Revenue recognition follows the transfer of control to the "
+            "customer over time as obligations are satisfied.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "Unrelated second block about depreciation schedules and "
+            "useful life estimates for fixed assets.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+
+        res = pdf_search(
+            str(pdf),
+            "revenue recognition control",
+            mode="keyword",
+            excerpt_style="paragraph",
+        )
+        hit = res["matches"][0]
+        assert "bbox" in hit and len(hit["bbox"]) == 4
+        assert "page_rect" in hit and hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
+        assert "clip" in hit and len(hit["clip"]) == 4
+        # clip is the server-computed fraction of bbox within page_rect
+        assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+        # bbox round-trips: clip region re-extracts the excerpt
+        # (punctuation-normalized)
+        d2 = pymupdf.open(str(pdf))
+        clip_txt = d2[0].get_text(clip=pymupdf.Rect(hit["bbox"]))
+        d2.close()
+
+        def norm(s: str) -> str:
+            return " ".join(s.lower().replace("-", " ").split())
+
+        assert norm(hit["excerpt"])[:40] in norm(clip_txt)
+
+    @pytest.mark.parametrize("mode", ["keyword", "semantic", "auto"])
+    def test_search_geometry_all_modes(self, isolated_server, tmp_path, mode):
+        if mode == "semantic":
+            try:
+                import fastembed  # noqa: F401
+            except ImportError:
+                pytest.skip("fastembed not installed")
+
+        pdf = tmp_path / f"geo_{mode}.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Transformer models use scaled dot product attention "
+            "across multiple heads in parallel.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "Convolutional networks apply learned filters over "
+            "local receptive fields of the input.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf),
+            "scaled dot product attention",
+            mode=mode,
+            excerpt_style="paragraph",
+        )
+        assert res["matches"], f"no matches in {mode} mode"
+        assert "bbox" in res["matches"][0]
+        assert "clip" in res["matches"][0]
+
+    def test_search_snippet_style_has_no_geometry(self, isolated_server, tmp_path):
+        pdf = tmp_path / "snip.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 200),
+            "Alpha beta gamma delta epsilon revenue recognition zeta eta " "theta.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf), "revenue recognition", mode="keyword", excerpt_style="snippet"
+        )
+        assert "bbox" not in res["matches"][0]
+        assert "page_rect" not in res["matches"][0]
+        assert "clip" not in res["matches"][0]
+
+    def test_search_bbox_is_picked_block_not_first_term(
+        self, isolated_server, tmp_path
+    ):
+        # Two blocks both contain "model"; picker should choose the
+        # query-dense block and bbox must belong to THAT block.
+        pdf = tmp_path / "multi.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        page.insert_text(
+            (72, 150),
+            "The model is mentioned here once briefly.",
+            fontsize=11,
+        )
+        page.insert_text(
+            (72, 500),
+            "The language model was pretrained then the model was "
+            "fine-tuned and the model was evaluated.",
+            fontsize=11,
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf),
+            "model pretrained fine-tuned evaluated",
+            mode="keyword",
+            excerpt_style="paragraph",
+        )
+        hit = res["matches"][0]
+        # bbox's vertical position should be the lower (second) block
+        assert hit["bbox"][1] > 300
+
+    def test_search_geometry_cjk_vertical(self, isolated_server, tmp_path):
+        pdf = tmp_path / "cjk.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=612, height=792)
+        # horizontal CJK block with a distinctive term
+        page.insert_text(
+            (72, 200),
+            "厚木基地 の 面積 と 歴史 について 説明 します。",
+            fontsize=14,
+            fontname="japan-s",
+        )
+        doc.save(str(pdf))
+        doc.close()
+        res = pdf_search(
+            str(pdf), "厚木基地", mode="keyword", excerpt_style="paragraph"
+        )
+        assert res["matches"], "CJK keyword search returned no hits"
+        hit = res["matches"][0]
+        assert "bbox" in hit and len(hit["bbox"]) == 4
+        assert hit["bbox"][2] > hit["bbox"][0] and hit["bbox"][3] > hit["bbox"][1]
+
+
 class TestOcrParallelOrchestration:
     def _two_page_scanned(self, tmp_path):
         import base64

@@ -4,7 +4,7 @@
 
 - **Current version:** v1.19.1 (released 2026-07-04)
 - **MCP Registry:** Published
-- **Test suite:** 948 tests across unit, integration, and retrieval-quality benchmarks (944 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Test suite:** 952 tests across unit, integration, and retrieval-quality benchmarks (948 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
 - **Tools:** `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
 
 ---
@@ -16,6 +16,8 @@ No release branch open. Merged on `develop` (CHANGELOG `[Unreleased]`), awaiting
 - **Bounding-box evidence on search hits and read pages.** Paragraph-style page-mode `pdf_search` hits now carry source geometry: `bbox` (absolute PDF points), `page_rect`, and a server-computed `clip` (page fractions) that pastes straight into `pdf_render_pages(clip=...)` to render just that region — no client-side coordinate math. Snippet-style and section hits are unchanged. `pdf_read_pages` images and tables carry `bbox` + `clip` too (multi-placement images list all rects under `placements`), and every page carries `page_rect`. The coordinate convention is backed by a shifted-MediaBox e2e test, `pdf_render_pages` accepts a stringified clip array (some MCP clients stringify list args), and the excerpt-quality benchmark gained a bbox-containment gate plus a multi-column corpus. Existing caches re-extract images once to populate geometry (a `page_images`-only rebuild; text and embeddings untouched). Closes the citable-source-coordinates gap surfaced by competitive analysis — several competing PDF MCP servers already ship coordinates on hits.
 
 - **Image xref dedup.** Repeated placements of the same embedded image (logos, watermarks) no longer produce N identical extracted PNGs: images dedup by PDF object reference (xref) with contiguous re-indexing, and `pdf_info`'s `raster_images_per_page` counts distinct images the same way so the two tools stay consistent. Dedup is by object identity, not pixel content.
+
+- **Document-local keyword ranking ([#17](https://github.com/jztan/pdf-mcp/issues/17)).** Keyword-mode `pdf_search` page and section ranking no longer depends on other cached PDFs. FTS5 `bm25()` derived IDF from the whole shared index, so the same query on the same PDF could rank pages differently as the cache grew; ranking now runs `bm25()` against a connection-local temp FTS index scoped to the queried document (all four porter/CJK page/section arms), making IDF document-local with no schema change, migration, or re-extraction. Re-baselined the RRF v2 keyword-NDCG gate (only 5/28 queries re-rank, aggregate flat) and added an offline cache-invariance benchmark guard. Reported and reproduced by @ebbsanchez.
 
 Cut from develop via `python scripts/release.py minor` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md) — the `[Unreleased]` block already documents all entries.
 
@@ -80,4 +82,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-07-04 (v1.19.0 + v1.19.1 released same day — v1.19.0 never reached PyPI due to the pymupdf4llm 1.28 `find_tables` regression, v1.19.1 carries it. Merged to `develop` for 1.20.0 — **bbox/clip source geometry** on paragraph search hits and `pdf_read_pages` images/tables (+ per-page `page_rect`); **image xref dedup**. Test count 943→948)
+**Last Updated:** 2026-07-05 (Merged to `develop` for 1.20.0 — **bbox/clip source geometry** on paragraph search hits and `pdf_read_pages` images/tables (+ per-page `page_rect`); **image xref dedup**; **document-local keyword ranking** ([#17](https://github.com/jztan/pdf-mcp/issues/17), reported + reproduced by @ebbsanchez — closed). Test count 948→952. Prior: v1.19.0 + v1.19.1 released 2026-07-04 same day — v1.19.0 never reached PyPI due to the pymupdf4llm 1.28 `find_tables` regression, v1.19.1 carries it.)

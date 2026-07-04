@@ -837,17 +837,38 @@ def extract_images_from_page(
                 )
                 continue
 
-            images.append(
-                {
-                    "page": page_num + 1,  # 1-indexed for output
-                    "index": kept_index,
-                    "width": pix.width,
-                    "height": pix.height,
-                    "format": color_format,
-                    "path": str(file_path),
-                    "size_bytes": file_path.stat().st_size,
-                }
-            )
+            img_dict: dict[str, Any] = {
+                "page": page_num + 1,  # 1-indexed for output
+                "index": kept_index,
+                "width": pix.width,
+                "height": pix.height,
+                "format": color_format,
+                "path": str(file_path),
+                "size_bytes": file_path.stat().st_size,
+            }
+            try:
+                rects = page.get_image_rects(xref)
+            except Exception:
+                rects = []
+            if rects:
+                p = rects[0]
+                img_dict["bbox"] = [
+                    round(p.x0, 1),
+                    round(p.y0, 1),
+                    round(p.x1, 1),
+                    round(p.y1, 1),
+                ]
+                if len(rects) > 1:
+                    img_dict["placements"] = [
+                        [
+                            round(r.x0, 1),
+                            round(r.y0, 1),
+                            round(r.x1, 1),
+                            round(r.y1, 1),
+                        ]
+                        for r in rects
+                    ]
+            images.append(img_dict)
             kept_index += 1
 
         except (ValueError, RuntimeError, KeyError) as e:

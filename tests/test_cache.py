@@ -512,6 +512,58 @@ class TestCacheCoverageEdgeCases:
         assert "file_path_on_disk" in columns
         assert "data" not in columns
 
+    def test_old_page_images_without_geometry_is_dropped(self, tmp_path):
+        """Pre-geometry page_images (no geometry_json) is dropped & rebuilt."""
+        import sqlite3
+
+        db_path = tmp_path / "cache.db"
+        # Simulate a pre-geometry page_images table (no geometry_json column).
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "CREATE TABLE page_images (file_path TEXT, page_num INTEGER,"
+                " image_index INTEGER, file_mtime REAL, width INTEGER,"
+                " height INTEGER, format TEXT, file_path_on_disk TEXT,"
+                " size_bytes INTEGER)"
+            )
+            conn.execute(
+                "INSERT INTO page_images VALUES" " ('p',0,0,1.0,1,1,'rgb','/x.png',1)"
+            )
+
+        PDFCache(cache_dir=tmp_path, ttl_hours=1)  # init runs migrations
+
+        with sqlite3.connect(db_path) as conn:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(page_images)")]
+            rows = conn.execute("SELECT COUNT(*) FROM page_images").fetchone()[0]
+        assert "geometry_json" in cols  # rebuilt with new schema
+        assert rows == 0  # old rows dropped -> forces re-extraction
+
+    def test_page_images_cache_roundtrips_geometry(self, cache, sample_pdf, tmp_path):
+        """bbox/placements survive a save_page_images -> get_page_images round trip."""
+        img_path = tmp_path / "img0.png"
+        img_path.write_bytes(b"x")
+        imgs = [
+            {
+                "index": 0,
+                "width": 1,
+                "height": 1,
+                "format": "rgb",
+                "path": str(img_path),
+                "size_bytes": 10,
+                "bbox": [50.0, 50.0, 80.0, 80.0],
+                "placements": [
+                    [50.0, 50.0, 80.0, 80.0],
+                    [120.0, 120.0, 150.0, 150.0],
+                ],
+            }
+        ]
+        cache.save_page_images(sample_pdf, 0, imgs)
+        got = cache.get_page_images(sample_pdf, 0)
+        assert got[0]["bbox"] == [50.0, 50.0, 80.0, 80.0]
+        assert got[0]["placements"] == [
+            [50.0, 50.0, 80.0, 80.0],
+            [120.0, 120.0, 150.0, 150.0],
+        ]
+
     def test_sentinel_save_handles_already_deleted_file(
         self, cache, sample_pdf, tmp_path
     ):

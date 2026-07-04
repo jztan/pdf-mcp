@@ -300,6 +300,30 @@ class TestExtractImagesFromPage:
         assert [img["index"] for img in images] == [0, 1]
         assert len(list(tmp_path.glob("*.png"))) == 2
 
+    def test_extract_images_single_placement_bbox(
+        self, sample_pdf_with_images, tmp_path
+    ):
+        """Single-placement image gets a bbox but no placements list."""
+        doc = pymupdf.open(sample_pdf_with_images)
+        imgs = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="h")
+        doc.close()
+        assert imgs
+        img = imgs[0]
+        assert "bbox" in img and len(img["bbox"]) == 4
+        # inserted at Rect(50,50,80,80)
+        assert abs(img["bbox"][0] - 50) < 2 and abs(img["bbox"][1] - 50) < 2
+        assert "placements" not in img  # single placement
+
+    def test_extract_images_multi_placement(self, sample_pdf_dup_image, tmp_path):
+        """Multi-placement image gets both bbox (first) and placements list."""
+        doc = pymupdf.open(sample_pdf_dup_image)
+        imgs = extract_images_from_page(doc, 0, output_dir=tmp_path, pdf_hash="h")
+        doc.close()
+        assert len(imgs) == 1  # deduped by xref
+        img = imgs[0]
+        assert "bbox" in img
+        assert "placements" in img and len(img["placements"]) == 2
+
     def test_cmyk_image_converted_to_rgb(self, tmp_path):
         """CMYK images are converted to RGB colorspace."""
         from PIL import Image

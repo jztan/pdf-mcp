@@ -1295,3 +1295,23 @@ class TestKeywordRankingCacheInvariance:
 
         assert before == after
         assert before[0] == 2  # page 2 (beta-dense) ranks first, cache-invariant
+
+    def test_cjk_page_order_unaffected_by_other_cached_pdfs(self, cache, tmp_path):
+        target = _touch_pdf(tmp_path, "cjk_target.pdf")
+        # Both pages hold the contiguous phrase 厚木基地 (so both survive the
+        # CJK contiguity excerpt filter) but with asymmetric term frequency:
+        # page 0 is 厚木-dense, page 1 is 基地-dense.
+        cache.save_page_text(target, 0, "厚木基地 " + "厚木 " * 11)
+        cache.save_page_text(target, 1, "厚木基地 " + "基地 " * 11)
+        before = cache.search_fts(target, "厚木 基地", 10, 100)
+
+        # 基地-only noise inflates 基地's table-wide document frequency, which
+        # drops its IDF in the SHARED index and drifts the two-term ranking.
+        for i in range(20):
+            noise = _touch_pdf(tmp_path, f"cjk_noise_{i}.pdf")
+            cache.save_page_text(noise, 0, "基地 " * 20)
+        after = cache.search_fts(target, "厚木 基地", 10, 100)
+
+        before_pairs = [(r["page"], r["score"]) for r in before]
+        after_pairs = [(r["page"], r["score"]) for r in after]
+        assert before_pairs == after_pairs

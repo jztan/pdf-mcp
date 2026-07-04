@@ -1558,13 +1558,13 @@ class PDFCache:
             escaped = _escape_fts5_query_cjk(query)
             with sqlite3.connect(self.db_path) as conn:
                 try:
+                    self._build_temp_page_fts(conn, path, cjk=True)
                     rows = conn.execute(
-                        "SELECT page_num, -bm25(pdf_search_fts_cjk)"
-                        " FROM pdf_search_fts_cjk"
-                        " WHERE pdf_search_fts_cjk MATCH ? AND file_path = ?"
-                        " ORDER BY bm25(pdf_search_fts_cjk)"
-                        " LIMIT ?",
-                        (escaped, path, max_results),
+                        "SELECT page_num, -bm25(doc_fts)"
+                        " FROM doc_fts"
+                        " WHERE doc_fts MATCH ?"
+                        " ORDER BY bm25(doc_fts) LIMIT ?",
+                        (escaped, max_results),
                     ).fetchall()
                 except sqlite3.OperationalError:
                     return []

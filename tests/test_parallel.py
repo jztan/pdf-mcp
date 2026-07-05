@@ -125,6 +125,9 @@ class TestRunPages:
             def map(self, *a, **k):
                 raise BrokenProcessPool("worker died")
 
+            def submit(self, worker, arg):
+                raise BrokenProcessPool("worker died")
+
         monkeypatch.setattr("pdf_mcp.parallel.ProcessPoolExecutor", _BoomPool)
         # Falls back to in-parent sequential, still returns correct results.
         out = run_pages(_square, [2, 3, 4], max_workers=4)

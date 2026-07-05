@@ -67,6 +67,7 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
             f"Downloaded PDF has zero pages — likely a truncated file: {url}"
         )
 
+
 _BLOCKED_NETWORKS = (
     ipaddress.ip_network("127.0.0.0/8"),  # IPv4 loopback
     ipaddress.ip_network("10.0.0.0/8"),  # RFC 1918
@@ -346,9 +347,7 @@ class URLFetcher:
                     rebuilt = parsed._replace(netloc=rebuilt_netloc).geturl()
 
                     request_headers = {"Host": parsed.netloc}
-                    request_extensions: dict[str, Any] = {
-                        "sni_hostname": hostname
-                    }
+                    request_extensions: dict[str, Any] = {"sni_hostname": hostname}
 
                     with client.stream(
                         "GET",
@@ -360,16 +359,12 @@ class URLFetcher:
                             location = response.headers.get("location")
                             if not location:
                                 raise ValueError("Redirect with no target URL")
-                            current_url = str(
-                                httpx.URL(current_url).join(location)
-                            )
+                            current_url = str(httpx.URL(current_url).join(location))
                             continue
 
                         response.raise_for_status()
 
-                        early_ct = (
-                            response.headers.get("content-type", "").lower()
-                        )
+                        early_ct = response.headers.get("content-type", "").lower()
                         if any(
                             early_ct.startswith(p)
                             for p in _DENIED_CONTENT_TYPE_PREFIXES
@@ -407,9 +402,7 @@ class URLFetcher:
                                 )
                         break
                 else:
-                    raise ValueError(
-                        f"Too many redirects (max {MAX_REDIRECTS})"
-                    )
+                    raise ValueError(f"Too many redirects (max {MAX_REDIRECTS})")
 
             try:
                 _validate_pdf_content(content, url)
@@ -423,6 +416,7 @@ class URLFetcher:
         filename = self._get_cache_filename(url)
         local_path = self.cache_dir / filename
 
+        assert content is not None, "content must be set before cache write"
         fd = os.open(str(local_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             os.write(fd, content)

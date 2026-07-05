@@ -11,6 +11,7 @@ Usage:
 import base64
 import hashlib
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -44,6 +45,8 @@ from .extractor import _ocr_page_worker, _render_page_worker
 from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
+
+logger = logging.getLogger(__name__)
 
 # Safety limits for parameters
 MAX_PAGES_LIMIT = 500
@@ -906,8 +909,11 @@ def pdf_read_pages(
                             doc_local = pymupdf.open(local_path)
                             try:
                                 from .extractor import _TESSDATA_PATH
+
                                 txt = ocr_page(
-                                    doc_local, n, lang=ocr_lang,
+                                    doc_local,
+                                    n,
+                                    lang=ocr_lang,
                                     tessdata=_TESSDATA_PATH,
                                 )
                                 ocr_results[n] = txt
@@ -976,9 +982,7 @@ def pdf_read_pages(
                         page_source = "ocr_failed"
                     else:
                         text = res
-                        cache.save_page_text(
-                            local_path, page_num, text, source="ocr"
-                        )
+                        cache.save_page_text(local_path, page_num, text, source="ocr")
                         page_source = "ocr"
             elif page_num in cached_texts:
                 text = cached_texts[page_num]

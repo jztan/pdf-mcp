@@ -61,13 +61,16 @@ def _resolve_tessdata() -> str | None:
     so search both.
     """
     import subprocess
+
     try:
         env_path = os.environ.get("TESSDATA_PREFIX")
         if env_path and os.path.isdir(env_path):
             return env_path
         result = subprocess.run(
             ["tesseract", "--list-langs"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         match = re.search(
             r'List of available languages in "(.+)"',
@@ -1065,7 +1068,9 @@ def _ocr_page_worker(
     try:
         doc = pymupdf.open(path)
         try:
-            return page_num, ocr_page(doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata)
+            return page_num, ocr_page(
+                doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata
+            )
         finally:
             doc.close()
     except Exception as exc:  # noqa: BLE001 - deliberate per-page isolation

@@ -61,10 +61,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   owner-password-only PDFs still get full validation), and closes the document
   via `finally` so the corrupt-PDF path no longer leaks it
   ([#19](https://github.com/jztan/pdf-mcp/issues/19)).
+- A hung OCR/render worker can no longer hang `pdf_read_pages`. `run_pages()`
+  previously re-ran pages left incomplete by a pool timeout/crash *in the
+  parent process with no timeout*, so a page stuck in Tesseract's native call
+  blocked forever (and a segfault-on-retry crashed the server). Incomplete
+  pages now run in a killable `multiprocessing` child bounded by a per-page
+  timeout; on timeout the child is terminated and the page is marked failed
+  (empty, retryable). The pool wait is now a per-page budget rather than a flat
+  total, and `render_page_as_png` writes atomically so a lingering worker can't
+  tear the PNG ([#20](https://github.com/jztan/pdf-mcp/issues/20)).
 
 ### Contributors
 - @ebbsanchez — confirmed the bug on `develop` and supplied a minimal cache-only reproduction ([#17](https://github.com/jztan/pdf-mcp/issues/17))
-- @VooDisss — diagnosed and fixed the Windows OCR failures (tessdata detection, cache poisoning, pool timeout, PDF validation) ([#18](https://github.com/jztan/pdf-mcp/pull/18)); root-caused the encrypted-PDF false-rejection and proposed the `needs_pass` short-circuit ([#19](https://github.com/jztan/pdf-mcp/issues/19))
+- @VooDisss — diagnosed and fixed the Windows OCR failures (tessdata detection, cache poisoning, pool timeout, PDF validation) ([#18](https://github.com/jztan/pdf-mcp/pull/18)); root-caused the encrypted-PDF false-rejection and proposed the `needs_pass` short-circuit ([#19](https://github.com/jztan/pdf-mcp/issues/19)); reported the residual hung-worker case in the #18 review ([#20](https://github.com/jztan/pdf-mcp/issues/20))
 
 ## [1.19.1] - 2026-07-04
 ### Added

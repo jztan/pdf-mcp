@@ -52,6 +52,14 @@ logger = logging.getLogger(__name__)
 _TESSDATA_PATH: str | None = None
 
 
+def _has_traineddata(path: str) -> bool:
+    """Check if path contains any .traineddata files."""
+    try:
+        return any(f.endswith(".traineddata") for f in os.listdir(path))
+    except OSError:
+        return False
+
+
 def _resolve_tessdata() -> str | None:
     """Find tessdata directory via safe subprocess call (no shell=True).
 
@@ -59,12 +67,21 @@ def _resolve_tessdata() -> str | None:
     then falls back to deriving from the tesseract binary location.
     On Windows, `tesseract --list-langs` emits to stdout (not stderr),
     so search both.
+
+    TESSDATA_PREFIX may point to the Tesseract install root (the classic
+    convention) instead of the tessdata subfolder. If the candidate has no
+    *.traineddata files, append /tessdata as a fallback.
     """
     import subprocess
 
     try:
         env_path = os.environ.get("TESSDATA_PREFIX")
         if env_path and os.path.isdir(env_path):
+            if _has_traineddata(env_path):
+                return env_path
+            subdir = os.path.join(env_path, "tessdata")
+            if os.path.isdir(subdir) and _has_traineddata(subdir):
+                return subdir
             return env_path
         result = subprocess.run(
             ["tesseract", "--list-langs"],
@@ -1063,9 +1080,13 @@ def _ocr_page_worker(
     re-imports only PyMuPDF, never FastMCP.
 
     Args tuple: (path, page_num, lang, dpi, tessdata)
+
+    The tuple unpack is inside the try so a malformed tuple (e.g. from a
+    stale caller) produces a PageError instead of crashing the whole batch.
     """
-    path, page_num, lang, dpi, tessdata = args
+    page_num = args[1]  # safe fallback when unpack fails
     try:
+        path, page_num, lang, dpi, tessdata = args
         doc = pymupdf.open(path)
         try:
             return page_num, ocr_page(
@@ -1086,8 +1107,9 @@ def _render_page_worker(
     deterministic from pdf_hash+page+dpi, so concurrent workers never collide).
     Returns the render_info dict; the parent records SQLite metadata.
     """
-    path, page_num, out_dir, pdf_hash, dpi = args
+    page_num = args[1]  # safe fallback when unpack fails
     try:
+        path, page_num, out_dir, pdf_hash, dpi = args
         doc = pymupdf.open(path)
         try:
             info = render_page_as_png(doc, page_num, Path(out_dir), pdf_hash, dpi)

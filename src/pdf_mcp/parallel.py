@@ -67,19 +67,33 @@ def run_pages(
     max_workers <= 1 -> sequential list comprehension (no pool, no spawn cost).
     Else a fresh per-call ProcessPoolExecutor with per-future timeout.
     On BrokenProcessPool or TimeoutError (worker segfault, hang, OOM-kill),
-    fall back to running the full arg_list sequentially in-parent so the call
-    still completes.
+    keep results from already-completed futures and re-run only the
+    incomplete indices sequentially in-parent so the call still completes
+    without waiting on orphaned/hung workers.
     """
     if max_workers <= 1:
         return [worker(a) for a in arg_list]
 
+    pool: ProcessPoolExecutor | None = None
+    results: list[Any] = [None] * len(arg_list)
+    completed: set[int] = set()
+
     try:
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        pool = ProcessPoolExecutor(max_workers=max_workers)
+        try:
             futures = [pool.submit(worker, a) for a in arg_list]
-            results = [None] * len(arg_list)
             for f in as_completed(futures, timeout=timeout):
                 idx = futures.index(f)
                 results[idx] = f.result()
-            return results
-    except (BrokenProcessPool, TimeoutError):
-        return [worker(a) for a in arg_list]
+                completed.add(idx)
+        except (BrokenProcessPool, TimeoutError):
+            pass
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    for idx in range(len(arg_list)):
+        if idx not in completed:
+            results[idx] = worker(arg_list[idx])
+
+    return results

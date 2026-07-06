@@ -122,6 +122,9 @@ class TestRunPages:
             def __exit__(self, *a):
                 return False
 
+            def shutdown(self, **k):
+                pass
+
             def map(self, *a, **k):
                 raise BrokenProcessPool("worker died")
 

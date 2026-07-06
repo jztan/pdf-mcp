@@ -51,21 +51,27 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
 
     Raises PDFValidationError if the PDF cannot be opened, produces
     zero pages, or has no extractable content.
+    Encrypted PDFs pass validation but skip the content decompression
+    check (content is inaccessible without authentication).
     """
     try:
         doc = pymupdf.open(stream=content, filetype="pdf")
         page_count = len(doc)
-        # Access page content to trigger deferred stream decompression
-        doc[0].get_text()
+        if page_count == 0:
+            raise PDFValidationError(
+                f"Downloaded PDF has zero pages — likely a truncated file: {url}"
+            )
+        # Trigger deferred stream decompression (catches zlib corruption)
+        # but skip for encrypted PDFs — content is inaccessible without auth.
+        if not doc.is_encrypted:
+            doc[0].get_text()
         doc.close()
+    except PDFValidationError:
+        raise
     except Exception as exc:
         raise PDFValidationError(
             f"Downloaded PDF is corrupt and cannot be opened: {exc}"
         ) from exc
-    if page_count == 0:
-        raise PDFValidationError(
-            f"Downloaded PDF has zero pages — likely a truncated file: {url}"
-        )
 
 
 _BLOCKED_NETWORKS = (

@@ -2415,10 +2415,10 @@ class TestPdfReadPagesOcr:
                 call_count_second = mock_worker.call_count
         assert call_count_second == call_count_first  # not called again
 
-    def test_ocr_empty_result_cached_and_not_retriggered(
+    def test_ocr_empty_result_not_cached_and_retriggered(
         self, sample_pdf, isolated_server, monkeypatch
     ):
-        """Empty OCR result is cached as source='ocr'; subsequent call skips re-OCR."""
+        """Empty OCR result is NOT cached; subsequent calls re-trigger OCR."""
         import pdf_mcp.server as srv
         from unittest.mock import patch, MagicMock
 
@@ -2427,9 +2427,9 @@ class TestPdfReadPagesOcr:
         with patch("pdf_mcp.server.check_tesseract_available"):
             with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-                assert srv.cache.get_page_source(sample_pdf, 0) == "ocr"
+                assert srv.cache.get_page_source(sample_pdf, 0) is None  # NOT cached
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-        assert mock_worker.call_count == 1  # not called a second time
+        assert mock_worker.call_count == 2  # called again because not cached
 
     def test_ocr_skip_page_with_native_text(
         self, sample_pdf, isolated_server, monkeypatch
@@ -2484,7 +2484,7 @@ class TestPdfReadPagesOcr:
             with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
         assert len(captured) == 1
-        # args = (local_path, page_num, ocr_lang, dpi)
+        # args = (local_path, page_num, ocr_lang, dpi, tessdata)
         assert captured[0][2] == "fra"
 
     def test_ocr_text_searchable_via_pdf_search(

@@ -3247,6 +3247,56 @@ class TestOcrParallelOrchestration:
         )
         assert len(result["pages"]) == 2
 
+    def test_ocr_run_pages_bare_sentinel_is_isolated_and_not_cached(
+        self, isolated_server, tmp_path, monkeypatch
+    ):
+        """run_pages itself (not the worker) can yield a bare PageError
+
+        sentinel for a page it never ran (pool timeout/kill) rather than the
+        worker's usual (page_num, payload) tuple. pdf_read_pages must consume
+        that bare sentinel without raising, and treat it as an isolated,
+        non-cached OCR failure — same contract as a worker-reported error.
+
+        This guards the real zip/consumption code in server.py, not a
+        reimplementation of it: if that loop ever regressed to
+        `for pn, res in run_pages(...)` (unpacking each yielded item as a
+        2-tuple), the unpack would TypeError on the bare PageError (not
+        iterable). That TypeError is swallowed by the surrounding
+        `except Exception` — which then silently falls back to sequential
+        per-page `ocr_page()` calls — so the response shape alone would not
+        catch the regression. The `ocr_page` call-count assertion below
+        closes that gap: it fails if the fallback path was entered at all.
+        """
+        cache_instance, _ = isolated_server
+        path = self._two_page_scanned(tmp_path)
+
+        import pdf_mcp.server as srv
+        from unittest.mock import MagicMock
+
+        # No-op the Tesseract gate; run_pages itself is mocked below so no
+        # real worker/pool involvement is needed.
+        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(
+            srv,
+            "run_pages",
+            lambda *args, **kwargs: [PageError("timeout"), PageError("timeout")],
+        )
+        fallback_ocr_page = MagicMock(side_effect=AssertionError("should not run"))
+        monkeypatch.setattr(srv, "ocr_page", fallback_ocr_page)
+
+        result = pdf_read_pages(path, "1-2", ocr=True)
+
+        assert "error" not in result
+        sources = [p.get("source") for p in result["pages"]]
+        assert sources == ["ocr_failed", "ocr_failed"]
+        assert all(p["text"] == "" for p in result["pages"])
+        # Failure must NOT be cached -> page source still absent, and the
+        # call returned normally (bounded — no hang on the mocked pool).
+        assert cache_instance.get_pages_source(path, [0, 1]) == {}
+        # The bare sentinel must be consumed directly, never triggering the
+        # except-Exception sequential fallback (which would call ocr_page()).
+        fallback_ocr_page.assert_not_called()
+
 
 class TestRenderParallelOrchestration:
     def _multi_page_pdf(self, tmp_path, n=3):

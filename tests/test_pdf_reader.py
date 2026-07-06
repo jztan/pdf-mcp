@@ -1956,7 +1956,7 @@ class TestPageWorkers:
 
         # Nonexistent file -> pymupdf.open raises -> worker returns PageError.
         page_num, result = _ocr_page_worker(
-            (str(tmp_path / "missing.pdf"), 0, "eng", 300)
+            (str(tmp_path / "missing.pdf"), 0, "eng", 300, None)
         )
         assert page_num == 0
         assert isinstance(result, PageError)

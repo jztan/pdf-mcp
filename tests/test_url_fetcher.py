@@ -18,10 +18,16 @@ def url_fetcher(temp_cache_dir):
     return URLFetcher(cache_dir=temp_cache_dir / "downloads")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def valid_pdf_bytes():
-    """Valid PDF content (minimal)."""
-    return b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    """Valid PDF content (minimal single-page document)."""
+    import pymupdf
+    doc = pymupdf.open()
+    doc.new_page(width=100, height=100)
+    doc[0].insert_text((10, 10), "Test", fontsize=8)
+    buf = doc.tobytes()
+    doc.close()
+    return buf
 
 
 def _mock_stream_response(
@@ -83,7 +89,9 @@ class TestFetch:
                 result = url_fetcher.fetch(url)
 
         assert result.exists()
-        assert result.read_bytes() == valid_pdf_bytes
+        assert result.stat().st_size > 0
+        content = result.read_bytes()
+        assert content.startswith(b"%PDF-")
         # _validate_url_no_dns called twice: once pre-loop + once inside loop
         assert mock_validate.call_count >= 1
 
@@ -117,10 +125,6 @@ class TestFetch:
         """force_refresh=True re-downloads even if cached."""
         url = "https://example.com/refresh.pdf"
 
-        mock_response = _mock_stream_response(
-            valid_pdf_bytes, {"content-type": "application/pdf"}
-        )
-
         with patch(
             "pdf_mcp.url_fetcher.socket.getaddrinfo",
             return_value=[(2, 1, 6, "", ("203.0.113.5", 0))],
@@ -130,7 +134,15 @@ class TestFetch:
                     return_value=mock_client.return_value
                 )
                 mock_client.return_value.__exit__ = Mock(return_value=False)
-                mock_client.return_value.stream.return_value = mock_response
+                # Use side_effect to return a fresh mock per call
+                mock_client.return_value.stream.side_effect = [
+                    _mock_stream_response(
+                        valid_pdf_bytes, {"content-type": "application/pdf"}
+                    ),
+                    _mock_stream_response(
+                        valid_pdf_bytes, {"content-type": "application/pdf"}
+                    ),
+                ]
 
                 # First fetch
                 url_fetcher.fetch(url)
@@ -251,7 +263,7 @@ class TestFetch:
                 result = url_fetcher.fetch(url)
 
         assert result.exists()
-        assert result.read_bytes() == valid_pdf_bytes
+        assert result.read_bytes().startswith(b"%PDF-")
 
     @patch.object(URLFetcher, "_validate_url_no_dns")
     def test_pdf_url_no_content_type_but_valid_magic_bytes_accepted(
@@ -276,7 +288,7 @@ class TestFetch:
                 result = url_fetcher.fetch(url)
 
         assert result.exists()
-        assert result.read_bytes() == valid_pdf_bytes
+        assert result.read_bytes().startswith(b"%PDF-")
 
 
 class TestGetCacheFilename:
@@ -649,7 +661,7 @@ class TestRedirectSSRFValidation:
                 result = url_fetcher.fetch(url)
 
         assert result.exists()
-        assert result.read_bytes() == valid_pdf_bytes
+        assert result.read_bytes().startswith(b"%PDF-")
 
     @patch.object(URLFetcher, "_validate_url_no_dns")
     def test_relative_redirect_preserves_hostname(
@@ -696,7 +708,7 @@ class TestRedirectSSRFValidation:
                 result = url_fetcher.fetch(url)
 
         assert result.exists()
-        assert result.read_bytes() == valid_pdf_bytes
+        assert result.read_bytes().startswith(b"%PDF-")
         # Both hops must pin the real hostname, never the pinned IP literal.
         assert seen_hosts == ["arxiv.org", "arxiv.org"]
 

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 from urllib.parse import urlparse
 
 import httpx
+import pymupdf
 
 # Maximum download size: 100 MB
 MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
@@ -36,6 +37,42 @@ _DENIED_CONTENT_TYPE_PREFIXES = (
 
 # Maximum number of HTTP redirects to follow
 MAX_REDIRECTS = 10
+
+
+class PDFValidationError(ValueError):
+    """Downloaded content is not a valid/readable PDF."""
+
+
+def _validate_pdf_content(content: bytes, url: str) -> None:
+    """Verify content is a readable PDF by opening it with PyMuPDF.
+
+    Catches truncated files, zlib corruption, and other structural
+    issues that pass magic-byte checks but produce broken documents.
+
+    Raises PDFValidationError if the PDF cannot be opened, produces
+    zero pages, or has no extractable content.
+    Encrypted PDFs pass validation but skip the content decompression
+    check (content is inaccessible without authentication).
+    """
+    try:
+        doc = pymupdf.open(stream=content, filetype="pdf")
+        page_count = len(doc)
+        if page_count == 0:
+            raise PDFValidationError(
+                f"Downloaded PDF has zero pages — likely a truncated file: {url}"
+            )
+        # Trigger deferred stream decompression (catches zlib corruption)
+        # but skip for encrypted PDFs — content is inaccessible without auth.
+        if not doc.is_encrypted:
+            doc[0].get_text()
+        doc.close()
+    except PDFValidationError:
+        raise
+    except Exception as exc:
+        raise PDFValidationError(
+            f"Downloaded PDF is corrupt and cannot be opened: {exc}"
+        ) from exc
+
 
 _BLOCKED_NETWORKS = (
     ipaddress.ip_network("127.0.0.0/8"),  # IPv4 loopback
@@ -276,6 +313,7 @@ class URLFetcher:
         Raises:
             httpx.HTTPError: If download fails
             ValueError: If URL doesn't return a PDF or targets a blocked address
+            PDFValidationError: If downloaded content is not a readable PDF
         """
         # Validate URL scheme and config rules. IP-range blocking is deferred
         # to _pick_pinned_ip inside the loop so there is exactly one
@@ -293,95 +331,98 @@ class URLFetcher:
         # IP pinning: resolve the hostname once per hop and rewrite the
         # URL to the pinned IP so httpx connects to the address we
         # validated — closing the DNS-rebinding TOCTOU gap.
-        current_url = url
-        with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
-            for _ in range(MAX_REDIRECTS):
-                # Validate scheme + config; IP check is done by _pick_pinned_ip
-                # below to keep exactly one getaddrinfo call per hop (TOCTOU fix).
-                self._validate_url_no_dns(current_url)
+        #
+        # Retry once on PDFValidationError (transient corruption).
+        content: bytes | None = None
+        for attempt in range(2):
+            current_url = url
+            with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
+                for _ in range(MAX_REDIRECTS):
+                    self._validate_url_no_dns(current_url)
 
-                parsed = urlparse(current_url)
-                hostname = parsed.hostname or ""
-                pinned_ip, af = _pick_pinned_ip(hostname)
-                if af == socket.AF_INET6:
-                    ip_host = f"[{pinned_ip}]"
-                else:
-                    ip_host = pinned_ip
-                rebuilt_netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-                rebuilt = parsed._replace(netloc=rebuilt_netloc).geturl()
+                    parsed = urlparse(current_url)
+                    hostname = parsed.hostname or ""
+                    pinned_ip, af = _pick_pinned_ip(hostname)
+                    if af == socket.AF_INET6:
+                        ip_host = f"[{pinned_ip}]"
+                    else:
+                        ip_host = pinned_ip
+                    rebuilt_netloc = (
+                        f"{ip_host}:{parsed.port}" if parsed.port else ip_host
+                    )
+                    rebuilt = parsed._replace(netloc=rebuilt_netloc).geturl()
 
-                request_headers = {"Host": parsed.netloc}
-                request_extensions: dict[str, Any] = {"sni_hostname": hostname}
+                    request_headers = {"Host": parsed.netloc}
+                    request_extensions: dict[str, Any] = {"sni_hostname": hostname}
 
-                with client.stream(
-                    "GET",
-                    rebuilt,
-                    headers=request_headers,
-                    extensions=request_extensions,
-                ) as response:
-                    if response.is_redirect:
-                        location = response.headers.get("location")
-                        if not location:
-                            raise ValueError("Redirect with no target URL")
-                        # Resolve the Location against the hostname-based
-                        # current_url, NOT response.next_request.url. We rewrote
-                        # this hop's request to the pinned IP, so httpx resolves
-                        # a *relative* Location against that IP URL and drops the
-                        # hostname — the next hop would then verify the TLS cert
-                        # against the IP literal and fail (issue #16). Joining
-                        # against current_url preserves the hostname; the next
-                        # loop iteration re-validates and re-pins it, so the
-                        # SSRF / DNS-rebinding protection is fully intact.
-                        current_url = str(httpx.URL(current_url).join(location))
-                        continue
+                    with client.stream(
+                        "GET",
+                        rebuilt,
+                        headers=request_headers,
+                        extensions=request_extensions,
+                    ) as response:
+                        if response.is_redirect:
+                            location = response.headers.get("location")
+                            if not location:
+                                raise ValueError("Redirect with no target URL")
+                            current_url = str(httpx.URL(current_url).join(location))
+                            continue
 
-                    response.raise_for_status()
+                        response.raise_for_status()
 
-                    early_ct = response.headers.get("content-type", "").lower()
-                    if any(
-                        early_ct.startswith(p) for p in _DENIED_CONTENT_TYPE_PREFIXES
-                    ):
-                        raise ValueError(
-                            f"URL content-type {early_ct!r} is not a PDF: "
-                            f"{current_url}"
-                        )
-
-                    # Check Content-Length header if available
-                    content_length = response.headers.get("content-length")
-                    if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
-                        raise ValueError(
-                            f"PDF file too large: {int(content_length)} bytes "
-                            f"(max {MAX_DOWNLOAD_SIZE} bytes)"
-                        )
-
-                    # Read response with size limit
-                    chunks: list[bytes] = []
-                    total_size = 0
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        total_size += len(chunk)
-                        if total_size > MAX_DOWNLOAD_SIZE:
+                        early_ct = response.headers.get("content-type", "").lower()
+                        if any(
+                            early_ct.startswith(p)
+                            for p in _DENIED_CONTENT_TYPE_PREFIXES
+                        ):
                             raise ValueError(
-                                f"PDF download exceeded maximum size of "
-                                f"{MAX_DOWNLOAD_SIZE} bytes"
+                                f"URL content-type {early_ct!r} is not a PDF: "
+                                f"{current_url}"
                             )
-                        chunks.append(chunk)
 
-                    content = b"".join(chunks)
+                        content_length = response.headers.get("content-length")
+                        if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
+                            raise ValueError(
+                                f"PDF file too large: {int(content_length)} bytes "
+                                f"(max {MAX_DOWNLOAD_SIZE} bytes)"
+                            )
 
-                    # Verify content type
-                    content_type = response.headers.get("content-type", "")
-                    if "pdf" not in content_type.lower():
-                        # Check magic bytes when Content-Type is not PDF
-                        if not content.startswith(b"%PDF"):
-                            raise ValueError(f"URL does not appear to be a PDF: {url}")
-                    break
-            else:
-                raise ValueError(f"Too many redirects (max {MAX_REDIRECTS})")
+                        chunks: list[bytes] = []
+                        total_size = 0
+                        for chunk in response.iter_bytes(chunk_size=8192):
+                            total_size += len(chunk)
+                            if total_size > MAX_DOWNLOAD_SIZE:
+                                raise ValueError(
+                                    f"PDF download exceeded maximum size of "
+                                    f"{MAX_DOWNLOAD_SIZE} bytes"
+                                )
+                            chunks.append(chunk)
+
+                        content = b"".join(chunks)
+
+                        content_type = response.headers.get("content-type", "")
+                        if "pdf" not in content_type.lower():
+                            if not content.startswith(b"%PDF"):
+                                raise ValueError(
+                                    f"URL does not appear to be a PDF: {url}"
+                                )
+                        break
+                else:
+                    raise ValueError(f"Too many redirects (max {MAX_REDIRECTS})")
+
+            try:
+                _validate_pdf_content(content, url)
+                break
+            except PDFValidationError:
+                if attempt == 0:
+                    continue
+                raise
 
         # Save to cache with restricted permissions
         filename = self._get_cache_filename(url)
         local_path = self.cache_dir / filename
 
+        assert content is not None, "content must be set before cache write"
         fd = os.open(str(local_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             os.write(fd, content)

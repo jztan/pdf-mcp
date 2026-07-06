@@ -5,6 +5,7 @@ PDF extraction utilities using PyMuPDF.
 import logging
 import os
 import re
+import shutil
 import statistics
 import sys
 import typing
@@ -45,6 +46,73 @@ import pymupdf  # noqa: E402
 from .parallel import PageError  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# Cached tessdata path — resolved once at first OCR check to avoid repeated
+# subprocess discovery (which PyMuPDF does via fragile shell=True on Windows).
+_TESSDATA_PATH: str | None = None
+
+
+def _has_traineddata(path: str) -> bool:
+    """Check if path contains any .traineddata files."""
+    try:
+        return any(f.endswith(".traineddata") for f in os.listdir(path))
+    except OSError:
+        return False
+
+
+def _resolve_tessdata() -> str | None:
+    """Find tessdata directory via safe subprocess call (no shell=True).
+
+    Checks TESSDATA_PREFIX env var first, then queries tesseract directly,
+    then falls back to deriving from the tesseract binary location.
+    On Windows, `tesseract --list-langs` emits to stdout (not stderr),
+    so search both.
+
+    TESSDATA_PREFIX may point to the Tesseract install root (the classic
+    convention) instead of the tessdata subfolder. If the candidate has no
+    *.traineddata files, append /tessdata as a fallback.
+    """
+    import subprocess
+
+    try:
+        env_path = os.environ.get("TESSDATA_PREFIX")
+        if env_path and os.path.isdir(env_path):
+            if _has_traineddata(env_path):
+                return env_path
+            subdir = os.path.join(env_path, "tessdata")
+            if os.path.isdir(subdir) and _has_traineddata(subdir):
+                return subdir
+            return env_path
+        result = subprocess.run(
+            ["tesseract", "--list-langs"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        match = re.search(
+            r'List of available languages in "(.+)"',
+            result.stderr or "",
+        )
+        if not match:
+            match = re.search(
+                r'List of available languages in "(.+)"',
+                result.stdout or "",
+            )
+        if match:
+            path = match.group(1)
+            if os.path.isdir(path):
+                return path
+            alt = path.replace("/", "\\")
+            if os.path.isdir(alt):
+                return alt
+        exe = shutil.which("tesseract")
+        if exe:
+            candidate = os.path.join(os.path.dirname(exe), "tessdata")
+            if os.path.isdir(candidate):
+                return candidate
+    except Exception:
+        pass
+    return None
 
 
 def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[int]:
@@ -939,12 +1007,14 @@ def render_page_as_png(
 
 def check_tesseract_available() -> None:
     """
-    Verify Tesseract binary is on PATH.
+    Verify Tesseract binary is on PATH, and cache tessdata path.
 
     Raises:
         RuntimeError: If tesseract binary is not found or returns non-zero.
     """
     import subprocess
+
+    global _TESSDATA_PATH  # noqa: PLW0603
 
     try:
         subprocess.run(
@@ -956,11 +1026,15 @@ def check_tesseract_available() -> None:
         raise RuntimeError(
             "Tesseract not found. Install with: "
             "brew install tesseract (macOS) / "
-            "apt install tesseract-ocr (Linux). "
+            "apt install tesseract-ocr (Linux) / "
+            "winget install Tesseract-OCR (Windows). "
             "See https://tesseract-ocr.github.io/tessdoc/Installation.html. "
             "If OCR returns empty for a page with visible text, also verify "
             "the language pack: tesseract --list-langs"
         ) from exc
+
+    if _TESSDATA_PATH is None:
+        _TESSDATA_PATH = _resolve_tessdata()
 
 
 def ocr_page(
@@ -968,9 +1042,14 @@ def ocr_page(
     page_num: int,
     lang: str = "eng",
     dpi: int = 300,
+    tessdata: str | None = None,
 ) -> str:
     """
     OCR a PDF page using PyMuPDF's built-in Tesseract binding.
+
+    Passes tessdata path explicitly if available, bypassing PyMuPDF's
+    fragile shell=True subprocess discovery (which crashes in spawned
+    worker processes on Windows).
 
     Args:
         doc: PyMuPDF document object
@@ -979,17 +1058,19 @@ def ocr_page(
         dpi: Internal render DPI for OCR (fixed at 300 for v1; not user-configurable
              to keep the surface minimal — expose as parameter in a future release
              if user feedback demands finer control)
+        tessdata: Explicit tessdata directory path. When None, PyMuPDF
+            auto-discovers (may use shell subprocesses).
 
     Returns:
         Extracted text string (empty string if OCR produces nothing)
     """
     page = doc[page_num]
-    textpage = page.get_textpage_ocr(language=lang, dpi=dpi)
+    textpage = page.get_textpage_ocr(language=lang, dpi=dpi, tessdata=tessdata)
     return str(page.get_text(textpage=textpage))
 
 
 def _ocr_page_worker(
-    args: tuple[str, int, str, int],
+    args: tuple[str, int, str, int, str | None],
 ) -> tuple[int, "str | PageError"]:
     """Picklable OCR worker for ProcessPoolExecutor.
 
@@ -997,12 +1078,20 @@ def _ocr_page_worker(
     processes) and isolates per-page failure as a PageError so one bad page
     never crashes the batch. Lives in extractor.py (not server.py) so spawn
     re-imports only PyMuPDF, never FastMCP.
+
+    Args tuple: (path, page_num, lang, dpi, tessdata)
+
+    The tuple unpack is inside the try so a malformed tuple (e.g. from a
+    stale caller) produces a PageError instead of crashing the whole batch.
     """
-    path, page_num, lang, dpi = args
+    page_num = args[1]  # safe fallback when unpack fails
     try:
+        path, page_num, lang, dpi, tessdata = args
         doc = pymupdf.open(path)
         try:
-            return page_num, ocr_page(doc, page_num, lang=lang, dpi=dpi)
+            return page_num, ocr_page(
+                doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata
+            )
         finally:
             doc.close()
     except Exception as exc:  # noqa: BLE001 - deliberate per-page isolation
@@ -1018,8 +1107,9 @@ def _render_page_worker(
     deterministic from pdf_hash+page+dpi, so concurrent workers never collide).
     Returns the render_info dict; the parent records SQLite metadata.
     """
-    path, page_num, out_dir, pdf_hash, dpi = args
+    page_num = args[1]  # safe fallback when unpack fails
     try:
+        path, page_num, out_dir, pdf_hash, dpi = args
         doc = pymupdf.open(path)
         try:
             info = render_page_as_png(doc, page_num, Path(out_dir), pdf_hash, dpi)

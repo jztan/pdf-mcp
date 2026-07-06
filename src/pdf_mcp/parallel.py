@@ -6,7 +6,7 @@ path cheap.
 """
 
 import os
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable
 
@@ -60,20 +60,40 @@ def run_pages(
     worker: Callable[[Any], Any],
     arg_list: list[Any],
     max_workers: int,
+    timeout: float = 300,
 ) -> list[Any]:
     """Map `worker` over `arg_list`, preserving order.
 
     max_workers <= 1 -> sequential list comprehension (no pool, no spawn cost).
-    Else a fresh per-call ProcessPoolExecutor. On BrokenProcessPool (a worker
-    process died hard -- C-layer segfault, OOM-kill, SIGKILL -- which the
-    worker's own try/except cannot catch), fall back to running the full
-    arg_list sequentially in-parent so the call still completes.
+    Else a fresh per-call ProcessPoolExecutor with per-future timeout.
+    On BrokenProcessPool or TimeoutError (worker segfault, hang, OOM-kill),
+    keep results from already-completed futures and re-run only the
+    incomplete indices sequentially in-parent so the call still completes
+    without waiting on orphaned/hung workers.
     """
     if max_workers <= 1:
         return [worker(a) for a in arg_list]
 
+    pool: ProcessPoolExecutor | None = None
+    results: list[Any] = [None] * len(arg_list)
+    completed: set[int] = set()
+
     try:
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            return list(pool.map(worker, arg_list))
-    except BrokenProcessPool:
-        return [worker(a) for a in arg_list]
+        pool = ProcessPoolExecutor(max_workers=max_workers)
+        try:
+            futures = [pool.submit(worker, a) for a in arg_list]
+            for f in as_completed(futures, timeout=timeout):
+                idx = futures.index(f)
+                results[idx] = f.result()
+                completed.add(idx)
+        except (BrokenProcessPool, TimeoutError):
+            pass
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    for idx in range(len(arg_list)):
+        if idx not in completed:
+            results[idx] = worker(arg_list[idx])
+
+    return results

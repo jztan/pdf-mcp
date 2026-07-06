@@ -11,6 +11,7 @@ Usage:
 import base64
 import hashlib
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ from .extractor import (
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
+    ocr_page,
     parse_page_range,
     render_page_as_png,
 )
@@ -43,6 +45,8 @@ from .extractor import _ocr_page_worker, _render_page_worker
 from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
+
+logger = logging.getLogger(__name__)
 
 # Safety limits for parameters
 MAX_PAGES_LIMIT = 500
@@ -426,14 +430,18 @@ _SERVER_FEATURES = _detect_features()
 def _is_ocr_cache_hit(
     cached_src: str | None, cached_texts: dict[int, str], page_num: int
 ) -> bool:
-    """True when page_num already has usable cached text in OCR mode: cached
-    OCR text, or non-empty cached 'extracted' text.
+    """True when page_num already has usable cached text in OCR mode: non-empty
+    cached OCR text, or non-empty cached 'extracted' text.
 
     Single source of truth for the OCR hit/miss decision, used by both the
     parallel dispatch (to skip already-cached pages) and the per-page assembly
     loop. Keeping it in one place avoids the two predicates drifting apart.
     """
-    return cached_src == "ocr" or (
+    return (
+        cached_src == "ocr"
+        and page_num in cached_texts
+        and len(cached_texts.get(page_num, "")) > 0
+    ) or (
         cached_src == "extracted"
         and page_num in cached_texts
         and len(cached_texts[page_num]) > 0
@@ -823,7 +831,9 @@ def pdf_read_pages(
                 "error": str(exc),
                 "install_hint": (
                     "brew install tesseract (macOS) / "
-                    "apt install tesseract-ocr (Linux)"
+                    "apt install tesseract-ocr (Linux) / "
+                    "winget install Tesseract-OCR (Windows); "
+                    "or set TESSDATA_PREFIX env var to your tessdata directory"
                 ),
             }
 
@@ -874,12 +884,43 @@ def pdf_read_pages(
                 if not _is_ocr_cache_hit(cached_sources.get(n), cached_texts, n)
             ]
             if ocr_miss_pages:
-                workers = resolve_workers(
-                    len(ocr_miss_pages), _OCR_PARALLEL_GATE, _MAX_PARALLEL_WORKERS
-                )
-                ocr_args = [(local_path, n, ocr_lang, 300) for n in ocr_miss_pages]
-                for pn, res in run_pages(_ocr_page_worker, ocr_args, workers):
-                    ocr_results[pn] = res
+                try:
+                    from .extractor import _TESSDATA_PATH
+
+                    workers = resolve_workers(
+                        len(ocr_miss_pages), _OCR_PARALLEL_GATE, _MAX_PARALLEL_WORKERS
+                    )
+                    ocr_args = [
+                        (local_path, n, ocr_lang, 300, _TESSDATA_PATH)
+                        for n in ocr_miss_pages
+                    ]
+                    for pn, res in run_pages(
+                        _ocr_page_worker, ocr_args, workers, timeout=600
+                    ):
+                        ocr_results[pn] = res
+                except Exception:
+                    logger.warning(
+                        "Batch OCR failed on %d pages; "
+                        "falling back to sequential per-page OCR",
+                        len(ocr_miss_pages),
+                    )
+                    for n in ocr_miss_pages:
+                        try:
+                            doc_local = pymupdf.open(local_path)
+                            try:
+                                from .extractor import _TESSDATA_PATH
+
+                                txt = ocr_page(
+                                    doc_local,
+                                    n,
+                                    lang=ocr_lang,
+                                    tessdata=_TESSDATA_PATH,
+                                )
+                                ocr_results[n] = txt
+                            finally:
+                                doc_local.close()
+                        except Exception as page_err:
+                            logger.warning("OCR failed on page %d: %s", n, page_err)
 
         # --- Parallel dispatch: render cache-misses ---
         render_failed_pages: list[int] = []
@@ -931,6 +972,13 @@ def pdf_read_pages(
                         # Isolated failure: empty text, tagged, NOT cached
                         # (keeps the page retryable on a later call).
                         text = ""
+                        page_source = "ocr_failed"
+                    elif len(res) == 0:
+                        # OCR returned empty — don't cache (retryable), and
+                        # fall back to native text extraction if available.
+                        page = doc[page_num]
+                        native = extract_text_from_page(page, sort_by_position=True)
+                        text = native if native else ""
                         page_source = "ocr_failed"
                     else:
                         text = res

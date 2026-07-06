@@ -51,27 +51,41 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
 
     Raises PDFValidationError if the PDF cannot be opened, produces
     zero pages, or has no extractable content.
-    Encrypted PDFs pass validation but skip the content decompression
-    check (content is inaccessible without authentication).
+    Password-protected PDFs pass validation but skip the page-count and
+    decompression checks — the page tree and streams are inaccessible
+    without authentication, and PDF 1.5+ object-stream layouts report
+    zero pages until unlocked (issue #19).
     """
     try:
         doc = pymupdf.open(stream=content, filetype="pdf")
+    except Exception as exc:
+        raise PDFValidationError(
+            f"Downloaded PDF is corrupt and cannot be opened: {exc}"
+        ) from exc
+    try:
+        # Short-circuit password-protected PDFs before any page access:
+        # opening succeeded, which confirms a structurally valid PDF, but
+        # the page tree is unreadable without the password (and object-stream
+        # layouts read as zero pages, tripping the truncation check below).
+        # needs_pass is more precise than is_encrypted — owner-password-only
+        # PDFs auto-authenticate (needs_pass False) and still get full checks.
+        if doc.needs_pass:
+            return
         page_count = len(doc)
         if page_count == 0:
             raise PDFValidationError(
                 f"Downloaded PDF has zero pages — likely a truncated file: {url}"
             )
-        # Trigger deferred stream decompression (catches zlib corruption)
-        # but skip for encrypted PDFs — content is inaccessible without auth.
-        if not doc.is_encrypted:
-            doc[0].get_text()
-        doc.close()
+        # Trigger deferred stream decompression (catches zlib corruption).
+        doc[0].get_text()
     except PDFValidationError:
         raise
     except Exception as exc:
         raise PDFValidationError(
             f"Downloaded PDF is corrupt and cannot be opened: {exc}"
         ) from exc
+    finally:
+        doc.close()
 
 
 _BLOCKED_NETWORKS = (

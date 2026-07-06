@@ -107,16 +107,16 @@ def run_pages(
     worker: Callable[[Any], Any],
     arg_list: list[Any],
     max_workers: int,
-    timeout: float = 300,
+    page_timeout: float = 300,
 ) -> list[Any]:
     """Map `worker` over `arg_list`, preserving order.
 
     max_workers <= 1 -> sequential list comprehension (no pool, no spawn cost).
-    Else a fresh per-call ProcessPoolExecutor with per-future timeout.
-    On BrokenProcessPool or TimeoutError (worker segfault, hang, OOM-kill),
-    keep results from already-completed futures and re-run only the
-    incomplete indices sequentially in-parent so the call still completes
-    without waiting on orphaned/hung workers.
+    Else a fresh per-call ProcessPoolExecutor with a per-page timeout: the pool
+    wait is bounded by `page_timeout` scaled to the worst-case wave count. On
+    BrokenProcessPool or TimeoutError, keep already-completed results and re-run
+    each incomplete page in a bounded, killable child process (never in-parent),
+    so a hung or crashing worker can neither block nor crash the parent.
     """
     if max_workers <= 1:
         return [worker(a) for a in arg_list]
@@ -124,13 +124,14 @@ def run_pages(
     pool: ProcessPoolExecutor | None = None
     results: list[Any] = [None] * len(arg_list)
     completed: set[int] = set()
+    overall = _overall_timeout(len(arg_list), max_workers, page_timeout)
 
     try:
         pool = ProcessPoolExecutor(max_workers=max_workers)
         try:
-            futures = [pool.submit(worker, a) for a in arg_list]
-            for f in as_completed(futures, timeout=timeout):
-                idx = futures.index(f)
+            future_to_idx = {pool.submit(worker, a): i for i, a in enumerate(arg_list)}
+            for f in as_completed(future_to_idx, timeout=overall):
+                idx = future_to_idx[f]
                 results[idx] = f.result()
                 completed.add(idx)
         except (BrokenProcessPool, TimeoutError):
@@ -141,6 +142,6 @@ def run_pages(
 
     for idx in range(len(arg_list)):
         if idx not in completed:
-            results[idx] = worker(arg_list[idx])
+            results[idx] = _run_page_bounded(worker, arg_list[idx], page_timeout)
 
     return results

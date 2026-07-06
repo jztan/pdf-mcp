@@ -152,29 +152,31 @@ class TestRunPages:
         out = run_pages(_square, [1, 2, 3, 4, 5], max_workers=2)
         assert out == [1, 4, 9, 16, 25]
 
-    def test_broken_pool_falls_back_to_sequential(self, monkeypatch):
+    def test_broken_pool_falls_back_to_bounded_subprocess(self, monkeypatch):
         from concurrent.futures.process import BrokenProcessPool
 
         class _BoomPool:
             def __init__(self, *a, **k):
                 pass
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
             def shutdown(self, **k):
                 pass
-
-            def map(self, *a, **k):
-                raise BrokenProcessPool("worker died")
 
             def submit(self, worker, arg):
                 raise BrokenProcessPool("worker died")
 
         monkeypatch.setattr("pdf_mcp.parallel.ProcessPoolExecutor", _BoomPool)
-        # Falls back to in-parent sequential, still returns correct results.
+        # Pool submit raises -> every page recovered via the bounded
+        # subprocess path (real multiprocessing), still correct + ordered.
         out = run_pages(_square, [2, 3, 4], max_workers=4)
         assert out == [4, 9, 16]
+
+    def test_hung_worker_does_not_hang_run_pages(self):
+        from pdf_mcp.parallel import PageError
+
+        t0 = time.monotonic()
+        out = run_pages(_sleep_worker, [1], max_workers=2, page_timeout=1)
+        elapsed = time.monotonic() - t0
+        assert isinstance(out[0], PageError)
+        # overall pool wait (~1s) + bounded fallback (~1s); killed, not waited.
+        assert elapsed < 8

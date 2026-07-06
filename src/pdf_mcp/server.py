@@ -895,7 +895,7 @@ def pdf_read_pages(
                         for n in ocr_miss_pages
                     ]
                     for pn, res in run_pages(
-                        _ocr_page_worker, ocr_args, workers, timeout=600
+                        _ocr_page_worker, ocr_args, workers, page_timeout=600
                     ):
                         ocr_results[pn] = res
                 except Exception:

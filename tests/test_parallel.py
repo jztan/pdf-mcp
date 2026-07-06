@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import time
 
 from pdf_mcp.parallel import PageError, resolve_workers, run_pages
 
@@ -97,6 +98,48 @@ class TestResolveWorkers:
 
 def _square(n):
     return n * n
+
+
+def _sleep_worker(n):
+    # Sleeps far longer than any test timeout so the bound must kill it.
+    time.sleep(30)
+    return n
+
+
+def _raise_worker(n):
+    raise RuntimeError(f"boom {n}")
+
+
+class TestBoundedHelpers:
+    def test_overall_timeout_scales_with_waves(self):
+        from pdf_mcp.parallel import _overall_timeout
+
+        assert _overall_timeout(5, 2, 10) == 30  # ceil(5/2) = 3 waves
+        assert _overall_timeout(2, 8, 10) == 10  # single wave
+        assert _overall_timeout(0, 8, 10) == 0
+        assert _overall_timeout(3, 0, 10) == 30  # guards div-by-zero
+
+    def test_run_page_bounded_returns_result(self):
+        from pdf_mcp.parallel import _run_page_bounded
+
+        assert _run_page_bounded(_square, 6, page_timeout=10) == 36
+
+    def test_run_page_bounded_kills_hung_worker(self):
+        from pdf_mcp.parallel import _run_page_bounded, PageError
+
+        t0 = time.monotonic()
+        res = _run_page_bounded(_sleep_worker, 7, page_timeout=1)
+        elapsed = time.monotonic() - t0
+        assert isinstance(res, PageError)
+        # Bounded to ~page_timeout: killed, not waited out (30s worker).
+        assert elapsed < 5
+
+    def test_run_page_bounded_captures_worker_exception(self):
+        from pdf_mcp.parallel import _run_page_bounded, PageError
+
+        res = _run_page_bounded(_raise_worker, 3, page_timeout=10)
+        assert isinstance(res, PageError)
+        assert "boom 3" in res.detail
 
 
 class TestRunPages:

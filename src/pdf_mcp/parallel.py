@@ -5,7 +5,10 @@ keeping this module free of PyMuPDF/project imports keeps the spawn re-import
 path cheap.
 """
 
+import math
+import multiprocessing
 import os
+import queue
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable
@@ -23,6 +26,50 @@ class PageError:
 
     def __repr__(self) -> str:
         return f"PageError({self.detail!r})"
+
+
+def _overall_timeout(n_pages: int, max_workers: int, page_timeout: float) -> float:
+    """Total wall-clock budget for the pool wait: per-page timeout times the
+    worst-case number of waves. Prevents a healthy large batch from
+    false-timing-out into the slow fallback (per-page, not a flat total)."""
+    return page_timeout * math.ceil(n_pages / max(1, max_workers))
+
+
+def _worker_into_queue(worker: Callable[[Any], Any], arg: Any, q: Any) -> None:
+    """Run `worker(arg)` and put the result (or a PageError) on `q`.
+
+    Module-level so it pickles under the `spawn` start method (macOS/Windows).
+    """
+    try:
+        q.put(worker(arg))
+    except Exception as exc:  # pragma: no cover - defensive
+        q.put(PageError(repr(exc)))
+
+
+def _run_page_bounded(
+    worker: Callable[[Any], Any], arg: Any, page_timeout: float
+) -> Any:
+    """Run one page in a killable child process, bounded by `page_timeout`.
+
+    Returns the worker's result, or a PageError if the page did not finish in
+    time (a true hang) or the child died without producing a result (segfault /
+    OOM-kill). The child is terminated on timeout so a native hang cannot block
+    the parent — the whole point of running the fallback out-of-process.
+    """
+    ctx = multiprocessing.get_context()
+    q = ctx.Queue()
+    p = ctx.Process(target=_worker_into_queue, args=(worker, arg, q))
+    p.start()
+    try:
+        # Read BEFORE join to avoid the mp.Queue drain-deadlock.
+        result = q.get(timeout=page_timeout)
+    except queue.Empty:
+        result = PageError(f"page timed out after {page_timeout}s")
+    finally:
+        if p.is_alive():
+            p.terminate()
+        p.join()
+    return result
 
 
 def resolve_workers(n_pages: int, gate: int, cap: int = 8) -> int:

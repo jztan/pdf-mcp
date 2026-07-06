@@ -36,9 +36,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order no longer depends on other PDFs in the cache. Previously FTS5 `bm25()`
   computed IDF over the whole shared index, so the same query on the same PDF
   could rank pages differently as the cache grew ([#17](https://github.com/jztan/pdf-mcp/issues/17)).
+- OCR (`pdf_read_pages(ocr=True)`) on scanned PDFs is usable on Windows again —
+  four interacting bugs made it return empty text or crash the server
+  ([#18](https://github.com/jztan/pdf-mcp/pull/18)). (1) `_resolve_tessdata()`
+  only searched `tesseract --list-langs` stderr, but Windows emits the path to
+  stdout, so the tessdata path was always `None` and PyMuPDF fell back to its
+  fragile `shell=True` auto-discovery (which crashes in spawned Windows worker
+  processes); the path is now resolved from both streams and passed explicitly
+  to `get_textpage_ocr(tessdata=...)`. (2) `_is_ocr_cache_hit()` treated any
+  `source="ocr"` page as a hit even when the cached text was empty, so a single
+  failed OCR attempt permanently poisoned the cache; empty OCR results are no
+  longer cached and now fall back to native text extraction. (3) `run_pages()`
+  replaced the unbounded `pool.map()` with `submit()` + `as_completed(timeout=)`,
+  so a crashed or hung worker no longer blocks forever and times out the MCP
+  connection; completed pages are kept and only incomplete pages re-run in-parent.
+  (4) `url_fetcher` now structurally validates a downloaded PDF (opens cleanly,
+  has pages, page content decompresses) with a retry-once loop, so a
+  zlib-corrupt download is no longer cached and served indefinitely.
 
 ### Contributors
 - @ebbsanchez — confirmed the bug on `develop` and supplied a minimal cache-only reproduction ([#17](https://github.com/jztan/pdf-mcp/issues/17))
+- @VooDisss — diagnosed and fixed the Windows OCR failures (tessdata detection, cache poisoning, pool timeout, PDF validation) ([#18](https://github.com/jztan/pdf-mcp/pull/18))
 
 ## [1.19.1] - 2026-07-04
 ### Added

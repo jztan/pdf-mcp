@@ -9,7 +9,11 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 
 from pdf_mcp.config import PDFConfig
-from pdf_mcp.url_fetcher import URLFetcher
+from pdf_mcp.url_fetcher import (
+    PDFValidationError,
+    URLFetcher,
+    _validate_pdf_content,
+)
 
 
 @pytest.fixture
@@ -22,6 +26,7 @@ def url_fetcher(temp_cache_dir):
 def valid_pdf_bytes():
     """Valid PDF content (minimal single-page document)."""
     import pymupdf
+
     doc = pymupdf.open()
     doc.new_page(width=100, height=100)
     doc[0].insert_text((10, 10), "Test", fontsize=8)
@@ -758,3 +763,47 @@ class TestRedirectSSRFValidation:
 
                 with pytest.raises(ValueError, match="Too many redirects"):
                     url_fetcher.fetch(url)
+
+
+class TestValidatePDFContent:
+    """Direct tests for _validate_pdf_content structural validation."""
+
+    def test_valid_pdf_accepted(self, valid_pdf_bytes):
+        """A well-formed PDF passes validation without raising."""
+        _validate_pdf_content(valid_pdf_bytes, "https://example.com/ok.pdf")
+
+    def test_password_protected_pdf_accepted(self):
+        """A valid password-protected PDF is accepted, not rejected as
+        truncated (regression for #19).
+
+        PDF 1.5+ encrypted documents laid out with compressed object streams
+        read as zero pages until authenticated (``len(doc) == 0``), so a
+        page-count check ahead of the encryption guard false-rejects them as
+        "truncated". ``use_objstms=1`` forces that modern layout, which is the
+        format the bug actually triggers on.
+        """
+        import pymupdf
+
+        doc = pymupdf.open()
+        doc.new_page(width=100, height=100)
+        buf = doc.tobytes(
+            encryption=pymupdf.PDF_ENCRYPT_AES_256,
+            user_pw="secret",
+            use_objstms=1,
+        )
+        doc.close()
+
+        # Sanity-check the fixture reproduces #19's conditions: object-stream
+        # encrypted PDFs report zero pages and require a password.
+        probe = pymupdf.open(stream=buf, filetype="pdf")
+        assert probe.needs_pass and len(probe) == 0
+        probe.close()
+
+        # Must not raise — the document opened, which confirms it is a
+        # structurally valid PDF even though content needs a password.
+        _validate_pdf_content(buf, "https://example.com/enc.pdf")
+
+    def test_garbage_bytes_rejected(self):
+        """Non-PDF bytes that slip past the magic-byte check are rejected."""
+        with pytest.raises(PDFValidationError, match="corrupt"):
+            _validate_pdf_content(b"%PDF-1.4 not really a pdf", "https://x/y.pdf")

@@ -53,10 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (4) `url_fetcher` now structurally validates a downloaded PDF (opens cleanly,
   has pages, page content decompresses) with a retry-once loop, so a
   zlib-corrupt download is no longer cached and served indefinitely.
+- URL-fetched, password-protected PDFs are no longer false-rejected as
+  "truncated". `_validate_pdf_content()` checked the page count before the
+  encryption guard, but PDF 1.5+ object-stream layouts report zero pages until
+  authenticated, so a genuine encrypted PDF tripped the truncation check. It
+  now short-circuits on `doc.needs_pass` (more precise than `is_encrypted` —
+  owner-password-only PDFs still get full validation), and closes the document
+  via `finally` so the corrupt-PDF path no longer leaks it
+  ([#19](https://github.com/jztan/pdf-mcp/issues/19)).
 
 ### Contributors
 - @ebbsanchez — confirmed the bug on `develop` and supplied a minimal cache-only reproduction ([#17](https://github.com/jztan/pdf-mcp/issues/17))
-- @VooDisss — diagnosed and fixed the Windows OCR failures (tessdata detection, cache poisoning, pool timeout, PDF validation) ([#18](https://github.com/jztan/pdf-mcp/pull/18))
+- @VooDisss — diagnosed and fixed the Windows OCR failures (tessdata detection, cache poisoning, pool timeout, PDF validation) ([#18](https://github.com/jztan/pdf-mcp/pull/18)); root-caused the encrypted-PDF false-rejection and proposed the `needs_pass` short-circuit ([#19](https://github.com/jztan/pdf-mcp/issues/19))
 
 ## [1.19.1] - 2026-07-04
 ### Added

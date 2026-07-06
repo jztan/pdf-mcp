@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import time
 
 from pdf_mcp.parallel import PageError, resolve_workers, run_pages
 
@@ -99,6 +100,48 @@ def _square(n):
     return n * n
 
 
+def _sleep_worker(n):
+    # Sleeps far longer than any test timeout so the bound must kill it.
+    time.sleep(30)
+    return n
+
+
+def _raise_worker(n):
+    raise RuntimeError(f"boom {n}")
+
+
+class TestBoundedHelpers:
+    def test_overall_timeout_scales_with_waves(self):
+        from pdf_mcp.parallel import _overall_timeout
+
+        assert _overall_timeout(5, 2, 10) == 30  # ceil(5/2) = 3 waves
+        assert _overall_timeout(2, 8, 10) == 10  # single wave
+        assert _overall_timeout(0, 8, 10) == 0
+        assert _overall_timeout(3, 0, 10) == 30  # guards div-by-zero
+
+    def test_run_page_bounded_returns_result(self):
+        from pdf_mcp.parallel import _run_page_bounded
+
+        assert _run_page_bounded(_square, 6, page_timeout=10) == 36
+
+    def test_run_page_bounded_kills_hung_worker(self):
+        from pdf_mcp.parallel import _run_page_bounded, PageError
+
+        t0 = time.monotonic()
+        res = _run_page_bounded(_sleep_worker, 7, page_timeout=1)
+        elapsed = time.monotonic() - t0
+        assert isinstance(res, PageError)
+        # Bounded to ~page_timeout: killed, not waited out (30s worker).
+        assert elapsed < 5
+
+    def test_run_page_bounded_captures_worker_exception(self):
+        from pdf_mcp.parallel import _run_page_bounded, PageError
+
+        res = _run_page_bounded(_raise_worker, 3, page_timeout=10)
+        assert isinstance(res, PageError)
+        assert "boom 3" in res.detail
+
+
 class TestRunPages:
     def test_sequential_branch_preserves_order(self):
         # max_workers <= 1 -> no pool
@@ -109,29 +152,57 @@ class TestRunPages:
         out = run_pages(_square, [1, 2, 3, 4, 5], max_workers=2)
         assert out == [1, 4, 9, 16, 25]
 
-    def test_broken_pool_falls_back_to_sequential(self, monkeypatch):
+    def test_broken_pool_falls_back_to_bounded_subprocess(self, monkeypatch):
         from concurrent.futures.process import BrokenProcessPool
 
         class _BoomPool:
             def __init__(self, *a, **k):
                 pass
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
             def shutdown(self, **k):
                 pass
-
-            def map(self, *a, **k):
-                raise BrokenProcessPool("worker died")
 
             def submit(self, worker, arg):
                 raise BrokenProcessPool("worker died")
 
         monkeypatch.setattr("pdf_mcp.parallel.ProcessPoolExecutor", _BoomPool)
-        # Falls back to in-parent sequential, still returns correct results.
+        # Pool submit raises -> every page recovered via the bounded
+        # subprocess path (real multiprocessing), still correct + ordered.
         out = run_pages(_square, [2, 3, 4], max_workers=4)
         assert out == [4, 9, 16]
+
+    def test_hung_worker_does_not_hang_run_pages(self):
+        from pdf_mcp.parallel import PageError
+
+        t0 = time.monotonic()
+        out = run_pages(_sleep_worker, [1], max_workers=2, page_timeout=1)
+        elapsed = time.monotonic() - t0
+        assert isinstance(out[0], PageError)
+        # overall pool wait (~1s) + bounded fallback (~1s); killed, not waited.
+        assert elapsed < 8
+
+    def test_timeout_sentinel_survives_server_style_consumption(self):
+        # Real workers return (page_num, payload) tuples; a timed-out page
+        # comes back as a bare PageError. The server consumes results by
+        # zipping with its known page list and tolerating the sentinel — this
+        # must not raise and must mark the hung page failed.
+        from pdf_mcp.parallel import PageError
+
+        def _tuple_ok(arg):
+            return (arg, f"payload-{arg}")
+
+        page_ids = [10, 11]
+        # Page 10 hits the (real multiprocessing) sleep→kill path; page 11 is
+        # only here to prove healthy tuples still unpack. We exercise the
+        # sentinel path directly via _run_page_bounded to keep it fast+robust.
+        from pdf_mcp.parallel import _run_page_bounded
+
+        results = [
+            _run_page_bounded(_sleep_worker, page_ids[0], page_timeout=1),
+            _tuple_ok(page_ids[1]),
+        ]
+        consumed = {}
+        for n, res in zip(page_ids, results):
+            consumed[n] = res[1] if isinstance(res, tuple) else res
+        assert isinstance(consumed[10], PageError)  # hung page -> sentinel kept
+        assert consumed[11] == "payload-11"  # healthy tuple -> payload

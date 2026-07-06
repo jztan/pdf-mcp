@@ -5,7 +5,10 @@ keeping this module free of PyMuPDF/project imports keeps the spawn re-import
 path cheap.
 """
 
+import math
+import multiprocessing
 import os
+import queue
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable
@@ -23,6 +26,54 @@ class PageError:
 
     def __repr__(self) -> str:
         return f"PageError({self.detail!r})"
+
+
+def _overall_timeout(n_pages: int, max_workers: int, page_timeout: float) -> float:
+    """Total wall-clock budget for the pool wait: per-page timeout times the
+    worst-case number of waves. Prevents a healthy large batch from
+    false-timing-out into the slow fallback (per-page, not a flat total)."""
+    return page_timeout * math.ceil(n_pages / max(1, max_workers))
+
+
+def _worker_into_queue(worker: Callable[[Any], Any], arg: Any, q: Any) -> None:
+    """Run `worker(arg)` and put the result (or a PageError) on `q`.
+
+    Module-level so it pickles under the `spawn` start method (macOS/Windows).
+    """
+    try:
+        q.put(worker(arg))
+    except Exception as exc:  # pragma: no cover - defensive
+        q.put(PageError(repr(exc)))
+
+
+def _run_page_bounded(
+    worker: Callable[[Any], Any], arg: Any, page_timeout: float
+) -> Any:
+    """Run one page in a killable child process, bounded by `page_timeout`.
+
+    Returns the worker's result, or a PageError if the page did not finish in
+    time (a true hang) or the child died without producing a result (segfault /
+    OOM-kill). The child is terminated on timeout so a native hang cannot block
+    the parent — the whole point of running the fallback out-of-process.
+    """
+    ctx = multiprocessing.get_context()
+    q = ctx.Queue()
+    p = ctx.Process(target=_worker_into_queue, args=(worker, arg, q))
+    p.start()
+    try:
+        # Read BEFORE join to avoid the mp.Queue drain-deadlock.
+        result = q.get(timeout=page_timeout)
+    except queue.Empty:
+        result = PageError(f"page timed out after {page_timeout}s")
+    finally:
+        if p.is_alive():
+            p.terminate()  # SIGTERM / TerminateProcess
+            p.join(timeout=5)
+            if p.is_alive():
+                p.kill()  # SIGKILL — uncatchable
+        p.join()
+        q.close()
+    return result
 
 
 def resolve_workers(n_pages: int, gate: int, cap: int = 8) -> int:
@@ -60,16 +111,16 @@ def run_pages(
     worker: Callable[[Any], Any],
     arg_list: list[Any],
     max_workers: int,
-    timeout: float = 300,
+    page_timeout: float = 300,
 ) -> list[Any]:
     """Map `worker` over `arg_list`, preserving order.
 
     max_workers <= 1 -> sequential list comprehension (no pool, no spawn cost).
-    Else a fresh per-call ProcessPoolExecutor with per-future timeout.
-    On BrokenProcessPool or TimeoutError (worker segfault, hang, OOM-kill),
-    keep results from already-completed futures and re-run only the
-    incomplete indices sequentially in-parent so the call still completes
-    without waiting on orphaned/hung workers.
+    Else a fresh per-call ProcessPoolExecutor with a per-page timeout: the pool
+    wait is bounded by `page_timeout` scaled to the worst-case wave count. On
+    BrokenProcessPool or TimeoutError, keep already-completed results and re-run
+    each incomplete page in a bounded, killable child process (never in-parent),
+    so a hung or crashing worker can neither block nor crash the parent.
     """
     if max_workers <= 1:
         return [worker(a) for a in arg_list]
@@ -77,13 +128,14 @@ def run_pages(
     pool: ProcessPoolExecutor | None = None
     results: list[Any] = [None] * len(arg_list)
     completed: set[int] = set()
+    overall = _overall_timeout(len(arg_list), max_workers, page_timeout)
 
     try:
         pool = ProcessPoolExecutor(max_workers=max_workers)
         try:
-            futures = [pool.submit(worker, a) for a in arg_list]
-            for f in as_completed(futures, timeout=timeout):
-                idx = futures.index(f)
+            future_to_idx = {pool.submit(worker, a): i for i, a in enumerate(arg_list)}
+            for f in as_completed(future_to_idx, timeout=overall):
+                idx = future_to_idx[f]
                 results[idx] = f.result()
                 completed.add(idx)
         except (BrokenProcessPool, TimeoutError):
@@ -94,6 +146,6 @@ def run_pages(
 
     for idx in range(len(arg_list)):
         if idx not in completed:
-            results[idx] = worker(arg_list[idx])
+            results[idx] = _run_page_bounded(worker, arg_list[idx], page_timeout)
 
     return results

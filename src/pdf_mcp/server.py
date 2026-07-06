@@ -894,10 +894,18 @@ def pdf_read_pages(
                         (local_path, n, ocr_lang, 300, _TESSDATA_PATH)
                         for n in ocr_miss_pages
                     ]
-                    for pn, res in run_pages(
-                        _ocr_page_worker, ocr_args, workers, timeout=600
+                    for n, res in zip(
+                        ocr_miss_pages,
+                        run_pages(
+                            _ocr_page_worker, ocr_args, workers, page_timeout=600
+                        ),
                     ):
-                        ocr_results[pn] = res
+                        # run_pages yields the worker's (page_num, payload) tuple
+                        # on success, or a bare PageError sentinel for a page it
+                        # could not run (timeout/kill). Store the payload (or the
+                        # sentinel) under the known page number; the read loop
+                        # below treats a PageError/None as ocr_failed (retryable).
+                        ocr_results[n] = res[1] if isinstance(res, tuple) else res
                 except Exception:
                     logger.warning(
                         "Batch OCR failed on %d pages; "
@@ -945,8 +953,11 @@ def pdf_read_pages(
                     (local_path, n, str(cache.renders_dir), pdf_hash, clamped_dpi)
                     for n in render_miss_pages
                 ]
-                for pn, res in run_pages(_render_page_worker, render_args, workers):
-                    render_results[pn] = res
+                for n, res in zip(
+                    render_miss_pages,
+                    run_pages(_render_page_worker, render_args, workers),
+                ):
+                    render_results[n] = res[1] if isinstance(res, tuple) else res
 
         results = []
         cache_hits = 0

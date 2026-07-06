@@ -986,12 +986,19 @@ def render_page_as_png(
 
     file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi{token}.png"
     file_path = output_dir / file_name
+    tmp_path = file_path.with_name(f"{file_name}.{os.getpid()}.tmp")
     try:
-        pix.save(str(file_path))
-        os.chmod(str(file_path), 0o600)
+        # Explicit output="png": pix.save() otherwise infers format from the
+        # file extension, and ".tmp" isn't a recognized image format.
+        pix.save(str(tmp_path), output="png")
+        os.chmod(str(tmp_path), 0o600)
+        # Atomic on POSIX and Windows: a concurrent writer (e.g. an orphaned
+        # pool worker rendering the same deterministic path) can no longer
+        # produce a torn/locked file — last writer wins as a whole.
+        os.replace(str(tmp_path), str(file_path))
     except Exception as e:
         try:
-            file_path.unlink(missing_ok=True)
+            tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
         logger.warning("Failed to save render for page %d: %s", page_num, e)

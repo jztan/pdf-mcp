@@ -180,3 +180,29 @@ class TestRunPages:
         assert isinstance(out[0], PageError)
         # overall pool wait (~1s) + bounded fallback (~1s); killed, not waited.
         assert elapsed < 8
+
+    def test_timeout_sentinel_survives_server_style_consumption(self):
+        # Real workers return (page_num, payload) tuples; a timed-out page
+        # comes back as a bare PageError. The server consumes results by
+        # zipping with its known page list and tolerating the sentinel — this
+        # must not raise and must mark the hung page failed.
+        from pdf_mcp.parallel import PageError
+
+        def _tuple_ok(arg):
+            return (arg, f"payload-{arg}")
+
+        page_ids = [10, 11]
+        # Page 10 hits the (real multiprocessing) sleep→kill path; page 11 is
+        # only here to prove healthy tuples still unpack. We exercise the
+        # sentinel path directly via _run_page_bounded to keep it fast+robust.
+        from pdf_mcp.parallel import _run_page_bounded
+
+        results = [
+            _run_page_bounded(_sleep_worker, page_ids[0], page_timeout=1),
+            _tuple_ok(page_ids[1]),
+        ]
+        consumed = {}
+        for n, res in zip(page_ids, results):
+            consumed[n] = res[1] if isinstance(res, tuple) else res
+        assert isinstance(consumed[10], PageError)  # hung page -> sentinel kept
+        assert consumed[11] == "payload-11"  # healthy tuple -> payload

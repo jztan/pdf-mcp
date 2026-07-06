@@ -67,8 +67,12 @@ def _run_page_bounded(
         result = PageError(f"page timed out after {page_timeout}s")
     finally:
         if p.is_alive():
-            p.terminate()
+            p.terminate()  # SIGTERM / TerminateProcess
+            p.join(timeout=5)
+            if p.is_alive():
+                p.kill()  # SIGKILL — uncatchable
         p.join()
+        q.close()
     return result
 
 

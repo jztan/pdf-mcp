@@ -2740,5 +2740,27 @@ def test_get_metadata_exposes_content_trust(tmp_path):
     assert cache.get_metadata(p)["content_trust"] == {"suspicious": False}
 
 
+def test_render_write_is_atomic_no_tmp_residue(tmp_path):
+    """render_page_as_png writes via a temp file + atomic replace, leaving
+    no *.tmp residue and a valid PNG (regression guard for the torn-file
+    race when an orphaned pool worker writes the same deterministic path)."""
+    import pymupdf
+    from pathlib import Path
+    from pdf_mcp.extractor import render_page_as_png
+
+    doc = pymupdf.open()
+    doc.new_page(width=200, height=200)
+    try:
+        result = render_page_as_png(doc, 0, tmp_path, "hashabc", dpi=72)
+    finally:
+        doc.close()
+
+    out = Path(result["file_path_on_disk"])
+    assert out.exists() and out.stat().st_size > 0
+    assert out.read_bytes().startswith(b"\x89PNG")
+    # No leftover temp files from the atomic write.
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

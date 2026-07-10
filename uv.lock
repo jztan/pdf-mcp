@@ -1864,7 +1864,7 @@ wheels = [
 
 [[package]]
 name = "pdf-mcp"
-version = "1.19.1"
+version = "1.20.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },

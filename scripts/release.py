@@ -400,11 +400,17 @@ Output contract (follow exactly):
   `### Added` / `### Fixed` / `### Changed` / `### Security` (omit empty
   groups). No internal mechanics: no PRAGMA names, no source file paths,
   no helper function names.
+- If the changelog section has a `### Contributors` block, reproduce it as a
+  final `## Contributors` section. Keep every `@handle`, description, and
+  issue/PR link exactly as written — do not drop, rename, or summarize any
+  contributor. Omit the section only when the changelog has no Contributors
+  block.
 
 Hard rules:
 - Use only facts present in the changelog section. Never invent features,
   benefits, or numbers.
 - Keep every number exactly as written in the changelog.
+- Never drop the Contributors block when one is present.
 - Plain markdown only. No H1 headings. Do not add Installation or Links
   sections (they are appended separately).
 

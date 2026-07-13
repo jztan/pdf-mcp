@@ -1,0 +1,555 @@
+"""
+Chart-extraction feasibility prototype (issue #23, "Approach A").
+NOT production code — a benchmark artifact. See README.md in this directory.
+
+Exact vector-geometry extraction + chart-type classifier + agent-hint protocol.
+
+extract(pdf, page, hints=None) -> {
+  status: ok | needs_hint | declined,
+  charts: [{chart_type, x_axis, y_axis, curves|bars|points, diagnostics}],
+  questions: [{id, kind, options}],        # when needs_hint (semantic ambiguity)
+  reasons: [...],                          # when declined (a gate fired)
+}
+Hints are semantic enums only (never values): {"p0_c1_axis": "right",
+"p0_type": "bar"}. Calibration + coordinates are always pure geometry, so a
+wrong hint can mislabel an axis pairing at worst, never fabricate a number.
+
+Runs on the project venv (needs only pymupdf + numpy):
+    uv run python benchmark_data/chart_extraction/pipeline.py <pdf> <page> ['{hints}']
+"""
+import fitz, re, json, os, collections
+import numpy as np
+
+# ---------------- text/tick helpers (from v2, proven) ----------------
+
+
+def get_words(page):
+    return page.get_text("words")
+
+
+def superscript_pow10(page):
+    out = []
+    raw = page.get_text("rawdict")
+    spans = []
+    for block in raw.get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                txt = "".join(c["c"] for c in span.get("chars", []))
+                spans.append({"t": txt.strip(), "size": span["size"],
+                              "bb": span["bbox"]})
+    for a in spans:
+        if a["t"] != "10":
+            continue
+        for b in spans:
+            if b is a or not re.fullmatch(r"-?\d{1,2}", b["t"]):
+                continue
+            if (b["size"] < 0.85*a["size"] and 0 <= b["bb"][0]-a["bb"][2] < 3
+                    and b["bb"][1] < a["bb"][1]+0.5):
+                x0, y0 = a["bb"][0], min(a["bb"][1], b["bb"][1])
+                x1, y1 = b["bb"][2], max(a["bb"][3], b["bb"][3])
+                out.append({"v": 10.0**float(b["t"]), "cx": (x0+x1)/2,
+                            "cy": (y0+y1)/2, "bb": (x0, y0, x1, y1),
+                            "raw": f"10^{b['t']}"})
+                break
+    return out
+
+
+def numeric_tokens(page):
+    sup = superscript_pow10(page)
+    sup_boxes = [s["bb"] for s in sup]
+
+    def in_sup(w):
+        return any(w[0] >= b[0]-1 and w[2] <= b[2]+1 and w[1] >= b[1]-1
+                   and w[3] <= b[3]+1 for b in sup_boxes)
+    toks = []
+    for w in get_words(page):
+        if in_sup(w):
+            continue
+        t = w[4].strip().rstrip(".,;")
+        if re.fullmatch(r"-?\d+(\.\d+)?([eE]-?\d+)?", t):
+            toks.append({"v": float(t), "cx": (w[0]+w[2])/2,
+                         "cy": (w[1]+w[3])/2, "bb": w[:4], "raw": t})
+    return toks + sup
+
+
+def cluster(toks, key, tol=3.0):
+    s = sorted(toks, key=key)
+    groups, cur = [], [s[0]] if s else []
+    for t in s[1:]:
+        if key(t)-key(cur[-1]) <= tol:
+            cur.append(t)
+        else:
+            groups.append(cur); cur = [t]
+    if cur:
+        groups.append(cur)
+    return groups
+
+
+def tick_series(g, ck):
+    g = sorted(g, key=lambda t: t[ck])
+    v = np.array([t["v"] for t in g]); px = np.array([t[ck] for t in g])
+    if len(g) < 3 or len(set(v.tolist())) < 3:
+        return None
+    dv, dpx = np.diff(v), np.diff(px)
+    if not ((dv > 0).all() or (dv < 0).all()):
+        return None
+    if dpx.max()-dpx.min() > 0.35*max(abs(dpx.mean()), 1):
+        return None
+    if abs(dv.max()-dv.min()) <= 0.25*max(abs(dv.mean()), 1e-9):
+        A = np.polyfit(px, v, 1)
+        res = v - (A[0]*px+A[1])
+        r2 = 1-np.sum(res**2)/max(np.sum((v-v.mean())**2), 1e-12)
+        return {"scale": "linear", "a": A[0], "b": A[1], "px": px, "v": v,
+                "r2": float(r2)}
+    if (v > 0).all():
+        lv = np.log10(v); dlv = np.diff(lv)
+        if abs(dlv.max()-dlv.min()) <= 0.25*max(abs(dlv.mean()), 1e-9):
+            A = np.polyfit(px, lv, 1)
+            res = lv-(A[0]*px+A[1])
+            r2 = 1-np.sum(res**2)/max(np.sum((lv-lv.mean())**2), 1e-12)
+            return {"scale": "log", "a": A[0], "b": A[1], "px": px, "v": v,
+                    "r2": float(r2)}
+    return None
+
+
+def apply_ax(ax, p):
+    val = ax["a"]*np.asarray(p, float)+ax["b"]
+    return 10**val if ax["scale"] == "log" else val
+
+
+# ---------------- drawing helpers ----------------
+
+
+def draw_style(d):
+    stroke = tuple(round(x, 2) for x in d["color"]) if d.get("color") else None
+    fill = tuple(round(x, 2) for x in d["fill"]) if d.get("fill") else None
+    return (stroke, fill, round(d.get("width") or 0, 2))
+
+
+def path_pts(d):
+    pts = []
+    for it in d["items"]:
+        if it[0] == "l":
+            pts += [(it[1].x, it[1].y), (it[2].x, it[2].y)]
+        elif it[0] == "c":
+            pts += [(it[1].x, it[1].y), (it[4].x, it[4].y)]
+        elif it[0] == "re":
+            r = it[1]
+            pts += [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)]
+        elif it[0] == "qu":
+            q = it[1]
+            pts += [(q.ul.x, q.ul.y), (q.ur.x, q.ur.y),
+                    (q.ll.x, q.ll.y), (q.lr.x, q.lr.y)]
+    return pts
+
+
+def d_bbox(d):
+    pts = path_pts(d)
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    return (min(xs), min(ys), max(xs), max(ys)) if pts else None
+
+
+def rects_of(d):
+    return [it[1] for it in d["items"] if it[0] == "re"]
+
+
+# ---------------- panel detection ----------------
+
+
+def find_panels(page):
+    toks = numeric_tokens(page)
+    rows = [g for g in cluster(toks, lambda t: t["cy"]) if len(g) >= 3]
+    # y-axis labels are edge-aligned (right edge for a left axis, left edge
+    # for a right axis) — centers shift with digit count, edges don't.
+    cols, seen_sets = [], []
+    for key in (lambda t: t["bb"][2], lambda t: t["bb"][0],
+                lambda t: t["cx"]):
+        for g in cluster(toks, key):
+            if len(g) < 3:
+                continue
+            ids = frozenset(id(t) for t in g)
+            if any(ids <= s for s in seen_sets):
+                continue
+            seen_sets.append(ids)
+            cols.append(g)
+    x_axes, y_axes = [], []
+    for g in rows:
+        if max(t["cx"] for t in g)-min(t["cx"] for t in g) < 60:
+            continue
+        s = tick_series(g, "cx")
+        if s:
+            s["y_at"] = float(np.mean([t["cy"] for t in g])); x_axes.append(s)
+    for g in cols:
+        if max(t["cy"] for t in g)-min(t["cy"] for t in g) < 60:
+            continue
+        s = tick_series(g, "cy")
+        if s:
+            s["x_at"] = float(np.mean([t["cx"] for t in g])); y_axes.append(s)
+    TOL = 30.0
+    panels = []
+    for xa in x_axes:
+        x0, x1 = xa["px"].min(), xa["px"].max()
+
+        xspan = x1-x0
+
+        def corner_ok(ya):
+            # same-plot constraint: x and y axes must meet at a shared corner.
+            # (1) x-axis runs along the BOTTOM of the y-axis's vertical span.
+            # (2) y-axis sits within a horizontal band around the x-axis span.
+            # Rejects pairing axes from two different figures on one page
+            # (they fail one or both), while tolerating the normal gap between
+            # y-tick labels and the first x-tick.
+            y0, y1 = ya["px"].min(), ya["px"].max()
+            # x-axis label row sits at/below the plot bottom; allow a generous
+            # downward margin for the gap between lowest y-label and x-labels.
+            vert = (y0-TOL) <= xa["y_at"] <= (y1+60)
+            band = max(0.4*xspan, 80)
+            horiz = (x0-band) <= ya["x_at"] <= (x1+band)
+            return vert and horiz
+        lefts = [ya for ya in y_axes
+                 if ya["x_at"] < x0+20 and ya["px"].max() <= xa["y_at"]+25
+                 and corner_ok(ya)]
+        rights = [ya for ya in y_axes
+                  if ya["x_at"] > x1-20 and ya["px"].max() <= xa["y_at"]+25
+                  and corner_ok(ya)]
+        if not lefts and not rights:
+            continue
+        lefts.sort(key=lambda ya: x0-ya["x_at"])
+        rights.sort(key=lambda ya: ya["x_at"]-x1)
+        ya = lefts[0] if lefts else rights[0]
+        panels.append({
+            "xa": xa, "ya": ya,
+            "ya_left": lefts[0] if lefts else None,
+            "ya_right": rights[0] if rights else None,
+            "rx0": x0-10, "rx1": x1+15,
+            "ry0": min(ya["px"].min(),
+                       rights[0]["px"].min() if rights else 1e9)-15,
+            "ry1": xa["y_at"]+2})
+    return panels
+
+
+# ---------------- structural filters ----------------
+
+
+def frame_like(d, panel):
+    """large axis-aligned rect ~ spanning the plot region, or full-span line"""
+    bb = d_bbox(d)
+    if bb is None:
+        return False
+    w, h = bb[2]-bb[0], bb[3]-bb[1]
+    pw, ph = panel["rx1"]-panel["rx0"], panel["ry1"]-panel["ry0"]
+    if w > 0.85*pw and h > 0.85*ph:
+        return True                       # plot frame box
+    pts = path_pts(d)
+    if len(pts) >= 2:
+        aligned = all(abs(a[0]-b[0]) < 1.2 or abs(a[1]-b[1]) < 1.2
+                      for a, b in zip(pts[:-1], pts[1:]))
+        if aligned and (w > 0.9*pw or h > 0.9*ph) and min(w, h) < 2.5:
+            return True                   # gridline / axis line
+    return False
+
+
+def legend_masks(page, panel):
+    masks = []
+    for w in get_words(page):
+        if re.fullmatch(r"-?\d+(\.\d+)?", w[4].strip()):
+            continue
+        if (panel["rx0"] <= w[0] and w[2] <= panel["rx1"]
+                and panel["ry0"] <= w[1] and w[3] <= panel["ry1"]):
+            masks.append((w[0]-45, w[1]-3, w[2]+3, w[3]+3))
+    return masks
+
+
+def masked(x, y, masks):
+    return any(m[0] <= x <= m[2] and m[1] <= y <= m[3] for m in masks)
+
+
+# ---------------- per-type extraction ----------------
+
+
+def in_panel(bb, panel, frac=0.9):
+    if bb is None:
+        return False
+    w = max(bb[2]-bb[0], 1e-6); h = max(bb[3]-bb[1], 1e-6)
+    ix = max(0, min(bb[2], panel["rx1"])-max(bb[0], panel["rx0"]))
+    iy = max(0, min(bb[3], panel["ry1"])-max(bb[1], panel["ry0"]))
+    return (ix*iy)/(w*h) >= frac
+
+
+def collect(draws, panel, masks):
+    """classify in-panel drawings into frames, bars(candidate rects),
+    markers (congruent small paths), polyline clouds by style"""
+    frames, bar_rects, small_paths, clouds = [], [], collections.defaultdict(list), collections.defaultdict(list)
+    pw = panel["rx1"]-panel["rx0"]; ph = panel["ry1"]-panel["ry0"]
+    for d in draws:
+        bb = d_bbox(d)
+        if bb is None:
+            continue
+        intersects = not (bb[2] < panel["rx0"] or bb[0] > panel["rx1"]
+                          or bb[3] < panel["ry0"] or bb[1] > panel["ry1"])
+        if intersects and frame_like(d, panel):
+            frames.append(d); continue
+        if not in_panel(bb, panel):
+            continue
+        w, h = bb[2]-bb[0], bb[3]-bb[1]
+        cx, cy = (bb[0]+bb[2])/2, (bb[1]+bb[3])/2
+        # marker glyph: small, square-ish path (filled or stroked). Check
+        # BEFORE bars so small filled marker-rects aren't misread as bars.
+        mcap = 0.09*min(pw, ph)
+        if (max(w, h) <= mcap and max(w, h) <= 12
+                and 0.35 <= (w+1e-6)/(h+1e-6) <= 2.8):
+            if masked(cx, cy, masks):
+                continue
+            col = draw_style(d)
+            # key by color (ignore fill/stroke split) + rounded size bucket
+            ckey = (col[1] or col[0], round(max(w, h)))
+            small_paths[ckey].append((cx, cy))
+            continue
+        rs = rects_of(d)
+        if rs and d.get("fill") is not None:
+            for r in rs:
+                if r.width < 0.5*pw and r.height <= ph:
+                    bar_rects.append((r, draw_style(d)))
+            continue
+        for x, y in path_pts(d):
+            if not masked(x, y, masks):
+                clouds[draw_style(d)].append((x, y))
+    return frames, bar_rects, small_paths, clouds
+
+
+def classify(bar_rects, small_paths, clouds, panel):
+    pw = panel["rx1"]-panel["rx0"]
+    # bars: >=3 filled rects sharing a baseline (same bottom y)
+    if len(bar_rects) >= 3:
+        bottoms = collections.Counter(round(r.y1, 1) for r, s in bar_rects)
+        base, n = bottoms.most_common(1)[0]
+        if n >= 3:
+            return "bar"
+    markers = {k: v for k, v in small_paths.items() if len(v) >= 5}
+    lines = {}
+    for k, pts in clouds.items():
+        xs = [p[0] for p in pts]
+        if len(pts) >= 8 and max(xs)-min(xs) >= 0.25*pw:
+            lines[k] = pts
+    if lines:
+        return "line"
+    if markers:
+        return "scatter"
+    return "unknown"
+
+
+def extract_line(clouds, panel, xa, ya):
+    pw = panel["rx1"]-panel["rx0"]; ph = panel["ry1"]-panel["ry0"]
+    curves = []
+    for k, pts in clouds.items():
+        xs = np.array([p[0] for p in pts]); ys = np.array([p[1] for p in pts])
+        if len(pts) < 8 or np.ptp(xs) < 0.25*pw:
+            continue
+        order = np.argsort(xs); xs, ys = xs[order], ys[order]
+        bins = np.linspace(xs.min(), xs.max(), 24)
+        idx = np.digitize(xs, bins)
+        spreads = [np.ptp(ys[idx == j]) for j in range(1, 25)
+                   if (idx == j).sum() >= 2]
+        if spreads and np.median(spreads) > 0.12*ph:
+            curves.append({"style": k, "multivalued": True})
+            continue
+        dx = apply_ax(xa, xs); dy = apply_ax(ya, ys)
+        if xa["scale"] == "log":
+            qs = np.logspace(np.log10(dx.min()), np.log10(dx.max()), 12)
+            samp = np.interp(np.log10(qs), np.log10(dx), dy)
+        else:
+            qs = np.linspace(dx.min(), dx.max(), 12)
+            samp = np.interp(qs, dx, dy)
+        curves.append({"style": k, "multivalued": False,
+                       "points": [[float(f"{a:.5g}"), float(f"{b:.5g}")]
+                                  for a, b in zip(qs, samp)]})
+    return curves
+
+
+def extract_bar(bar_rects, xa, ya):
+    by_style = collections.defaultdict(list)
+    for r, s in bar_rects:
+        by_style[s].append(r)
+    series = []
+    for s, rs in by_style.items():
+        if len(rs) < 3:
+            continue
+        pts = []
+        for r in rs:
+            cx = (r.x0+r.x1)/2
+            pts.append([float(f"{apply_ax(xa, cx):.5g}"),
+                        float(f"{apply_ax(ya, r.y0):.5g}")])   # top edge = value
+        pts.sort()
+        series.append({"style": s, "bars": pts})
+    return series
+
+
+def extract_scatter(small_paths, xa, ya):
+    series = []
+    for (ckey, size), centers in small_paths.items():
+        # merge fill+stroke duplicates drawn at the same location
+        uniq = []
+        for cx, cy in sorted(centers):
+            if not any(abs(cx-ux) < 1.5 and abs(cy-uy) < 1.5 for ux, uy in uniq):
+                uniq.append((cx, cy))
+        if len(uniq) < 5:
+            continue
+        pts = [[float(f"{apply_ax(xa, cx):.5g}"),
+                float(f"{apply_ax(ya, cy):.5g}")] for cx, cy in uniq]
+        pts.sort()
+        series.append({"style": str(ckey), "marker_size": size, "points": pts})
+    return series
+
+
+# ---------------- main entry ----------------
+
+
+def _range(ax):
+    v = ax["v"]
+    return float(min(v)), float(max(v))
+
+
+def in_range_series(pts, xr, yr, frac=0.15, need=0.7):
+    """keep only series where >=need fraction of points fall within the
+    tick range (+/- margin). Marginal-distribution bars / decorations that
+    extend into the plot margins map outside the axis range and are dropped."""
+    if not pts:
+        return False
+    xm = frac*max(xr[1]-xr[0], 1e-9); ym = frac*max(yr[1]-yr[0], 1e-9)
+    ok = sum(1 for x, y in pts
+             if xr[0]-xm <= x <= xr[1]+xm and yr[0]-ym <= y <= yr[1]+ym)
+    return ok/len(pts) >= need
+
+
+def extract(pdf, pageno, hints=None):
+    hints = hints or {}
+    doc = fitz.open(pdf); page = doc[pageno-1]
+    res = {"pdf": os.path.basename(pdf), "page": pageno, "status": "ok",
+           "charts": [], "questions": [], "reasons": []}
+    panels = find_panels(page)
+    if not panels:
+        res["status"] = "declined"
+        res["reasons"].append("no chart signature (no valid tick-series axes)")
+        doc.close(); return res
+    draws = page.get_drawings()
+    qn = 0
+    for pi, panel in enumerate(panels):
+        xa, ya = panel["xa"], panel["ya"]
+        masks = legend_masks(page, panel)
+        frames, bar_rects, small_paths, clouds = collect(draws, panel, masks)
+        # refine region: if a plot-frame box was found, adopt it (tick-label
+        # spans undershoot the true plot area) and re-collect
+        pw0 = panel["rx1"]-panel["rx0"]; ph0 = panel["ry1"]-panel["ry0"]
+        big = [v3bb for v3bb in (d_bbox(f) for f in frames)
+               if v3bb and 0.7*pw0 < (v3bb[2]-v3bb[0]) < 1.4*pw0
+               and 0.5*ph0 < (v3bb[3]-v3bb[1]) < 1.4*ph0]
+        if big:
+            fb = max(big, key=lambda b: (b[2]-b[0])*(b[3]-b[1]))
+            panel = dict(panel, rx0=fb[0]-2, rx1=fb[2]+2,
+                         ry0=fb[1]-2, ry1=fb[3]+2)
+            masks = legend_masks(page, panel)
+            frames, bar_rects, small_paths, clouds = collect(draws, panel, masks)
+        ctype = classify(bar_rects, small_paths, clouds, panel)
+        # hint override
+        tkey = f"p{pi}_type"
+        if tkey in hints:
+            ctype = hints[tkey]
+        chart = {"panel": pi, "chart_type": ctype,
+                 "x_axis": {"scale": xa["scale"], "r2": round(xa["r2"], 5)},
+                 "y_axis": {"scale": ya["scale"], "r2": round(ya["r2"], 5),
+                            "side": "left" if panel["ya_left"] else "right"},
+                 "diagnostics": {"n_frames": len(frames),
+                                 "n_bar_rects": len(bar_rects),
+                                 "n_marker_groups": len([1 for v in small_paths.values() if len(v) >= 5]),
+                                 "n_line_clouds": len(clouds),
+                                 "dual_axis": bool(panel["ya_left"] and panel["ya_right"])}}
+        # dual-axis: ask per emitted series unless hinted
+        if ctype == "line":
+            curves = extract_line(clouds, panel, xa, ya)
+            good = [c for c in curves if not c["multivalued"]]
+            bad = [c for c in curves if c["multivalued"]]
+            if chart["diagnostics"]["dual_axis"] and good:
+                for ci, c in enumerate(good):
+                    akey = f"p{pi}_c{ci}_axis"
+                    if akey in hints:
+                        if hints[akey] == "right" and panel["ya_right"]:
+                            ya2 = panel["ya_right"]
+                            # re-extract this curve against right axis
+                            cl = {c["style"]: clouds[c["style"]]}
+                            c2 = extract_line(cl, panel, xa, ya2)
+                            if c2 and not c2[0]["multivalued"]:
+                                c["points"] = c2[0]["points"]
+                                c["axis"] = "right"
+                        else:
+                            c["axis"] = "left"
+                    else:
+                        qn += 1
+                        res["questions"].append(
+                            {"id": akey, "kind": "y_axis_for_curve",
+                             "curve_style": str(c["style"]),
+                             "options": ["left", "right"]})
+            chart["curves"] = good
+            if bad:
+                chart["diagnostics"]["declined_multivalued"] = len(bad)
+            if not good:
+                chart["chart_type"] = "declined"
+                chart["decline_reason"] = ("all line clouds multivalued "
+                                           "(crossing/overlapping curves)")
+        elif ctype == "bar":
+            chart["bars"] = extract_bar(bar_rects, xa, ya)
+        elif ctype == "scatter":
+            chart["points"] = extract_scatter(small_paths, xa, ya)
+        else:
+            chart["chart_type"] = "unknown"
+            qn += 1
+            res["questions"].append(
+                {"id": tkey, "kind": "chart_type",
+                 "options": ["line", "bar", "scatter", "not_a_chart"]})
+        # out-of-axis-range gate: drop series whose values fall outside the
+        # tick range (catches marginal-distribution bars, margin decorations)
+        xr, yr = _range(xa), _range(ya)
+        yr_right = _range(panel["ya_right"]) if panel["ya_right"] else yr
+        dropped = 0
+        if "curves" in chart:
+            kept = []
+            for c in chart["curves"]:
+                cyr = yr_right if c.get("axis") == "right" else yr
+                if c.get("points") and not in_range_series(c["points"], xr, cyr):
+                    dropped += 1; continue
+                kept.append(c)
+            chart["curves"] = kept
+        for fld in ("bars", "points"):
+            if fld in chart:
+                key = "bars" if fld == "bars" else "points"
+                kept = []
+                for s in chart[fld]:
+                    pts = s.get(key) or s.get("points")
+                    if pts and not in_range_series(pts, xr, yr):
+                        dropped += 1; continue
+                    kept.append(s)
+                chart[fld] = kept
+        if dropped:
+            chart["diagnostics"]["dropped_out_of_range"] = dropped
+        if dropped and not (chart.get("curves") or chart.get("bars")
+                            or chart.get("points")):
+            chart["chart_type"] = "declined"
+            chart["decline_reason"] = ("series fell outside axis range "
+                                       "(likely not a data chart)")
+        res["charts"].append(chart)
+    if res["questions"]:
+        res["status"] = "needs_hint"
+    emitted = any(c.get("curves") or c.get("bars") or c.get("points")
+                  for c in res["charts"])
+    if not emitted and not res["questions"]:
+        res["status"] = "declined"
+        if not res["reasons"]:
+            res["reasons"].append("no extractable series passed gates")
+    doc.close()
+    return res
+
+
+if __name__ == "__main__":
+    import sys
+    pdf, pg = sys.argv[1], int(sys.argv[2])
+    hints = json.loads(sys.argv[3]) if len(sys.argv) > 3 else None
+    print(json.dumps(extract(pdf, pg, hints), indent=1, default=str))

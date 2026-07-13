@@ -35,6 +35,7 @@ def superscript_pow10(page):
         for line in block.get("lines", []):
             for span in line.get("spans", []):
                 txt = "".join(c["c"] for c in span.get("chars", []))
+                txt = txt.replace("−", "-")   # unicode minus in exponents
                 spans.append({"t": txt.strip(), "size": span["size"],
                               "bb": span["bbox"]})
     for a in spans:
@@ -67,6 +68,19 @@ def numeric_tokens(page):
         if in_sup(w):
             continue
         t = w[4].strip().rstrip(".,;")
+        t = t.replace("−", "-")          # unicode minus (matplotlib default)
+        # locale-ambiguity gate: "5.000" is EN 5.0 but DE 5000 — parsing it
+        # either way risks a silently mis-scaled axis (verified 1000x
+        # wrong-emit). Unresolvable at token level -> drop; the axis then
+        # declines for lack of ticks (safe). Leading-zero decimals ("0.395")
+        # cannot be thousands-groups and stay. Comma-decimal with 1-2 digits
+        # ("0,5") is unambiguous -> normalized to a decimal point.
+        if re.fullmatch(r"-?[1-9]\d{0,2}(\.\d{3})+", t):
+            continue
+        if re.fullmatch(r"-?\d+,\d{1,2}", t):
+            t = t.replace(",", ".")
+        elif re.fullmatch(r"-?[1-9]\d{0,2}(,\d{3})+", t):
+            continue                          # EN thousands / DE ambiguity
         if re.fullmatch(r"-?\d+(\.\d+)?([eE]-?\d+)?", t):
             toks.append({"v": float(t), "cx": (w[0]+w[2])/2,
                          "cy": (w[1]+w[3])/2, "bb": w[:4], "raw": t})

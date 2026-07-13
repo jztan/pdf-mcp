@@ -68,6 +68,31 @@ Post-v6 state: synthetic 0.27% / 0-of-10 wrong-emit; real suite (17 cases incl.
 reporter samples) 0 wrong-emit, every emission adjudicated; 0802 caption check
 0.3% / 0.1%.
 
+## v7 update: tick-label parsing gates (locale + unicode minus)
+
+An LLM-consumer review identified tick-label parsing as the trust contract's
+real floor: calibration is the pipeline's one non-geometric input, and a
+consistent misparse yields a high-R², mis-scaled axis no downstream gate
+catches. Both predicted risks **verified empirically**, then fixed:
+
+| Case | Before | After |
+|---|---|---|
+| `line_locale_de` (German thousands-period axis, "10.000" = 10000) | **1000× wrong-emit** (`status: ok`, x range 0.00006–20 vs true 0–20000) | correctly **declines** (locale-ambiguity gate: ambiguous tokens dropped → axis lacks ticks) |
+| `line_neg_log` (matplotlib `10^-k` ticks, U+2212 minus) | fully declined (all negative exponents unparseable) | **extracts at 0.66%** (U+2212 → `-` normalization) |
+
+Gate design: period/comma + exactly-3-digit-group tokens with non-zero integer
+part are genuinely ambiguous (EN decimal vs DE thousands) and are dropped —
+ambiguity → decline, never a guess. Leading-zero decimals (`0.395`) cannot be
+thousands-groups and are kept (protects the 2605 Fig 11 case). Unambiguous
+comma-decimals (`0,5`) normalize. Both archetypes are now permanent synthetic
+corpus cases (12 total). Post-v7: synthetic **0.31% mean err / 0-of-11
+wrong-emit**, real suite unchanged (0 wrong-emit, littelfuse 1.3%, 2605 0.7%,
+1807 1.5/4.1%).
+
+Not in threat model (documented): OCR-style glyph confusion — tick labels come
+from the born-digital text layer (exact character codes), never OCR; mojibake
+fonts fail parsing → decline.
+
 ## Discovery benchmark (`bench_discovery.py`, 2026-07-13)
 
 Tests the `detect_charts` signal from the design (`find_panels ≥ 1` per page)

@@ -107,6 +107,28 @@ for i in range(1, 6):
 ax.set_xlim(0, 10); ax.set_ylim(0, 4)
 save(fig, "decoy_diagram", {"type": "decline_expected", "series": {}})
 
+# 11. German-locale axis: thousands written with PERIOD ("10.000" = 10000).
+# Token-level parsing is genuinely ambiguous vs EN decimals -> the pipeline
+# must DECLINE, never emit a 1000x mis-scaled table (verified wrong-emit
+# before the locale gate; LLM-consumer review 2026-07-13).
+x = np.array([0, 5000, 10000, 15000, 20000], float)
+y = np.array([2, 9, 14, 17, 19], float)
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:red")
+ax.set_xticks(x)
+ax.set_xticklabels(["0", "5.000", "10.000", "15.000", "20.000"])
+ax.set_yticks(range(0, 21, 5))
+save(fig, "line_locale_de", {"type": "decline_expected", "series": {}})
+
+# 12. negative log exponents — matplotlib renders the minus as U+2212;
+# without normalization every negative tick drops and the chart declines.
+x = np.logspace(-3, 0, 10)
+y = 9 + 2*np.log10(x)
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.semilogx(x, y, color="tab:blue")
+save(fig, "line_neg_log", {"type": "line",
+     "series": {"blue": [x.tolist(), y.tolist()]}})
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

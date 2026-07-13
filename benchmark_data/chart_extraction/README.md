@@ -19,6 +19,7 @@ this directory is the runnable evidence behind it.
 | `gen_synthetic.py` | Regenerates `syn_corpus/` — 10 chart archetypes with exact ground truth. Only step needing matplotlib. |
 | `bench_synthetic.py` | Scores the prototype on `syn_corpus/` with an oracle agent (answers hints correctly). Reports accuracy + wrong-emit rate. |
 | `bench_real.py` | Scores it on the arXiv chart-signature pages in `../.reading_order_pdfs/`. Replays **recorded** agent (vision) hint answers so it's deterministic, and prints error vs hand-verified ground truth. |
+| `bench_discovery.py` | Sweeps EVERY corpus page with the chart-signature check (the `detect_charts` discovery signal): recall/false-positives vs adjudicated labels, flag rate, per-page runtime. |
 | `syn_corpus/` | Generated synthetic PDFs + `ground_truth.json` (committed so benchmarks run without matplotlib). |
 | `RESULTS.md` | Snapshot of the last run + the per-page adjudication (incl. the manually-checked ones). |
 

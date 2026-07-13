@@ -68,6 +68,22 @@ Post-v6 state: synthetic 0.27% / 0-of-10 wrong-emit; real suite (17 cases incl.
 reporter samples) 0 wrong-emit, every emission adjudicated; 0802 caption check
 0.3% / 0.1%.
 
+## Discovery benchmark (`bench_discovery.py`, 2026-07-13)
+
+Tests the `detect_charts` signal from the design (`find_panels ≥ 1` per page)
+over the full corpus (640 pages incl. issue-23 samples):
+
+| Metric | Result |
+|---|---|
+| Recall on adjudicated chart pages | **17/17** |
+| False positives on adjudicated non-chart pages (boards/diagrams/heatmaps) | **0/4** |
+| Flag rate over corpus | 6.2% (40/640) — selective, won't spam agents |
+| Runtime per page | median 10ms, p95 42ms, max 710ms (pathological 300k-seg page → the tool should carry a per-page time guard) |
+| Unlabeled flags, sampled visually | 3/3 were genuine charts (incl. 0709.4466 p3, which corrected an earlier by-inference NON-chart label — the signal beat the human label) |
+
+23 flagged pages remain unadjudicated (most in chart-dense papers); the
+sampled precision suggests they are overwhelmingly real charts.
+
 Reproduce with `uv run python benchmark_data/chart_extraction/bench_synthetic.py`
 and `bench_real.py`. See `README.md` for caveats (recorded vs live hints;
 manual adjudication of real-page wrong-emit).

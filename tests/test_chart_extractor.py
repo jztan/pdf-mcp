@@ -71,3 +71,23 @@ def test_detect_charts_signal_budget_returns_none(line_doc):
 
 def test_version_constant():
     assert isinstance(chart_extractor.CHART_EXTRACTION_VERSION, int)
+
+
+def test_sharp_peak_survives_sampling():
+    doc = pymupdf.open(SYN / "line_sharp_peak.pdf")
+    result = chart_extractor.extract_charts(doc, 0, max_points=24)
+    doc.close()
+    assert result["status"] == "ok"
+    pts = result["charts"][0]["curves"][0]["points"]
+    ys = [p[1] for p in pts]
+    # ground truth peak is y=100 at x=5.03 (between uniform sample slots)
+    assert max(ys) > 95, f"peak lost: max emitted y={max(ys)}"
+
+
+def test_extrema_overflow_self_reports():
+    doc = pymupdf.open(SYN / "line_sharp_peak.pdf")
+    # budget of 6 points cannot hold the jagged section's extrema
+    result = chart_extractor.extract_charts(doc, 0, max_points=6)
+    doc.close()
+    notes = result["charts"][0]["diagnostics"].get("notes", [])
+    assert any("extrema exceeded max_points" in n for n in notes)

@@ -129,6 +129,17 @@ ax.semilogx(x, y, color="tab:blue")
 save(fig, "line_neg_log", {"type": "line",
      "series": {"blue": [x.tolist(), y.tolist()]}})
 
+# 13. sharp peak between uniform sample slots — extrema-preserving sampling
+# must retain it ("point-exact, feature-lossy" trap; consumer review).
+x = np.linspace(0, 10, 201)
+y = 10 + 5 * np.sin(x)
+y[y.shape[0] // 2 + 1] = 100.0          # spike at x=5.05
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:red")
+ax.set_yticks(range(0, 101, 20))
+save(fig, "line_sharp_peak", {"type": "line",
+     "series": {"red": [x.tolist(), y.tolist()]}})
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

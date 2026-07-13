@@ -657,19 +657,39 @@ def extract_line(
             continue
         dx = apply_ax(xa, xs)
         dy = apply_ax(ya, ys)
-        if xa["scale"] == "log":
-            qs = np.logspace(np.log10(dx.min()), np.log10(dx.max()), max_points)
-            samp = np.interp(np.log10(qs), np.log10(dx), dy)
+        order = np.argsort(dx)
+        dx, dy = dx[order], dy[order]
+        # path_pts duplicates each interior vertex (line-segment end/start
+        # overlap), which zeroes out d1 at every vertex and defeats the
+        # sign-change extrema test below — collapse exact consecutive
+        # duplicates first so extrema detection sees the real polyline.
+        keep = np.concatenate([[True], (np.diff(dx) != 0) | (np.diff(dy) != 0)])
+        dx, dy = dx[keep], dy[keep]
+        n_extrema_dropped = 0
+        if len(dx) <= max_points:
+            sel = np.arange(len(dx))
+            downsampled = False
         else:
-            qs = np.linspace(dx.min(), dx.max(), max_points)
-            samp = np.interp(qs, dx, dy)
+            # local extrema (sign change of dy differences), ranked by
+            # prominence = |y - mean of neighbors|
+            d1 = np.diff(dy)
+            ext = np.where(np.sign(d1[:-1]) * np.sign(d1[1:]) < 0)[0] + 1
+            prom = np.abs(dy[ext] - (dy[ext - 1] + dy[ext + 1]) / 2)
+            ranked = ext[np.argsort(prom)[::-1]]
+            keep_ext = ranked[: max(0, max_points - 2)]
+            n_extrema_dropped = max(0, len(ext) - len(keep_ext))
+            uniform = np.linspace(0, len(dx) - 1, max_points - len(keep_ext)).astype(
+                int
+            )
+            sel = np.unique(np.concatenate([keep_ext, uniform, [0, len(dx) - 1]]))
+            downsampled = True
         curves.append(
             {
                 "style": k,
                 "multivalued": False,
-                "points": [
-                    [float(f"{a:.5g}"), float(f"{b:.5g}")] for a, b in zip(qs, samp)
-                ],
+                "downsampled": downsampled,
+                "n_extrema_dropped": int(n_extrema_dropped),
+                "points": [[float(f"{dx[i]:.5g}"), float(f"{dy[i]:.5g}")] for i in sel],
             }
         )
     return curves
@@ -881,6 +901,14 @@ def extract_charts(
                             }
                         )
             chart["curves"] = good
+            chart.setdefault("diagnostics", {}).setdefault("notes", [])
+            for c in good:
+                if c.get("n_extrema_dropped"):
+                    chart["diagnostics"]["notes"].append(
+                        f"{c['n_extrema_dropped']} local extrema exceeded "
+                        f"max_points={max_points}; table simplified — raise "
+                        "max_points or read the render for peak questions"
+                    )
             if bad:
                 chart["diagnostics"]["declined_multivalued"] = len(bad)
             if not good:

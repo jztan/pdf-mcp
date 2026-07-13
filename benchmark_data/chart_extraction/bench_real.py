@@ -13,13 +13,14 @@ GOOD extractions; the rest emit plausibly or decline safely.
 
 Run:  uv run python benchmark_data/chart_extraction/bench_real.py
 """
-import os, time, importlib.util, urllib.request
+
+import os, time, sys, urllib.request
 import numpy as np
+import fitz
 
 SP = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("pipeline",
-                                              os.path.join(SP, "pipeline.py"))
-pl = importlib.util.module_from_spec(spec); spec.loader.exec_module(pl)
+sys.path.insert(0, os.path.join(SP, "..", "..", "src"))
+from pdf_mcp import chart_extractor as pl
 
 # Real chart pages come from arXiv. Same corpus + on-demand fetch pattern as
 # scripts/benchmark_reading_order.py: PDFs are cached (gitignored) under
@@ -36,7 +37,8 @@ def fetch_pdf(arxiv_id):
     try:
         req = urllib.request.Request(
             f"https://arxiv.org/pdf/{arxiv_id}",
-            headers={"User-Agent": "Mozilla/5.0 (pdf-mcp chart benchmark)"})
+            headers={"User-Agent": "Mozilla/5.0 (pdf-mcp chart benchmark)"},
+        )
         with open(pdf, "wb") as f:
             f.write(urllib.request.urlopen(req, timeout=30).read())
         time.sleep(1.2)  # be polite to arxiv.org
@@ -45,15 +47,26 @@ def fetch_pdf(arxiv_id):
         print(f"  fetch failed for {arxiv_id}: {e}")
         return None
 
+
 CASES = [
-    ("0710.2265", 7), ("0711.3236", 7), ("0802.0733", 10), ("0802.0733", 12),
-    ("0811.0781", 29), ("0811.0781", 31), ("0904.1520", 9), ("0905.3502", 8),
-    ("0905.3502", 14), ("0905.3502", 17), ("1406.4582", 4), ("1501.05624", 8),
-    ("1501.05624", 9), ("1807.11632", 4),
+    ("0710.2265", 7),
+    ("0711.3236", 7),
+    ("0802.0733", 10),
+    ("0802.0733", 12),
+    ("0811.0781", 29),
+    ("0811.0781", 31),
+    ("0904.1520", 9),
+    ("0905.3502", 8),
+    ("0905.3502", 14),
+    ("0905.3502", 17),
+    ("1406.4582", 4),
+    ("1501.05624", 8),
+    ("1501.05624", 9),
+    ("1807.11632", 4),
     # issue-#23 reporter's own samples (arXiv, auto-fetched):
-    ("2605.06546", 20),   # Fig 11: 6 small-multiple panels x 6 series (+ Fig
-                          # 10 declines: y-axis has 2 composite N x 10^k labels)
-    ("2203.15556", 5),    # Chinchilla IsoFLOP: crossing curves -> decline
+    ("2605.06546", 20),  # Fig 11: 6 small-multiple panels x 6 series (+ Fig
+    # 10 declines: y-axis has 2 composite N x 10^k labels)
+    ("2203.15556", 5),  # Chinchilla IsoFLOP: crossing curves -> decline
 ]
 
 # issue-#23 samples that cannot be auto-fetched (bot-walled / proprietary —
@@ -64,7 +77,7 @@ CASES = [
 #     ?assetguid=15a03de1-f0c6-457a-95f1-55d449fdd756
 LOCAL_DIR = os.path.normpath(os.path.join(SP, "..", ".chart_samples"))
 LOCAL_CASES = [
-    ("littelfuse_sp05", 2),   # "Typical Diode Capacitance vs Reverse Voltage"
+    ("littelfuse_sp05", 2),  # "Typical Diode Capacitance vs Reverse Voltage"
 ]
 
 
@@ -76,8 +89,9 @@ def answer_hints(questions):
         if q["kind"] == "y_axis_for_curve":
             # 1807 p4: red (1.0,0.0,0.0) is the right-axis F0-RMSE curve;
             # everything else reads off the left axis.
-            hints[q["id"]] = "right" if "1.0, 0.0, 0.0" in q["curve_style"] \
-                else "left"
+            hints[q["id"]] = (
+                "right" if "1.0, 0.0, 0.0" in str(q["series_style"]) else "left"
+            )
         elif q["kind"] == "chart_type":
             # 0904 p9 is a scatter (element markers); 0811 p29 is a line.
             hints[q["id"]] = "scatter" if "0904" in q.get("_pdf", "") else "line"
@@ -99,7 +113,7 @@ GROUND_TRUTH = {
     # 7 schemes. Verified separately by cluster-local weighted means
     # (scheme1=1312, scheme5=4727, schemes2-4~2755) -> 0.1-3.1% in the writeup.
     ("littelfuse_sp05", 2): {
-        "kind": "line-dual",   # single curve; same color-matched scoring path
+        "kind": "line-dual",  # single curve; same color-matched scoring path
         "x": [0, 1, 2, 3, 4, 5],
         # visual reads off the rendered figure (+/- ~0.5 pF)
         "series": {"0.0, 0.53, 0.32": [50.0, 38.8, 33.0, 29.8, 27.7, 26.0]},
@@ -127,13 +141,19 @@ def score_line(curve, gt_x, gt_y):
 
 
 def run_case(name, pg, pdf):
-    r = pl.extract(pdf, pg)
+    # max_points=12 pins the v7 sample density (extract_charts' production
+    # default is 24) so this benchmark reproduces the historical v7 numbers.
+    doc = fitz.open(pdf)
+    r = pl.extract_charts(doc, pg - 1, max_points=12)
     if r["status"] == "needs_hint":
         for q in r["questions"]:
             q["_pdf"] = name
-        r = pl.extract(pdf, pg, answer_hints(r["questions"]))
-    n = sum(len(c.get("curves", [])) + len(c.get("bars", []))
-            + len(c.get("points", [])) for c in r["charts"])
+        r = pl.extract_charts(doc, pg - 1, answer_hints(r["questions"]), max_points=12)
+    doc.close()
+    n = sum(
+        len(c.get("curves", [])) + len(c.get("bars", [])) + len(c.get("points", []))
+        for c in r["charts"]
+    )
     line = f"{name} p{pg}: {r['status']:9} emitted={n}"
     gt = GROUND_TRUTH.get((name, pg))
     if gt and gt["kind"] == "line-dual":
@@ -164,12 +184,16 @@ def run():
     for name, pg in LOCAL_CASES:
         pdf = os.path.join(LOCAL_DIR, f"{name}.pdf")
         if not os.path.exists(pdf):
-            print(f"{name} p{pg}: SKIP (download manually into "
-                  f"{LOCAL_DIR}/ — see comment above LOCAL_CASES)")
+            print(
+                f"{name} p{pg}: SKIP (download manually into "
+                f"{LOCAL_DIR}/ — see comment above LOCAL_CASES)"
+            )
             continue
         run_case(name, pg, pdf)
-    print("\nWRONG-EMIT (uncaught by gates): 0 as of v5 — "
-          "adjudicated manually against renders; see RESULTS.md")
+    print(
+        "\nWRONG-EMIT (uncaught by gates): 0 as of v5 — "
+        "adjudicated manually against renders; see RESULTS.md"
+    )
 
 
 if __name__ == "__main__":

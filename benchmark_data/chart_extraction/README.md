@@ -15,7 +15,7 @@ this directory is the runnable evidence behind it.
 
 | File | Purpose |
 |---|---|
-| `pipeline.py` | The prototype. `extract(pdf, page, hints=None)` → `ok` / `needs_hint` / `declined`. Pure vector geometry for calibration + coordinates; hints are semantic enums only (never values). |
+| `src/pdf_mcp/chart_extractor.py` | Chart extraction module (promoted to production). `extract_charts(pdf, page_num, hints=None)` → `ok` / `needs_hint` / `declined`. Pure vector geometry for calibration + coordinates; hints are semantic enums only (never values). Imported by benchmark scripts below. |
 | `gen_synthetic.py` | Regenerates `syn_corpus/` — 10 chart archetypes with exact ground truth. Only step needing matplotlib. |
 | `bench_synthetic.py` | Scores the prototype on `syn_corpus/` with an oracle agent (answers hints correctly). Reports accuracy + wrong-emit rate. |
 | `bench_real.py` | Scores it on the arXiv chart-signature pages in `../.reading_order_pdfs/`. Replays **recorded** agent (vision) hint answers so it's deterministic, and prints error vs hand-verified ground truth. |
@@ -32,8 +32,9 @@ uv run python benchmark_data/chart_extraction/bench_synthetic.py
 uv run python benchmark_data/chart_extraction/bench_real.py
 
 # one page, ad hoc:
-uv run python benchmark_data/chart_extraction/pipeline.py \
-    benchmark_data/.reading_order_pdfs/1807.11632.pdf 4
+uv run python -c "import pymupdf, json; from pdf_mcp import chart_extractor as ce; \
+d = pymupdf.open('benchmark_data/.reading_order_pdfs/1807.11632.pdf'); \
+print(json.dumps(ce.extract_charts(d, 3), indent=1, default=str))"
 ```
 
 Regenerating the synthetic corpus (only if you change `gen_synthetic.py`) needs

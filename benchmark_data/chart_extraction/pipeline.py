@@ -85,6 +85,33 @@ def cluster(toks, key, tol=3.0):
     return groups
 
 
+def monotonic_runs(g, ck, min_len=3):
+    """Split a label cluster into maximal monotonic-value runs along the
+    pixel coordinate. Small-multiple layouts put several subplots' ticks in
+    one row/column cluster; each subplot's ticks form their own run."""
+    g = sorted(g, key=lambda t: t[ck])
+    runs, cur, sign = [], [g[0]] if g else [], 0
+    for t in g[1:]:
+        dv = t["v"] - cur[-1]["v"]
+        s = (dv > 0) - (dv < 0)
+        if s == 0:                      # duplicate value: start a new run
+            if len(cur) >= min_len:
+                runs.append(cur)
+            cur, sign = [t], 0
+            continue
+        if sign == 0 or s == sign:
+            sign = s if sign == 0 else sign
+            cur.append(t)
+        else:
+            if len(cur) >= min_len:
+                runs.append(cur)
+            cur, sign = [cur[-1], t], 0   # previous point may start next run
+            sign = (t["v"] - cur[0]["v"] > 0) - (t["v"] - cur[0]["v"] < 0)
+    if len(cur) >= min_len:
+        runs.append(cur)
+    return runs
+
+
 def tick_series(g, ck):
     g = sorted(g, key=lambda t: t[ck])
     v = np.array([t["v"] for t in g]); px = np.array([t[ck] for t in g])
@@ -132,7 +159,14 @@ def path_pts(d):
         if it[0] == "l":
             pts += [(it[1].x, it[1].y), (it[2].x, it[2].y)]
         elif it[0] == "c":
-            pts += [(it[1].x, it[1].y), (it[4].x, it[4].y)]
+            # sample the cubic bezier — long smooth curves are drawn with few
+            # segments, so endpoints alone starve the cloud (n<8 -> rejected)
+            p0, p1, p2, p3 = it[1], it[2], it[3], it[4]
+            for t in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0):
+                mt = 1-t
+                x = mt**3*p0.x + 3*mt**2*t*p1.x + 3*mt*t**2*p2.x + t**3*p3.x
+                y = mt**3*p0.y + 3*mt**2*t*p1.y + 3*mt*t**2*p2.y + t**3*p3.y
+                pts.append((x, y))
         elif it[0] == "re":
             r = it[1]
             pts += [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)]
@@ -156,8 +190,30 @@ def rects_of(d):
 # ---------------- panel detection ----------------
 
 
+def axis_anchor_segments(page):
+    """long axis-aligned segments + rect edges: candidate axis lines/frames"""
+    horiz, vert = [], []
+    for d in page.get_drawings():
+        for it in d["items"]:
+            segs = []
+            if it[0] == "l":
+                segs = [(it[1], it[2])]
+            elif it[0] == "re":
+                r = it[1]
+                horiz += [(r.x0, r.x1, r.y0), (r.x0, r.x1, r.y1)]
+                vert += [(r.y0, r.y1, r.x0), (r.y0, r.y1, r.x1)]
+                continue
+            for a, b in segs:
+                if abs(a.y-b.y) < 1.0 and abs(a.x-b.x) > 20:
+                    horiz.append((min(a.x, b.x), max(a.x, b.x), a.y))
+                elif abs(a.x-b.x) < 1.0 and abs(a.y-b.y) > 20:
+                    vert.append((min(a.y, b.y), max(a.y, b.y), a.x))
+    return horiz, vert
+
+
 def find_panels(page):
     toks = numeric_tokens(page)
+    horiz, vert = axis_anchor_segments(page)
     rows = [g for g in cluster(toks, lambda t: t["cy"]) if len(g) >= 3]
     # y-axis labels are edge-aligned (right edge for a left axis, left edge
     # for a right axis) — centers shift with digit count, edges don't.
@@ -173,18 +229,40 @@ def find_panels(page):
             seen_sets.append(ids)
             cols.append(g)
     x_axes, y_axes = [], []
-    for g in rows:
-        if max(t["cx"] for t in g)-min(t["cx"] for t in g) < 60:
-            continue
-        s = tick_series(g, "cx")
-        if s:
-            s["y_at"] = float(np.mean([t["cy"] for t in g])); x_axes.append(s)
-    for g in cols:
-        if max(t["cy"] for t in g)-min(t["cy"] for t in g) < 60:
-            continue
-        s = tick_series(g, "cy")
-        if s:
-            s["x_at"] = float(np.mean([t["cx"] for t in g])); y_axes.append(s)
+    for g0 in rows:
+        for g in monotonic_runs(g0, "cx"):
+            if max(t["cx"] for t in g)-min(t["cx"] for t in g) < 60:
+                continue
+            s = tick_series(g, "cx")
+            if not s:
+                continue
+            # anchored-axis check: a real x-label row sits just below a long
+            # horizontal axis line spanning most of its range. Kills "fake
+            # rows" assembled from side-by-side subplots' y-labels (their
+            # gridlines are per-panel, too short to span the fake run).
+            y_at = float(np.mean([t["cy"] for t in g]))
+            x0, x1 = s["px"].min(), s["px"].max()
+            if not any(hx0 <= x0+10 and hx1 >= x1-10
+                       and y_at-25 <= hy <= y_at-1
+                       for hx0, hx1, hy in horiz):
+                continue
+            s["y_at"] = y_at
+            x_axes.append(s)
+    for g0 in cols:
+        for g in monotonic_runs(g0, "cy"):
+            if max(t["cy"] for t in g)-min(t["cy"] for t in g) < 60:
+                continue
+            s = tick_series(g, "cy")
+            if not s:
+                continue
+            x_at = float(np.mean([t["cx"] for t in g]))
+            y0, y1 = s["px"].min(), s["px"].max()
+            if not any(vy0 <= y0+10 and vy1 >= y1-10
+                       and abs(vx-x_at) <= 35
+                       for vy0, vy1, vx in vert):
+                continue
+            s["x_at"] = x_at
+            y_axes.append(s)
     TOL = 30.0
     panels = []
     for xa in x_axes:
@@ -209,9 +287,11 @@ def find_panels(page):
         lefts = [ya for ya in y_axes
                  if ya["x_at"] < x0+20 and ya["px"].max() <= xa["y_at"]+25
                  and corner_ok(ya)]
+        # a true right axis hugs the panel's right edge; anything further out
+        # is a NEIGHBORING subplot's left axis (small-multiple layouts)
         rights = [ya for ya in y_axes
-                  if ya["x_at"] > x1-20 and ya["px"].max() <= xa["y_at"]+25
-                  and corner_ok(ya)]
+                  if x1-20 < ya["x_at"] <= x1+45
+                  and ya["px"].max() <= xa["y_at"]+25 and corner_ok(ya)]
         if not lefts and not rights:
             continue
         lefts.sort(key=lambda ya: x0-ya["x_at"])
@@ -246,6 +326,19 @@ def frame_like(d, panel):
                       for a, b in zip(pts[:-1], pts[1:]))
         if aligned and (w > 0.9*pw or h > 0.9*ph) and min(w, h) < 2.5:
             return True                   # gridline / axis line
+        # per-SEGMENT alignment (pen jumps between strokes are diagonal, so
+        # test the drawn line items, not consecutive sampled points): a path
+        # whose every stroke is axis-aligned is decoration when it is either
+        # (a) a grid lattice spanning the plot, or (b) a thin strip (tick row/
+        # column, partial gridline). Trade-off: (b) also drops a perfectly
+        # flat data line (rare; documented).
+        segs = [(it[1], it[2]) for it in d["items"] if it[0] == "l"]
+        if len(segs) >= 3 and \
+                all(abs(a.x-b.x) < 1.2 or abs(a.y-b.y) < 1.2 for a, b in segs):
+            if w > 0.5*pw and h > 0.5*ph:
+                return True               # grid lattice
+            if min(w, h) < 3:
+                return True               # tick strip / partial gridline
     return False
 
 
@@ -293,6 +386,13 @@ def collect(draws, panel, masks):
             continue
         w, h = bb[2]-bb[0], bb[3]-bb[1]
         cx, cy = (bb[0]+bb[2])/2, (bb[1]+bb[3])/2
+        # tick-mark stubs: tiny paths whose segments are all axis-aligned
+        # (fail the marker aspect check, then pollute clouds as baseline
+        # noise). Pure decoration — skip outright.
+        segs = [(it[1], it[2]) for it in d["items"] if it[0] == "l"]
+        if segs and max(w, h) < 8 and \
+                all(abs(a.x-b.x) < 1.0 or abs(a.y-b.y) < 1.0 for a, b in segs):
+            continue
         # marker glyph: small, square-ish path (filled or stroked). Check
         # BEFORE bars so small filled marker-rects aren't misread as bars.
         mcap = 0.09*min(pw, ph)

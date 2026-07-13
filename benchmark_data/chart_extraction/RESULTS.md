@@ -1,4 +1,36 @@
-# Chart-extraction benchmark — results snapshot (v4, 2026-07-13)
+# Chart-extraction benchmark — results snapshot (v4/v5, 2026-07-13)
+
+## v5 update: validated on the actual issue-#23 sample PDFs
+
+The reporter supplied his real target PDFs (issue #23 comments). All three are
+**born-digital vector** (zero raster chart images) — squarely in scope.
+
+| Sample | Result |
+|---|---|
+| Littelfuse SP05 datasheet p2, "Typical Diode Capacitance vs. Reverse Voltage" (his primary ask; bot-walled URL, download manually) | **Extracted clean**: single green curve (0V, 50.5pF) → (5V, 25.6pF), matches figure; no junk series |
+| arXiv 2605.06546 p20 Fig. 11 (6 small-multiple panels × 6 series) | **All 6 panels extracted**, 6 viridis series each at x=1..12; spot-verified point-for-point against a zoomed render (e.g. dark-blue x=2 → 0.369 vs 0.3688 on chart) |
+| arXiv 2605.06546 p20 Fig. 10 (log-log, y-axis has only two composite "N×10^k" labels) | Declines (calibration needs ≥3 parseable ticks) — honest coverage gap |
+| arXiv 2203.15556 (Chinchilla; reporter himself called it "imo not possible") | Vector too, but IsoFLOP figures are hundreds of crossing curves → declines, as expected |
+
+v5 fixes driven by these samples (all general, no per-sample hacks; full
+regression suite stayed green — synthetic 0.27% / 0 wrong-emit, real 0/14):
+1. **Bezier sampling** in `path_pts` — smooth curves drawn with few cubic
+   segments starved the cloud (Littelfuse curve had 4 endpoints < 8 minimum).
+2. **Tick-strip / grid-lattice filter** — per-*segment* alignment test (pen
+   jumps between stubs are diagonal); kills tick rows/columns drawn as one
+   path. Trade-off: a perfectly flat data line is also dropped (rare —
+   e.g. Fig. 11's r=0 baseline).
+3. **Monotonic-run splitting** of label clusters — small-multiple layouts put
+   several subplots' ticks in one row/column cluster.
+4. **Anchored-axis validation** — a real axis label row/column must have a
+   long axis line/frame edge beside it; kills "fake x-rows" assembled from
+   side-by-side panels' y-labels.
+5. Tighter right-axis band (a true right axis hugs the panel edge; anything
+   further is a neighboring subplot's left axis).
+
+Remaining known gaps: composite "N×10^k" mantissa labels (Fig. 10); flat-line
+trade-off above; small-multiple pages still over-ask dual-axis hints (safe
+direction, noisy).
 
 Reproduce with `uv run python benchmark_data/chart_extraction/bench_synthetic.py`
 and `bench_real.py`. See `README.md` for caveats (recorded vs live hints;

@@ -32,6 +32,42 @@ Remaining known gaps: composite "N×10^k" mantissa labels (Fig. 10); flat-line
 trade-off above; small-multiple pages still over-ask dual-axis hints (safe
 direction, noisy).
 
+## v6 update: reporter's samples added to the benchmark + chimera class killed
+
+The issue-#23 samples are now permanent scored cases in `bench_real.py`
+(arXiv ones auto-fetch; the Littelfuse datasheet is bot-walled/proprietary —
+download manually into `benchmark_data/.chart_samples/`, cases SKIP if absent).
+
+Scored results: littelfuse capacitance curve **1.3%** vs visual GT; 2605.06546
+Fig 11 dark-blue series **0.7%** vs zoomed-render GT; Chinchilla p5 emits its
+two tractable panels (center Parameters-vs-FLOPs scatter; right panel's fit
+line — both value-checked, e.g. 1.5e12 tokens at Gopher's 5.76e23 FLOPs) while
+the crossing-curves envelope declines.
+
+v6 fixes (chasing cross-panel "chimera" emissions — right x-axis, wrong
+y-axis — which regenerated twice under heuristic shifts):
+1. Suffix-magnitude labels (100M / 1.0B / 1T) parse as numbers — without
+   this the center Chinchilla panel's y-axis is invisible and pairing falls
+   through to a neighbor's axis.
+2. Exact-duplicate (not subset) cluster dedup + prefer-more-ticks axis
+   pairing — a clean label subset must survive a polluted superset.
+3. **Anchor-corner consistency**: each axis records its anchor line (nearest
+   to the labels, not longest — page-background rect edges are longer); an
+   x/y pair is accepted only if the y-spine meets the x-anchor's end (≤15pt).
+   Kills neighbor-axis pairing structurally.
+4. Frame-refinement requires mutual-majority overlap (a neighbor's frame
+   merely touches the region edge).
+5. **Bars must stand on the axis baseline** (one-sided: baseline may sit
+   below the lowest labeled tick, never meaningfully above) — kills
+   marginal-distribution histograms (1406) for good, keeps real histograms
+   whose 0 is unlabeled (0802).
+6. Step functions survive decoration filters via stroke connectivity
+   (grids/tick strips are disjoint; a staircase is a connected chain).
+
+Post-v6 state: synthetic 0.27% / 0-of-10 wrong-emit; real suite (17 cases incl.
+reporter samples) 0 wrong-emit, every emission adjudicated; 0802 caption check
+0.3% / 0.1%.
+
 Reproduce with `uv run python benchmark_data/chart_extraction/bench_synthetic.py`
 and `bench_real.py`. See `README.md` for caveats (recorded vs live hints;
 manual adjudication of real-page wrong-emit).

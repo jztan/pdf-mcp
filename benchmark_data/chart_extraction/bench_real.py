@@ -50,6 +50,21 @@ CASES = [
     ("0811.0781", 29), ("0811.0781", 31), ("0904.1520", 9), ("0905.3502", 8),
     ("0905.3502", 14), ("0905.3502", 17), ("1406.4582", 4), ("1501.05624", 8),
     ("1501.05624", 9), ("1807.11632", 4),
+    # issue-#23 reporter's own samples (arXiv, auto-fetched):
+    ("2605.06546", 20),   # Fig 11: 6 small-multiple panels x 6 series (+ Fig
+                          # 10 declines: y-axis has 2 composite N x 10^k labels)
+    ("2203.15556", 5),    # Chinchilla IsoFLOP: crossing curves -> decline
+]
+
+# issue-#23 samples that cannot be auto-fetched (bot-walled / proprietary —
+# not redistributed). Download manually into benchmark_data/.chart_samples/
+# (gitignored); cases SKIP when absent.
+#   littelfuse_sp05.pdf: https://www.littelfuse.com/assetdocs/
+#     tvs-diode-array-spasp050xba-lead-freegreen-datasheet
+#     ?assetguid=15a03de1-f0c6-457a-95f1-55d449fdd756
+LOCAL_DIR = os.path.normpath(os.path.join(SP, "..", ".chart_samples"))
+LOCAL_CASES = [
+    ("littelfuse_sp05", 2),   # "Typical Diode Capacitance vs Reverse Voltage"
 ]
 
 
@@ -83,6 +98,20 @@ GROUND_TRUTH = {
     # 0802 p12: histogram; caption gives the mean boarding time of each of the
     # 7 schemes. Verified separately by cluster-local weighted means
     # (scheme1=1312, scheme5=4727, schemes2-4~2755) -> 0.1-3.1% in the writeup.
+    ("littelfuse_sp05", 2): {
+        "kind": "line-dual",   # single curve; same color-matched scoring path
+        "x": [0, 1, 2, 3, 4, 5],
+        # visual reads off the rendered figure (+/- ~0.5 pF)
+        "series": {"0.0, 0.53, 0.32": [50.0, 38.8, 33.0, 29.8, 27.7, 26.0]},
+    },
+    ("2605.06546", 20): {
+        "kind": "line-dual",
+        "x": [1, 2, 3, 5],
+        # Fig 11 top-left panel, darkest-blue series (r=0.1), read off a 6x
+        # zoomed render. The same style recurs in all 6 panels; scoring takes
+        # the best-matching curve (i.e. the panel this GT belongs to).
+        "series": {"0.23, 0.32, 0.54": [0.3633, 0.3688, 0.3766, 0.3832]},
+    },
 }
 
 
@@ -97,34 +126,50 @@ def score_line(curve, gt_x, gt_y):
     return 100 * np.abs(pred - gy).mean() / max(np.ptp(gy), 1e-9)
 
 
+def run_case(name, pg, pdf):
+    r = pl.extract(pdf, pg)
+    if r["status"] == "needs_hint":
+        for q in r["questions"]:
+            q["_pdf"] = name
+        r = pl.extract(pdf, pg, answer_hints(r["questions"]))
+    n = sum(len(c.get("curves", [])) + len(c.get("bars", []))
+            + len(c.get("points", [])) for c in r["charts"])
+    line = f"{name} p{pg}: {r['status']:9} emitted={n}"
+    gt = GROUND_TRUTH.get((name, pg))
+    if gt and gt["kind"] == "line-dual":
+        for col, ys in gt["series"].items():
+            errs = []
+            for ch in r["charts"]:
+                for c in ch.get("curves", []):
+                    if c.get("points") and col in str(c["style"]):
+                        e = score_line(c, gt["x"], ys)
+                        if e is not None:
+                            errs.append(e)
+            if errs:
+                # style may recur across panels (small multiples): the GT
+                # belongs to one panel, so score the best-matching curve
+                line += f"  | curve[{col}] err={min(errs):.1f}%"
+            else:
+                line += f"  | curve[{col}] NOT EMITTED"
+    print(line)
+
+
 def run():
-    wrong_emit = 0
     for name, pg in CASES:
         pdf = fetch_pdf(name)
         if pdf is None:
             print(f"{name} p{pg}: SKIP (fetch unavailable — needs network)")
             continue
-        r = pl.extract(pdf, pg)
-        if r["status"] == "needs_hint":
-            for q in r["questions"]:
-                q["_pdf"] = name
-            r = pl.extract(pdf, pg, answer_hints(r["questions"]))
-        n = sum(len(c.get("curves", [])) + len(c.get("bars", []))
-                + len(c.get("points", [])) for c in r["charts"])
-        line = f"{name} p{pg}: {r['status']:9} emitted={n}"
-        gt = GROUND_TRUTH.get((name, pg))
-        if gt and gt["kind"] == "line-dual":
-            for ch in r["charts"]:
-                for c in ch.get("curves", []):
-                    if not c.get("points"):
-                        continue
-                    for col, ys in gt["series"].items():
-                        if col in str(c["style"]):
-                            e = score_line(c, gt["x"], ys)
-                            line += f"  | curve[{col}] err={e:.1f}%"
-        print(line)
-    print(f"\nWRONG-EMIT (uncaught by gates): {wrong_emit}  "
-          "(adjudicated manually against renders; see RESULTS.md)")
+        run_case(name, pg, pdf)
+    for name, pg in LOCAL_CASES:
+        pdf = os.path.join(LOCAL_DIR, f"{name}.pdf")
+        if not os.path.exists(pdf):
+            print(f"{name} p{pg}: SKIP (download manually into "
+                  f"{LOCAL_DIR}/ — see comment above LOCAL_CASES)")
+            continue
+        run_case(name, pg, pdf)
+    print("\nWRONG-EMIT (uncaught by gates): 0 as of v5 — "
+          "adjudicated manually against renders; see RESULTS.md")
 
 
 if __name__ == "__main__":

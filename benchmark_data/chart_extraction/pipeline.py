@@ -61,6 +61,7 @@ def numeric_tokens(page):
     def in_sup(w):
         return any(w[0] >= b[0]-1 and w[2] <= b[2]+1 and w[1] >= b[1]-1
                    and w[3] <= b[3]+1 for b in sup_boxes)
+    SUFFIX = {"k": 1e3, "K": 1e3, "M": 1e6, "B": 1e9, "G": 1e9, "T": 1e12}
     toks = []
     for w in get_words(page):
         if in_sup(w):
@@ -69,6 +70,13 @@ def numeric_tokens(page):
         if re.fullmatch(r"-?\d+(\.\d+)?([eE]-?\d+)?", t):
             toks.append({"v": float(t), "cx": (w[0]+w[2])/2,
                          "cy": (w[1]+w[3])/2, "bb": w[:4], "raw": t})
+        else:
+            # suffix-magnitude labels: 100M, 1.0B, 1T (ML/finance axes)
+            m = re.fullmatch(r"(-?\d+(\.\d+)?)([kKMBGT])", t)
+            if m:
+                toks.append({"v": float(m.group(1))*SUFFIX[m.group(3)],
+                             "cx": (w[0]+w[2])/2, "cy": (w[1]+w[3])/2,
+                             "bb": w[:4], "raw": t})
     return toks + sup
 
 
@@ -224,7 +232,10 @@ def find_panels(page):
             if len(g) < 3:
                 continue
             ids = frozenset(id(t) for t in g)
-            if any(ids <= s for s in seen_sets):
+            # exact-duplicate dedup only: a clean SUBSET cluster (e.g. the
+            # same labels without a stray caption token) must survive even
+            # when a polluted superset was seen first
+            if ids in seen_sets:
                 continue
             seen_sets.append(ids)
             cols.append(g)
@@ -242,11 +253,15 @@ def find_panels(page):
             # gridlines are per-panel, too short to span the fake run).
             y_at = float(np.mean([t["cy"] for t in g]))
             x0, x1 = s["px"].min(), s["px"].max()
-            if not any(hx0 <= x0+10 and hx1 >= x1-10
-                       and y_at-25 <= hy <= y_at-1
-                       for hx0, hx1, hy in horiz):
+            anchors = [(hx0, hx1, hy) for hx0, hx1, hy in horiz
+                       if hx0 <= x0+10 and hx1 >= x1-10
+                       and y_at-25 <= hy <= y_at-1]
+            if not anchors:
                 continue
             s["y_at"] = y_at
+            # segment nearest the labels = the axis line / frame bottom edge
+            # (NOT the longest — that can be the page-background rect edge)
+            s["anchor"] = min(anchors, key=lambda a: y_at-a[2])
             x_axes.append(s)
     for g0 in cols:
         for g in monotonic_runs(g0, "cy"):
@@ -257,11 +272,13 @@ def find_panels(page):
                 continue
             x_at = float(np.mean([t["cx"] for t in g]))
             y0, y1 = s["px"].min(), s["px"].max()
-            if not any(vy0 <= y0+10 and vy1 >= y1-10
-                       and abs(vx-x_at) <= 35
-                       for vy0, vy1, vx in vert):
+            anchors = [(vy0, vy1, vx) for vy0, vy1, vx in vert
+                       if vy0 <= y0+10 and vy1 >= y1-10
+                       and abs(vx-x_at) <= 35]
+            if not anchors:
                 continue
             s["x_at"] = x_at
+            s["anchor"] = min(anchors, key=lambda a: abs(a[2]-x_at))
             y_axes.append(s)
     TOL = 30.0
     panels = []
@@ -284,18 +301,29 @@ def find_panels(page):
             band = max(0.4*xspan, 80)
             horiz = (x0-band) <= ya["x_at"] <= (x1+band)
             return vert and horiz
+        # anchor-corner consistency: the y-axis spine must meet the x-axis
+        # anchor line at a shared corner. A neighboring subplot's spine does
+        # not line up with THIS panel's frame edge.
+        hx0a, hx1a, _ = xa["anchor"]
+
+        def corner_meets(ya, end_x):
+            return abs(ya["anchor"][2] - end_x) <= 15
+
         lefts = [ya for ya in y_axes
                  if ya["x_at"] < x0+20 and ya["px"].max() <= xa["y_at"]+25
-                 and corner_ok(ya)]
+                 and corner_ok(ya) and corner_meets(ya, hx0a)]
         # a true right axis hugs the panel's right edge; anything further out
         # is a NEIGHBORING subplot's left axis (small-multiple layouts)
         rights = [ya for ya in y_axes
                   if x1-20 < ya["x_at"] <= x1+45
-                  and ya["px"].max() <= xa["y_at"]+25 and corner_ok(ya)]
+                  and ya["px"].max() <= xa["y_at"]+25
+                  and corner_ok(ya) and corner_meets(ya, hx1a)]
         if not lefts and not rights:
             continue
-        lefts.sort(key=lambda ya: x0-ya["x_at"])
-        rights.sort(key=lambda ya: ya["x_at"]-x1)
+        # more ticks = better axis (half-columns from label-cluster splits
+        # lose to the full column), then nearest to the plot edge
+        lefts.sort(key=lambda ya: (-len(ya["px"]), x0-ya["x_at"]))
+        rights.sort(key=lambda ya: (-len(ya["px"]), ya["x_at"]-x1))
         ya = lefts[0] if lefts else rights[0]
         panels.append({
             "xa": xa, "ya": ya,
@@ -335,6 +363,12 @@ def frame_like(d, panel):
         segs = [(it[1], it[2]) for it in d["items"] if it[0] == "l"]
         if len(segs) >= 3 and \
                 all(abs(a.x-b.x) < 1.2 or abs(a.y-b.y) < 1.2 for a, b in segs):
+            # connected chain of aligned strokes = a STEP FUNCTION (data),
+            # not decoration: grids/tick strips are disjoint strokes.
+            joined = sum(1 for (a1, b1), (a2, b2) in zip(segs[:-1], segs[1:])
+                         if abs(b1.x-a2.x) < 1.0 and abs(b1.y-a2.y) < 1.0)
+            if joined >= 0.8*(len(segs)-1):
+                return False
             if w > 0.5*pw and h > 0.5*ph:
                 return True               # grid lattice
             if min(w, h) < 3:
@@ -471,8 +505,20 @@ def extract_bar(bar_rects, xa, ya):
     for r, s in bar_rects:
         by_style[s].append(r)
     series = []
+    yv = ya["v"]
+    y_lo, y_rng = float(min(yv)), float(max(yv))-float(min(yv))
     for s, rs in by_style.items():
         if len(rs) < 3:
+            continue
+        # bars must stand on the axis baseline: the series' common bottom
+        # edge has to map to ~the y-axis minimum. A marginal-distribution
+        # histogram (drawn in the plot margins with its own local zero) maps
+        # to a random mid-axis value and is rejected here.
+        base_py = collections.Counter(round(r.y1, 1) for r in rs).most_common(1)[0][0]
+        base_val = float(apply_ax(ya, base_py))
+        # one-sided: the true baseline may sit below the lowest LABELED tick
+        # (charts often leave 0 unlabeled), but never meaningfully above it
+        if base_val - y_lo > 0.1*max(y_rng, 1e-9):
             continue
         pts = []
         for r in rs:
@@ -540,9 +586,20 @@ def extract(pdf, pageno, hints=None):
         # refine region: if a plot-frame box was found, adopt it (tick-label
         # spans undershoot the true plot area) and re-collect
         pw0 = panel["rx1"]-panel["rx0"]; ph0 = panel["ry1"]-panel["ry0"]
+
+        def mutual_overlap(bb):
+            # frame must mostly overlap THIS panel (and vice versa) — a
+            # neighboring subplot's frame merely touches the region edge
+            ix = max(0, min(bb[2], panel["rx1"])-max(bb[0], panel["rx0"]))
+            iy = max(0, min(bb[3], panel["ry1"])-max(bb[1], panel["ry0"]))
+            inter = ix*iy
+            fa = (bb[2]-bb[0])*(bb[3]-bb[1])
+            pa = pw0*ph0
+            return inter >= 0.5*fa and inter >= 0.5*pa
         big = [v3bb for v3bb in (d_bbox(f) for f in frames)
                if v3bb and 0.7*pw0 < (v3bb[2]-v3bb[0]) < 1.4*pw0
-               and 0.5*ph0 < (v3bb[3]-v3bb[1]) < 1.4*ph0]
+               and 0.5*ph0 < (v3bb[3]-v3bb[1]) < 1.4*ph0
+               and mutual_overlap(v3bb)]
         if big:
             fb = max(big, key=lambda b: (b[2]-b[0])*(b[3]-b[1]))
             panel = dict(panel, rx0=fb[0]-2, rx1=fb[2]+2,

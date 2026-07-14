@@ -1339,6 +1339,7 @@ class PDFCache:
                 except FileNotFoundError:
                     pass
             conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM page_charts WHERE file_path = ?", (path,))
 
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
@@ -1438,6 +1439,10 @@ class PDFCache:
                     f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_charts WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
         with sqlite3.connect(self.db_path) as conn2:
@@ -1485,6 +1490,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_embeddings")
             conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
+            conn.execute("DELETE FROM page_charts")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -1519,6 +1525,10 @@ class PDFCache:
 
             stats["total_renders"] = conn.execute(
                 "SELECT COUNT(*) FROM page_renders"
+            ).fetchone()[0]
+
+            stats["total_charts"] = conn.execute(
+                "SELECT COUNT(*) FROM page_charts"
             ).fetchone()[0]
 
             # FTS5 indexed page count

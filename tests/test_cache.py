@@ -1433,3 +1433,13 @@ def test_page_charts_mtime_invalidation(cache, sample_pdf):
     time.sleep(0.01)
     os.utime(sample_pdf)
     assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None
+
+
+def test_page_charts_cleared_by_clear_all(cache, sample_pdf):
+    """clear_all must drop page_charts too — it was previously missing from
+    every clear/invalidation path, so a chart cache row would survive
+    pdf_cache_clear (and _invalidate_file / clear_expired) forever."""
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, {"status": "ok"})
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is not None
+    cache.clear_all()
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from pdf_mcp.cache import PDFCache, _get_columns
+from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
 
 
 @pytest.fixture
@@ -1443,3 +1444,30 @@ def test_page_charts_cleared_by_clear_all(cache, sample_pdf):
     assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is not None
     cache.clear_all()
     assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None
+
+
+def test_page_charts_stale_version_purged_on_open(sample_pdf, tmp_path):
+    """A page_charts row written under an older CHART_EXTRACTION_VERSION must
+    be purged the next time a PDFCache opens the same DB file — otherwise a
+    stale pre-response-shape-change row (e.g. series `style` as a tuple
+    instead of a dict) would keep being served forever. Mirrors the
+    _EXTRACTION_VERSION purge for page_text."""
+    cache_dir = tmp_path / "chart_version_cache"
+    cache1 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
+    result = {"status": "ok", "charts": [{"chart_id": "p0"}]}
+    cache1.save_page_charts(str(sample_pdf), 1, "abc123", 24, result)
+    assert cache1.get_page_charts(str(sample_pdf), 1, "abc123", 24) == result
+
+    # Simulate a row written by an older extraction version, bypassing
+    # save_page_charts (which always stamps the *current* constant).
+    with sqlite3.connect(cache1.db_path) as conn:
+        conn.execute(
+            "UPDATE page_charts SET chart_extraction_version = ? "
+            "WHERE file_path = ? AND page_num = ?",
+            (CHART_EXTRACTION_VERSION - 1, str(sample_pdf), 1),
+        )
+
+    # Re-opening the DB (a fresh PDFCache instance, as happens across server
+    # restarts) must purge rows whose stamped version no longer matches.
+    cache2 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
+    assert cache2.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None

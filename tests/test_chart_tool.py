@@ -119,6 +119,46 @@ def test_detect_charts_default_off(call_read):
     assert "charts_detected" not in r["pages"][0]
 
 
+def test_render_unavailable_on_missing_file(call, isolated_server):
+    """If the cached render_path file is gone by the time a cache-hit
+    re-attaches its image block (e.g. an OS temp-dir sweep, or the renders
+    dir was cleared out-of-band), the tool must degrade gracefully: no image
+    block for that render, render_unavailable=True, and no exception."""
+    result = call(path=str(SYN / "decoy_diagram.pdf"), page=1)
+    r = result[0]
+    assert r["status"] == "declined"
+    render_path = Path(r["render_path"])
+    assert render_path.exists()
+
+    # First call populated the cache; delete the render file on disk so the
+    # *next* call (a cache hit) fails to re-attach the image.
+    render_path.unlink()
+
+    result2 = call(path=str(SYN / "decoy_diagram.pdf"), page=1)
+    r2 = result2[0]
+    assert r2["from_cache"] is True
+    assert r2.get("render_unavailable") is True
+    # No image block was produced for the missing render.
+    assert len(result2) == 1
+    assert all(getattr(b, "type", None) != "image" for b in result2[1:])
+
+
+def test_render_oversized_on_missing_file(call, isolated_server, monkeypatch):
+    """When a render PNG exceeds the transport byte budget, the tool must
+    drop the image block, flag render_oversized=True on the response, and
+    not raise — rather than silently omitting the flag or crashing."""
+    from pdf_mcp import server
+
+    monkeypatch.setattr(server, "RENDER_RESULT_BYTE_BUDGET", 10)
+
+    result = call(path=str(SYN / "decoy_diagram.pdf"), page=1)
+    r = result[0]
+    assert r["status"] == "declined"
+    assert r.get("render_oversized") is True
+    assert len(result) == 1
+    assert all(getattr(b, "type", None) != "image" for b in result[1:])
+
+
 def test_inline_errors(call):
     r = call(path="/nonexistent.pdf", page=1)
     assert isinstance(r, list) and len(r) == 1

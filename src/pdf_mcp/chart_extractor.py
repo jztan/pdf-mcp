@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 1
+CHART_EXTRACTION_VERSION = 2
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:

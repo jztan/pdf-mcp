@@ -39,6 +39,16 @@ CASES = [
 _SERIES_REQUIRED = {"kind", "style", "label", "resolved_by", "axis"}
 
 
+@pytest.fixture(autouse=True)
+def _clean_cache(isolated_server):
+    """CRITICAL: run every contract test against a FRESH cache. Without this
+    the tool serves stale page_charts rows and the tests validate the OLD
+    response shape — the exact cache-masking that hid these bugs during
+    development (a probe key added to the live response passed the schema
+    guard until the cache was isolated)."""
+    return isolated_server
+
+
 def _call(name, page, **kw):
     return server.pdf_extract_chart(path=str(SYN / f"{name}.pdf"), page=page, **kw)
 
@@ -122,6 +132,42 @@ def test_declined_and_hint_carry_inline_image():
 def test_error_envelope_is_still_a_list():
     r = server.pdf_extract_chart(path="/does/not/exist.pdf", page=1)
     assert isinstance(r, list) and len(r) == 1 and "error" in r[0]
+
+
+# --- schema<->version coupling guard ---------------------------------------
+# The CHART_EXTRACTION_VERSION bump was forgotten TWICE, and stale page_charts
+# cache then served the old shape. A comment-rule wasn't enough. This pins the
+# emitted chart-object key set to the version: change the shape and this test
+# fails, and the fix (edit EXPECTED_CHART_KEYS) sits right next to the version
+# you must bump — so the two move together instead of drifting silently.
+EXPECTED_CHART_KEYS = {
+    "chart_id",
+    "chart_type",
+    "region_bbox",
+    "x_axis",
+    "y_axis",
+    "series",
+    "diagnostics",
+    "render_path",
+}  # optional, status-dependent keys (y_axis_right, decline_reason) excluded
+EXPECTED_SCHEMA_VERSION = 4  # BUMP THIS whenever the set above changes
+
+
+def test_response_schema_coupled_to_version():
+    from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
+
+    r = _call("line_color_linear", 1)
+    keys = set(r[0]["charts"][0])
+    assert keys == EXPECTED_CHART_KEYS, (
+        f"chart response schema changed ({keys ^ EXPECTED_CHART_KEYS}). "
+        "If intended: update EXPECTED_CHART_KEYS AND bump both "
+        "EXPECTED_SCHEMA_VERSION and CHART_EXTRACTION_VERSION (cached rows "
+        "carry the version; a change without a bump serves the old shape)."
+    )
+    assert CHART_EXTRACTION_VERSION == EXPECTED_SCHEMA_VERSION, (
+        "CHART_EXTRACTION_VERSION and EXPECTED_SCHEMA_VERSION disagree — bump "
+        "them together whenever the response shape changes."
+    )
 
 
 @pytest.mark.skipif(

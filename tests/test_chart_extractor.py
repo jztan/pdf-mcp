@@ -225,6 +225,7 @@ def test_max_points_floor():
 
 
 REAL = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
+LOCAL = Path(__file__).parent.parent / "benchmark_data" / ".chart_samples"
 
 
 @pytest.mark.skipif(
@@ -512,11 +513,43 @@ def test_axis_title_rejects_body_text():
     doc = pymupdf.open(REAL / "1807.11632.pdf")
     result = chart_extractor.extract_charts(doc, 3)
     doc.close()
+    chart = result["charts"][0]
+    # positive: the REAL x-title is captured (not null, not the body-text
+    # pollution "as follows. In the multi-speaker task, ...")
+    assert chart["x_axis"]["title"] == "size"
+    # the left + right y-axis titles are the real ones, not captions
+    assert chart["y_axis"]["title"] == "MCD (dB)"
+    assert "y_axis_right" in chart
+    assert "RMSE" in (chart["y_axis_right"]["title"] or "")
+
+
+def test_axis_title_null_when_only_body_text_below_axis():
+    """Chinchilla p5 has a figure caption under the panel but no real x-axis
+    title — the tool must return null, never the caption."""
+    doc = pymupdf.open(REAL / "2203.15556.pdf")
+    result = chart_extractor.extract_charts(doc, 4)
+    doc.close()
     for ch in result["charts"]:
-        title = ch["x_axis"]["title"]
-        assert title is None or title == "size"
-        assert title is None or " task," not in title
-        assert len(title or "") <= 45
+        t = ch["x_axis"]["title"]
+        assert t is None or (
+            len(t) <= 45 and not t.lower().startswith(("figure", "fig"))
+        )
+
+
+@pytest.mark.skipif(
+    not (LOCAL / "littelfuse_sp05.pdf").exists(),
+    reason="proprietary datasheet not present locally",
+)
+def test_real_axis_titles_captured_not_dropped():
+    """False-negative guard: the gate must still capture genuine short titles.
+    Littelfuse p2 has real x/y titles that the frame-refined-panel bug used to
+    drop to null."""
+    doc = pymupdf.open(LOCAL / "littelfuse_sp05.pdf")
+    result = chart_extractor.extract_charts(doc, 1)
+    doc.close()
+    chart = result["charts"][0]
+    assert chart["x_axis"]["title"] == "Diode Reverse Voltage (V)"
+    assert chart["y_axis"]["title"] == "Diode Capacitance (pF)"
 
 
 def test_dual_axis_exposes_right_axis():

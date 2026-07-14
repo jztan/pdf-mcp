@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 2
+CHART_EXTRACTION_VERSION = 3
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -670,20 +670,32 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
     titles) via get_text('dict') line direction. Returns
     {"left": str|None, "right": str|None}."""
     out: dict[str, str | None] = {"left": None, "right": None}
+    # Anchor on the y-tick COLUMN geometry, not the (frame-refined) panel box:
+    # frame refinement can enclose the axis titles, moving the box edges past
+    # them. Tick positions are stable.
+    ya_l = panel.get("ya_left") or panel.get("ya")
+    ya_r = panel.get("ya_right")
+    if ya_l is not None:
+        y_top = float(ya_l["px"].min())
+        y_bot = float(ya_l["px"].max())
+    else:
+        y_top, y_bot = panel["ry0"], panel["ry1"]
     d = page.get_text("dict")
     for block in d.get("blocks", []):
         for line in block.get("lines", []):
             if abs(line.get("dir", (1, 0))[0]) > 0.3:
                 continue  # not vertical text
             bb = line["bbox"]
-            if not (panel["ry0"] - 10 <= bb[1] and bb[3] <= panel["ry1"] + 10):
-                continue
-            text = " ".join(s["text"] for s in line["spans"]).strip()
+            if bb[3] < y_top - 30 or bb[1] > y_bot + 30:
+                continue  # not vertically alongside the axis
+            text = re.sub(
+                r"\s+", " ", " ".join(s["text"] for s in line["spans"]).strip()
+            )
             if not text or not _looks_like_axis_title(text):
                 continue
-            if bb[2] <= panel["rx0"] + 10:
+            if ya_l is not None and bb[2] <= ya_l["x_at"] - 2:
                 out["left"] = text
-            elif bb[0] >= panel["rx1"] - 10:
+            elif ya_r is not None and bb[0] >= ya_r["x_at"] + 2:
                 out["right"] = text
     return out
 
@@ -692,24 +704,35 @@ def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
     """x-axis title: horizontal text centered under the tick-label row,
     within a plausible band below the panel. Returns the nearest such line,
     or None (display string only — never parsed as data)."""
+    # Anchor on the x-tick label row (xa["y_at"]) and the tick span, not the
+    # frame-refined panel box (which can enclose the title, pushing ry1 below
+    # it). The predicate — not a tight band — is what rejects body-text/caption
+    # pollution, so the band can be generous and the nearest passing line wins.
+    xa = panel.get("xa")
+    if xa is None:
+        return None
+    y_row = float(xa["y_at"])
+    x0t, x1t = float(xa["px"].min()), float(xa["px"].max())
+    cx_target = (x0t + x1t) / 2
+    span = max(x1t - x0t, 1e-6)
     d = page.get_text("dict")
-    cx_target = (panel["rx0"] + panel["rx1"]) / 2
-    pw = max(panel["rx1"] - panel["rx0"], 1e-6)
     best: tuple[float, str] | None = None
     for block in d.get("blocks", []):
         for line in block.get("lines", []):
             if abs(line.get("dir", (1, 0))[1]) > 0.3:
                 continue  # not horizontal text
             bb = line["bbox"]
-            if not (panel["ry1"] + 2 <= bb[1] <= panel["ry1"] + 35):
-                continue
-            text = " ".join(s["text"] for s in line["spans"]).strip()
+            if not (y_row + 2 <= bb[1] <= y_row + 45):
+                continue  # not just below the tick-label row
+            text = re.sub(
+                r"\s+", " ", " ".join(s["text"] for s in line["spans"]).strip()
+            )
             if not text or not _looks_like_axis_title(text):
                 continue
             line_cx = (bb[0] + bb[2]) / 2
-            if abs(line_cx - cx_target) > 0.3 * pw:
+            if abs(line_cx - cx_target) > 0.35 * span:
                 continue
-            dist = abs(bb[1] - panel["ry1"])
+            dist = bb[1] - y_row
             if best is None or dist < best[0]:
                 best = (dist, text)
     return best[1] if best else None

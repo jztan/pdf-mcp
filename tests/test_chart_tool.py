@@ -182,7 +182,6 @@ def test_inline_errors(call):
 def test_server_exposes_y_axis_right(call):
     """The server response must surface y_axis_right on a dual-axis chart
     (the module produces it; the response whitelist used to drop it)."""
-    import os
     from pathlib import Path
 
     real = (

@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 4
+CHART_EXTRACTION_VERSION = 5
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -77,7 +77,17 @@ def get_words(page: Any) -> Any:
     return page.get_text("words")
 
 
-def superscript_pow10(page: Any) -> list[dict[str, Any]]:
+def superscript_powers(page: Any) -> list[dict[str, Any]]:
+    """Recover ``base^exponent`` tick labels typeset with a raised superscript.
+
+    Handles bases 10 and 2 (see the base filter below) — powers-of-two axes
+    (batch size, sequence length, dataset size) are ubiquitous in ML and, read
+    as plain text, `2^19` glues to "219", which then fits a *linear* axis at
+    r2=1.0 and silently emits a table off by orders of magnitude and wrong in
+    scale type (verified wrong-emit on Hestness 1712.00409 Fig 1). The base and
+    exponent are separate spans (exponent smaller + baseline-raised), so `b^k`
+    is recoverable geometrically the same way `10^k` is.
+    """
     out: list[dict[str, Any]] = []
     raw = page.get_text("rawdict")
     spans: list[dict[str, Any]] = []
@@ -90,7 +100,12 @@ def superscript_pow10(page: Any) -> list[dict[str, Any]]:
                     {"t": txt.strip(), "size": span["size"], "bb": span["bbox"]}
                 )
     for a in spans:
-        if a["t"] != "10":
+        # base: restricted to the log bases that actually occur on chart axes
+        # (10 and 2). Allowing arbitrary bases created false matches from
+        # coincidental adjacencies of unrelated numbers on dense multi-panel
+        # figures ("9^2", "20^8"), corrupting calibration — verified on
+        # 2605.06546 p20. A base-16/base-e chart would be a sample-driven add.
+        if a["t"] not in ("10", "2"):
             continue
         for b in spans:
             if b is a or not re.fullmatch(r"-?\d{1,2}", b["t"]):
@@ -104,11 +119,11 @@ def superscript_pow10(page: Any) -> list[dict[str, Any]]:
                 x1, y1 = b["bb"][2], max(a["bb"][3], b["bb"][3])
                 out.append(
                     {
-                        "v": 10.0 ** float(b["t"]),
+                        "v": float(a["t"]) ** float(b["t"]),
                         "cx": (x0 + x1) / 2,
                         "cy": (y0 + y1) / 2,
                         "bb": (x0, y0, x1, y1),
-                        "raw": f"10^{b['t']}",
+                        "raw": f"{a['t']}^{b['t']}",
                     }
                 )
                 break
@@ -116,7 +131,7 @@ def superscript_pow10(page: Any) -> list[dict[str, Any]]:
 
 
 def numeric_tokens(page: Any) -> list[dict[str, Any]]:
-    sup = superscript_pow10(page)
+    sup = superscript_powers(page)
     sup_boxes = [s["bb"] for s in sup]
 
     def in_sup(w: Any) -> bool:
@@ -757,6 +772,23 @@ def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
     return best[1] if best else None
 
 
+def _title_says_log(title: str | None) -> bool:
+    """True when an axis title DECLARES a log scale — matches "log scale",
+    "log-scale", "logarithmic", "(log)". Deliberately does NOT match a logged
+    QUANTITY like "log likelihood"/"log loss" (those are values plotted on a
+    possibly-linear axis). Used as a contradiction guard: title says log but
+    calibration came out linear ⇒ the tick labels weren't read correctly
+    (e.g. an unrecoverable superscript typography) ⇒ decline, never emit a
+    mis-scaled linear table."""
+    if not title:
+        return False
+    # \b before "log" so we don't match "anaLOG SCALE" / "cataLOG scale"
+    # (Visual Analog Scale is a common *linear* axis — a false decline).
+    return bool(
+        re.search(r"\blog[\s-]?scale|\blogarithmic|\(\s*log\s*\)", title.lower())
+    )
+
+
 def _tokens(s: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", s.lower()))
 
@@ -1207,6 +1239,26 @@ def extract_charts(
                 "title": titles.get("right"),
                 "range": [float(ya_r["v"].min()), float(ya_r["v"].max())],
             }
+        # contradiction guard: an axis whose TITLE declares a log scale but
+        # which calibrated as linear means the tick labels were mis-read
+        # (e.g. a base^exp superscript typography we couldn't recover) — the
+        # numbers would be off by orders of magnitude. Decline rather than
+        # emit a confidently-wrong linear table.
+        _axes = [chart["x_axis"], chart["y_axis"]]
+        if "y_axis_right" in chart:
+            _axes.append(chart["y_axis_right"])
+        if any(
+            ax["scale"] == "linear" and _title_says_log(ax.get("title")) for ax in _axes
+        ):
+            chart["chart_type"] = "declined"
+            chart["decline_reason"] = (
+                "axis title declares a log scale but calibration is linear — "
+                "tick labels not read reliably (unrecoverable superscript?)"
+            )
+            chart["diagnostics"]["notes"].append(chart["decline_reason"])
+            res["charts"].append(chart)
+            continue
+
         # dual-axis: ask per emitted series unless hinted
         if ctype == "line":
             curves = extract_line(clouds, panel, xa, ya, max_points)

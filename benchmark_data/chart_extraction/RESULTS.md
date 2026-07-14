@@ -246,3 +246,36 @@ Per the sample-driven post-ship policy: no calibration change without a
 confirmed real chart that has TEXT scalar labels on a genuinely
 pixel-compressed log axis and currently declines. None found. Restraint here
 is the 0-wrong-emit discipline in action.
+
+## Base^exponent superscript recovery + log-title contradiction guard (2026-07-14)
+
+A consumer caught a confident wrong-emit in the wild: Hestness et al.
+(1712.00409 Fig 1) has an x-axis with power-of-two ticks (2¹⁹…2²⁷) typeset as
+`base` + superscript `exponent`. The old `superscript_pow10` handler only
+recognised base-10 decades, so the two-glyph labels read as the literal
+concatenations "219…227" and calibrated **linear** — a geometrically-exact-
+looking but wrong table. This is a *read* error (mis-parsed tick label), not a
+scale-choice judgement, so it sits outside the exact-or-decline gray zone: the
+right behaviour is to read the label correctly.
+
+Two changes (both general, no per-sample hacks):
+
+1. **`superscript_powers`** (renamed from `superscript_pow10`) recovers
+   `base^exponent` for `base ∈ {10, 2}` — the two bases that appear as real log
+   axes. Constrained to those two: an earlier any-integer-base generalization
+   false-matched incidental super/subscripts on 2605.06546 p20 ('9²', '8⁰',
+   '20⁸'), blowing that chart from 0.8% to 204% error. With `{10,2}`, Hestness
+   now reads x = log[524288 … 134217728] and 2605 stays at 36 series / 0.8%.
+
+2. **Contradiction guard** (`_title_says_log` + a check in `extract_charts`):
+   if an axis *title* declares a log scale ("(log-scale)", "logarithmic") but
+   the axis calibrated linear, the chart **declines** instead of emitting the
+   mis-scaled table. This is a narrow backstop — it only fires when the log
+   title is a short, extractable label; Hestness's own title is a long sentence
+   the title extractor rejects, so the base² reader (not the guard) is what
+   actually fixes Hestness. `_title_says_log` deliberately does NOT match
+   "log likelihood" / "log loss" (logged quantities, not scale declarations).
+
+New synthetic archetype `line_log2` (base-2 log x-axis, ticks 2¹⁹…2²⁷) pins the
+recovery: scores 0.10% of y-range, 0/15 wrong-emit. Real corpus stays 0 uncaught
+wrong-emit. `CHART_EXTRACTION_VERSION` → 5 (cache rows carry the version).

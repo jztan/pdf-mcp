@@ -523,6 +523,55 @@ def test_axis_title_rejects_body_text():
     assert "RMSE" in (chart["y_axis_right"]["title"] or "")
 
 
+def test_base2_log_axis_recovered_not_read_as_linear():
+    """Base-2 superscript ticks (2^19..2^27) must read as a LOG axis, not glue
+    to integers "219..227" and emit a linear axis off by orders of magnitude
+    (verified wrong-emit on Hestness 1712.00409)."""
+    doc = pymupdf.open(SYN / "line_log2.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    xa = result["charts"][0]["x_axis"]
+    assert xa["scale"] == "log"
+    assert xa["range"][0] == 2**19 and xa["range"][1] == 2**27
+
+
+def test_title_says_log_predicate():
+    f = chart_extractor._title_says_log
+    assert f("Number of Tokens (Log-scale)")
+    assert f("Frequency (logarithmic)")
+    assert f("Compute (log)")
+    assert not f("log likelihood")  # a logged QUANTITY, not a scale decl
+    assert not f("log loss")
+    assert not f("Voltage (V)")
+    assert not f(None)
+    # word-boundary: "...log scale" inside a longer word must NOT match —
+    # Visual Analog Scale is a common LINEAR axis; matching it false-declines.
+    assert not f("Visual Analog Scale")
+    assert not f("analog scale")
+    assert not f("catalog scale")
+
+
+def test_contradiction_guard_declines_log_title_linear_calibration(monkeypatch):
+    """Backstop for unrecoverable log-axis typographies: when an axis title
+    DECLARES a log scale but the axis calibrated LINEAR, decline — never emit a
+    mis-scaled linear table. NB: this only fires when the log-scale title is a
+    short, extractable label; the real Hestness fix is the base^exp reader
+    (its actual title is a long sentence the title extractor rejects). Here we
+    force a short log-scale x-title onto a genuinely linear chart to exercise
+    the guard mechanism directly."""
+    monkeypatch.setattr(
+        chart_extractor, "_x_axis_title", lambda page, panel: "size (log scale)"
+    )
+    doc = pymupdf.open(SYN / "line_color_linear.pdf")
+    try:
+        result = chart_extractor.extract_charts(doc, 0)
+    finally:
+        doc.close()
+    declined = [c for c in result["charts"] if c["chart_type"] == "declined"]
+    assert declined, "log-titled linear-calibrated axis must decline"
+    assert any("declares a log scale" in c.get("decline_reason", "") for c in declined)
+
+
 def test_multipanel_ytitle_not_stolen_from_neighbor():
     """Cross-panel title theft (ship-blocker): on a tight 3-panel figure each
     panel's y-title must be ITS OWN. Chinchilla p5 center panel is "Parameters"

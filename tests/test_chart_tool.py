@@ -21,6 +21,17 @@ def call(isolated_server):
     return _call
 
 
+@pytest.fixture()
+def call_read(isolated_server):
+    # Mirrors `call` above but for pdf_read_pages.
+    from pdf_mcp import server
+
+    def _call(**kw):
+        return server.pdf_read_pages(**kw)
+
+    return _call
+
+
 def test_ok_flow_emits_table_and_render(call):
     r = call(path=str(SYN / "line_color_linear.pdf"), page=1)
     assert "error" not in r
@@ -60,6 +71,18 @@ def test_declined_chart_reason_surfaced_in_response(call):
     chart = declined[0]
     assert chart["decline_reason"]
     assert any("multivalued" in n for n in chart["diagnostics"]["notes"])
+
+
+def test_detect_charts_flag(call_read):
+    r = call_read(
+        path=str(SYN / "line_color_linear.pdf"), pages="1", detect_charts=True
+    )
+    assert r["pages"][0]["charts_detected"] == 1
+
+
+def test_detect_charts_default_off(call_read):
+    r = call_read(path=str(SYN / "line_color_linear.pdf"), pages="1")
+    assert "charts_detected" not in r["pages"][0]
 
 
 def test_inline_errors(call):

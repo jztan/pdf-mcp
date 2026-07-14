@@ -24,6 +24,8 @@ resolves the axis without a hint. Emitted curves carry "resolved_by"
 ("geometry" | "text" | "hint") and "label" (str | None).
 """
 
+import hashlib
+import json
 import re
 import collections
 from pathlib import Path
@@ -33,6 +35,15 @@ import numpy as np
 import pymupdf
 
 CHART_EXTRACTION_VERSION = 1
+
+
+def hints_hash(hints: dict[str, str] | None) -> str:
+    """Stable short digest of a hints dict, order-independent. ``None`` and
+    ``{}`` hash identically — both mean "no hints" for cache-key purposes."""
+    return hashlib.sha1(json.dumps(hints or {}, sort_keys=True).encode()).hexdigest()[
+        :16
+    ]
+
 
 # a drawing style key: (stroke_color, fill_color, line_width)
 Style = tuple[Any, Any, float]

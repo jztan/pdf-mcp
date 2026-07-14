@@ -130,6 +130,16 @@ def test_version_constant():
     assert isinstance(chart_extractor.CHART_EXTRACTION_VERSION, int)
 
 
+def test_hints_hash_order_independent():
+    a = chart_extractor.hints_hash({"p0.type": "bar", "p0.s1.axis": "right"})
+    b = chart_extractor.hints_hash({"p0.s1.axis": "right", "p0.type": "bar"})
+    assert a == b
+
+
+def test_hints_hash_none_equals_empty_dict():
+    assert chart_extractor.hints_hash(None) == chart_extractor.hints_hash({})
+
+
 def test_sharp_peak_survives_sampling():
     doc = pymupdf.open(SYN / "line_sharp_peak.pdf")
     result = chart_extractor.extract_charts(doc, 0, max_points=24)

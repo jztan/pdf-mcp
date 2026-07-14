@@ -1418,3 +1418,18 @@ class TestKeywordRankingCacheInvariance:
         ]
 
         assert before == after
+
+
+def test_page_charts_roundtrip(cache, sample_pdf):
+    result = {"status": "ok", "charts": [{"chart_id": "p0"}]}
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, result)
+    got = cache.get_page_charts(str(sample_pdf), 1, "abc123", 24)
+    assert got == result
+    assert cache.get_page_charts(str(sample_pdf), 1, "other", 24) is None
+
+
+def test_page_charts_mtime_invalidation(cache, sample_pdf):
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, {"status": "ok"})
+    time.sleep(0.01)
+    os.utime(sample_pdf)
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None

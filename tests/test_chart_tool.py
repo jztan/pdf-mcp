@@ -52,6 +52,16 @@ def test_declined_returns_page_render(call):
     assert Path(r["render_path"]).exists()
 
 
+def test_declined_chart_reason_surfaced_in_response(call):
+    r = call(path=str(SYN / "line_mono_crossing.pdf"), page=1)
+    assert r["status"] == "declined"
+    declined = [c for c in r.get("charts", []) if c["chart_type"] == "declined"]
+    assert declined, "expected the response to include the declined chart"
+    chart = declined[0]
+    assert chart["decline_reason"]
+    assert any("multivalued" in n for n in chart["diagnostics"]["notes"])
+
+
 def test_inline_errors(call):
     assert "error" in call(path="/nonexistent.pdf", page=1)
     r = call(path=str(SYN / "line_color_linear.pdf"), page=99)

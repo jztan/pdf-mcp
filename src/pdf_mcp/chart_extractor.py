@@ -1121,6 +1121,7 @@ def extract_charts(
                 chart["decline_reason"] = (
                     "all line clouds multivalued " "(crossing/overlapping curves)"
                 )
+                chart["diagnostics"]["notes"].append(chart["decline_reason"])
         elif ctype == "bar":
             chart["bars"] = extract_bar(bar_rects, xa, ya)
         elif ctype == "scatter":
@@ -1169,6 +1170,8 @@ def extract_charts(
             chart["decline_reason"] = (
                 "series fell outside axis range " "(likely not a data chart)"
             )
+            chart.setdefault("diagnostics", {}).setdefault("notes", [])
+            chart["diagnostics"]["notes"].append(chart["decline_reason"])
         res["charts"].append(chart)
     unconsumed = set(hints) - used_hint_keys
     if unconsumed:

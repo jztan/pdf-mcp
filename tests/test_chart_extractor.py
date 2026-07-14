@@ -60,6 +60,21 @@ def test_hints_resolve_dual_axis(dual_doc):
     assert axes == {"left", "right"}
 
 
+def test_declined_chart_carries_reason_in_diagnostics_notes():
+    doc = pymupdf.open(SYN / "line_mono_crossing.pdf")
+    try:
+        result = chart_extractor.extract_charts(doc, 0)
+    finally:
+        doc.close()
+    assert result["status"] == "declined"
+    declined = [c for c in result["charts"] if c["chart_type"] == "declined"]
+    assert declined, "expected at least one declined chart"
+    chart = declined[0]
+    assert chart["decline_reason"]
+    notes = chart["diagnostics"]["notes"]
+    assert any("multivalued" in n for n in notes)
+
+
 def test_annotated_hint_render(tmp_path, dual_doc):
     result = chart_extractor.extract_charts(dual_doc, 0)
     assert result["status"] == "needs_hint"

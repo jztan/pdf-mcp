@@ -2844,18 +2844,19 @@ def pdf_extract_chart(
             info = render_page_as_png(
                 doc, page - 1, out_dir, pdf_hash, dpi=150, clip=clip
             )
-            response_charts.append(
-                {
-                    "chart_id": chart["chart_id"],
-                    "chart_type": chart["chart_type"],
-                    "region_bbox": chart.get("region_bbox"),
-                    "x_axis": chart["x_axis"],
-                    "y_axis": chart["y_axis"],
-                    "series": _chart_series(chart),
-                    "diagnostics": chart["diagnostics"],
-                    "render_path": info["file_path_on_disk"],
-                }
-            )
+            response_chart = {
+                "chart_id": chart["chart_id"],
+                "chart_type": chart["chart_type"],
+                "region_bbox": chart.get("region_bbox"),
+                "x_axis": chart["x_axis"],
+                "y_axis": chart["y_axis"],
+                "series": _chart_series(chart),
+                "diagnostics": chart["diagnostics"],
+                "render_path": info["file_path_on_disk"],
+            }
+            if "decline_reason" in chart:
+                response_chart["decline_reason"] = chart["decline_reason"]
+            response_charts.append(response_chart)
         result["charts"] = response_charts
         if result["status"] == "declined":
             info = render_page_as_png(doc, page - 1, out_dir, pdf_hash, dpi=150)

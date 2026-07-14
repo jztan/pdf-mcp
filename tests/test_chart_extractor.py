@@ -523,6 +523,21 @@ def test_axis_title_rejects_body_text():
     assert "RMSE" in (chart["y_axis_right"]["title"] or "")
 
 
+def test_multipanel_ytitle_not_stolen_from_neighbor():
+    """Cross-panel title theft (ship-blocker): on a tight 3-panel figure each
+    panel's y-title must be ITS OWN. Chinchilla p5 center panel is "Parameters"
+    and the right panel is "Tokens" — the right panel used to steal the center
+    panel's title (numerically incoherent: tokens labeled parameters)."""
+    doc = pymupdf.open(REAL / "2203.15556.pdf")
+    result = chart_extractor.extract_charts(doc, 4)
+    doc.close()
+    titles = [c["y_axis"].get("title") for c in result["charts"]]
+    assert "Parameters" in titles and "Tokens" in titles, titles
+    # no two panels share the same non-null y-title (theft signature)
+    non_null = [t for t in titles if t]
+    assert len(non_null) == len(set(non_null)), f"duplicate stolen title: {titles}"
+
+
 def test_axis_title_null_when_only_body_text_below_axis():
     """Chinchilla p5 has a figure caption under the panel but no real x-axis
     title — the tool must return null, never the caption."""

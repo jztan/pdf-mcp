@@ -2968,6 +2968,8 @@ def pdf_extract_chart(
                 "diagnostics": chart["diagnostics"],
                 "render_path": info["file_path_on_disk"],
             }
+            if "y_axis_right" in chart:
+                response_chart["y_axis_right"] = chart["y_axis_right"]
             if "decline_reason" in chart:
                 response_chart["decline_reason"] = chart["decline_reason"]
             response_charts.append(response_chart)

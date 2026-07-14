@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 3
+CHART_EXTRACTION_VERSION = 4
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -682,6 +682,15 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
         y_bot = float(ya_l["px"].max())
     else:
         y_top, y_bot = panel["ry0"], panel["ry1"]
+    # A y-axis title sits IMMEDIATELY beside its own tick column. On a tight
+    # multi-panel figure a neighbor panel's title is left of this panel's tick
+    # column too, so an unbounded "left of the column" test steals it (verified:
+    # Chinchilla's "Tokens" panel got the center panel's "Parameters" title).
+    # Fix: cap the horizontal gap and keep the NEAREST candidate to this
+    # column, not the last one iterated.
+    MAX_GAP = 55.0
+    best_l: tuple[float, str] | None = None
+    best_r: tuple[float, str] | None = None
     d = page.get_text("dict")
     for block in d.get("blocks", []):
         for line in block.get("lines", []):
@@ -695,10 +704,18 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
             )
             if not text or not _looks_like_axis_title(text):
                 continue
-            if ya_l is not None and bb[2] <= ya_l["x_at"] - 2:
-                out["left"] = text
-            elif ya_r is not None and bb[0] >= ya_r["x_at"] + 2:
-                out["right"] = text
+            if ya_l is not None:
+                gap = ya_l["x_at"] - bb[2]  # title is left of the tick column
+                if 2 <= gap <= MAX_GAP and (best_l is None or gap < best_l[0]):
+                    best_l = (gap, text)
+            if ya_r is not None:
+                gap = bb[0] - ya_r["x_at"]  # title is right of the tick column
+                if 2 <= gap <= MAX_GAP and (best_r is None or gap < best_r[0]):
+                    best_r = (gap, text)
+    if best_l is not None:
+        out["left"] = best_l[1]
+    if best_r is not None:
+        out["right"] = best_r[1]
     return out
 
 

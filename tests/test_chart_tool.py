@@ -177,3 +177,27 @@ def test_inline_errors(call):
     )
     assert len(r) == 1
     assert "error" in r[0]  # invalid enum value
+
+
+def test_server_exposes_y_axis_right(call):
+    """The server response must surface y_axis_right on a dual-axis chart
+    (the module produces it; the response whitelist used to drop it)."""
+    import os
+    from pathlib import Path
+
+    real = (
+        Path(__file__).parent.parent
+        / "benchmark_data"
+        / ".reading_order_pdfs"
+        / "1807.11632.pdf"
+    )
+    if not real.exists():
+        import pytest
+
+        pytest.skip("real corpus not fetched")
+    r = call(path=str(real), page=4)
+    chart = r[0]["charts"][0]
+    assert "y_axis_right" in chart
+    assert chart["y_axis_right"]["side"] == "right"
+    assert "RMSE" in (chart["y_axis_right"]["title"] or "")
+    assert len(chart["y_axis_right"]["range"]) == 2

@@ -672,8 +672,10 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
     out: dict[str, str | None] = {"left": None, "right": None}
     # Anchor on the y-tick COLUMN geometry, not the (frame-refined) panel box:
     # frame refinement can enclose the axis titles, moving the box edges past
-    # them. Tick positions are stable.
-    ya_l = panel.get("ya_left") or panel.get("ya")
+    # them. Tick positions are stable. Use ya_left specifically (NOT a fallback
+    # to the primary ya, which on a right-only panel IS the right axis — that
+    # would let a right-side title spuriously populate out["left"]).
+    ya_l = panel.get("ya_left")
     ya_r = panel.get("ya_right")
     if ya_l is not None:
         y_top = float(ya_l["px"].min())

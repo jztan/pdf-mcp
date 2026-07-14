@@ -483,3 +483,60 @@ def test_looks_like_colorbar_detects_raster_strip(dual_doc):
     x1 = panel["xa"]["px"].max()
     ya = panel["ya"]
     assert chart_extractor._looks_like_colorbar(page, x1, ya) is False
+
+
+def test_looks_like_axis_title():
+    good = [
+        "size",
+        "Superposition Size",
+        "Diode Reverse Voltage (V)",
+        "Compute (PF-days)",
+        "Number of d electrons",
+        "iter. (1e4)",
+    ]
+    bad = [
+        "as follows. In the multi-speaker task, we used en.base and",
+        "Figure 2 | Training curve envelope for a range of model sizes.",
+    ]
+    for t in good:
+        assert chart_extractor._looks_like_axis_title(t) is True, t
+    for t in bad:
+        assert chart_extractor._looks_like_axis_title(t) is False, t
+
+
+def test_axis_title_rejects_body_text():
+    """Ship-blocker regression: _x_axis_title must never launder body text
+    or a figure caption into x_axis.title. 1807.11632 p4 (0-indexed 3) is a
+    real sample where the nearest horizontal line under the panel used to be
+    a sentence fragment, not the true axis title ("size")."""
+    doc = pymupdf.open(REAL / "1807.11632.pdf")
+    result = chart_extractor.extract_charts(doc, 3)
+    doc.close()
+    for ch in result["charts"]:
+        title = ch["x_axis"]["title"]
+        assert title is None or title == "size"
+        assert title is None or " task," not in title
+        assert len(title or "") <= 45
+
+
+def test_dual_axis_exposes_right_axis():
+    doc = pymupdf.open(SYN / "line_dual_axis.pdf")
+    r1 = chart_extractor.extract_charts(doc, 0)
+    hints = {q["id"]: "left" for q in r1["questions"]}
+    for q in r1["questions"]:
+        if q["series_style"]["color"] and q["series_style"]["color"][0] > 0.5:
+            hints[q["id"]] = "right"
+    result = chart_extractor.extract_charts(doc, 0, hints=hints)
+    doc.close()
+    assert result["status"] == "ok"
+    chart = result["charts"][0]
+    assert "y_axis_right" in chart
+    yar = chart["y_axis_right"]
+    assert yar["side"] == "right"
+    assert len(yar["range"]) == 2
+    assert isinstance(yar["range"][0], float) and isinstance(yar["range"][1], float)
+
+    doc2 = pymupdf.open(SYN / "line_color_linear.pdf")
+    result2 = chart_extractor.extract_charts(doc2, 0)
+    doc2.close()
+    assert "y_axis_right" not in result2["charts"][0]

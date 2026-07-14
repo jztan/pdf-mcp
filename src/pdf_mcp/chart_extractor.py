@@ -599,6 +599,22 @@ def masked(x: float, y: float, masks: list[tuple[float, float, float, float]]) -
     return any(m[0] <= x <= m[2] and m[1] <= y <= m[3] for m in masks)
 
 
+def _looks_like_axis_title(text: str) -> bool:
+    """A real axis title is a short label, not a sentence or caption."""
+    t = text.strip()
+    if not t or len(t) > 45:
+        return False
+    if len(t.split()) > 6:
+        return False
+    if re.match(r"(?i)^(figure|fig|table|eq|equation)\b", t):
+        return False
+    if re.search(r",\s", t):  # sentence-like clause separator
+        return False
+    if re.fullmatch(r"-?\d+(\.\d+)?", t):  # a stray number
+        return False
+    return True
+
+
 # ---------------- tier-2 text self-answering (legend + axis titles) --------
 
 
@@ -663,7 +679,7 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
             if not (panel["ry0"] - 10 <= bb[1] and bb[3] <= panel["ry1"] + 10):
                 continue
             text = " ".join(s["text"] for s in line["spans"]).strip()
-            if not text:
+            if not text or not _looks_like_axis_title(text):
                 continue
             if bb[2] <= panel["rx0"] + 10:
                 out["left"] = text
@@ -685,10 +701,10 @@ def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
             if abs(line.get("dir", (1, 0))[1]) > 0.3:
                 continue  # not horizontal text
             bb = line["bbox"]
-            if not (panel["ry1"] + 2 <= bb[1] <= panel["ry1"] + 60):
+            if not (panel["ry1"] + 2 <= bb[1] <= panel["ry1"] + 35):
                 continue
             text = " ".join(s["text"] for s in line["spans"]).strip()
-            if not text or re.fullmatch(r"-?\d+(\.\d+)?", text):
+            if not text or not _looks_like_axis_title(text):
                 continue
             line_cx = (bb[0] + bb[2]) / 2
             if abs(line_cx - cx_target) > 0.3 * pw:
@@ -1140,6 +1156,15 @@ def extract_charts(
                 "notes": [],
             },
         }
+        if panel["ya_left"] and panel["ya_right"]:
+            ya_r = panel["ya_right"]
+            chart["y_axis_right"] = {
+                "scale": ya_r["scale"],
+                "r2": round(ya_r["r2"], 5),
+                "side": "right",
+                "title": titles.get("right"),
+                "range": [float(ya_r["v"].min()), float(ya_r["v"].max())],
+            }
         # dual-axis: ask per emitted series unless hinted
         if ctype == "line":
             curves = extract_line(clouds, panel, xa, ya, max_points)

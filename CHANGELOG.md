@@ -14,7 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a rendered image fallback. Vision-capable callers can resolve
   semantic ambiguity (dual axes, chart type) via closed-enum hints with
   annotated renders; many cases self-resolve from legend/axis-title text.
-  Benchmarked at 0 wrong-emits across the synthetic + real regression suite
+  Returns a list whose first element is the structured result and whose
+  following elements are MCP image blocks (the annotated render on
+  `needs_hint`, the full-page render on `declined`; `include_render=True`
+  also inlines the chart crop on `ok`) — the same image-content pattern as
+  `pdf_render_pages`. Each series carries axis titles/range, provenance
+  (`resolved_by`), and honesty flags (`multivalued`, `downsampled`).
+  Benchmarked at 0 wrong-emits across the synthetic + real regression suite,
+  including out-of-sample validation on fresh arXiv PDFs
   ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
 - `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
   signal (~10ms/page) so agents notice extractable charts

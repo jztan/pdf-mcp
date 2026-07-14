@@ -350,3 +350,45 @@ well-behaved ASCII positive-decade log axes. Real ML papers break the
 tick-label reader constantly via `10^k` exponent typography, and the failure is
 silent + confident. Cataloged here; not yet fixed (decision: keep gathering
 before committing to a reader fix vs. an aggressive decline guard).
+
+## Catalog growth — econ / finance / bio / stats batch (2026-07-15)
+
+Third batch, for locale/toolchain diversity: 36 recent applied papers pulled via
+the arXiv API across econ.GN, q-fin.ST, q-fin.RM, q-bio.PE, q-bio.NC, stat.AP
+(R / Stata / seaborn / matplotlib toolchains). 43 chart-signal pages → 174
+emits, 13 declines, 51 triage-flagged; flagged emits verified against renders.
+
+**No new CATASTROPHIC class.** These domains are almost entirely linear-axis,
+and the linear tick parser is solid: 4-decimal volatility ticks
+(2607.09566 efficient frontiers, `0.0005…0.0025`) and large-count density ticks
+(2607.08291 `0…70000`) both calibrate correctly. Genuine-negative-x axes
+(standardized-return / SDF domains, `[-2,2]`, `[-3,3]`) emit correctly, like the
+non-ML negatives.
+
+**Confirmed / reinforced (medium & low):**
+- **Title pollution is pervasive in multi-panel econ/finance figures** — bold
+  subplot captions are captured as axis titles across dozens of panels:
+  `(a) DAX 100`, `(c) Nikkei 225`, `30 days EP`, `2 quantile`, `(d) TWLO.`
+  The real axis title (e.g. "Risk") is displaced. Display-only, values
+  unaffected, but the `title` field is not trustworthy on grid figures.
+- **Dense overlapping-distribution grids over-emit instead of declining** (new,
+  medium). 2607.08291 Fig 19 is a 6×4 grid of seaborn KDE+histogram panels with
+  three translucent Train/Validation/Test fills each; the tool traces a single
+  "curve" per panel. Axis ranges are roughly right, but a stack of overlapping
+  translucent densities has no single extractable curve — the series data is
+  semantically meaningless and should decline (multivalued/overlapping fills).
+- **Mixed curve+scatter panels**: efficient-frontier panels carry a smooth curve
+  plus two scatter clouds; the tool emits the curve and its scatter handling is
+  inconsistent across the pair.
+
+**Still untested — thousands-separators & comma-decimals.** matplotlib/R (what
+arXiv applied papers use) don't emit `1,000` grouping or European `0,5` decimal
+commas, so this parser path remains unexercised. It would need Stata/Excel/SPSS
+or journal-typeset PDFs, which arXiv doesn't readily provide — an open gap, not
+a clean result.
+
+**Running tally across all three batches:** one catastrophic silent class
+(log-`10^k`-exponent axes, ML), medium (multi-panel axis/title mixing;
+overlapping-distribution over-emit), low (noisy-trace multivalued; title
+subscript splits). Linear tick parsing, genuine negatives, and positive-decade
+log all correct. Still held experimental; nothing fixed.

@@ -60,6 +60,21 @@ def test_hints_resolve_dual_axis(dual_doc):
     assert axes == {"left", "right"}
 
 
+def test_annotated_hint_render(tmp_path, dual_doc):
+    result = chart_extractor.extract_charts(dual_doc, 0)
+    assert result["status"] == "needs_hint"
+    chart_extractor.annotate_questions(dual_doc, 0, result, tmp_path, "testhash")
+    q = result["questions"][0]
+    assert Path(q["render_path"]).exists()
+    assert q["highlight"] in chart_extractor._HALO_NAMES
+    # halo hue must genuinely contrast with the series' own color — not just
+    # differ in name — so channel-wise distance must clear a real threshold.
+    halo_rgb = chart_extractor._HALOS[q["highlight"]]
+    series_rgb = q["series_style"]["color"] or (0, 0, 0)
+    dist = sum(abs(a - b) for a, b in zip(halo_rgb, series_rgb))
+    assert dist >= 0.8
+
+
 def test_detect_charts_signal(line_doc):
     n = chart_extractor.detect_charts_signal(line_doc[0])
     assert n == 1
@@ -156,14 +171,16 @@ def test_legend_style_collision_drops_both_entries(monkeypatch):
 
     blue = (0.1, 0.2, 0.8)
     monkeypatch.setattr(
-        ce, "_legend_entries",
+        ce,
+        "_legend_entries",
         lambda page, panel: [
             ((blue, None, 1.0), "series alpha"),
             ((blue, None, 1.0), "series beta"),
         ],
     )
     monkeypatch.setattr(
-        ce, "_axis_titles",
+        ce,
+        "_axis_titles",
         lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
     )
     curves = [{"style": (blue, None, 1.0), "points": [[0, 0], [1, 1]]}]
@@ -179,14 +196,16 @@ def test_legend_unique_match_answers(monkeypatch):
     blue = (0.1, 0.2, 0.8)
     red = (0.9, 0.1, 0.1)
     monkeypatch.setattr(
-        ce, "_legend_entries",
+        ce,
+        "_legend_entries",
         lambda page, panel: [
             ((blue, None, 1.0), "series alpha"),
             ((red, None, 1.0), "series beta"),
         ],
     )
     monkeypatch.setattr(
-        ce, "_axis_titles",
+        ce,
+        "_axis_titles",
         lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
     )
     curves = [

@@ -26,9 +26,11 @@ resolves the axis without a hint. Emitted curves carry "resolved_by"
 
 import re
 import collections
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pymupdf
 
 CHART_EXTRACTION_VERSION = 1
 
@@ -1031,6 +1033,7 @@ def extract_charts(
                     panel_questions.append(
                         {
                             "id": akey,
+                            "chart_id": f"p{pi}",
                             "kind": "y_axis_for_curve",
                             "series_style": series_style,
                             "options": ["left", "right"],
@@ -1094,6 +1097,7 @@ def extract_charts(
             res["questions"].append(
                 {
                     "id": tkey,
+                    "chart_id": f"p{pi}",
                     "kind": "chart_type",
                     "options": ["line", "bar", "scatter", "not_a_chart"],
                 }
@@ -1143,6 +1147,91 @@ def extract_charts(
         if not res["reasons"]:
             res["reasons"].append("no extractable series passed gates")
     return res
+
+
+# ---------------- annotated hint renders (halo underlay) ----------------
+
+# translucent halo colors used to highlight a queried series in a hint
+# render; must stay visually distinct from common matplotlib series colors
+# (tab:blue, tab:red, tab:green, ...) so the halo never blends into the line
+# it is meant to point at.
+_HALOS: dict[str, tuple[float, float, float]] = {
+    "magenta": (1, 0, 1),
+    "orange": (1, 0.6, 0),
+    "cyan": (0, 0.8, 1),
+    "green": (0.1, 0.8, 0.1),
+}
+_HALO_NAMES: list[str] = list(_HALOS)
+
+
+def _pick_halo(series_color: tuple[float, ...] | None) -> str:
+    """Halo hue that contrasts with the series' own color: maximize
+    channel-wise distance."""
+    sc = series_color or (0, 0, 0)
+    return max(_HALOS, key=lambda n: sum(abs(a - b) for a, b in zip(_HALOS[n], sc)))
+
+
+def annotate_questions(
+    doc: Any,
+    page_num: int,
+    result: dict[str, Any],
+    out_dir: Path,
+    pdf_hash: str,
+) -> dict[str, str]:
+    """Render one annotated clip per panel that has open questions; a
+    translucent halo is drawn UNDER each queried series (stroke untouched).
+
+    Sets ``q["render_path"]`` and ``q["highlight"]`` on every question in
+    ``result["questions"]`` and returns ``{chart_id: png_path}``.
+    """
+    out: dict[str, str] = {}
+    by_panel: dict[str, list[dict[str, Any]]] = {}
+    for q in result.get("questions", []):
+        by_panel.setdefault(q["chart_id"], []).append(q)
+    if not by_panel:
+        return out
+    src_page = doc[page_num]
+    panels = find_panels(src_page)
+    draws = src_page.get_drawings()
+    for chart_id, qs in by_panel.items():
+        pi = int(chart_id[1:])
+        if pi >= len(panels):
+            continue
+        panel = panels[pi]
+        tmp = pymupdf.open()
+        tmp.insert_pdf(doc, from_page=page_num, to_page=page_num)
+        page = tmp[0]
+        shape = page.new_shape()
+        masks = legend_masks(src_page, panel)
+        _, _, _, clouds = collect(draws, panel, masks)
+        for q in qs:
+            series_style = q.get("series_style")
+            col = series_style.get("color") if series_style else None
+            target = tuple(col) if col else None
+            hue = _pick_halo(target)
+            q["highlight"] = hue
+            if target is not None:
+                for style, pts in clouds.items():
+                    if style[0] == target and pts:
+                        seq = sorted(pts)[:400]
+                        shape.draw_polyline(seq)
+                        shape.finish(color=_HALOS[hue], width=4, stroke_opacity=0.35)
+                        break
+        shape.commit(overlay=False)  # UNDER the original strokes
+        clip = pymupdf.Rect(
+            panel["rx0"] - 5,
+            panel["ry0"] - 5,
+            panel["rx1"] + 5,
+            panel["ry1"] + 5,
+        )
+        pix = page.get_pixmap(dpi=200, clip=clip)
+        path = str(out_dir / f"chart_hints_{pdf_hash}_p{page_num + 1}_{chart_id}.png")
+        pix.save(path)
+        tmp.close()
+        for q in qs:
+            q["render_path"] = path
+        out[chart_id] = path
+    return out
 
 
 def detect_charts_signal(page: Any, budget_ms: int = 250) -> int | None:

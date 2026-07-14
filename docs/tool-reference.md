@@ -361,6 +361,8 @@ Extract chart data as exact `(x, y)` tables from a born-digital vector chart on 
 3. **Vision hint** — if still ambiguous, the tool returns `status: "needs_hint"` with closed-enum `questions[]`; a vision-capable caller looks at each question's `render_path` (the series in question is highlighted) and answers, then re-calls with `hints={...}` (`resolved_by: "hint"`).
 4. **Decline** — if no path resolves the chart (or it's out of scope entirely), `status: "declined"` with `reasons[]` and a full-page render.
 
+A panel can also be ambiguous at the chart-*type* level: if it has valid, calibrated axes but no geometry that classifies as a line, bar, or scatter series, `chart_type` comes back `"unknown"` and the tool asks a `kind: "chart_type"` question (`id: "p{n}.type"`, `options: ["line", "bar", "scatter", "not_a_chart"]`). Unlike axis-assignment questions, there's no specific series to point at yet, so this question carries no `series_style`, and its `render_path` is a plain, un-annotated crop of the whole panel — no highlight halo is drawn. Answer it the same way as any other hint: pass `{"p{n}.type": "..."}` in a follow-up call.
+
 **Status values:**
 - `"ok"` — `charts[].series[]` carry exact points plus render evidence.
 - `"needs_hint"` — a semantic choice is ambiguous; see `questions[]`.
@@ -377,8 +379,14 @@ Extract chart data as exact `(x, y)` tables from a born-digital vector chart on 
 **Returns:**
 - `page` (int) — Echoes the requested page.
 - `status` (string) — `"ok"`, `"needs_hint"`, or `"declined"`.
-- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis` (`scale`, `r2`, and for `y_axis` a `side` of `"left"`/`"right"`), `series[]` (`kind`, `style`, `points` as `[x, y]` pairs, `resolved_by`, `label`, `multivalued`, `downsampled`, `n_extrema_dropped`), `diagnostics` (`n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, `notes`), and `render_path` (annotated crop of the chart region).
-- `questions` (array, present when `status="needs_hint"`) — `id`, `chart_id`, `kind`, `series_style`, `options`, `highlight`, `render_path`.
+- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis` (`scale`, `r2`, and for `y_axis` a `side` of `"left"`/`"right"`), `series[]`, `diagnostics`, `decline_reason` (conditional), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames).
+- `series[]` fields vary by `kind`:
+  - `"curve"` — `{style, points, axis, resolved_by, label, multivalued, downsampled, n_extrema_dropped}`. The provenance (`resolved_by`), `label`, and sampling fields (`downsampled`, `n_extrema_dropped`) are curve-only.
+  - `"bars"` — `{style, bars}`. The data key is `bars`, not `points`.
+  - `"points"` (scatter) — `{style, marker_size, points}`.
+- `diagnostics` — `n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, and `notes` (line charts; may be absent otherwise — bar/scatter chart diagnostics may omit the key entirely).
+- `decline_reason` (string, conditional) — present only on a chart whose `chart_type` is `"declined"`; a human-readable reason (e.g. `"all line clouds multivalued (crossing/overlapping curves)"`). The same text also appears in that chart's `diagnostics.notes`.
+- `questions` (array, present when `status="needs_hint"`) — `id`, `chart_id`, `kind`, `series_style` (absent for the `chart_type` question kind — no specific series to describe), `options`, `highlight`, `render_path`.
 - `reasons` (array, present when `status="declined"`) — Human-readable strings describing which gate(s) fired.
 - `from_cache` (bool).
 

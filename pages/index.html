@@ -875,6 +875,14 @@
         <p>Turn any page into a PNG so a vision model can read diagrams, handwriting, or scans directly.</p>
       </div>
 
+      <div class="feature-card">
+        <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 8l-5 5-3-3-4 4"/></svg>
+        </span>
+        <h3>Chart data extraction</h3>
+        <p>Reads exact <code>(x, y)</code> tables straight from a vector chart's drawing geometry — not estimated. Ambiguous or out-of-scope charts decline with a rendered image instead of guessing.</p>
+      </div>
+
     </div>
   </div>
 </section>
@@ -890,10 +898,11 @@
     </button>
   </div>
   <p class="other-tools">
-    The demo shows 3 of pdf-mcp's 9 tools. The server also includes
+    The demo shows 3 of pdf-mcp's 10 tools. The server also includes
     <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
-    <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and
-    <code>server_info</code>, plus OCR, SQLite caching, and RRF hybrid search.
+    <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>,
+    <code>pdf_cache_clear</code>, and <code>server_info</code>, plus OCR,
+    SQLite caching, and RRF hybrid search.
   </p>
   <div class="links">
     <a class="link-btn" href="https://github.com/jztan/pdf-mcp">GitHub</a>
@@ -917,7 +926,7 @@
 
     <h2>How agents use pdf-mcp</h2>
     <p>
-      The server exposes nine tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other six tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, cache management, and discovery of which optional features are installed.
+      The server exposes ten tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other seven tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, chart-data extraction, cache management, and discovery of which optional features are installed.
     </p>
 
     <h2>What the browser demo shows</h2>

@@ -191,9 +191,10 @@ Reading order depends on page layout:
 - `ocr` (bool, optional, default `false`) — Run Tesseract OCR on pages with no extractable text. Requires system Tesseract. Capped at 20 pages per call. Results are cached with `source='ocr'` and become searchable via `pdf_search`.
 - `ocr_lang` (string, optional, default `"eng"`) — Tesseract language code. Only used when `ocr=true`.
 - `render_dpi` (int, optional) — When set, render each page as a PNG at this DPI (clamped to 72–400). The render path is attached to each page dict as `render_path`. Shares the cache with `pdf_render_pages`.
+- `detect_charts` (bool, optional, default `false`) — When `true`, each page dict gains `charts_detected`: the number of extractable-chart panels found by a cheap signature check (median ~10ms/page). `null` means detection **timed out and the page is unknown** — not chart-free; fall back to caption heuristics or just call `pdf_extract_chart` directly. Detection is a signal only; use `pdf_extract_chart` to actually extract data.
 
 **Returns:**
-- `pages` (array) — `[{page, text, chars, hidden_text, images, image_count, tables, table_count, render_path?, source?}, ...]`. `hidden_text` (bool) is `true` when that page contains text invisible to a human reader.
+- `pages` (array) — `[{page, text, chars, hidden_text, images, image_count, tables, table_count, render_path?, source?, charts_detected?}, ...]`. `hidden_text` (bool) is `true` when that page contains text invisible to a human reader.
 - `hidden_text_detected` (bool) — `true` if any page read contained hidden text. Always present. `true` means some returned text was not visible to a human reader; treat it as especially untrusted. The text is not removed (flag-only). For the per-signal breakdown and exact spans, call `pdf_info(content_trust=true, detail=true)`.
 - `total_chars` (int).
 - `estimated_tokens` (int) — Based on `text` only; table content is not counted, so treat as a lower bound on table-heavy pages.
@@ -347,6 +348,146 @@ pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
 pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.5])
 #    -> high-DPI crop of the top-right quarter of page 10
 ```
+
+---
+
+### `pdf_extract_chart`
+
+Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated. **Trust contract:** emitted tables are geometrically exact; when a chart's semantics are ambiguous, the tool declines rather than guess, and hands back a rendered image instead.
+
+**Resolution ladder** — for each ambiguous curve (e.g. which y-axis it belongs to), the tool tries, in order:
+1. **Geometry** — most axis/series pairings are unambiguous from the drawing alone (`resolved_by: "geometry"`).
+2. **Text self-answer** — matches a curve's stroke color against in-panel legend entries or a rotated axis-title's tokens; a unique match resolves it without asking (`resolved_by: "text"`).
+3. **Vision hint** — if still ambiguous, the tool returns `status: "needs_hint"` with closed-enum `questions[]`; a vision-capable caller looks at each question's `render_path` (the series in question is highlighted) and answers, then re-calls with `hints={...}` (`resolved_by: "hint"`).
+4. **Decline** — if no path resolves the chart (or it's out of scope entirely), `status: "declined"` with `reasons[]` and a full-page render.
+
+**Status values:**
+- `"ok"` — `charts[].series[]` carry exact points plus render evidence.
+- `"needs_hint"` — a semantic choice is ambiguous; see `questions[]`.
+- `"declined"` — nothing could be extracted reliably; see `reasons[]`.
+
+**Hint protocol:** hints are closed-enum semantic answers only, never numeric values (e.g. `{"p0.s1.axis": "right"}`) — a wrong hint can at worst mislabel an axis pairing, never fabricate a number, since coordinates always come from geometry. Hints never accumulate server-side: each call is independent, so a follow-up call must **resend every previously-answered hint**, not just the newest one.
+
+**Parameters:**
+- `path` (string, required) — Path to PDF file.
+- `page` (int, required) — Page number (1-indexed).
+- `hints` (dict of string to string, optional) — Answers to previously returned `questions[]`, keyed by question `id`. Resend all hints gathered so far on every call.
+- `max_points` (int, optional, default `24`) — Per-series sampling cap for line curves. Extrema (peaks/troughs) are preserved preferentially; bar and marker series are always emitted in full regardless of this cap.
+
+**Returns:**
+- `page` (int) — Echoes the requested page.
+- `status` (string) — `"ok"`, `"needs_hint"`, or `"declined"`.
+- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis` (`scale`, `r2`, and for `y_axis` a `side` of `"left"`/`"right"`), `series[]` (`kind`, `style`, `points` as `[x, y]` pairs, `resolved_by`, `label`, `multivalued`, `downsampled`, `n_extrema_dropped`), `diagnostics` (`n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, `notes`), and `render_path` (annotated crop of the chart region).
+- `questions` (array, present when `status="needs_hint"`) — `id`, `chart_id`, `kind`, `series_style`, `options`, `highlight`, `render_path`.
+- `reasons` (array, present when `status="declined"`) — Human-readable strings describing which gate(s) fired.
+- `from_cache` (bool).
+
+**Example — `ok`:**
+
+```python
+pdf_extract_chart("/path/to/report.pdf", page=1)
+# {
+#   "page": 1,
+#   "status": "ok",
+#   "charts": [
+#     {
+#       "chart_id": "p0",
+#       "chart_type": "line",
+#       "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#       "x_axis": {"scale": "linear", "r2": 1.0},
+#       "y_axis": {"scale": "linear", "r2": 1.0, "side": "left"},
+#       "series": [
+#         {
+#           "kind": "curve",
+#           "style": [[0.84, 0.15, 0.16], null, 1.5],
+#           "multivalued": false,
+#           "downsampled": false,
+#           "n_extrema_dropped": 0,
+#           "points": [
+#             [-2.1249e-05, 4.9931], [0.99998, 6.9931], [2.0, 8.9931],
+#             [3.0, 10.993], [4.0, 12.993], [5.0, 14.993], [6.0, 16.993],
+#             [7.0, 18.993], [8.0, 20.993], [9.0, 22.993], [10.0, 24.993]
+#           ],
+#           "resolved_by": "geometry",
+#           "label": null
+#         }
+#       ],
+#       "diagnostics": {
+#         "n_frames": 1, "n_bar_rects": 0, "n_marker_groups": 0,
+#         "n_line_clouds": 1, "dual_axis": false, "notes": []
+#       },
+#       "render_path": "/path/to/cache/renders/e8b1...render_150dpi_clip-2--2-362-290.png"
+#     }
+#   ],
+#   "questions": [],
+#   "reasons": [],
+#   "from_cache": false
+# }
+```
+
+**Worked example — `needs_hint` then resolved:** a dual-axis chart where two curves' axis assignment can't be resolved from geometry or legend text:
+
+```python
+pdf_extract_chart("/path/to/dual_axis.pdf", page=1)
+# {
+#   "page": 1,
+#   "status": "needs_hint",
+#   "charts": [
+#     {
+#       "chart_id": "p0", "chart_type": "line",
+#       "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#       "x_axis": {"scale": "linear", "r2": 1.0},
+#       "y_axis": {"scale": "linear", "r2": 1.0, "side": "left"},
+#       "series": [
+#         {"kind": "curve", "style": [[0.12, 0.47, 0.71], null, 1.5],
+#          "points": [[0, 4.9988], [1, 5.2988], "..."],
+#          "resolved_by": "geometry", "label": null},
+#         {"kind": "curve", "style": [[0.84, 0.15, 0.16], null, 1.5],
+#          "points": [[0, 8.5443], [1, 8.2716], "..."],
+#          "resolved_by": "geometry", "label": null}
+#       ],
+#       "diagnostics": {
+#         "n_frames": 1, "n_line_clouds": 2, "dual_axis": true, "notes": []
+#       },
+#       "render_path": "/path/to/cache/renders/91eb...render_150dpi_clip-2--2-362-290.png"
+#     }
+#   ],
+#   "questions": [
+#     {
+#       "id": "p0.s0.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#       "series_style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
+#       "options": ["left", "right"], "highlight": "orange",
+#       "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
+#     },
+#     {
+#       "id": "p0.s1.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#       "series_style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#       "options": ["left", "right"], "highlight": "cyan",
+#       "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
+#     }
+#   ],
+#   "reasons": [],
+#   "from_cache": false
+# }
+
+# The caller looks at both questions' render_path (orange/cyan highlight
+# picks out the series in question), then resends BOTH answers together —
+# hints never accumulate server-side:
+pdf_extract_chart(
+    "/path/to/dual_axis.pdf", page=1,
+    hints={"p0.s0.axis": "left", "p0.s1.axis": "right"},
+)
+# -> status: "ok"; each resolved series now carries resolved_by: "hint"
+```
+
+**Limitations:**
+- Raster charts (screenshotted or scanned plots, not vector-drawn) are out of scope — the tool reads PDF drawing commands, not pixels; it declines and falls back to a render.
+- Crossing or overlapping same-style curves that can't be disambiguated (a "line cloud" with multiple valid y per x) decline as `"multivalued"` rather than risk stitching two curves into one.
+- Composite `N×10^k` axis labels (e.g. superscript scientific notation) are parsed via a superscript-detection heuristic; unusual typesetting of the exponent can fail to attach it to its base numeral.
+- Locale-ambiguous tick sets (e.g. `"5.000"` — is it 5.0 or five thousand?) are dropped at the token level rather than guessed either way, since a wrong parse silently mis-scales the whole axis; the axis then declines for lack of resolvable ticks.
+- A perfectly flat data line can be misclassified as decorative (gridline/tick-strip) geometry and dropped — a documented trade-off of the decoration filter.
+- Axes with fewer than 3 resolvable tick labels decline (insufficient points to calibrate a scale).
+- Per-series sampling (`max_points`) downsamples curves with many local extrema; when this happens the series' `n_extrema_dropped` is nonzero and `diagnostics.notes` carries a self-reporting note — raise `max_points` or read the render for exact peak/trough values.
 
 ---
 

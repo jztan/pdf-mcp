@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- `pdf_extract_chart`: extract chart data as exact `(x, y)` tables from
+  born-digital vector charts, read from the PDF's drawing geometry and
+  calibrated against tick labels — values are read, not estimated. Emits
+  only geometrically exact tables; ambiguous or out-of-scope charts decline
+  with a rendered image fallback. Vision-capable callers can resolve
+  semantic ambiguity (dual axes, chart type) via closed-enum hints with
+  annotated renders; many cases self-resolve from legend/axis-title text.
+  Benchmarked at 0 wrong-emits across the synthetic + real regression suite
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
+  signal (~10ms/page) so agents notice extractable charts
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+
+### Contributors
+- @DerDennisOP — requested chart extraction, provided the decisive sample
+  PDFs, and offered nixpkgs packaging ([#23](https://github.com/jztan/pdf-mcp/issues/23))
+
 ## [1.20.0] - 2026-07-11
 ### Added
 - `pdf_search` paragraph-style page-mode hits now carry source geometry:

@@ -375,119 +375,154 @@ A panel can also be ambiguous at the chart-*type* level: if it has valid, calibr
 - `page` (int, required) — Page number (1-indexed).
 - `hints` (dict of string to string, optional) — Answers to previously returned `questions[]`, keyed by question `id`. Resend all hints gathered so far on every call.
 - `max_points` (int, optional, default `24`) — Per-series sampling cap for line curves. Extrema (peaks/troughs) are preserved preferentially; bar and marker series are always emitted in full regardless of this cap.
+- `include_render` (bool, optional, default `false`) — When `status="ok"`, also inline one MCP image block per chart (its region render). Ignored for `"declined"`/`"needs_hint"`, which always inline their render(s) regardless of this flag.
 
-**Returns:**
+**Returns a list**, like `pdf_render_pages`: `result[0]` is the response dict below; subsequent elements are `mcp.types.ImageContent` blocks so a vision-capable caller can actually see the render — `render_path` alone is a device-local filesystem path the model cannot read, so it stays on every chart/question/response entry for local hosts and caching, but the inline blocks are what the model sees. Image-block count by status:
+- `"declined"` — exactly one block (the full-page render), `block.meta = {"kind": "declined_page", "page": <1-indexed>}`.
+- `"needs_hint"` — one block per panel that has open questions (deduped by `render_path` — every question in a panel shares one annotated halo render), `block.meta = {"kind": "hint_panel", "chart_id": ..., "page": ...}`.
+- `"ok"` — none by default; with `include_render=true`, one block per chart (its region render), `block.meta = {"kind": "chart_region", "chart_id": ..., "page": ...}`.
+
+If a render's base64-encoded size would exceed the transport byte budget, the block is dropped and `render_oversized: true` is set on the corresponding chart/response dict instead of blowing the response; if a cached render's file is no longer on disk (e.g. cache was cleared), the block is skipped and `render_unavailable: true` is set instead.
+
+Errors (bad path, out-of-range page, invalid/unknown hint) return a **single-element list** `[{"error": "..."}]`, matching `pdf_render_pages`' error convention — check `result[0].get("error")`.
+
+**`result[0]` (response dict):**
 - `page` (int) — Echoes the requested page.
 - `status` (string) — `"ok"`, `"needs_hint"`, or `"declined"`.
-- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis` (`scale`, `r2`, and for `y_axis` a `side` of `"left"`/`"right"`), `series[]`, `diagnostics`, `decline_reason` (conditional), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames).
-- `series[]` fields vary by `kind`:
-  - `"curve"` — `{style, points, axis, resolved_by, label, multivalued, downsampled, n_extrema_dropped}`. The provenance (`resolved_by`), `label`, and sampling fields (`downsampled`, `n_extrema_dropped`) are curve-only.
-  - `"bars"` — `{style, bars}`. The data key is `bars`, not `points`.
-  - `"points"` (scatter) — `{style, marker_size, points}`.
-- `diagnostics` — `n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, and `notes` (line charts; may be absent otherwise — bar/scatter chart diagnostics may omit the key entirely).
+- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis`, `series[]`, `diagnostics`, `decline_reason` (conditional), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
+- `x_axis` / `y_axis` — `scale` (`"linear"`|`"log"`), `r2` (calibration fit quality), `title` (str|null — the axis title text nearest the tick row/column, display-only, never parsed as data or instructions), `range` (`[min, max]` from the calibrated tick values). `y_axis` additionally carries `side` (`"left"`|`"right"`).
+- `series[]` — **uniform fields across all kinds**, present-with-null rather than omitted, so every entry can be parsed the same way: `kind` (`"curve"`|`"bars"`|`"points"`), `style` (`{"color": [r,g,b]|null, "width": float}` — one shape for every kind; earlier versions emitted a tuple for line/bar and a Python-repr string for scatter), `label` (str|null — populated from a uniquely-matched legend entry whenever one exists, independent of whether the curve needed an axis hint), `axis` (str|null — `"left"`/`"right"` once resolved), `resolved_by` (`"geometry"`|`"text"`|`"hint"`|null), `multivalued` (bool), `downsampled` (bool), `n_extrema_dropped` (int — nonzero only when sampling actually dropped a local extremum). The data key stays kind-specific: `points` for `"curve"`/`"points"` entries, `bars` for `"bars"` entries. `marker_size` stays scatter-only. Bar/scatter series always report `multivalued: false`, `downsampled: false`, `n_extrema_dropped: 0` (present, not omitted — they never downsample).
+- `diagnostics` — `n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, and `notes` (array, **always present**, possibly empty). A note is appended only when something was actually lost or a chart declined — e.g. a per-series `n_extrema_dropped > 0` (peaks/troughs actually dropped by sampling) or a decline reason. `downsampled: true` with `n_extrema_dropped: 0` legitimately produces no note: sampling ran, but nothing was lost.
 - `decline_reason` (string, conditional) — present only on a chart whose `chart_type` is `"declined"`; a human-readable reason (e.g. `"all line clouds multivalued (crossing/overlapping curves)"`). The same text also appears in that chart's `diagnostics.notes`.
 - `questions` (array, present when `status="needs_hint"`) — `id`, `chart_id`, `kind`, `series_style` (absent for the `chart_type` question kind — no specific series to describe), `options`, `highlight`, `render_path`.
 - `reasons` (array, present when `status="declined"`) — Human-readable strings describing which gate(s) fired.
-- `from_cache` (bool).
+- `from_cache` (bool). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
+
+**Precision note:** emitted `x`/`y` values are rounded to 4 significant figures — geometry-eyeballed chart values don't carry more precision than that, and the previous `.5g` round-trip through `float()` could produce 15-digit fictional precision on log axes. Large-magnitude values may still print in integer or scientific notation in JSON (e.g. `1.361e15`); that's a JSON float-printing artifact of the rounded value, not extra precision.
 
 **Example — `ok`:**
 
 ```python
 pdf_extract_chart("/path/to/report.pdf", page=1)
-# {
-#   "page": 1,
-#   "status": "ok",
-#   "charts": [
-#     {
-#       "chart_id": "p0",
-#       "chart_type": "line",
-#       "region_bbox": [-2.0, -2.0, 362.0, 290.0],
-#       "x_axis": {"scale": "linear", "r2": 1.0},
-#       "y_axis": {"scale": "linear", "r2": 1.0, "side": "left"},
-#       "series": [
-#         {
-#           "kind": "curve",
-#           "style": [[0.84, 0.15, 0.16], null, 1.5],
-#           "multivalued": false,
-#           "downsampled": false,
-#           "n_extrema_dropped": 0,
-#           "points": [
-#             [-2.1249e-05, 4.9931], [0.99998, 6.9931], [2.0, 8.9931],
-#             [3.0, 10.993], [4.0, 12.993], [5.0, 14.993], [6.0, 16.993],
-#             [7.0, 18.993], [8.0, 20.993], [9.0, 22.993], [10.0, 24.993]
-#           ],
-#           "resolved_by": "geometry",
-#           "label": null
-#         }
-#       ],
-#       "diagnostics": {
-#         "n_frames": 1, "n_bar_rects": 0, "n_marker_groups": 0,
-#         "n_line_clouds": 1, "dual_axis": false, "notes": []
-#       },
-#       "render_path": "/path/to/cache/renders/e8b1...render_150dpi_clip-2--2-362-290.png"
-#     }
-#   ],
-#   "questions": [],
-#   "reasons": [],
-#   "from_cache": false
-# }
+# [
+#   {
+#     "page": 1,
+#     "status": "ok",
+#     "charts": [
+#       {
+#         "chart_id": "p0",
+#         "chart_type": "line",
+#         "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#         "x_axis": {
+#           "scale": "linear", "r2": 1.0, "title": "epoch", "range": [0.0, 10.0]
+#         },
+#         "y_axis": {
+#           "scale": "linear", "r2": 1.0, "side": "left",
+#           "title": "loss", "range": [5.0, 25.0]
+#         },
+#         "series": [
+#           {
+#             "kind": "curve",
+#             "style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#             "multivalued": false,
+#             "downsampled": false,
+#             "n_extrema_dropped": 0,
+#             "points": [
+#               [-2.125e-05, 4.993], [1.0, 6.993], [2.0, 8.993],
+#               [3.0, 10.99], [4.0, 12.99], [5.0, 14.99], [6.0, 16.99],
+#               [7.0, 18.99], [8.0, 20.99], [9.0, 22.99], [10.0, 24.99]
+#             ],
+#             "resolved_by": "geometry",
+#             "label": "training loss",
+#             "axis": "left"
+#           }
+#         ],
+#         "diagnostics": {
+#           "n_frames": 1, "n_bar_rects": 0, "n_marker_groups": 0,
+#           "n_line_clouds": 1, "dual_axis": false, "notes": []
+#         },
+#         "render_path": "/path/to/cache/renders/e8b1...render_150dpi_clip-2--2-362-290.png"
+#       }
+#     ],
+#     "questions": [],
+#     "reasons": [],
+#     "from_cache": false
+#   }
+#   # no image blocks: status="ok" and include_render was not set
+# ]
 ```
 
 **Worked example — `needs_hint` then resolved:** a dual-axis chart where two curves' axis assignment can't be resolved from geometry or legend text:
 
 ```python
 pdf_extract_chart("/path/to/dual_axis.pdf", page=1)
-# {
-#   "page": 1,
-#   "status": "needs_hint",
-#   "charts": [
-#     {
-#       "chart_id": "p0", "chart_type": "line",
-#       "region_bbox": [-2.0, -2.0, 362.0, 290.0],
-#       "x_axis": {"scale": "linear", "r2": 1.0},
-#       "y_axis": {"scale": "linear", "r2": 1.0, "side": "left"},
-#       "series": [
-#         {"kind": "curve", "style": [[0.12, 0.47, 0.71], null, 1.5],
-#          "label": null, "axis": null, "pending_question": "p0.s0.axis"},
-#         {"kind": "curve", "style": [[0.84, 0.15, 0.16], null, 1.5],
-#          "label": null, "axis": null, "pending_question": "p0.s1.axis"}
-#       ],
-#       # NOTE: neither series carries a "points" table — the axis is still
-#       # unresolved for both, and this tool never emits a numeric table
-#       # calibrated against a guessed axis. "pending_question" correlates
-#       # each series back to the matching entry in questions[] below.
-#       "diagnostics": {
-#         "n_frames": 1, "n_line_clouds": 2, "dual_axis": true, "notes": []
+# [
+#   {
+#     "page": 1,
+#     "status": "needs_hint",
+#     "charts": [
+#       {
+#         "chart_id": "p0", "chart_type": "line",
+#         "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#         "x_axis": {
+#           "scale": "linear", "r2": 1.0, "title": null, "range": [0.0, 10.0]
+#         },
+#         "y_axis": {
+#           "scale": "linear", "r2": 1.0, "side": "left",
+#           "title": null, "range": [0.0, 100.0]
+#         },
+#         "series": [
+#           {"kind": "curve", "style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
+#            "label": null, "axis": null, "resolved_by": null,
+#            "multivalued": false, "downsampled": false, "n_extrema_dropped": 0,
+#            "pending_question": "p0.s0.axis"},
+#           {"kind": "curve", "style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#            "label": null, "axis": null, "resolved_by": null,
+#            "multivalued": false, "downsampled": false, "n_extrema_dropped": 0,
+#            "pending_question": "p0.s1.axis"}
+#         ],
+#         # NOTE: neither series carries a "points" table — the axis is still
+#         # unresolved for both, and this tool never emits a numeric table
+#         # calibrated against a guessed axis. "pending_question" correlates
+#         # each series back to the matching entry in questions[] below.
+#         "diagnostics": {
+#           "n_frames": 1, "n_line_clouds": 2, "dual_axis": true, "notes": []
+#         },
+#         "render_path": "/path/to/cache/renders/91eb...render_150dpi_clip-2--2-362-290.png"
+#       }
+#     ],
+#     "questions": [
+#       {
+#         "id": "p0.s0.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#         "series_style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
+#         "options": ["left", "right"], "highlight": "orange",
+#         "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
 #       },
-#       "render_path": "/path/to/cache/renders/91eb...render_150dpi_clip-2--2-362-290.png"
-#     }
-#   ],
-#   "questions": [
-#     {
-#       "id": "p0.s0.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
-#       "series_style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
-#       "options": ["left", "right"], "highlight": "orange",
-#       "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
-#     },
-#     {
-#       "id": "p0.s1.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
-#       "series_style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
-#       "options": ["left", "right"], "highlight": "cyan",
-#       "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
-#     }
-#   ],
-#   "reasons": [],
-#   "from_cache": false
-# }
+#       {
+#         "id": "p0.s1.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#         "series_style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#         "options": ["left", "right"], "highlight": "cyan",
+#         "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
+#       }
+#     ],
+#     "reasons": [],
+#     "from_cache": false
+#   },
+#   # one image block: the panel's annotated halo render (both questions
+#   # share it, so it appears once, deduped by render_path)
+#   ImageContent(type="image", data="...", mimeType="image/png",
+#                 meta={"kind": "hint_panel", "chart_id": "p0", "page": 1})
+# ]
 
-# The caller looks at both questions' render_path (orange/cyan highlight
-# picks out the series in question), then resends BOTH answers together —
-# hints never accumulate server-side:
+# The caller looks at the inlined image (orange/cyan highlight picks out
+# the series in question), then resends BOTH answers together — hints
+# never accumulate server-side:
 pdf_extract_chart(
     "/path/to/dual_axis.pdf", page=1,
     hints={"p0.s0.axis": "left", "p0.s1.axis": "right"},
 )
-# -> status: "ok"; each resolved series now carries resolved_by: "hint"
+# -> [response]; status: "ok"; each resolved series now carries
+# resolved_by: "hint"; no image blocks unless include_render=true
 ```
 
 **Limitations:**
@@ -497,7 +532,7 @@ pdf_extract_chart(
 - Locale-ambiguous tick sets (e.g. `"5.000"` — is it 5.0 or five thousand?) are dropped at the token level rather than guessed either way, since a wrong parse silently mis-scales the whole axis; the axis then declines for lack of resolvable ticks.
 - A perfectly flat data line can be misclassified as decorative (gridline/tick-strip) geometry and dropped — a documented trade-off of the decoration filter.
 - Axes with fewer than 3 resolvable tick labels decline (insufficient points to calibrate a scale).
-- Per-series sampling (`max_points`) downsamples curves with many local extrema; when this happens the series' `n_extrema_dropped` is nonzero and `diagnostics.notes` carries a self-reporting note — raise `max_points` or read the render for exact peak/trough values.
+- Per-series sampling (`max_points`) reports `downsampled: true` on any curve whose point count exceeded the cap — that alone does not mean data was lost, since the sampler always keeps both endpoints and the global min/max. `diagnostics.notes` gains an entry only when `n_extrema_dropped > 0`, i.e. a local extremum (a peak or trough, not the global one) was actually dropped for lack of budget. A curve can legitimately be `downsampled: true` with `n_extrema_dropped: 0` and no note — that's sampling working as intended, not data loss. Raise `max_points` or read the render for exact peak/trough values when a note does fire.
 
 ---
 

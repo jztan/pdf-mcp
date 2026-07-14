@@ -241,7 +241,7 @@ def test_1807_dual_axis_resolves_via_text_no_hints():
         c
         for ch in result["charts"]
         for c in ch["curves"]
-        if c["style"][0] and c["style"][0][0] == 1.0
+        if c["style"]["color"] and c["style"]["color"][0] == 1.0
     ]
     assert reds and reds[0]["axis"] == "right"
     assert reds[0]["resolved_by"] == "text"
@@ -274,7 +274,7 @@ def test_legend_style_collision_drops_both_entries(monkeypatch):
         "_axis_titles",
         lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
     )
-    curves = [{"style": (blue, None, 1.0), "points": [[0, 0], [1, 1]]}]
+    curves = [{"_style_key": (blue, None, 1.0), "points": [[0, 0], [1, 1]]}]
     questions = [{"id": "p0.s0.axis", "kind": "y_axis_for_curve"}]
     answers, labels = ce.resolve_semantics(None, None, curves, questions)
     assert answers == {}, "collision must disable text self-answer"
@@ -300,8 +300,8 @@ def test_legend_unique_match_answers(monkeypatch):
         lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
     )
     curves = [
-        {"style": (blue, None, 1.0), "points": [[0, 0], [1, 1]]},
-        {"style": (red, None, 1.0), "points": [[0, 0], [1, 1]]},
+        {"_style_key": (blue, None, 1.0), "points": [[0, 0], [1, 1]]},
+        {"_style_key": (red, None, 1.0), "points": [[0, 0], [1, 1]]},
     ]
     questions = [
         {"id": "p0.s0.axis", "kind": "y_axis_for_curve"},
@@ -341,6 +341,134 @@ def test_colorbar_never_wins_as_y_axis():
         # distinguishes a correct emission from the wrong-emit.
         assert min(ys) > 50, f"y-values too low, looks colorbar-calibrated: {ys}"
         assert max(ys) < 600, f"y-values out of the real axis range: {ys}"
+
+
+def test_style_is_uniform_dict_shape_across_kinds():
+    """#1: every kind (curve/bar/scatter) emits the SAME style shape:
+    {"color": [r,g,b]|None, "width": float} — never a raw tuple/string."""
+
+    def check_style(style):
+        assert isinstance(style, dict)
+        assert set(style) == {"color", "width"}
+        assert style["color"] is None or (
+            isinstance(style["color"], list) and len(style["color"]) == 3
+        )
+        assert isinstance(style["width"], float)
+
+    doc = pymupdf.open(SYN / "line_color_linear.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    for c in r["charts"][0]["curves"]:
+        check_style(c["style"])
+
+    doc = pymupdf.open(SYN / "bar_simple.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    bar_charts = [ch for ch in r["charts"] if ch.get("bars")]
+    assert bar_charts
+    for s in bar_charts[0]["bars"]:
+        check_style(s["style"])
+
+    doc = pymupdf.open(SYN / "scatter_simple.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    scatter_charts = [ch for ch in r["charts"] if ch.get("points")]
+    assert scatter_charts
+    for s in scatter_charts[0]["points"]:
+        check_style(s["style"])
+
+
+def test_series_fields_present_with_null_across_kinds():
+    """#5: every series carries the same optional fields, present-with-null,
+    regardless of kind — bars/scatter get multivalued=False,
+    downsampled=False, n_extrema_dropped=0 rather than omitting them."""
+    common = {
+        "style",
+        "label",
+        "axis",
+        "resolved_by",
+        "multivalued",
+        "downsampled",
+        "n_extrema_dropped",
+    }
+
+    doc = pymupdf.open(SYN / "bar_simple.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    bar_charts = [ch for ch in r["charts"] if ch.get("bars")]
+    for s in bar_charts[0]["bars"]:
+        assert common <= set(s)
+        assert s["multivalued"] is False
+        assert s["downsampled"] is False
+        assert s["n_extrema_dropped"] == 0
+        assert "bars" in s
+
+    doc = pymupdf.open(SYN / "scatter_simple.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    scatter_charts = [ch for ch in r["charts"] if ch.get("points")]
+    for s in scatter_charts[0]["points"]:
+        assert common <= set(s)
+        assert s["multivalued"] is False
+        assert s["downsampled"] is False
+        assert s["n_extrema_dropped"] == 0
+        assert "points" in s
+
+
+def test_diagnostics_always_carries_notes_key():
+    """#5/#6: diagnostics.notes is always present (possibly empty) — it
+    should never be missing regardless of chart kind."""
+    for fname in ("bar_simple.pdf", "scatter_simple.pdf", "line_color_linear.pdf"):
+        doc = pymupdf.open(SYN / fname)
+        r = chart_extractor.extract_charts(doc, 0)
+        doc.close()
+        for ch in r["charts"]:
+            assert "notes" in ch["diagnostics"]
+            assert isinstance(ch["diagnostics"]["notes"], list)
+
+
+def test_axis_titles_and_range_populated(line_doc):
+    """#2: x_axis/y_axis carry title (str|None) and range ([min,max])."""
+    r = chart_extractor.extract_charts(line_doc, 0)
+    chart = r["charts"][0]
+    for axis_key in ("x_axis", "y_axis"):
+        axis = chart[axis_key]
+        assert "title" in axis
+        assert axis["title"] is None or isinstance(axis["title"], str)
+        assert "range" in axis
+        lo, hi = axis["range"]
+        assert isinstance(lo, float) and isinstance(hi, float)
+        assert lo < hi
+
+
+def test_curve_label_populated_from_legend_without_dual_axis():
+    """#2: label matching runs for every curve, not only when a dual-axis
+    question was asked. line_two_legend_dashed.pdf has a legend and a
+    single y-axis (no dual-axis ambiguity)."""
+    doc = pymupdf.open(SYN / "line_two_legend_dashed.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    assert r["status"] == "ok"
+    labels = [c.get("label") for ch in r["charts"] for c in ch.get("curves", [])]
+    assert any(lab is not None for lab in labels), "expected a legend-matched label"
+
+
+def test_points_rounded_to_four_sig_figs(line_doc):
+    """#3: emitted point values are rounded to 4 significant figures — no
+    fictional 15-digit float precision."""
+    r = chart_extractor.extract_charts(line_doc, 0)
+    for c in r["charts"][0]["curves"]:
+        for x, y in c["points"]:
+            for v in (x, y):
+                mantissa = f"{abs(v):.10e}".split("e")[0]
+                digits = mantissa.replace(".", "").rstrip("0") or "0"
+                assert len(digits) <= 4, f"value {v} exceeds 4 sig figs ({digits})"
+
+
+def test_sig_helper():
+    assert chart_extractor._sig(1361412345678901.0) == 1.361e15
+    assert chart_extractor._sig(0.000123456) == 0.0001235
+    assert chart_extractor._sig(5.0) == 5.0
 
 
 def test_looks_like_colorbar_detects_raster_strip(dual_doc):

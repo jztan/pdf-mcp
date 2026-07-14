@@ -56,8 +56,11 @@ def best_match(gt, chart):
 
 
 def style_matches(c, series_style):
-    color = list(c["style"][0]) if c["style"][0] else None
-    return color == series_style["color"] and c["style"][2] == series_style["width"]
+    style = c["style"]  # {"color": [r,g,b]|None, "width": float}
+    return (
+        style["color"] == series_style["color"]
+        and style["width"] == series_style["width"]
+    )
 
 
 # max_points=12 pins the v7 sample density (extract_charts' production

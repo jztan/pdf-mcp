@@ -48,6 +48,28 @@ def hints_hash(hints: dict[str, str] | None) -> str:
 # a drawing style key: (stroke_color, fill_color, line_width)
 Style = tuple[Any, Any, float]
 
+
+def _sig(v: Any, n: int = 4) -> float:
+    """Round to ``n`` significant figures. Geometry-eyeballed chart values
+    don't deserve more precision than this — 5g round-tripped through
+    float() previously produced 15-digit fictional precision on log axes.
+    Large-magnitude results may still print in integer/scientific notation
+    in JSON; that is a JSON float-printing artifact, not extra precision."""
+    return float(f"{float(v):.{n}g}")
+
+
+def _style_dict(style_key: tuple[Any, ...]) -> dict[str, Any]:
+    """Public, uniform series style shape: {"color": [r,g,b]|None, "width":
+    float}. Accepts either the 3-tuple (stroke, fill, width) used
+    internally by line/bar series, or the 2-tuple (color, size) used by
+    scatter marker grouping."""
+    if len(style_key) == 3:
+        color, width = style_key[0], style_key[2]
+    else:
+        color, width = style_key
+    return {"color": list(color) if color else None, "width": float(width)}
+
+
 # ---------------- text/tick helpers (from v2, proven) ----------------
 
 
@@ -650,6 +672,33 @@ def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
     return out
 
 
+def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
+    """x-axis title: horizontal text centered under the tick-label row,
+    within a plausible band below the panel. Returns the nearest such line,
+    or None (display string only — never parsed as data)."""
+    d = page.get_text("dict")
+    cx_target = (panel["rx0"] + panel["rx1"]) / 2
+    pw = max(panel["rx1"] - panel["rx0"], 1e-6)
+    best: tuple[float, str] | None = None
+    for block in d.get("blocks", []):
+        for line in block.get("lines", []):
+            if abs(line.get("dir", (1, 0))[1]) > 0.3:
+                continue  # not horizontal text
+            bb = line["bbox"]
+            if not (panel["ry1"] + 2 <= bb[1] <= panel["ry1"] + 60):
+                continue
+            text = " ".join(s["text"] for s in line["spans"]).strip()
+            if not text or re.fullmatch(r"-?\d+(\.\d+)?", text):
+                continue
+            line_cx = (bb[0] + bb[2]) / 2
+            if abs(line_cx - cx_target) > 0.3 * pw:
+                continue
+            dist = abs(bb[1] - panel["ry1"])
+            if best is None or dist < best[0]:
+                best = (dist, text)
+    return best[1] if best else None
+
+
 def _tokens(s: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", s.lower()))
 
@@ -674,7 +723,7 @@ def resolve_semantics(
             continue
         s_idx = int(q["id"].split(".s")[1].split(".")[0])
         curve = curves[s_idx]
-        col = curve["style"][0]
+        col = curve["_style_key"][0]
         # entries key on the full draw_style tuple (stroke, fill, width);
         # curves only carry the stroke color here — match on stroke alone.
         label = next((lab for st, lab in entries if st[0] == col), None)
@@ -854,7 +903,7 @@ def extract_line(
         idx = np.digitize(xs, bins)
         spreads = [np.ptp(ys[idx == j]) for j in range(1, 25) if (idx == j).sum() >= 2]
         if spreads and np.median(spreads) > 0.12 * ph:
-            curves.append({"style": k, "multivalued": True})
+            curves.append({"_style_key": k, "multivalued": True})
             continue
         dx = apply_ax(xa, xs)
         dy = apply_ax(ya, ys)
@@ -880,11 +929,11 @@ def extract_line(
             downsampled = True
         curves.append(
             {
-                "style": k,
+                "_style_key": k,
                 "multivalued": False,
                 "downsampled": downsampled,
                 "n_extrema_dropped": int(n_extrema_dropped),
-                "points": [[float(f"{dx[i]:.5g}"), float(f"{dy[i]:.5g}")] for i in sel],
+                "points": [[_sig(dx[i]), _sig(dy[i])] for i in sel],
             }
         )
     return curves
@@ -916,10 +965,10 @@ def extract_bar(
         for r in rs:
             cx = (r.x0 + r.x1) / 2
             pts.append(
-                [float(f"{apply_ax(xa, cx):.5g}"), float(f"{apply_ax(ya, r.y0):.5g}")]
+                [_sig(apply_ax(xa, cx)), _sig(apply_ax(ya, r.y0))]
             )  # top edge = value
         pts.sort()
-        series.append({"style": s, "bars": pts})
+        series.append({"_style_key": s, "bars": pts})
     return series
 
 
@@ -937,12 +986,9 @@ def extract_scatter(
                 uniq.append((cx, cy))
         if len(uniq) < 5:
             continue
-        pts = [
-            [float(f"{apply_ax(xa, cx):.5g}"), float(f"{apply_ax(ya, cy):.5g}")]
-            for cx, cy in uniq
-        ]
+        pts = [[_sig(apply_ax(xa, cx)), _sig(apply_ax(ya, cy))] for cx, cy in uniq]
         pts.sort()
-        series.append({"style": str(ckey), "marker_size": size, "points": pts})
+        series.append({"_style_key": (ckey, size), "marker_size": size, "points": pts})
     return series
 
 
@@ -1058,6 +1104,8 @@ def extract_charts(
         if tkey in hints:
             ctype = hints[tkey]
             used_hint_keys.add(tkey)
+        y_side = "left" if panel["ya_left"] else "right"
+        titles = _axis_titles(page, panel)
         chart: dict[str, Any] = {
             "chart_id": f"p{pi}",
             "panel": pi,
@@ -1068,11 +1116,18 @@ def extract_charts(
                 float(panel["rx1"]),
                 float(panel["ry1"]),
             ],
-            "x_axis": {"scale": xa["scale"], "r2": round(xa["r2"], 5)},
+            "x_axis": {
+                "scale": xa["scale"],
+                "r2": round(xa["r2"], 5),
+                "title": _x_axis_title(page, panel),
+                "range": [float(xa["v"].min()), float(xa["v"].max())],
+            },
             "y_axis": {
                 "scale": ya["scale"],
                 "r2": round(ya["r2"], 5),
-                "side": "left" if panel["ya_left"] else "right",
+                "side": y_side,
+                "title": titles.get(y_side),
+                "range": [float(ya["v"].min()), float(ya["v"].max())],
             },
             "diagnostics": {
                 "n_frames": len(frames),
@@ -1082,6 +1137,7 @@ def extract_charts(
                 ),
                 "n_line_clouds": len(clouds),
                 "dual_axis": bool(panel["ya_left"] and panel["ya_right"]),
+                "notes": [],
             },
         }
         # dual-axis: ask per emitted series unless hinted
@@ -1093,6 +1149,22 @@ def extract_charts(
             for c in good:
                 c["resolved_by"] = "geometry"
                 c.setdefault("label", None)
+                c.setdefault("axis", y_side)
+            if good:
+                # populate label from legend matching for EVERY curve
+                # (independent of dual-axis ambiguity) whenever a unique
+                # color match exists — display text only, never parsed.
+                entries = _legend_entries(page, panel)
+                style_counts = collections.Counter(e[0][0] for e in entries)
+                entries = [e for e in entries if style_counts[e[0][0]] == 1]
+                for c in good:
+                    if c.get("label") is None:
+                        lab = next(
+                            (lab for st, lab in entries if st[0] == c["_style_key"][0]),
+                            None,
+                        )
+                        if lab is not None:
+                            c["label"] = lab
             if chart["diagnostics"]["dual_axis"] and good:
                 # collect would-be questions for curves the caller has not
                 # already answered via hints
@@ -1102,10 +1174,7 @@ def extract_charts(
                     if akey in hints:
                         used_hint_keys.add(akey)
                         continue
-                    series_style = {
-                        "color": list(c["style"][0]) if c["style"][0] else None,
-                        "width": c["style"][2],
-                    }
+                    series_style = _style_dict(c["_style_key"])
                     panel_questions.append(
                         {
                             "id": akey,
@@ -1134,7 +1203,7 @@ def extract_charts(
                         if local_hints[akey] == "right" and panel["ya_right"]:
                             ya2 = panel["ya_right"]
                             # re-extract this curve against right axis
-                            cl = {c["style"]: clouds[c["style"]]}
+                            cl = {c["_style_key"]: clouds[c["_style_key"]]}
                             c2 = extract_line(cl, panel, xa, ya2, max_points)
                             if c2 and not c2[0]["multivalued"]:
                                 c["points"] = c2[0]["points"]
@@ -1155,11 +1224,10 @@ def extract_charts(
                         q = next(q for q in panel_questions if q["id"] == akey)
                         res["questions"].append(q)
                         c.pop("points", None)
-                        c.pop("resolved_by", None)
+                        c["resolved_by"] = None
                         c["axis"] = None
                         c["pending_question"] = akey
             chart["curves"] = good
-            chart.setdefault("diagnostics", {}).setdefault("notes", [])
             for c in good:
                 if c.get("n_extrema_dropped"):
                     chart["diagnostics"]["notes"].append(
@@ -1177,8 +1245,22 @@ def extract_charts(
                 chart["diagnostics"]["notes"].append(chart["decline_reason"])
         elif ctype == "bar":
             chart["bars"] = extract_bar(bar_rects, xa, ya)
+            for s in chart["bars"]:
+                s["label"] = None
+                s["axis"] = y_side
+                s["resolved_by"] = "geometry"
+                s["multivalued"] = False
+                s["downsampled"] = False
+                s["n_extrema_dropped"] = 0
         elif ctype == "scatter":
             chart["points"] = extract_scatter(small_paths, xa, ya)
+            for s in chart["points"]:
+                s["label"] = None
+                s["axis"] = y_side
+                s["resolved_by"] = "geometry"
+                s["multivalued"] = False
+                s["downsampled"] = False
+                s["n_extrema_dropped"] = 0
         else:
             chart["chart_type"] = "unknown"
             res["questions"].append(
@@ -1225,6 +1307,15 @@ def extract_charts(
             )
             chart.setdefault("diagnostics", {}).setdefault("notes", [])
             chart["diagnostics"]["notes"].append(chart["decline_reason"])
+        # final style-shape conversion: internal "_style_key" tuples (used
+        # above for color matching / re-extraction) become the public
+        # uniform style dict; never leak the internal key.
+        for c in chart.get("curves", []):
+            c["style"] = _style_dict(c.pop("_style_key"))
+        for s in chart.get("bars", []):
+            s["style"] = _style_dict(s.pop("_style_key"))
+        for s in chart.get("points", []):
+            s["style"] = _style_dict(s.pop("_style_key"))
         res["charts"].append(chart)
     unconsumed = set(hints) - used_hint_keys
     if unconsumed:

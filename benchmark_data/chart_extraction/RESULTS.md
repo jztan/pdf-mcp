@@ -167,3 +167,42 @@ wiring; (2) marker-glyph capture (wider size cap + fill/stroke dedup) — scatte
 synthetic; (3) **out-of-axis-range gate** — the fix that actually converted 1406
 from wrong-emit to clean decline (marginal-distribution bars map above the axis
 max). All residual failures now fail *safe* (decline), never wrong-emit.
+
+## Out-of-sample validation (2026-07-14, pre-release gate)
+
+10 fresh arXiv PDFs never used in tuning (1409.1556, 1412.6980, 1502.03167,
+1512.03385, 1608.06993, 1706.03762, 1810.04805, 2001.08361, 2005.14165,
+2010.11929), 219 pages swept with discovery + extraction; flagged pages and a
+sample of unflagged pages adjudicated visually against renders.
+
+**The gate worked: it caught one out-of-sample wrong-emit, which was fixed
+before release.** On 2001.08361 (Kaplan scaling laws) p24, Fig 18's right
+panel emitted 33 curves with y calibrated against the COLORBAR ticks (linear
+4..10 "Test Loss") instead of the panel's own log Tokens axis. Root cause:
+the panel's compact 3-tick y-axis (59pt label span) was rejected by the 60pt
+minimum-span filter by one point, and the anchored colorbar column won the
+right-axis slot by default. Fix (commit 0628e0d): span threshold 60→45pt +
+`_looks_like_colorbar` rejection of right-axis candidates backed by a narrow
+raster/rect strip; new synthetic archetype #14 `line_colorbar`; two TDD
+regression tests (both confirmed failing pre-fix).
+
+Post-fix out-of-sample results:
+- 18/219 pages flagged (8.2%, consistent with in-sample 6.7%); every flagged
+  page adjudicated is a genuine chart page.
+- Adjudicated extractions: Kaplan Fig 2 (p4) — dark-purple 10^3-param curves
+  start at loss 10.8 and plateau at 6.4, matching the figure; Kaplan p24 now
+  emits 48 series against the correct log axes; ResNet Fig 4 (p5) — ResNet-18
+  ends 31.2%, ResNet-34 ends 28.4%, matching the printed curves. No wrong
+  emissions post-fix; remaining pages emit plausibly or decline/ask safely.
+- GPT-3 (2005.14165) correctly produced ZERO flags: every chart in that PDF
+  is a raster image (no vector geometry) — out of scope by design, and the
+  discovery signal correctly stays silent rather than false-flagging.
+- In-sample side effects of the fix: two real pages now extract MORE
+  (0711.3236 both panels; 0811.0781 p31 6 series), discovery flag rate
+  41→43/640, recall still 17/17, false positives still 0/4, both benchmark
+  suites still 0 wrong-emit.
+
+Verdict: out-of-sample wrong-emit = 0 after the colorbar fix; discovery
+generalizes (8.2% flag rate, no false flags observed); the release gate is
+satisfied. Residual known limits unchanged (raster charts, crossing
+same-style curves, composite mantissa labels).

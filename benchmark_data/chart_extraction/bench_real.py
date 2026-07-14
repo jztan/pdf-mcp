@@ -145,6 +145,9 @@ def run_case(name, pg, pdf):
     # default is 24) so this benchmark reproduces the historical v7 numbers.
     doc = fitz.open(pdf)
     r = pl.extract_charts(doc, pg - 1, max_points=12)
+    # hint burden: how many questions text self-answering (tier 2) left open
+    # for the vision agent, before any hint is applied
+    n_q = len(r.get("questions", []))
     if r["status"] == "needs_hint":
         for q in r["questions"]:
             q["_pdf"] = name
@@ -154,7 +157,7 @@ def run_case(name, pg, pdf):
         len(c.get("curves", [])) + len(c.get("bars", [])) + len(c.get("points", []))
         for c in r["charts"]
     )
-    line = f"{name} p{pg}: {r['status']:9} emitted={n}"
+    line = f"{name} p{pg}: {r['status']:9} emitted={n} questions={n_q}"
     gt = GROUND_TRUTH.get((name, pg))
     if gt and gt["kind"] == "line-dual":
         for col, ys in gt["series"].items():

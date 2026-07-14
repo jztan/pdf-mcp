@@ -16,6 +16,12 @@ extract_charts(doc, page_num, hints=None, max_points=24) -> {
 Hints are semantic enums only (never values): {"p0.s1.axis": "right",
 "p0.type": "bar"}. Calibration + coordinates are always pure geometry, so a
 wrong hint can mislabel an axis pairing at worst, never fabricate a number.
+
+Tier-2 text self-answering (resolve_semantics): before asking the caller a
+dual-axis question, matches a curve's stroke color against in-panel legend
+entries and a rotated axis-title's tokens; a unique legend/title match
+resolves the axis without a hint. Emitted curves carry "resolved_by"
+("geometry" | "text" | "hint") and "label" (str | None).
 """
 
 import re
@@ -515,6 +521,121 @@ def masked(x: float, y: float, masks: list[tuple[float, float, float, float]]) -
     return any(m[0] <= x <= m[2] and m[1] <= y <= m[3] for m in masks)
 
 
+# ---------------- tier-2 text self-answering (legend + axis titles) --------
+
+
+def _legend_entries(page: Any, panel: dict[str, Any]) -> list[tuple[Style, str]]:
+    """Legend entries: a short stroked sample next to a text label inside
+    the panel. Returns [(style_key, label_text), ...]."""
+    entries: list[tuple[Style, str]] = []
+    words = [
+        w
+        for w in get_words(page)
+        if panel["rx0"] <= w[0]
+        and w[2] <= panel["rx1"]
+        and panel["ry0"] <= w[1]
+        and w[3] <= panel["ry1"]
+        and not re.fullmatch(r"-?[\d.,]+", w[4].strip())
+    ]
+    if not words:
+        return entries
+    # group words into lines (same baseline)
+    words.sort(key=lambda w: (round(w[3]), w[0]))
+    lines: list[list[Any]] = []
+    cur: list[Any] = [words[0]]
+    for w in words[1:]:
+        if abs(w[3] - cur[-1][3]) < 2 and w[0] - cur[-1][2] < 12:
+            cur.append(w)
+        else:
+            lines.append(cur)
+            cur = [w]
+    lines.append(cur)
+    for ln in lines:
+        x0, y0, y1 = ln[0][0], ln[0][1], ln[0][3]
+        label = " ".join(w[4] for w in ln).strip()
+        # sample stroke: a drawing to the left of the label, vertically
+        # centered on the line, short (< 45pt wide)
+        for d in page.get_drawings():
+            bb = d_bbox(d)
+            if bb is None or d.get("color") is None:
+                continue
+            if (
+                x0 - 48 <= bb[0]
+                and bb[2] <= x0 - 2
+                and bb[1] >= y0 - 4
+                and bb[3] <= y1 + 4
+                and bb[2] - bb[0] >= 8
+            ):
+                entries.append((draw_style(d), label))
+                break
+    return entries
+
+
+def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:
+    """Axis titles: rotated text near the left/right panel edges (y-axis
+    titles) via get_text('dict') line direction. Returns
+    {"left": str|None, "right": str|None}."""
+    out: dict[str, str | None] = {"left": None, "right": None}
+    d = page.get_text("dict")
+    for block in d.get("blocks", []):
+        for line in block.get("lines", []):
+            if abs(line.get("dir", (1, 0))[0]) > 0.3:
+                continue  # not vertical text
+            bb = line["bbox"]
+            if not (panel["ry0"] - 10 <= bb[1] and bb[3] <= panel["ry1"] + 10):
+                continue
+            text = " ".join(s["text"] for s in line["spans"]).strip()
+            if not text:
+                continue
+            if bb[2] <= panel["rx0"] + 10:
+                out["left"] = text
+            elif bb[0] >= panel["rx1"] - 10:
+                out["right"] = text
+    return out
+
+
+def _tokens(s: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", s.lower()))
+
+
+def resolve_semantics(
+    page: Any,
+    panel: dict[str, Any],
+    curves: list[dict[str, Any]],
+    questions: list[dict[str, Any]],
+) -> tuple[dict[str, str], dict[int, str]]:
+    """Tier-2: answer open questions from the PDF's own text. Returns
+    (answers: {question_id: enum}, labels: {series_index: label})."""
+    entries = _legend_entries(page, panel)
+    # style collision -> that style identifies nothing; drop colliding entries
+    style_counts = collections.Counter(e[0][0] for e in entries)  # by stroke color
+    entries = [e for e in entries if style_counts[e[0][0]] == 1]
+    titles = _axis_titles(page, panel)
+    answers: dict[str, str] = {}
+    labels: dict[int, str] = {}
+    for q in questions:
+        if q["kind"] != "y_axis_for_curve":
+            continue
+        s_idx = int(q["id"].split(".s")[1].split(".")[0])
+        curve = curves[s_idx]
+        col = curve["style"][0]
+        # entries key on the full draw_style tuple (stroke, fill, width);
+        # curves only carry the stroke color here — match on stroke alone.
+        label = next((lab for st, lab in entries if st[0] == col), None)
+        if label is None:
+            continue
+        labels[s_idx] = label
+        lt = _tokens(label)
+        left_hit = titles["left"] and lt & _tokens(titles["left"])
+        right_hit = titles["right"] and lt & _tokens(titles["right"])
+        if left_hit and not right_hit:
+            answers[q["id"]] = "left"
+        elif right_hit and not left_hit:
+            answers[q["id"]] = "right"
+        # both/neither -> stays a question (unique match only)
+    return answers, labels
+
+
 # ---------------- per-type extraction ----------------
 
 
@@ -892,15 +1013,46 @@ def extract_charts(
             good = [c for c in curves if not c["multivalued"]]
             bad = [c for c in curves if c["multivalued"]]
             good.sort(key=lambda c: c["points"][0] if c.get("points") else [0, 0])
+            for c in good:
+                c["resolved_by"] = "geometry"
+                c.setdefault("label", None)
             if chart["diagnostics"]["dual_axis"] and good:
+                # collect would-be questions for curves the caller has not
+                # already answered via hints
+                panel_questions = []
                 for ci, c in enumerate(good):
                     akey = f"p{pi}.s{ci}.axis"
+                    if akey in hints:
+                        continue
                     series_style = {
                         "color": list(c["style"][0]) if c["style"][0] else None,
                         "width": c["style"][2],
                     }
-                    if akey in hints:
-                        if hints[akey] == "right" and panel["ya_right"]:
+                    panel_questions.append(
+                        {
+                            "id": akey,
+                            "kind": "y_axis_for_curve",
+                            "series_style": series_style,
+                            "options": ["left", "right"],
+                        }
+                    )
+                # tier-2: try to answer those questions from the page's own
+                # text (legend + rotated axis title) before falling back to
+                # the caller-hint tier
+                text_answers: dict[str, str] = {}
+                if panel_questions:
+                    text_answers, labels = resolve_semantics(
+                        page, panel, good, panel_questions
+                    )
+                    for s_idx, lab in labels.items():
+                        good[s_idx]["label"] = lab
+                local_hints = dict(hints)
+                local_hints.update(text_answers)
+                for ci, c in enumerate(good):
+                    akey = f"p{pi}.s{ci}.axis"
+                    if akey in local_hints:
+                        resolved_by = "text" if akey in text_answers else "hint"
+                        if local_hints[akey] == "right" and panel["ya_right"]:
                             ya2 = panel["ya_right"]
                             # re-extract this curve against right axis
                             cl = {c["style"]: clouds[c["style"]]}
@@ -908,17 +1060,15 @@ def extract_charts(
                             if c2 and not c2[0]["multivalued"]:
                                 c["points"] = c2[0]["points"]
                                 c["axis"] = "right"
+                                c["resolved_by"] = resolved_by
                         else:
                             c["axis"] = "left"
+                            c["resolved_by"] = resolved_by
                     else:
-                        res["questions"].append(
-                            {
-                                "id": akey,
-                                "kind": "y_axis_for_curve",
-                                "series_style": series_style,
-                                "options": ["left", "right"],
-                            }
-                        )
+                        # still open — text tier did not produce a unique
+                        # answer for this curve
+                        q = next(q for q in panel_questions if q["id"] == akey)
+                        res["questions"].append(q)
             chart["curves"] = good
             chart.setdefault("diagnostics", {}).setdefault("notes", [])
             for c in good:

@@ -116,3 +116,34 @@ def test_max_points_floor():
     doc.close()
     pts = result["charts"][0]["curves"][0]["points"]
     assert len(pts) <= 4
+
+
+REAL = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
+
+
+@pytest.mark.skipif(
+    not (REAL / "1807.11632.pdf").exists(), reason="real corpus not fetched"
+)
+def test_1807_dual_axis_resolves_via_text_no_hints():
+    doc = pymupdf.open(REAL / "1807.11632.pdf")
+    result = chart_extractor.extract_charts(doc, 3)  # page 4, 0-indexed
+    doc.close()
+    # legend "MCD"/"F0 RMSE" + right-axis title "F0 RMSE (Hz)" resolve the
+    # axis assignment with ZERO questions
+    assert result["status"] == "ok", result.get("questions")
+    reds = [
+        c
+        for ch in result["charts"]
+        for c in ch["curves"]
+        if c["style"][0] and c["style"][0][0] == 1.0
+    ]
+    assert reds and reds[0]["axis"] == "right"
+    assert reds[0]["resolved_by"] == "text"
+    assert reds[0].get("label") == "F0 RMSE"
+
+
+def test_style_collision_disables_text_answer(dual_doc):
+    # the dual-axis synthetic has NO legend at all -> text tier cannot fire,
+    # questions must remain
+    result = chart_extractor.extract_charts(dual_doc, 0)
+    assert result["status"] == "needs_hint"

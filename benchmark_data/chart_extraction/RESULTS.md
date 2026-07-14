@@ -218,3 +218,31 @@ blocks on `needs_hint`/`declined`. Extraction accuracy is unchanged (this was
 shape/semantics, not values). Guards added so the class can't silently regress:
 `tests/test_chart_response_contract.py` (cache-isolated consumer-side invariants
 + a schema↔`CHART_EXTRACTION_VERSION` coupling check).
+
+## Investigated + REJECTED: scalar-labeled-log calibration path (2026-07-14)
+
+A consumer flagged Kaplan et al. Fig 1 (2001.08361 p3) declining and proposed
+adding a "fit log10(value) vs pixel against scalar tick labels" calibration
+path. Investigated rigorously; NOT implemented — two reasons:
+
+1. **Misdiagnosed root cause.** Fig 1's tick labels are drawn as VECTOR
+   OUTLINES, not text (`numeric_tokens` finds 2 on the whole page; the center
+   panel's "2.7..4.2" and left "2..7" return False for every value in the text
+   layer). There is nothing to calibrate against — no scalar-log path helps.
+   The decline is correct (the now-documented outlined-labels limitation). By
+   contrast Kaplan Fig 2 (p4) HAS text labels and extracts fine; its scalar
+   "10,8,6,4" Test-Loss axis calibrates as linear at r2=0.9999 (its ticks are
+   at evenly-spaced pixels — genuinely linear, not compressed).
+
+2. **The general fix would regress the trust contract.** Measured on genuine
+   narrow-range LINEAR axes, the log fit is near-perfect too (1807 y: r2_lin=1.0
+   vs r2_log=0.9996; 22..12 axis: 1.0 vs 0.992). A "prefer/accept log when it
+   fits" rule would silently mis-model linear axes as log and emit subtly-wrong
+   interpolated values — violating exact-or-decline. The only SAFE variant
+   (log ONLY when linear fails the R² floor AND the value range is wide enough
+   to separate the two models) fires on zero confirmed real samples.
+
+Per the sample-driven post-ship policy: no calibration change without a
+confirmed real chart that has TEXT scalar labels on a genuinely
+pixel-compressed log axis and currently declines. None found. Restraint here
+is the 0-wrong-emit discipline in action.

@@ -530,6 +530,7 @@ pdf_extract_chart(
 
 **Limitations:**
 - Raster charts (screenshotted or scanned plots, not vector-drawn) are out of scope — the tool reads PDF drawing commands, not pixels; it declines and falls back to a render.
+- Tick labels drawn as vector outlines rather than real text (some LaTeX/Type-3 font setups) are invisible to text extraction, so the axis can't be calibrated and the chart declines even when the *plot* geometry is clean. This is distinct from a raster chart (the curves are still vector) — it's specifically the axis numbers that aren't extractable. Calibration reads tick-label text; there is nothing to read here.
 - Crossing or overlapping same-style curves that can't be disambiguated (a "line cloud" with multiple valid y per x) decline as `"multivalued"` rather than risk stitching two curves into one.
 - Composite `N×10^k` axis labels (e.g. superscript scientific notation) are parsed via a superscript-detection heuristic; unusual typesetting of the exponent can fail to attach it to its base numeral.
 - Locale-ambiguous tick sets (e.g. `"5.000"` — is it 5.0 or five thousand?) are dropped at the token level rather than guessed either way, since a wrong parse silently mis-scales the whole axis; the axis then declines for lack of resolvable ticks.

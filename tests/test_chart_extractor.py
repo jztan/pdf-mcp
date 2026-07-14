@@ -44,6 +44,30 @@ def test_question_ids_are_positional(dual_doc):
     assert all("series_style" in q for q in result["questions"])
 
 
+def test_needs_hint_curves_carry_no_points(dual_doc):
+    """Trust-contract regression: a curve whose axis question is still OPEN
+    must never carry a numeric points table. Pre-fix, extract_charts left
+    the curve's geometry-extracted "points" (calibrated against the default
+    left axis) on the curve alongside resolved_by="geometry" — a wrong-table
+    escape path, since the real axis is unknown until the caller answers.
+    """
+    result = chart_extractor.extract_charts(dual_doc, 0)
+    assert result["status"] == "needs_hint"
+    pending_ids = {q["id"] for q in result["questions"]}
+    assert pending_ids
+    for ch in result["charts"]:
+        for ci, c in enumerate(ch.get("curves", [])):
+            akey = f"{ch['chart_id']}.s{ci}.axis"
+            if akey in pending_ids:
+                assert "points" not in c, f"{akey} must not carry a points table"
+                assert c.get("axis") is None
+                assert c.get("pending_question") == akey
+                # style/label survive so callers can still correlate the
+                # question to a visual series
+                assert "style" in c
+                assert "label" in c
+
+
 def test_hints_resolve_dual_axis(dual_doc):
     r1 = chart_extractor.extract_charts(dual_doc, 0)
     hints = {q["id"]: "left" for q in r1["questions"]}

@@ -66,7 +66,8 @@ CASES = [
     # issue-#23 reporter's own samples (arXiv, auto-fetched):
     ("2605.06546", 20),  # Fig 11: 6 small-multiple panels x 6 series (+ Fig
     # 10 declines: y-axis has 2 composite N x 10^k labels)
-    ("2203.15556", 5),  # Chinchilla IsoFLOP: crossing curves -> decline
+    ("2203.15556", 5),  # Chinchilla IsoFLOP: crossing envelope declines;
+    # 2 tractable panels emit (adjudicated v6)
 ]
 
 # issue-#23 samples that cannot be auto-fetched (bot-walled / proprietary —

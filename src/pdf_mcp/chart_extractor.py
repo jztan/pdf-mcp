@@ -1145,9 +1145,19 @@ def extract_charts(
                             c["resolved_by"] = resolved_by
                     else:
                         # still open — text tier did not produce a unique
-                        # answer for this curve
+                        # answer for this curve. Never leave a numeric table
+                        # calibrated against the default left axis sitting on
+                        # an axis-unresolved curve: that is a wrong-table
+                        # escape path. Drop "points" and "resolved_by"
+                        # (both were provisionally set against the default
+                        # axis above) and mark the curve as pending so the
+                        # caller can correlate it to the open question.
                         q = next(q for q in panel_questions if q["id"] == akey)
                         res["questions"].append(q)
+                        c.pop("points", None)
+                        c.pop("resolved_by", None)
+                        c["axis"] = None
+                        c["pending_question"] = akey
             chart["curves"] = good
             chart.setdefault("diagnostics", {}).setdefault("notes", [])
             for c in good:

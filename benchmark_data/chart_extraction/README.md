@@ -15,7 +15,7 @@ this directory is the runnable evidence behind it.
 
 | File | Purpose |
 |---|---|
-| `src/pdf_mcp/chart_extractor.py` | Chart extraction module (promoted to production). `extract_charts(pdf, page_num, hints=None)` → `ok` / `needs_hint` / `declined`. Pure vector geometry for calibration + coordinates; hints are semantic enums only (never values). Imported by benchmark scripts below. |
+| `src/pdf_mcp/chart_extractor.py` | Chart extraction module (promoted to production). `extract_charts(doc, page_num, hints=None)` → `ok` / `needs_hint` / `declined`. Pure vector geometry for calibration + coordinates; hints are semantic enums only (never values). Imported by benchmark scripts below. |
 | `gen_synthetic.py` | Regenerates `syn_corpus/` — 10 chart archetypes with exact ground truth. Only step needing matplotlib. |
 | `bench_synthetic.py` | Scores the prototype on `syn_corpus/` with an oracle agent (answers hints correctly). Reports accuracy + wrong-emit rate. |
 | `bench_real.py` | Scores it on the arXiv chart-signature pages in `../.reading_order_pdfs/`. Replays **recorded** agent (vision) hint answers so it's deterministic, and prints error vs hand-verified ground truth. |

@@ -448,12 +448,14 @@ pdf_extract_chart("/path/to/dual_axis.pdf", page=1)
 #       "y_axis": {"scale": "linear", "r2": 1.0, "side": "left"},
 #       "series": [
 #         {"kind": "curve", "style": [[0.12, 0.47, 0.71], null, 1.5],
-#          "points": [[0, 4.9988], [1, 5.2988], "..."],
-#          "resolved_by": "geometry", "label": null},
+#          "label": null, "axis": null, "pending_question": "p0.s0.axis"},
 #         {"kind": "curve", "style": [[0.84, 0.15, 0.16], null, 1.5],
-#          "points": [[0, 8.5443], [1, 8.2716], "..."],
-#          "resolved_by": "geometry", "label": null}
+#          "label": null, "axis": null, "pending_question": "p0.s1.axis"}
 #       ],
+#       # NOTE: neither series carries a "points" table — the axis is still
+#       # unresolved for both, and this tool never emits a numeric table
+#       # calibrated against a guessed axis. "pending_question" correlates
+#       # each series back to the matching entry in questions[] below.
 #       "diagnostics": {
 #         "n_frames": 1, "n_line_clouds": 2, "dual_axis": true, "notes": []
 #       },

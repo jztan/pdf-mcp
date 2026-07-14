@@ -75,6 +75,48 @@ def test_annotated_hint_render(tmp_path, dual_doc):
     assert dist >= 0.8
 
 
+def _pixels(pix):
+    import numpy as np
+
+    arr = np.frombuffer(pix.samples, dtype=np.uint8)
+    return arr.reshape(pix.height, pix.width, pix.n)[..., :3].astype(int)
+
+
+def test_annotated_hint_render_pixels_show_halo(tmp_path, dual_doc):
+    """The halos must be VISIBLE in the saved PNG, not silently buried
+    (regression: overlay=False hid them under the opaque plot background).
+    Compares annotated vs unannotated renders of the same clip pixel-wise."""
+    import numpy as np
+
+    result = chart_extractor.extract_charts(dual_doc, 0)
+    chart_extractor.annotate_questions(dual_doc, 0, result, tmp_path, "pxhash")
+    annotated = _pixels(pymupdf.Pixmap(result["questions"][0]["render_path"]))
+    # baseline: identical clip + dpi rendered straight from the source page
+    page = dual_doc[0]
+    panel = chart_extractor.find_panels(page)[0]
+    clip = pymupdf.Rect(
+        panel["rx0"] - 5, panel["ry0"] - 5, panel["rx1"] + 5, panel["ry1"] + 5
+    )
+    base = _pixels(page.get_pixmap(dpi=200, clip=clip))
+    assert annotated.shape == base.shape
+    changed = np.abs(annotated - base).sum(axis=2) > 30
+    # a real halo band repaints a substantial share of the panel
+    assert changed.mean() > 0.005, f"only {changed.mean():.4%} of pixels changed"
+    # ...and among the changed pixels, each queried series must have at least
+    # one pixel whose color is closer to its halo RGB than to white or to the
+    # series' own color (pure background/stroke shifts would fail this)
+    cpx = annotated[changed]
+    for q in result["questions"]:
+        halo = np.array(chart_extractor._HALOS[q["highlight"]]) * 255
+        series = np.array(q["series_style"]["color"] or (0, 0, 0)) * 255
+        d_halo = np.abs(cpx - halo).sum(axis=1)
+        d_white = np.abs(cpx - 255).sum(axis=1)
+        d_series = np.abs(cpx - series).sum(axis=1)
+        assert (
+            (d_halo < d_white) & (d_halo < d_series)
+        ).any(), f"no halo-colored pixels for {q['id']} ({q['highlight']})"
+
+
 def test_detect_charts_signal(line_doc):
     n = chart_extractor.detect_charts_signal(line_doc[0])
     assert n == 1

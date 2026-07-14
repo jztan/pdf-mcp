@@ -1149,7 +1149,7 @@ def extract_charts(
     return res
 
 
-# ---------------- annotated hint renders (halo underlay) ----------------
+# ---------------- annotated hint renders (halo overlay) ----------------
 
 # translucent halo colors used to highlight a queried series in a hint
 # render; must stay visually distinct from common matplotlib series colors
@@ -1179,7 +1179,8 @@ def annotate_questions(
     pdf_hash: str,
 ) -> dict[str, str]:
     """Render one annotated clip per panel that has open questions; a
-    translucent halo is drawn UNDER each queried series (stroke untouched).
+    translucent wide halo is drawn OVER each queried series so the vision
+    agent identifies the series by highlight hue.
 
     Sets ``q["render_path"]`` and ``q["highlight"]`` on every question in
     ``result["questions"]`` and returns ``{chart_id: png_path}``.
@@ -1215,9 +1216,23 @@ def annotate_questions(
                     if style[0] == target and pts:
                         seq = sorted(pts)[:400]
                         shape.draw_polyline(seq)
-                        shape.finish(color=_HALOS[hue], width=4, stroke_opacity=0.35)
+                        # wide translucent band: ~4x the series' own stroke
+                        # width, low opacity, so the thin opaque stroke stays
+                        # readable through the halo
+                        w = 4.0 * float((series_style or {}).get("width") or 1.0)
+                        shape.finish(
+                            color=_HALOS[hue],
+                            width=max(w, 4.0),
+                            stroke_opacity=0.35,
+                        )
                         break
-        shape.commit(overlay=False)  # UNDER the original strokes
+        # overlay=True: the halo must go ON TOP of existing content.
+        # overlay=False (under) buries it beneath the chart's opaque white
+        # plot-background rectangle (matplotlib paints one over the whole
+        # figure), making the halo invisible. A wide low-opacity band over a
+        # thin opaque stroke keeps the stroke's trajectory clearly readable,
+        # which is the actual cue the vision agent needs.
+        shape.commit(overlay=True)
         clip = pymupdf.Rect(
             panel["rx0"] - 5,
             panel["ry0"] - 5,

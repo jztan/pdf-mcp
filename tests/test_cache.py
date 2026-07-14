@@ -1452,22 +1452,31 @@ def test_page_charts_stale_version_purged_on_open(sample_pdf, tmp_path):
     stale pre-response-shape-change row (e.g. series `style` as a tuple
     instead of a dict) would keep being served forever. Mirrors the
     _EXTRACTION_VERSION purge for page_text."""
+    assert CHART_EXTRACTION_VERSION >= 2, (
+        "this test assumes the constant has been bumped past the original 1; "
+        "it hardcodes the stale row at version 1 to prove the current "
+        "constant purges genuine pre-branch rows"
+    )
     cache_dir = tmp_path / "chart_version_cache"
     cache1 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
-    result = {"status": "ok", "charts": [{"chart_id": "p0"}]}
-    cache1.save_page_charts(str(sample_pdf), 1, "abc123", 24, result)
-    assert cache1.get_page_charts(str(sample_pdf), 1, "abc123", 24) == result
+    stale = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "old"}]}
+    fresh = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "new"}]}
+    cache1.save_page_charts(str(sample_pdf), 1, "stalekey", 24, stale)
+    cache1.save_page_charts(str(sample_pdf), 1, "freshkey", 24, fresh)
 
-    # Simulate a row written by an older extraction version, bypassing
-    # save_page_charts (which always stamps the *current* constant).
+    # Stamp ONLY the stale row at the real pre-branch version (1), bypassing
+    # save_page_charts (which stamps the current constant). The fresh row keeps
+    # the current version. Reverting the 1->2 bump would make the stale row's
+    # version match again and this test would then fail (it would survive).
     with sqlite3.connect(cache1.db_path) as conn:
         conn.execute(
-            "UPDATE page_charts SET chart_extraction_version = ? "
-            "WHERE file_path = ? AND page_num = ?",
-            (CHART_EXTRACTION_VERSION - 1, str(sample_pdf), 1),
+            "UPDATE page_charts SET chart_extraction_version = 1 "
+            "WHERE file_path = ? AND hints_hash = ?",
+            (str(sample_pdf), "stalekey"),
         )
 
-    # Re-opening the DB (a fresh PDFCache instance, as happens across server
-    # restarts) must purge rows whose stamped version no longer matches.
+    # Re-opening the DB (fresh PDFCache, as across server restarts) must purge
+    # ONLY the version-mismatched row — the current-version row must survive.
     cache2 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
-    assert cache2.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None
+    assert cache2.get_page_charts(str(sample_pdf), 1, "stalekey", 24) is None
+    assert cache2.get_page_charts(str(sample_pdf), 1, "freshkey", 24) == fresh

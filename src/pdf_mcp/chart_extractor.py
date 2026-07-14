@@ -632,6 +632,30 @@ def classify(
     return "unknown"
 
 
+def _select_sample_indices(dy: np.ndarray, max_points: int) -> np.ndarray:
+    """Choose <= max_points indices into ``dy`` for downsampled emission.
+
+    Always keeps the series endpoints plus the global argmin/argmax of
+    ``dy`` (a table must not silently lose the peak/trough), fills the
+    remaining budget with local extrema ranked by prominence
+    (|y - mean(neighbors)|), then pads with a uniform spread. Returns
+    sorted unique indices.
+    """
+    forced = {0, len(dy) - 1, int(np.argmax(dy)), int(np.argmin(dy))}
+    # local extrema (sign change of dy differences), ranked by
+    # prominence = |y - mean of neighbors|
+    d1 = np.diff(dy)
+    ext = np.where(np.sign(d1[:-1]) * np.sign(d1[1:]) < 0)[0] + 1
+    prom = np.abs(dy[ext] - (dy[ext - 1] + dy[ext + 1]) / 2)
+    ranked = ext[np.argsort(prom)[::-1]]
+    remaining_budget = max(0, max_points - len(forced))
+    keep_ext = ranked[:remaining_budget]
+    fill = max(0, max_points - len(forced) - len(keep_ext))
+    uniform = np.linspace(0, len(dy) - 1, fill).astype(int)
+    sel: np.ndarray = np.unique(np.concatenate([list(forced), keep_ext, uniform]))
+    return sel
+
+
 def extract_line(
     clouds: dict[Style, list[tuple[float, float]]],
     panel: dict[str, Any],
@@ -670,18 +694,12 @@ def extract_line(
             sel = np.arange(len(dx))
             downsampled = False
         else:
-            # local extrema (sign change of dy differences), ranked by
-            # prominence = |y - mean of neighbors|
+            sel = _select_sample_indices(dy, max_points)
+            # local extrema (sign change of dy differences) not present in
+            # the final selection were dropped for lack of budget
             d1 = np.diff(dy)
             ext = np.where(np.sign(d1[:-1]) * np.sign(d1[1:]) < 0)[0] + 1
-            prom = np.abs(dy[ext] - (dy[ext - 1] + dy[ext + 1]) / 2)
-            ranked = ext[np.argsort(prom)[::-1]]
-            keep_ext = ranked[: max(0, max_points - 2)]
-            n_extrema_dropped = max(0, len(ext) - len(keep_ext))
-            uniform = np.linspace(0, len(dx) - 1, max_points - len(keep_ext)).astype(
-                int
-            )
-            sel = np.unique(np.concatenate([keep_ext, uniform, [0, len(dx) - 1]]))
+            n_extrema_dropped = int(np.setdiff1d(ext, sel).size)
             downsampled = True
         curves.append(
             {
@@ -794,6 +812,7 @@ def extract_charts(
     problems; gates decline instead.
     """
     hints = hints or {}
+    max_points = max(max_points, 4)
     page = doc[page_num]
     res: dict[str, Any] = {
         "page": page_num + 1,

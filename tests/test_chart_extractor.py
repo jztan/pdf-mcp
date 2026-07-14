@@ -91,3 +91,28 @@ def test_extrema_overflow_self_reports():
     doc.close()
     notes = result["charts"][0]["diagnostics"].get("notes", [])
     assert any("extrema exceeded max_points" in n for n in notes)
+
+
+def test_global_max_survives_adversarial_prominence():
+    import numpy as np
+
+    from pdf_mcp.chart_extractor import _select_sample_indices
+
+    # gentle global hill (apex 100) plus four sharper, higher-local-
+    # prominence spikes (amplitude 40): local prominence ranking alone
+    # would fill the budget with spikes and drop the true global max.
+    xs = np.linspace(0.0, 10.0, 401)
+    ys = 100.0 * np.exp(-((xs - 5.0) ** 2) / 8.0)
+    for cx in (1.0, 2.0, 8.0, 9.0):
+        ys = ys + 40.0 * (np.abs(xs - cx) < 0.03)
+    sel = _select_sample_indices(ys, 6)
+    assert int(np.argmax(ys)) in sel, "global max dropped by sampler"
+    assert 0 in sel and len(ys) - 1 in sel
+
+
+def test_max_points_floor():
+    doc = pymupdf.open(SYN / "line_sharp_peak.pdf")
+    result = chart_extractor.extract_charts(doc, 0, max_points=1)
+    doc.close()
+    pts = result["charts"][0]["curves"][0]["points"]
+    assert len(pts) <= 4

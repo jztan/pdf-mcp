@@ -946,6 +946,18 @@ def extract_charts(
     problems; gates decline instead.
     """
     hints = hints or {}
+    # up-front value validation: closed enums per hint-id suffix. Ids
+    # themselves are validated later (after extraction) by checking which
+    # supplied hint keys were actually consumed by a real panel/series.
+    _AXIS_VALUES = {"left", "right"}
+    _TYPE_VALUES = {"line", "bar", "scatter", "not_a_chart"}
+    for hk, hv in hints.items():
+        suffix = hk.rsplit(".", 1)[-1]
+        if suffix == "axis" and hv not in _AXIS_VALUES:
+            return {"error": f"invalid hint value {hv!r} for {hk}"}
+        if suffix == "type" and hv not in _TYPE_VALUES:
+            return {"error": f"invalid hint value {hv!r} for {hk}"}
+    used_hint_keys: set[str] = set()
     max_points = max(max_points, 4)
     page = doc[page_num]
     res: dict[str, Any] = {
@@ -957,6 +969,8 @@ def extract_charts(
     }
     panels = find_panels(page)
     if not panels:
+        if hints:
+            return {"error": f"unknown hint id: {sorted(hints)[0]}"}
         res["status"] = "declined"
         res["reasons"].append("no chart signature (no valid tick-series axes)")
         return res
@@ -1000,10 +1014,17 @@ def extract_charts(
         tkey = f"p{pi}.type"
         if tkey in hints:
             ctype = hints[tkey]
+            used_hint_keys.add(tkey)
         chart: dict[str, Any] = {
             "chart_id": f"p{pi}",
             "panel": pi,
             "chart_type": ctype,
+            "region_bbox": [
+                float(panel["rx0"]),
+                float(panel["ry0"]),
+                float(panel["rx1"]),
+                float(panel["ry1"]),
+            ],
             "x_axis": {"scale": xa["scale"], "r2": round(xa["r2"], 5)},
             "y_axis": {
                 "scale": ya["scale"],
@@ -1036,6 +1057,7 @@ def extract_charts(
                 for ci, c in enumerate(good):
                     akey = f"p{pi}.s{ci}.axis"
                     if akey in hints:
+                        used_hint_keys.add(akey)
                         continue
                     series_style = {
                         "color": list(c["style"][0]) if c["style"][0] else None,
@@ -1148,6 +1170,9 @@ def extract_charts(
                 "series fell outside axis range " "(likely not a data chart)"
             )
         res["charts"].append(chart)
+    unconsumed = set(hints) - used_hint_keys
+    if unconsumed:
+        return {"error": f"unknown hint id: {sorted(unconsumed)[0]}"}
     if res["questions"]:
         res["status"] = "needs_hint"
     emitted = any(

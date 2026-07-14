@@ -279,3 +279,74 @@ Two changes (both general, no per-sample hacks):
 New synthetic archetype `line_log2` (base-2 log x-axis, ticks 2¹⁹…2²⁷) pins the
 recovery: scores 0.10% of y-range, 0/15 wrong-emit. Real corpus stays 0 uncaught
 wrong-emit. `CHART_EXTRACTION_VERSION` → 5 (cache rows carry the version).
+
+## Real-world failure catalog — broad out-of-corpus sweep (2026-07-15)
+
+Feature held EXPERIMENTAL (silent-wrong-emit risk). To map the true failure
+surface before any fix, swept two fresh out-of-corpus batches and adversarially
+verified every emit against a render (not just the 0-wrong-emit gate):
+
+- **Batch A — 11 typography-diverse ML papers** (scaling laws / training curves
+  / LR schedules): 55 chart-signal pages → 130 emits, 5 declines.
+- **Batch B — ~38 non-ML papers already in `.reading_order_pdfs/`** (physics /
+  astro / stats, 2007–2018; gnuplot/matlab/xmgrace toolchains): 26 signal pages
+  → 27 emits, 4 declines.
+
+(PDFs auto-fetched into gitignored `.reading_order_pdfs/`; triage script +
+renders in session scratchpad, not committed.)
+
+### CATASTROPHIC — log axes with `10^k` exponent tick labels (silent, orders of magnitude)
+
+The dominant real-world failure, same family as the base-2 Hestness bug but far
+more common (log axes are ubiquitous in ML papers). The mis-read axis still
+calibrates at r²≈1.0, so `status="ok"` and nothing signals the error. Two
+sub-mechanisms confirmed on two real papers:
+
+1. **Sign dropped — `10^-6` read as `10^6`.** Henighan 2010.14701 Fig 16:
+   x-axis "Compute (PF-days)" is `10^-6 … 10^1`, emitted x runs up to **76,280**.
+   Root cause: the minus sign on negative exponents is a **vector stroke, not
+   text** (zero minus glyphs in the page text layer), so `superscript_powers`
+   silently reads the magnitude with the wrong sign.
+2. **Base not paired — exponents read as a linear axis.** SGDR 1608.03983 Fig 1:
+   y-axis "Learning rate" is log `10^-4 … 10^0`, emitted as **linear `[-4, 0]`**
+   (a negative learning rate). The `10` base isn't attached to its exponent, so
+   the exponent labels become literal linear tick values.
+
+**Invisible to range sanity checks:** 0/130 Batch-A emits would be caught by a
+"log range dips below 1" heuristic — dropping the sign keeps the range ≥1, and
+the linear-misread isn't even flagged as log. Only a visual render comparison
+catches it. Positive-decade log axes (2206.07682 emergent-abilities,
+`10^18 … 10^24`) DO calibrate correctly.
+
+### MEDIUM — dense multi-panel `pgfplots` figures (panel/axis/title mixing)
+
+2206.07682 Fig 2 (8-panel emergent abilities): x-axis (positive-decade log)
+reads correctly, but y-ranges come out `[0,50]` where the panels are 0–70,
+emitted y-values don't match the plotted curves, and the bold subplot captions
+("(E) TruthfulQA") are captured as x-axis titles. Tight small-multiple grids
+still confuse panel↔axis↔title association.
+
+### LOW / fidelity — noisy-trace `multivalued-x` emit
+
+Non-ML batch: noisy experimental traces (0811.0781 force-extension curves,
+0904.1520) and wiggly time series get emitted as a single sampled polyline even
+though the same x carries multiple y. Values aren't orders-of-magnitude wrong,
+but a jagged experimental trace arguably should decline rather than emit a clean
+(x,y) table. Cosmetic sub-case: subscript splits in titles ("CO₂" → "CO 2" on
+1302.4245 p5) — display-only, values unaffected.
+
+### What the sweep did NOT break (correct emits)
+
+- **Genuinely-negative linear axes** — every negative-linear-y flag was a false
+  alarm: 1302.4245 Fig 3 "Covariance" `[-200,200]`, 0711.3236 `b(x)` `[0,-1.5]`,
+  "Log Spectral Density" `[-15,10]` all emitted correctly (a logged *quantity*
+  on a linear axis is not a log scale — the `_title_says_log` exclusion holds).
+- **Positive-decade log axes** and ordinary linear physics/stats plots.
+
+### Takeaway
+
+The curated 0-wrong-emit corpus was **not representative** — it used
+well-behaved ASCII positive-decade log axes. Real ML papers break the
+tick-label reader constantly via `10^k` exponent typography, and the failure is
+silent + confident. Cataloged here; not yet fixed (decision: keep gathering
+before committing to a reader fix vs. an aggressive decline guard).

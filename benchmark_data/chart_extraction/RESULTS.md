@@ -206,3 +206,15 @@ Verdict: out-of-sample wrong-emit = 0 after the colorbar fix; discovery
 generalizes (8.2% flag rate, no false flags observed); the release gate is
 satisfied. Residual known limits unchanged (raster charts, crossing
 same-style curves, composite mantissa labels).
+
+## Response-contract hardening (consumer validation, 2026-07-14)
+
+Beyond the extraction numbers above (producer-side: 0 wrong-emit), the tool's
+response *contract* was hardened over three rounds of external-LLM consumer
+testing — uniform series schema (`style` always a dict), axis titles/range with
+body-text/caption/cross-panel-title pollution rejected (null on miss),
+`y_axis_right` exposed on dual-axis charts, list-return with inline MCP image
+blocks on `needs_hint`/`declined`. Extraction accuracy is unchanged (this was
+shape/semantics, not values). Guards added so the class can't silently regress:
+`tests/test_chart_response_contract.py` (cache-isolated consumer-side invariants
++ a schema↔`CHART_EXTRACTION_VERSION` coupling check).

@@ -147,3 +147,56 @@ def test_style_collision_disables_text_answer(dual_doc):
     # questions must remain
     result = chart_extractor.extract_charts(dual_doc, 0)
     assert result["status"] == "needs_hint"
+
+
+def test_legend_style_collision_drops_both_entries(monkeypatch):
+    """Two legend entries sharing a stroke color identify nothing: the
+    collision-drop path must leave the question open (no text answer)."""
+    from pdf_mcp import chart_extractor as ce
+
+    blue = (0.1, 0.2, 0.8)
+    monkeypatch.setattr(
+        ce, "_legend_entries",
+        lambda page, panel: [
+            ((blue, None, 1.0), "series alpha"),
+            ((blue, None, 1.0), "series beta"),
+        ],
+    )
+    monkeypatch.setattr(
+        ce, "_axis_titles",
+        lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
+    )
+    curves = [{"style": (blue, None, 1.0), "points": [[0, 0], [1, 1]]}]
+    questions = [{"id": "p0.s0.axis", "kind": "y_axis_for_curve"}]
+    answers, labels = ce.resolve_semantics(None, None, curves, questions)
+    assert answers == {}, "collision must disable text self-answer"
+    assert labels == {}
+
+
+def test_legend_unique_match_answers(monkeypatch):
+    from pdf_mcp import chart_extractor as ce
+
+    blue = (0.1, 0.2, 0.8)
+    red = (0.9, 0.1, 0.1)
+    monkeypatch.setattr(
+        ce, "_legend_entries",
+        lambda page, panel: [
+            ((blue, None, 1.0), "series alpha"),
+            ((red, None, 1.0), "series beta"),
+        ],
+    )
+    monkeypatch.setattr(
+        ce, "_axis_titles",
+        lambda page, panel: {"left": "alpha (units)", "right": "beta (units)"},
+    )
+    curves = [
+        {"style": (blue, None, 1.0), "points": [[0, 0], [1, 1]]},
+        {"style": (red, None, 1.0), "points": [[0, 0], [1, 1]]},
+    ]
+    questions = [
+        {"id": "p0.s0.axis", "kind": "y_axis_for_curve"},
+        {"id": "p0.s1.axis", "kind": "y_axis_for_curve"},
+    ]
+    answers, labels = ce.resolve_semantics(None, None, curves, questions)
+    assert answers == {"p0.s0.axis": "left", "p0.s1.axis": "right"}
+    assert labels == {0: "series alpha", 1: "series beta"}

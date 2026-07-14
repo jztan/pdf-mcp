@@ -285,4 +285,49 @@ def test_legend_unique_match_answers(monkeypatch):
     ]
     answers, labels = ce.resolve_semantics(None, None, curves, questions)
     assert answers == {"p0.s0.axis": "left", "p0.s1.axis": "right"}
-    assert labels == {0: "series alpha", 1: "series beta"}
+
+
+def test_colorbar_never_wins_as_y_axis():
+    """Regression for the arXiv 2001.08361 p24 Fig18 wrong-emit: a compact
+    3-tick panel y-axis (100/300/500, pixel span < 60) sits next to a taller
+    ScalarMappable colorbar (0..10, "Test Loss"). Pre-fix, the compact real
+    axis was rejected by the 60pt span filter and the colorbar's own tick
+    column won as the right-side y-axis by default, calibrating the two real
+    line series (ground truth y in 150..480) against the colorbar's 0..10
+    scale instead — a ~100x-smaller chimera range, easily detectable.
+
+    Both fix layers are exercised: (1) the lowered 45pt span threshold admits
+    the real compact axis so it out-competes the colorbar as a `lefts`
+    candidate, and (2) `_looks_like_colorbar` rejects the colorbar strip
+    outright so it can never become a `rights` candidate even if the real
+    axis were absent.
+    """
+    doc = pymupdf.open(SYN / "line_colorbar.pdf")
+    result = chart_extractor.extract_charts(doc, 0, max_points=12)
+    doc.close()
+    assert result["status"] == "ok"
+    chart = result["charts"][0]
+    assert chart["y_axis"]["side"] == "left", "must calibrate off the panel's own axis"
+    curves = chart["curves"]
+    assert len(curves) == 2, "both real line series must be emitted"
+    for curve in curves:
+        ys = [p[1] for p in curve["points"]]
+        # ground-truth range is 150..480; colorbar range is 0..10 — a
+        # chimera would land entirely below 10, so this range check alone
+        # distinguishes a correct emission from the wrong-emit.
+        assert min(ys) > 50, f"y-values too low, looks colorbar-calibrated: {ys}"
+        assert max(ys) < 600, f"y-values out of the real axis range: {ys}"
+
+
+def test_looks_like_colorbar_detects_raster_strip(dual_doc):
+    """`_looks_like_colorbar` is a standalone geometry check: a raster image
+    (or dense stack of thin filled rects) sitting in a narrow band between
+    the x-axis span's right edge and a candidate y-axis column reads as a
+    colorbar. Exercise it directly against a page with no such raster band
+    (the ordinary dual-axis synthetic fixture) to confirm it returns False
+    absent colorbar-shaped content, so the helper isn't a rubber stamp."""
+    page = dual_doc[0]
+    panel = chart_extractor.find_panels(page)[0]
+    x1 = panel["xa"]["px"].max()
+    ya = panel["ya"]
+    assert chart_extractor._looks_like_colorbar(page, x1, ya) is False

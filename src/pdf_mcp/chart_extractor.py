@@ -330,6 +330,48 @@ def axis_anchor_segments(
     return horiz, vert
 
 
+def _looks_like_colorbar(page: Any, x1: float, ya: dict[str, Any]) -> bool:
+    """Defense in depth against the arXiv 2001.08361 p24 Fig18 wrong-emit: a
+    matplotlib colorbar is a narrow vertical strip — a raster image OR a
+    dense stack of thin filled rects — sitting immediately left of its own
+    tick-label column. ``x1`` is the x-axis span's right end (the panel's
+    right edge); ``ya`` is a y-axis candidate being evaluated as a RIGHT-side
+    axis. Returns True when the horizontal band between ``x1`` and the
+    candidate's tick-label column (``ya["x_at"]``) is occupied by
+    colorbar-shaped content: narrow (< 35pt wide) and tall enough
+    (>= 0.4x the candidate's own tick-label pixel span) to plausibly be the
+    strip those labels are ticking."""
+    x_at = ya["x_at"]
+    band_x0, band_x1 = (x1, x_at) if x1 <= x_at else (x_at, x1)
+    py_span = float(ya["px"].max() - ya["px"].min())
+    min_h = 0.4 * py_span
+    for info in page.get_image_info():
+        bbox = info.get("bbox")
+        if not bbox:
+            continue
+        bx0, by0, bx1, by1 = bbox
+        if (
+            bx0 >= band_x0 - 2
+            and bx1 <= band_x1 + 2
+            and (bx1 - bx0) < 35
+            and (by1 - by0) >= min_h
+        ):
+            return True
+    fills: list[Any] = []
+    for d in page.get_drawings():
+        if d.get("fill") is None:
+            continue
+        for r in rects_of(d):
+            if band_x0 - 2 <= r.x0 and r.x1 <= band_x1 + 2:
+                fills.append(r)
+    if len(fills) >= 8:
+        w = max(r.x1 for r in fills) - min(r.x0 for r in fills)
+        h = max(r.y1 for r in fills) - min(r.y0 for r in fills)
+        if w < 35 and h >= min_h:
+            return True
+    return False
+
+
 def find_panels(page: Any) -> list[dict[str, Any]]:
     toks = numeric_tokens(page)
     horiz, vert = axis_anchor_segments(page)
@@ -354,7 +396,7 @@ def find_panels(page: Any) -> list[dict[str, Any]]:
     y_axes: list[dict[str, Any]] = []
     for g0 in rows:
         for g in monotonic_runs(g0, "cx"):
-            if max(t["cx"] for t in g) - min(t["cx"] for t in g) < 60:
+            if max(t["cx"] for t in g) - min(t["cx"] for t in g) < 45:
                 continue
             s = tick_series(g, "cx")
             if not s:
@@ -379,7 +421,7 @@ def find_panels(page: Any) -> list[dict[str, Any]]:
             x_axes.append(s)
     for g0 in cols:
         for g in monotonic_runs(g0, "cy"):
-            if max(t["cy"] for t in g) - min(t["cy"] for t in g) < 60:
+            if max(t["cy"] for t in g) - min(t["cy"] for t in g) < 45:
                 continue
             s = tick_series(g, "cy")
             if not s:
@@ -443,6 +485,7 @@ def find_panels(page: Any) -> list[dict[str, Any]]:
             and ya["px"].max() <= xa["y_at"] + 25
             and corner_ok(ya)
             and corner_meets(ya, hx1a)
+            and not _looks_like_colorbar(page, x1, ya)
         ]
         if not lefts and not rights:
             continue

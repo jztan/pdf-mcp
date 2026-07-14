@@ -140,6 +140,34 @@ ax.set_yticks(range(0, 101, 20))
 save(fig, "line_sharp_peak", {"type": "line",
      "series": {"red": [x.tolist(), y.tolist()]}})
 
+# 14. line chart + colorbar (the arXiv 2001.08361 p24 Fig18 wrong-emit
+# archetype): a compact 3-tick panel y-axis (100/300/500, pixel span <60,
+# same shape as the real Fig18 subplot) sits next to a taller ScalarMappable
+# colorbar (0..10, "Test Loss") whose own tick column spans MORE pixels —
+# under the pre-fix 60pt threshold the real axis was rejected and the
+# colorbar's ticks won as the right-side axis by default. Ground truth is
+# the two REAL line series on the panel's own y-axis (100..500) — the data
+# range is far from the colorbar's 0..10 so a chimera (colorbar-calibrated y,
+# order-of-magnitude smaller) is detectable by range alone.
+x = np.linspace(0, 10, 11); y1 = 150+30*x; y2 = 480-25*x
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y1, color="tab:blue")
+ax.plot(x, y2, color="tab:red")
+ax.set_ylim(100, 500); ax.set_yticks([100, 300, 500])
+sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(0, 10))
+sm.set_array([])
+cbar = fig.colorbar(sm, ax=ax, pad=0.0)
+cbar.set_label("Test Loss")
+# shrink ONLY the plot axes (not the colorbar) so the panel's own y-axis
+# tick-label pixel span is compact (~46pt) while the colorbar's tick column
+# stays tall — reproducing the real-world geometry that fooled the pre-fix
+# 60pt span filter.
+pos = ax.get_position()
+ax.set_position([pos.x0, pos.y0, pos.width, 0.16])
+save(fig, "line_colorbar", {"type": "line",
+     "series": {"blue": [x.tolist(), y1.tolist()],
+                "red": [x.tolist(), y2.tolist()]}})
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

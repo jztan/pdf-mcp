@@ -825,3 +825,17 @@ misleading; syn corpus decline reasons unchanged (decoy_diagram and
 locale_de keep the generic reason); chart suites 88 passed.
 `CHART_EXTRACTION_VERSION` → 13 (decline-reason strings change for cached
 no-panel pages).
+
+## Implemented: withhold known-wrong ranges on sign-declined axes (2026-07-15, v14)
+
+Assembling the round-6 consumer handoff kit exposed a residual trap in the
+v12 decline path: a chart declined by the unreadable-ticks guard still
+carried the CONFIDENTLY-WRONG calibration in its axis metadata — the wild
+sample's declined charts advertised y range [20, 70] (true −70..−20) and
+[90, 140] (true −140..−90) beside a decline_reason saying the sign is
+unreadable. The guard's premise is that the calibration is wrong in sign or
+scale, so every flagged axis's `range` is now nulled on decline (ranges on
+OTHER decline classes — multivalued, no-geometry — remain trustworthy and
+stay). Contract already allowed null ranges (`_assert_axis`); tests pin the
+nulls on both the synthetic and wild samples. Chart suites 86 passed.
+`CHART_EXTRACTION_VERSION` → 14 (declined-chart metadata values change).

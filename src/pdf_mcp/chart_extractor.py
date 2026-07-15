@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 13
+CHART_EXTRACTION_VERSION = 14
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -1860,6 +1860,13 @@ def extract_charts(
             chart["chart_type"] = "declined"
             chart["decline_reason"] = f"{name}-axis: {why}"
             chart["diagnostics"]["notes"].append(chart["decline_reason"])
+            # the guard's premise is that the calibration is wrong in sign
+            # or scale — the flagged axis's range is a KNOWN-WRONG number
+            # (10^-6 read as 10^6; -70..-20 read as 20..70) and must not
+            # ride along in the declined chart's metadata.
+            _ax_key = {"x": "x_axis", "y": "y_axis", "right y": "y_axis_right"}
+            for bad_name, _ in _bad:
+                chart[_ax_key[bad_name]]["range"] = None
             res["charts"].append(chart)
             continue
 

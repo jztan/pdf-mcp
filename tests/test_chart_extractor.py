@@ -686,6 +686,10 @@ def test_base_level_drawn_minus_declines():
     ch = result["charts"][0]
     assert ch["chart_type"] == "declined"
     assert "sign" in ch["decline_reason"]
+    # the mirrored calibration ([18,24] for [-24,-18]) is known-wrong and
+    # must not ride along in the declined chart's axis metadata
+    assert ch["x_axis"]["range"] is None
+    assert ch["y_axis"]["range"] is None
     # the sanctioned hint path must not resurrect the wrong emit either
     hinted = chart_extractor.extract_charts(doc, 0, {"p0.type": "line"})
     doc.close()
@@ -772,6 +776,7 @@ def test_base_level_drawn_minus_real_corpus_declines():
         assert ch["chart_type"] == "declined", ch
         assert "sign is drawn, not typed" in ch["decline_reason"]
         assert not ch.get("curves")
+        assert ch["y_axis"]["range"] is None, "flipped range leaked"
 
 
 def test_bar_misclassification_falls_back_to_question():

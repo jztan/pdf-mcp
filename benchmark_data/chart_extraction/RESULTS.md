@@ -798,3 +798,30 @@ EMIT with negative ranges; `line_drawn_minus` doctored sibling must DECLINE)
 1807.11632 dual-axis and 2607.06360 grazing-cap negative controls unchanged;
 chart suites 86 passed. `CHART_EXTRACTION_VERSION` → 12 (declined-chart
 metadata changes for affected pages; cached rows must invalidate).
+
+## Implemented: drawn-glyph decline-reason discrimination (2026-07-15, v13)
+
+The round-4/5 consumer note, twice flagged: the generic decline
+`"no chart signature (no valid tick-series axes)"` conflates "not a chart"
+with "a chart whose tick labels never reach the text layer" (SuperMongo/
+PGPLOT Hershey strokes — Blanton astro-ph/0210215 p33; outlined-text
+exports). The latter is a typography ceiling the consumer should eyeball
+around, not a tool failure to debug.
+
+`_no_panel_reason` now discriminates on the drawn-glyph fingerprint: >=2
+long horizontal + >=2 long vertical axis-anchor segments whose frame region
+(+25pt label margin) holds fewer than 3 numeric text tokens → the decline
+names the situation ("axis-like frame geometry but no readable tick-label
+text — either not a data chart, or the labels are drawn/outlined glyphs…").
+Data tables keep the generic reason (their rules enclose their numbers);
+prose/header-rule pages lack the perpendicular pair. Wording deliberately
+claims only what is measured — line drawings and schematics share the
+fingerprint, so it offers both readings.
+
+Validation: Blanton p33 gets the specific reason; 40-PDF wild sweep: 41 of
+532 no-panel declines flip, adjudicated = unlabeled/drawn-label plots
+(correct) + boxy schematics (covered by the either/or wording), zero
+misleading; syn corpus decline reasons unchanged (decoy_diagram and
+locale_de keep the generic reason); chart suites 88 passed.
+`CHART_EXTRACTION_VERSION` → 13 (decline-reason strings change for cached
+no-panel pages).

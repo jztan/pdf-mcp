@@ -626,6 +626,51 @@ def test_grazing_error_bar_cap_does_not_negate():
                 assert rng[0] >= 1.0, f"negated a positive axis: {rng}"
 
 
+def test_drawn_glyph_labels_get_specific_decline_reason():
+    """A SuperMongo/PGPLOT-style figure draws EVERYTHING as strokes — axis
+    frame, tick marks, and the tick-label digits (Hershey fonts / outlined
+    text). Nothing lands in the text layer, so no panel can form; but the
+    generic 'no chart signature' reason reads as 'not a chart', sending the
+    consumer hunting for a tool bug. Axis-like frame geometry with a
+    text-empty label zone must name the real situation: unreadable labels,
+    use the render. (Blanton astro-ph/0210215 p33 is the wild sample.)"""
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=300)
+    # stroked axis frame + tick marks, zero text anywhere
+    page.draw_rect(pymupdf.Rect(60, 40, 360, 240), color=(0, 0, 0), width=1)
+    for i in range(6):
+        x = 60 + i * 60
+        page.draw_line((x, 240), (x, 234), color=(0, 0, 0), width=0.8)
+        y = 40 + i * 40
+        page.draw_line((60, y), (66, y), color=(0, 0, 0), width=0.8)
+    # a data polyline inside the frame
+    pts = [(60 + i * 30, 220 - i * 15) for i in range(11)]
+    for a, b in zip(pts, pts[1:]):
+        page.draw_line(a, b, color=(0, 0, 1), width=1.2)
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    assert result["status"] == "declined"
+    assert any("no readable tick-label text" in r for r in result["reasons"]), (
+        result["reasons"]
+    )
+
+
+def test_textless_prose_page_keeps_generic_decline_reason():
+    """A page with no axis-like geometry (prose, or a lone header rule) must
+    keep the generic no-chart-signature reason — the drawn-glyph wording is
+    reserved for pages that actually carry frame geometry."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=300)
+    page.insert_text((60, 60), "Just some body text, nothing chart-like.")
+    page.draw_line((40, 80), (360, 80), color=(0, 0, 0), width=0.5)
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    assert result["status"] == "declined"
+    assert any("no chart signature" in r for r in result["reasons"]), (
+        result["reasons"]
+    )
+
+
 def test_base_level_drawn_minus_declines():
     """Base-level drawn minus (Origin/journal typography): tick digits are
     text but every minus sign is a drawn rule (syn corpus doctors a real

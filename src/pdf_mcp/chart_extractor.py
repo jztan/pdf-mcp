@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 12
+CHART_EXTRACTION_VERSION = 13
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -503,6 +503,43 @@ def _looks_like_colorbar(page: Any, x1: float, ya: dict[str, Any]) -> bool:
         if w < 35 and h >= min_h:
             return True
     return False
+
+
+def _no_panel_reason(page: Any) -> str:
+    """Pick the decline reason when find_panels found nothing.
+
+    Two very different situations land here, and consumers need to tell them
+    apart (round-4/5 consumer note): a page that simply isn't a chart, versus
+    a chart whose tick labels never reach the text layer — SuperMongo/PGPLOT
+    Hershey strokes (Blanton astro-ph/0210215 p33), outlined-text exports,
+    usetex-outlined figures. The generic reason reads as "not a chart / tool
+    bug"; the specific one tells them it's a typography ceiling: use the
+    render. Fingerprint: axis-like frame geometry (>=2 long horizontal and
+    >=2 long vertical segments) whose label zone (frame bbox + 25pt margin,
+    where tick labels live) holds fewer than 3 numeric text tokens. A data
+    table keeps the generic reason (its rules ENCLOSE its numbers); prose or
+    a lone header rule lacks the perpendicular pair. Line drawings/flowcharts
+    can match the fingerprint, so the wording claims only what is known:
+    frame geometry present, no readable labels."""
+    horiz, vert = axis_anchor_segments(page)
+    if len(horiz) < 2 or len(vert) < 2:
+        return "no chart signature (no valid tick-series axes)"
+    x0 = min(min(s[0] for s in horiz), min(s[2] for s in vert)) - 25
+    x1 = max(max(s[1] for s in horiz), max(s[2] for s in vert)) + 25
+    y0 = min(min(s[0] for s in vert), min(s[2] for s in horiz)) - 25
+    y1 = max(max(s[1] for s in vert), max(s[2] for s in horiz)) + 25
+    n_toks = sum(
+        1 for t in numeric_tokens(page) if x0 <= t["cx"] <= x1 and y0 <= t["cy"] <= y1
+    )
+    if n_toks < 3:
+        return (
+            "axis-like frame geometry but no readable tick-label text — "
+            "either not a data chart, or the labels are drawn/outlined "
+            "glyphs with no text layer (SuperMongo/PGPLOT, outlined fonts); "
+            "if the render shows a chart, its values can only be read "
+            "visually"
+        )
+    return "no chart signature (no valid tick-series axes)"
 
 
 def find_panels(page: Any) -> list[dict[str, Any]]:
@@ -1668,7 +1705,7 @@ def extract_charts(
         if hints:
             return {"error": f"unknown hint id: {sorted(hints)[0]}"}
         res["status"] = "declined"
-        res["reasons"].append("no chart signature (no valid tick-series axes)")
+        res["reasons"].append(_no_panel_reason(page))
         return res
     draws = page.get_drawings()
     # page-level context for the unreadable-ticks guard (computed once)

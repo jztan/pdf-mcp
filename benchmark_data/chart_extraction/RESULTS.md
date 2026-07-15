@@ -531,3 +531,50 @@ split superscripts "E 2 dN/dE"), multiplier-notation axis labels ("[10^-4]" —
 values match the printed ticks; the unit multiplier lives in the title, which
 the caller must read), step-histogram multivalued flags (hep-ph event walls,
 2607.08175 p23). **Wrong-emits found: 0.**
+
+## Adjudicated: the "empty panel" bucket (2026-07-15)
+
+Panel census across all four corpora (109 papers): 595 detected panels →
+468 emitted (78.7%), 61 declined-with-reason (10.3%), 66 "empty" (11.1%,
+attempted but zero series). Every empty panel was collected with diagnostics
+and a region render; representative cases adjudicated visually.
+
+**Headline: the empty bucket is not a silent shrug.** 64/66 are
+`chart_type: "unknown"` — the tool returns `needs_hint` with a closed-enum
+`chart_type` question and an annotated render, not an empty OK. Only 2/66 are
+true silent failures (classified `bar`, zero series emitted).
+
+**Dominant root cause (~2/3 of the bucket): SPARSE charts — 3–7 points per
+series.** The classify gates require ≥8 points spanning ≥25% width for a line
+cloud and ≥5 markers per style group for a scatter. Real charts below these
+thresholds fall through to `unknown`: EfficientNet's 6-point frontier
+(1905.11946), chain-of-thought's 5-point emergence lines (2206.07682), 3-point
+error-bar scatters (0811.0781 p29), 8-series-one-point-each comparison
+scatters (2206.07682 p24). One point per model size is the canonical
+scaling-law figure — this class is common and *valuable*.
+
+**Hint recovery works for sparse LINES but not sparse SCATTERS.** Answering
+the chart_type question with "line" recovers EfficientNet p4 exactly (w=1.0 →
+76.13 vs 76.1 printed on the figure) — `extract_line` has no min-count gate.
+But `extract_scatter` re-applies its own ≥5-unique-points gate, so a 3-point
+scatter accepts the hint and still emits nothing. The obvious, contained
+recall lever: after an explicit type hint (the agent has confirmed the
+markers are data), relax the scatter min-count; and let classify treat
+few-point marker-connected polylines as line candidates directly.
+
+**Second cluster (~1/4): no extractable vector data in the panel.** Vector
+axes framing rasterized plot content (physics.optics 2607.03442's field-map
+panels), seaborn KDE grids whose translucent fills survive no gate
+(2607.08291 p78), and one clean vector curve that `collect` finds no cloud
+for (2607.03442 p21 — unexplained, worth a probe). These are correct
+non-emits; they'd serve agents better as reasoned declines
+("no vector plot geometry found — data may be rasterized").
+
+**True silent failures (2): open-marker scatters misclassified as bars.**
+Large open squares/triangles register as bar_rects (73 on astro 2607.06338
+p7), bar extraction then finds no shared baseline and emits nothing. Should
+fall back to unknown/question when extract_bar yields zero series.
+
+Follow-ups (open, not implemented): sparse-chart recovery (relax post-hint
+scatter gate + few-point line classify), reasoned decline for
+no-vector-geometry panels, bar→unknown fallback on zero series.

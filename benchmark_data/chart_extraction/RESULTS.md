@@ -499,3 +499,35 @@ Exponent typography remains unbounded (outlined glyphs, unusual kerning,
 non-matplotlib renderers), so the class is *mitigated*, not closed — the
 posture stays exact-or-decline with the sweep loop as the detector of the
 next variant.
+
+## Out-of-sample test of v6 — fresh astro/cond-mat/hep/optics/ML batch (2026-07-15)
+
+24 new papers from six previously-unsampled arXiv categories (astro-ph.GA/HE,
+cond-mat.stat-mech, hep-ph, physics.optics, cs.LG — log-axis-heavy by design,
+stressing exactly the class v6 fixed): 131 emits, 30 panel declines, flagged
+emits + all negative-decade log reads verified against renders.
+
+**The v6 read-fix works in the wild.** 8 negative-decade log emits on
+cond-mat 2607.02157 (x `log [0.1, 100]`, y `log [0.001, 1]`) verified
+point-for-point (a1: J=0.1 → 1.315 vs ~1.32 on the figure; b1 0.027 vs ~0.03;
+c1 0.315 vs ~0.31). Under v5 these would have been silent linear/sign-dropped
+wrong-emits. Astro log-log axes up to `10^43..10^48` erg read correctly.
+
+**The v6 decline guard works in the wild.** hep-ph 2607.08082 draws its
+exponent minuses as rules (Henighan-style) across the whole paper — all 11
+affected panels decline with the vector-minus reason; verified the y-axes
+fire on their own tick bboxes (not incidental geometry).
+
+**One guard refinement from this batch.** The bar test's -0.5pt top slack let
+an error-bar cap grazing a tick's bbox top (0.2pt ABOVE it) false-decline one
+of nine panels on astro 2607.06360 p20. Tightened to strictly-inside
+(`bb.top + 0.2 < bar.y`); a real drawn minus is centered on the exponent
+(~2pt inside — Henighan +2.2), so all true positives hold. Post-fix: the
+panel emits, Henighan/2607.08082 still decline, suites + benchmarks 0
+wrong-emit.
+
+**Confirmed known classes, no new ones:** title pollution (subplot captions,
+split superscripts "E 2 dN/dE"), multiplier-notation axis labels ("[10^-4]" —
+values match the printed ticks; the unit multiplier lives in the title, which
+the caller must read), step-histogram multivalued flags (hep-ph event walls,
+2607.08175 p23). **Wrong-emits found: 0.**

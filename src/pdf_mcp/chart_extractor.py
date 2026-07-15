@@ -867,12 +867,16 @@ def _ticks_unreadable(
         bb = t["bb"]
         mid_y = (bb[1] + bb[3]) / 2
         if any(
-            # the bar must sit INSIDE the tick's own bbox at superscript
-            # height — Henighan's drawn minus is ~2pt below the bbox top.
-            # Without the lower bound, dashed curves / minor tick marks far
-            # ABOVE the label (same x-column) falsely declined all-positive
-            # axes (2010.14701 p12 Fig 7, 2203.15556 p23).
-            bb[0] - 0.5 < bx < bb[2] + 0.5 and bb[1] - 0.5 < by < mid_y + 0.5
+            # the bar must sit strictly INSIDE the tick's own bbox at
+            # superscript height — Henighan's drawn minus is ~2pt below the
+            # bbox top. Without the lower bound, dashed curves / minor tick
+            # marks far ABOVE the label (same x-column) falsely declined
+            # all-positive axes (2010.14701 p12 Fig 7, 2203.15556 p23); with
+            # a -0.5pt slack, an error-bar cap grazing the bbox top from the
+            # plot above still false-declined 2607.06360 p20 (bar 0.2pt above
+            # the top edge). A real drawn minus is centered on the exponent,
+            # never above the merged bbox top.
+            bb[0] - 0.5 < bx < bb[2] + 0.5 and bb[1] + 0.2 < by < mid_y + 0.5
             for bx, by in bars
         ):
             return (

@@ -839,3 +839,36 @@ OTHER decline classes — multivalued, no-geometry — remain trustworthy and
 stay). Contract already allowed null ranges (`_assert_axis`); tests pin the
 nulls on both the synthetic and wild samples. Chart suites 86 passed.
 `CHART_EXTRACTION_VERSION` → 14 (declined-chart metadata values change).
+
+## Implemented: small-font superscript raise slack + glued-decade guard (2026-07-15, v15)
+
+Consumer round 7 (new domain/toolchain/chart-type hunt) found the
+highest-value wrong-emit since base-2, one chart in: FlashAttention
+2205.14135 p9 Fig 3 left — a log runtime axis labeled 10^0/10^1/10^2
+emitted as LINEAR [100, 102] (r2=0.9997), compressing 0.4–136ms of
+quadratic runtime growth into a flat ~100ms band. Same class as base-2:
+superscript concatenation. The twist that beat the existing guards:
+non-negative small exponents glue into CONSECUTIVE integers (100, 101,
+102) that fit linear beautifully, and the spans pair-FAILED by 0.01pt —
+at 8pt figure fonts the exponent's bbox top sits base_top + 0.51pt,
+against the raise gate's hard `+ 0.5`.
+
+Fix, two layers:
+1. **Read**: raise slack is proportional (0.12em, floor 0.5pt) with a
+   bottom-clearance condition (exponent bottom must clear the base bottom
+   by 0.5pt) — subscripts and same-baseline neighbors still fail. A first
+   draft using midline slack was corpus-caught pairing a MATLAB contour
+   label '0' to a log2 '2' tick (1808.08321 p5, 2^0 — a stray contour
+   dash negated the wide gap, the open stray-bar thread firing in the
+   wild) and eating the tick; the proportional bound excludes it.
+2. **Decline backstop**: `_power_pairs` now reports `glued_suspects` —
+   adjacent smaller-digit pairs that failed even the relaxed geometry.
+   A linear calibration with >=2 suspect-glued ticks declines ("mis-read
+   log scale"), so the NEXT typography that beats the raise gate declines
+   instead of emitting a linear decade axis.
+
+Validation: stub-geometry unit tests (exact wild span boxes; baseline +
+subscript negative controls), integration pin (p9 y must read log
+[1, 100]), 260-page full-corpus structured pre/post diff = exactly ONE
+changed page (the target), bench_real byte-identical, synthetic 0/19.
+`CHART_EXTRACTION_VERSION` → 15.

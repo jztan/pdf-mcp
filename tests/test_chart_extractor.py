@@ -563,7 +563,7 @@ def test_superscript_pairing_requires_vertical_overlap():
     if not pdf.exists():
         pytest.skip("real corpus not fetched")
     doc = pymupdf.open(pdf)
-    paired, _ = chart_extractor._power_pairs(doc[24])
+    paired, _, _ = chart_extractor._power_pairs(doc[24])
     result = chart_extractor.extract_charts(doc, 24)
     doc.close()
     for s in paired:
@@ -669,6 +669,117 @@ def test_textless_prose_page_keeps_generic_decline_reason():
     assert any("no chart signature" in r for r in result["reasons"]), (
         result["reasons"]
     )
+
+
+class _StubPage:
+    """Minimal page double for _power_pairs: crafted rawdict + no drawings."""
+
+    def __init__(self, spans):
+        self._spans = spans
+
+    def get_drawings(self):
+        return []
+
+    def get_text(self, kind):
+        assert kind == "rawdict"
+        return {
+            "blocks": [
+                {
+                    "lines": [
+                        {
+                            "spans": [
+                                {
+                                    "size": size,
+                                    "bbox": bbox,
+                                    "chars": [{"c": c} for c in txt],
+                                }
+                            ]
+                        }
+                        for txt, size, bbox in self._spans
+                    ]
+                }
+            ]
+        }
+
+
+def test_superscript_raise_gate_tolerates_small_font_metrics():
+    """FlashAttention 2205.14135 p9: at 8pt figure fonts the superscript's
+    bbox top sits 0.51pt BELOW the base's top — the raise gate's
+    `top < base_top + 0.5` missed the pair by 0.01pt, the labels glued to
+    '100'/'101'/'102' in the words layer, and the log y-axis emitted as
+    linear [100, 102] (r2=0.9997) — runtimes compressed to a meaningless
+    ~100ms band. Exact geometry from the wild page; the pair must recover."""
+    page = _StubPage(
+        [
+            ("10", 8.0, [116.41, 108.75, 124.62, 118.37]),
+            ("1", 4.66, [124.61, 109.26, 127.01, 114.87]),
+        ]
+    )
+    sup = chart_extractor.superscript_powers(page)
+    assert [s["v"] for s in sup] == [10.0], sup
+
+
+def test_superscript_raise_gate_still_rejects_baseline_and_subscript():
+    """The relaxed raise test must not admit non-superscript neighbors:
+    a same-baseline smaller digit (bottom flush with the base's) and a
+    subscript (bottom below the base's) both stay unpaired."""
+    baseline = _StubPage(
+        [
+            ("10", 8.0, [100.0, 100.0, 108.0, 110.0]),
+            ("5", 6.0, [108.5, 102.5, 111.0, 110.0]),  # bottom flush
+        ]
+    )
+    assert chart_extractor.superscript_powers(baseline) == []
+    subscript = _StubPage(
+        [
+            ("10", 8.0, [100.0, 100.0, 108.0, 110.0]),
+            ("2", 4.66, [108.0, 106.0, 110.4, 112.5]),  # bottom below base
+        ]
+    )
+    assert chart_extractor.superscript_powers(subscript) == []
+
+
+def test_flashattention_log_y_axis_reads_log_not_linear():
+    """Integration pin for the wild wrong-emit: Figure 3 left (p9) must
+    calibrate y as log spanning decades 10^0..10^2, never linear [100, 102]."""
+    pdf = REAL / "2205.14135.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 8)
+    doc.close()
+    emitting = [c for c in result["charts"] if c.get("curves")]
+    assert emitting, "Fig 3 left must emit"
+    for ch in emitting:
+        assert ch["y_axis"]["scale"] == "log", ch["y_axis"]
+        assert ch["y_axis"]["range"] == [1.0, 100.0], ch["y_axis"]
+
+
+def test_glued_decade_backstop_declines_linear_calibration():
+    """Defense in depth: when an adjacent smaller-digit pair fails even the
+    relaxed pairing geometry (unknown future typography), the glued word
+    must poison a linear calibration built on it — same contract as the
+    orphan-exponent guard."""
+    # exponent top BELOW base mid: fails pairing, must become a suspect
+    spans = []
+    toks = []
+    for i, y in enumerate((100.0, 140.0, 180.0)):
+        spans.append(("10", 8.0, [100.0, y, 108.0, y + 10.0]))
+        spans.append((str(i), 4.66, [108.2, y + 5.5, 110.6, y + 8.5]))
+        toks.append(
+            {
+                "v": 100.0 + i,
+                "bb": (100.0, y, 110.6, y + 10.0),
+                "raw": f"10{i}",
+            }
+        )
+    page = _StubPage(spans)
+    assert chart_extractor.superscript_powers(page) == []
+    _, _, suspects = chart_extractor._power_pairs(page)
+    assert len(suspects) == 3, suspects
+    ax = {"scale": "linear", "toks": toks}
+    why = chart_extractor._ticks_unreadable(ax, [], [], [], suspects)
+    assert why is not None and "could not be paired" in why, why
 
 
 def test_base_level_drawn_minus_declines():

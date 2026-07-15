@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 14
+CHART_EXTRACTION_VERSION = 15
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -87,18 +87,25 @@ def get_words(page: Any) -> Any:
 
 def _power_pairs(
     page: Any,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Any]]:
     """Pair ``base^exponent`` tick labels; also report the bases that failed.
 
-    Returns (paired, orphan_bases). ``paired`` entries are the recovered
-    powers (see superscript_powers). ``orphan_bases`` are '10'/'2' spans that
-    paired with nothing — meaningless globally (every linear-axis '10' tick
-    and body-text '2' lands here), but meaningful to the per-axis unreadable-
-    ticks guard, which only consults them when one sits immediately left of a
-    calibrated tick at raised-exponent geometry.
+    Returns (paired, orphan_bases, glued_suspects). ``paired`` entries are
+    the recovered powers (see superscript_powers). ``orphan_bases`` are
+    '10'/'2' spans that paired with nothing — meaningless globally (every
+    linear-axis '10' tick and body-text '2' lands here), but meaningful to
+    the per-axis unreadable-ticks guard, which only consults them when one
+    sits immediately left of a calibrated tick at raised-exponent geometry.
+    ``glued_suspects`` are union bboxes of adjacent smaller-digit pairs that
+    failed even the pairing geometry: in the words layer such a pair GLUES
+    into one integer ('10'+'2' -> '102') that can calibrate as a clean
+    linear tick — the unreadable-ticks guard poisons a linear axis built on
+    them (FlashAttention 2205.14135 p9 emitted log 10^0..10^2 as linear
+    [100, 102] before the raise gate learned small-font metrics).
     """
     out: list[dict[str, Any]] = []
     orphans: list[dict[str, Any]] = []
+    suspects: list[Any] = []
     # stage-3 drawn-minus reading: matplotlib mathtext (and some journal
     # typesetters) draw the exponent's minus as a RULE, not a glyph. The
     # bar's presence in the base->exponent gap at superscript height is a
@@ -124,10 +131,27 @@ def _power_pairs(
         if a["t"] not in ("10", "2"):
             continue
         paired = False
+        cand_suspects: list[Any] = []
         for b in spans:
             if b is a or not re.fullmatch(r"-?\d{1,2}", b["t"]):
                 continue
             gap = b["bb"][0] - a["bb"][2]
+            raised = b["bb"][1] < a["bb"][1] + 0.5 or (
+                # small-font slack: at 8pt figure fonts a TRUE superscript's
+                # bbox top sits ~0.5pt BELOW the base top (FlashAttention
+                # 2205.14135 p9: exp top = base top + 0.51 — missed the
+                # strict test by 0.01pt, glued to '100'..'102', emitted a
+                # log axis as linear). Slack is PROPORTIONAL to the base
+                # font (0.12em, floor 0.5pt) and the bottom must clear the
+                # base bottom — subscripts (bottom below base) and same-
+                # baseline smaller neighbors (bottom flush) still fail, and
+                # so does a MATLAB contour label floating near a tick
+                # (1808.08321 p5: a '0' 1.9pt below the '2' tick's top —
+                # a midline-slack draft paired them as 2^0, a stray contour
+                # dash negated the wide gap, and the tick was eaten).
+                b["bb"][1] < a["bb"][1] + max(0.5, 0.12 * a["size"])
+                and b["bb"][3] < a["bb"][3] - 0.5
+            )
             geom_ok = (
                 b["size"] < 0.85 * a["size"]
                 # gap lower bound is -2, not 0: renderers kern the raised
@@ -136,7 +160,7 @@ def _power_pairs(
                 # leaving orphaned exponents that calibrate as a bogus linear
                 # axis ("Learning rate" 10^-4..10^0 emitted as [-4, 0]).
                 and -2 <= gap < 9
-                and b["bb"][1] < a["bb"][1] + 0.5
+                and raised
                 # vertical bands must OVERLAP: a superscript sits beside its
                 # base (top raised, bottom still below the base's top). The
                 # -2 x-overlap alone let an x-tick pair with unrelated text
@@ -144,6 +168,24 @@ def _power_pairs(
                 # -> bogus 2^-3 that ate the tick and broke the axis).
                 and b["bb"][3] > a["bb"][1]
             )
+            if (
+                not geom_ok
+                and b["size"] < 0.85 * a["size"]
+                and -2 <= gap < 3
+                and b["bb"][3] > a["bb"][1]
+                and b["bb"][1] < a["bb"][3]
+            ):
+                # adjacent smaller digit that will GLUE with the base in the
+                # words layer but could not be read as a superscript —
+                # candidate for the glued-decade guard if `a` stays unpaired
+                cand_suspects.append(
+                    (
+                        min(a["bb"][0], b["bb"][0]),
+                        min(a["bb"][1], b["bb"][1]),
+                        max(a["bb"][2], b["bb"][2]),
+                        max(a["bb"][3], b["bb"][3]),
+                    )
+                )
             if geom_ok:
                 # drawn-minus test: a thin bar in the base->exponent gap at
                 # superscript height (strictly below the exponent's top edge
@@ -184,7 +226,8 @@ def _power_pairs(
                 break
         if not paired:
             orphans.append(a)
-    return out, orphans
+            suspects.extend(cand_suspects)
+    return out, orphans, suspects
 
 
 def superscript_powers(page: Any) -> list[dict[str, Any]]:
@@ -1144,12 +1187,13 @@ def _ticks_unreadable(
     bars: list[tuple[float, float, float, float]],
     wide_bars: list[tuple[float, float, float, float]],
     orphan_bases: list[dict[str, Any]],
+    glued_suspects: list[Any],
 ) -> str | None:
     """Return a reason when an axis's tick labels look like typography the
     reader could not resolve — the calibration would be wrong in sign or
     scale. None when the ticks are trustworthy.
 
-    Three per-axis signals (scoped on real/synthetic wrong-emits, RESULTS.md):
+    Four per-axis signals (scoped on real/synthetic wrong-emits, RESULTS.md):
 
     - vector-minus: a recovered `10^k` tick has an hrule bar inside its bbox
       at superscript height. The exponent's minus was drawn, not typed, so
@@ -1166,6 +1210,12 @@ def _ticks_unreadable(
       right of a larger unpaired '10'/'2' span at raised-exponent geometry —
       the "values" are exponents whose base failed to pair (kerning/size
       quirks beyond what the pairing gate accepts).
+    - glued decade: a LINEAR calibration whose ticks are words a '10'/'2'
+      base GLUED with an adjacent smaller digit the pairing geometry
+      rejected ('10'+'2' -> '102'). Non-negative small exponents produce
+      consecutive integers (100, 101, 102) that fit linear at r2~1 — the
+      FlashAttention class (2205.14135 p9: log 10^0..10^2 runtime axis
+      emitted as linear [100, 102]).
     """
     toks = ax.get("toks") or []
     if not toks:
@@ -1220,6 +1270,27 @@ def _ticks_unreadable(
                     "tick label sign is drawn, not typed (vector minus at "
                     "base level, left of the digits) — axis sign unreadable"
                 )
+    if ax["scale"] == "linear" and glued_suspects:
+        n_glued = 0
+        for t in toks:
+            bb = t["bb"]
+            if any(
+                # a glued word's bbox IS the union of its base+digit char
+                # boxes, so a matching suspect sits inside the tick bbox
+                # (1.5pt slack for word-assembly rounding)
+                sb[0] >= bb[0] - 1.5
+                and sb[2] <= bb[2] + 1.5
+                and sb[1] >= bb[1] - 1.5
+                and sb[3] <= bb[3] + 1.5
+                for sb in glued_suspects
+            ):
+                n_glued += 1
+        if n_glued >= 2 and n_glued * 2 >= len(toks):
+            return (
+                "tick labels are a '10'/'2' base glued with a smaller "
+                "adjacent digit that could not be paired as a superscript "
+                "— axis is likely a mis-read log scale"
+            )
     if ax["scale"] == "linear":
         n_exp = 0
         for t in toks:
@@ -1711,7 +1782,7 @@ def extract_charts(
     # page-level context for the unreadable-ticks guard (computed once)
     _bars = _hrule_bars(draws)
     _minus_bars = _hrule_bars(draws, max_w=9.0, fill_only=True)
-    _, _orphan_bases = _power_pairs(page)
+    _, _orphan_bases, _glued_suspects = _power_pairs(page)
     for pi, panel in enumerate(panels):
         xa, ya = panel["xa"], panel["ya"]
         masks = legend_masks(page, panel)
@@ -1852,7 +1923,9 @@ def extract_charts(
         _bad = [
             (name, why)
             for name, s in _ax_series
-            for why in [_ticks_unreadable(s, _bars, _minus_bars, _orphan_bases)]
+            for why in [
+                _ticks_unreadable(s, _bars, _minus_bars, _orphan_bases, _glued_suspects)
+            ]
             if why
         ]
         if _bad:

@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `pdf_extract_chart`: extract chart data as exact `(x, y)` tables from
   born-digital vector charts, read from the PDF's drawing geometry and
-  calibrated against tick labels — values are read, not estimated. Emits
-  only geometrically exact tables; ambiguous or out-of-scope charts decline
-  with a rendered image fallback. Vision-capable callers can resolve
+  calibrated against tick labels — values are read, not estimated. Tables
+  are exact when tick-label calibration succeeds, and every emitted chart
+  carries `render_path` so the numbers can be verified against the figure;
+  ambiguous, unreadable, or out-of-scope charts decline with a rendered
+  image fallback and a specific reason. Vision-capable callers can resolve
   semantic ambiguity (dual axes, chart type) via closed-enum hints with
   annotated renders; many cases self-resolve from legend/axis-title text.
   Returns a list whose first element is the structured result and whose
@@ -19,13 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `needs_hint`, the full-page render on `declined`; `include_render=True`
   also inlines the chart crop on `ok`) — the same image-content pattern as
   `pdf_render_pages`. Each series carries axis titles/range, provenance
-  (`resolved_by`), and honesty flags (`multivalued`, `downsampled`).
-  Benchmarked at 0 wrong-emits across the synthetic + real regression suite,
-  including out-of-sample validation on 58 fresh arXiv papers spanning
-  ML / econ / finance / bio / physics (~330 emitted charts adjudicated
-  against renders); log axes with superscript-exponent tick labels
-  (`10⁻⁴…10⁰`, `2¹⁹…2²⁷`) read correctly, and axes whose exponent sign is
-  drawn rather than typed decline instead of mis-reading
+  (`resolved_by`), and honesty flags (`multivalued`, `downsampled`,
+  partial-capture notes). Benchmarked at 0 wrong-emits across the
+  synthetic + real regression suite (58+ fresh arXiv papers spanning
+  ML / econ / finance / bio / physics, ~330 emitted charts adjudicated
+  against renders), then adversarially hardened over multiple external
+  consumer rounds against the tick-typography wrong-emit space:
+  superscript-exponent labels (`10⁻⁴…10⁰`, `2¹⁹…2²⁷`, small-font metrics),
+  exponent signs drawn as vector rules rather than typed (superscript and
+  base level), decade labels that glue into plausible linear integers,
+  fully-drawn (Hershey/outlined) labels, and ambiguous locale number
+  formats (`5.000`, `1,000`) — each class either reads correctly or
+  declines with a reason, pinned by per-class regression fixtures
   ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
 - `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
   signal (~10ms/page) so agents notice extractable charts

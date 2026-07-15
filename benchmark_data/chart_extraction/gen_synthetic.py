@@ -360,6 +360,26 @@ doc.save(os.path.join(OUT, "line_drawn_minus.pdf"))
 doc.close()
 GT["line_drawn_minus"] = {"type": "decline_expected", "series": {}}
 
+# 21. German comma-decimal tick labels ("0,5".."2,0") — the UNAMBIGUOUS
+# locale case (1-2 decimal digits) that numeric_tokens normalizes to a
+# decimal point. Must EMIT y [0.5, 2.0]; the ambiguous formats ("5.000",
+# "1,000") are covered by line_locale_de (decline_expected).
+from matplotlib.ticker import FixedFormatter, FixedLocator  # noqa: E402
+
+x = np.linspace(0, 10, 11)
+y = 0.5 + 1.5 * (x / 10.0)
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:blue")
+ax.set_xticks(range(0, 11, 2))
+ax.set_ylim(0.38, 2.12)
+ax.yaxis.set_major_locator(FixedLocator([0.5, 1.0, 1.5, 2.0]))
+ax.yaxis.set_major_formatter(FixedFormatter(["0,5", "1,0", "1,5", "2,0"]))
+save(
+    fig,
+    "line_locale_de_decimal",
+    {"type": "line", "series": {"blue": [x.tolist(), y.tolist()]}},
+)
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

@@ -353,7 +353,7 @@ pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.
 
 ### `pdf_extract_chart`
 
-Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated. **Trust contract:** emitted tables are geometrically exact; when a chart's semantics are ambiguous, the tool declines rather than guess, and hands back a rendered image instead.
+Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated. **Trust contract:** emitted tables are exact *when tick-label calibration succeeds* — every emitted chart carries `render_path` so the numbers can be verified against the figure; when a chart's semantics are ambiguous or its tick labels can't be read reliably (drawn/outlined glyphs, ambiguous locale formats, unresolvable superscripts), the tool declines rather than guess, and hands back a rendered image instead.
 
 **Resolution ladder** — for each ambiguous curve (e.g. which y-axis it belongs to), the tool tries, in order:
 1. **Geometry** — most axis/series pairings are unambiguous from the drawing alone (`resolved_by: "geometry"`).

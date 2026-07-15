@@ -782,6 +782,21 @@ def test_glued_decade_backstop_declines_linear_calibration():
     assert why is not None and "could not be paired" in why, why
 
 
+def test_comma_decimal_locale_axis_reads_correctly():
+    """Round-8 locale pass: unambiguous German comma-decimal tick labels
+    ("0,5".."2,0", 1-2 decimal digits) must normalize and EMIT y [0.5, 2.0]
+    — the ambiguous formats ("5.000", "1,000", "1 000", "1'000") are locale
+    gates that decline and are covered by line_locale_de + the attack set
+    (all adjudicated declining, no wrong-emit; RESULTS.md v15 ship pass)."""
+    doc = pymupdf.open(SYN / "line_locale_de_decimal.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    assert result["status"] == "ok", (result["status"], result["reasons"])
+    ch = result["charts"][0]
+    assert ch["y_axis"]["range"] == [0.5, 2.0], ch["y_axis"]
+    assert any(c.get("points") for c in ch.get("curves", []))
+
+
 def test_base_level_drawn_minus_declines():
     """Base-level drawn minus (Origin/journal typography): tick digits are
     text but every minus sign is a drawn rule (syn corpus doctors a real

@@ -872,3 +872,30 @@ subscript negative controls), integration pin (p9 y must read log
 [1, 100]), 260-page full-corpus structured pre/post diff = exactly ONE
 changed page (the target), bench_real byte-identical, synthetic 0/19.
 `CHART_EXTRACTION_VERSION` → 15.
+
+## Round-8 focused label-parsing pass → SHIP DECISION (2026-07-15)
+
+Scope per user directive: label-parsing class only; if no new class, the
+correctness bar is met and the feature ships behind the (honest) trust
+contract.
+
+1. **10^k re-verify**: all four superscript regression families re-run —
+   FlashAttention p9 log [1,100], Henighan p22 negative decades, SGDR log
+   [1e-4,1], A&A typed-minus 10^-12..10^-9. Correct.
+2. **Locale attack set** (9 synthesized variants, since arXiv can't supply
+   them): unambiguous comma-decimal ("0,5".."2,0") EMITS exactly [0.5,2.0];
+   mixed integer+comma ("0","0,5","1","1,5") exact; NEGATIVE comma-decimal
+   ("-1,5".."0,0") exact with sign preserved. Every ambiguous format
+   declines: DE thousands "1.000", EN thousands "1,000", Swiss "1'000",
+   French space "1 000" (splits to two words, cannot form an axis run),
+   EU-full "1.234,5", and 3-digit comma-decimal "0,125" (coverage gap, not
+   a correctness gap — declines). ZERO wrong-emits. New corpus case
+   line_locale_de_decimal (emit) joins line_locale_de (decline); synthetic
+   0/20 cases, 0/19 emitted series wrong.
+
+No new class. Correctness bar declared met: every known tick-typography
+class either reads exactly or declines with a reason, each pinned by a
+regression fixture. Trust wording softened for ship ("exact when
+calibration succeeds — verify against render_path"); coverage tail
+(3-digit comma-decimals, stroked-rule minus, sparse marker shapes) can
+improve post-launch — declines are safe by construction.

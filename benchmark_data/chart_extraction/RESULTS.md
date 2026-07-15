@@ -392,3 +392,52 @@ a clean result.
 overlapping-distribution over-emit), low (noisy-trace multivalued; title
 subscript splits). Linear tick parsing, genuine negatives, and positive-decade
 log all correct. Still held experimental; nothing fixed.
+
+## Scoping: is the log-`10^k`-exponent class fixable vs. hard-decline? (2026-07-15)
+
+Root-caused the two confirmed sub-mechanisms down to the primitive level. The
+class is NOT one bug — it is a difficulty gradient of renderer-specific quirks:
+
+**Sub-case A — exponent is TEXT, pairing fails (SGDR 1608.03983 "Learning
+rate", read as linear `[-4,0]`).** The tick label is fully present as text:
+base `10` + exponent `−4` (real U+2212), which `superscript_powers` already
+normalizes to ASCII. The sole blocker: the raised exponent is kerned to
+*overlap* the base by 0.007pt (`exp.x0 − base.x1 = −0.0069`), and the pairing
+gate `0 <= gap < 3` rejects the negative overlap. The orphaned exponents then
+calibrate as a spurious linear axis. **Verdict: FIXABLE, EASY, LOW-RISK** —
+loosen the gate to `-2 <= gap < 3`. Still requires adjacent+raised+smaller, so
+low false-pair risk. Likely covers a large share of matplotlib
+LogFormatterMathtext axes. Must re-validate against the good log corpus.
+
+**Sub-case B — minus is a VECTOR primitive, not text (Henighan 2010.14701
+"Compute (PF-days)", `10^-6` read as `10^6`).** The base `10` and exponent `6`
+are text, but the minus is drawn as a mathtext *hrule* (a thin filled bar,
+`x≈174.9–176.4, y≈151.3`) — zero minus characters in the text layer. No
+regex/pairing fix can help; the sign lives only in drawing commands.
+Recovering it means correlating hrule bars with exponents AND separating true
+tick-minuses from decoys (fit-label `e−12`, tick marks, axis frame, other
+figures' minuses — 63 short bars on the page, only ~26 near exponents).
+**Verdict: reading is FEASIBLE-BUT-FRAGILE (matplotlib-specific, false-positive
+risk); prefer DETECT + DECLINE.**
+
+**Decline detector — needs per-panel context.** Naive global signals
+false-positive: pooled multi-panel tick rows read as NON-MONO even for the
+correct positive-decade case (2206.07682 `10^18..10^24`), and an "unpaired
+base" signal catches A but not B (B's bases pair fine, just wrong-signed).
+A viable detector must run inside each panel's calibration: (1) a `10`/`2`
+base with no paired exponent, or (2) an hrule adjacent to a paired exponent, or
+(3) a recovered log axis that is descending/non-monotonic within one panel →
+decline. Its false-positive rate against the many CORRECT log axes
+(1803.03635 has dozens; 2206.07682 x) is the crux and must be benchmarked.
+
+**Recommendation (staged, if the feature is ever un-held):**
+1. Sub-case A read-fix (loosen pairing gate) — small, high-value, validate.
+2. Decline detector (per-panel unpaired-base / hrule-near-exponent /
+   non-monotonic) as the safety backbone — makes sub-case B SAFE without
+   reading it. Medium; false-positive validation is the real work.
+3. (optional, later) Sub-case B hrule read to recover instead of decline —
+   medium/fragile, defer.
+The space of exponent typographies is unbounded and renderer-specific, so the
+backbone should be robust DECLINE; correct reads (unicode-minus/overlap) are
+enhancements on top, never the primary defense. Still held experimental; the
+above is a scoping verdict, not an implementation.

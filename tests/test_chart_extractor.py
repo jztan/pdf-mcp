@@ -626,6 +626,43 @@ def test_grazing_error_bar_cap_does_not_negate():
                 assert rng[0] >= 1.0, f"negated a positive axis: {rng}"
 
 
+def test_base_level_drawn_minus_declines():
+    """Base-level drawn minus (Origin/journal typography): tick digits are
+    text but every minus sign is a drawn rule (syn corpus doctors a real
+    matplotlib chart: minus glyphs redacted, thin filled bars drawn in their
+    place). Reading the digits without the sign calibrates a MIRRORED axis
+    at r2=1.0 (x [18,24] for a true [-24,-18]) and the only obstacle to
+    emission is an incidental chart-type question — which an honest agent
+    answers 'line', producing a silent sign-flipped table. The axis-sign
+    gate must decline BEFORE any hint round."""
+    doc = pymupdf.open(SYN / "line_drawn_minus.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    assert result["status"] == "declined", result["status"]
+    ch = result["charts"][0]
+    assert ch["chart_type"] == "declined"
+    assert "sign" in ch["decline_reason"]
+    # the sanctioned hint path must not resurrect the wrong emit either
+    hinted = chart_extractor.extract_charts(doc, 0, {"p0.type": "line"})
+    doc.close()
+    for c in hinted.get("charts", []):
+        assert not c.get("curves"), "sign-flipped curve emitted via hint path"
+
+
+def test_typed_minus_negative_linear_axis_still_emits():
+    """Control for the base-level drawn-minus gate: the SAME chart with
+    ordinary typed minus glyphs must keep emitting with correct negative
+    ranges — a typed minus on the axis proves the toolchain types signs,
+    so the gate must stay off."""
+    doc = pymupdf.open(SYN / "line_neg_linear.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    assert result["status"] == "ok", (result["status"], result["reasons"])
+    ch = result["charts"][0]
+    assert ch["x_axis"]["range"] == [-24.0, -18.0], ch["x_axis"]["range"]
+    assert ch["y_axis"]["range"][0] < 0, ch["y_axis"]["range"]
+    assert any(c.get("points") for c in ch.get("curves", []))
+
+
 def test_sparse_marker_line_recovered():
     """A 5-point marker line (one point per model size — the canonical
     scaling-law figure) is below the dense-cloud gate (>=8 vertices) but must
@@ -652,7 +689,11 @@ def test_no_vector_geometry_declines_with_reason():
     """A panel whose interior holds (essentially) no vector geometry —
     rasterized plot data, or a phantom axis pairing with a stray vertex —
     must DECLINE with the rasterized/unsupported reason instead of asking a
-    chart_type question no answer can satisfy."""
+    chart_type question no answer can satisfy. Page 21 mixes both decline
+    classes: the positive-axis panels carry the no-geometry reason, while
+    the negative-dB panels hit the (earlier) base-level drawn-minus sign
+    gate — their axis metadata is sign-flipped, so the sign reason must win
+    for them."""
     pdf = REAL / "2607.03442.pdf"
     if not pdf.exists():
         pytest.skip("real corpus not fetched")
@@ -660,10 +701,32 @@ def test_no_vector_geometry_declines_with_reason():
     result = chart_extractor.extract_charts(doc, 20)
     doc.close()
     assert result["charts"], "panels must still be reported"
+    reasons = []
     for ch in result["charts"]:
         assert ch["chart_type"] == "declined"
-        assert "no extractable vector plot geometry" in ch["decline_reason"]
+        reasons.append(ch["decline_reason"])
+    assert any("no extractable vector plot geometry" in r for r in reasons)
+    assert any("sign is drawn, not typed" in r for r in reasons)
     assert result["status"] == "declined"
+
+
+def test_base_level_drawn_minus_real_corpus_declines():
+    """2607.03442 p31 (phase-noise figure, y −70..−20 dBc/Hz): tick digits
+    are text, every minus is a vector-drawn filled rule. Pre-gate this page
+    EMITTED both curves against a sign-flipped y axis ([20, 70]) — the
+    first confirmed wild wrong-emit of the base-level drawn-minus class.
+    Must decline with the sign reason and emit nothing."""
+    pdf = REAL / "2607.03442.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 30)
+    doc.close()
+    assert result["charts"]
+    for ch in result["charts"]:
+        assert ch["chart_type"] == "declined", ch
+        assert "sign is drawn, not typed" in ch["decline_reason"]
+        assert not ch.get("curves")
 
 
 def test_bar_misclassification_falls_back_to_question():

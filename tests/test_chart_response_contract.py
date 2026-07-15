@@ -150,7 +150,7 @@ EXPECTED_CHART_KEYS = {
     "diagnostics",
     "render_path",
 }  # optional, status-dependent keys (y_axis_right, decline_reason) excluded
-EXPECTED_SCHEMA_VERSION = 11  # BUMP THIS whenever the set above changes
+EXPECTED_SCHEMA_VERSION = 12  # BUMP THIS whenever the set above changes
 
 
 def test_response_schema_coupled_to_version():

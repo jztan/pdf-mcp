@@ -753,3 +753,48 @@ Post-fix: Fig 16 emits monotone data/fit pairs (sawtooth gone), the other
 chimera panel declines safely, SGDR/marginal-histogram/colorbar negative
 controls unchanged, suites 1044 passed, benches 0 wrong-emit.
 `CHART_EXTRACTION_VERSION` → 10 (style dict gains `dash`).
+
+## Implemented: base-level drawn-minus sign gate (2026-07-15, v12)
+
+Consumer round 4 closed the SuperMongo branch (fully-drawn Hershey labels
+decline safely — nothing reaches the sign logic) but left a claim untested:
+"digits-as-text + drawn minus only exists at superscript level." It doesn't.
+A synthetic probe (matplotlib chart, minus glyphs redacted and redrawn as
+filled rules — the Origin/journal typography) produced a full sign-flip:
+x [-24,-18] emitted as [18,24], y [-5,-1] as [1,5], both r2=1.0, reachable
+through an HONESTLY-answered chart-type hint (the minus rules themselves
+triggered the question as phantom bar-rects). `numeric_tokens` reads |value|
+and NO guard inspected plain-number ticks.
+
+Hunting the corpus for the same typography found a LIVE wild wrong-emit:
+2607.03442 p31 (phase noise, y −70..−20 dBc/Hz, digits text / minus drawn)
+emitted both curves against y [20, 70]. Pages 21/23/30 of the same paper
+carry the identical defect masked by other declines (their declined chart
+metadata still advertised sign-flipped axis ranges).
+
+Fix: third `_ticks_unreadable` signal — on an axis where NO tick carries a
+typed minus, a plain-number tick with a thin FILLED bar hugging its left
+edge (right edge within −2.2..+0.6pt of the digit, bar at digit mid-height)
+declines the axis as sign-unreadable. Two scoping lessons baked in:
+
+1. **Width is base-level, not superscript-level**: `_hrule_bars`' 4.5pt cap
+   (tuned on exponent-sized rules) misses full-size minus rules (~0.6-0.8em:
+   6.5pt in the probe, 2.8pt at 2607.03442's font) — the gate sweeps its own
+   `max_w=9.0`.
+2. **Fill vs stroke is the tick-mark discriminator**: 1807.11632 p4's
+   right-axis tick marks end 1.6pt from their labels — inside any workable
+   x-gap window — but ticks/dashes/error-caps are STROKED paths while every
+   observed minus rule is a FILLED rect (`fill_only=True`).
+
+Not attempted: READING the sign (negating the token). The v9 read-unlock had
+corpus-wide 0-FP evidence for its bar signal first; base-level bars have one
+wild sample so far. Decline is the trust-contract move until the sample base
+grows.
+
+Validation: synthetic corpus +2 (`line_neg_linear` typed-minus control must
+EMIT with negative ranges; `line_drawn_minus` doctored sibling must DECLINE)
+= 0/19 wrong-emit; bench_real byte-identical pre/post (zero collateral);
+2607.03442 p31/p30/p21 decline with the sign reason (new regression test);
+1807.11632 dual-axis and 2607.06360 grazing-cap negative controls unchanged;
+chart suites 86 passed. `CHART_EXTRACTION_VERSION` → 12 (declined-chart
+metadata changes for affected pages; cached rows must invalidate).

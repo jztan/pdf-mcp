@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 11
+CHART_EXTRACTION_VERSION = 12
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -157,7 +157,7 @@ def _power_pairs(
                     negated = any(
                         a["bb"][2] - 0.6 < bx < b["bb"][0] + 0.6
                         and b["bb"][1] + 0.2 < by < mid_y + 1.0
-                        for bx, by in bars
+                        for bx, by, _, _ in bars
                     )
                 if gap >= 3 and not negated:
                     # a wide gap is only a superscript pair when the drawn
@@ -1053,16 +1053,30 @@ def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
     return best[1] if best else None
 
 
-def _hrule_bars(draws: list[dict[str, Any]]) -> list[tuple[float, float]]:
-    """Centers of thin short horizontal filled bars in the page drawings.
+def _hrule_bars(
+    draws: list[dict[str, Any]], max_w: float = 4.5, fill_only: bool = False
+) -> list[tuple[float, float, float, float]]:
+    """(cx, cy, x0, x1) of thin short horizontal filled bars in the drawings.
 
     matplotlib's mathtext draws the MINUS of a superscript exponent as a rule
     (a filled bar), not a glyph — `10^-6` has zero minus characters in the
     text layer (Henighan 2010.14701 Fig 16). These bars are how that
-    invisible sign is detected.
+    invisible sign is detected. The x-extent (x0, x1) lets the base-level
+    sign gate tell a minus rule hugging a digit (right edge < 2pt away) from
+    a right-side-axis tick mark (~3.5pt label pad away).
+
+    The default 4.5pt cap fits SUPERSCRIPT-sized rules (exponent font). A
+    base-level minus rule is full-text-size (~0.6-0.8em: 6-8pt at 10pt font)
+    — the base-level gate sweeps again with max_w=9.0 and fill_only=True:
+    a drawn minus is a FILLED rect, while the look-alikes near tick labels
+    (axis tick marks, dashes, error-bar caps) are stroked paths — 1807.11632
+    p4's right-axis tick marks end 1.6pt from the labels, inside any
+    workable x-gap window, so the fill/stroke split is the discriminator.
     """
-    bars: list[tuple[float, float]] = []
+    bars: list[tuple[float, float, float, float]] = []
     for d in draws:
+        if fill_only and d.get("type") != "f":
+            continue
         xs: list[float] = []
         ys: list[float] = []
         for it in d["items"]:
@@ -1076,26 +1090,41 @@ def _hrule_bars(draws: list[dict[str, Any]]) -> list[tuple[float, float]]:
         if not xs:
             continue
         w, h = max(xs) - min(xs), max(ys) - min(ys)
-        if 0.6 < w < 4.5 and h < 1.0:
-            bars.append(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2))
+        if 0.6 < w < max_w and h < 1.0:
+            bars.append(
+                (
+                    (min(xs) + max(xs)) / 2,
+                    (min(ys) + max(ys)) / 2,
+                    min(xs),
+                    max(xs),
+                )
+            )
     return bars
 
 
 def _ticks_unreadable(
     ax: dict[str, Any],
-    bars: list[tuple[float, float]],
+    bars: list[tuple[float, float, float, float]],
+    wide_bars: list[tuple[float, float, float, float]],
     orphan_bases: list[dict[str, Any]],
 ) -> str | None:
-    """Return a reason when an axis's tick labels look like base^exponent
-    typography the reader could not resolve — the calibration would be wrong
-    in sign or scale. None when the ticks are trustworthy.
+    """Return a reason when an axis's tick labels look like typography the
+    reader could not resolve — the calibration would be wrong in sign or
+    scale. None when the ticks are trustworthy.
 
-    Two per-axis signals (scoped on real wrong-emits, see RESULTS.md):
+    Three per-axis signals (scoped on real/synthetic wrong-emits, RESULTS.md):
 
     - vector-minus: a recovered `10^k` tick has an hrule bar inside its bbox
       at superscript height. The exponent's minus was drawn, not typed, so
       the recovered value is silently positive (`10^-6` -> `10^6`); ONE such
       tick already falsifies the axis.
+    - base-level drawn minus: a plain-number tick with an hrule bar hugging
+      its LEFT edge at digit mid-height (Origin/journal typography — digits
+      are text, the sign is a drawn rule). The token reads |value|, the
+      all-negative axis calibrates mirrored at r2=1.0 (true [-24,-18] emits
+      as [18,24]). Only when NO tick on the axis carries a typed minus — a
+      typed sign anywhere proves the toolchain types signs, so a nearby bar
+      is tick-mark/dash noise, not a minus.
     - orphan exponent: a LINEAR calibration where the ticks sit immediately
       right of a larger unpaired '10'/'2' span at raised-exponent geometry —
       the "values" are exponents whose base failed to pair (kerning/size
@@ -1125,12 +1154,35 @@ def _ticks_unreadable(
             # the top edge). A real drawn minus is centered on the exponent,
             # never above the merged bbox top.
             bb[0] - 0.5 < bx < bb[2] + 0.5 and bb[1] + 0.2 < by < mid_y + 0.5
-            for bx, by in bars
+            for bx, by, _, _ in bars
         ):
             return (
                 "tick label sign is drawn, not typed (vector minus on a "
                 "superscript exponent) — axis sign unreadable"
             )
+    if not any("-" in str(t.get("raw", "")) for t in toks):
+        for t in toks:
+            raw = str(t.get("raw", ""))
+            if "^" in raw:
+                continue  # recovered powers: the superscript gate above
+            bb = t["bb"]
+            h = bb[3] - bb[1]
+            if any(
+                # the bar's RIGHT edge must hug the digit's left edge: a
+                # drawn minus kerns to within ~1pt of the digit, while a
+                # right-side-axis tick mark sits a full label pad (~3.5pt)
+                # away and a plot dash farther still. Mid-height band (the
+                # middle half of the line box) excludes underlines and
+                # grazing content at the bbox edges.
+                bb[0] - 2.2 < bx1 < bb[0] + 0.6
+                and bx0 < bb[0] + 0.1
+                and bb[1] + 0.25 * h < by < bb[3] - 0.25 * h
+                for _, by, bx0, bx1 in wide_bars
+            ):
+                return (
+                    "tick label sign is drawn, not typed (vector minus at "
+                    "base level, left of the digits) — axis sign unreadable"
+                )
     if ax["scale"] == "linear":
         n_exp = 0
         for t in toks:
@@ -1621,6 +1673,7 @@ def extract_charts(
     draws = page.get_drawings()
     # page-level context for the unreadable-ticks guard (computed once)
     _bars = _hrule_bars(draws)
+    _minus_bars = _hrule_bars(draws, max_w=9.0, fill_only=True)
     _, _orphan_bases = _power_pairs(page)
     for pi, panel in enumerate(panels):
         xa, ya = panel["xa"], panel["ya"]
@@ -1762,7 +1815,7 @@ def extract_charts(
         _bad = [
             (name, why)
             for name, s in _ax_series
-            for why in [_ticks_unreadable(s, _bars, _orphan_bases)]
+            for why in [_ticks_unreadable(s, _bars, _minus_bars, _orphan_bases)]
             if why
         ]
         if _bad:

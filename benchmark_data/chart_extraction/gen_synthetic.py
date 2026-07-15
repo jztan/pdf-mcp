@@ -313,6 +313,53 @@ ax.set_yticks(range(0, 21, 5))
 fig.savefig(os.path.join(OUT, "scatter_arrow_decoy.pdf"))
 plt.close(fig)
 
+# 19. negative LINEAR axes with TYPED minus (control for the base-level
+# drawn-minus gate): a typed minus anywhere on the axis proves the toolchain
+# types signs, so the gate must stay off and the chart must keep emitting.
+x = np.linspace(-24, -18, 13)
+y = -1.0 - 0.6 * (x + 24)
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:red")
+ax.set_xticks(range(-24, -17, 1))
+ax.set_yticks(np.arange(-5, 0, 1))
+save(
+    fig,
+    "line_neg_linear",
+    {"type": "line", "series": {"red": [x.tolist(), y.tolist()]}},
+)
+
+# 20. same chart, DOCTORED: every minus glyph in the tick labels is redacted
+# out of the text layer and redrawn as a thin filled rule (Origin/journal
+# typography — digits stay text, the sign becomes vector geometry). Reading
+# the digits without the sign calibrates a MIRRORED axis at r2=1.0 (x
+# [18,24] instead of [-24,-18]) — a silent sign-flipped wrong-emit through
+# an honestly-answered chart-type hint. Must DECLINE.
+import pymupdf  # noqa: E402  (only this case post-processes a PDF)
+
+doc = pymupdf.open(os.path.join(OUT, "line_neg_linear.pdf"))
+page = doc[0]
+minus_rects = [
+    pymupdf.Rect(ch["bbox"])
+    for block in page.get_text("rawdict")["blocks"]
+    for line in block.get("lines", [])
+    for span in line.get("spans", [])
+    for ch in span.get("chars", [])
+    if ch["c"] in ("−", "-")
+]
+for r in minus_rects:
+    page.add_redact_annot(r)
+page.apply_redactions(graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
+for r in minus_rects:
+    cy = (r.y0 + r.y1) / 2 + 0.8  # rule sits at math-axis height
+    page.draw_rect(
+        pymupdf.Rect(r.x0 + 0.5, cy - 0.3, r.x1 - 0.5, cy + 0.3),
+        color=None,
+        fill=(0, 0, 0),
+    )
+doc.save(os.path.join(OUT, "line_drawn_minus.pdf"))
+doc.close()
+GT["line_drawn_minus"] = {"type": "decline_expected", "series": {}}
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

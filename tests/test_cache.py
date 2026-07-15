@@ -1480,3 +1480,23 @@ def test_page_charts_stale_version_purged_on_open(sample_pdf, tmp_path):
     cache2 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
     assert cache2.get_page_charts(str(sample_pdf), 1, "stalekey", 24) is None
     assert cache2.get_page_charts(str(sample_pdf), 1, "freshkey", 24) == fresh
+
+
+def test_page_charts_stale_version_filtered_on_read(sample_pdf, tmp_path):
+    """The purge-at-open alone is not enough: with per-conversation STDIO
+    servers, an OLDER-code process can write old-version rows into the shared
+    DB after a newer process's open-time purge already ran. The read path
+    must therefore filter on chart_extraction_version too — an old-version
+    row must read as a miss WITHOUT reopening the cache."""
+    cache = PDFCache(cache_dir=tmp_path / "chart_read_cache", ttl_hours=1)
+    stale = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "old"}]}
+    cache.save_page_charts(str(sample_pdf), 1, "k", 24, stale)
+    assert cache.get_page_charts(str(sample_pdf), 1, "k", 24) == stale
+    # simulate the concurrent old-version writer: stamp the row stale IN PLACE
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute(
+            "UPDATE page_charts SET chart_extraction_version = 1 "
+            "WHERE file_path = ?",
+            (str(sample_pdf),),
+        )
+    assert cache.get_page_charts(str(sample_pdf), 1, "k", 24) is None

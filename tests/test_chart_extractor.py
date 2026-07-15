@@ -650,9 +650,9 @@ def test_drawn_glyph_labels_get_specific_decline_reason():
     result = chart_extractor.extract_charts(doc, 0)
     doc.close()
     assert result["status"] == "declined"
-    assert any("no readable tick-label text" in r for r in result["reasons"]), (
-        result["reasons"]
-    )
+    assert any("no readable tick-label text" in r for r in result["reasons"]), result[
+        "reasons"
+    ]
 
 
 def test_textless_prose_page_keeps_generic_decline_reason():
@@ -666,9 +666,7 @@ def test_textless_prose_page_keeps_generic_decline_reason():
     result = chart_extractor.extract_charts(doc, 0)
     doc.close()
     assert result["status"] == "declined"
-    assert any("no chart signature" in r for r in result["reasons"]), (
-        result["reasons"]
-    )
+    assert any("no chart signature" in r for r in result["reasons"]), result["reasons"]
 
 
 class _StubPage:
@@ -795,6 +793,65 @@ def test_comma_decimal_locale_axis_reads_correctly():
     ch = result["charts"][0]
     assert ch["y_axis"]["range"] == [0.5, 2.0], ch["y_axis"]
     assert any(c.get("points") for c in ch.get("curves", []))
+
+
+def test_legend_entries_tight_pitch_no_off_by_one():
+    """Mamba 2312.00752 p15 Fig 8: legend rows at ~7.1pt pitch, sample
+    strokes at each row's center. The old pairing window ([y0-4, y1+4],
+    first-match-in-draw-order) let row k's sample also satisfy row k+1, so
+    'Convolution' claimed the blue FlashAttention-2 sample; the unique-color
+    filter then dropped blue entirely (label None) and every other curve
+    wore the label ONE ROW OFF — 'Scan (ours)' (the paper's contribution)
+    read as 'OOM'. Samples must pair by nearest row-center with the center
+    inside the row band. Exact wild geometry."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=500)
+    rows = [
+        (388.0, "FlashAttention-2", (0.28, 0.47, 0.82)),
+        (394.9, "Convolution", (0.93, 0.52, 0.29)),
+        (402.0, "Scan (PyTorch)", (0.42, 0.80, 0.39)),
+        (409.2, "Scan (ours)", (0.84, 0.37, 0.37)),
+    ]
+    for y0, label, color in rows:
+        # sample stroke at the row's visual center (wild: cy = y0 + 3.4)
+        page.draw_line((108.3, y0 + 3.4), (117.8, y0 + 3.4), color=color)
+        page.insert_text((121.6, y0 + 5.5), label, fontsize=6.3)
+    panel = {"rx0": 90.0, "rx1": 320.0, "ry0": 370.0, "ry1": 440.0}
+    entries = chart_extractor._legend_entries(page, panel)
+    doc.close()
+    got = {lab: st[0] for st, lab in entries}
+    assert len(entries) == 4, entries
+    for _, label, color in rows:
+        assert label in got, f"{label} missing: {entries}"
+        assert got[label] == tuple(round(c, 2) for c in color) or all(
+            abs(a - b) < 0.02 for a, b in zip(got[label], color)
+        ), (label, got[label], color)
+
+
+def test_mamba_fig8_labels_not_shifted():
+    """Integration pin for the wild mislabel: every emitted curve's label
+    must match its own color's legend entry — the blue (steepest,
+    FlashAttention-2) curve must not be None, and no curve may wear the
+    marker-only 'OOM' annotation entry as its label."""
+    pdf = REAL / "2312.00752.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 14)
+    doc.close()
+    want = {
+        (0.28, 0.47, 0.82): "FlashAttention-2",
+        (0.93, 0.52, 0.29): "Convolution",
+        (0.42, 0.8, 0.39): "Scan (PyTorch)",
+        (0.84, 0.37, 0.37): "Scan (ours)",
+    }
+    emitting = [c for ch in result["charts"] for c in ch.get("curves") or []]
+    assert emitting, "Fig 8 must emit"
+    for c in emitting:
+        color = tuple(c["style"]["color"])
+        expected = want.get(color)
+        assert expected is not None, color
+        assert c["label"] == expected, (color, c["label"], expected)
 
 
 def test_base_level_drawn_minus_declines():

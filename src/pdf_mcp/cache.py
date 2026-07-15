@@ -1270,11 +1270,17 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
+                # version filter on READ, not just the purge at open: with
+                # per-conversation STDIO servers, an older-code process can
+                # re-populate old-version rows AFTER this process's open-time
+                # purge — without the filter those rows would be served as
+                # current.
                 """SELECT result_json, file_mtime
                    FROM page_charts
                    WHERE file_path = ? AND page_num = ?
-                     AND hints_hash = ? AND max_points = ?""",
-                (path, page_num, hints_hash, max_points),
+                     AND hints_hash = ? AND max_points = ?
+                     AND chart_extraction_version = ?""",
+                (path, page_num, hints_hash, max_points, CHART_EXTRACTION_VERSION),
             ).fetchone()
             if row is None:
                 return None

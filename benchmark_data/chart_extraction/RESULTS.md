@@ -899,3 +899,51 @@ regression fixture. Trust wording softened for ship ("exact when
 calibration succeeds — verify against render_path"); coverage tail
 (3-digit comma-decimals, stroked-rule minus, sparse marker shapes) can
 improve post-launch — declines are safe by construction.
+
+## Implemented: legend row pairing by column consensus (2026-07-15/16, v16)
+
+Consumer round 9 (Mamba 2312.00752, unseen data): axis/value engine held
+(x log [512, 512k] suffix labels, y log [0.1, 1000], values exact), but
+Figure 8's SERIES LABELS were systematically wrong — every curve wore the
+legend entry one row below its true one, blue fell to null, and the
+lowest curve absorbed "OOM" (a marker-only annotation entry). The paper's
+headline contribution ("Scan (ours)", the 34ms line) was emitted labeled
+"OOM"; the naive baseline was labeled "Scan (ours)". Values right, method
+identities inverted — a confidently-mislabeled table, new failure class.
+
+Root cause (two layers, both in `_legend_entries`):
+1. **Row-window overlap**: samples paired via `[y0-4, y1+4]` +
+   first-match-in-draw-order. At Mamba's 7.1pt legend pitch, row k's
+   sample also satisfied row k+1's window, so 'Convolution' claimed the
+   blue sample; the unique-color filter then killed BOTH blue entries and
+   the rest read one row off. Fix: sample's vertical CENTER must sit
+   inside the row band ([y0-1, y1+1]) and the nearest-centered candidate
+   wins.
+2. **Junk-row collisions**: math fragments ('→γγ') and stat annotations
+   ('µ ='/'±') pair with stray plot drawings at their own height and
+   collide with genuine entries in the unique-color filter (2607.08175
+   p17 lost its π0/fit labels to this). Fix: column consensus — legend
+   samples draw in an x-aligned column (line samples and centered markers
+   share center-x); when any center-x cluster holds >=2 entries, entries
+   outside clusters are dropped. Lone-entry legends keep everything;
+   ncol-2 legends form one cluster per column (legend_attacks suite
+   green).
+
+Corpus adjudication (one-pass old-vs-new inline diff, 710 panels): 78
+panels' pairings changed; label-level diff on affected pages shows the
+old code was ALREADY mislabeling in the wild — 2607.06844 p19's seven
+SED components were each shifted one row (Host wore 'Best-Fit', Line wore
+'Continuum+FeII'...), now all seven correct against the render; Hestness
+p6 gains its two labels; Henighan p17 loses junk 'log(' labels; 2607.10810
+p19 corrects DDPM/WGAN/TailGAN; Pareto-front duplicates adjudicated
+correct (each panel's only black line IS the front). bench_real
+byte-identical; synthetic 0/19.
+
+Also v16: `get_page_charts` filters `chart_extraction_version` on READ
+(consumer round-9 cache observation) — the purge-at-open alone cannot
+protect against a concurrently-running older-code STDIO server
+re-populating old-version rows after this process's purge. Note the
+consumer's actual observation (stale result, `from_cache: true`) was a
+stale server PROCESS: per-conversation STDIO servers only pick up new
+code on restart; `pdf_cache_clear` alone cannot help there.
+`CHART_EXTRACTION_VERSION` → 16.

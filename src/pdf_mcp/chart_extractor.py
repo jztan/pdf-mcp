@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 15
+CHART_EXTRACTION_VERSION = 16
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -1018,27 +1018,60 @@ def _looks_like_axis_title(text: str) -> bool:
 def _legend_entries(page: Any, panel: dict[str, Any]) -> list[tuple[Style, str]]:
     """Legend entries: a short stroked sample next to a text label inside
     the panel. Returns [(style_key, label_text), ...]."""
-    entries: list[tuple[Style, str]] = []
+    entries: list[tuple[Style, str, float]] = []
     lines = _word_lines(page, panel)
+    draws = page.get_drawings()
     for ln in lines:
         x0, y0, y1 = ln[0][0], ln[0][1], ln[0][3]
         label = " ".join(w[4] for w in ln).strip()
-        # sample stroke: a drawing to the left of the label, vertically
-        # centered on the line, short (< 45pt wide)
-        for d in page.get_drawings():
+        row_cy = (y0 + y1) / 2
+        # sample stroke: a drawing to the left of the label, short (< 45pt
+        # wide), whose vertical CENTER sits inside this row's band — pick
+        # the candidate nearest the row's center, never the first in draw
+        # order. The old edge-window test ([y0-4, y1+4], first match) broke
+        # on tight legends (Mamba 2312.00752 p15: 7.1pt row pitch — row
+        # k's sample also satisfied row k+1's window, 'Convolution'
+        # claimed the blue sample, the unique-color filter killed both
+        # blue entries, and every curve label shifted one row: the paper's
+        # 'Scan (ours)' contribution was emitted labeled 'OOM').
+        best: tuple[float, Any] | None = None
+        for d in draws:
             bb = d_bbox(d)
             if bb is None or d.get("color") is None:
                 continue
-            if (
-                x0 - 48 <= bb[0]
-                and bb[2] <= x0 - 2
-                and bb[1] >= y0 - 4
-                and bb[3] <= y1 + 4
-                and bb[2] - bb[0] >= 8
-            ):
-                entries.append((draw_style(d), label))
-                break
-    return entries
+            if not (x0 - 48 <= bb[0] and bb[2] <= x0 - 2 and bb[2] - bb[0] >= 8):
+                continue
+            s_cy = (bb[1] + bb[3]) / 2
+            if not (y0 - 1 <= s_cy <= y1 + 1):
+                continue
+            dist = abs(s_cy - row_cy)
+            if best is None or dist < best[0]:
+                best = (dist, d)
+        if best is not None:
+            bb = d_bbox(best[1])
+            assert bb is not None
+            entries.append((draw_style(best[1]), label, (bb[0] + bb[2]) / 2))
+    # column consensus: legend samples are drawn in an x-aligned column
+    # (line samples and centered markers share the same center-x). Rows
+    # that pair with stray plot drawings at their own height — math
+    # fragments ('→γγ'), stat annotations ('µ ='/'±') — land OUTSIDE that
+    # column and then collide with genuine entries in the unique-color
+    # filter, killing both (2607.08175 p17 lost its π0 and fit labels this
+    # way). When any center-x cluster holds >=2 entries, keep only
+    # clustered entries; a lone-entry legend has no column evidence and
+    # keeps everything. Multi-column legends form one cluster per column.
+    if len(entries) >= 2:
+        xs = sorted((cx, i) for i, (_, _, cx) in enumerate(entries))
+        clusters: list[list[int]] = [[xs[0][1]]]
+        for (cx, i), (pcx, _) in zip(xs[1:], xs[:-1]):
+            if cx - pcx <= 3.0:
+                clusters[-1].append(i)
+            else:
+                clusters.append([i])
+        if any(len(c) >= 2 for c in clusters):
+            keep = {i for c in clusters if len(c) >= 2 for i in c}
+            entries = [e for i, e in enumerate(entries) if i in keep]
+    return [(st, lab) for st, lab, _ in entries]
 
 
 def _axis_titles(page: Any, panel: dict[str, Any]) -> dict[str, str | None]:

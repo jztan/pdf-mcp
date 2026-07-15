@@ -603,6 +603,146 @@ def test_henighan_vector_minus_axis_declines():
         assert "sign is drawn" in ch.get("decline_reason", "")
 
 
+def test_sparse_marker_line_recovered():
+    """A 5-point marker line (one point per model size — the canonical
+    scaling-law figure) is below the dense-cloud gate (>=8 vertices) but must
+    classify and extract via marker-vertex coincidence, with exact values and
+    a sparse-capture honesty note. Pre-v7 it fell through to 'unknown' and
+    emitted nothing."""
+    doc = pymupdf.open(SYN / "line_sparse.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    ch = result["charts"][0]
+    assert ch["chart_type"] == "line"
+    assert len(ch["curves"]) == 1
+    assert ch["curves"][0]["points"] == [
+        [1.0, 61.0],
+        [2.0, 67.0],
+        [4.0, 72.0],
+        [8.0, 74.5],
+        [16.0, 76.0],
+    ]
+    assert any("sparse line capture" in n for n in ch["diagnostics"]["notes"])
+
+
+def test_no_vector_geometry_declines_with_reason():
+    """A panel whose interior holds (essentially) no vector geometry —
+    rasterized plot data, or a phantom axis pairing with a stray vertex —
+    must DECLINE with the rasterized/unsupported reason instead of asking a
+    chart_type question no answer can satisfy."""
+    pdf = REAL / "2607.03442.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 20)
+    doc.close()
+    assert result["charts"], "panels must still be reported"
+    for ch in result["charts"]:
+        assert ch["chart_type"] == "declined"
+        assert "no extractable vector plot geometry" in ch["decline_reason"]
+    assert result["status"] == "declined"
+
+
+def test_bar_misclassification_falls_back_to_question():
+    """Large OPEN markers misread as bar rects (astro scatter squares) used
+    to return a typed-but-empty 'bar' chart; with zero baseline series the
+    classification is untrustworthy — fall back to the chart_type question."""
+    pdf = REAL / "2607.06338.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 6)
+    doc.close()
+    empty_bar = [
+        c for c in result["charts"] if c["chart_type"] == "bar" and not c.get("bars")
+    ]
+    assert not empty_bar, "typed-but-empty bar chart must not be returned"
+    assert any(
+        q["kind"] == "chart_type" for q in result.get("questions", [])
+    ), "mis-classified panel must ask the chart_type question"
+
+
+def test_hinted_type_with_no_series_declines():
+    """An EXPLICITLY hinted chart type that still extracts nothing must
+    decline with the honest reason, not return an ok-empty typed chart."""
+    pdf = REAL / "0811.0781.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    r = chart_extractor.extract_charts(doc, 28)
+    hints = {
+        q["id"]: "scatter" for q in r.get("questions", []) if q["kind"] == "chart_type"
+    }
+    if hints:
+        r = chart_extractor.extract_charts(doc, 28, hints)
+    doc.close()
+    for ch in r["charts"]:
+        n = (
+            len(ch.get("curves", []))
+            + len(ch.get("bars", []))
+            + len(ch.get("points", []))
+        )
+        if n == 0:
+            assert ch["chart_type"] == "declined", ch
+            assert ch.get("decline_reason"), ch
+
+
+def test_hinted_line_does_not_emit_bracket_decoy():
+    """A chart_type='line' HINT confirms the chart, not that every short
+    polyline is data: the significance bracket (4 vertices, wide span, tiny
+    y-drop) must NOT emit as a curve. The real sparse line here carries no
+    markers, so nothing is extractable — the panel declines with the honest
+    hinted-type reason (adversarial review probe, v7 fix wave)."""
+    doc = pymupdf.open(SYN / "line_bracket_decoy.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    hints = {
+        q["id"]: "line" for q in r.get("questions", []) if q["kind"] == "chart_type"
+    }
+    assert hints, "fixture must ask the chart_type question first"
+    r2 = chart_extractor.extract_charts(doc, 0, hints)
+    doc.close()
+    for ch in r2["charts"]:
+        assert not ch.get("curves"), "bracket decoy must not emit as a curve"
+        assert ch["chart_type"] == "declined"
+        assert "hinted type 'line'" in ch["decline_reason"]
+
+
+def test_hinted_scatter_drops_arrowhead_pair():
+    """A chart_type='scatter' HINT lowers the marker minimum to 3, not 2:
+    the two same-color annotation arrowheads must stay out; only the real
+    4-point series emits (adversarial review probe, v7 fix wave)."""
+    doc = pymupdf.open(SYN / "scatter_arrow_decoy.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    hints = {
+        q["id"]: "scatter" for q in r.get("questions", []) if q["kind"] == "chart_type"
+    }
+    assert hints, "fixture must ask the chart_type question first"
+    r2 = chart_extractor.extract_charts(doc, 0, hints)
+    doc.close()
+    series = [s for ch in r2["charts"] for s in ch.get("points", [])]
+    assert len(series) == 1, f"only the real series may emit, got {len(series)}"
+    assert len(series[0]["points"]) == 4
+
+
+def test_not_a_chart_answer_is_terminal():
+    """Answering the chart_type question with 'not_a_chart' must DECLINE the
+    panel — pre-fix it fell into the unknown branch and re-asked forever."""
+    doc = pymupdf.open(SYN / "line_bracket_decoy.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    hints = {
+        q["id"]: "not_a_chart"
+        for q in r.get("questions", [])
+        if q["kind"] == "chart_type"
+    }
+    assert hints
+    r2 = chart_extractor.extract_charts(doc, 0, hints)
+    doc.close()
+    assert r2["status"] == "declined"
+    assert not r2.get("questions"), "not_a_chart must not re-ask"
+    assert all(c["chart_type"] == "declined" for c in r2["charts"])
+    assert any("not a chart" in c.get("decline_reason", "") for c in r2["charts"])
+
+
 def test_title_says_log_predicate():
     f = chart_extractor._title_says_log
     assert f("Number of Tokens (Log-scale)")

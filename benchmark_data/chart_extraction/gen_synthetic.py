@@ -260,6 +260,59 @@ save(
     fig, "line_logneg", {"type": "line", "series": {"green": [x.tolist(), y.tolist()]}}
 )
 
+# 16. SPARSE marker line (5 points, one per "model size") — the canonical
+# scaling-law figure. Below the dense-cloud gate (>=8 vertices), it must be
+# recovered via marker-vertex coincidence, not fall through to "unknown".
+x = np.array([1.0, 2.0, 4.0, 8.0, 16.0])
+y = np.array([61.0, 67.0, 72.0, 74.5, 76.0])
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:purple", marker="o")
+ax.set_xticks([0, 4, 8, 12, 16])
+ax.set_yticks(range(60, 81, 5))
+save(
+    fig, "line_sparse", {"type": "line", "series": {"purple": [x.tolist(), y.tolist()]}}
+)
+
+# --- hint-flow adversarial fixtures (NO ground-truth entries: they pin the
+# HINTED extraction paths in pytest, not the oracle-driven benchmark) -------
+# 17. sparse marker-less line + significance bracket: answering the
+# chart_type question with "line" must NOT emit the bracket as a curve
+# (adversarial review probe; the marker-connection requirement is mandatory
+# even under a hint).
+x = np.array([1.0, 4.0, 7.0, 10.0])
+y = np.array([5.0, 9.0, 12.0, 14.0])
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:red")  # 4 vertices, no markers
+bx1, bx2, by = 3.0, 7.5, 18.0
+ax.plot([bx1, bx1, bx2, bx2], [by - 0.6, by, by, by - 0.6], color="black", lw=1)
+ax.set_xlim(0, 11)
+ax.set_ylim(0, 20)
+ax.set_xticks(range(0, 12, 2))
+ax.set_yticks(range(0, 21, 5))
+fig.savefig(os.path.join(OUT, "line_bracket_decoy.pdf"))
+plt.close(fig)
+
+# 18. 4 real scatter markers + two same-color annotation arrowheads:
+# answering "scatter" must emit ONLY the real 4-point series — the
+# arrowhead pair must stay below the hinted min-points gate.
+xs = np.array([2.0, 4.0, 6.0, 8.0])
+ys = np.array([4.0, 8.0, 11.0, 15.0])
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.scatter(xs, ys, color="tab:blue", s=25)
+for ax_, ay_ in [(3.0, 17.0), (7.0, 17.0)]:
+    ax.annotate(
+        "",
+        xy=(ax_, 15.5),
+        xytext=(ax_, 17.8),
+        arrowprops=dict(arrowstyle="-|>", color="tab:blue", mutation_scale=18),
+    )
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 20)
+ax.set_xticks(range(0, 11, 2))
+ax.set_yticks(range(0, 21, 5))
+fig.savefig(os.path.join(OUT, "scatter_arrow_decoy.pdf"))
+plt.close(fig)
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

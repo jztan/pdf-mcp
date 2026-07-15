@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 6
+CHART_EXTRACTION_VERSION = 7
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -1057,6 +1057,34 @@ def collect(
     return frames, bar_rects, small_paths, clouds
 
 
+def _marker_connected(
+    pts: list[tuple[float, float]],
+    small_paths: dict[tuple[Any, int], list[tuple[float, float]]],
+) -> bool:
+    """True when a polyline's vertices coincide with plotted markers.
+
+    A short cloud (a 5-point scaling-law frontier) is indistinguishable from
+    decoration by point count alone, but data lines drawn point-per-model
+    carry a marker at each vertex — that coincidence is strong evidence the
+    polyline is data, not a bracket/arrow/axis break. Requires >=3 vertex-
+    marker hits covering >=50% of the distinct vertices."""
+    if not small_paths:
+        return False
+    centers = [c for v in small_paths.values() for c in v]
+    if not centers:
+        return False
+    uniq: list[tuple[float, float]] = []
+    for p in pts:
+        if not any(abs(p[0] - u[0]) < 0.5 and abs(p[1] - u[1]) < 0.5 for u in uniq):
+            uniq.append(p)
+    hits = sum(
+        1
+        for p in uniq
+        if any(abs(p[0] - c[0]) < 2.5 and abs(p[1] - c[1]) < 2.5 for c in centers)
+    )
+    return hits >= 3 and hits * 2 >= len(uniq)
+
+
 def classify(
     bar_rects: list[tuple[Any, Style]],
     small_paths: dict[tuple[Any, int], list[tuple[float, float]]],
@@ -1078,6 +1106,17 @@ def classify(
             lines[k] = pts
     if lines:
         return "line"
+    # sparse marker-connected lines: a 3-7 vertex polyline whose vertices
+    # carry markers (one point per model size — the canonical scaling-law
+    # figure) is a data line even though it fails the dense-cloud gate.
+    for k, pts in clouds.items():
+        xs = [p[0] for p in pts]
+        if (
+            len(pts) >= 3
+            and max(xs) - min(xs) >= 0.25 * pw
+            and _marker_connected(pts, small_paths)
+        ):
+            return "line"
     if markers:
         return "scatter"
     return "unknown"
@@ -1113,6 +1152,7 @@ def extract_line(
     xa: dict[str, Any],
     ya: dict[str, Any],
     max_points: int,
+    small_paths: dict[tuple[Any, int], list[tuple[float, float]]] | None = None,
 ) -> list[dict[str, Any]]:
     pw = panel["rx1"] - panel["rx0"]
     ph = panel["ry1"] - panel["ry0"]
@@ -1121,7 +1161,21 @@ def extract_line(
         xs = np.array([p[0] for p in pts])
         ys = np.array([p[1] for p in pts])
         if len(pts) < 8 or np.ptp(xs) < 0.25 * pw:
-            continue
+            # sparse-cloud path: a short polyline is still a data line when
+            # its vertices carry markers (scaling-law figures plot one point
+            # per model). Marker-vertex coincidence is MANDATORY here even
+            # when the caller hinted "line": the hint confirms the CHART
+            # type, not that every short polyline in the panel is data — a
+            # hinted bypass emitted a significance bracket as a curve
+            # (adversarial review probe). Span gate stays too:
+            # brackets/arrows/axis-break decorations are short-span.
+            sparse_ok = (
+                len(pts) >= 3
+                and np.ptp(xs) >= 0.25 * pw
+                and _marker_connected(pts, small_paths or {})
+            )
+            if not sparse_ok:
+                continue
         order = np.argsort(xs)
         xs, ys = xs[order], ys[order]
         bins = np.linspace(xs.min(), xs.max(), 24)
@@ -1201,7 +1255,15 @@ def extract_scatter(
     small_paths: dict[tuple[Any, int], list[tuple[float, float]]],
     xa: dict[str, Any],
     ya: dict[str, Any],
+    min_pts: int = 5,
 ) -> list[dict[str, Any]]:
+    """min_pts=5 filters decoration/annotation markers on the geometry-only
+    path; extract_charts lowers it to 3 when the caller EXPLICITLY hinted
+    "scatter" — the agent has looked at the render and confirmed the chart
+    type, so a 3-point error-bar measurement series may emit. Not lower:
+    2-point same-style groups are how paired annotation arrowheads look
+    (adversarial review probe), and a hint confirms the chart, not that
+    every tiny style group is data."""
     series: list[dict[str, Any]] = []
     for (ckey, size), centers in small_paths.items():
         # merge fill+stroke duplicates drawn at the same location
@@ -1209,7 +1271,7 @@ def extract_scatter(
         for cx, cy in sorted(centers):
             if not any(abs(cx - ux) < 1.5 and abs(cy - uy) < 1.5 for ux, uy in uniq):
                 uniq.append((cx, cy))
-        if len(uniq) < 5:
+        if len(uniq) < min_pts:
             continue
         pts = [[_sig(apply_ax(xa, cx)), _sig(apply_ax(ya, cy))] for cx, cy in uniq]
         pts.sort()
@@ -1329,9 +1391,53 @@ def extract_charts(
         ctype = classify(bar_rects, small_paths, clouds, panel)
         # hint override
         tkey = f"p{pi}.type"
-        if tkey in hints:
+        type_hinted = tkey in hints
+        if type_hinted:
             ctype = hints[tkey]
             used_hint_keys.add(tkey)
+            if ctype == "not_a_chart":
+                # terminal answer: the caller looked at the render and said
+                # this panel is not a data chart. Decline — do not re-ask
+                # (pre-fix this fell into the unknown branch and looped).
+                y_side0 = "left" if panel["ya_left"] else "right"
+                res["charts"].append(
+                    {
+                        "chart_id": f"p{pi}",
+                        "panel": pi,
+                        "chart_type": "declined",
+                        "decline_reason": (
+                            "caller identified the panel as not a chart"
+                        ),
+                        "region_bbox": [
+                            float(panel["rx0"]),
+                            float(panel["ry0"]),
+                            float(panel["rx1"]),
+                            float(panel["ry1"]),
+                        ],
+                        "x_axis": {
+                            "scale": xa["scale"],
+                            "r2": round(xa["r2"], 5),
+                            "title": None,
+                            "range": [float(xa["v"].min()), float(xa["v"].max())],
+                        },
+                        "y_axis": {
+                            "scale": ya["scale"],
+                            "r2": round(ya["r2"], 5),
+                            "side": y_side0,
+                            "title": None,
+                            "range": [float(ya["v"].min()), float(ya["v"].max())],
+                        },
+                        "diagnostics": {
+                            "n_frames": 0,
+                            "n_bar_rects": 0,
+                            "n_marker_groups": 0,
+                            "n_line_clouds": 0,
+                            "dual_axis": False,
+                            "notes": ["caller identified the panel as not a chart"],
+                        },
+                    }
+                )
+                continue
         y_side = "left" if panel["ya_left"] else "right"
         titles = _axis_titles(page, panel)
         chart: dict[str, Any] = {
@@ -1419,9 +1525,58 @@ def extract_charts(
             res["charts"].append(chart)
             continue
 
+        # no-vector-geometry guard: axes calibrated but the panel interior
+        # holds (essentially) no clouds, markers, or bars — either the plot
+        # content is rasterized (vector axes framing an image: matplotlib
+        # `rasterized=True`, microscopy figures), or the markers use shapes
+        # geometry collection doesn't capture. A chart_type question is
+        # unanswerable in both cases; decline with the reason instead.
+        # "Essentially": <=2 vertices total also counts — phantom panels
+        # (spurious axis pairings near a real figure) carry a stray vertex.
+        _n_geom = (
+            sum(len(v) for v in clouds.values())
+            + sum(len(v) for v in small_paths.values())
+            + len(bar_rects)
+        )
+        if _n_geom <= 2:
+            chart["chart_type"] = "declined"
+            chart["decline_reason"] = (
+                "no extractable vector plot geometry inside the panel — "
+                "rasterized data (image content) or unsupported marker shapes"
+            )
+            chart["diagnostics"]["notes"].append(chart["decline_reason"])
+            res["charts"].append(chart)
+            continue
+
         # dual-axis: ask per emitted series unless hinted
         if ctype == "line":
-            curves = extract_line(clouds, panel, xa, ya, max_points)
+            curves = extract_line(clouds, panel, xa, ya, max_points, small_paths)
+            # honesty notes for the sparse path (no silent caps): flag short
+            # captures, and flag data-like clouds left below the gates so an
+            # agent knows the table may be missing a series it can see in
+            # the render.
+            _pw = panel["rx1"] - panel["rx0"]
+            _emitted_styles = {c["_style_key"] for c in curves}
+            for c in curves:
+                pts = c.get("points") or []
+                if 0 < len(pts) < 8:
+                    chart["diagnostics"]["notes"].append(
+                        f"sparse line capture ({len(pts)} vertices) — "
+                        "verify completeness against the render"
+                    )
+            _left_behind = sum(
+                1
+                for k, pts in clouds.items()
+                if k not in _emitted_styles
+                and len(pts) >= 3
+                and (max(p[0] for p in pts) - min(p[0] for p in pts)) >= 0.25 * _pw
+            )
+            if _left_behind and curves:
+                chart["diagnostics"]["notes"].append(
+                    f"{_left_behind} line cloud(s) below extraction gates "
+                    "not emitted — the chart may show more series than the "
+                    "table; check the render"
+                )
             good = [c for c in curves if not c["multivalued"]]
             bad = [c for c in curves if c["multivalued"]]
             good.sort(key=lambda c: c["points"][0] if c.get("points") else [0, 0])
@@ -1516,7 +1671,7 @@ def extract_charts(
                     )
             if bad:
                 chart["diagnostics"]["declined_multivalued"] = len(bad)
-            if not good:
+            if not good and bad:
                 chart["chart_type"] = "declined"
                 chart["decline_reason"] = (
                     "all line clouds multivalued " "(crossing/overlapping curves)"
@@ -1524,7 +1679,24 @@ def extract_charts(
                 chart["diagnostics"]["notes"].append(chart["decline_reason"])
         elif ctype == "bar":
             chart["bars"] = extract_bar(bar_rects, xa, ya)
-            for s in chart["bars"]:
+            if not chart["bars"] and not type_hinted:
+                # geometry said "bar" but no series stood on the baseline —
+                # usually large OPEN markers misread as bar rects (astro
+                # scatter squares/triangles). The classification is the
+                # unreliable part, so fall back to the chart_type question
+                # instead of returning a typed-but-empty chart.
+                del chart["bars"]
+                ctype = "unknown"
+                chart["chart_type"] = "unknown"
+                res["questions"].append(
+                    {
+                        "id": tkey,
+                        "chart_id": f"p{pi}",
+                        "kind": "chart_type",
+                        "options": ["line", "bar", "scatter", "not_a_chart"],
+                    }
+                )
+            for s in chart.get("bars", []):
                 s["label"] = None
                 s["axis"] = y_side
                 s["resolved_by"] = "geometry"
@@ -1532,7 +1704,9 @@ def extract_charts(
                 s["downsampled"] = False
                 s["n_extrema_dropped"] = 0
         elif ctype == "scatter":
-            chart["points"] = extract_scatter(small_paths, xa, ya)
+            chart["points"] = extract_scatter(
+                small_paths, xa, ya, min_pts=3 if type_hinted else 5
+            )
             for s in chart["points"]:
                 s["label"] = None
                 s["axis"] = y_side
@@ -1585,6 +1759,20 @@ def extract_charts(
                 "series fell outside axis range " "(likely not a data chart)"
             )
             chart.setdefault("diagnostics", {}).setdefault("notes", [])
+            chart["diagnostics"]["notes"].append(chart["decline_reason"])
+        # an EXPLICITLY hinted type that still yields nothing must not return
+        # a typed-but-empty chart (an ok with no data reads as "chart has no
+        # series"); decline with the honest reason instead.
+        if (
+            type_hinted
+            and chart["chart_type"] not in ("declined", "unknown")
+            and not (chart.get("curves") or chart.get("bars") or chart.get("points"))
+        ):
+            chart["chart_type"] = "declined"
+            chart["decline_reason"] = (
+                f"hinted type '{ctype}' produced no extractable series — "
+                "geometry too sparse or not vector-drawn"
+            )
             chart["diagnostics"]["notes"].append(chart["decline_reason"])
         # final style-shape conversion: internal "_style_key" tuples (used
         # above for color matching / re-extraction) become the public

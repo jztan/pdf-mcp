@@ -553,14 +553,14 @@ error-bar scatters (0811.0781 p29), 8-series-one-point-each comparison
 scatters (2206.07682 p24). One point per model size is the canonical
 scaling-law figure — this class is common and *valuable*.
 
-**Hint recovery works for sparse LINES but not sparse SCATTERS.** Answering
-the chart_type question with "line" recovers EfficientNet p4 exactly (w=1.0 →
-76.13 vs 76.1 printed on the figure) — `extract_line` has no min-count gate.
-But `extract_scatter` re-applies its own ≥5-unique-points gate, so a 3-point
-scatter accepts the hint and still emits nothing. The obvious, contained
-recall lever: after an explicit type hint (the agent has confirmed the
-markers are data), relax the scatter min-count; and let classify treat
-few-point marker-connected polylines as line candidates directly.
+**Hint recovery was broken for BOTH sparse lines and sparse scatters**
+(correction to this section's first draft: the "recovered" EfficientNet
+panel turned out to be a pre-existing emit of a different panel on the same
+page — `extract_line` re-applies its own ≥8-point gate, and `extract_scatter`
+its ≥5-unique-points gate, so the chart_type answer changed nothing). The
+recall lever: relax the per-extractor gates when the type is explicitly
+hinted, and let classify treat few-point marker-connected polylines as line
+candidates directly. Implemented as v7 — see the next section.
 
 **Second cluster (~1/4): no extractable vector data in the panel.** Vector
 axes framing rasterized plot content (physics.optics 2607.03442's field-map
@@ -578,3 +578,66 @@ fall back to unknown/question when extract_bar yields zero series.
 Follow-ups (open, not implemented): sparse-chart recovery (relax post-hint
 scatter gate + few-point line classify), reasoned decline for
 no-vector-geometry panels, bar→unknown fallback on zero series.
+
+## Implemented: sparse-chart recovery + reasoned empty-panel outcomes (2026-07-15, v7)
+
+The follow-ups from the empty-bucket adjudication, implemented and validated:
+
+1. **Sparse marker-connected lines extract.** A 3–7 vertex polyline whose
+   vertices coincide with plotted markers (>=3 hits, >=50% of vertices) is a
+   data line — one point per model size is the canonical scaling-law figure.
+   `classify` recognises it and `extract_line` accepts it (span gate stays:
+   brackets/arrows are short-span). Honesty notes accompany the sparse path:
+   `sparse line capture (N vertices)` on short captures, and a
+   `line cloud(s) below extraction gates not emitted` note when data-like
+   clouds are left behind — the table never silently pretends completeness.
+2. **Explicitly hinted types get relaxed gates.** Hinted "line" bypasses the
+   dense-cloud minimum (>=3 vertices + span still required); hinted "scatter"
+   lowers the marker minimum 5→2. A hinted type that still extracts nothing
+   DECLINES with the reason instead of returning a typed-but-empty chart.
+3. **Reasoned declines for unanswerable panels.** A panel whose interior has
+   essentially no vector geometry (<=2 vertices — rasterized data, phantom
+   axis pairings) declines with "no extractable vector plot geometry" instead
+   of asking a chart_type question no answer can satisfy. Classified-bar
+   panels with zero baseline series fall back to the chart_type question
+   (open markers misread as bar rects).
+
+Corrections from implementation (honesty): the earlier adjudication's
+"EfficientNet sparse frontier" empties were actually PHANTOM panels around a
+figure whose real panel already emitted; and the 0811.0781 3-point-scatter
+markers never reach geometry collection at all (unsupported marker shapes),
+so it now declines with a reason rather than emitting — its printed value
+labels remain readable as text.
+
+**Validation (58 papers, full re-sweep + census):**
+- Empty panels 66 → 34 (11.1% → 5.7% of detected panels); emitted 78.7% →
+  80.7%; reasoned declines absorb the rest (10.3% → 13.6%).
+- 13 new emits, every one adjudicated against its render, all correct:
+  emergent-abilities MMLU/instruction-following sparse pgfplots panels
+  (x 10^20..10^24, y 0..100 ✓), ViT Figure 4 (6 series × 4 markers,
+  x "10M..300M" ✓), a Pareto-frontier dashed line (finance), one astro
+  luminosity panel. 0 dropped emits. **Wrong-emits: 0.**
+- Suites: 1031 passed; synthetic 0/17 wrong-emit (new `line_sparse`
+  archetype: 5 points exact + sparse-capture note); real bench 0 wrong-emit.
+- `CHART_EXTRACTION_VERSION` → 7.
+
+Residual: series whose markers geometry collection can't capture (oversized/
+compound shapes) and 1-point-per-style panels stay declined/questioned —
+documented, sample-driven follow-ups.
+
+**Adversarial review of v7 caught two wrong-emit defects in the hinted
+relaxations — both fixed before finalizing.** The principle both violated:
+*a type hint confirms the CHART, never per-series evidence.* (1) hinted
+"line" waived marker-connection for every cloud in the panel, so a
+significance bracket (4 vertices, wide span) emitted as a curve — marker-
+vertex coincidence is now mandatory on the sparse path even under a hint;
+(2) hinted "scatter" at min-2 points emitted a pair of same-color annotation
+arrowheads as a data series — the hinted floor is now 3. Also fixed: an
+empty hinted-line extraction declined with the misleading "all multivalued"
+message (now the honest hinted-type reason), and answering `not_a_chart`
+looped forever re-asking the question (now a terminal decline). The
+reviewer's probe PDFs are promoted to permanent fixtures
+(`line_bracket_decoy`, `scatter_arrow_decoy` — pytest hint-flow tests, kept
+out of the oracle benchmark which never answers the dangerous way). All 13
+adjudicated v7 recoveries survive the tightening (they are all genuinely
+marker-connected); suites 1034 passed, synthetic 0/17, real 0 wrong-emit.

@@ -202,7 +202,7 @@ def run():
             continue
         run_case(name, pg, pdf)
     print(
-        "\nWRONG-EMIT (uncaught by gates): 0 as of v6 — "
+        "\nWRONG-EMIT (uncaught by gates): 0 as of v7 — "
         "adjudicated manually against renders; see RESULTS.md"
     )
 

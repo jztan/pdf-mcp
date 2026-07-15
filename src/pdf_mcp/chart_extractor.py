@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 7
+CHART_EXTRACTION_VERSION = 8
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -626,20 +626,226 @@ def frame_like(d: dict[str, Any], panel: dict[str, Any]) -> bool:
     return False
 
 
+def _word_lines(page: Any, panel: dict[str, Any]) -> list[list[Any]]:
+    """In-panel non-numeric words grouped into baseline lines (shared by
+    legend_masks and _legend_entries)."""
+    words = [
+        w
+        for w in get_words(page)
+        if panel["rx0"] <= w[0]
+        and w[2] <= panel["rx1"]
+        and panel["ry0"] <= w[1]
+        and w[3] <= panel["ry1"]
+        and not re.fullmatch(r"-?[\d.,]+", w[4].strip())
+    ]
+    if not words:
+        return []
+    words.sort(key=lambda w: (round(w[3]), w[0]))
+    lines: list[list[Any]] = []
+    cur: list[Any] = [words[0]]
+    for w in words[1:]:
+        if abs(w[3] - cur[-1][3]) < 2 and w[0] - cur[-1][2] < 12:
+            cur.append(w)
+        else:
+            lines.append(cur)
+            cur = [w]
+    lines.append(cur)
+    return lines
+
+
 def legend_masks(
     page: Any, panel: dict[str, Any]
 ) -> list[tuple[float, float, float, float]]:
+    """Geometry masks over LEGEND rows only — not every in-panel label.
+
+    Masking every non-numeric word blanketed text-dense panels (EfficientNet
+    Fig 1: ~15 point annotations + an inset table produced 72 masks covering
+    135% of the panel area) and per-vertex masking then ATE the data curves —
+    the root cause of the composite-figure empty class. Masks exist to keep
+    legend samples/markers out of collected geometry, so a mask now requires
+    a legend SIGNATURE:
+      - a short thin STROKE sample immediately left of the text line
+        (line-chart legends — the class that pollutes clouds), or
+      - a small marker glyph immediately left, on >=2 vertically-adjacent
+        left-aligned lines (scatter legends; a single label with a marker
+        nearby is a point annotation, not a legend).
+    Annotation text itself never pollutes geometry — masks only ever filter
+    drawings — so unmasked labels are harmless.
+    """
+    lines = _word_lines(page, panel)
+    if not lines:
+        return []
+    dboxes = []
+    for d in page.get_drawings():
+        bb = d_bbox(d)
+        if bb is not None:
+            dboxes.append((d, bb))
+    boxes = [bb for _d, bb in dboxes]
+
+    info = []  # ((x0,y0,x1,y1), has_stroke_sample, marker_offset|None)
+    for ln in lines:
+        x0 = ln[0][0]
+        y0 = min(w[1] for w in ln)
+        x1 = max(w[2] for w in ln)
+        y1 = max(w[3] for w in ln)
+        stroke = False
+        marker_off: float | None = None
+        for bb in boxes:
+            if not (
+                x0 - 48 <= bb[0]
+                and bb[2] <= x0 - 2
+                and bb[1] >= y0 - 4
+                and bb[3] <= y1 + 4
+            ):
+                continue
+            w_, h_ = bb[2] - bb[0], bb[3] - bb[1]
+            if w_ >= 8 and h_ <= (y1 - y0) + 8:
+                stroke = True
+            elif 1.5 <= max(w_, h_) < 8:
+                marker_off = x0 - bb[0]
+        info.append(((x0, y0, x1, y1), stroke, marker_off))
+
+    # small-glyph style census (color+size bucket) for the lone-row rule
+    glyph_counts: dict[tuple[Any, int], int] = {}
+    for d_, bb in dboxes:
+        w_, h_ = bb[2] - bb[0], bb[3] - bb[1]
+        if 1.5 <= max(w_, h_) < 8 and 0.35 <= (w_ + 1e-6) / (h_ + 1e-6) <= 2.8:
+            st = draw_style(d_)
+            key = (st[1] or st[0], round(max(w_, h_)))
+            glyph_counts[key] = glyph_counts.get(key, 0) + 1
+    row_glyph_key: list[tuple[Any, int] | None] = []
+    for ln in lines:
+        x0 = ln[0][0]
+        y0 = min(w[1] for w in ln)
+        y1 = max(w[3] for w in ln)
+        gk = None
+        for d_, bb in dboxes:
+            if (
+                x0 - 48 <= bb[0]
+                and bb[2] <= x0 - 2
+                and bb[1] >= y0 - 4
+                and bb[3] <= y1 + 4
+            ):
+                w_, h_ = bb[2] - bb[0], bb[3] - bb[1]
+                if 1.5 <= max(w_, h_) < 8:
+                    st = draw_style(d_)
+                    gk = (st[1] or st[0], round(max(w_, h_)))
+        row_glyph_key.append(gk)
+
     masks: list[tuple[float, float, float, float]] = []
-    for w in get_words(page):
-        if re.fullmatch(r"-?\d+(\.\d+)?", w[4].strip()):
+    for i, (bb, stroke, marker_off) in enumerate(info):
+        keep = stroke
+        if not keep and marker_off is not None:
+            # lone-row rule: a single label whose adjacent marker's style
+            # RECURS as panel data (>=5 same-style glyphs) is a legend sample
+            # of an emitting series — unmasked it injects a fabricated point
+            # into that series (attack D2, single-entry unframed legend). A
+            # uniquely-styled labeled point doesn't match and stays.
+            gk = row_glyph_key[i]
+            if gk is not None and glyph_counts.get(gk, 0) >= 5:
+                keep = True
+        if not keep and marker_off is not None:
+            # marker-legend rule: needs a left-aligned vertical neighbor row
+            # whose sample sits at the SAME label offset — legends stack with
+            # consistent sample indents; stacked point ANNOTATIONS (r=1.3 /
+            # r=1.5 beside a rising curve, EfficientNet Fig 3) have their
+            # data markers at varying offsets and must not mask.
+            lh = bb[3] - bb[1]
+            for j, (bb2, s2, m2) in enumerate(info):
+                if j == i:
+                    continue
+                if s2 is False and m2 is None:
+                    continue
+                stacked = abs(bb2[0] - bb[0]) <= 10 and abs(bb2[1] - bb[1]) <= (
+                    2.5 * max(lh, 6)
+                )
+                same_row = abs(bb2[1] - bb[1]) < 3  # ncol legends sit on one baseline
+                if not (stacked or same_row):
+                    continue
+                if m2 is not None and abs(m2 - marker_off) > 6:
+                    continue
+                keep = True
+                break
+        if keep:
+            masks.append((bb[0] - 45, bb[1] - 3, bb[2] + 3, bb[3] + 3))
+    # framed-legend rule: a compact sub-panel box enclosing >=2 label rows
+    # is a legend even when its per-row samples defeat the strip geometry
+    # (some renderers draw all samples as one path — 2607.09566 p30's
+    # unmasked samples merged into data clouds and killed the panel as
+    # "multivalued"). Mask every row inside such a box.
+    pw = panel["rx1"] - panel["rx0"]
+    ph = panel["ry1"] - panel["ry0"]
+    frame_boxes: list[tuple[float, float, float, float]] = []
+    for d_, bb in dboxes:
+        if d_.get("color") is None:
+            # fill-only rect = shaded region (axvspan); treating one as a
+            # legend frame masked the annotations inside it AND their 45pt
+            # strips clipped a real curve crest (attack D3). Legend frames
+            # are stroked.
             continue
-        if (
-            panel["rx0"] <= w[0]
-            and w[2] <= panel["rx1"]
-            and panel["ry0"] <= w[1]
-            and w[3] <= panel["ry1"]
+        w_, h_ = bb[2] - bb[0], bb[3] - bb[1]
+        if w_ * h_ > 0.35 * pw * ph or w_ > 0.8 * pw or h_ > 0.8 * ph:
+            continue
+        if w_ < 12 or h_ < 8:
+            continue
+        inside = [
+            i
+            for i, (lb, _s, _m) in enumerate(info)
+            if bb[0] <= (lb[0] + lb[2]) / 2 <= bb[2]
+            and bb[1] <= (lb[1] + lb[3]) / 2 <= bb[3]
+        ]
+        if len(inside) >= 1:
+            frame_boxes.append(bb)
+            for i in inside:
+                lb = info[i][0]
+                m = (lb[0] - 45, lb[1] - 3, lb[2] + 3, lb[3] + 3)
+                if m not in masks:
+                    masks.append(m)
+
+    # mask legend-frame BORDERS (thin bands only): the box stroke around the
+    # entries otherwise enters clouds as a fabricated 10-18 vertex "curve" at
+    # legend position (2607.09566 p27 grey artifact; single-entry framed
+    # legends emitted their own frame as THE curve — adversarial attack D1).
+    # Bands, NOT interiors — interior masking ate curves near legends. Bands
+    # apply to frame_boxes regardless of whether any row masks exist, and
+    # ONLY to drawings whose own vertices hug their bbox perimeter: a frame's
+    # path lies on its border; a data curve fills its bbox interior (banding
+    # arbitrary bboxes ate a curve's own apex/baseline — attack D4).
+    def _perimeter_hugging(d: dict[str, Any], bb: Any) -> bool:
+        pts = path_pts(d)
+        if len(pts) < 4:
+            return False
+        near = sum(
+            1
+            for x, y in pts
+            if min(abs(x - bb[0]), abs(x - bb[2])) < 2.5
+            or min(abs(y - bb[1]), abs(y - bb[3])) < 2.5
+        )
+        return near >= 0.9 * len(pts)
+
+    row_centers = [((lb[0] + lb[2]) / 2, (lb[1] + lb[3]) / 2) for lb, _s, _m in info]
+    bordered: list[tuple[float, float, float, float]] = []
+    for d in page.get_drawings():
+        bb = d_bbox(d)
+        if bb is None:
+            continue
+        w_, h_ = bb[2] - bb[0], bb[3] - bb[1]
+        if w_ * h_ > 0.35 * pw * ph or w_ > 0.8 * pw or h_ > 0.8 * ph:
+            continue
+        if w_ < 12 or h_ < 8:
+            continue
+        if not any(
+            bb[0] <= cx <= bb[2] and bb[1] <= cy <= bb[3] for cx, cy in row_centers
         ):
-            masks.append((w[0] - 45, w[1] - 3, w[2] + 3, w[3] + 3))
+            continue
+        if _perimeter_hugging(d, bb):
+            bordered.append(bb)
+    B = 1.5
+    for bb in bordered:
+        masks.append((bb[0] - B, bb[1] - B, bb[2] + B, bb[1] + B))  # top
+        masks.append((bb[0] - B, bb[3] - B, bb[2] + B, bb[3] + B))  # bottom
+        masks.append((bb[0] - B, bb[1] - B, bb[0] + B, bb[3] + B))  # left
+        masks.append((bb[2] - B, bb[1] - B, bb[2] + B, bb[3] + B))  # right
     return masks
 
 
@@ -670,28 +876,7 @@ def _legend_entries(page: Any, panel: dict[str, Any]) -> list[tuple[Style, str]]
     """Legend entries: a short stroked sample next to a text label inside
     the panel. Returns [(style_key, label_text), ...]."""
     entries: list[tuple[Style, str]] = []
-    words = [
-        w
-        for w in get_words(page)
-        if panel["rx0"] <= w[0]
-        and w[2] <= panel["rx1"]
-        and panel["ry0"] <= w[1]
-        and w[3] <= panel["ry1"]
-        and not re.fullmatch(r"-?[\d.,]+", w[4].strip())
-    ]
-    if not words:
-        return entries
-    # group words into lines (same baseline)
-    words.sort(key=lambda w: (round(w[3]), w[0]))
-    lines: list[list[Any]] = []
-    cur: list[Any] = [words[0]]
-    for w in words[1:]:
-        if abs(w[3] - cur[-1][3]) < 2 and w[0] - cur[-1][2] < 12:
-            cur.append(w)
-        else:
-            lines.append(cur)
-            cur = [w]
-    lines.append(cur)
+    lines = _word_lines(page, panel)
     for ln in lines:
         x0, y0, y1 = ln[0][0], ln[0][1], ln[0][3]
         label = " ".join(w[4] for w in ln).strip()
@@ -891,7 +1076,12 @@ def _ticks_unreadable(
             for b in orphan_bases:
                 obb = b["bb"]
                 if (
-                    -4 <= bb[0] - obb[2] < 4  # immediately right of the base
+                    # window reaches 8pt: a VECTOR-DRAWN minus occupies
+                    # ~3-5pt between base and exponent (2607.06844 SED plot:
+                    # gap 4.6pt — the exponents orphaned AND escaped this
+                    # guard at <4, emitting a linear [1,11] axis for a
+                    # 10^-11..10^5 log scale)
+                    -4 <= bb[0] - obb[2] < 8  # immediately right of the base
                     and (obb[3] - obb[1]) > 1.15 * max(h, 1e-6)  # base larger
                     and bb[3] < obb[3] - 1  # tick raised above base bottom
                     and bb[1] < obb[3]

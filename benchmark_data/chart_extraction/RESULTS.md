@@ -641,3 +641,66 @@ reviewer's probe PDFs are promoted to permanent fixtures
 out of the oracle benchmark which never answers the dangerous way). All 13
 adjudicated v7 recoveries survive the tightening (they are all genuinely
 marker-connected); suites 1034 passed, synthetic 0/17, real 0 wrong-emit.
+
+## Implemented: legend-signature masking — the composite-figure fix (2026-07-15, v8)
+
+Probing the composite-figure empty class disproved its "needs dash-stitching"
+label: dashed/dotted lines never shatter (matplotlib writes ONE path with a
+dash-pattern attribute — vertices intact). The real cause: `legend_masks`
+masked EVERY in-panel word, and on text-dense panels (EfficientNet Fig 1:
+~15 point annotations + an inset table = 72 masks covering 135% of the panel)
+the per-vertex masking ATE the data curves.
+
+**The fix — masks now require a legend signature:**
+- a short thin stroke sample immediately left of a text row (line legends), or
+- a marker glyph at a CONSISTENT label offset on >=2 stacked left-aligned rows
+  (scatter legends; stacked point annotations like Fig 3's "r=1.3/1.5/1.7"
+  have varying offsets and no longer mask), or
+- a compact frame box enclosing >=2 label rows (framed legends whose samples
+  defeat the strip geometry — 2607.09566 p30).
+Legend FRAME BORDERS are masked as thin bands (the frame stroke otherwise
+enters clouds as a fabricated grey "curve" at legend position — caught by
+adjudication); interiors are NOT masked (interior masking ate curves passing
+near legends).
+
+**Adjudication catches during this wave (all fixed before commit):**
+1. legend frame border emitted as a 12-pt grey near-vertical "curve"
+   (2607.09566 p27) → border-band masking;
+2. full-interior frame masking ate 4 real curves (1905.11946 p8) → bands only;
+3. stacked point annotations mimicking a marker legend re-ate EfficientNet
+   Fig 3's r-panel → consistent-offset rule;
+4. a NEW panel unlocked by the fix exposed a pre-existing tick-reader gap:
+   an A&A SED plot's 10^-11..10^5 y-axis has a DRAWN minus occupying a
+   4.6pt base-exponent gap — beyond both the 3pt pairing gate and the
+   orphan-guard's 4pt window — emitting linear [1,11]. Orphan window widened
+   to 8pt; the panel now declines with the honest unreadable-ticks reason.
+
+**Adversarial review of the first v8 cut found TWO wrong-emit regressions on
+vanilla matplotlib legends** — a single-entry framed legend emitted its own
+frame as the only "curve", and unframed/ncol marker legends injected
+fabricated points into real scatter series — plus a border-banding rule that
+could eat a data curve's own apex. All fixed: frame boxes must be STROKED
+(shaded fill-only regions are not legends), frames enclosing >=1 row count,
+border bands apply only to perimeter-hugging paths, ncol same-baseline rows
+qualify as legend neighbors, and a lone marker-row masks when its marker
+style recurs as panel data (>=5 glyphs — fabrication prevention beats the
+annotation-row recall it costs). The reviewer's 11 attack PDFs are permanent
+fixtures (`legend_attacks/` + tests/test_chart_legend_attacks.py, 8 tests).
+
+**Final numbers (595 panels, 109 papers):** emitted 80.7% → **80.8%**,
+declined 13.6% → 14.3%, empty 5.7% → **4.9%**. The headline is not the
+percentage — it is what moved: EfficientNet Fig 1 and other text-dense
+composite figures now emit (values match Fig 1's own inset table), FIVE
+latent wrong-emits were caught and now decline (the A&A SED drawn-minus
+family: linear [1,11] / [11,15] for 10^k log flux axes — orphan-exponent
+window widened 4→8pt, zero false positives corpus-wide), and the masking
+layer is now fabrication-proof against the attack set. Some annotation-heavy
+panels re-masked by the fabrication rules returned to the question path —
+recall traded for the trust contract. Suites 1042 passed; synthetic 0/17;
+`CHART_EXTRACTION_VERSION` → 8. Recovered: EfficientNet Fig 1
+(values match its own inset table: B1 = 7.8M/79.1% vs emitted 7.803/79.25)
+and Fig 3, ViT Fig 4 region panels, efficient-frontier scatter series,
+astro/optics panels. 4 dropped emits are all safe-direction declines
+(multivalued / out-of-range). The 1807 dual-axis benchmark error IMPROVED
+2.2% → 0.8% (previously-masked curve vertices restored). Suites 1034 passed;
+synthetic 0/17; `CHART_EXTRACTION_VERSION` → 8.

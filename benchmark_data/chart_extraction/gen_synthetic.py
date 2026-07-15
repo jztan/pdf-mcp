@@ -242,6 +242,24 @@ ax.set_xscale("log", base=2)
 ax.set_yticks(range(0, 13, 3))
 save(fig, "line_log2", {"type": "line", "series": {"blue": [x.tolist(), y.tolist()]}})
 
+# 15. NEGATIVE-decade log y-axis (ticks 10^-4..10^0) — the SGDR/Henighan
+# wrong-emit class: matplotlib mathtext kerns the raised exponent to overlap
+# the base (pairing must accept ~-2pt gaps) and, in some backends, draws the
+# exponent's minus as an hrule instead of a glyph. The trust-contract
+# invariant for this archetype is NO WRONG EMIT: either the axis reads as
+# log [1e-4, 1] (typed minus) or the chart declines (drawn minus) — never a
+# linear [-4, 0] axis.
+x = np.linspace(0, 200, 9)
+y = 10.0 ** (-4 + 4 * np.exp(-x / 60.0))
+fig, ax = plt.subplots(figsize=(5, 4))
+ax.plot(x, y, color="tab:green")
+ax.set_yscale("log")
+ax.set_ylim(5e-5, 2.0)
+ax.set_xticks(range(0, 201, 50))
+save(
+    fig, "line_logneg", {"type": "line", "series": {"green": [x.tolist(), y.tolist()]}}
+)
+
 with open(os.path.join(OUT, "ground_truth.json"), "w") as f:
     json.dump(GT, f, indent=1)
 print(f"wrote {len(GT)} synthetic PDFs + ground_truth.json to {OUT}")

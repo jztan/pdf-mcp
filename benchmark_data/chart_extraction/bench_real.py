@@ -68,6 +68,13 @@ CASES = [
     # 10 declines: y-axis has 2 composite N x 10^k labels)
     ("2203.15556", 5),  # Chinchilla IsoFLOP: crossing envelope declines;
     # 2 tractable panels emit (adjudicated v6)
+    # log-exponent wrong-emit class (2026-07-15 sweep; see RESULTS.md):
+    ("1608.03983", 2),  # SGDR "Learning rate" 10^-4..10^0 — kerned-overlap
+    # exponents; must EMIT with a log y-axis (was linear [-4,0] wrong-emit)
+    ("2010.14701", 22),  # Henighan Fig 16 — vector-drawn exponent minus;
+    # must DECLINE every panel (was 10^-6 -> 10^6 sign-dropped wrong-emit)
+    ("1406.6799", 7),  # MATLAB 12-panel, TYPED negative-decade log x
+    # (10^-12..10^-9); must EMIT — guards must not false-decline typed signs
 ]
 
 # issue-#23 samples that cannot be auto-fetched (bot-walled / proprietary —
@@ -195,7 +202,7 @@ def run():
             continue
         run_case(name, pg, pdf)
     print(
-        "\nWRONG-EMIT (uncaught by gates): 0 as of v5 — "
+        "\nWRONG-EMIT (uncaught by gates): 0 as of v6 — "
         "adjudicated manually against renders; see RESULTS.md"
     )
 

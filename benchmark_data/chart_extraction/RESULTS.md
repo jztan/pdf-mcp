@@ -441,3 +441,61 @@ The space of exponent typographies is unbounded and renderer-specific, so the
 backbone should be robust DECLINE; correct reads (unicode-minus/overlap) are
 enhancements on top, never the primary defense. Still held experimental; the
 above is a scoping verdict, not an implementation.
+
+## Implemented: log-exponent read-fix + unreadable-ticks decline guard (2026-07-15, v6)
+
+The staged plan from the scoping section, implemented and validated:
+
+1. **Pairing-gate fix (sub-case A, read).** `superscript_powers` accepts a
+   kerned base/exponent overlap down to −2pt (was 0). SGDR's "Learning rate"
+   axis now reads `log [1e-4, 1.0]` (was the linear `[-4, 0]` wrong-emit).
+   Loosening exposed a second latent bug the original 0-floor had masked:
+   x-overlap with NO vertical bound let an x-tick "-3" pair with body text
+   88pt below it (2607.08500 p25, bogus `2^-3` ate the tick and broke a
+   genuinely-linear [-3,3] axis). Fixed with a vertical-bands-overlap gate —
+   a superscript sits BESIDE its base.
+2. **Unreadable-ticks decline guard (sub-case B, per-panel).** Two signals on
+   each calibrated axis's own ticks: (a) *vector-minus* — an hrule bar inside
+   a recovered `10^k` tick's bbox at superscript height (one hit falsifies the
+   axis sign); (b) *orphan exponents* — a linear calibration whose ticks sit
+   at raised-exponent geometry immediately right of a larger unpaired
+   `10`/`2` base. Fires per-panel, so multi-panel pages keep their good
+   panels. Henighan Fig 16 (and Fig 8, p12) now decline with
+   "tick label sign is drawn, not typed".
+
+**Adversarial review pass (required for trust-contract code) caught two
+false-decline defects in the first guard cut, both fixed before the final
+validation:** (1) the vector-minus bar test had no LOWER vertical bound, so
+dashed curves / minor tick marks in the same x-column far above a positive
+`10^k` label falsely declined all-positive axes (Henighan Fig 7 p12,
+Chinchilla p23, 7 panels corpus-wide) — the bar must sit INSIDE the tick's
+own bbox; (2) the guard fired even on ticks whose minus was TYPED and parsed
+(`raw="10^-12"`) — a parsed sign is proof the drawn-minus signal doesn't
+apply (1406.6799 p7's typed 10^-12..10^-9 axes now READ correctly instead of
+declining). The review also exposed an adjudication error in the interim
+notes: Henighan p12_c1 was Fig 7's positive fourth panel (a good emit the
+unbounded guard had falsely declined), not a Fig 8 wrong-emit.
+
+**Final validation — full re-sweep of all three corpora (58 papers, ~330
+emits), every flip adjudicated against renders:**
+
+| Corpus | pre→post emits | dropped | new |
+|---|---|---|---|
+| ML (11 papers) | 130→131 | 4 — the Henighan Fig 16 wrong-emits (10^-6 read as 10^6) | 5 — all correct (recovered pgfplots panels: factor-4 log y `[0.05,3.2]`, correct `[0,70]` y-ranges) |
+| econ/bio (36) | 174→175 | 0 | 1 — correct (eigenmodes panel) |
+| non-ML local (38) | 27→30 | 0 | 3 — all correct (MATLAB panels: typed negative-decade log axes `[1e-12,1e-9]` now read; N∈[2,10] linear) |
+
+Zero good emits lost; guard false-positive rate 0 after the review fixes
+(one 1406.6799 panel declines via the orphan-exponent signal — correct: its
+y-ticks failed to pair and would have calibrated linear). New synthetic
+archetype `line_logneg` (10^-4..10^0 log y, typed minus) pins the read;
+real-PDF regressions for SGDR (reads log), Henighan p22 (declines,
+vector-minus reason), and 2607.08500 p25 (the vertical-overlap collateral
+case) added to the fast suite (skip when corpus absent) and to `bench_real`
+CASES. `CHART_EXTRACTION_VERSION` → 6.
+
+Residual honesty: the decline guard covers the two *known* mechanisms.
+Exponent typography remains unbounded (outlined glyphs, unusual kerning,
+non-matplotlib renderers), so the class is *mitigated*, not closed — the
+posture stays exact-or-decline with the sweep loop as the detector of the
+next variant.

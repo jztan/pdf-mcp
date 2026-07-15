@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 5
+CHART_EXTRACTION_VERSION = 6
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -77,18 +77,20 @@ def get_words(page: Any) -> Any:
     return page.get_text("words")
 
 
-def superscript_powers(page: Any) -> list[dict[str, Any]]:
-    """Recover ``base^exponent`` tick labels typeset with a raised superscript.
+def _power_pairs(
+    page: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Pair ``base^exponent`` tick labels; also report the bases that failed.
 
-    Handles bases 10 and 2 (see the base filter below) — powers-of-two axes
-    (batch size, sequence length, dataset size) are ubiquitous in ML and, read
-    as plain text, `2^19` glues to "219", which then fits a *linear* axis at
-    r2=1.0 and silently emits a table off by orders of magnitude and wrong in
-    scale type (verified wrong-emit on Hestness 1712.00409 Fig 1). The base and
-    exponent are separate spans (exponent smaller + baseline-raised), so `b^k`
-    is recoverable geometrically the same way `10^k` is.
+    Returns (paired, orphan_bases). ``paired`` entries are the recovered
+    powers (see superscript_powers). ``orphan_bases`` are '10'/'2' spans that
+    paired with nothing — meaningless globally (every linear-axis '10' tick
+    and body-text '2' lands here), but meaningful to the per-axis unreadable-
+    ticks guard, which only consults them when one sits immediately left of a
+    calibrated tick at raised-exponent geometry.
     """
     out: list[dict[str, Any]] = []
+    orphans: list[dict[str, Any]] = []
     raw = page.get_text("rawdict")
     spans: list[dict[str, Any]] = []
     for block in raw.get("blocks", []):
@@ -107,13 +109,25 @@ def superscript_powers(page: Any) -> list[dict[str, Any]]:
         # 2605.06546 p20. A base-16/base-e chart would be a sample-driven add.
         if a["t"] not in ("10", "2"):
             continue
+        paired = False
         for b in spans:
             if b is a or not re.fullmatch(r"-?\d{1,2}", b["t"]):
                 continue
             if (
                 b["size"] < 0.85 * a["size"]
-                and 0 <= b["bb"][0] - a["bb"][2] < 3
+                # gap lower bound is -2, not 0: renderers kern the raised
+                # exponent to slightly OVERLAP the base (SGDR 1608.03983:
+                # exp.x0 - base.x1 = -0.007), and a 0-floor rejects the pair,
+                # leaving orphaned exponents that calibrate as a bogus linear
+                # axis ("Learning rate" 10^-4..10^0 emitted as [-4, 0]).
+                and -2 <= b["bb"][0] - a["bb"][2] < 3
                 and b["bb"][1] < a["bb"][1] + 0.5
+                # vertical bands must OVERLAP: a superscript sits beside its
+                # base (top raised, bottom still below the base's top). The
+                # -2 x-overlap alone let an x-tick pair with unrelated text
+                # 88pt below it (2607.08500 p25: tick "-3" + a body-text "2"
+                # -> bogus 2^-3 that ate the tick and broke the axis).
+                and b["bb"][3] > a["bb"][1]
             ):
                 x0, y0 = a["bb"][0], min(a["bb"][1], b["bb"][1])
                 x1, y1 = b["bb"][2], max(a["bb"][3], b["bb"][3])
@@ -126,8 +140,25 @@ def superscript_powers(page: Any) -> list[dict[str, Any]]:
                         "raw": f"{a['t']}^{b['t']}",
                     }
                 )
+                paired = True
                 break
-    return out
+        if not paired:
+            orphans.append(a)
+    return out, orphans
+
+
+def superscript_powers(page: Any) -> list[dict[str, Any]]:
+    """Recover ``base^exponent`` tick labels typeset with a raised superscript.
+
+    Handles bases 10 and 2 (see the base filter in _power_pairs) — powers-of-
+    two axes (batch size, sequence length, dataset size) are ubiquitous in ML
+    and, read as plain text, `2^19` glues to "219", which then fits a *linear*
+    axis at r2=1.0 and silently emits a table off by orders of magnitude and
+    wrong in scale type (verified wrong-emit on Hestness 1712.00409 Fig 1).
+    The base and exponent are separate spans (exponent smaller + baseline-
+    raised), so `b^k` is recoverable geometrically the same way `10^k` is.
+    """
+    return _power_pairs(page)[0]
 
 
 def numeric_tokens(page: Any) -> list[dict[str, Any]]:
@@ -258,6 +289,7 @@ def tick_series(g: list[dict[str, Any]], ck: str) -> dict[str, Any] | None:
             "px": px,
             "v": v,
             "r2": float(r2),
+            "toks": g,
         }
     if (v > 0).all():
         lv = np.log10(v)
@@ -273,6 +305,7 @@ def tick_series(g: list[dict[str, Any]], ck: str) -> dict[str, Any] | None:
                 "px": px,
                 "v": v,
                 "r2": float(r2),
+                "toks": g,
             }
     return None
 
@@ -772,6 +805,104 @@ def _x_axis_title(page: Any, panel: dict[str, Any]) -> str | None:
     return best[1] if best else None
 
 
+def _hrule_bars(draws: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    """Centers of thin short horizontal filled bars in the page drawings.
+
+    matplotlib's mathtext draws the MINUS of a superscript exponent as a rule
+    (a filled bar), not a glyph — `10^-6` has zero minus characters in the
+    text layer (Henighan 2010.14701 Fig 16). These bars are how that
+    invisible sign is detected.
+    """
+    bars: list[tuple[float, float]] = []
+    for d in draws:
+        xs: list[float] = []
+        ys: list[float] = []
+        for it in d["items"]:
+            for p in it[1:]:
+                if hasattr(p, "x"):
+                    xs.append(p.x)
+                    ys.append(p.y)
+                elif hasattr(p, "x0"):
+                    xs += [p.x0, p.x1]
+                    ys += [p.y0, p.y1]
+        if not xs:
+            continue
+        w, h = max(xs) - min(xs), max(ys) - min(ys)
+        if 0.6 < w < 4.5 and h < 1.0:
+            bars.append(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2))
+    return bars
+
+
+def _ticks_unreadable(
+    ax: dict[str, Any],
+    bars: list[tuple[float, float]],
+    orphan_bases: list[dict[str, Any]],
+) -> str | None:
+    """Return a reason when an axis's tick labels look like base^exponent
+    typography the reader could not resolve — the calibration would be wrong
+    in sign or scale. None when the ticks are trustworthy.
+
+    Two per-axis signals (scoped on real wrong-emits, see RESULTS.md):
+
+    - vector-minus: a recovered `10^k` tick has an hrule bar inside its bbox
+      at superscript height. The exponent's minus was drawn, not typed, so
+      the recovered value is silently positive (`10^-6` -> `10^6`); ONE such
+      tick already falsifies the axis.
+    - orphan exponent: a LINEAR calibration where the ticks sit immediately
+      right of a larger unpaired '10'/'2' span at raised-exponent geometry —
+      the "values" are exponents whose base failed to pair (kerning/size
+      quirks beyond what the pairing gate accepts).
+    """
+    toks = ax.get("toks") or []
+    if not toks:
+        return None
+    for t in toks:
+        raw = t.get("raw", "")
+        # only unsigned recovered powers: a parsed minus ("10^-12") is PROOF
+        # the sign was typed — a drawn minus leaves zero minus glyphs, so the
+        # vector-minus signal cannot apply (falsely declined 1406.6799 p7,
+        # whose typed 10^-12..10^-9 axes read correctly).
+        if "^" not in raw or "^-" in raw:
+            continue
+        bb = t["bb"]
+        mid_y = (bb[1] + bb[3]) / 2
+        if any(
+            # the bar must sit INSIDE the tick's own bbox at superscript
+            # height — Henighan's drawn minus is ~2pt below the bbox top.
+            # Without the lower bound, dashed curves / minor tick marks far
+            # ABOVE the label (same x-column) falsely declined all-positive
+            # axes (2010.14701 p12 Fig 7, 2203.15556 p23).
+            bb[0] - 0.5 < bx < bb[2] + 0.5 and bb[1] - 0.5 < by < mid_y + 0.5
+            for bx, by in bars
+        ):
+            return (
+                "tick label sign is drawn, not typed (vector minus on a "
+                "superscript exponent) — axis sign unreadable"
+            )
+    if ax["scale"] == "linear":
+        n_exp = 0
+        for t in toks:
+            bb = t["bb"]
+            h = bb[3] - bb[1]
+            for b in orphan_bases:
+                obb = b["bb"]
+                if (
+                    -4 <= bb[0] - obb[2] < 4  # immediately right of the base
+                    and (obb[3] - obb[1]) > 1.15 * max(h, 1e-6)  # base larger
+                    and bb[3] < obb[3] - 1  # tick raised above base bottom
+                    and bb[1] < obb[3]
+                    and bb[3] > obb[1]  # vertical bands overlap
+                ):
+                    n_exp += 1
+                    break
+        if n_exp >= 2 and n_exp * 2 >= len(toks):
+            return (
+                "tick labels are raised exponents of an unpaired '10'/'2' "
+                "base — axis is a mis-read log scale"
+            )
+    return None
+
+
 def _title_says_log(title: str | None) -> bool:
     """True when an axis title DECLARES a log scale — matches "log scale",
     "log-scale", "logarithmic", "(log)". Deliberately does NOT match a logged
@@ -1154,6 +1285,9 @@ def extract_charts(
         res["reasons"].append("no chart signature (no valid tick-series axes)")
         return res
     draws = page.get_drawings()
+    # page-level context for the unreadable-ticks guard (computed once)
+    _bars = _hrule_bars(draws)
+    _, _orphan_bases = _power_pairs(page)
     for pi, panel in enumerate(panels):
         xa, ya = panel["xa"], panel["ya"]
         masks = legend_masks(page, panel)
@@ -1239,6 +1373,28 @@ def extract_charts(
                 "title": titles.get("right"),
                 "range": [float(ya_r["v"].min()), float(ya_r["v"].max())],
             }
+        # unreadable-ticks guard: decline when an axis's tick labels are
+        # base^exponent typography the reader could not resolve (vector-drawn
+        # minus, or orphaned exponents of an unpaired base). The calibration
+        # fits at r2~1.0 either way, so without this check the chart emits a
+        # confidently-wrong axis (Henighan 2010.14701: 10^-6 read as 10^6).
+        _ax_series = [("x", xa), ("y", ya)]
+        if panel["ya_left"] and panel["ya_right"]:
+            _ax_series.append(("right y", panel["ya_right"]))
+        _bad = [
+            (name, why)
+            for name, s in _ax_series
+            for why in [_ticks_unreadable(s, _bars, _orphan_bases)]
+            if why
+        ]
+        if _bad:
+            name, why = _bad[0]
+            chart["chart_type"] = "declined"
+            chart["decline_reason"] = f"{name}-axis: {why}"
+            chart["diagnostics"]["notes"].append(chart["decline_reason"])
+            res["charts"].append(chart)
+            continue
+
         # contradiction guard: an axis whose TITLE declares a log scale but
         # which calibrated as linear means the tick labels were mis-read
         # (e.g. a base^exp superscript typography we couldn't recover) — the

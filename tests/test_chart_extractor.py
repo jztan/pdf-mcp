@@ -535,6 +535,74 @@ def test_base2_log_axis_recovered_not_read_as_linear():
     assert xa["range"][0] == 2**19 and xa["range"][1] == 2**27
 
 
+def test_negative_decade_log_axis_recovered_not_linear():
+    """Negative-decade superscript ticks (10^-4..10^0, matplotlib mathtext)
+    must read as a LOG axis. Two real wrong-emits in this class: SGDR
+    1608.03983 ("Learning rate" emitted as linear [-4, 0] — the kerned
+    exponent OVERLAPS its base by ~0.007pt and the pairing gate's 0-floor
+    rejected the pair) and Henighan 2010.14701 (vector-drawn minus, declines).
+    The committed fixture has a typed minus, so the correct outcome is a READ;
+    the invariant either way is: never a linear [-4, 0] axis."""
+    doc = pymupdf.open(SYN / "line_logneg.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    ch = result["charts"][0]
+    assert ch["chart_type"] != "declined", ch.get("decline_reason")
+    ya = ch["y_axis"]
+    assert ya["scale"] == "log"
+    assert ya["range"] == [0.0001, 1.0]
+
+
+def test_superscript_pairing_requires_vertical_overlap():
+    """The -2pt overlap tolerance must NOT pair vertically-distant spans: on
+    2607.08500 p25 an x-tick "-3" paired with a body-text "2" sitting 88pt
+    BELOW it (bogus 2^-3), eating the tick and breaking a genuinely-linear
+    [-3, 3] axis. A superscript's vertical band overlaps its base's."""
+    pdf = REAL / "2607.08500.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    paired, _ = chart_extractor._power_pairs(doc[24])
+    result = chart_extractor.extract_charts(doc, 24)
+    doc.close()
+    for s in paired:
+        bb = s["bb"]
+        assert bb[3] - bb[1] < 20, f"vertically-smeared pair {s['raw']} {bb}"
+    ranges = [c["x_axis"]["range"] for c in result["charts"]]
+    assert ranges == [[-3.0, 3.0], [-3.0, 3.0]], ranges
+
+
+def test_sgdr_learning_rate_axis_reads_log():
+    """Real-PDF regression for the pairing-gate fix (kerned overlap)."""
+    pdf = REAL / "1608.03983.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 1)
+    doc.close()
+    ch = result["charts"][0]
+    assert ch["chart_type"] != "declined"
+    assert ch["y_axis"]["scale"] == "log"
+    assert ch["y_axis"]["range"] == [0.0001, 1.0]
+
+
+def test_henighan_vector_minus_axis_declines():
+    """Real-PDF regression for the unreadable-ticks guard: Fig 16's x-axis is
+    10^-6..10^1 PF-days with the exponent minus drawn as an hrule (not a
+    glyph). Reading it sign-drops to 10^6 (a confirmed silent wrong-emit) —
+    every panel on the page must DECLINE, with the vector-minus reason."""
+    pdf = REAL / "2010.14701.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 21)
+    doc.close()
+    assert result["charts"], "page must still produce (declined) charts"
+    for ch in result["charts"]:
+        assert ch["chart_type"] == "declined", ch["chart_id"]
+        assert "sign is drawn" in ch.get("decline_reason", "")
+
+
 def test_title_says_log_predicate():
     f = chart_extractor._title_says_log
     assert f("Number of Tokens (Log-scale)")

@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_render_pages`. Each series carries axis titles/range, provenance
   (`resolved_by`), and honesty flags (`multivalued`, `downsampled`).
   Benchmarked at 0 wrong-emits across the synthetic + real regression suite,
-  including out-of-sample validation on fresh arXiv PDFs
+  including out-of-sample validation on 58 fresh arXiv papers spanning
+  ML / econ / finance / bio / physics (~330 emitted charts adjudicated
+  against renders); log axes with superscript-exponent tick labels
+  (`10⁻⁴…10⁰`, `2¹⁹…2²⁷`) read correctly, and axes whose exponent sign is
+  drawn rather than typed decline instead of mis-reading
   ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
 - `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
   signal (~10ms/page) so agents notice extractable charts

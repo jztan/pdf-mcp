@@ -586,21 +586,43 @@ def test_sgdr_learning_rate_axis_reads_log():
     assert ch["y_axis"]["range"] == [0.0001, 1.0]
 
 
-def test_henighan_vector_minus_axis_declines():
-    """Real-PDF regression for the unreadable-ticks guard: Fig 16's x-axis is
-    10^-6..10^1 PF-days with the exponent minus drawn as an hrule (not a
-    glyph). Reading it sign-drops to 10^6 (a confirmed silent wrong-emit) —
-    every panel on the page must DECLINE, with the vector-minus reason."""
+def test_henighan_drawn_minus_axis_reads_negative():
+    """Stage-3 drawn-minus READING: Fig 16's x-axis is 10^-6..10^1 PF-days
+    with the exponent minus drawn as an hrule (not a glyph). v6-v8 declined
+    (detect-only); v9 reads the bar in the base->exponent gap and negates the
+    exponent — the axis must emit as log [1e-06, 10], never the sign-dropped
+    [1, 1e6] (the original catastrophic wrong-emit) and no longer a decline."""
     pdf = REAL / "2010.14701.pdf"
     if not pdf.exists():
         pytest.skip("real corpus not fetched")
     doc = pymupdf.open(pdf)
     result = chart_extractor.extract_charts(doc, 21)
     doc.close()
-    assert result["charts"], "page must still produce (declined) charts"
+    emitting = [c for c in result["charts"] if c.get("curves")]
+    assert emitting, "Fig 16 panels must emit now"
+    for ch in emitting:
+        assert ch["x_axis"]["scale"] == "log"
+        # each panel's compute axis starts in the negative decades (10^-6 to
+        # 10^-4 depending on panel) — a sign-dropped read starts >= 1
+        assert ch["x_axis"]["range"][0] < 1.0, ch["x_axis"]["range"]
+        assert ch["x_axis"]["range"][1] <= 100.0
+
+
+def test_grazing_error_bar_cap_does_not_negate():
+    """The drawn-minus reader must not negate a POSITIVE tick because a data
+    element grazes the tick bbox (2607.06360 p20: error-bar cap 0.2pt above
+    a 10^36 label — the strictly-inside band excludes it)."""
+    pdf = REAL / "2607.06360.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 19)
+    doc.close()
     for ch in result["charts"]:
-        assert ch["chart_type"] == "declined", ch["chart_id"]
-        assert "sign is drawn" in ch.get("decline_reason", "")
+        for ax in (ch["x_axis"], ch["y_axis"]):
+            rng = ax.get("range")
+            if rng and ax["scale"] == "log":
+                assert rng[0] >= 1.0, f"negated a positive axis: {rng}"
 
 
 def test_sparse_marker_line_recovered():

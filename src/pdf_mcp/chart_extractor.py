@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 8
+CHART_EXTRACTION_VERSION = 9
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -91,6 +91,12 @@ def _power_pairs(
     """
     out: list[dict[str, Any]] = []
     orphans: list[dict[str, Any]] = []
+    # stage-3 drawn-minus reading: matplotlib mathtext (and some journal
+    # typesetters) draw the exponent's minus as a RULE, not a glyph. The
+    # bar's presence in the base->exponent gap at superscript height is a
+    # precise signal (0 false positives corpus-wide as a decline trigger;
+    # see RESULTS.md v6-v8) — precise enough to READ: negate the exponent.
+    bars = _hrule_bars(page.get_drawings())
     raw = page.get_text("rawdict")
     spans: list[dict[str, Any]] = []
     for block in raw.get("blocks", []):
@@ -113,14 +119,15 @@ def _power_pairs(
         for b in spans:
             if b is a or not re.fullmatch(r"-?\d{1,2}", b["t"]):
                 continue
-            if (
+            gap = b["bb"][0] - a["bb"][2]
+            geom_ok = (
                 b["size"] < 0.85 * a["size"]
                 # gap lower bound is -2, not 0: renderers kern the raised
                 # exponent to slightly OVERLAP the base (SGDR 1608.03983:
                 # exp.x0 - base.x1 = -0.007), and a 0-floor rejects the pair,
                 # leaving orphaned exponents that calibrate as a bogus linear
                 # axis ("Learning rate" 10^-4..10^0 emitted as [-4, 0]).
-                and -2 <= b["bb"][0] - a["bb"][2] < 3
+                and -2 <= gap < 9
                 and b["bb"][1] < a["bb"][1] + 0.5
                 # vertical bands must OVERLAP: a superscript sits beside its
                 # base (top raised, bottom still below the base's top). The
@@ -128,16 +135,41 @@ def _power_pairs(
                 # 88pt below it (2607.08500 p25: tick "-3" + a body-text "2"
                 # -> bogus 2^-3 that ate the tick and broke the axis).
                 and b["bb"][3] > a["bb"][1]
-            ):
+            )
+            if geom_ok:
+                # drawn-minus test: a thin bar in the base->exponent gap at
+                # superscript height (strictly below the exponent's top edge
+                # +0.2 — a grazing error-bar cap 0.2pt ABOVE the bbox must
+                # not negate a positive tick; 2607.06360 p20). Only for
+                # unsigned exponents: a typed minus is already in b["t"].
+                exp_txt = b["t"]
+                mid_y = (b["bb"][1] + b["bb"][3]) / 2
+                negated = False
+                if not exp_txt.startswith("-"):
+                    negated = any(
+                        a["bb"][2] - 0.6 < bx < b["bb"][0] + 0.6
+                        and b["bb"][1] + 0.2 < by < mid_y + 1.0
+                        for bx, by in bars
+                    )
+                if gap >= 3 and not negated:
+                    # a wide gap is only a superscript pair when the drawn
+                    # minus explains the space (A&A family, gap ~4.6pt);
+                    # otherwise adjacency is coincidental — do not pair.
+                    continue
+                val = (
+                    float(a["t"]) ** -float(exp_txt)
+                    if negated
+                    else float(a["t"]) ** float(exp_txt)
+                )
                 x0, y0 = a["bb"][0], min(a["bb"][1], b["bb"][1])
                 x1, y1 = b["bb"][2], max(a["bb"][3], b["bb"][3])
                 out.append(
                     {
-                        "v": float(a["t"]) ** float(b["t"]),
+                        "v": val,
                         "cx": (x0 + x1) / 2,
                         "cy": (y0 + y1) / 2,
                         "bb": (x0, y0, x1, y1),
-                        "raw": f"{a['t']}^{b['t']}",
+                        "raw": f"{a['t']}^{'-' if negated else ''}{exp_txt}",
                     }
                 )
                 paired = True
@@ -278,7 +310,13 @@ def tick_series(g: list[dict[str, Any]], ck: str) -> dict[str, Any] | None:
         return None
     if dpx.max() - dpx.min() > 0.35 * max(abs(dpx.mean()), 1):
         return None
-    if abs(dv.max() - dv.min()) <= 0.25 * max(abs(dv.mean()), 1e-9):
+    # dv-uniformity floor must be SCALE-AWARE: with an absolute 1e-9 floor,
+    # any micro-magnitude tick set (astro fluxes 1e-15..1e-11) trivially
+    # passes as "uniform" and calibrates LINEAR on a log axis — interpolated
+    # values silently wrong (caught adjudicating 2607.06360 p19 after the
+    # drawn-minus reader unlocked it).
+    _floor = max(1e-9 * float(np.abs(v).max()), 1e-30)
+    if abs(dv.max() - dv.min()) <= 0.25 * max(abs(dv.mean()), _floor):
         A = np.polyfit(px, v, 1)
         res = v - (A[0] * px + A[1])
         r2 = 1 - np.sum(res**2) / max(np.sum((v - v.mean()) ** 2), 1e-12)

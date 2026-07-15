@@ -704,3 +704,31 @@ astro/optics panels. 4 dropped emits are all safe-direction declines
 (multivalued / out-of-range). The 1807 dual-axis benchmark error IMPROVED
 2.2% → 0.8% (previously-masked curve vertices restored). Suites 1034 passed;
 synthetic 0/17; `CHART_EXTRACTION_VERSION` → 8.
+
+## Implemented: drawn-minus READING — stage 3 of the log-exponent plan (2026-07-15, v9)
+
+The deferred stage-3: instead of declining, `_power_pairs` now READS a
+vector-drawn exponent minus — a thin bar in the base→exponent gap at
+superscript height (strictly inside the exponent band, +0.2pt top margin so
+grazing error-bar caps never negate a positive tick) negates the exponent.
+Wide gaps (3–9pt, the A&A family where the drawn minus occupies the space)
+pair ONLY when the bar is present; typed-minus exponents never double-negate.
+The detect-and-decline guards remain as backstops for unpaired geometries.
+
+Validation: Henighan Fig 16 — the ORIGINAL catastrophic wrong-emit — now
+reads x = log [1e-06, 10] with values matching the figure (first datum
+1.79e-6 PF-days / 1.51e4 params); A&A flux axes read (10^-11..10^5,
+10^-15..10^-11). 27 decline→emit conversions across the corpus, ZERO drops,
+all adjudicated (incl. a genuine 21-decade axis, 10^-16..10^5 every 3
+decades). 2607.08082 stays declined (partial negation — safe direction).
+Negative controls unchanged: positive decades, base-2, typed minus,
+grazing-cap page. Regression tests updated (Henighan now must READ; new
+grazing-cap must-not-negate test).
+
+Adjudicating the conversions caught a second latent bug: `tick_series`'s
+dv-uniformity floor was ABSOLUTE (1e-9), so micro-magnitude tick sets
+(fluxes 1e-15..1e-11) trivially passed as "uniform" and calibrated LINEAR on
+log axes — interpolated values silently wrong. Floor is now scale-aware
+(1e-9 x |v|max); tiny-decimal genuine linear axes (0.0005..0.0025) unaffected.
+
+Suites 1043 passed; synthetic 0/17; `CHART_EXTRACTION_VERSION` → 9.

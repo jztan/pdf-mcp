@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 10
+CHART_EXTRACTION_VERSION = 11
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -1939,6 +1939,21 @@ def extract_charts(
                     )
             if bad:
                 chart["diagnostics"]["declined_multivalued"] = len(bad)
+                if good:
+                    # partial-capture honesty (consumer round 3): on dense
+                    # multi-curve figures the separable minority (often a
+                    # reference/fit line) emits while the actual result
+                    # curves drop as multivalued — a bare "ok" then reads as
+                    # "extracted the figure". Say what is missing, loudly.
+                    # NB: each dropped item is a same-style CLOUD that may
+                    # contain MANY visual curves — never state a curve count.
+                    chart["diagnostics"]["notes"].append(
+                        f"partial capture: {len(bad)} same-style line "
+                        "cloud(s) with multiple overlapping curves could "
+                        "not be separated and are NOT in the table — the "
+                        "figure likely shows more curves than emitted; "
+                        "check the render"
+                    )
             if not good and bad:
                 chart["chart_type"] = "declined"
                 chart["decline_reason"] = (

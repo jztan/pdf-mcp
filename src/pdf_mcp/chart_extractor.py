@@ -28,13 +28,14 @@ import hashlib
 import json
 import re
 import collections
+import math
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 9
+CHART_EXTRACTION_VERSION = 10
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -46,7 +47,7 @@ def hints_hash(hints: dict[str, str] | None) -> str:
 
 
 # a drawing style key: (stroke_color, fill_color, line_width)
-Style = tuple[Any, Any, float]
+Style = tuple[Any, Any, float, Any]
 
 
 def _sig(v: Any, n: int = 4) -> float:
@@ -63,11 +64,18 @@ def _style_dict(style_key: tuple[Any, ...]) -> dict[str, Any]:
     float}. Accepts either the 3-tuple (stroke, fill, width) used
     internally by line/bar series, or the 2-tuple (color, size) used by
     scatter marker grouping."""
-    if len(style_key) == 3:
+    dash = None
+    if len(style_key) >= 3:
         color, width = style_key[0], style_key[2]
+        if len(style_key) >= 4:
+            dash = style_key[3]
     else:
         color, width = style_key
-    return {"color": list(color) if color else None, "width": float(width)}
+    return {
+        "color": list(color) if color else None,
+        "width": float(width),
+        "dash": dash,
+    }
 
 
 # ---------------- text/tick helpers (from v2, proven) ----------------
@@ -356,10 +364,27 @@ def apply_ax(ax: dict[str, Any], p: Any) -> Any:
 # ---------------- drawing helpers ----------------
 
 
+def _dash_key(d: dict[str, Any]) -> str | None:
+    """Normalized dash pattern, None for solid. Part of the style key: a
+    solid data curve and its same-color DASHED power-law fit are different
+    series — keyed without the dash they merged into one interleaved
+    "sawtooth" chimera that traced neither real curve and, when the fit ran
+    past the axis corner, dragged the whole panel into an out-of-range
+    decline (consumer-found on Henighan Fig 16). Numbers are rounded so
+    float noise between segments of one curve cannot split it."""
+    raw = d.get("dashes")
+    if not raw or raw in ("[] 0", "[]0"):
+        return None
+    nums = re.findall(r"-?\d+(?:\.\d+)?", str(raw))
+    if not nums or all(float(n) == 0 for n in nums):
+        return None
+    return " ".join(f"{float(n):.1f}" for n in nums[:4])
+
+
 def draw_style(d: dict[str, Any]) -> Style:
     stroke = tuple(round(x, 2) for x in d["color"]) if d.get("color") else None
     fill = tuple(round(x, 2) for x in d["fill"]) if d.get("fill") else None
-    return (stroke, fill, round(d.get("width") or 0, 2))
+    return (stroke, fill, round(d.get("width") or 0, 2), _dash_key(d))
 
 
 def path_pts(d: dict[str, Any]) -> list[tuple[float, float]]:
@@ -1521,18 +1546,33 @@ def in_range_series(
     yr: tuple[float, float],
     frac: float = 0.15,
     need: float = 0.7,
+    xlog: bool = False,
+    ylog: bool = False,
 ) -> bool:
     """keep only series where >=need fraction of points fall within the
     tick range (+/- margin). Marginal-distribution bars / decorations that
     extend into the plot margins map outside the axis range and are dropped."""
     if not pts:
         return False
-    xm = frac * max(xr[1] - xr[0], 1e-9)
-    ym = frac * max(yr[1] - yr[0], 1e-9)
+
+    def _within(v: float, lo: float, hi: float, is_log: bool) -> bool:
+        # log axes need the margin in DECADES: a linear +/-15% margin is
+        # microscopic at the top of a log range (a curve legitimately
+        # running past the last tick to the panel corner — 0.5 decades on
+        # Henighan p22 Text-to-Image — read as "outside" and the whole
+        # panel false-declined; consumer-found) and unbounded at the bottom.
+        if is_log and lo > 0 and hi > 0:
+            if v <= 0:
+                return False
+            m = frac * max(math.log10(hi) - math.log10(lo), 1e-9)
+            return math.log10(lo) - m <= math.log10(v) <= math.log10(hi) + m
+        m = frac * max(hi - lo, 1e-9)
+        return lo - m <= v <= hi + m
+
     ok = sum(
         1
         for x, y in pts
-        if xr[0] - xm <= x <= xr[1] + xm and yr[0] - ym <= y <= yr[1] + ym
+        if _within(x, xr[0], xr[1], xlog) and _within(y, yr[0], yr[1], ylog)
     )
     return ok / len(pts) >= need
 
@@ -1956,12 +1996,18 @@ def extract_charts(
         # tick range (catches marginal-distribution bars, margin decorations)
         xr, yr = _range(xa), _range(ya)
         yr_right = _range(panel["ya_right"]) if panel["ya_right"] else yr
+        _xlog = xa["scale"] == "log"
+        _ylog = ya["scale"] == "log"
+        _ylog_r = (panel["ya_right"] or ya)["scale"] == "log"
         dropped = 0
         if "curves" in chart:
             kept = []
             for c in chart["curves"]:
-                cyr = yr_right if c.get("axis") == "right" else yr
-                if c.get("points") and not in_range_series(c["points"], xr, cyr):
+                right = c.get("axis") == "right"
+                cyr = yr_right if right else yr
+                if c.get("points") and not in_range_series(
+                    c["points"], xr, cyr, xlog=_xlog, ylog=_ylog_r if right else _ylog
+                ):
                     dropped += 1
                     continue
                 kept.append(c)
@@ -1972,7 +2018,7 @@ def extract_charts(
                 kept = []
                 for s in chart[fld]:
                     pts = s.get(key) or s.get("points")
-                    if pts and not in_range_series(pts, xr, yr):
+                    if pts and not in_range_series(pts, xr, yr, xlog=_xlog, ylog=_ylog):
                         dropped += 1
                         continue
                     kept.append(s)

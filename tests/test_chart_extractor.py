@@ -350,7 +350,8 @@ def test_style_is_uniform_dict_shape_across_kinds():
 
     def check_style(style):
         assert isinstance(style, dict)
-        assert set(style) == {"color", "width"}
+        assert set(style) == {"color", "width", "dash"}
+        assert style["dash"] is None or isinstance(style["dash"], str)
         assert style["color"] is None or (
             isinstance(style["color"], list) and len(style["color"]) == 3
         )
@@ -763,6 +764,32 @@ def test_not_a_chart_answer_is_terminal():
     assert not r2.get("questions"), "not_a_chart must not re-ask"
     assert all(c["chart_type"] == "declined" for c in r2["charts"])
     assert any("not a chart" in c.get("decline_reason", "") for c in r2["charts"])
+
+
+def test_same_color_data_and_fit_do_not_merge():
+    """Consumer-found (v10): a solid data curve and its same-color DASHED
+    power-law fit merged into one interleaved sawtooth series that traced
+    neither real curve (multivalued:false — nothing warned the caller), and
+    the merged series' beyond-axis fit tail false-declined a clean panel.
+    Dash pattern is now part of the style key and surfaced as style.dash;
+    log axes get decade-based range margins. Henighan Fig 16: emitted curves
+    must be monotone in y (scaling-law data/fits are), and the Text-to-Image
+    panel must emit."""
+    pdf = REAL / "2010.14701.pdf"
+    if not pdf.exists():
+        pytest.skip("real corpus not fetched")
+    doc = pymupdf.open(pdf)
+    result = chart_extractor.extract_charts(doc, 21)
+    doc.close()
+    emitting = [c for c in result["charts"] if c.get("curves")]
+    assert len(emitting) >= 3, "Fig 16 panels (incl. Text-to-Image) must emit"
+    for ch in emitting:
+        for c in ch["curves"]:
+            assert "dash" in c["style"]
+            ys = [p[1] for p in c["points"]]
+            assert all(
+                ys[i] <= ys[i + 1] for i in range(len(ys) - 1)
+            ), f"interleaved data+fit sawtooth: {ys}"
 
 
 def test_title_says_log_predicate():

@@ -732,3 +732,24 @@ log axes — interpolated values silently wrong. Floor is now scale-aware
 (1e-9 x |v|max); tiny-decimal genuine linear axes (0.0005..0.0025) unaffected.
 
 Suites 1043 passed; synthetic 0/17; `CHART_EXTRACTION_VERSION` → 9.
+
+## Consumer round 2 fixes: dash-aware styles + log-aware range gate (2026-07-15, v10)
+
+The second external-consumer round (testing v9) verified all three historical
+repro cases fixed against renders, then found two defects on Henighan Fig 16:
+
+1. **Same-color data+fit merged into one interleaved series** — the solid
+   data curve and its dashed power-law fit share a color, and the style key
+   (color, fill, width) ignored dash. The merged "curve" was a sawtooth
+   tracing neither real curve, flagged multivalued:false. Fix: dash pattern
+   (normalized, float-noise-rounded) is part of the style key and surfaced
+   as `style.dash` (null = solid) so callers can tell data from fit.
+2. **False decline of a clean panel** — the merged series inherited the
+   fit's run past the last tick, and `in_range_series` computes margins in
+   LINEAR units, microscopic at the top of a log axis. Fix: decade-based
+   margins on log axes. Text-to-Image now emits data+fit separately.
+
+Post-fix: Fig 16 emits monotone data/fit pairs (sawtooth gone), the other
+chimera panel declines safely, SGDR/marginal-histogram/colorbar negative
+controls unchanged, suites 1044 passed, benches 0 wrong-emit.
+`CHART_EXTRACTION_VERSION` → 10 (style dict gains `dash`).

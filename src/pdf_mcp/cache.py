@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from pdf_mcp import content_trust
+from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -384,7 +385,32 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_renders_path
                     ON page_renders(file_path);
+
+                -- Chart-extraction results cache (issue #23)
+                CREATE TABLE IF NOT EXISTS page_charts (
+                    file_path                 TEXT    NOT NULL,
+                    page_num                  INTEGER NOT NULL,
+                    file_mtime                REAL    NOT NULL,
+                    hints_hash                TEXT    NOT NULL,
+                    max_points                INTEGER NOT NULL,
+                    chart_extraction_version  INTEGER NOT NULL,
+                    result_json               TEXT    NOT NULL,
+                    created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path, page_num, hints_hash, max_points)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_page_charts_path
+                    ON page_charts(file_path);
             """)
+
+            # page_charts: version-scoped invalidation — drop rows produced by
+            # an older chart-extraction algorithm so stale results never leak
+            # back out after a logic change (mirrors _EXTRACTION_VERSION for
+            # page_text, but scoped to just this table).
+            conn.execute(
+                "DELETE FROM page_charts WHERE chart_extraction_version != ?",
+                (CHART_EXTRACTION_VERSION,),
+            )
 
             # page_text: add source column to existing tables (safe ALTER TABLE)
             cols = _get_columns(conn, "page_text")
@@ -1231,6 +1257,66 @@ class PDFCache:
                 ),
             )
 
+    # ==================== Chart Extraction Operations ====================
+
+    def get_page_charts(
+        self, path: str, page_num: int, hints_hash: str, max_points: int
+    ) -> dict[str, Any] | None:
+        """Get cached chart-extraction result for a page.
+
+        Keyed on (path, page_num, hints_hash, max_points). Returns None if
+        not cached, or if the source file's mtime has changed since caching.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                # version filter on READ, not just the purge at open: with
+                # per-conversation STDIO servers, an older-code process can
+                # re-populate old-version rows AFTER this process's open-time
+                # purge — without the filter those rows would be served as
+                # current.
+                """SELECT result_json, file_mtime
+                   FROM page_charts
+                   WHERE file_path = ? AND page_num = ?
+                     AND hints_hash = ? AND max_points = ?
+                     AND chart_extraction_version = ?""",
+                (path, page_num, hints_hash, max_points, CHART_EXTRACTION_VERSION),
+            ).fetchone()
+            if row is None:
+                return None
+            if not self._is_cache_valid(path, row["file_mtime"]):
+                return None
+            result: dict[str, Any] = json.loads(row["result_json"])
+            return result
+
+    def save_page_charts(
+        self,
+        path: str,
+        page_num: int,
+        hints_hash: str,
+        max_points: int,
+        result: dict[str, Any],
+    ) -> None:
+        """Save a chart-extraction result to cache."""
+        mtime, _ = self._get_file_info(path)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO page_charts
+                   (file_path, page_num, file_mtime, hints_hash, max_points,
+                    chart_extraction_version, result_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    path,
+                    page_num,
+                    mtime,
+                    hints_hash,
+                    max_points,
+                    CHART_EXTRACTION_VERSION,
+                    json.dumps(result),
+                ),
+            )
+
     # ==================== Cache Management ====================
 
     def _invalidate_file(self, path: str) -> None:
@@ -1259,6 +1345,7 @@ class PDFCache:
                 except FileNotFoundError:
                     pass
             conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM page_charts WHERE file_path = ?", (path,))
 
             conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
@@ -1358,6 +1445,10 @@ class PDFCache:
                     f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
+                conn.execute(
+                    f"DELETE FROM page_charts WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
         with sqlite3.connect(self.db_path) as conn2:
@@ -1405,6 +1496,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_embeddings")
             conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
+            conn.execute("DELETE FROM page_charts")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
             return int(count)
@@ -1439,6 +1531,10 @@ class PDFCache:
 
             stats["total_renders"] = conn.execute(
                 "SELECT COUNT(*) FROM page_renders"
+            ).fetchone()[0]
+
+            stats["total_charts"] = conn.execute(
+                "SELECT COUNT(*) FROM page_charts"
             ).fetchone()[0]
 
             # FTS5 indexed page count

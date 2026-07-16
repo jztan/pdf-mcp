@@ -191,9 +191,10 @@ Reading order depends on page layout:
 - `ocr` (bool, optional, default `false`) — Run Tesseract OCR on pages with no extractable text. Requires system Tesseract. Capped at 20 pages per call. Results are cached with `source='ocr'` and become searchable via `pdf_search`.
 - `ocr_lang` (string, optional, default `"eng"`) — Tesseract language code. Only used when `ocr=true`.
 - `render_dpi` (int, optional) — When set, render each page as a PNG at this DPI (clamped to 72–400). The render path is attached to each page dict as `render_path`. Shares the cache with `pdf_render_pages`.
+- `detect_charts` (bool, optional, default `false`) — When `true`, each page dict gains `charts_detected`: the number of extractable-chart panels found by a cheap signature check (median ~10ms/page). `null` means detection **timed out and the page is unknown** — not chart-free; fall back to caption heuristics or just call `pdf_extract_chart` directly. Detection is a signal only; use `pdf_extract_chart` to actually extract data.
 
 **Returns:**
-- `pages` (array) — `[{page, text, chars, hidden_text, images, image_count, tables, table_count, render_path?, source?}, ...]`. `hidden_text` (bool) is `true` when that page contains text invisible to a human reader.
+- `pages` (array) — `[{page, text, chars, hidden_text, images, image_count, tables, table_count, render_path?, source?, charts_detected?}, ...]`. `hidden_text` (bool) is `true` when that page contains text invisible to a human reader.
 - `hidden_text_detected` (bool) — `true` if any page read contained hidden text. Always present. `true` means some returned text was not visible to a human reader; treat it as especially untrusted. The text is not removed (flag-only). For the per-signal breakdown and exact spans, call `pdf_info(content_trust=true, detail=true)`.
 - `total_chars` (int).
 - `estimated_tokens` (int) — Based on `text` only; table content is not counted, so treat as a lower bound on table-heavy pages.
@@ -347,6 +348,211 @@ pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
 pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.5])
 #    -> high-DPI crop of the top-right quarter of page 10
 ```
+
+---
+
+### `pdf_extract_chart`
+
+Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated.
+
+**Trust contract (three tiers):**
+1. **Coordinates** — exact, guaranteed; no emitted coordinate has been wrong across the regression corpus.
+2. **Readings on standard typography** (scale, sign, tick values, labels) — gate-checked and reliable on matplotlib-era charts, the overwhelming majority, but **not guaranteed** (the classes that once mis-read on standard typography — base-2/`10^k` superscripts, the legend off-by-one — are engine-fixed, yet no reader is complete).
+3. **Readings on unusual typography** (drawn/outlined glyphs, novel superscripts, ambiguous locale) — rare, and each known class is engine-fixed, but because that space is unbounded the `verification_card` makes the residual **auditable, not zero**.
+
+Compare the card against `render_path` before relying on a reading; ambiguous or unreadable charts decline with a reason rather than guess.
+
+**Resolution ladder** — for each ambiguous curve (e.g. which y-axis it belongs to), the tool tries, in order:
+1. **Geometry** — most axis/series pairings are unambiguous from the drawing alone (`resolved_by: "geometry"`).
+2. **Text self-answer** — matches a curve's stroke color against in-panel legend entries or a rotated axis-title's tokens; a unique match resolves it without asking (`resolved_by: "text"`).
+3. **Vision hint** — if still ambiguous, the tool returns `status: "needs_hint"` with closed-enum `questions[]`; a vision-capable caller looks at each question's `render_path` (the series in question is highlighted) and answers, then re-calls with `hints={...}` (`resolved_by: "hint"`).
+4. **Decline** — if no path resolves the chart (or it's out of scope entirely), `status: "declined"` with `reasons[]` and a full-page render.
+
+A panel can also be ambiguous at the chart-*type* level: if it has valid, calibrated axes but no geometry that classifies as a line, bar, or scatter series, `chart_type` comes back `"unknown"` and the tool asks a `kind: "chart_type"` question (`id: "p{n}.type"`, `options: ["line", "bar", "scatter", "not_a_chart"]`). Unlike axis-assignment questions, there's no specific series to point at yet, so this question carries no `series_style`, and its `render_path` is a plain, un-annotated crop of the whole panel — no highlight halo is drawn. Answer it the same way as any other hint: pass `{"p{n}.type": "..."}` in a follow-up call.
+
+**Status values:**
+- `"ok"` — `charts[].series[]` carry exact points plus render evidence.
+- `"needs_hint"` — a semantic choice is ambiguous; see `questions[]`.
+- `"declined"` — nothing could be extracted reliably; see `reasons[]`.
+
+**Hint protocol:** hints are closed-enum semantic answers only, never numeric values (e.g. `{"p0.s1.axis": "right"}`) — a wrong hint can at worst mislabel an axis pairing, never fabricate a number, since coordinates always come from geometry. Hints never accumulate server-side: each call is independent, so a follow-up call must **resend every previously-answered hint**, not just the newest one.
+
+**Verification card & state (tier-3 audit aid):** every emitted chart carries a `verification_card` mirroring what the heuristics *read*, so a caller can falsify it against `render_path` in one glance:
+- `x_axis` / `y_axis` — `{scale, range, ticks: [{raw, value}]}` (the tick labels as-read, raw text plus parsed value).
+- `series` — `[{color, color_name, dash, label}]`, where `color_name` is a coarse hue word (red/blue/…). The exact-RGB `color` is retained for programmatic matching, and `color_names_unique` is `false` when two series share a hue word — on those (similar-palette) charts the words alone can't disambiguate the legend, so use the render swatches.
+
+Each emitted chart also carries a `verification` state: `"unverified"` (the default — today's engine trust, labeled), `"card_confirmed"`, or `"labels_rejected"`. To record a verdict, re-call with a `p{n}.verify` hint (closed enum):
+- `"confirmed"` → `verification` becomes `"card_confirmed"`. **This records a caller *assertion*, not an attested check** — the server is stateless and cannot prove the render was consulted, so pass `include_render=true` and actually compare the card to the render first. Coordinates are exact regardless.
+- `"labels_wrong"` (whole legend) or `"labels_wrong:s{n}"` (one series by index) → keeps the exact coordinates, nulls the disputed label(s) with `resolved_by: "caller_rejected"`; `verification` becomes `"labels_rejected"`.
+- `"axes_wrong"` → the chart declines (the axis reading is rejected; no caller-supplied recalibration in this version).
+
+**Parameters:**
+- `path` (string, required) — Path to PDF file.
+- `page` (int, required) — Page number (1-indexed).
+- `hints` (dict of string to string, optional) — Answers to previously returned `questions[]`, keyed by question `id`. Resend all hints gathered so far on every call.
+- `max_points` (int, optional, default `24`) — Per-series sampling cap for line curves. Extrema (peaks/troughs) are preserved preferentially; bar and marker series are always emitted in full regardless of this cap.
+- `include_render` (bool, optional, default `false`) — When `status="ok"`, also inline one MCP image block per chart (its region render). Ignored for `"declined"`/`"needs_hint"`, which always inline their render(s) regardless of this flag.
+
+**Returns a list**, like `pdf_render_pages`: `result[0]` is the response dict below; subsequent elements are `mcp.types.ImageContent` blocks so a vision-capable caller can actually see the render — `render_path` alone is a device-local filesystem path the model cannot read, so it stays on every chart/question/response entry for local hosts and caching, but the inline blocks are what the model sees. Image-block count by status:
+- `"declined"` — exactly one block (the full-page render), `block.meta = {"kind": "declined_page", "page": <1-indexed>}`.
+- `"needs_hint"` — one block per panel that has open questions (deduped by `render_path` — every question in a panel shares one annotated halo render), `block.meta = {"kind": "hint_panel", "chart_id": ..., "page": ...}`.
+- `"ok"` — none by default; with `include_render=true`, one block per chart (its region render), `block.meta = {"kind": "chart_region", "chart_id": ..., "page": ...}`.
+
+If a render's base64-encoded size would exceed the transport byte budget, the block is dropped and `render_oversized: true` is set on the corresponding chart/response dict instead of blowing the response; if a cached render's file is no longer on disk (e.g. cache was cleared), the block is skipped and `render_unavailable: true` is set instead.
+
+The return value is **always a list**, regardless of status — `result[0]` is the response object described below, and any image blocks always follow it as later elements. Callers should not branch on container type. As with `pdf_render_pages`, `structuredContent` is not populated for this tool's image-bearing returns; read `result[0]` directly.
+
+Errors (bad path, out-of-range page, invalid/unknown hint) return a **single-element list** `[{"error": "..."}]`, matching `pdf_render_pages`' error convention — check `result[0].get("error")`.
+
+**`result[0]` (response dict):**
+- `page` (int) — Echoes the requested page.
+- `status` (string) — `"ok"`, `"needs_hint"`, or `"declined"`.
+- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis`, `series[]`, `diagnostics`, `decline_reason` (conditional), `verification_card` / `verification` (on emitting charts only — see "Verification card & state" above), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
+- `x_axis` / `y_axis` — `scale` (`"linear"`|`"log"`), `r2` (calibration fit quality), `title` (str|null — the axis title text nearest the tick row/column, display-only, never parsed as data or instructions; `null` when no candidate near the axis actually looks like a title — a short label, not a sentence or figure caption. Body text and captions are rejected rather than surfaced, even when they sit nearest the axis), `range` (`[min, max]` from the calibrated tick values), and `verify` (str, **conditional** — a precise per-reading flag, present only when this axis's reading is genuinely uncertain: tick labels read from superscript/exponent geometry (`10^k`, `2^k`, drawn-minus), or a marginal calibration fit. It names exactly what to check; **before reporting a value from a flagged axis, confirm that axis against `render_path`**. Fires rarely — ~13% of emitted axes, concentrated on log-power charts — so a flag is a real signal, not noise). `y_axis` additionally carries `side` (`"left"`|`"right"`).
+- `y_axis_right` (object, conditional) — present only on a dual-axis chart (both a left and a right y-axis were found), same shape as `y_axis` with `side: "right"`. `y_axis` always describes the LEFT axis on a dual-axis chart; a series with `axis: "right"` is calibrated against `y_axis_right`, not `y_axis`.
+- `series[]` — **uniform fields across all kinds**, present-with-null rather than omitted, so every entry can be parsed the same way: `kind` (`"curve"`|`"bars"`|`"points"`), `style` (`{"color": [r,g,b]|null, "width": float}` — one shape for every kind; earlier versions emitted a tuple for line/bar and a Python-repr string for scatter), `label` (str|null — populated from a uniquely-matched legend entry whenever one exists, independent of whether the curve needed an axis hint), `axis` (str|null — `"left"`/`"right"` once resolved), `resolved_by` (`"geometry"`|`"text"`|`"hint"`|null), `multivalued` (bool), `downsampled` (bool), `n_extrema_dropped` (int — nonzero only when sampling actually dropped a local extremum). The data key stays kind-specific: `points` for `"curve"`/`"points"` entries, `bars` for `"bars"` entries. `marker_size` stays scatter-only. Bar/scatter series always report `multivalued: false`, `downsampled: false`, `n_extrema_dropped: 0` (present, not omitted — they never downsample).
+- `diagnostics` — `n_frames`, `n_bar_rects`, `n_marker_groups`, `n_line_clouds`, `dual_axis`, and `notes` (array, **always present**, possibly empty). A note is appended only when something was actually lost or a chart declined — e.g. a per-series `n_extrema_dropped > 0` (peaks/troughs actually dropped by sampling) or a decline reason. `downsampled: true` with `n_extrema_dropped: 0` legitimately produces no note: sampling ran, but nothing was lost.
+- `decline_reason` (string, conditional) — present only on a chart whose `chart_type` is `"declined"`; a human-readable reason (e.g. `"all line clouds multivalued (crossing/overlapping curves)"`). The same text also appears in that chart's `diagnostics.notes`.
+- `questions` (array, present when `status="needs_hint"`) — `id`, `chart_id`, `kind`, `series_style` (absent for the `chart_type` question kind — no specific series to describe), `options`, `highlight`, `render_path`.
+- `reasons` (array, present when `status="declined"`) — Human-readable strings describing which gate(s) fired.
+- `from_cache` (bool). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
+
+**Precision note:** emitted `x`/`y` values are rounded to 4 significant figures — geometry-eyeballed chart values don't carry more precision than that, and the previous `.5g` round-trip through `float()` could produce 15-digit fictional precision on log axes. Large-magnitude values may still print in integer or scientific notation in JSON (e.g. `1.361e15`); that's a JSON float-printing artifact of the rounded value, not extra precision.
+
+**Example — `ok`:**
+
+```python
+pdf_extract_chart("/path/to/report.pdf", page=1)
+# [
+#   {
+#     "page": 1,
+#     "status": "ok",
+#     "charts": [
+#       {
+#         "chart_id": "p0",
+#         "chart_type": "line",
+#         "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#         "x_axis": {
+#           "scale": "linear", "r2": 1.0, "title": "epoch", "range": [0.0, 10.0]
+#         },
+#         "y_axis": {
+#           "scale": "linear", "r2": 1.0, "side": "left",
+#           "title": "loss", "range": [5.0, 25.0]
+#         },
+#         "series": [
+#           {
+#             "kind": "curve",
+#             "style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#             "multivalued": false,
+#             "downsampled": false,
+#             "n_extrema_dropped": 0,
+#             "points": [
+#               [-2.125e-05, 4.993], [1.0, 6.993], [2.0, 8.993],
+#               [3.0, 10.99], [4.0, 12.99], [5.0, 14.99], [6.0, 16.99],
+#               [7.0, 18.99], [8.0, 20.99], [9.0, 22.99], [10.0, 24.99]
+#             ],
+#             "resolved_by": "geometry",
+#             "label": "training loss",
+#             "axis": "left"
+#           }
+#         ],
+#         "diagnostics": {
+#           "n_frames": 1, "n_bar_rects": 0, "n_marker_groups": 0,
+#           "n_line_clouds": 1, "dual_axis": false, "notes": []
+#         },
+#         "render_path": "/path/to/cache/renders/e8b1...render_150dpi_clip-2--2-362-290.png"
+#       }
+#     ],
+#     "questions": [],
+#     "reasons": [],
+#     "from_cache": false
+#   }
+#   # no image blocks: status="ok" and include_render was not set
+# ]
+```
+
+**Worked example — `needs_hint` then resolved:** a dual-axis chart where two curves' axis assignment can't be resolved from geometry or legend text:
+
+```python
+pdf_extract_chart("/path/to/dual_axis.pdf", page=1)
+# [
+#   {
+#     "page": 1,
+#     "status": "needs_hint",
+#     "charts": [
+#       {
+#         "chart_id": "p0", "chart_type": "line",
+#         "region_bbox": [-2.0, -2.0, 362.0, 290.0],
+#         "x_axis": {
+#           "scale": "linear", "r2": 1.0, "title": null, "range": [0.0, 10.0]
+#         },
+#         "y_axis": {
+#           "scale": "linear", "r2": 1.0, "side": "left",
+#           "title": null, "range": [0.0, 100.0]
+#         },
+#         "series": [
+#           {"kind": "curve", "style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
+#            "label": null, "axis": null, "resolved_by": null,
+#            "multivalued": false, "downsampled": false, "n_extrema_dropped": 0,
+#            "pending_question": "p0.s0.axis"},
+#           {"kind": "curve", "style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#            "label": null, "axis": null, "resolved_by": null,
+#            "multivalued": false, "downsampled": false, "n_extrema_dropped": 0,
+#            "pending_question": "p0.s1.axis"}
+#         ],
+#         # NOTE: neither series carries a "points" table — the axis is still
+#         # unresolved for both, and this tool never emits a numeric table
+#         # calibrated against a guessed axis. "pending_question" correlates
+#         # each series back to the matching entry in questions[] below.
+#         "diagnostics": {
+#           "n_frames": 1, "n_line_clouds": 2, "dual_axis": true, "notes": []
+#         },
+#         "render_path": "/path/to/cache/renders/91eb...render_150dpi_clip-2--2-362-290.png"
+#       }
+#     ],
+#     "questions": [
+#       {
+#         "id": "p0.s0.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#         "series_style": {"color": [0.12, 0.47, 0.71], "width": 1.5},
+#         "options": ["left", "right"], "highlight": "orange",
+#         "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
+#       },
+#       {
+#         "id": "p0.s1.axis", "chart_id": "p0", "kind": "y_axis_for_curve",
+#         "series_style": {"color": [0.84, 0.15, 0.16], "width": 1.5},
+#         "options": ["left", "right"], "highlight": "cyan",
+#         "render_path": "/path/to/cache/renders/chart_hints_91eb..._p0.png"
+#       }
+#     ],
+#     "reasons": [],
+#     "from_cache": false
+#   },
+#   # one image block: the panel's annotated halo render (both questions
+#   # share it, so it appears once, deduped by render_path)
+#   ImageContent(type="image", data="...", mimeType="image/png",
+#                 meta={"kind": "hint_panel", "chart_id": "p0", "page": 1})
+# ]
+
+# The caller looks at the inlined image (orange/cyan highlight picks out
+# the series in question), then resends BOTH answers together — hints
+# never accumulate server-side:
+pdf_extract_chart(
+    "/path/to/dual_axis.pdf", page=1,
+    hints={"p0.s0.axis": "left", "p0.s1.axis": "right"},
+)
+# -> [response]; status: "ok"; each resolved series now carries
+# resolved_by: "hint"; no image blocks unless include_render=true
+```
+
+**Limitations:**
+- Raster charts (screenshotted or scanned plots, not vector-drawn) are out of scope — the tool reads PDF drawing commands, not pixels; it declines and falls back to a render.
+- Tick labels drawn as vector outlines rather than real text (some LaTeX/Type-3 font setups) are invisible to text extraction, so the axis can't be calibrated and the chart declines even when the *plot* geometry is clean. This is distinct from a raster chart (the curves are still vector) — it's specifically the axis numbers that aren't extractable. Calibration reads tick-label text; there is nothing to read here.
+- Crossing or overlapping same-style curves that can't be disambiguated (a "line cloud" with multiple valid y per x) decline as `"multivalued"` rather than risk stitching two curves into one.
+- Superscript power labels (`base^exponent`, e.g. `10³`, `10⁻⁴` or `2²⁰`) are recovered via a superscript-detection heuristic, but only for bases 10 and 2 — the two that appear as real log axes. This bound is deliberate: recognizing any base false-matches incidental super/subscripts elsewhere on the page. Composite `N×10^k` scientific-notation labels use the same heuristic; unusual typesetting of the exponent can fail to attach it to its base numeral. Two backstops decline rather than emit a mis-scaled axis when the typography defeats the reader: (1) when a renderer draws the exponent's minus sign as a *rule* instead of a glyph (matplotlib mathtext does this — the sign is invisible to text extraction, and reading `10⁻⁶` as `10⁶` would be silently wrong by orders of magnitude), the chart declines with a "sign is drawn, not typed" reason; (2) when an axis *title* declares a log scale ("(log-scale)", "logarithmic") but the ticks calibrate linear anyway, the chart declines likewise.
+- Locale-ambiguous tick sets (e.g. `"5.000"` — is it 5.0 or five thousand?) are dropped at the token level rather than guessed either way, since a wrong parse silently mis-scales the whole axis; the axis then declines for lack of resolvable ticks.
+- A perfectly flat data line can be misclassified as decorative (gridline/tick-strip) geometry and dropped — a documented trade-off of the decoration filter.
+- Axes with fewer than 3 resolvable tick labels decline (insufficient points to calibrate a scale).
+- Per-series sampling (`max_points`) reports `downsampled: true` on any curve whose point count exceeded the cap — that alone does not mean data was lost, since the sampler always keeps both endpoints and the global min/max. `diagnostics.notes` gains an entry only when `n_extrema_dropped > 0`, i.e. a local extremum (a peak or trough, not the global one) was actually dropped for lack of budget. A curve can legitimately be `downsampled: true` with `n_extrema_dropped: 0` and no note — that's sampling working as intended, not data loss. Raise `max_points` or read the render for exact peak/trough values when a note does fire.
 
 ---
 

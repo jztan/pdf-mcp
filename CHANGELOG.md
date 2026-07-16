@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- `pdf_extract_chart`: extract chart data as exact `(x, y)` tables from
+  born-digital vector charts, read from the PDF's drawing geometry and
+  calibrated against tick labels — values are read, not estimated. Tables
+  are exact when tick-label calibration succeeds, and every emitted chart
+  carries `render_path` so the numbers can be verified against the figure;
+  ambiguous, unreadable, or out-of-scope charts decline with a rendered
+  image fallback and a specific reason. Vision-capable callers can resolve
+  semantic ambiguity (dual axes, chart type) via closed-enum hints with
+  annotated renders; many cases self-resolve from legend/axis-title text.
+  Returns a list whose first element is the structured result and whose
+  following elements are MCP image blocks (the annotated render on
+  `needs_hint`, the full-page render on `declined`; `include_render=True`
+  also inlines the chart crop on `ok`) — the same image-content pattern as
+  `pdf_render_pages`. Each series carries axis titles/range, provenance
+  (`resolved_by`), and honesty flags (`multivalued`, `downsampled`,
+  partial-capture notes). Benchmarked at 0 wrong-emits across the
+  synthetic + real regression suite (58+ fresh arXiv papers spanning
+  ML / econ / finance / bio / physics, ~330 emitted charts adjudicated
+  against renders), then adversarially hardened over multiple external
+  consumer rounds against the tick-typography wrong-emit space:
+  superscript-exponent labels (`10⁻⁴…10⁰`, `2¹⁹…2²⁷`, small-font metrics),
+  exponent signs drawn as vector rules rather than typed (superscript and
+  base level), decade labels that glue into plausible linear integers,
+  fully-drawn (Hershey/outlined) labels, and ambiguous locale number
+  formats (`5.000`, `1,000`) — each class either reads correctly or
+  declines with a reason, pinned by per-class regression fixtures
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
+  signal (~10ms/page) so agents notice extractable charts
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_extract_chart` verification card: every emitted chart carries a
+  `verification_card` — the reading the extractor made (axis
+  scale/range/ticks as-read, and the series colour→label map with a coarse
+  `color_name`, exact RGB, and a `color_names_unique` flag) — so a
+  vision-capable caller can confirm it against `render_path` in one glance.
+  A `verification` state (`unverified`/`card_confirmed`/`labels_rejected`)
+  and a closed-enum `p{n}.verify` verdict (`confirmed` /
+  `labels_wrong[:s{n}]` / `axes_wrong`) let a caller confirm the reading,
+  reject wrong labels while keeping the exact coordinates, or reject a
+  misread axis. The trust contract is now stated in three tiers —
+  coordinates exact and guaranteed, standard-typography readings
+  gate-checked, unusual-typography readings auditable-via-card — so the
+  card is neither over-trusted as a guarantee nor under-trusted as a flat
+  downgrade ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_extract_chart` precise per-reading verify flag: an axis whose reading
+  is genuinely uncertain — tick labels recovered from superscript/exponent
+  geometry (`10^k`, `2^k`, drawn-minus, the class that historically produced
+  silent order-of-magnitude and sign errors), or a marginal calibration fit —
+  carries a `verify` string on that axis naming exactly what to confirm
+  against the render, and the tool description teaches the protocol (confirm a
+  flagged reading before reporting its value). The flag fires on ~13% of
+  emitted axes, concentrated on log-power charts, so it is signal not noise:
+  a caller that verifies flagged readings catches the residual
+  unusual-typography errors the geometry-only reader cannot self-detect
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+
+### Contributors
+- @DerDennisOP — requested chart extraction, provided the decisive sample
+  PDFs, and offered nixpkgs packaging ([#23](https://github.com/jztan/pdf-mcp/issues/23))
+
 ## [1.20.0] - 2026-07-11
 ### Added
 - `pdf_search` paragraph-style page-mode hits now carry source geometry:

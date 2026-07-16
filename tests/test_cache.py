@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from pdf_mcp.cache import PDFCache, _get_columns
+from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
 
 
 @pytest.fixture
@@ -1418,3 +1419,84 @@ class TestKeywordRankingCacheInvariance:
         ]
 
         assert before == after
+
+
+def test_page_charts_roundtrip(cache, sample_pdf):
+    result = {"status": "ok", "charts": [{"chart_id": "p0"}]}
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, result)
+    got = cache.get_page_charts(str(sample_pdf), 1, "abc123", 24)
+    assert got == result
+    assert cache.get_page_charts(str(sample_pdf), 1, "other", 24) is None
+
+
+def test_page_charts_mtime_invalidation(cache, sample_pdf):
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, {"status": "ok"})
+    time.sleep(0.01)
+    os.utime(sample_pdf)
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None
+
+
+def test_page_charts_cleared_by_clear_all(cache, sample_pdf):
+    """clear_all must drop page_charts too — it was previously missing from
+    every clear/invalidation path, so a chart cache row would survive
+    pdf_cache_clear (and _invalidate_file / clear_expired) forever."""
+    cache.save_page_charts(str(sample_pdf), 1, "abc123", 24, {"status": "ok"})
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is not None
+    cache.clear_all()
+    assert cache.get_page_charts(str(sample_pdf), 1, "abc123", 24) is None
+
+
+def test_page_charts_stale_version_purged_on_open(sample_pdf, tmp_path):
+    """A page_charts row written under an older CHART_EXTRACTION_VERSION must
+    be purged the next time a PDFCache opens the same DB file — otherwise a
+    stale pre-response-shape-change row (e.g. series `style` as a tuple
+    instead of a dict) would keep being served forever. Mirrors the
+    _EXTRACTION_VERSION purge for page_text."""
+    assert CHART_EXTRACTION_VERSION >= 2, (
+        "this test assumes the constant has been bumped past the original 1; "
+        "it hardcodes the stale row at version 1 to prove the current "
+        "constant purges genuine pre-branch rows"
+    )
+    cache_dir = tmp_path / "chart_version_cache"
+    cache1 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
+    stale = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "old"}]}
+    fresh = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "new"}]}
+    cache1.save_page_charts(str(sample_pdf), 1, "stalekey", 24, stale)
+    cache1.save_page_charts(str(sample_pdf), 1, "freshkey", 24, fresh)
+
+    # Stamp ONLY the stale row at the real pre-branch version (1), bypassing
+    # save_page_charts (which stamps the current constant). The fresh row keeps
+    # the current version. Reverting the 1->2 bump would make the stale row's
+    # version match again and this test would then fail (it would survive).
+    with sqlite3.connect(cache1.db_path) as conn:
+        conn.execute(
+            "UPDATE page_charts SET chart_extraction_version = 1 "
+            "WHERE file_path = ? AND hints_hash = ?",
+            (str(sample_pdf), "stalekey"),
+        )
+
+    # Re-opening the DB (fresh PDFCache, as across server restarts) must purge
+    # ONLY the version-mismatched row — the current-version row must survive.
+    cache2 = PDFCache(cache_dir=cache_dir, ttl_hours=1)
+    assert cache2.get_page_charts(str(sample_pdf), 1, "stalekey", 24) is None
+    assert cache2.get_page_charts(str(sample_pdf), 1, "freshkey", 24) == fresh
+
+
+def test_page_charts_stale_version_filtered_on_read(sample_pdf, tmp_path):
+    """The purge-at-open alone is not enough: with per-conversation STDIO
+    servers, an OLDER-code process can write old-version rows into the shared
+    DB after a newer process's open-time purge already ran. The read path
+    must therefore filter on chart_extraction_version too — an old-version
+    row must read as a miss WITHOUT reopening the cache."""
+    cache = PDFCache(cache_dir=tmp_path / "chart_read_cache", ttl_hours=1)
+    stale = {"status": "ok", "charts": [{"chart_id": "p0", "shape": "old"}]}
+    cache.save_page_charts(str(sample_pdf), 1, "k", 24, stale)
+    assert cache.get_page_charts(str(sample_pdf), 1, "k", 24) == stale
+    # simulate the concurrent old-version writer: stamp the row stale IN PLACE
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute(
+            "UPDATE page_charts SET chart_extraction_version = 1 "
+            "WHERE file_path = ?",
+            (str(sample_pdf),),
+        )
+    assert cache.get_page_charts(str(sample_pdf), 1, "k", 24) is None

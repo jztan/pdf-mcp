@@ -664,6 +664,9 @@ def test_looks_like_axis_title():
         assert chart_extractor._looks_like_axis_title(t) is False, t
 
 
+@pytest.mark.skipif(
+    not (REAL / "1807.11632.pdf").exists(), reason="real corpus not fetched"
+)
 def test_axis_title_rejects_body_text():
     """Ship-blocker regression: _x_axis_title must never launder body text
     or a figure caption into x_axis.title. 1807.11632 p4 (0-indexed 3) is a
@@ -1283,6 +1286,9 @@ def test_contradiction_guard_declines_log_title_linear_calibration(monkeypatch):
     assert any("declares a log scale" in c.get("decline_reason", "") for c in declined)
 
 
+@pytest.mark.skipif(
+    not (REAL / "2203.15556.pdf").exists(), reason="real corpus not fetched"
+)
 def test_multipanel_ytitle_not_stolen_from_neighbor():
     """Cross-panel title theft (ship-blocker): on a tight 3-panel figure each
     panel's y-title must be ITS OWN. Chinchilla p5 center panel is "Parameters"
@@ -1298,6 +1304,9 @@ def test_multipanel_ytitle_not_stolen_from_neighbor():
     assert len(non_null) == len(set(non_null)), f"duplicate stolen title: {titles}"
 
 
+@pytest.mark.skipif(
+    not (REAL / "2203.15556.pdf").exists(), reason="real corpus not fetched"
+)
 def test_axis_title_null_when_only_body_text_below_axis():
     """Chinchilla p5 has a figure caption under the panel but no real x-axis
     title — the tool must return null, never the caption."""

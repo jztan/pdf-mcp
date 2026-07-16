@@ -1682,7 +1682,9 @@ def classify(
     return "unknown"
 
 
-def _select_sample_indices(dy: np.ndarray, max_points: int) -> np.ndarray:
+def _select_sample_indices(
+    dy: "np.typing.NDArray[Any]", max_points: int
+) -> "np.typing.NDArray[Any]":
     """Choose <= max_points indices into ``dy`` for downsampled emission.
 
     Always keeps the series endpoints plus the global argmin/argmax of
@@ -1702,7 +1704,9 @@ def _select_sample_indices(dy: np.ndarray, max_points: int) -> np.ndarray:
     keep_ext = ranked[:remaining_budget]
     fill = max(0, max_points - len(forced) - len(keep_ext))
     uniform = np.linspace(0, len(dy) - 1, fill).astype(int)
-    sel: np.ndarray = np.unique(np.concatenate([list(forced), keep_ext, uniform]))
+    sel: "np.typing.NDArray[Any]" = np.unique(
+        np.concatenate([list(forced), keep_ext, uniform])
+    )
     return sel
 
 

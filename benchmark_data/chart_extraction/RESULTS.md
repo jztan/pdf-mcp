@@ -989,3 +989,52 @@ the old shape). Still HELD EXPERIMENTAL; no merge/release. Deferred to
 v18: caller calibration (FR4-7), strict flag (FR11, inert in v17),
 text-independent anchor detection, and the phase-1 catch-rate measurement
 (FR2b) that gates v18.
+
+## Phase 2: precise per-reading verify flag + teaching (2026-07-16, v18)
+
+Built on an FR2b measurement with `claude -p` (Opus 4.8 as the independent
+caller — the real production archetype; harness in a session scratchpad).
+Four escalating tests settled whether the verification premise is real:
+
+1. PASSIVE card, teaching off (response hand-fed as data): answer-dependent
+   catch ~50% — the realistic errors (label swap, data-trusted sign flip)
+   slipped through; only obvious off-axis errors caught. Catching is
+   ATTENTION-driven, not availability-driven.
+2. TEACHING (in the tool DESCRIPTION — the LLM-facing channel, NOT the
+   docstring) + an ACTIVE per-reading flag: both realistic failures flip to
+   caught. The ~50% was measured with teaching OFF — an unfair test of the
+   real MCP flow.
+3. ALERT-FATIGUE, n=4 (4 false-alarm flags + 1 real error): real error still
+   caught, correct triage.
+4. SCALE-FATIGUE, n=24 (21 false alarms ~88%, 3 real errors at pos 6/14/22):
+   3/3 caught, no positional decay, 21/21 false alarms answered correctly,
+   explicit verification of all 24.
+
+Conclusion: the design works as "engine flags its own risky readings +
+description teaches verify-before-report", NOT "caller happens to verify"
+(that failed at 50%). Untested regime = bulk COST pressure (tests gave the
+caller unlimited budget; hundreds-of-figures + a token cap + a cheaper model
+invites economic skipping — a different failure mode than attention fatigue),
+mitigated by flagging precisely so total check-cost stays low.
+
+Shipped (v18):
+- `_axis_verify_reason(r2, tick_raws)`: a precise flag firing only on the two
+  classes the tool cannot self-verify — (a) exponent-recovered ticks (raw
+  carries '^': 10^k/2^k/drawn-minus; r2 can't separate good from bad reads
+  there, so the PATH is the trigger), and (b) marginal fit (r2 < 0.995).
+  Emitted as an axis-level `verify` string on x_axis/y_axis (and mirrored in
+  the card), naming what to check.
+- Tool DESCRIPTION teaches the protocol: a flagged reading must be confirmed
+  against the render before its value is reported.
+
+Firing rate on the real corpus: 143/1128 emitting axes = 12.7%, concentrated
+on log-power papers (1406.6799, 1608.03983, 1712.00409) — the exponent class
+that held every historical catastrophe. 87% of axes stay unflagged, so a flag
+is signal not noise. Purely additive: bench_real byte-identical, synthetic
+0/19 wrong-emit, 1071 tests. CHART_EXTRACTION_VERSION -> 18. Still HELD
+EXPERIMENTAL; no merge/release.
+
+Follow-ups (not in v18): the exponent-class flag can't be narrowed by r2
+(good/bad reads both fit ~1.0) — a geometric pairing-cleanliness signal could
+tighten it later; series-label flagging for ambiguous legend matches; a
+budget-constrained bulk eval to probe the cost-pressure regime.

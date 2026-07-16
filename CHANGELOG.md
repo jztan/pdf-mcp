@@ -51,6 +51,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gate-checked, unusual-typography readings auditable-via-card — so the
   card is neither over-trusted as a guarantee nor under-trusted as a flat
   downgrade ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_extract_chart` precise per-reading verify flag: an axis whose reading
+  is genuinely uncertain — tick labels recovered from superscript/exponent
+  geometry (`10^k`, `2^k`, drawn-minus, the class that historically produced
+  silent order-of-magnitude and sign errors), or a marginal calibration fit —
+  carries a `verify` string on that axis naming exactly what to confirm
+  against the render, and the tool description teaches the protocol (confirm a
+  flagged reading before reporting its value). The flag fires on ~13% of
+  emitted axes, concentrated on log-power charts, so it is signal not noise:
+  a caller that verifies flagged readings catches the residual
+  unusual-typography errors the geometry-only reader cannot self-detect
+  ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
 
 ### Contributors
 - @DerDennisOP — requested chart extraction, provided the decisive sample

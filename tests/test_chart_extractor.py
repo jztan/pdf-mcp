@@ -579,6 +579,43 @@ def test_verification_card_color_names_unique_flag(monkeypatch):
     assert card["color_names_unique"] == expected_unique
 
 
+def test_axis_verify_reason_flags_exponent_reads():
+    """Precise-flag: an axis whose ticks were read from superscript/exponent
+    geometry (raw carries '^': 10^k, 2^k, drawn-minus) is the historically
+    catastrophic class — r2 can't separate good from bad reads there (both
+    fit ~1.0), so the PATH is the trigger. A clean plain-text axis is not
+    flagged."""
+    r = chart_extractor._axis_verify_reason(1.0, ["2^19", "2^20", "2^21"])
+    assert r is not None and "exponent" in r.lower()
+    assert chart_extractor._axis_verify_reason(1.0, ["0", "2", "4", "6"]) is None
+
+
+def test_power_axis_emits_verify_flag_clean_axis_does_not():
+    """Integration: a chart with a 2^k / 10^k axis carries a `verify` flag on
+    that axis (the precise, rare flag), while a clean linear chart carries no
+    verify flag on either axis."""
+    doc = pymupdf.open(SYN / "line_log2.pdf")
+    r = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    ch = next(c for c in r["charts"] if c.get("curves"))
+    assert "verify" in ch["x_axis"] and "exponent" in ch["x_axis"]["verify"]
+    assert "verify" not in ch["y_axis"]  # y is a clean linear axis here
+
+    doc = pymupdf.open(SYN / "line_color_linear.pdf")
+    r2 = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    ch2 = r2["charts"][0]
+    assert "verify" not in ch2["x_axis"] and "verify" not in ch2["y_axis"]
+
+
+def test_axis_verify_reason_flags_marginal_fit():
+    """A marginal calibration fit (low r2) is a distinct uncertainty and is
+    flagged even on plain ticks; a clean fit (r2 ~1.0) is not."""
+    r = chart_extractor._axis_verify_reason(0.982, ["0", "10", "20"])
+    assert r is not None and "fit" in r.lower()
+    assert chart_extractor._axis_verify_reason(0.9999, ["0", "10", "20"]) is None
+
+
 def test_color_name_coarse_hue_words():
     """The verification card needs a coarse hue word so a caller can compare
     the legend map to the render without color-picking. Primary/secondary

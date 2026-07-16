@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 17
+CHART_EXTRACTION_VERSION = 18
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -348,6 +348,36 @@ def monotonic_runs(
     if len(cur) >= min_len:
         runs.append(cur)
     return runs
+
+
+_MARGINAL_R2 = 0.995
+
+
+def _axis_verify_reason(r2: float, tick_raws: list[str]) -> str | None:
+    """A precise per-reading verify flag: return WHAT to check when an axis
+    reading is genuinely uncertain, else None. Fires rarely by design —
+    only on the two classes the tool cannot self-verify:
+
+    1. Exponent-recovered ticks (raw carries '^': 10^k / 2^k / drawn-minus).
+       r2 does NOT separate good from bad reads here — a sign-dropped or
+       glued power fits at r2~1.0 too — so the recovery PATH is the trigger.
+    2. A marginal calibration fit (low r2) — a distinct, fit-quality
+       uncertainty, flagged even on plain ticks.
+
+    Clean plain-text axes at r2~1.0 (the overwhelming majority) are not
+    flagged, keeping the false-alarm tax low (see RESULTS.md FR2b eval)."""
+    if any("^" in raw for raw in tick_raws):
+        return (
+            "tick labels were read from superscript/exponent geometry "
+            "(e.g. 10^-6, 2^19) — confirm the exponents and their signs "
+            "against the render before relying on these values"
+        )
+    if r2 < _MARGINAL_R2:
+        return (
+            f"axis calibration fit is marginal (r2={round(r2, 4)}) — confirm "
+            "the scale and range against the render"
+        )
+    return None
 
 
 def _axis_card(ax: dict[str, Any]) -> dict[str, Any]:
@@ -2376,6 +2406,20 @@ def extract_charts(
             )
             chart["verification_card"] = _build_verification_card(xa, ya, _emitted)
             chart["verification"] = "unverified"
+            # precise per-reading verify flag: mark the axis (and its card)
+            # when the reading is genuinely uncertain (exponent-recovered or
+            # marginal fit). Rare by design — keeps the false-alarm tax low.
+            _card = chart["verification_card"]
+            for _obj, _cobj in (
+                (chart["x_axis"], _card["x_axis"]),
+                (chart["y_axis"], _card["y_axis"]),
+            ):
+                _reason = _axis_verify_reason(
+                    _obj.get("r2", 1.0), [t["raw"] for t in _cobj["ticks"]]
+                )
+                if _reason:
+                    _obj["verify"] = _reason
+                    _cobj["verify"] = _reason
             # verify verdict (FR3): a caller's judgment on the card. Applied
             # here, post-assembly, since it acts on the finished reading.
             _vkey = f"p{pi}.verify"

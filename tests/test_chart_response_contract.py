@@ -134,6 +134,18 @@ def test_error_envelope_is_still_a_list():
     assert isinstance(r, list) and len(r) == 1 and "error" in r[0]
 
 
+def test_server_carries_axis_verify_flag():
+    """The precise per-reading verify flag on a power/exponent axis must
+    survive the server's response reshaping (it rides x_axis through), and a
+    clean linear chart must carry no verify flag."""
+    r = server.pdf_extract_chart(path=str(SYN / "line_log2.pdf"), page=1)
+    ch = next(c for c in r[0]["charts"] if c.get("series"))
+    assert "exponent" in ch["x_axis"].get("verify", "")
+    clean = server.pdf_extract_chart(path=str(SYN / "line_color_linear.pdf"), page=1)
+    cch = clean[0]["charts"][0]
+    assert "verify" not in cch["x_axis"] and "verify" not in cch["y_axis"]
+
+
 def test_server_carries_verification_card_and_state():
     """The server whitelists response keys; the phase-1 verification card and
     state (FR1/FR2) must survive that reshaping on an emitted chart, and a
@@ -171,7 +183,7 @@ EXPECTED_CHART_KEYS = {
 }  # optional, status-dependent keys (y_axis_right, decline_reason) excluded.
 # verification_card/verification are present on every EMITTING chart (the
 # coupling probe uses an ok chart); declined charts omit them.
-EXPECTED_SCHEMA_VERSION = 17  # BUMP THIS whenever the set above changes
+EXPECTED_SCHEMA_VERSION = 18  # BUMP THIS whenever the set above changes
 
 
 def test_response_schema_coupled_to_version():

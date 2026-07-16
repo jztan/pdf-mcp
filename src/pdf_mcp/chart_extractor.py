@@ -1759,6 +1759,7 @@ def extract_line(
         keep = np.concatenate([[True], (np.diff(dx) != 0) | (np.diff(dy) != 0)])
         dx, dy = dx[keep], dy[keep]
         n_extrema_dropped = 0
+        sel: "np.typing.NDArray[Any]"
         if len(dx) <= max_points:
             sel = np.arange(len(dx))
             downsampled = False

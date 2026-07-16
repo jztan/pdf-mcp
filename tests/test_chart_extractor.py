@@ -473,6 +473,127 @@ def test_sig_helper():
     assert chart_extractor._sig(5.0) == 5.0
 
 
+def test_verification_card_present_and_shaped(line_doc):
+    """FR1: every emitted (non-declined) chart carries a verification_card —
+    the reading the heuristics made, render-comparable in one glance: axis
+    scale/range/ticks (raw text + parsed value), and the series color↔label
+    map with coarse hue words. Exact-RGB is retained and a color_names_unique
+    flag signals when two series share a hue word (FR1 collision caveat)."""
+    result = chart_extractor.extract_charts(line_doc, 0)
+    assert result["status"] == "ok"
+    card = result["charts"][0]["verification_card"]
+    for axk in ("x_axis", "y_axis"):
+        ax = card[axk]
+        assert ax["scale"] in ("linear", "log")
+        assert len(ax["range"]) == 2
+        assert ax["ticks"], f"{axk} must list the ticks it read"
+        for t in ax["ticks"]:
+            assert set(t) == {"raw", "value"}
+            assert isinstance(t["raw"], str)
+            assert isinstance(t["value"], float)
+    assert isinstance(card["color_names_unique"], bool)
+    for s in card["series"]:
+        assert set(s) >= {"color", "color_name", "dash", "label"}
+        assert s["color"] is None or len(s["color"]) == 3
+        assert s["color_name"] is None or isinstance(s["color_name"], str)
+
+
+def test_verification_default_unverified(line_doc):
+    """FR2: an emitted chart is `unverified` until a caller records a verdict."""
+    result = chart_extractor.extract_charts(line_doc, 0)
+    assert result["charts"][0]["verification"] == "unverified"
+
+
+def test_verify_confirmed_sets_card_confirmed(line_doc):
+    """FR3: `p{n}.verify=confirmed` records that a caller asserted the reading
+    is correct — verification becomes card_confirmed (asserted, not attested;
+    the coordinates were already engine-trust and are unchanged)."""
+    result = chart_extractor.extract_charts(line_doc, 0, {"p0.verify": "confirmed"})
+    ch = result["charts"][0]
+    assert ch["verification"] == "card_confirmed"
+    assert ch["curves"][0]["points"], "coordinates unchanged by confirmation"
+
+
+def test_verify_labels_wrong_nulls_all_labels_keeps_coordinates():
+    """FR3: `labels_wrong` (no series id) keeps the exact coordinates but
+    nulls every legend-derived label with resolved_by caller_rejected — the
+    table survives with honest anonymity (the whole-legend Mamba case)."""
+    doc = pymupdf.open(SYN / "line_two_legend_dashed.pdf")
+    result = chart_extractor.extract_charts(doc, 0, {"p0.verify": "labels_wrong"})
+    doc.close()
+    ch = result["charts"][0]
+    assert ch["verification"] == "labels_rejected"
+    assert ch["curves"], "coordinates must survive a label rejection"
+    for c in ch["curves"]:
+        assert c["points"], "points kept"
+        assert c["label"] is None
+        assert c["resolved_by"] == "caller_rejected"
+
+
+def test_verify_labels_wrong_per_series_keeps_the_rest():
+    """FR3 per-series reject: `labels_wrong:s0` nulls only series 0's label;
+    other series keep their engine-read labels (closed grammar, no free-text,
+    avoids the whole-legend over-punishment when only one label is wrong)."""
+    doc = pymupdf.open(SYN / "line_two_legend_dashed.pdf")
+    base = chart_extractor.extract_charts(doc, 0)
+    n_curves = len(base["charts"][0]["curves"])
+    result = chart_extractor.extract_charts(doc, 0, {"p0.verify": "labels_wrong:s0"})
+    doc.close()
+    if n_curves < 2:
+        pytest.skip("fixture needs >=2 curves to test selective reject")
+    ch = result["charts"][0]
+    assert ch["verification"] == "labels_rejected"
+    assert ch["curves"][0]["label"] is None
+    assert ch["curves"][0]["resolved_by"] == "caller_rejected"
+    assert any(c["label"] is not None for c in ch["curves"][1:]), "others kept"
+
+
+def test_verify_axes_wrong_terminal_declines_in_phase1(line_doc):
+    """FR3 phase-1 routing: `axes_wrong` has no calibration target yet (that
+    is v18), so it terminal-declines with the caller-rejected reason rather
+    than emitting an axis the caller says is misread."""
+    result = chart_extractor.extract_charts(line_doc, 0, {"p0.verify": "axes_wrong"})
+    ch = result["charts"][0]
+    assert ch["chart_type"] == "declined"
+    assert "rejected axis reading" in ch["decline_reason"]
+    assert not ch.get("curves")
+
+
+def test_verify_invalid_value_errors(line_doc):
+    """A verify verdict outside the closed enum is a validation error, like
+    the other closed-enum hint suffixes."""
+    r = chart_extractor.extract_charts(line_doc, 0, {"p0.verify": "maybe"})
+    assert "error" in r
+
+
+def test_verification_card_color_names_unique_flag(monkeypatch):
+    """color_names_unique is False when >=2 emitted series coarse-name to the
+    same hue word (the palette-collision case where the card alone can't
+    disambiguate and the caller needs the render swatches)."""
+    doc = pymupdf.open(SYN / "line_two_legend_dashed.pdf")
+    result = chart_extractor.extract_charts(doc, 0)
+    doc.close()
+    card = result["charts"][0]["verification_card"]
+    names = [s["color_name"] for s in card["series"]]
+    expected_unique = len(names) == len(set(names))
+    assert card["color_names_unique"] == expected_unique
+
+
+def test_color_name_coarse_hue_words():
+    """The verification card needs a coarse hue word so a caller can compare
+    the legend map to the render without color-picking. Primary/secondary
+    hues and the neutrals must name predictably."""
+    cn = chart_extractor._color_name
+    assert cn((0.84, 0.15, 0.16)) == "red"  # matplotlib tab:red
+    assert cn((0.12, 0.47, 0.71)) == "blue"  # matplotlib tab:blue
+    assert cn((1.0, 0.6, 0.0)) == "orange"
+    assert cn((0.17, 0.63, 0.17)) == "green"
+    assert cn((0.0, 0.0, 0.0)) == "black"
+    assert cn((1.0, 1.0, 1.0)) == "white"
+    assert cn((0.5, 0.5, 0.5)) == "gray"
+    assert cn(None) is None
+
+
 def test_looks_like_colorbar_detects_raster_strip(dual_doc):
     """`_looks_like_colorbar` is a standalone geometry check: a raster image
     (or dense stack of thin filled rects) sitting in a narrow band between

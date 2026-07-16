@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pymupdf
 
-CHART_EXTRACTION_VERSION = 16
+CHART_EXTRACTION_VERSION = 17
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:
@@ -348,6 +348,90 @@ def monotonic_runs(
     if len(cur) >= min_len:
         runs.append(cur)
     return runs
+
+
+def _axis_card(ax: dict[str, Any]) -> dict[str, Any]:
+    """The reading of one axis, render-comparable: scale, range, and the
+    tick labels as-read (raw text + parsed value)."""
+    toks = ax.get("toks") or []
+    ticks = [
+        {"raw": str(t.get("raw", "")), "value": float(t["v"])} for t in toks if "v" in t
+    ]
+    return {
+        "scale": ax["scale"],
+        "range": [float(ax["v"].min()), float(ax["v"].max())],
+        "ticks": ticks,
+    }
+
+
+def _apply_verify(
+    chart: dict[str, Any], series: list[dict[str, Any]], verdict: str
+) -> None:
+    """Apply a caller's verify verdict to an assembled chart (FR3).
+
+    - confirmed: record card_confirmed (asserted, not attested — the server
+      cannot prove the render was consulted; the coordinates were always
+      engine-trust and are untouched).
+    - labels_wrong[:s{n}]: keep exact coordinates, null the disputed
+      legend-derived label(s) with resolved_by caller_rejected. Bare form
+      nulls all; `:s{n}` nulls only that series index (the correct labels
+      survive — no whole-legend over-punishment).
+    - axes_wrong: the axis reading is rejected. Phase 1 has no calibration
+      recovery (that is v18), so decline terminally.
+    """
+    if verdict == "confirmed":
+        chart["verification"] = "card_confirmed"
+        return
+    if verdict == "axes_wrong":
+        chart["chart_type"] = "declined"
+        chart["decline_reason"] = "caller rejected axis reading — see render"
+        chart["diagnostics"].setdefault("notes", []).append(chart["decline_reason"])
+        for fld in ("curves", "bars", "points"):
+            chart.pop(fld, None)
+        chart.pop("verification_card", None)
+        chart.pop("verification", None)
+        return
+    # labels_wrong[:s{n}]
+    target = None
+    if ":" in verdict:
+        target = int(verdict.split(":s", 1)[1])
+    card_series = (chart.get("verification_card") or {}).get("series") or []
+    for i, s in enumerate(series):
+        if target is None or i == target:
+            s["label"] = None
+            s["resolved_by"] = "caller_rejected"
+            if i < len(card_series):
+                card_series[i]["label"] = None
+    chart["verification"] = "labels_rejected"
+
+
+def _build_verification_card(
+    xa: dict[str, Any], ya: dict[str, Any], series: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """FR1: the compact reading a caller falsifies against the render — axis
+    scale/range/ticks and the series color↔label map. Exact RGB is retained
+    alongside the coarse `color_name`; `color_names_unique` warns when two
+    series share a hue word so the caller knows the words alone can't
+    disambiguate them (FR1 collision caveat)."""
+    card_series = []
+    for s in series:
+        style = s.get("style") or {}
+        color = style.get("color")
+        card_series.append(
+            {
+                "color": color,
+                "color_name": _color_name(tuple(color) if color else None),
+                "dash": style.get("dash"),
+                "label": s.get("label"),
+            }
+        )
+    names = [s["color_name"] for s in card_series]
+    return {
+        "x_axis": _axis_card(xa),
+        "y_axis": _axis_card(ya),
+        "series": card_series,
+        "color_names_unique": len(names) == len(set(names)),
+    }
 
 
 def tick_series(g: list[dict[str, Any]], ck: str) -> dict[str, Any] | None:
@@ -1794,6 +1878,12 @@ def extract_charts(
             return {"error": f"invalid hint value {hv!r} for {hk}"}
         if suffix == "type" and hv not in _TYPE_VALUES:
             return {"error": f"invalid hint value {hv!r} for {hk}"}
+        # verify verdict (FR3): confirmed | labels_wrong[:s{n}] | axes_wrong
+        if suffix == "verify" and not (
+            hv in ("confirmed", "labels_wrong", "axes_wrong")
+            or re.fullmatch(r"labels_wrong:s\d+", hv)
+        ):
+            return {"error": f"invalid hint value {hv!r} for {hk}"}
     used_hint_keys: set[str] = set()
     max_points = max(max_points, 4)
     page = doc[page_num]
@@ -2275,6 +2365,23 @@ def extract_charts(
             s["style"] = _style_dict(s.pop("_style_key"))
         for s in chart.get("points", []):
             s["style"] = _style_dict(s.pop("_style_key"))
+        # verification card + state on every emitting chart (FR1/FR2): the
+        # reading the heuristics made, for a caller to falsify against the
+        # render. Declined charts carry no card (nothing was read to trust).
+        if chart["chart_type"] not in ("declined", "unknown"):
+            _emitted = (
+                chart.get("curves", [])
+                + chart.get("bars", [])
+                + chart.get("points", [])
+            )
+            chart["verification_card"] = _build_verification_card(xa, ya, _emitted)
+            chart["verification"] = "unverified"
+            # verify verdict (FR3): a caller's judgment on the card. Applied
+            # here, post-assembly, since it acts on the finished reading.
+            _vkey = f"p{pi}.verify"
+            if _vkey in hints:
+                used_hint_keys.add(_vkey)
+                _apply_verify(chart, _emitted, hints[_vkey])
         res["charts"].append(chart)
     unconsumed = set(hints) - used_hint_keys
     if unconsumed:
@@ -2311,6 +2418,50 @@ def _pick_halo(series_color: tuple[float, ...] | None) -> str:
     channel-wise distance."""
     sc = series_color or (0, 0, 0)
     return max(_HALOS, key=lambda n: sum(abs(a - b) for a, b in zip(_HALOS[n], sc)))
+
+
+_HUE_NAMES = [
+    (0, "red"),
+    (30, "orange"),
+    (60, "yellow"),
+    (120, "green"),
+    # cyan owns a narrow band; blue is centered low (210, not 240) so muted
+    # cyan-ish blues like matplotlib tab:blue (hue ~204°) name "blue" as a
+    # human would, not "cyan".
+    (180, "cyan"),
+    (210, "blue"),
+    (285, "purple"),
+    (360, "red"),
+]
+
+
+def _color_name(rgb: tuple[float, ...] | None) -> str | None:
+    """Coarse hue word for an RGB triplet, for the verification card.
+
+    Neutral (low-saturation) colors name by lightness (black/gray/white);
+    saturated colors name by nearest hue bucket. Deliberately coarse — it
+    is a human-glanceable comparison aid, not a precise identifier (the card
+    also carries the exact RGB and a `color_names_unique` flag so a caller
+    knows when two series share a word; see _build_verification_card)."""
+    if rgb is None:
+        return None
+    r, g, b = rgb[0], rgb[1], rgb[2]
+    mx, mn = max(r, g, b), min(r, g, b)
+    if mx - mn < 0.12:  # unsaturated: neutral
+        return "black" if mx < 0.25 else "white" if mx > 0.85 else "gray"
+    h = _rgb_hue(r, g, b, mx, mn)
+    return min(_HUE_NAMES, key=lambda hn: abs(hn[0] - h))[1]
+
+
+def _rgb_hue(r: float, g: float, b: float, mx: float, mn: float) -> float:
+    d = mx - mn
+    if mx == r:
+        h = ((g - b) / d) % 6
+    elif mx == g:
+        h = (b - r) / d + 2
+    else:
+        h = (r - g) / d + 4
+    return h * 60
 
 
 def annotate_questions(

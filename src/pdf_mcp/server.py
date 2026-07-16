@@ -2975,6 +2975,12 @@ def pdf_extract_chart(
                 response_chart["y_axis_right"] = chart["y_axis_right"]
             if "decline_reason" in chart:
                 response_chart["decline_reason"] = chart["decline_reason"]
+            # phase-1 verification card + state (FR1/FR2): present only on
+            # emitting charts (declined carries neither).
+            if "verification_card" in chart:
+                response_chart["verification_card"] = chart["verification_card"]
+            if "verification" in chart:
+                response_chart["verification"] = chart["verification"]
             response_charts.append(response_chart)
         result["charts"] = response_charts
         if result["status"] == "declined":

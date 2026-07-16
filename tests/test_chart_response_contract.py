@@ -134,6 +134,23 @@ def test_error_envelope_is_still_a_list():
     assert isinstance(r, list) and len(r) == 1 and "error" in r[0]
 
 
+def test_server_carries_verification_card_and_state():
+    """The server whitelists response keys; the phase-1 verification card and
+    state (FR1/FR2) must survive that reshaping on an emitted chart, and a
+    declined chart must NOT carry them (nothing was read to trust)."""
+    ok = server.pdf_extract_chart(path=str(SYN / "line_color_linear.pdf"), page=1)
+    ch = ok[0]["charts"][0]
+    assert ch["verification"] == "unverified"
+    card = ch["verification_card"]
+    assert card["x_axis"]["ticks"] and card["y_axis"]["ticks"]
+    assert isinstance(card["color_names_unique"], bool)
+    dec = server.pdf_extract_chart(path=str(SYN / "line_mono_crossing.pdf"), page=1)
+    dchs = [c for c in dec[0]["charts"] if c["chart_type"] == "declined"]
+    assert dchs, "expected a declined chart entry"
+    for dch in dchs:
+        assert "verification_card" not in dch and "verification" not in dch
+
+
 # --- schema<->version coupling guard ---------------------------------------
 # The CHART_EXTRACTION_VERSION bump was forgotten TWICE, and stale page_charts
 # cache then served the old shape. A comment-rule wasn't enough. This pins the
@@ -149,8 +166,12 @@ EXPECTED_CHART_KEYS = {
     "series",
     "diagnostics",
     "render_path",
-}  # optional, status-dependent keys (y_axis_right, decline_reason) excluded
-EXPECTED_SCHEMA_VERSION = 16  # BUMP THIS whenever the set above changes
+    "verification_card",
+    "verification",
+}  # optional, status-dependent keys (y_axis_right, decline_reason) excluded.
+# verification_card/verification are present on every EMITTING chart (the
+# coupling probe uses an ok chart); declined charts omit them.
+EXPECTED_SCHEMA_VERSION = 17  # BUMP THIS whenever the set above changes
 
 
 def test_response_schema_coupled_to_version():

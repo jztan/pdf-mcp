@@ -947,3 +947,45 @@ consumer's actual observation (stale result, `from_cache: true`) was a
 stale server PROCESS: per-conversation STDIO servers only pick up new
 code on restart; `pdf_cache_clear` alone cannot help there.
 `CHART_EXTRACTION_VERSION` → 16.
+
+## Phase 1: verification card + three-way verify (2026-07-16, v17)
+
+**Trust claim, restated (tiered — do not flatten):** (1) coordinates exact
+and guaranteed; (2) readings on standard typography gate-checked and
+historically correct on the matplotlib-era majority; (3) readings on the
+unbounded-typography tail auditable-not-guaranteed via the card. The card
+does NOT restore a flat "exact-or-declines" guarantee, and it must not be
+described as a flat downgrade either — the asymmetry is the honest claim.
+
+First implementation phase of the vision-assisted-calibration design
+(`docs/superpowers/specs/2026-07-16-...`, local-only). Ships the CARD and
+VERIFY only; caller-supplied calibration is deferred to v18.
+
+Built after a two-number probe (currently-declined hard cases): a capable
+VLM read the drawn-glyph (Blanton SuperMongo, 11/11), drawn-minus dB
+(2607.03442, signs correct), and locale glyphs the engine structurally
+cannot — read accuracy at the ceiling ~100% on sign/typography. The probe
+also confirmed the residual is real and concentrated in locale (value
+genuinely ambiguous even to the VLM; a consistent misread fits perfectly),
+and surfaced a v18 cost: the fully-drawn case returns 0 panels because
+panel detection is text-token-seeded, so calibration needs a
+text-independent anchor path.
+
+Shipped (v17):
+- `verification_card` per emitted chart — axis scale/range/ticks (raw +
+  value) and the series color->label map (coarse `color_name` +
+  exact-RGB + `color_names_unique`).
+- `verification` state enum (`unverified`/`card_confirmed`/
+  `labels_rejected`) — not a bool, so a bare `false` can't read as "safe".
+- three-way `p{n}.verify` (`confirmed` / `labels_wrong[:s{n}]` /
+  `axes_wrong`): confirm records an ASSERTION (stateless server can't
+  attest the render was seen); labels_wrong keeps exact coordinates and
+  nulls the disputed label(s); axes_wrong declines (no recalibration yet).
+
+Purely additive to extraction: `bench_real` byte-identical, synthetic
+0/19 wrong-emit, 1067 tests. `CHART_EXTRACTION_VERSION` → 17 (read-path
+version filter from v16 keeps a stale-code STDIO server from re-serving
+the old shape). Still HELD EXPERIMENTAL; no merge/release. Deferred to
+v18: caller calibration (FR4-7), strict flag (FR11, inert in v17),
+text-independent anchor detection, and the phase-1 catch-rate measurement
+(FR2b) that gates v18.

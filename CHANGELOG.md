@@ -37,6 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pdf_read_pages(detect_charts=True)`: opt-in per-page `charts_detected`
   signal (~10ms/page) so agents notice extractable charts
   ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
+- `pdf_extract_chart` verification card: every emitted chart carries a
+  `verification_card` — the reading the extractor made (axis
+  scale/range/ticks as-read, and the series colour→label map with a coarse
+  `color_name`, exact RGB, and a `color_names_unique` flag) — so a
+  vision-capable caller can confirm it against `render_path` in one glance.
+  A `verification` state (`unverified`/`card_confirmed`/`labels_rejected`)
+  and a closed-enum `p{n}.verify` verdict (`confirmed` /
+  `labels_wrong[:s{n}]` / `axes_wrong`) let a caller confirm the reading,
+  reject wrong labels while keeping the exact coordinates, or reject a
+  misread axis. The trust contract is now stated in three tiers —
+  coordinates exact and guaranteed, standard-typography readings
+  gate-checked, unusual-typography readings auditable-via-card — so the
+  card is neither over-trusted as a guarantee nor under-trusted as a flat
+  downgrade ([#23](https://github.com/jztan/pdf-mcp/issues/23)).
 
 ### Contributors
 - @DerDennisOP — requested chart extraction, provided the decisive sample

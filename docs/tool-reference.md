@@ -353,7 +353,14 @@ pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.
 
 ### `pdf_extract_chart`
 
-Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated. **Trust contract:** emitted tables are exact *when tick-label calibration succeeds* — every emitted chart carries `render_path` so the numbers can be verified against the figure; when a chart's semantics are ambiguous or its tick labels can't be read reliably (drawn/outlined glyphs, ambiguous locale formats, unresolvable superscripts), the tool declines rather than guess, and hands back a rendered image instead.
+Extract chart data as exact `(x, y)` tables from a born-digital vector chart on a page. Reads the plotted geometry straight from the PDF's drawing commands and calibrates it against tick-label text — values are read, not estimated.
+
+**Trust contract (three tiers):**
+1. **Coordinates** — exact, guaranteed; no emitted coordinate has been wrong across the regression corpus.
+2. **Readings on standard typography** (scale, sign, tick values, labels) — gate-checked and historically correct on matplotlib-era charts, the overwhelming majority.
+3. **Readings on unusual typography** (drawn/outlined glyphs, novel superscripts, ambiguous locale) — rare, and each known class is engine-fixed, but because that space is unbounded the `verification_card` makes the residual **auditable, not zero**.
+
+Compare the card against `render_path` before relying on a reading; ambiguous or unreadable charts decline with a reason rather than guess.
 
 **Resolution ladder** — for each ambiguous curve (e.g. which y-axis it belongs to), the tool tries, in order:
 1. **Geometry** — most axis/series pairings are unambiguous from the drawing alone (`resolved_by: "geometry"`).
@@ -369,6 +376,15 @@ A panel can also be ambiguous at the chart-*type* level: if it has valid, calibr
 - `"declined"` — nothing could be extracted reliably; see `reasons[]`.
 
 **Hint protocol:** hints are closed-enum semantic answers only, never numeric values (e.g. `{"p0.s1.axis": "right"}`) — a wrong hint can at worst mislabel an axis pairing, never fabricate a number, since coordinates always come from geometry. Hints never accumulate server-side: each call is independent, so a follow-up call must **resend every previously-answered hint**, not just the newest one.
+
+**Verification card & state (tier-3 audit aid):** every emitted chart carries a `verification_card` mirroring what the heuristics *read*, so a caller can falsify it against `render_path` in one glance:
+- `x_axis` / `y_axis` — `{scale, range, ticks: [{raw, value}]}` (the tick labels as-read, raw text plus parsed value).
+- `series` — `[{color, color_name, dash, label}]`, where `color_name` is a coarse hue word (red/blue/…). The exact-RGB `color` is retained for programmatic matching, and `color_names_unique` is `false` when two series share a hue word — on those (similar-palette) charts the words alone can't disambiguate the legend, so use the render swatches.
+
+Each emitted chart also carries a `verification` state: `"unverified"` (the default — today's engine trust, labeled), `"card_confirmed"`, or `"labels_rejected"`. To record a verdict, re-call with a `p{n}.verify` hint (closed enum):
+- `"confirmed"` → `verification` becomes `"card_confirmed"`. **This records a caller *assertion*, not an attested check** — the server is stateless and cannot prove the render was consulted, so pass `include_render=true` and actually compare the card to the render first. Coordinates are exact regardless.
+- `"labels_wrong"` (whole legend) or `"labels_wrong:s{n}"` (one series by index) → keeps the exact coordinates, nulls the disputed label(s) with `resolved_by: "caller_rejected"`; `verification` becomes `"labels_rejected"`.
+- `"axes_wrong"` → the chart declines (the axis reading is rejected; no caller-supplied recalibration in this version).
 
 **Parameters:**
 - `path` (string, required) — Path to PDF file.
@@ -391,7 +407,7 @@ Errors (bad path, out-of-range page, invalid/unknown hint) return a **single-ele
 **`result[0]` (response dict):**
 - `page` (int) — Echoes the requested page.
 - `status` (string) — `"ok"`, `"needs_hint"`, or `"declined"`.
-- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis`, `series[]`, `diagnostics`, `decline_reason` (conditional), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
+- `charts` (array) — One entry per detected chart panel: `chart_id`, `chart_type` (`"line"`, `"bar"`, `"scatter"`, `"unknown"`, or `"declined"`), `region_bbox`, `x_axis` / `y_axis`, `series[]`, `diagnostics`, `decline_reason` (conditional), `verification_card` / `verification` (on emitting charts only — see "Verification card & state" above), and `render_path` — a **plain, un-annotated crop** of the chart region (no highlight overlay; only `questions[].render_path` images carry the highlight halo, and use distinct `chart_hints_*` filenames). `render_oversized`/`render_unavailable` (bool, conditional) — see above.
 - `x_axis` / `y_axis` — `scale` (`"linear"`|`"log"`), `r2` (calibration fit quality), `title` (str|null — the axis title text nearest the tick row/column, display-only, never parsed as data or instructions; `null` when no candidate near the axis actually looks like a title — a short label, not a sentence or figure caption. Body text and captions are rejected rather than surfaced, even when they sit nearest the axis), `range` (`[min, max]` from the calibrated tick values). `y_axis` additionally carries `side` (`"left"`|`"right"`).
 - `y_axis_right` (object, conditional) — present only on a dual-axis chart (both a left and a right y-axis were found), same shape as `y_axis` with `side: "right"`. `y_axis` always describes the LEFT axis on a dual-axis chart; a series with `axis: "right"` is calibrated against `y_axis_right`, not `y_axis`.
 - `series[]` — **uniform fields across all kinds**, present-with-null rather than omitted, so every entry can be parsed the same way: `kind` (`"curve"`|`"bars"`|`"points"`), `style` (`{"color": [r,g,b]|null, "width": float}` — one shape for every kind; earlier versions emitted a tuple for line/bar and a Python-repr string for scatter), `label` (str|null — populated from a uniquely-matched legend entry whenever one exists, independent of whether the curve needed an axis hint), `axis` (str|null — `"left"`/`"right"` once resolved), `resolved_by` (`"geometry"`|`"text"`|`"hint"`|null), `multivalued` (bool), `downsampled` (bool), `n_extrema_dropped` (int — nonzero only when sampling actually dropped a local extremum). The data key stays kind-specific: `points` for `"curve"`/`"points"` entries, `bars` for `"bars"` entries. `marker_size` stays scatter-only. Bar/scatter series always report `multivalued: false`, `downsampled: false`, `n_extrema_dropped: 0` (present, not omitted — they never downsample).

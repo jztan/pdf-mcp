@@ -37,7 +37,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
 | Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted — hidden-text detection (`content_trust=True`) |
-| Tool design | Single monolithic tool | 9 specialized tools |
+| Tool design | Single monolithic tool | 10 specialized tools |
 
 ## Features
 

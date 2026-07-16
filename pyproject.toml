@@ -48,6 +48,9 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
     "joserfc>=1.6.7",
+    # Pulled in transitively via fastmcp -> typer/uvicorn; floor to clear
+    # PYSEC-2026-2132.
+    "click>=8.3.3",
     "httpx>=0.27.0",
     "tomli>=2.0; python_version < '3.11'",
 ]
@@ -57,7 +60,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0",
-    "pillow>=10.0",
+    # Floor to clear PYSEC-2026-2253..2257 / 3451..3453 (dev-only; not shipped
+    # at runtime — image extraction uses PyMuPDF, not Pillow).
+    "pillow>=12.3.0",
     "mypy>=1.8.0",
     "flake8>=7.0",
     "black>=26.3.1",

@@ -357,7 +357,7 @@ Extract chart data as exact `(x, y)` tables from a born-digital vector chart on 
 
 **Trust contract (three tiers):**
 1. **Coordinates** — exact, guaranteed; no emitted coordinate has been wrong across the regression corpus.
-2. **Readings on standard typography** (scale, sign, tick values, labels) — gate-checked and historically correct on matplotlib-era charts, the overwhelming majority.
+2. **Readings on standard typography** (scale, sign, tick values, labels) — gate-checked and reliable on matplotlib-era charts, the overwhelming majority, but **not guaranteed** (the classes that once mis-read on standard typography — base-2/`10^k` superscripts, the legend off-by-one — are engine-fixed, yet no reader is complete).
 3. **Readings on unusual typography** (drawn/outlined glyphs, novel superscripts, ambiguous locale) — rare, and each known class is engine-fixed, but because that space is unbounded the `verification_card` makes the residual **auditable, not zero**.
 
 Compare the card against `render_path` before relying on a reading; ambiguous or unreadable charts decline with a reason rather than guess.

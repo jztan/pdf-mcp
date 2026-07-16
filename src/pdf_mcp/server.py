@@ -2865,8 +2865,8 @@ def _attach_chart_image_blocks(
     description=_tool_description(
         "Extract exact (x,y) data series from born-digital vector charts."
         " Coordinates are exact and guaranteed. Axis/label READINGS are"
-        " gate-checked and correct on standard typography, but — because"
-        " completeness across every chart toolchain can't be proven — each"
+        " gate-checked and reliable on standard typography but NOT guaranteed"
+        " — no reader is complete across every chart toolchain — so each"
         " emitted chart carries a verification_card (the reading,"
         " render-comparable). A reading the tool is unsure about carries a"
         " `verify` field naming what to check; before you report a value"
@@ -2892,8 +2892,10 @@ def pdf_extract_chart(
     Trust contract, three tiers:
       1. COORDINATES are exact and guaranteed.
       2. Axis/label READINGS on standard typography (scale, sign, tick
-         values, labels) are gate-checked and historically correct on the
-         matplotlib-era charts that are the overwhelming majority.
+         values, labels) are gate-checked and reliable on the matplotlib-era
+         charts that are the overwhelming majority — reliable, but not
+         guaranteed (the classes that once mis-read on standard typography
+         are engine-fixed, yet no reader is complete).
       3. Readings on unusual typography (drawn/outlined glyphs, novel
          superscripts, ambiguous locale) are rare and each known class is
          engine-fixed, but the space is unbounded — so every emitted chart

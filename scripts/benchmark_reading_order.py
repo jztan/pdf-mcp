@@ -44,8 +44,10 @@ from typing import Any
 import pymupdf
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from pdf_mcp.extractor import extract_text_from_page  # noqa: E402
+from _mcp_client import MCPClient  # noqa: E402
 
 CORPUS = Path(__file__).parent.parent / "benchmark_data" / "reading_order_corpus.json"
 PDF_CACHE = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
@@ -201,74 +203,164 @@ def _p4llm_text(pdf: Path) -> str | None:
         return pymupdf4llm.to_markdown(str(pdf), pages=pages, show_progress=False)
 
 
-def run(limit: int | None = None) -> dict[str, Any]:
-    """Run the benchmark; return per-doc rows and per-group aggregates."""
+def _reference_text(
+    client: MCPClient, pdf: Path, tool: str, args_template: str
+) -> str | None:
+    """Reading-ordered text for the first PAGE_CAP pages from a reference MCP
+    server, or None on any failure (fail-open, like _p4llm_text)."""
+    try:
+        args = fill_reference_args(args_template, path=str(pdf), pages=f"1-{PAGE_CAP}")
+        result = client.call_tool(tool, args)
+        parts = [
+            block["text"]
+            for block in result.get("content", [])
+            if isinstance(block, dict) and isinstance(block.get("text"), str)
+        ]
+        text = "\n".join(parts)
+        return text or None
+    except Exception:
+        return None
+
+
+def _fmt(value: float | None) -> str:
+    return "%.3f" % value if value is not None else "n/a"
+
+
+def _mean(rows: list[dict[str, Any]], key: str) -> float | None:
+    vals = [r[key] for r in rows if r[key] is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+def run(
+    limit: int | None = None,
+    reference_cmd: list[str] | None = None,
+    reference_tool: str | None = None,
+    reference_args: str | None = None,
+) -> dict[str, Any]:
+    """Run the benchmark; return per-doc rows and per-group aggregates.
+
+    When reference_cmd/tool/args are all provided, an external reading-order
+    reference is spawned once and scored alongside the two built-in extractors.
+    """
     corpus = json.loads(CORPUS.read_text())
+    use_ref = bool(reference_cmd and reference_tool and reference_args)
+    client = None
+    if use_ref:
+        try:
+            client = MCPClient(reference_cmd)
+            client.initialize()
+        except Exception as exc:  # server failed to start -> drop the column
+            print(f"  reference unavailable: {exc}", file=sys.stderr)
+            client = None
+            use_ref = False
+
     rows = []
-    for group, ids in corpus.items():
-        for arxiv_id in ids[:limit] if limit else ids:
-            pdf = _fetch_pdf(arxiv_id)
-            gt = _load_gt(arxiv_id)
-            if pdf is None or gt is None:
-                print(f"  skip {arxiv_id}: fetch/GT unavailable", file=sys.stderr)
-                continue
-            pdfmcp = reading_order_score(_pdfmcp_text(pdf), gt)
-            ref_text = _p4llm_text(pdf)
-            ref = reading_order_score(ref_text, gt) if ref_text else None
-            rows.append(
-                {"id": arxiv_id, "group": group, "pdfmcp": pdfmcp, "p4llm_ref": ref}
-            )
-            print(
-                f"  {group:11} {arxiv_id:12} pdfmcp={pdfmcp:.3f} "
-                f"ref={'%.3f' % ref if ref is not None else 'n/a'}",
-                file=sys.stderr,
-            )
+    try:
+        for group, ids in corpus.items():
+            for arxiv_id in ids[:limit] if limit else ids:
+                pdf = _fetch_pdf(arxiv_id)
+                gt = _load_gt(arxiv_id)
+                if pdf is None or gt is None:
+                    print(f"  skip {arxiv_id}: fetch/GT unavailable", file=sys.stderr)
+                    continue
+                mc_text = _pdfmcp_text(pdf)
+                ref_text = _p4llm_text(pdf)
+                row = {
+                    "id": arxiv_id,
+                    "group": group,
+                    "pdfmcp_order": reading_order_score(mc_text, gt),
+                    "pdfmcp_recall": recall_score(mc_text, gt),
+                    "p4llm_order": (
+                        reading_order_score(ref_text, gt) if ref_text else None
+                    ),
+                    "p4llm_recall": recall_score(ref_text, gt) if ref_text else None,
+                    "ref_order": None,
+                    "ref_recall": None,
+                }
+                if use_ref and client is not None:
+                    rt = _reference_text(client, pdf, reference_tool, reference_args)
+                    if rt:
+                        row["ref_order"] = reading_order_score(rt, gt)
+                        row["ref_recall"] = recall_score(rt, gt)
+                rows.append(row)
+                print(
+                    f"  {group:11} {arxiv_id:12} "
+                    f"pdfmcp={row['pdfmcp_order']:.3f} "
+                    f"p4llm={_fmt(row['p4llm_order'])} "
+                    f"ref={_fmt(row['ref_order'])}",
+                    file=sys.stderr,
+                )
+    finally:
+        if client is not None:
+            client.close()
 
     aggregates = {}
     for group in corpus:
         sub = [r for r in rows if r["group"] == group]
         if not sub:
             continue
-        mc = sum(r["pdfmcp"] for r in sub) / len(sub)
-        refs = [r["p4llm_ref"] for r in sub if r["p4llm_ref"] is not None]
-        mr = sum(refs) / len(refs) if refs else None
         aggregates[group] = {
             "n": len(sub),
-            "pdfmcp": mc,
-            "p4llm_ref": mr,
-            "delta": (mr - mc) if mr is not None else None,
+            "pdfmcp_order": _mean(sub, "pdfmcp_order"),
+            "pdfmcp_recall": _mean(sub, "pdfmcp_recall"),
+            "p4llm_order": _mean(sub, "p4llm_order"),
+            "p4llm_recall": _mean(sub, "p4llm_recall"),
+            "ref_order": _mean(sub, "ref_order"),
+            "ref_recall": _mean(sub, "ref_recall"),
         }
-    return {"rows": rows, "aggregates": aggregates}
+    return {"rows": rows, "aggregates": aggregates, "used_reference": use_ref}
 
 
 def format_markdown(result: dict[str, Any]) -> str:
     lines = [
         "# Reading-order fidelity benchmark",
         "",
-        "Score = sequence similarity of normalized token streams vs READoc "
-        "ground truth (higher is better, max 1.0). `pdfmcp` = current "
-        "`extract_text_from_page`; `p4llm_ref` = PyMuPDF4LLM column-aware "
-        "reference (upper bound).",
+        "Order score = sequence similarity of normalized token streams vs "
+        "READoc ground truth (order-sensitive). Recall = order-insensitive "
+        "token overlap vs the same ground truth. `pdfmcp` = current "
+        "`extract_text_from_page`; `p4llm` = PyMuPDF4LLM column-aware path we "
+        "ship; `reference` = external XY-cut reference (when provided).",
         "",
         "## Aggregates",
         "",
-        "| group | n | pdfmcp | p4llm_ref | delta |",
-        "| --- | --- | --- | --- | --- |",
+        "| group | n | pdfmcp_order | p4llm_order | ref_order "
+        "| pdfmcp_recall | p4llm_recall | ref_recall |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for group, a in result["aggregates"].items():
-        ref = "%.3f" % a["p4llm_ref"] if a["p4llm_ref"] is not None else "n/a"
-        delta = "%+.3f" % a["delta"] if a["delta"] is not None else "n/a"
-        lines.append(f"| {group} | {a['n']} | {a['pdfmcp']:.3f} | {ref} | {delta} |")
+        lines.append(
+            f"| {group} | {a['n']} | {_fmt(a['pdfmcp_order'])} "
+            f"| {_fmt(a['p4llm_order'])} | {_fmt(a['ref_order'])} "
+            f"| {_fmt(a['pdfmcp_recall'])} | {_fmt(a['p4llm_recall'])} "
+            f"| {_fmt(a['ref_recall'])} |"
+        )
     lines += [
         "",
         "## Per-document",
         "",
-        "| id | group | pdfmcp | p4llm_ref |",
-        "| --- | --- | --- | --- |",
+        "| id | group | pdfmcp_order | p4llm_order | ref_order |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for r in result["rows"]:
-        ref = "%.3f" % r["p4llm_ref"] if r["p4llm_ref"] is not None else "n/a"
-        lines.append(f"| {r['id']} | {r['group']} | {r['pdfmcp']:.3f} | {ref} |")
+        lines.append(
+            f"| {r['id']} | {r['group']} | {_fmt(r['pdfmcp_order'])} "
+            f"| {_fmt(r['p4llm_order'])} | {_fmt(r['ref_order'])} |"
+        )
+
+    if result.get("used_reference"):
+        tc = result["aggregates"].get("two_column")
+        if tc and tc["ref_order"] is not None and tc["p4llm_order"] is not None:
+            order_gain = tc["ref_order"] - tc["p4llm_order"]
+            recall_gap = (tc["ref_recall"] or 0.0) - (tc["p4llm_recall"] or 0.0)
+            verdict = compute_verdict(order_gain, recall_gap)
+            lines += [
+                "",
+                "## Verdict (two_column)",
+                "",
+                f"- order_gain (reference - p4llm) = {order_gain:+.3f}",
+                f"- recall_gap (reference - p4llm) = {recall_gap:+.3f}",
+                f"- **{verdict}**",
+            ]
     return "\n".join(lines) + "\n"
 
 
@@ -276,9 +368,34 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=None, help="docs per group")
     parser.add_argument("--output", type=str, default=None, help="write md table")
+    parser.add_argument(
+        "--reference-cmd",
+        type=str,
+        default=None,
+        help="launch command for an external reading-order MCP server "
+        "(e.g. 'npx -y <server>'); omitted -> no reference column",
+    )
+    parser.add_argument(
+        "--reference-tool",
+        type=str,
+        default=None,
+        help="tool name to call on the reference server",
+    )
+    parser.add_argument(
+        "--reference-args",
+        type=str,
+        default=None,
+        help="JSON args template with {path} and {pages} placeholders, e.g. "
+        '\'{"sources":[{"path":"{path}","pages":"{pages}"}],"full":true}\'',
+    )
     args = parser.parse_args()
 
-    result = run(limit=args.limit)
+    result = run(
+        limit=args.limit,
+        reference_cmd=args.reference_cmd.split() if args.reference_cmd else None,
+        reference_tool=args.reference_tool,
+        reference_args=args.reference_args,
+    )
     md = format_markdown(result)
     print(md)
     if args.output:

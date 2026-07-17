@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from benchmark_reading_order import (  # noqa: E402
     classify_columns,
     compute_verdict,
+    fill_reference_args,
     normalize_tokens,
     reading_order_score,
     recall_score,
@@ -111,3 +112,17 @@ def test_verdict_boundaries_are_exclusive():
     assert compute_verdict(order_gain=0.03, recall_gap=0.00) == "NO-GO"
     assert compute_verdict(order_gain=0.04, recall_gap=0.02) == "PORT-WORTH"
     assert compute_verdict(order_gain=0.04, recall_gap=0.021) == "CONFOUNDED"
+
+
+def test_fill_reference_args_substitutes_placeholders():
+    template = '{"sources": [{"path": "{path}", "pages": "{pages}"}], "full": true}'
+    out = fill_reference_args(template, path="/tmp/a b.pdf", pages="1-6")
+    assert out == {
+        "sources": [{"path": "/tmp/a b.pdf", "pages": "1-6"}],
+        "full": True,
+    }
+
+
+def test_fill_reference_args_without_placeholders_is_plain_json():
+    out = fill_reference_args('{"k": 1}', path="/tmp/x.pdf", pages="1-6")
+    assert out == {"k": 1}

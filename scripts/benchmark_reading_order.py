@@ -75,6 +75,18 @@ def compute_verdict(order_gain: float, recall_gap: float) -> str:
     return "PORT-WORTH"
 
 
+def fill_reference_args(template: str, path: str, pages: str) -> dict[str, Any]:
+    """Substitute {path} and {pages} into a JSON args template and parse it.
+
+    Keeps the reference server's exact call shape out of committed code: the
+    operator supplies the template at run time. `pages` is the 1-indexed page
+    window (e.g. "1-6") matching PAGE_CAP; a reference that cannot honour it is
+    a comparability caveat, not this helper's concern.
+    """
+    filled = template.replace("{path}", path).replace("{pages}", pages)
+    return json.loads(filled)
+
+
 def normalize_tokens(text: str, cap: int | None = None) -> list[str]:
     """Lowercase, strip LaTeX commands, keep alphanumeric word tokens.
 

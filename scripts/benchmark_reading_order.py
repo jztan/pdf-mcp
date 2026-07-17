@@ -211,6 +211,8 @@ def _reference_text(
     try:
         args = fill_reference_args(args_template, path=str(pdf), pages=f"1-{PAGE_CAP}")
         result = client.call_tool(tool, args)
+        if result.get("isError"):
+            return None
         parts = [
             block["text"]
             for block in result.get("content", [])

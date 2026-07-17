@@ -44,6 +44,16 @@ dependencies = [
     "fastmcp>=3.0.0",
     "pymupdf>=1.24.0",
     "pydantic>=2.0",
+    # Imported directly (mcp.types) in server.py; arrives transitively via
+    # fastmcp today, but declare it explicitly so the direct import can't break
+    # if fastmcp ever drops/renames it. Stay within fastmcp's <2.0 cap; floor at
+    # 1.28.1 to clear CVE-2026-52869/52870 (fixed 1.27.2) and CVE-2026-59950
+    # (fixed 1.28.1).
+    "mcp>=1.28.1,<2.0",
+    # Required at import time by chart_extractor (unconditional `import numpy`),
+    # which server.py imports on every startup — so it's a core runtime dep, not
+    # optional. Also re-used by the semantic extra.
+    "numpy>=1.24",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
@@ -72,22 +82,22 @@ dev = [
     # Pulled in transitively via pip-audit -> cachecontrol; floor to clear
     # GHSA-6v7p-g79w-8964 (dev/build-time only, not shipped at runtime).
     "msgpack>=1.2.1",
-    "numpy>=1.24",
     "pre-commit>=3.5",
     # Column-aware extraction tests need the real detector; reference the
     # extra so its version floor lives in one place (see `multicolumn`).
     "pdf-mcp[multicolumn]",
 ]
 
+# numpy is a core dependency (see [project].dependencies), so it's not repeated
+# here — installing this extra only adds fastembed.
 semantic = [
     "fastembed>=0.7,<1.0",
-    "numpy>=1.24",
 ]
 
 # CJK (Japanese/Chinese/Korean) search. FTS5 keyword matching is unreliable on
 # unspaced CJK, so semantic search is effectively required for usable CJK
 # retrieval. Extraction itself (read/render) needs no extra. Self-referential
-# extra → pulls exactly fastembed + numpy.
+# extra → pulls exactly fastembed (numpy is already a core dep).
 cjk = ["pdf-mcp[semantic]"]
 
 # Column-aware reading order for multi-column PDFs. Optional because it pulls

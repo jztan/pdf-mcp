@@ -30,6 +30,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Token budgeting | Guess and overflow | Estimated tokens before reading |
 | Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
+| Charts | Trapped in the plot image | Extracted as `(x, y)` data tables |
 | Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
 | Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き); CJK keyword search works on unspaced Japanese/Chinese/Korean text via a char-split FTS index |
 | Images | Ignored | Extracted as PNG files |
@@ -45,10 +46,11 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
 - **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
+- **Chart data extraction** — pull exact `(x, y)` tables from vector charts, read from the plot geometry rather than guessed from the image; declines with a rendered image when a chart can't be read reliably
 - **Vertical-script reading order** — Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
 - **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
 - **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
-- **Content-trust / hidden-text detection** — flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. `pdf_info(content_trust=True)` reports it; the read tools carry a `hidden_text_detected` flag. Flag-only — nothing is stripped. Includes a configurable, non-English `injection_in_hidden` phrase hint
+- **Content-trust / hidden-text detection** — flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. Flag-only — nothing is stripped
 
 ## Contents
 

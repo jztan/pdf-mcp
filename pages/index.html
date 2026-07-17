@@ -492,15 +492,19 @@
   section.features .inner { max-width: 1040px; margin: 0 auto; text-align: center; }
   .features-title { font-family: var(--font-display); font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
   .features-sub { color: var(--text-secondary); font-size: 16px; margin: 0 auto 44px; max-width: 540px; }
-  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; text-align: left; }
-  @media (max-width: 720px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 640px) { .feature-grid { grid-template-columns: 1fr; } }
+  /* Flex-wrap (not grid) so any incomplete last row centers instead of
+     leaving a lone card orphaned against the left edge, in case the card
+     count stops being a multiple of 3. flex-basis reproduces 3/2/1 columns. */
+  .feature-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; text-align: left; }
   .feature-card {
+    flex: 0 1 calc((100% - 36px) / 3);
     background: var(--bg-elev); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 24px 22px;
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
+  @media (max-width: 720px) { .feature-card { flex-basis: calc((100% - 18px) / 2); } }
+  @media (max-width: 640px) { .feature-card { flex-basis: 100%; } }
   .feature-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
   @media (prefers-reduced-motion: reduce) { .feature-card { transition: none; } }
   .feature-icon {
@@ -807,32 +811,8 @@
         <span class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </span>
-        <h3>Hybrid RRF search</h3>
-        <p>Keyword and semantic ranking fused with reciprocal rank fusion — a query matches by wording or by meaning.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        </span>
-        <h3>CJK keyword search</h3>
-        <p>Japanese, Chinese, and Korean queries match exactly — a character-level index handles unspaced text that word-based search misses.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-        </span>
-        <h3>OCR for scanned pages</h3>
-        <p>Tesseract reads image-only PDFs, parallelized across pages for ~2–3× faster extraction.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg>
-        </span>
-        <h3>Multi-column &amp; vertical layouts</h3>
-        <p>Column-aware reading order keeps two-column papers and vertical Japanese (tategaki) text in sequence.</p>
+        <h3>Hybrid search, any language</h3>
+        <p>Keyword and semantic ranking fused with reciprocal rank fusion, matching by wording or meaning, in any language including Japanese, Chinese, and Korean.</p>
       </div>
 
       <div class="feature-card">
@@ -845,26 +825,10 @@
 
       <div class="feature-card">
         <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
         </span>
-        <h3>Bounding-box evidence</h3>
-        <p>Search hits, tables, and images carry bbox and paste-ready clip coordinates that drop straight into <code>pdf_render_pages</code>.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </span>
-        <h3>Hidden-text detection</h3>
-        <p>Text a human can't see — white-on-white, off-page, invisible render mode — is flagged so your agent treats it as untrusted.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        </span>
-        <h3>Persistent SQLite cache</h3>
-        <p>Extractions survive server restarts, keyed on file path and modification time.</p>
+        <h3>OCR for scanned pages</h3>
+        <p>Tesseract reads image-only PDFs, parallelized across pages for ~2–3× faster extraction.</p>
       </div>
 
       <div class="feature-card">
@@ -877,10 +841,42 @@
 
       <div class="feature-card">
         <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg>
+        </span>
+        <h3>Bounding-box evidence</h3>
+        <p>Search hits, tables, and images carry bbox coordinates that drop straight into <code>pdf_render_pages</code>.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg>
+        </span>
+        <h3>Multi-column &amp; vertical layouts</h3>
+        <p>Column-aware reading order keeps two-column papers and vertical Japanese (tategaki) text in sequence.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </span>
+        <h3>Hidden-text detection</h3>
+        <p>Invisible text (white-on-white, off-page, hidden render mode) is flagged so your agent treats it as untrusted.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </span>
+        <h3>Persistent SQLite cache</h3>
+        <p>Extractions survive server restarts, keyed on file path and modification time.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 8l-5 5-3-3-4 4"/></svg>
         </span>
         <h3>Chart data extraction</h3>
-        <p>Reads exact <code>(x, y)</code> tables straight from a vector chart's drawing geometry — not estimated. Ambiguous or out-of-scope charts decline with a rendered image instead of guessing.</p>
+        <p>Reads exact <code>(x, y)</code> tables from a vector chart's drawing geometry, not estimated. Unclear charts return a rendered image instead of a guess.</p>
       </div>
 
     </div>

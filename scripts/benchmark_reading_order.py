@@ -51,9 +51,28 @@ CORPUS = Path(__file__).parent.parent / "benchmark_data" / "reading_order_corpus
 PDF_CACHE = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
 PAGE_CAP = 6  # first N pages — matches the token window, bounds fetch/OCR cost
 TOKEN_CAP = 1500
+ORDER_GAIN_MIN = 0.03  # reference must beat p4llm order score by more than this
+RECALL_GAP_MAX = 0.02  # ...without out-recalling p4llm by more than this
 
 _LATEX_CMD = re.compile(r"\\[a-zA-Z]+")
 _NON_ALNUM = re.compile(r"[^a-z0-9 ]")
+
+
+def compute_verdict(order_gain: float, recall_gap: float) -> str:
+    """Go/no-go verdict for porting an XY-cut, from the two-column deltas.
+
+    order_gain = reference.order_score  - p4llm.order_score
+    recall_gap = reference.recall_score - p4llm.recall_score
+
+    PORT-WORTH  : beat p4llm on order without out-recalling it (real ordering win)
+    CONFOUNDED  : beat p4llm on order but also out-recalled it (text-layer diff)
+    NO-GO       : did not clear the order bar
+    """
+    if order_gain <= ORDER_GAIN_MIN:
+        return "NO-GO"
+    if recall_gap > RECALL_GAP_MAX:
+        return "CONFOUNDED"
+    return "PORT-WORTH"
 
 
 def normalize_tokens(text: str, cap: int | None = None) -> list[str]:

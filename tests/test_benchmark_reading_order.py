@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from benchmark_reading_order import (  # noqa: E402
     classify_columns,
+    compute_verdict,
     normalize_tokens,
     reading_order_score,
     recall_score,
@@ -91,3 +92,22 @@ def test_recall_score_is_order_insensitive_but_order_score_is_not():
     # order-sensitive score drops. This is the control's load-bearing property.
     assert recall_score(scrambled, gt) == 1.0
     assert reading_order_score(scrambled, gt) < 1.0
+
+
+def test_verdict_port_worth_on_order_gain_with_tied_recall():
+    assert compute_verdict(order_gain=0.05, recall_gap=0.00) == "PORT-WORTH"
+
+
+def test_verdict_confounded_when_recall_also_jumps():
+    assert compute_verdict(order_gain=0.05, recall_gap=0.05) == "CONFOUNDED"
+
+
+def test_verdict_no_go_below_order_threshold():
+    assert compute_verdict(order_gain=0.01, recall_gap=0.00) == "NO-GO"
+
+
+def test_verdict_boundaries_are_exclusive():
+    # order_gain must exceed +0.03; recall_gap must not exceed +0.02.
+    assert compute_verdict(order_gain=0.03, recall_gap=0.00) == "NO-GO"
+    assert compute_verdict(order_gain=0.04, recall_gap=0.02) == "PORT-WORTH"
+    assert compute_verdict(order_gain=0.04, recall_gap=0.021) == "CONFOUNDED"

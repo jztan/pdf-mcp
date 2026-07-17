@@ -37,6 +37,7 @@ import re
 import sys
 import time
 import urllib.request
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,22 @@ def reading_order_score(pred: str, gt: str) -> float:
     if not a or not b:
         return 0.0
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
+
+
+def recall_score(pred: str, gt: str) -> float:
+    """Order-insensitive token recall in [0, 1]: multiset overlap of normalized
+    tokens vs ground truth.
+
+    Isolates content recovery from ordering. Paired with reading_order_score, a
+    reading-order win can be told apart from a text-layer extraction difference:
+    a higher order score with an equal recall score is a genuine ordering win.
+    """
+    a = Counter(normalize_tokens(pred, cap=TOKEN_CAP))
+    b = Counter(normalize_tokens(gt, cap=TOKEN_CAP))
+    if not a or not b:
+        return 0.0
+    overlap = sum((a & b).values())
+    return overlap / sum(b.values())
 
 
 def classify_columns(doc: pymupdf.Document) -> int:

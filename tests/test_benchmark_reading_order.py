@@ -19,6 +19,7 @@ from benchmark_reading_order import (  # noqa: E402
     classify_columns,
     normalize_tokens,
     reading_order_score,
+    recall_score,
 )
 
 
@@ -69,3 +70,24 @@ def test_classify_columns_two_column():
     page.insert_textbox(pymupdf.Rect(340, 100, 560, 400), _BODY)
     assert classify_columns(doc) == 2
     doc.close()
+
+
+def test_recall_score_identical_is_one():
+    assert recall_score("alpha beta gamma", "alpha beta gamma") == 1.0
+
+
+def test_recall_score_disjoint_is_zero():
+    assert recall_score("xxx yyy", "alpha beta gamma") == 0.0
+
+
+def test_recall_score_empty_prediction_is_zero():
+    assert recall_score("", "alpha beta gamma") == 0.0
+
+
+def test_recall_score_is_order_insensitive_but_order_score_is_not():
+    gt = "alpha beta gamma delta epsilon"
+    scrambled = "epsilon delta gamma beta alpha"
+    # Same tokens, reversed order: recall is unchanged (1.0) but the
+    # order-sensitive score drops. This is the control's load-bearing property.
+    assert recall_score(scrambled, gt) == 1.0
+    assert reading_order_score(scrambled, gt) < 1.0

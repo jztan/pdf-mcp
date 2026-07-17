@@ -61,6 +61,8 @@ dependencies = [
     # Pulled in transitively via fastmcp -> typer/uvicorn; floor to clear
     # PYSEC-2026-2132.
     "click>=8.3.3",
+    # Pulled in transitively via fastmcp -> rich; floor to clear PYSEC-2026-2987.
+    "pygments>=2.20.0",
     "httpx>=0.27.0",
     "tomli>=2.0; python_version < '3.11'",
 ]

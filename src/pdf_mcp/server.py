@@ -15,7 +15,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 
 import httpx
 import pymupdf
@@ -26,6 +26,7 @@ from pydantic import BeforeValidator
 from . import __version__
 from . import chart_extractor
 from . import content_trust
+from . import corpus
 from .cache import PDFCache
 from .config import PDFConfig
 from .extractor import (
@@ -2195,6 +2196,100 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
 
     finally:
         doc.close()
+
+
+# ============================================================================
+# Tool: pdf_corpus_warm - warm a folder of PDFs into the cache
+# ============================================================================
+
+
+@mcp.tool(
+    description=_tool_description(
+        "Warm a folder (or list) of local PDFs into the cache: text"
+        " extraction, and optionally embeddings, up to a time budget."
+        " Warmed docs are free cache hits afterwards; call again to"
+        " continue where the budget stopped."
+    )
+)
+def pdf_corpus_warm(
+    paths: str | list[str],
+    budget_seconds: int = 45,
+    embeddings: bool = False,
+    recursive: bool = False,
+) -> dict[str, Any]:
+    """
+    Warm a corpus of local PDFs into the cache within a time budget.
+
+    Args:
+        paths: Directory containing PDFs, or an explicit list of .pdf
+            paths. URLs are not accepted (fetch via a single-doc tool
+            first). Corpora are capped at 100 files.
+        budget_seconds: Wall-clock budget for warming uncached docs
+            (clamped to 1-300). Cached docs are free. Docs that do not
+            fit the budget are listed in `unprocessed`; call again to
+            continue (warmed docs then hit cache).
+        embeddings: Also compute and cache page embeddings (requires
+            the embedding extra; needed before semantic corpus search).
+        recursive: Directory mode only, recurse into subdirectories.
+
+    Returns:
+        - docs: per-doc rows {path, status: "warmed"|"cached", pages,
+          embeddings}
+        - unprocessed: resolved paths not warmed (budget ran out)
+        - skipped: [{path, reason}] for invalid/corrupt/denied files
+        - corpus_size, warmed_this_call, budget_exhausted
+
+    Error contract: call-level failures (missing directory, empty
+    corpus, cap exceeded, unavailable embedding model) return an
+    inline {"error", "hint"} payload; check for an `error` key first.
+    """
+    budget = _clamp(budget_seconds, 1, 300)
+    res = corpus.resolve_corpus(
+        paths, recursive=recursive, check_path=pdf_config.check_path
+    )
+    if "error" in res:
+        return res
+
+    model_name: str | None = None
+    embed_fn: Callable[[list[str]], list[bytes]] | None = None
+    if embeddings:
+        from . import embedder as _embedder
+
+        _mn: str = pdf_config.embedding_model
+        model_name = _mn
+        try:
+            _embedder.check_available(_mn)
+        except Exception as e:
+            return {
+                "error": str(e),
+                "hint": (
+                    "Install the embedding extra or fix the configured"
+                    " model, or call with embeddings=False."
+                ),
+            }
+
+        def _embed(texts: list[str]) -> list[bytes]:
+            vecs = _embedder.encode(texts, _mn)
+            return [v.tobytes() for v in vecs]
+
+        embed_fn = _embed
+
+    warm = corpus.warm_docs(
+        res["files"],
+        budget,
+        cache,
+        embeddings=embeddings,
+        model_name=model_name,
+        embed=embed_fn,
+    )
+    return {
+        "docs": warm["docs"],
+        "unprocessed": warm["unprocessed"],
+        "skipped": res["skipped"] + warm["skipped"],
+        "corpus_size": len(res["files"]),
+        "warmed_this_call": warm["warmed_this_call"],
+        "budget_exhausted": warm["budget_exhausted"],
+    }
 
 
 # ============================================================================

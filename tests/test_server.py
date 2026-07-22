@@ -22,6 +22,7 @@ from pdf_mcp.server import (
     pdf_read_all,
     pdf_search,
     pdf_get_toc,
+    pdf_corpus_warm,
     pdf_cache_stats,
     pdf_cache_clear,
     pdf_render_pages,
@@ -3801,3 +3802,33 @@ def test_geometry_on_shifted_mediabox_pdf(isolated_server, tmp_path):
     # the emitted clip renders without error
     out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
     assert isinstance(out, list) and "error" not in out[0]
+
+
+class TestPdfCorpusWarm:
+    def test_warms_directory(self, corpus_dir, isolated_server):
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert "error" not in result
+        assert result["corpus_size"] == 3
+        assert result["warmed_this_call"] == 3
+        assert result["unprocessed"] == []
+        assert result["budget_exhausted"] is False
+        assert {d["status"] for d in result["docs"]} == {"warmed"}
+
+    def test_second_call_all_cached(self, corpus_dir, isolated_server):
+        pdf_corpus_warm(str(corpus_dir))
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert result["warmed_this_call"] == 0
+        assert {d["status"] for d in result["docs"]} == {"cached"}
+
+    def test_missing_directory_inline_error(self, isolated_server):
+        result = pdf_corpus_warm("/nonexistent-dir-for-corpus")
+        assert "error" in result
+        assert "hint" in result
+
+    def test_list_mode_reports_skipped(self, corpus_dir, tmp_path, isolated_server):
+        result = pdf_corpus_warm(
+            [str(corpus_dir / "alpha.pdf"), str(tmp_path / "ghost.pdf")]
+        )
+        assert result["corpus_size"] == 1
+        assert len(result["skipped"]) == 1
+        assert "not found" in result["skipped"][0]["reason"]

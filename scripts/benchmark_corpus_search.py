@@ -23,7 +23,7 @@ import json
 import re
 import sqlite3
 import sys
-import time  # noqa: F401
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -287,7 +287,164 @@ def _page_text_lookup_factory(manifest: dict):
 
 
 def run_benchmark() -> int:
-    raise NotImplementedError("Task 4")
+    """Warm the corpus, run both arms over all queries, apply the
+    pre-committed decision rule, write results.json + RESULTS.md."""
+    import tempfile
+
+    import _retrieval_metrics as rm
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.corpus import warm_docs
+
+    manifest, queries = load_manifest(), load_queries()
+    paths = [
+        str(REPO / d["path"]) for d in manifest["docs"] if (REPO / d["path"]).exists()
+    ]
+    missing = [d["path"] for d in manifest["docs"] if not (REPO / d["path"]).exists()]
+    for m in missing:
+        print(f"SKIP (missing locally): {m}")
+    if not paths:
+        print("No corpus PDFs available locally; aborting.")
+        return 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        t0 = time.perf_counter()
+        warm = warm_docs(paths, budget_seconds=3600, cache=cache)
+        warm_s = time.perf_counter() - t0
+        print(
+            f"warmed {warm['warmed_this_call']} docs in {warm_s:.1f}s"
+            f" ({len(warm['skipped'])} skipped)"
+        )
+
+        id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
+        pages: list[tuple[str, int, str]] = []
+        for row in warm["docs"]:
+            doc_id = id_by_path[row["path"]]
+            texts = cache.get_pages_text(row["path"], list(range(row["pages"])))
+            for pn, text in sorted(texts.items()):
+                pages.append((doc_id, pn + 1, text))  # 1-indexed pages
+
+        # Arm B indexes are built once (production would keep per-doc
+        # persistent indexes); arm A rebuilds per query BY DESIGN, since
+        # the production candidate is a per-query temp index.
+        conn_b = sqlite3.connect(":memory:")
+        tb0 = time.perf_counter()
+        doc_ids = build_per_doc_indexes(conn_b, pages)
+        arm_b_build_s = time.perf_counter() - tb0
+
+        per_query: dict[str, dict] = {}
+        arm_a_times: list[float] = []
+        for q in queries["queries"]:
+            labels = {(lb["doc"], lb["page"]): float(lb["gain"]) for lb in q["labels"]}
+            ideal = list(labels.values())
+            gold_docs = {lb["doc"] for lb in q["labels"] if lb["gain"] >= 2}
+
+            ta = time.perf_counter()
+            conn_a = sqlite3.connect(":memory:")
+            build_corpus_index(conn_a, pages)
+            ranked_a = search_corpus(conn_a, q["query"], TOP_K)
+            conn_a.close()
+            a_time = time.perf_counter() - ta
+            arm_a_times.append(a_time)
+
+            tqb = time.perf_counter()
+            ranked_b = search_per_doc_rrf(
+                conn_b, doc_ids, q["query"], per_doc_k=TOP_K, top_k=TOP_K
+            )
+            b_time = time.perf_counter() - tqb
+
+            per_query[q["id"]] = {
+                "class": q["class"],
+                "ndcg_a": rm.ndcg_at_k(
+                    cr.grade_ranking(ranked_a, labels), ideal, TOP_K
+                ),
+                "ndcg_b": rm.ndcg_at_k(
+                    cr.grade_ranking(ranked_b, labels), ideal, TOP_K
+                ),
+                "dochit3_a": int(bool({d for d, _p in ranked_a[:3]} & gold_docs)),
+                "dochit3_b": int(bool({d for d, _p in ranked_b[:3]} & gold_docs)),
+                "a_seconds": round(a_time, 4),
+                "b_seconds": round(b_time, 4),
+            }
+
+    def class_mean(metric: str, arm: str) -> dict[str, float]:
+        out: dict[str, list[float]] = {}
+        for row in per_query.values():
+            out.setdefault(row["class"], []).append(row[f"{metric}_{arm}"])
+        return {c: sum(v) / len(v) for c, v in out.items()}
+
+    class_ndcg_a = class_mean("ndcg", "a")
+    class_ndcg_b = class_mean("ndcg", "b")
+    arm_a_mean_s = sum(arm_a_times) / len(arm_a_times)
+    decision = cr.evaluate_decision(class_ndcg_a, class_ndcg_b, arm_a_mean_s)
+
+    all_rows = list(per_query.values())
+    results = {
+        "corpus_docs": len(doc_ids),
+        "corpus_pages": len(pages),
+        "missing_docs": missing,
+        "per_query": per_query,
+        "overall_ndcg_temp_fts": sum(r["ndcg_a"] for r in all_rows) / len(all_rows),
+        "overall_ndcg_rrf_fusion": sum(r["ndcg_b"] for r in all_rows) / len(all_rows),
+        "class_ndcg_temp_fts": class_ndcg_a,
+        "class_ndcg_rrf_fusion": class_ndcg_b,
+        "dochit3_temp_fts": class_mean("dochit3", "a"),
+        "dochit3_rrf_fusion": class_mean("dochit3", "b"),
+        "arm_a_mean_query_seconds": round(arm_a_mean_s, 4),
+        "arm_b_index_build_seconds": round(arm_b_build_s, 3),
+        "decision": decision,
+    }
+    (OUT_DIR / "results.json").write_text(
+        json.dumps(results, indent=2, ensure_ascii=False) + "\n"
+    )
+    _write_results_md(results)
+    print(f"decision: {decision['winner']}")
+    for r in decision["reasons"]:
+        print(f"  - {r}")
+    return 0
+
+
+def _write_results_md(results: dict) -> None:
+    d = results["decision"]
+    lines = [
+        "# Cross-Doc Keyword Ranking Spike: Results",
+        "",
+        f"Corpus: {results['corpus_docs']} docs,"
+        f" {results['corpus_pages']} pages"
+        f" ({len(results['missing_docs'])} manifest docs missing locally).",
+        "",
+        "## Decision",
+        "",
+        f"**Winner: {d['winner']}**",
+        "",
+    ]
+    lines += [f"- {r}" for r in d["reasons"]]
+    lines += [
+        "",
+        "## Per-class NDCG@10",
+        "",
+        "| class | temp-fts (A) | rrf-fusion (B) |",
+        "|---|---|---|",
+    ]
+    for cls in sorted(results["class_ndcg_temp_fts"]):
+        a = results["class_ndcg_temp_fts"][cls]
+        b = results["class_ndcg_rrf_fusion"].get(cls, 0.0)
+        lines.append(f"| {cls} | {a:.3f} | {b:.3f} |")
+    lines.append(
+        f"| overall | {results['overall_ndcg_temp_fts']:.3f}"
+        f" | {results['overall_ndcg_rrf_fusion']:.3f} |"
+    )
+    lines += [
+        "",
+        "## Cost",
+        "",
+        f"- Arm A mean per-query (incl. per-query index build):"
+        f" {results['arm_a_mean_query_seconds']}s",
+        f"- Arm B one-time index build: {results['arm_b_index_build_seconds']}s"
+        " (amortized in production as persistent per-doc indexes)",
+        "",
+    ]
+    (OUT_DIR / "RESULTS.md").write_text("\n".join(lines))
 
 
 def main() -> int:

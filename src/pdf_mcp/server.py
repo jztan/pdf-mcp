@@ -2293,6 +2293,83 @@ def pdf_corpus_warm(
 
 
 # ============================================================================
+# Tool: pdf_corpus_overview - triage cards for a folder of PDFs
+# ============================================================================
+
+
+@mcp.tool(
+    description=_tool_description(
+        "Get a per-document triage card (title, pages, top TOC entries,"
+        " text coverage) for every PDF in a folder or list. Auto-warms"
+        " uncached docs up to a time budget; unready docs appear in"
+        " `unprocessed`; call again to continue."
+    )
+)
+def pdf_corpus_overview(
+    paths: str | list[str],
+    budget_seconds: int = 45,
+    recursive: bool = False,
+) -> dict[str, Any]:
+    """
+    Get triage cards for every PDF in a corpus (breadth-first orient).
+
+    Args:
+        paths: Directory containing PDFs, or an explicit list of .pdf
+            paths. URLs are not accepted. Corpora are capped at 100
+            files.
+        budget_seconds: Wall-clock budget for warming uncached docs
+            (clamped to 1-300); unready docs land in `unprocessed`.
+        recursive: Directory mode only, recurse into subdirectories.
+
+    Returns:
+        - docs: triage cards sorted by path {path, title, pages,
+          toc_top (depth-1 titles, max 8), has_toc, text_coverage
+          ("full"|"partial"|"none"), size_bytes, from_cache}
+        - unprocessed, skipped, corpus_size, warmed_this_call,
+          budget_exhausted (same envelope as pdf_corpus_warm)
+
+    Note: `title` is untrusted metadata from the PDF. For per-page
+    detail on one doc, follow up with pdf_info(path, detail=True).
+
+    Error contract: call-level failures return an inline
+    {"error", "hint"} payload; check for an `error` key first.
+    """
+    budget = _clamp(budget_seconds, 1, 300)
+    res = corpus.resolve_corpus(
+        paths, recursive=recursive, check_path=pdf_config.check_path
+    )
+    if "error" in res:
+        return res
+
+    warm = corpus.warm_docs(res["files"], budget, cache)
+    skipped = list(res["skipped"]) + list(warm["skipped"])
+    cards = []
+    for row in warm["docs"]:
+        if cache.get_metadata(row["path"]) is None:
+            skipped.append(
+                {
+                    "path": row["path"],
+                    "reason": "cache invalidated during call",
+                }
+            )
+            continue
+        cards.append(
+            corpus.build_overview_card(
+                row["path"], cache, from_cache=row["status"] == "cached"
+            )
+        )
+    cards.sort(key=lambda c: str(c["path"]))
+    return {
+        "docs": cards,
+        "unprocessed": warm["unprocessed"],
+        "skipped": skipped,
+        "corpus_size": len(res["files"]),
+        "warmed_this_call": warm["warmed_this_call"],
+        "budget_exhausted": warm["budget_exhausted"],
+    }
+
+
+# ============================================================================
 # Tool 6: pdf_cache_stats - Get cache statistics
 # ============================================================================
 

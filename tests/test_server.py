@@ -23,6 +23,7 @@ from pdf_mcp.server import (
     pdf_search,
     pdf_get_toc,
     pdf_corpus_warm,
+    pdf_corpus_overview,
     pdf_cache_stats,
     pdf_cache_clear,
     pdf_render_pages,
@@ -3832,3 +3833,73 @@ class TestPdfCorpusWarm:
         assert result["corpus_size"] == 1
         assert len(result["skipped"]) == 1
         assert "not found" in result["skipped"][0]["reason"]
+
+
+CORPUS_ENVELOPE_KEYS = {
+    "docs",
+    "unprocessed",
+    "skipped",
+    "corpus_size",
+    "warmed_this_call",
+    "budget_exhausted",
+}
+
+
+class TestPdfCorpusOverview:
+    def test_cards_for_all_docs(self, corpus_dir, isolated_server):
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert "error" not in result
+        assert len(result["docs"]) == 3
+        card = result["docs"][0]
+        assert set(card.keys()) == {
+            "path",
+            "title",
+            "pages",
+            "toc_top",
+            "has_toc",
+            "text_coverage",
+            "size_bytes",
+            "from_cache",
+        }
+        paths = [c["path"] for c in result["docs"]]
+        assert paths == sorted(paths)
+
+    def test_second_call_from_cache(self, corpus_dir, isolated_server):
+        pdf_corpus_overview(str(corpus_dir))
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert result["warmed_this_call"] == 0
+        assert all(c["from_cache"] for c in result["docs"])
+
+    def test_envelope_parity_with_warm(self, corpus_dir, isolated_server):
+        warm = pdf_corpus_warm(str(corpus_dir))
+        overview = pdf_corpus_overview(str(corpus_dir))
+        assert CORPUS_ENVELOPE_KEYS <= set(warm.keys())
+        assert CORPUS_ENVELOPE_KEYS <= set(overview.keys())
+
+    def test_metadata_invalidated_during_call_is_skipped_not_raised(
+        self, corpus_dir, isolated_server
+    ):
+        """cache.get_metadata(path) can return None if the file's mtime
+        changes between warm_docs validating it and the card build. The
+        tool must route that doc to `skipped` instead of crashing."""
+        test_cache, _ = isolated_server
+        pdf_corpus_overview(str(corpus_dir))
+
+        target_path = str(corpus_dir / "alpha.pdf")
+        original_get_metadata = test_cache.get_metadata
+
+        def flaky_get_metadata(path):
+            if path == target_path:
+                return None
+            return original_get_metadata(path)
+
+        test_cache.get_metadata = flaky_get_metadata
+
+        result = pdf_corpus_overview(str(corpus_dir))
+
+        assert "error" not in result
+        skipped_paths = {s["path"]: s["reason"] for s in result["skipped"]}
+        assert skipped_paths[target_path] == "cache invalidated during call"
+        card_paths = [c["path"] for c in result["docs"]]
+        assert target_path not in card_paths
+        assert len(result["docs"]) == 2

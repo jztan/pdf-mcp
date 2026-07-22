@@ -72,3 +72,65 @@ class TestResolveCorpus:
         p = str(corpus_dir / "alpha.pdf")
         res = corpus.resolve_corpus([p, p])
         assert len(res["files"]) == 1
+
+
+class SteppingClock:
+    """Fake monotonic clock: advances a fixed step on every call."""
+
+    def __init__(self, step: float):
+        self.t = -step  # first call returns 0.0
+        self.step = step
+
+    def __call__(self) -> float:
+        self.t += self.step
+        return self.t
+
+
+def _files(corpus_dir):
+    return corpus.resolve_corpus(str(corpus_dir))["files"]
+
+
+class TestWarmDocs:
+    def test_warms_all_within_budget(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert out["unprocessed"] == []
+        assert out["budget_exhausted"] is False
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+        assert {d["pages"] for d in out["docs"]} == {1, 2, 4}
+
+    def test_second_call_is_all_cached(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        out = corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 0
+        assert {d["status"] for d in out["docs"]} == {"cached"}
+
+    def test_smallest_page_count_warms_first(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
+        order = [Path(d["path"]).name for d in out["docs"] if d["status"] == "warmed"]
+        assert order == ["charlie.pdf", "alpha.pdf", "bravo.pdf"]
+
+    def test_budget_exhaustion_reports_unprocessed(self, corpus_dir, cache):
+        # Clock steps 6s per call, budget 10s: start=0, first check
+        # reads 6 (warm charlie), second check reads 12 (> 10, stop).
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
+        assert out["warmed_this_call"] == 1
+        assert len(out["unprocessed"]) == 2
+        assert out["budget_exhausted"] is True
+        assert Path(out["docs"][0]["path"]).name == "charlie.pdf"
+
+    def test_corrupt_pdf_skipped_others_warm(self, corpus_dir, cache):
+        (corpus_dir / "corrupt.pdf").write_bytes(b"not a real pdf")
+        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert len(out["skipped"]) == 1
+        assert "corrupt.pdf" in out["skipped"][0]["path"]
+
+    def test_warm_populates_text_cache(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        alpha = [f for f in files if f.endswith("alpha.pdf")][0]
+        texts = cache.get_pages_text(alpha, [0, 1])
+        assert len(texts) == 2
+        assert "budget" in texts[0].lower()

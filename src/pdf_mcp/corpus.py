@@ -10,10 +10,15 @@ caller; this module owns no storage of its own.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["CORPUS_MAX_FILES", "resolve_corpus"]
+import pymupdf
+
+from .extractor import extract_metadata, extract_text_from_page, extract_toc
+
+__all__ = ["CORPUS_MAX_FILES", "resolve_corpus", "warm_docs"]
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
 # explicit. Beyond this, corpus tools return an inline error instead
@@ -117,3 +122,152 @@ def resolve_corpus(
             ),
         }
     return {"files": files, "skipped": skipped}
+
+
+def _cached_pages(
+    path: str,
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+) -> int | None:
+    """Return the doc's page count if it is fully warm in cache, else None.
+
+    Fully warm = valid metadata row including a text_coverage map, all
+    pages' text cached, and (when ``embeddings``) embeddings cached for
+    every non-empty page. Staleness is handled by the cache layer's
+    mtime checks: invalid rows simply come back missing.
+    """
+    meta = cache.get_metadata(path)
+    if not meta or meta.get("text_coverage") is None:
+        return None
+    pages: int = meta["page_count"]
+    texts = cache.get_pages_text(path, list(range(pages)))
+    if len(texts) < pages:
+        return None
+    if embeddings:
+        non_empty = [pn for pn, t in texts.items() if t.strip()]
+        embs = cache.get_page_embeddings(path, non_empty, model_name)
+        if len(embs) < len(non_empty):
+            return None
+    return pages
+
+
+def _warm_one_doc(
+    path: str,
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+) -> int:
+    """Extract everything for one doc, then write to cache.
+
+    Extraction completes fully before any write, so a failure leaves
+    the cache untouched (atomic per doc). Coverage counts use raw
+    ``get_text()`` chars, matching pdf_info's coverage scan.
+    """
+    doc = pymupdf.open(path)
+    blobs: dict[int, bytes] = {}
+    try:
+        page_count = len(doc)
+        metadata = extract_metadata(doc)
+        toc = extract_toc(doc)
+        coverage: list[dict[str, int]] = []
+        texts: dict[int, str] = {}
+        for pn in range(page_count):
+            page = doc[pn]
+            texts[pn] = extract_text_from_page(page, sort_by_position=True)
+            coverage.append(
+                {
+                    "page": pn + 1,
+                    "text_chars": len(page.get_text()),
+                    "raster_images": len({img[0] for img in page.get_images()}),
+                }
+            )
+        if embeddings:
+            assert embed is not None and model_name is not None
+            non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+            if non_empty:
+                nums = sorted(non_empty)
+                vecs = embed([non_empty[pn] for pn in nums])
+                blobs = dict(zip(nums, vecs))
+    finally:
+        doc.close()
+
+    cache.save_metadata(path, page_count, metadata, toc, text_coverage=coverage)
+    cache.save_pages_text(path, texts)
+    if blobs and model_name is not None:
+        cache.save_page_embeddings(path, blobs, model_name)
+    return page_count
+
+
+def warm_docs(
+    files: list[str],
+    budget_seconds: float,
+    cache: Any,
+    embeddings: bool = False,
+    model_name: str | None = None,
+    embed: Callable[[list[str]], list[bytes]] | None = None,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    """Budgeted warm loop over a resolved corpus.
+
+    Cached docs are free (never charged against the budget). Uncached
+    docs warm smallest-first, one at a time, atomically; the clock is
+    checked between docs only. Per-doc failures land in ``skipped``
+    and never abort the batch.
+    """
+    start = clock()
+    docs: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    uncached: list[tuple[str, int]] = []
+
+    for path in files:
+        pages = _cached_pages(path, cache, embeddings, model_name)
+        if pages is not None:
+            docs.append(
+                {
+                    "path": path,
+                    "status": "cached",
+                    "pages": pages,
+                    "embeddings": embeddings,
+                }
+            )
+            continue
+        try:
+            with pymupdf.open(path) as probe:
+                uncached.append((path, len(probe)))
+        except Exception as e:
+            skipped.append({"path": path, "reason": f"unreadable: {e}"})
+
+    uncached.sort(key=lambda item: item[1])
+
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    warmed = 0
+    for i, (path, _pages) in enumerate(uncached):
+        if clock() - start > budget_seconds:
+            unprocessed = [p for p, _ in uncached[i:]]
+            budget_exhausted = True
+            break
+        try:
+            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
+        except Exception as e:
+            skipped.append({"path": path, "reason": f"warm failed: {e}"})
+            continue
+        warmed += 1
+        docs.append(
+            {
+                "path": path,
+                "status": "warmed",
+                "pages": page_count,
+                "embeddings": embeddings,
+            }
+        )
+
+    return {
+        "docs": docs,
+        "unprocessed": unprocessed,
+        "skipped": skipped,
+        "warmed_this_call": warmed,
+        "budget_exhausted": budget_exhausted,
+    }

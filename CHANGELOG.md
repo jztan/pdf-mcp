@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Python 3.14 support: tested in CI (test matrix extended to 3.14) and
   declared in the PyPI classifiers.
+- `pdf_corpus_warm` and `pdf_corpus_overview`: stage-1 multi-document
+  corpus tools. Point them at a folder (or explicit list) of local
+  PDFs to warm text (and optionally embeddings) into the cache within
+  a time budget, and to get per-document triage cards (title, page
+  count, top TOC entries, text coverage). Budget-exhausted docs are
+  reported in `unprocessed`; repeat calls continue where warming
+  stopped. Corpora are capped at 100 files; URLs are not accepted.
 
 ### Fixed
 - Multi-column text extraction no longer duplicates text, and its reading

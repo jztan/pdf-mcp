@@ -38,7 +38,7 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
 | Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted — hidden-text detection (`content_trust=True`) |
-| Tool design | Single monolithic tool | 10 specialized tools |
+| Tool design | Single monolithic tool | 12 specialized tools |
 
 ## Features
 
@@ -273,6 +273,8 @@ The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate 
 |------|--------------|
 | `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** Pass `content_trust=True` for a `content_trust` block (`suspicious`, `hidden_text_runs`, `hidden_chars`, `injection_in_hidden`, `pages_flagged`, `signals`); add `detail=True` for per-span `spans`. |
 | `pdf_get_toc` | Full table of contents for documents with >50 bookmarks |
+| `pdf_corpus_warm` | Warm a folder (or list) of PDFs into the cache, text and optional embeddings, within a time budget. Returns per-doc status plus `unprocessed`/`skipped`. |
+| `pdf_corpus_overview` | Per-document triage cards for a folder: title, page count, top TOC entries, text coverage. Auto-warms within the budget. |
 | `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables, each with source `bbox` + `clip` coordinates. Always returns `hidden_text_detected` (response level) and per-page `hidden_text`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |

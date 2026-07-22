@@ -7,6 +7,7 @@ Complete documentation for the `pdf-mcp` MCP tools.
 | [Document Introspection](#document-introspection) | `pdf_info`, `pdf_get_toc` |
 | [Content Reading](#content-reading) | `pdf_read_pages`, `pdf_read_all`, `pdf_render_pages` |
 | [Search](#search) | `pdf_search` |
+| [Corpus](#corpus) | `pdf_corpus_warm`, `pdf_corpus_overview` |
 | [Cache Management](#cache-management) | `pdf_cache_stats`, `pdf_cache_clear` |
 | [Server Introspection](#server-introspection) | `server_info` |
 
@@ -660,6 +661,110 @@ pdf_search("/path/to/paper.pdf", "training process", granularity="section")
 
 ```python
 pdf_search("/path/to/manual.pdf", "ERR-4172", mode="keyword")
+```
+
+---
+
+## Corpus
+
+Both tools take a directory of local PDFs (or an explicit list of paths) and process them within a shared time budget. Directory mode is non-recursive by default, matches `*.pdf` case-insensitively, and returns files sorted. Uncached docs are warmed smallest-page-count-first, one at a time; already-cached docs are free and are never charged against the budget. The clock is only checked between docs, so one very large document can run past the budget before the next check fires. Docs that don't fit the budget come back in `unprocessed`; call again with the same corpus to continue where it stopped, since already-warmed docs then hit cache.
+
+Shared envelope (both tools):
+- `docs` (array) — per-tool row shape, see below.
+- `unprocessed` (array of paths) — resolved paths not processed this call because the budget ran out.
+- `skipped` (array) — `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, unreadable file, cache invalidated mid-call).
+- `corpus_size` (int) — number of files resolved into the corpus (before skips).
+- `warmed_this_call` (int) — count of docs actually extracted this call (cache hits don't count).
+- `budget_exhausted` (bool) — `true` when `unprocessed` is non-empty because the budget ran out.
+
+**Error contract:** call-level failures (missing directory, empty corpus, corpus above the file cap, embeddings requested with an unavailable embedding model) return an inline `{"error": "...", "hint": "..."}` payload instead of raising. Check for an `error` key before reading other fields.
+
+**Limitations (both tools):**
+- Corpora are capped at 100 files; a larger corpus returns an inline error rather than truncating silently.
+- URLs are not accepted; fetch a remote PDF via a single-doc tool first, then point a corpus tool at its local path.
+- `budget_seconds` is clamped to 1-300 regardless of what's passed in.
+
+### `pdf_corpus_warm`
+
+Warms a folder or explicit list of local PDFs into the cache: text extraction, and optionally page embeddings, up to a wall-clock time budget. Use this to pre-populate the cache before a batch of `pdf_search` or `pdf_read_pages` calls so those calls hit cache instead of re-extracting.
+
+**Parameters:**
+- `paths` (string or array, required) — A directory containing PDFs, or an explicit list of `.pdf` paths.
+- `budget_seconds` (int, optional, default `45`) — Wall-clock budget for warming uncached docs, clamped to 1-300. Cached docs are free.
+- `embeddings` (bool, optional, default `false`) — Also compute and cache page embeddings for each doc (requires the embedding extra to be installed and a working embedding model). Needed before semantic search over the corpus.
+- `recursive` (bool, optional, default `false`) — Directory mode only: recurse into subdirectories.
+
+**Returns:**
+- `docs` (array) — `[{path, status: "warmed" | "cached", pages, embeddings}, ...]`.
+- Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
+
+**Limitations:**
+- The 100-file cap, budget clamp, and URL rejection described above apply.
+- Budget is checked between docs, not within one: one very large PDF can push the call past `budget_seconds` before the next check.
+- Repeat calls continue warming from where the previous call's budget stopped; already-warmed docs come back as `"cached"` and don't re-extract.
+
+**Example:**
+
+```python
+pdf_corpus_warm("/path/to/reports/", budget_seconds=60)
+# {
+#   "docs": [
+#     {"path": "/path/to/reports/q1.pdf", "status": "cached",
+#      "pages": 12, "embeddings": false},
+#     {"path": "/path/to/reports/q2.pdf", "status": "warmed",
+#      "pages": 18, "embeddings": false}
+#   ],
+#   "unprocessed": ["/path/to/reports/q3-annual.pdf"],
+#   "skipped": [],
+#   "corpus_size": 3,
+#   "warmed_this_call": 1,
+#   "budget_exhausted": true
+# }
+```
+
+### `pdf_corpus_overview`
+
+Returns a per-document triage card for every PDF in a folder or list: title, page count, top table-of-contents entries, and a text-coverage label. Auto-warms uncached docs up to the time budget first, so a fresh corpus can be surveyed in one call. Use this to orient across a folder of documents before deciding which ones warrant a closer `pdf_info` or `pdf_search` call.
+
+**Parameters:**
+- `paths` (string or array, required) — A directory containing PDFs, or an explicit list of `.pdf` paths.
+- `budget_seconds` (int, optional, default `45`) — Wall-clock budget for warming uncached docs before building their cards, clamped to 1-300.
+- `recursive` (bool, optional, default `false`) — Directory mode only: recurse into subdirectories.
+
+**Returns:**
+- `docs` (array, sorted by path) — triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`.
+  - `title` — PDF metadata title, or `null` if absent. **Untrusted content from the PDF.**
+  - `toc_top` — depth-1 TOC entry titles, capped at 8.
+  - `text_coverage` — `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.
+- Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
+
+**Limitations:**
+- The 100-file cap, budget clamp, and URL rejection described above apply.
+- Cards carry no per-page arrays and no content excerpts; follow up with `pdf_info(path, detail=True)` for per-page detail on a single document of interest.
+- `title` is untrusted PDF metadata and may be absent.
+- A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated during call"`.
+
+**Example:**
+
+```python
+pdf_corpus_overview("/path/to/reports/")
+# {
+#   "docs": [
+#     {"path": "/path/to/reports/q1.pdf", "title": "Q1 Report",
+#      "pages": 12, "toc_top": ["Summary", "Results", "Outlook"],
+#      "has_toc": true, "text_coverage": "full",
+#      "size_bytes": 184320, "from_cache": true},
+#     {"path": "/path/to/reports/q2.pdf", "title": null,
+#      "pages": 18, "toc_top": [], "has_toc": false,
+#      "text_coverage": "partial", "size_bytes": 265120,
+#      "from_cache": false}
+#   ],
+#   "unprocessed": ["/path/to/reports/q3-annual.pdf"],
+#   "skipped": [],
+#   "corpus_size": 3,
+#   "warmed_this_call": 1,
+#   "budget_exhausted": true
+# }
 ```
 
 ---

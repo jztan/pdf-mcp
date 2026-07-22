@@ -673,7 +673,7 @@ Shared envelope (both tools):
 - `docs` (array): per-tool row shape, see below.
 - `unprocessed` (array of paths): resolved paths not processed this call because the budget ran out.
 - `skipped` (array): `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, unreadable file).
-- `corpus_size` (int): number of files resolved into the corpus (before skips).
+- `corpus_size` (int): number of files that passed resolution into the corpus (skipped entries are excluded).
 - `warmed_this_call` (int): count of docs actually extracted this call (cache hits don't count).
 - `budget_exhausted` (bool): `true` when `unprocessed` is non-empty because the budget ran out.
 
@@ -742,7 +742,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - The 100-file cap, budget clamp, and URL rejection described above apply.
 - Cards carry no per-page arrays and no content excerpts; follow up with `pdf_info(path, detail=True)` for per-page detail on a single document of interest.
 - `title` is untrusted PDF metadata and may be absent.
-- A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated mid-call"` (pdf_corpus_overview only).
+- A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated during call"` (pdf_corpus_overview only).
 
 **Example:**
 

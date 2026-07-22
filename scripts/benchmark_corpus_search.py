@@ -148,10 +148,11 @@ def search_per_doc_rrf(
     cjk = _contains_cjk(query)
     fts_query = _escape_fts5_query_cjk(query) if cjk else _escape_fts5_query(query)
     # Cheap guard: the per-doc-index table for doc_ids[i] must exist at
-    # position i. This does not fully prove the caller's list matches
-    # build_per_doc_indexes' order (the docstring contract above is the
-    # primary defense), but it catches the common misuse of passing a
-    # shorter, reordered, or filtered list against a stale connection.
+    # position i. Catches doc_ids lists longer than the built tables
+    # and stale/empty connections. Cannot detect same-length reorderings
+    # or filtered subsets, which silently mislabel results. The ordering
+    # contract (pass exactly the list returned by build_per_doc_indexes,
+    # unmodified) is the only defense.
     existing = {
         row[0]
         for row in conn.execute(

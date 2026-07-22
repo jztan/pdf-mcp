@@ -99,7 +99,13 @@ def _doc_table(idx: int, cjk: bool) -> str:
 def build_per_doc_indexes(
     conn: sqlite3.Connection, pages: list[tuple[str, int, str]]
 ) -> list[str]:
-    """Arm B indexes: one FTS5 pair per document (per-doc IDF)."""
+    """Arm B indexes: one FTS5 pair per document (per-doc IDF).
+
+    The returned list's order is the table-naming contract: table i is
+    named from doc_ids[i] (see `_doc_table`). Callers must pass this
+    exact list, in this exact order, to `search_per_doc_rrf` — it
+    re-derives table names positionally from the list it is given.
+    """
     doc_ids = sorted({doc for doc, _page, _text in pages})
     for i, doc_id in enumerate(doc_ids):
         conn.execute(
@@ -131,9 +137,35 @@ def search_per_doc_rrf(
     per_doc_k: int,
     top_k: int,
 ) -> list[tuple[str, int]]:
-    """Arm B: query each doc's own index, RRF-fuse the rank lists."""
+    """Arm B: query each doc's own index, RRF-fuse the rank lists.
+
+    doc_ids must be the exact, order-preserved list returned by
+    build_per_doc_indexes: table names are re-derived positionally from
+    this list (table i is `_doc_table(i, ...)`, named from doc_ids[i]
+    at build time), so a reordered or filtered list will silently query
+    the wrong document's table.
+    """
     cjk = _contains_cjk(query)
     fts_query = _escape_fts5_query_cjk(query) if cjk else _escape_fts5_query(query)
+    # Cheap guard: the per-doc-index table for doc_ids[i] must exist at
+    # position i. This does not fully prove the caller's list matches
+    # build_per_doc_indexes' order (the docstring contract above is the
+    # primary defense), but it catches the common misuse of passing a
+    # shorter, reordered, or filtered list against a stale connection.
+    existing = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+    for i in range(len(doc_ids)):
+        expected = _doc_table(i, cjk)
+        if expected not in existing:
+            raise ValueError(
+                f"missing table {expected!r} for doc_ids[{i}] = "
+                f"{doc_ids[i]!r}; doc_ids must be the exact, "
+                "order-preserved list returned by build_per_doc_indexes"
+            )
     rank_lists: list[list[tuple[str, int]]] = []
     for i, doc_id in enumerate(doc_ids):
         table = _doc_table(i, cjk)

@@ -94,30 +94,53 @@ class TestEvaluateDecision:
         assert any("regress" in r for r in out["reasons"])
 
 
-# Trap fixture: "budget" is boilerplate on every page of alpha and bravo;
-# "shortfall" also appears once on alpha/bravo page 2 (padded with filler
-# so each page is longer than zulu's), so all three docs match the query
-# under FTS5's AND-per-token semantics — the per-doc index cannot skip
-# alpha/bravo the way it would if they lacked "shortfall" entirely.
-# Global IDF (arm A) still ranks zulu page 2 first: BM25 rewards zulu's
-# short, concentrated page over alpha/bravo's longer, padded ones.
+# Trap fixture: this synthetic corpus proves the two arms are
+# distinguishable, not that either one is "smarter". Arm A ranks
+# cross-doc via corpus-wide BM25 (here dominated by length
+# normalization, not IDF); arm B fuses within-doc ranks, so pages
+# tied at equal within-doc rank tie regardless of content. The real
+# IDF-vs-fusion question is answered by the trap-class queries on the
+# real corpus in the benchmark run, not by this fixture.
+#
+# "budget" is boilerplate on every page of alpha and bravo; "shortfall"
+# also appears once on alpha/bravo page 2, buried in heavy filler so
+# those pages are much longer than zulu's short, concentrated page, so
+# all three docs match the query under FTS5's AND-per-token semantics.
+# The decoy pages (page 3/4 on each doc, none containing "budget" or
+# "shortfall") exist only to keep both terms' corpus-wide document
+# frequency away from exactly half the corpus: at exactly N/2, SQLite's
+# BM25 IDF term evaluates to ln(1) == 0, collapsing all three matching
+# pages' scores to a ~1e-6 sliver that any BM25 rounding change or
+# one-word fixture edit could flip. With the decoys, arm A's margin
+# between zulu page 2 and the alpha/bravo runner-up is a comfortable
+# ~0.78 (measured: zulu -1.122 vs alpha/bravo -0.343).
 # Rank-only fusion (arm B) sees all three docs tie at within-doc rank 1,
 # and its tie-break prefers alphabetical doc ids, surfacing alpha first.
 TRAP_PAGES = [
-    ("alpha", 1, "annual budget overview for the fiscal year budget"),
+    ("alpha", 1, "annual budget overview for the fiscal year budget budget budget"),
     (
         "alpha",
         2,
-        "budget tables and appendix shortfall listings extra padding words here",
+        ("budget " * 8)
+        + (" ".join(["padding"] * 60))
+        + " shortfall "
+        + (" ".join(["padding"] * 60)),
     ),
-    ("bravo", 1, "budget summary and budget notes for departments"),
+    ("bravo", 1, "budget summary and budget notes for departments budget budget"),
     (
         "bravo",
         2,
-        "departmental budget planning shortfall review extra padding words here",
+        ("budget " * 8)
+        + (" ".join(["padding"] * 60))
+        + " shortfall "
+        + (" ".join(["padding"] * 60)),
     ),
     ("zulu", 1, "unrelated prose about municipal parks and events"),
     ("zulu", 2, "the projected budget shortfall requires council action"),
+    ("alpha", 3, "quarterly report on staffing and logistics for the office"),
+    ("bravo", 3, "meeting minutes regarding facilities and travel policy"),
+    ("zulu", 3, "park maintenance schedule and volunteer sign up sheet"),
+    ("alpha", 4, "training materials for new hires in the finance office"),
 ]
 
 
@@ -126,7 +149,7 @@ def _conn():
 
 
 class TestCorpusFtsArm:
-    def test_trap_query_ranks_meaningful_page_first(self):
+    def test_corpus_arm_discriminates_across_docs(self):
         conn = _conn()
         build_corpus_index(conn, TRAP_PAGES)
         ranked = search_corpus(conn, "budget shortfall", top_k=5)
@@ -141,7 +164,7 @@ class TestCorpusFtsArm:
 
 
 class TestPerDocRrfArm:
-    def test_trap_query_shows_rank_fusion_weakness(self):
+    def test_rrf_arm_cannot_discriminate_across_docs(self):
         conn = _conn()
         doc_ids = build_per_doc_indexes(conn, TRAP_PAGES)
         assert doc_ids == ["alpha", "bravo", "zulu"]
@@ -150,7 +173,9 @@ class TestPerDocRrfArm:
         )
         # Every doc's within-doc best hit fuses at the same RRF score;
         # alphabetical tie-break puts a boilerplate page first. This is
-        # the structural weakness the trap class measures.
+        # the structural limitation of rank-only fusion the trap class
+        # measures: it cannot discriminate across docs by content, only
+        # by within-doc rank.
         assert ranked[0][0] == "alpha"
         assert ("zulu", 2) in ranked
 

@@ -183,3 +183,45 @@ class TestWarmDocs:
         )
         # Text is cached but embeddings are missing -> re-warm.
         assert out["warmed_this_call"] == 3
+
+
+class TestOverviewCards:
+    def test_text_coverage_label(self):
+        full = [{"page": 1, "text_chars": 10, "raster_images": 0}]
+        none = [{"page": 1, "text_chars": 0, "raster_images": 1}]
+        part = full + none
+        assert corpus.text_coverage_label(full) == "full"
+        assert corpus.text_coverage_label(none) == "none"
+        assert corpus.text_coverage_label(part) == "partial"
+        assert corpus.text_coverage_label([]) == "none"
+
+    def test_card_fields(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        alpha = [f for f in files if f.endswith("alpha.pdf")][0]
+        card = corpus.build_overview_card(alpha, cache, from_cache=False)
+        assert card["path"] == alpha
+        assert card["title"] is None  # fixture sets no metadata title
+        assert card["pages"] == 2
+        assert card["toc_top"] == []
+        assert card["has_toc"] is False
+        assert card["text_coverage"] == "full"
+        assert card["size_bytes"] > 0
+        assert card["from_cache"] is False
+
+    def test_toc_top_depth1_capped(self, cache, tmp_path):
+        p = tmp_path / "toc.pdf"
+        doc = pymupdf.open()
+        for _ in range(3):
+            page = doc.new_page()
+            page.insert_text((50, 50), "Chapter body text here.")
+        doc.set_toc(
+            [[1, "Intro", 1], [2, "Sub A", 1], [1, "Results", 2], [1, "End", 3]]
+        )
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+        corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+        card = corpus.build_overview_card(path, cache, from_cache=False)
+        assert card["toc_top"] == ["Intro", "Results", "End"]
+        assert card["has_toc"] is True

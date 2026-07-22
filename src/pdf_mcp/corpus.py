@@ -18,7 +18,13 @@ import pymupdf
 
 from .extractor import extract_metadata, extract_text_from_page, extract_toc
 
-__all__ = ["CORPUS_MAX_FILES", "resolve_corpus", "warm_docs"]
+__all__ = [
+    "CORPUS_MAX_FILES",
+    "resolve_corpus",
+    "warm_docs",
+    "text_coverage_label",
+    "build_overview_card",
+]
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
 # explicit. Beyond this, corpus tools return an inline error instead
@@ -270,4 +276,35 @@ def warm_docs(
         "skipped": skipped,
         "warmed_this_call": warmed,
         "budget_exhausted": budget_exhausted,
+    }
+
+
+def text_coverage_label(coverage: list[dict[str, int]]) -> str:
+    """Collapse a per-page coverage map into a triage label.
+
+    "full" when every page has text, "none" when no page does,
+    else "partial". An empty map (zero-page doc) reads as "none".
+    """
+    pages_with_text = sum(1 for c in coverage if c["text_chars"] > 0)
+    if coverage and pages_with_text == len(coverage):
+        return "full"
+    if pages_with_text == 0:
+        return "none"
+    return "partial"
+
+
+def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, Any]:
+    """Build one triage card from cached data only (doc must be warm)."""
+    meta = cache.get_metadata(path)
+    toc = meta.get("toc") or []
+    title = (meta.get("metadata") or {}).get("title") or None
+    return {
+        "path": path,
+        "title": title,
+        "pages": meta["page_count"],
+        "toc_top": [e["title"] for e in toc if e["level"] == 1][:8],
+        "has_toc": bool(toc),
+        "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
+        "size_bytes": meta["file_size"],
+        "from_cache": from_cache,
     }

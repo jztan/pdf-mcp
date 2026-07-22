@@ -10,8 +10,10 @@ from scripts._corpus_ranking import (
 from scripts.benchmark_corpus_search import (
     build_corpus_index,
     build_per_doc_indexes,
+    normalize,
     search_corpus,
     search_per_doc_rrf,
+    validate_queries,
 )
 
 
@@ -187,3 +189,49 @@ class TestPerDocRrfArm:
         b = search_per_doc_rrf(conn, doc_ids, "municipal parks", per_doc_k=10, top_k=3)
         assert a[0] == ("zulu", 1)
         assert b[0] == ("zulu", 1)
+
+
+class TestValidation:
+    def test_normalize_collapses_whitespace_and_case(self):
+        assert normalize("Flash\nAttention  IO") == "flash attention io"
+
+    def test_validate_queries_reports_missing_doc_and_bad_evidence(self):
+        manifest = {"docs": [{"id": "d1", "path": "x.pdf", "lang": "en"}]}
+        queries = {
+            "queries": [
+                {
+                    "id": "q1",
+                    "class": "needle",
+                    "query": "anything",
+                    "labels": [{"doc": "ghost", "page": 1, "gain": 2, "evidence": "e"}],
+                }
+            ]
+        }
+        errors = validate_queries(manifest, queries, page_text_lookup=lambda d, p: "")
+        assert any("ghost" in e for e in errors)
+
+    def test_validate_queries_passes_when_evidence_found(self):
+        manifest = {"docs": [{"id": "d1", "path": "x.pdf", "lang": "en"}]}
+        queries = {
+            "queries": [
+                {
+                    "id": "q1",
+                    "class": "needle",
+                    "query": "anything",
+                    "labels": [
+                        {
+                            "doc": "d1",
+                            "page": 2,
+                            "gain": 2,
+                            "evidence": "IO complexity",
+                        }
+                    ],
+                }
+            ]
+        }
+        errors = validate_queries(
+            manifest,
+            queries,
+            page_text_lookup=lambda d, p: "We analyze the IO\ncomplexity here.",
+        )
+        assert errors == []

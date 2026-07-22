@@ -18,9 +18,9 @@ FTS tables from cached page text. Tokenization mirrors production
 
 from __future__ import annotations
 
-import argparse  # noqa: F401
-import json  # noqa: F401
-import re  # noqa: F401
+import argparse
+import json
+import re
 import sqlite3
 import sys
 import time  # noqa: F401
@@ -177,3 +177,151 @@ def search_per_doc_rrf(
         if rows:
             rank_lists.append([(doc_id, int(p)) for (p,) in rows])
     return cr.rrf_fuse_doc_rankings(rank_lists, top_k=top_k)
+
+
+# --------------------------------------------------------------------------
+# Manifest and ground-truth validation
+# --------------------------------------------------------------------------
+
+
+def build_manifest() -> dict:
+    """Enumerate local corpus PDFs into a committed manifest.
+
+    EN docs come from the untracked reading-order corpus (sorted, capped
+    at EN_DOC_CAP); CJK docs from the local vertical-jp samples (capped
+    at CJK_DOC_CAP). Missing directories reduce the corpus, loudly.
+    """
+    docs: list[dict[str, str]] = []
+    if EN_PDF_DIR.is_dir():
+        for p in sorted(EN_PDF_DIR.glob("*.pdf"))[:EN_DOC_CAP]:
+            docs.append(
+                {
+                    "id": p.stem,
+                    "path": str(p.relative_to(REPO)),
+                    "lang": "en",
+                }
+            )
+    else:
+        print(f"WARNING: {EN_PDF_DIR} absent; no EN docs in manifest")
+    if CJK_PDF_DIR.is_dir():
+        for p in sorted(CJK_PDF_DIR.glob("*.pdf"))[:CJK_DOC_CAP]:
+            docs.append(
+                {
+                    "id": p.stem.split("_vertical")[0],
+                    "path": str(p.relative_to(REPO)),
+                    "lang": "cjk",
+                }
+            )
+    else:
+        print(f"WARNING: {CJK_PDF_DIR} absent; no CJK docs in manifest")
+    return {
+        "description": (
+            "Corpus for the cross-doc keyword ranking spike. PDFs are"
+            " local-only (not committed); missing files are skipped"
+            " loudly at run time."
+        ),
+        "docs": docs,
+    }
+
+
+def load_manifest() -> dict:
+    return json.loads((OUT_DIR / "manifest.json").read_text())
+
+
+def load_queries() -> dict:
+    return json.loads((OUT_DIR / "queries.json").read_text())
+
+
+_WS = re.compile(r"\s+")
+
+
+def normalize(text: str) -> str:
+    """Whitespace-collapse + casefold for evidence matching."""
+    return _WS.sub(" ", text).strip().casefold()
+
+
+def validate_queries(manifest, queries, page_text_lookup) -> list[str]:
+    """Check every label: doc exists in manifest, evidence substring is
+    present (normalized) in that doc/page's text. Returns error strings.
+
+    page_text_lookup(doc_id, page_1indexed) -> str
+    """
+    known = {d["id"] for d in manifest["docs"]}
+    errors: list[str] = []
+    for q in queries["queries"]:
+        for label in q["labels"]:
+            if label["doc"] not in known:
+                errors.append(f"{q['id']}: unknown doc {label['doc']}")
+                continue
+            text = page_text_lookup(label["doc"], label["page"])
+            if normalize(label["evidence"]) not in normalize(text):
+                errors.append(
+                    f"{q['id']}: evidence not found on"
+                    f" {label['doc']} p{label['page']}:"
+                    f" {label['evidence']!r}"
+                )
+    return errors
+
+
+def _page_text_lookup_factory(manifest: dict):
+    """Open each doc lazily once; return extracted text per 1-indexed page."""
+    import pymupdf
+
+    from pdf_mcp.extractor import extract_text_from_page
+
+    docs_by_id = {d["id"]: REPO / d["path"] for d in manifest["docs"]}
+    cache: dict[str, list[str]] = {}
+
+    def lookup(doc_id: str, page: int) -> str:
+        if doc_id not in cache:
+            doc = pymupdf.open(str(docs_by_id[doc_id]))
+            cache[doc_id] = [
+                extract_text_from_page(doc[i], sort_by_position=True)
+                for i in range(len(doc))
+            ]
+            doc.close()
+        pages = cache[doc_id]
+        return pages[page - 1] if 1 <= page <= len(pages) else ""
+
+    return lookup
+
+
+def run_benchmark() -> int:
+    raise NotImplementedError("Task 4")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--build-manifest", action="store_true")
+    ap.add_argument("--validate", action="store_true")
+    ap.add_argument("--run", action="store_true")
+    args = ap.parse_args()
+
+    if args.build_manifest:
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        manifest = build_manifest()
+        (OUT_DIR / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+        )
+        print(f"wrote manifest with {len(manifest['docs'])} docs")
+        return 0
+
+    if args.validate:
+        manifest, queries = load_manifest(), load_queries()
+        errors = validate_queries(
+            manifest, queries, _page_text_lookup_factory(manifest)
+        )
+        for e in errors:
+            print(f"INVALID: {e}")
+        print(f"{len(queries['queries'])} queries," f" {len(errors)} label errors")
+        return 1 if errors else 0
+
+    if args.run:
+        return run_benchmark()  # Task 4
+
+    ap.print_help()
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

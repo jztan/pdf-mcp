@@ -1,0 +1,110 @@
+{
+  "description": "Corpus for the cross-doc keyword ranking spike. PDFs are local-only (not committed); missing files are skipped loudly at run time.",
+  "docs": [
+    {
+      "id": "0705.4297",
+      "path": "benchmark_data/.reading_order_pdfs/0705.4297.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.0028",
+      "path": "benchmark_data/.reading_order_pdfs/0706.0028.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.0954",
+      "path": "benchmark_data/.reading_order_pdfs/0706.0954.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.2397",
+      "path": "benchmark_data/.reading_order_pdfs/0706.2397.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.0311",
+      "path": "benchmark_data/.reading_order_pdfs/0707.0311.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.1301",
+      "path": "benchmark_data/.reading_order_pdfs/0707.1301.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.3690",
+      "path": "benchmark_data/.reading_order_pdfs/0707.3690.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.4042",
+      "path": "benchmark_data/.reading_order_pdfs/0707.4042.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.2178",
+      "path": "benchmark_data/.reading_order_pdfs/0709.2178.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.2857",
+      "path": "benchmark_data/.reading_order_pdfs/0709.2857.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.4466",
+      "path": "benchmark_data/.reading_order_pdfs/0709.4466.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0710.2265",
+      "path": "benchmark_data/.reading_order_pdfs/0710.2265.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0710.2740",
+      "path": "benchmark_data/.reading_order_pdfs/0710.2740.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0711.0528",
+      "path": "benchmark_data/.reading_order_pdfs/0711.0528.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0711.3236",
+      "path": "benchmark_data/.reading_order_pdfs/0711.3236.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0802.0539",
+      "path": "benchmark_data/.reading_order_pdfs/0802.0539.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0802.0733",
+      "path": "benchmark_data/.reading_order_pdfs/0802.0733.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0811.0781",
+      "path": "benchmark_data/.reading_order_pdfs/0811.0781.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "chukobungaku_104-52",
+      "path": "docs_internal/sample_pdfs/vertical-jp/chukobungaku_104-52_vertical-jp-academic.pdf",
+      "lang": "cjk"
+    },
+    {
+      "id": "ibk_72-102",
+      "path": "docs_internal/sample_pdfs/vertical-jp/ibk_72-102_vertical-jp-academic_99pct.pdf",
+      "lang": "cjk"
+    },
+    {
+      "id": "iwaki_koho_2025-12",
+      "path": "docs_internal/sample_pdfs/vertical-jp/iwaki_koho_2025-12_vertical-jp.pdf",
+      "lang": "cjk"
+    }
+  ]
+}

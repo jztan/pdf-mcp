@@ -1,0 +1,569 @@
+{
+  "description": "Hand-authored graded ground truth at (doc, page) level. Classes: needle (one doc holds the answer), spread (2-3 docs), trap (query terms are boilerplate in most docs, meaningful in one). Every label carries an evidence substring verifiable against extracted page text via --validate.",
+  "queries": [
+    {
+      "id": "needle-01",
+      "class": "needle",
+      "query": "Noetherian type splitting families",
+      "labels": [
+        {
+          "doc": "0705.4297",
+          "page": 1,
+          "gain": 2,
+          "evidence": "SPLITTING FAMILIES AND THE NOETHERIAN TYPE"
+        }
+      ]
+    },
+    {
+      "id": "needle-02",
+      "class": "needle",
+      "query": "Thomson problem spherical crystals",
+      "labels": [
+        {
+          "doc": "0707.3690",
+          "page": 1,
+          "gain": 2,
+          "evidence": "repulsive Coulomb potential (the Thomson problem)"
+        }
+      ]
+    },
+    {
+      "id": "needle-03",
+      "class": "needle",
+      "query": "birth-and-death chain passage time",
+      "labels": [
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "passage time distribution for a birth-and-death chain"
+        }
+      ]
+    },
+    {
+      "id": "needle-04",
+      "class": "needle",
+      "query": "volatility clustering long memory",
+      "labels": [
+        {
+          "doc": "0709.2178",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Long Memory and Volatility Clustering"
+        }
+      ]
+    },
+    {
+      "id": "needle-05",
+      "class": "needle",
+      "query": "Chern numbers projective varieties",
+      "labels": [
+        {
+          "doc": "0709.2857",
+          "page": 1,
+          "gain": 2,
+          "evidence": "CHERN NUMBERS AND DIFFEOMORPHISM TYPES OF PROJECTIVE VARIETIES"
+        }
+      ]
+    },
+    {
+      "id": "needle-06",
+      "class": "needle",
+      "query": "spiral turbulence excitable media",
+      "labels": [
+        {
+          "doc": "0710.2265",
+          "page": 1,
+          "gain": 2,
+          "evidence": "spiral turbulence in excitable media"
+        }
+      ]
+    },
+    {
+      "id": "needle-07",
+      "class": "needle",
+      "query": "optimal airline boarding method",
+      "labels": [
+        {
+          "doc": "0802.0733",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Optimal boarding method for airline"
+        }
+      ]
+    },
+    {
+      "id": "needle-08",
+      "class": "needle",
+      "query": "ubiquitin unfolding pathways",
+      "labels": [
+        {
+          "doc": "0811.0781",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Pathways of Ubiquitin"
+        }
+      ]
+    },
+    {
+      "id": "needle-09",
+      "class": "needle",
+      "query": "public cluster web interface",
+      "labels": [
+        {
+          "doc": "0711.0528",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Web-based Interface in Public Cluster"
+        }
+      ]
+    },
+    {
+      "id": "needle-10",
+      "class": "needle",
+      "query": "四十八願 議論 本願",
+      "labels": [
+        {
+          "doc": "ibk_72-102",
+          "page": 1,
+          "gain": 2,
+          "evidence": "阿弥陀仏の四十八願"
+        },
+        {
+          "doc": "ibk_72-102",
+          "page": 2,
+          "gain": 1,
+          "evidence": "第十八願を根本として四十八願"
+        }
+      ]
+    },
+    {
+      "id": "needle-11",
+      "class": "needle",
+      "query": "善導 観経疏 玄義分",
+      "labels": [
+        {
+          "doc": "ibk_72-102",
+          "page": 1,
+          "gain": 2,
+          "evidence": "観経疏"
+        }
+      ]
+    },
+    {
+      "id": "needle-12",
+      "class": "needle",
+      "query": "生産者 めぐみ 誇り",
+      "labels": [
+        {
+          "doc": "iwaki_koho_2025-12",
+          "page": 2,
+          "gain": 2,
+          "evidence": "生産者という"
+        }
+      ]
+    },
+    {
+      "id": "needle-13",
+      "class": "needle",
+      "query": "農業 水産業 いわき",
+      "labels": [
+        {
+          "doc": "iwaki_koho_2025-12",
+          "page": 1,
+          "gain": 2,
+          "evidence": "農業、そして水産業"
+        }
+      ]
+    },
+    {
+      "id": "needle-14",
+      "class": "needle",
+      "query": "ブルーベリー ファーム",
+      "labels": [
+        {
+          "doc": "iwaki_koho_2025-12",
+          "page": 2,
+          "gain": 2,
+          "evidence": "ブルーベリー"
+        }
+      ]
+    },
+    {
+      "id": "spread-01",
+      "class": "spread",
+      "query": "genus surfaces topology",
+      "labels": [
+        {
+          "doc": "0706.0028",
+          "page": 1,
+          "gain": 2,
+          "evidence": "orientable surfaces of higher genus"
+        },
+        {
+          "doc": "0706.2397",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Genus-p"
+        },
+        {
+          "doc": "0709.2857",
+          "page": 3,
+          "gain": 1,
+          "evidence": "Todd genus"
+        }
+      ]
+    },
+    {
+      "id": "spread-02",
+      "class": "spread",
+      "query": "Markov chain model",
+      "labels": [
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Markov chains, birth-and-death chains"
+        },
+        {
+          "doc": "0710.2740",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Markovian model for the transfer"
+        },
+        {
+          "doc": "0802.0733",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Markov Chain Monte Carlo"
+        }
+      ]
+    },
+    {
+      "id": "spread-03",
+      "class": "spread",
+      "query": "Monte Carlo simulation",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 3,
+          "gain": 2,
+          "evidence": "quantum\nMonte Carlo simulations"
+        },
+        {
+          "doc": "0709.4466",
+          "page": 3,
+          "gain": 2,
+          "evidence": "Monte Carlo simulation"
+        },
+        {
+          "doc": "0802.0733",
+          "page": 1,
+          "gain": 1,
+          "evidence": "Markov Chain Monte Carlo"
+        }
+      ]
+    },
+    {
+      "id": "spread-04",
+      "class": "spread",
+      "query": "diffeomorphism invariants",
+      "labels": [
+        {
+          "doc": "0706.0954",
+          "page": 11,
+          "gain": 2,
+          "evidence": "Slowly growing diffeomorphisms"
+        },
+        {
+          "doc": "0709.2857",
+          "page": 1,
+          "gain": 2,
+          "evidence": "DIFFEOMORPHISM TYPES OF PROJECTIVE VARIETIES"
+        }
+      ]
+    },
+    {
+      "id": "spread-05",
+      "class": "spread",
+      "query": "Coulomb interaction electrons",
+      "labels": [
+        {
+          "doc": "0707.3690",
+          "page": 1,
+          "gain": 2,
+          "evidence": "repulsive Coulomb potential"
+        },
+        {
+          "doc": "0802.0539",
+          "page": 2,
+          "gain": 2,
+          "evidence": "Coulomb and van der Waals"
+        }
+      ]
+    },
+    {
+      "id": "spread-06",
+      "class": "spread",
+      "query": "eigenvalue spectrum",
+      "labels": [
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "eigenvalue information about the chain"
+        },
+        {
+          "doc": "0802.0539",
+          "page": 4,
+          "gain": 2,
+          "evidence": "Kohn-Sham eigenvalues"
+        }
+      ]
+    },
+    {
+      "id": "spread-07",
+      "class": "spread",
+      "query": "entropy measure",
+      "labels": [
+        {
+          "doc": "0709.2178",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the concept of entropy"
+        },
+        {
+          "doc": "0811.0781",
+          "page": 2,
+          "gain": 2,
+          "evidence": "entropy of the dena"
+        }
+      ]
+    },
+    {
+      "id": "spread-08",
+      "class": "spread",
+      "query": "stochastic dynamics",
+      "labels": [
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "stochastic proof"
+        },
+        {
+          "doc": "0710.2265",
+          "page": 4,
+          "gain": 2,
+          "evidence": "systems with stochastic dynamics"
+        }
+      ]
+    },
+    {
+      "id": "spread-09",
+      "class": "spread",
+      "query": "Hamiltonian interaction energy",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Anderson Hamiltonian"
+        },
+        {
+          "doc": "0802.0539",
+          "page": 3,
+          "gain": 2,
+          "evidence": "interaction Hamiltonian"
+        },
+        {
+          "doc": "0811.0781",
+          "page": 6,
+          "gain": 2,
+          "evidence": "bare SOP Hamiltonian"
+        }
+      ]
+    },
+    {
+      "id": "spread-10",
+      "class": "spread",
+      "query": "numerical simulation methods",
+      "labels": [
+        {
+          "doc": "0710.2265",
+          "page": 4,
+          "gain": 2,
+          "evidence": "numerical simulations"
+        },
+        {
+          "doc": "0802.0539",
+          "page": 3,
+          "gain": 2,
+          "evidence": "double numerical plus polar"
+        },
+        {
+          "doc": "0707.1301",
+          "page": 1,
+          "gain": 1,
+          "evidence": "numerical results"
+        }
+      ]
+    },
+    {
+      "id": "trap-01",
+      "class": "trap",
+      "query": "model software reliability",
+      "labels": [
+        {
+          "doc": "0710.2740",
+          "page": 1,
+          "gain": 2,
+          "evidence": "reliability of a system using the Markovian model"
+        }
+      ]
+    },
+    {
+      "id": "trap-02",
+      "class": "trap",
+      "query": "results anti-chain separable sets",
+      "labels": [
+        {
+          "doc": "0707.0311",
+          "page": 1,
+          "gain": 2,
+          "evidence": "anti-chain of linearly\nseparable sets"
+        }
+      ]
+    },
+    {
+      "id": "trap-03",
+      "class": "trap",
+      "query": "model electron localization",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Delocalization Eﬀects in the Hubbard-Anderson Model"
+        }
+      ]
+    },
+    {
+      "id": "trap-04",
+      "class": "trap",
+      "query": "data conjugated polymers absorption",
+      "labels": [
+        {
+          "doc": "0802.0539",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Conjugated Polymers"
+        }
+      ]
+    },
+    {
+      "id": "trap-05",
+      "class": "trap",
+      "query": "simulation IRA codes",
+      "labels": [
+        {
+          "doc": "0709.4466",
+          "page": 1,
+          "gain": 2,
+          "evidence": "(IRA) component codes"
+        }
+      ]
+    },
+    {
+      "id": "trap-06",
+      "class": "trap",
+      "query": "model confidence interval regression",
+      "labels": [
+        {
+          "doc": "0711.3236",
+          "page": 1,
+          "gain": 2,
+          "evidence": "utilizes this\nprior information"
+        }
+      ]
+    },
+    {
+      "id": "trap-07",
+      "class": "trap",
+      "query": "model quasi-morphism quasi-state",
+      "labels": [
+        {
+          "doc": "0706.0028",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Py-Calabi quasi-morphism"
+        }
+      ]
+    },
+    {
+      "id": "trap-08",
+      "class": "trap",
+      "query": "results measure-preserving mixing",
+      "labels": [
+        {
+          "doc": "0706.0954",
+          "page": 1,
+          "gain": 2,
+          "evidence": "measure-preserving homeomorphism"
+        }
+      ]
+    },
+    {
+      "id": "trap-09",
+      "class": "trap",
+      "query": "numerical knotted attractors",
+      "labels": [
+        {
+          "doc": "0706.2397",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Topology of Knotted\nAttractors"
+        }
+      ]
+    },
+    {
+      "id": "trap-10",
+      "class": "trap",
+      "query": "stochastic strong stationary duality",
+      "labels": [
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Strong stationary duality gives a"
+        }
+      ]
+    },
+    {
+      "id": "trap-11",
+      "class": "trap",
+      "query": "data web-based cluster interface",
+      "labels": [
+        {
+          "doc": "0711.0528",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Web-based Interface in Public Cluster"
+        }
+      ]
+    },
+    {
+      "id": "trap-12",
+      "class": "trap",
+      "query": "model crowding effects protein",
+      "labels": [
+        {
+          "doc": "0811.0781",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Crowding Eﬀects on the Mechanical Stability"
+        }
+      ]
+    }
+  ]
+}

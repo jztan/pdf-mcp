@@ -134,3 +134,52 @@ class TestWarmDocs:
         texts = cache.get_pages_text(alpha, [0, 1])
         assert len(texts) == 2
         assert "budget" in texts[0].lower()
+
+    @staticmethod
+    def _fake_embed(texts):
+        # 2 float32 lanes per page; content irrelevant, shape stable.
+        return [b"\x00\x00\x80?\x00\x00\x00@" for _ in texts]
+
+    def test_embeddings_warm_and_cached_partition(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(
+            files,
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._fake_embed,
+            clock=SteppingClock(0),
+        )
+        assert out["warmed_this_call"] == 3
+        assert all(d["embeddings"] for d in out["docs"])
+        alpha = [f for f in files if f.endswith("alpha.pdf")][0]
+        embs = cache.get_page_embeddings(alpha, [0, 1], "fake-model")
+        assert len(embs) == 2
+        # Second call: fully warm including embeddings -> all cached.
+        out2 = corpus.warm_docs(
+            files,
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._fake_embed,
+            clock=SteppingClock(0),
+        )
+        assert out2["warmed_this_call"] == 0
+        assert {d["status"] for d in out2["docs"]} == {"cached"}
+
+    def test_text_warm_does_not_satisfy_embeddings_warm(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        out = corpus.warm_docs(
+            files,
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._fake_embed,
+            clock=SteppingClock(0),
+        )
+        # Text is cached but embeddings are missing -> re-warm.
+        assert out["warmed_this_call"] == 3

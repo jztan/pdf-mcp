@@ -83,28 +83,45 @@ regresses beyond the 0.02 tolerance. That is expected: those classes
 are not designed to stress global vs. per-doc IDF, so both arms
 converge on the same right answer most of the time.
 
-`trap` is the class built to separate the two ranking schemes, and it
-did: temp-fts scores 0.469 against rrf-fusion's 0.408, a 0.062 NDCG
-gap, clearing the 0.05 decision threshold. The mechanism is visible
-in the query-level detail above: `trap-02` and `trap-11` are cases
-where a decoy word shares vocabulary with a page in the same
-document, and corpus-wide IDF (arm A) discounts that generic decoy
-term more heavily across the whole corpus, favoring the on-topic rare
-term more consistently than a per-document rank fusion (arm B), which
-has no cross-document signal to tell a generic word from a
-document-specific one. `dochit3` (whether a gold document lands in
-the top 3 by document) is identical between arms at this class
-(0.667), so the separation shows up in page-level ranking within the
-right document, not in whether the right document is found at all.
+`trap` is the class built to separate the two ranking schemes, and on
+the aggregate number it did: temp-fts scores 0.469 against
+rrf-fusion's 0.408, a 0.062 NDCG gap, clearing the 0.05 decision
+threshold. But per-query, that gap is not spread across the class.
+Of the 12 trap queries, 10 score identically on both arms (`trap-01`,
+`trap-03`, `trap-04`, `trap-08` all hit; `trap-02`, `trap-06`,
+`trap-07`, `trap-09`, `trap-11`, `trap-12` all miss, per the
+quality-loop pass above). Only `trap-05` and `trap-10` differ between
+arms at all: on both, arm A (temp-fts) ranks the gold page at
+position 1 (NDCG 1.0) while arm B (rrf-fusion) ranks it at position 2
+(NDCG 0.6309), a one-rank difference each. Those two queries are the
+entire source of the class-level separation: (1.0 - 0.6309) * 2 / 12
+= 0.0615, matching the reported 0.062 delta. `dochit3` (whether a
+gold document lands in the top 3 by document) is identical between
+arms at this class (0.667), so even this margin is confined to
+page-level ranking within the right document, not document-level
+retrieval.
 
-At 21 docs and 301 pages, corpus-wide IDF has enough cross-document
-contrast to price down generic terms, and it does so cheaply (0.22s
-mean per query, index rebuild included), well under the 1.0s budget.
-Whether that IDF advantage would hold, shrink, or invert on a larger,
-topically narrower corpus (all 21 docs here are a general arXiv
-math/physics/finance mix plus one mojibake CJK doc, not a
-single-domain corpus where "model" or "results" would be uniformly
-common) is outside what this spike measured.
+**Margin fragility.** The +0.062 trap-class delta clears the 0.05
+gate, but it rests entirely on 2 of 12 trap queries, one rank
+position each. If either `trap-05` or `trap-10` flips to a tie (arm B
+also lands the gold page at rank 1, or arm A drops to rank 2), the
+delta falls to roughly (1.0 - 0.6309) / 12 = 0.031, below the 0.05
+threshold, and the rule as specified would select rrf-fusion (arm B)
+instead. The decision is rule-correct at this corpus size, but it is
+thin: a single query's ranking, on a corpus this small, decides which
+arm wins. That is a property of the corpus size and query count, not
+a defect in the rule itself.
+
+At 21 docs and 301 pages, corpus-wide IDF produced that one-rank
+advantage on two queries cheaply (0.22s mean per query, index
+rebuild included), well under the 1.0s budget. Whether that advantage
+would hold, shrink, or invert on a larger, topically narrower corpus
+(all 21 docs here are a general arXiv math/physics/finance mix plus
+one mojibake CJK doc, not a single-domain corpus where "model" or
+"results" would be uniformly common) is outside what this spike
+measured, and the margin's dependence on two queries means it is not
+yet safe to assume the advantage generalizes even at this corpus
+profile.
 
 ## What stage 3 implements
 

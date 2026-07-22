@@ -70,3 +70,17 @@ class TestEvaluateDecision:
         out = evaluate_decision(a, self.BASE_B, 0.4)
         # trap delta exactly 0.05 (>=) and needle regress exactly 0.02 (<=)
         assert out["winner"] == "temp-fts"
+
+    def test_near_threshold_deltas_are_not_rounded_up(self):
+        # True trap delta 0.0497 must NOT win (rounding to 3dp would
+        # wrongly promote it to 0.050).
+        a = {"needle": 0.8, "spread": 0.7, "trap": 0.5497}
+        out = evaluate_decision(a, self.BASE_B, 0.4)
+        assert out["winner"] == "rrf-fusion"
+
+    def test_near_threshold_regression_is_not_rounded_down(self):
+        # True needle regression 0.0201 must trigger the regression gate.
+        a = {"needle": 0.7799, "spread": 0.7, "trap": 0.60}
+        out = evaluate_decision(a, self.BASE_B, 0.4)
+        assert out["winner"] == "rrf-fusion"
+        assert any("regress" in r for r in out["reasons"])

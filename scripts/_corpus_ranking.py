@@ -13,6 +13,9 @@ CLASS_REGRESS_MAX = 0.02
 ARM_A_QUERY_BUDGET_S = 1.0
 RRF_K = 60  # matches production _RRF_K
 
+# Epsilon for float-representation noise only, never for real margins.
+_EPS = 1e-9
+
 
 def rrf_fuse_doc_rankings(
     rank_lists: list[list[tuple[str, int]]],
@@ -56,20 +59,21 @@ def evaluate_decision(
     < ARM_A_QUERY_BUDGET_S. Otherwise (including ties) B wins.
     """
     reasons: list[str] = []
-    trap_delta = round(class_ndcg_a.get("trap", 0.0) - class_ndcg_b.get("trap", 0.0), 3)
-    if trap_delta >= TRAP_GAIN_MIN:
+    trap_delta = class_ndcg_a.get("trap", 0.0) - class_ndcg_b.get("trap", 0.0)
+    if trap_delta >= TRAP_GAIN_MIN - _EPS:
         reasons.append(f"trap-class NDCG delta {trap_delta:+.3f} >= {TRAP_GAIN_MIN}")
         win = True
     else:
         reasons.append(f"trap-class NDCG delta {trap_delta:+.3f} < {TRAP_GAIN_MIN}")
         win = False
 
-    for cls in sorted(set(class_ndcg_b) - {"trap"}):
-        regress = round(class_ndcg_b[cls] - class_ndcg_a.get(cls, 0.0), 3)
-        if regress > CLASS_REGRESS_MAX:
+    for cls in sorted((set(class_ndcg_a) | set(class_ndcg_b)) - {"trap"}):
+        regress = class_ndcg_b.get(cls, 0.0) - class_ndcg_a.get(cls, 0.0)
+        if regress > CLASS_REGRESS_MAX + _EPS:
             reasons.append(f"{cls}-class regresses {regress:.3f} > {CLASS_REGRESS_MAX}")
             win = False
 
+    # Timing values carry no float-representation concern at this scale.
     if arm_a_mean_query_seconds >= ARM_A_QUERY_BUDGET_S:
         reasons.append(
             f"arm-A mean per-query cost {arm_a_mean_query_seconds:.3f}s"

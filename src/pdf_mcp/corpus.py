@@ -189,18 +189,41 @@ def _warm_one_doc(
                     "raster_images": len({img[0] for img in page.get_images()}),
                 }
             )
-        if embeddings:
-            assert embed is not None and model_name is not None
-            non_empty = {pn: t for pn, t in texts.items() if t.strip()}
-            if non_empty:
-                nums = sorted(non_empty)
-                vecs = embed([non_empty[pn] for pn in nums])
-                blobs = dict(zip(nums, vecs))
     finally:
         doc.close()
 
+    # Preserve previously-OCR'd pages: a scanned doc's page may already
+    # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
+    # this doc was never "fully warm" (e.g. missing metadata/text_coverage
+    # or missing embeddings). Native re-extraction of such a page returns
+    # empty text, which would otherwise clobber the OCR text and reset
+    # its cache row's `source` label back to 'extracted' via the bulk
+    # REPLACE in save_pages_text. Stale (mtime-mismatched) rows are
+    # already excluded by get_pages_source, so a genuinely modified file
+    # still re-extracts and re-writes in full. Merge the OCR text into
+    # ``texts`` before embedding so embeddings benefit from it too.
+    sources = cache.get_pages_source(path, list(range(page_count)))
+    ocr_pages = [pn for pn, src in sources.items() if src == "ocr"]
+    preserved: set[int] = set()
+    if ocr_pages:
+        cached_ocr_text = cache.get_pages_text(path, ocr_pages)
+        for pn, cached_text in cached_ocr_text.items():
+            if cached_text:
+                texts[pn] = cached_text
+                preserved.add(pn)
+
+    if embeddings:
+        assert embed is not None and model_name is not None
+        non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+        if non_empty:
+            nums = sorted(non_empty)
+            vecs = embed([non_empty[pn] for pn in nums])
+            blobs = dict(zip(nums, vecs))
+
+    to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
+
     cache.save_metadata(path, page_count, metadata, toc, text_coverage=coverage)
-    cache.save_pages_text(path, texts)
+    cache.save_pages_text(path, to_save)
     if blobs and model_name is not None:
         cache.save_page_embeddings(path, blobs, model_name)
     return page_count

@@ -184,6 +184,50 @@ class TestWarmDocs:
         # Text is cached but embeddings are missing -> re-warm.
         assert out["warmed_this_call"] == 3
 
+    def test_warm_preserves_cached_ocr_text(self, cache, tmp_path):
+        # A "scanned" doc: one blank page, no extractable native text.
+        p = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+
+        # Simulate a prior pdf_read_pages(ocr=True) call.
+        cache.save_page_text(path, 0, "OCRED SEARCHABLE CONTENT", source="ocr")
+
+        out = corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+        assert cache.get_page_text(path, 0) == "OCRED SEARCHABLE CONTENT"
+        assert cache.get_page_source(path, 0) == "ocr"
+
+    def test_warm_embeds_preserved_ocr_text(self, cache, tmp_path):
+        # Same setup, but with embeddings on: the preserved OCR text
+        # (not the blank native extraction) must feed the embed input.
+        p = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+
+        cache.save_page_text(path, 0, "OCRED SEARCHABLE CONTENT", source="ocr")
+
+        out = corpus.warm_docs(
+            [path],
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._fake_embed,
+            clock=SteppingClock(0),
+        )
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+        embs = cache.get_page_embeddings(path, [0], "fake-model")
+        assert len(embs) == 1
+        assert cache.get_page_text(path, 0) == "OCRED SEARCHABLE CONTENT"
+        assert cache.get_page_source(path, 0) == "ocr"
+
 
 class TestOverviewCards:
     def test_text_coverage_label(self):

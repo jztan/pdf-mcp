@@ -42,7 +42,7 @@ import _corpus_ranking as cr  # noqa: E402
 OUT_DIR = REPO / "benchmark_data" / "corpus_search"
 EN_PDF_DIR = REPO / "benchmark_data" / ".reading_order_pdfs"
 CJK_PDF_DIR = REPO / "docs_internal" / "sample_pdfs" / "vertical-jp"
-EN_DOC_CAP = 18
+EN_DOC_CAP = 97
 CJK_DOC_CAP = 3
 TOP_K = 10
 

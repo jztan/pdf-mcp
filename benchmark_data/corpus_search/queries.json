@@ -564,6 +564,502 @@
           "evidence": "Crowding Eﬀects on the Mechanical Stability"
         }
       ]
+    },
+    {
+      "id": "spread-11",
+      "class": "spread",
+      "query": "scaling laws language models",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Scaling Laws for Autoregressive Generative Modeling"
+        },
+        {
+          "doc": "2206.07682",
+          "page": 2,
+          "gain": 2,
+          "evidence": "predicted by extrapolating a scaling law"
+        },
+        {
+          "doc": "2005.14165",
+          "page": 42,
+          "gain": 1,
+          "evidence": "applied scaling laws to help predict and guide"
+        }
+      ]
+    },
+    {
+      "id": "spread-12",
+      "class": "spread",
+      "query": "double descent generalization",
+      "labels": [
+        {
+          "doc": "1912.02292",
+          "page": 2,
+          "gain": 2,
+          "evidence": "model-wise double descent"
+        },
+        {
+          "doc": "2201.02177",
+          "page": 2,
+          "gain": 2,
+          "evidence": "double descent of validation loss"
+        }
+      ]
+    },
+    {
+      "id": "spread-13",
+      "class": "spread",
+      "query": "compute-optimal training",
+      "labels": [
+        {
+          "doc": "2203.15556",
+          "page": 2,
+          "gain": 2,
+          "evidence": "compute-optimal frontier"
+        },
+        {
+          "doc": "2010.14701",
+          "page": 4,
+          "gain": 2,
+          "evidence": "compute-optimal training"
+        },
+        {
+          "doc": "2206.07682",
+          "page": 11,
+          "gain": 1,
+          "evidence": "compute-optimal model"
+        }
+      ]
+    },
+    {
+      "id": "spread-14",
+      "class": "spread",
+      "query": "portfolio optimization",
+      "labels": [
+        {
+          "doc": "2607.09566",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Portfolio Optimization Problem Under Cardinality"
+        },
+        {
+          "doc": "2607.09556",
+          "page": 2,
+          "gain": 2,
+          "evidence": "portfolio capable of tracking the return"
+        },
+        {
+          "doc": "2607.10297",
+          "page": 2,
+          "gain": 2,
+          "evidence": "Portfolio optimization, which relies directly on"
+        }
+      ]
+    },
+    {
+      "id": "spread-15",
+      "class": "spread",
+      "query": "dark matter candidate",
+      "labels": [
+        {
+          "doc": "2607.08082",
+          "page": 3,
+          "gain": 2,
+          "evidence": "compatible with the observed dark matter abundance"
+        },
+        {
+          "doc": "0905.2570",
+          "page": 12,
+          "gain": 2,
+          "evidence": "one of the primary\ndark matter candidates"
+        },
+        {
+          "doc": "2607.06755",
+          "page": 21,
+          "gain": 1,
+          "evidence": "Dark Matter Halos"
+        }
+      ]
+    },
+    {
+      "id": "spread-16",
+      "class": "spread",
+      "query": "magnetic fields turbulence galaxy clusters",
+      "labels": [
+        {
+          "doc": "2607.06346",
+          "page": 2,
+          "gain": 2,
+          "evidence": "ICM Magnetic Fields and Turbulence"
+        },
+        {
+          "doc": "2607.06744",
+          "page": 1,
+          "gain": 1,
+          "evidence": "turbulence, magnetic fields, feedback"
+        }
+      ]
+    },
+    {
+      "id": "spread-17",
+      "class": "spread",
+      "query": "quantum computing applications",
+      "labels": [
+        {
+          "doc": "2607.08169",
+          "page": 2,
+          "gain": 2,
+          "evidence": "well-known motivation for Quantum Computing"
+        },
+        {
+          "doc": "2607.09906",
+          "page": 1,
+          "gain": 1,
+          "evidence": "Quantum Topological Data Analysis"
+        },
+        {
+          "doc": "2607.10451",
+          "page": 3,
+          "gain": 1,
+          "evidence": "quantum computer will be able to break them"
+        }
+      ]
+    },
+    {
+      "id": "spread-18",
+      "class": "spread",
+      "query": "self-attention transformer architecture",
+      "labels": [
+        {
+          "doc": "2010.11929",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Self-attention-based architectures"
+        },
+        {
+          "doc": "2312.00752",
+          "page": 1,
+          "gain": 2,
+          "evidence": "efficacy of self-attention"
+        },
+        {
+          "doc": "2607.08175",
+          "page": 4,
+          "gain": 1,
+          "evidence": "Transformers employ self-attention mechanisms"
+        }
+      ]
+    },
+    {
+      "id": "spread-19",
+      "class": "spread",
+      "query": "neural network pruning",
+      "labels": [
+        {
+          "doc": "1803.03635",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Neural network pruning techniques"
+        },
+        {
+          "doc": "1905.11946",
+          "page": 9,
+          "gain": 1,
+          "evidence": "deep neural networks with pruning"
+        }
+      ]
+    },
+    {
+      "id": "spread-20",
+      "class": "spread",
+      "query": "selective state space models",
+      "labels": [
+        {
+          "doc": "2312.00752",
+          "page": 2,
+          "gain": 2,
+          "evidence": "new class of selective state space models"
+        },
+        {
+          "doc": "2607.02154",
+          "page": 5,
+          "gain": 1,
+          "evidence": "region of state space departs from the Markovian"
+        }
+      ]
+    },
+    {
+      "id": "spread-21",
+      "class": "spread",
+      "query": "international trade economy",
+      "labels": [
+        {
+          "doc": "2607.09990",
+          "page": 2,
+          "gain": 2,
+          "evidence": "classical case for international trade"
+        },
+        {
+          "doc": "2607.09951",
+          "page": 2,
+          "gain": 2,
+          "evidence": "part of international trade travels by sea"
+        }
+      ]
+    },
+    {
+      "id": "spread-22",
+      "class": "spread",
+      "query": "stochastic gradient descent",
+      "labels": [
+        {
+          "doc": "1608.03983",
+          "page": 1,
+          "gain": 2,
+          "evidence": "STOCHASTIC GRADIENT DESCENT WITH WARM RESTARTS"
+        },
+        {
+          "doc": "1502.03167",
+          "page": 4,
+          "gain": 2,
+          "evidence": "Stochastic Gradient Descent with a mini-batch"
+        }
+      ]
+    },
+    {
+      "id": "spread-23",
+      "class": "spread",
+      "query": "few-shot learning",
+      "labels": [
+        {
+          "doc": "2005.14165",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Language Models are Few-Shot Learners"
+        },
+        {
+          "doc": "2206.07682",
+          "page": 3,
+          "gain": 2,
+          "evidence": "Few-Shot Prompted Tasks"
+        },
+        {
+          "doc": "2010.11929",
+          "page": 7,
+          "gain": 1,
+          "evidence": "Linear few-shot evaluation"
+        }
+      ]
+    },
+    {
+      "id": "spread-24",
+      "class": "spread",
+      "query": "emergent abilities large models",
+      "labels": [
+        {
+          "doc": "2206.07682",
+          "page": 2,
+          "gain": 2,
+          "evidence": "emergent abilities of large language models"
+        },
+        {
+          "doc": "2607.10430",
+          "page": 2,
+          "gain": 1,
+          "evidence": "emergent structure of the learned latent"
+        }
+      ]
+    },
+    {
+      "id": "spread-25",
+      "class": "spread",
+      "query": "Gaussian process kernels",
+      "labels": [
+        {
+          "doc": "1302.4245",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Gaussian Process Kernels for Pattern Discovery"
+        },
+        {
+          "doc": "1811.03679",
+          "page": 1,
+          "gain": 1,
+          "evidence": "Gaussian Processes (GPs) on each layer"
+        }
+      ]
+    },
+    {
+      "id": "trap-13",
+      "class": "trap",
+      "query": "model lottery ticket hypothesis",
+      "labels": [
+        {
+          "doc": "1803.03635",
+          "page": 1,
+          "gain": 2,
+          "evidence": "THE LOTTERY TICKET HYPOTHESIS"
+        }
+      ]
+    },
+    {
+      "id": "trap-14",
+      "class": "trap",
+      "query": "model compound scaling network",
+      "labels": [
+        {
+          "doc": "1905.11946",
+          "page": 1,
+          "gain": 2,
+          "evidence": "simple yet effective compound scaling method"
+        }
+      ]
+    },
+    {
+      "id": "trap-15",
+      "class": "trap",
+      "query": "data reverberation mapping quasars",
+      "labels": [
+        {
+          "doc": "0905.2570",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Reverberation Mapping of the Optical Continua"
+        }
+      ]
+    },
+    {
+      "id": "trap-16",
+      "class": "trap",
+      "query": "results solitaire card game",
+      "labels": [
+        {
+          "doc": "0811.0851",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Solitaire: Recent Developments"
+        }
+      ]
+    },
+    {
+      "id": "trap-17",
+      "class": "trap",
+      "query": "signal wake-up radio waveform",
+      "labels": [
+        {
+          "doc": "1808.03354",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Wake-up Radio Signals and OFDM Waveforms"
+        }
+      ]
+    },
+    {
+      "id": "trap-18",
+      "class": "trap",
+      "query": "analysis boron nitride layers",
+      "labels": [
+        {
+          "doc": "0904.1520",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Graphene and Boron Nitride Single Layers"
+        }
+      ]
+    },
+    {
+      "id": "trap-19",
+      "class": "trap",
+      "query": "model maritime trade disruption",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Maritime Trade Disruptions"
+        }
+      ]
+    },
+    {
+      "id": "trap-20",
+      "class": "trap",
+      "query": "model index tracking rebalancing",
+      "labels": [
+        {
+          "doc": "2607.09556",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Index tracking endeavors to reproduce"
+        }
+      ]
+    },
+    {
+      "id": "trap-21",
+      "class": "trap",
+      "query": "results vacuum birefringence magnetar",
+      "labels": [
+        {
+          "doc": "2607.06422",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Vacuum Birefringence and Magnetar Polarization"
+        }
+      ]
+    },
+    {
+      "id": "trap-22",
+      "class": "trap",
+      "query": "model hierarchical topic nested",
+      "labels": [
+        {
+          "doc": "1301.3570",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Nested HDP for Hierarchical Topic Models"
+        }
+      ]
+    },
+    {
+      "id": "trap-23",
+      "class": "trap",
+      "query": "analysis oxygen vacancies electrical",
+      "labels": [
+        {
+          "doc": "1401.4991",
+          "page": 1,
+          "gain": 2,
+          "evidence": "oxygen vacancies in electrical properties"
+        }
+      ]
+    },
+    {
+      "id": "trap-24",
+      "class": "trap",
+      "query": "data ancient DNA selection coefficient",
+      "labels": [
+        {
+          "doc": "1606.06090",
+          "page": 1,
+          "gain": 2,
+          "evidence": "in ancient DNA"
+        }
+      ]
+    },
+    {
+      "id": "trap-25",
+      "class": "trap",
+      "query": "results bitwise neural networks",
+      "labels": [
+        {
+          "doc": "1601.06071",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Bitwise Neural Networks"
+        }
+      ]
     }
   ]
 }

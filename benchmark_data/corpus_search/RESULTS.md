@@ -1,130 +1,95 @@
 # Cross-Doc Keyword Ranking Spike: Results
 
-Corpus: 21 docs, 301 pages (0 manifest docs missing locally).
+Corpus: 100 docs, 2238 pages (0 manifest docs missing locally).
 
 ## Decision
 
-**Winner: temp-fts**
+**Winner: rrf-fusion**
 
-- trap-class NDCG delta +0.062 >= 0.05
+- trap-class NDCG delta +0.006 < 0.05
+- spread-class regresses 0.049 > 0.02
+- arm-A mean per-query cost 2.327s >= 1.0s budget
 
 ## Per-class NDCG@10
 
 | class | temp-fts (A) | rrf-fusion (B) |
 |---|---|---|
 | needle | 0.970 | 0.968 |
-| spread | 0.438 | 0.433 |
-| trap | 0.469 | 0.408 |
-| overall | 0.655 | 0.633 |
+| spread | 0.332 | 0.381 |
+| trap | 0.482 | 0.476 |
+| overall | 0.531 | 0.547 |
 
 ## Cost
 
-- Arm A mean per-query (incl. per-query index build): 0.2184s
-- Arm B one-time index build: 0.226s (amortized in production as persistent per-doc indexes)
+- Arm A mean per-query (incl. per-query index build): 2.327s
+- Arm B one-time index build: 2.379s (amortized in production as persistent per-doc indexes)
 
-## Quality-loop pass
+## Sample
 
-Inspected the 7 queries where both arms scored 0 (`trap-06`, `trap-07`,
-`trap-09`, `trap-12`, and the wrong-page misses `trap-02`, `trap-11`,
-plus `spread-05` scored low but not zero on closer look). For each,
-re-checked the label's doc, page, and evidence substring against the
-actual extracted page text (the same check `--validate` runs). All
-seven turned out to be genuine: the evidence substring is present on
-the labeled page, and the labeled page is the correct answer to the
-query. The 0 scores come from how the two arms are built, not from
-bad ground truth:
+This is the expanded run. The corpus grew from the initial 21 docs / 301
+pages to 100 docs / 2238 pages (the 79 added EN docs are pure distractors;
+all previously labeled docs are retained, so every earlier label stays
+valid). The query set grew from 36 to 64: needle 14 (unchanged), spread
+10 to 25, trap 12 to 25. The two decision-driving classes were roughly
+doubled so the outcome no longer rests on a handful of differing queries.
+New gold labels draw heavily from the previously unlabeled distractor
+docs. Trap discriminating terms were verified concentrated in their single
+labeled doc by grepping every term across all 100 extracted docs; five
+candidate terms were rejected for appearing substantively in more than one
+doc.
 
-- `trap-06`, `trap-07`, `trap-09`, `trap-12` pair a rare, on-page term
-  (e.g. "quasi-morphism", "knotted attractors", "crowding effects")
-  with a generic decoy word ("model", "numerical") that does not
-  appear anywhere on the gold page. Both arms tokenize queries as an
-  AND of all terms (this mirrors production's `_escape_fts5_query`,
-  which is a tokenized AND-join, not a phrase match), so a single
-  absent decoy word makes the whole query return nothing, for both
-  arms alike, on this corpus.
-- `trap-02` and `trap-11` include a decoy word ("results", "data")
-  that happens to appear on a different page of the same document
-  (a "results" section, a data table), so both arms rank that wrong
-  page over the correct one. This is the trap mechanism working
-  exactly as intended; it just did not separate arm A from arm B on
-  these two particular queries.
+## What changed from the initial 21-doc / 36-query spike
 
-No labels were changed. Tuning the queries to make these hit would
-mean removing the decoy words that make them traps in the first
-place, which is exactly the "don't tune labels to favor an arm"
-tripwire the task called out. Re-ran `--validate` to confirm this
-(0 errors, unchanged from before the inspection).
+The initial spike selected temp-fts on a +0.062 trap-class margin that
+rested on 2 of 12 trap queries. Both the corpus scale-up and the query
+expansion overturned that:
 
-## Corpus deviation
-
-The design spec assumed corpus docs up to 300+ pages. The actual
-local corpus does not reach that: `build_manifest` sorts the
-untracked reading-order pool alphabetically and caps at 18 EN docs,
-and old arXiv identifiers ("0705.xxxx"..."0811.xxxx") sort before the
-newer, much longer ones ("2607.xxxx"), so every EN doc that made the
-manifest is small (largest is `0706.0028` at 38 pages). The pool
-itself does contain a 170-page PDF (`2607.11520.pdf`), well short of
-300+ but far heavier than what the manifest actually picked up; it
-was simply never selected. Net effect: the 21-doc, 301-page corpus
-benchmarked here is lighter than the spec's target profile. That
-matters most for the cost side of the decision, not the ranking
-side: arm A's per-query cost (rebuilding one corpus-wide FTS5 table)
-scales with total corpus text volume, so the measured 0.22s/query is
-an optimistic floor. The 1.0s budget has headroom to spare at this
-scale, but that headroom should not be read as proof arm A stays
-under budget on a corpus with several 300+ page documents; that
-would need a heavier corpus to confirm.
+- At 21 docs the trap edge looked real and even grew to +0.092 when only
+  the corpus was scaled (36 queries, 100 docs). With the trap class
+  expanded to 25 queries it collapses to +0.006, a tie. The earlier
+  deltas were a small-sample artifact of a few queries where arm A
+  happened to place the gold page one rank higher; across 25 trap queries
+  only 6 differ at all, and the two arms' wins offset (arm A takes three
+  at +0.369, arm B takes two at -0.5).
+- The spread class, which the small corpus could not stress, regresses for
+  temp-fts at scale: -0.049 overall, 21 of 25 queries differing.
 
 ## Interpretation
 
-`needle` and `spread` classes are a near-wash: temp-fts and
-rrf-fusion differ by 0.002-0.005 NDCG, well inside noise, and neither
-regresses beyond the 0.02 tolerance. That is expected: those classes
-are not designed to stress global vs. per-doc IDF, so both arms
-converge on the same right answer most of the time.
+temp-fts (one corpus-wide FTS5 table, global IDF) has no robust ranking
+advantage at scale. It ties on needle (0.970 vs 0.968) and trap (0.482 vs
+0.476), and loses spread (0.332 vs 0.381), so rrf-fusion wins overall
+(0.547 vs 0.531).
 
-`trap` is the class built to separate the two ranking schemes, and on
-the aggregate number it did: temp-fts scores 0.469 against
-rrf-fusion's 0.408, a 0.062 NDCG gap, clearing the 0.05 decision
-threshold. But per-query, that gap is not spread across the class.
-Of the 12 trap queries, 10 score identically on both arms (`trap-01`,
-`trap-03`, `trap-04`, `trap-08` all hit; `trap-02`, `trap-06`,
-`trap-07`, `trap-09`, `trap-11`, `trap-12` all miss, per the
-quality-loop pass above). Only `trap-05` and `trap-10` differ between
-arms at all: on both, arm A (temp-fts) ranks the gold page at
-position 1 (NDCG 1.0) while arm B (rrf-fusion) ranks it at position 2
-(NDCG 0.6309), a one-rank difference each. Those two queries are the
-entire source of the class-level separation: (1.0 - 0.6309) * 2 / 12
-= 0.0615, matching the reported 0.062 delta. `dochit3` (whether a
-gold document lands in the top 3 by document) is identical between
-arms at this class (0.667), so even this margin is confined to
-page-level ranking within the right document, not document-level
-retrieval.
+The spread result is the substantive finding, and its shape matters. In
+raw count the spread queries are nearly balanced (11 favor arm A, 10 favor
+arm B), but arm A loses the ones it loses catastrophically: four spread
+queries land at -0.49 to -0.61 for arm A, against a best arm-A gain of
++0.47. That asymmetry is intrinsic, not a measurement artifact. A single
+corpus-wide BM25 table ranks all 2238 pages together, so on a multi-doc
+query the 79 distractor docs can flood the top-10 and bury the gold pages
+that are spread thinly across 2-3 documents. Per-doc RRF fusion is
+structurally robust to this: it fuses each document's own ranking, so
+every gold document's best page competes for a slot regardless of how many
+distractor documents exist. That robustness is what the small 21-doc
+corpus could not exhibit, because there were not enough distractors to
+flood arm A.
 
-**Margin fragility.** The +0.062 trap-class delta clears the 0.05
-gate, but it rests entirely on 2 of 12 trap queries, one rank
-position each. If either `trap-05` or `trap-10` flips to a tie (arm B
-also lands the gold page at rank 1, or arm A drops to rank 2), the
-delta falls to roughly (1.0 - 0.6309) / 12 = 0.031, below the 0.05
-threshold, and the rule as specified would select rrf-fusion (arm B)
-instead. The decision is rule-correct at this corpus size, but it is
-thin: a single query's ranking, on a corpus this small, decides which
-arm wins. That is a property of the corpus size and query count, not
-a defect in the rule itself.
-
-At 21 docs and 301 pages, corpus-wide IDF produced that one-rank
-advantage on two queries cheaply (0.22s mean per query, index
-rebuild included), well under the 1.0s budget. Whether that advantage
-would hold, shrink, or invert on a larger, topically narrower corpus
-(all 21 docs here are a general arXiv math/physics/finance mix plus
-one mojibake CJK doc, not a single-domain corpus where "model" or
-"results" would be uniformly common) is outside what this spike
-measured, and the margin's dependence on two queries means it is not
-yet safe to assume the advantage generalizes even at this corpus
-profile.
+Cost is the second gate. Arm A rebuilds the corpus-wide FTS table per
+query and costs 2.33s at this scale, above the 1.0s budget; arm B builds
+per-doc indexes once (2.38s) and reuses them, so its query-time cost is
+negligible. The cost gate depends on the per-query-rebuild assumption a
+persistent corpus-wide index would neutralize, so it is weighted less than
+the spread finding. It does not change the decision: rrf-fusion already
+wins on quality alone (overall NDCG, no trap edge for A, spread win for B),
+independent of cost.
 
 ## What stage 3 implements
 
-The decision rule selects **temp-fts** (arm A, a corpus-wide FTS5
-table rebuilt per query): stage 3 implements corpus-wide keyword
-search using this design, not per-document RRF fusion.
+The expanded, firmer benchmark reverses the initial spike. Stage 3 should
+implement cross-document keyword search as **rrf-fusion of per-document
+rankings**, not a corpus-wide temp-FTS table: it wins or ties on every
+quality class, is robust to distractor flooding on multi-document queries,
+and is far cheaper at query time. A hybrid that grafts global-IDF
+discrimination onto fusion's distractor-robustness is a possible later
+refinement, but the base design is per-document fusion.

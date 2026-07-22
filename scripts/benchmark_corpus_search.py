@@ -103,7 +103,7 @@ def build_per_doc_indexes(
 
     The returned list's order is the table-naming contract: table i is
     named from doc_ids[i] (see `_doc_table`). Callers must pass this
-    exact list, in this exact order, to `search_per_doc_rrf` — it
+    exact list, in this exact order, to `search_per_doc_rrf`: it
     re-derives table names positionally from the list it is given.
     """
     doc_ids = sorted({doc for doc, _page, _text in pages})

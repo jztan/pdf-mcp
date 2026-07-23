@@ -68,7 +68,7 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
-_EXTRACTION_VERSION = 6  # 6: deterministic + dedup rawdict multi-column assembly
+_EXTRACTION_VERSION = 7  # 7: same-row fragment merge in multi-column assembly
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'

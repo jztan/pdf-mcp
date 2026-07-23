@@ -2861,7 +2861,72 @@ def test_multicolumn_falls_back_on_helper_error(monkeypatch):
     assert out == expected  # positional-sort fallback, not an exception
 
 
-@pytest.mark.xfail(strict=True, reason="fragment merge lands in the next commit")
+class TestMergeRowFragments:
+    """Pure-helper tests: (text, bbox, baseline) fragments -> merged text."""
+
+    def _frag(self, text, x0, x1, baseline, y0=100.0, y1=110.0):
+        return (text, (x0, y0, x1, y1), baseline)
+
+    def test_same_baseline_small_gap_joins_without_space(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("Slo", 228.2, 245.6, 110.0),
+            self._frag("wl", 245.6, 258.0, 110.0),
+            self._frag("y", 258.0, 264.0, 110.0),
+        ]
+        assert _merge_row_fragments(frags) == "Slowly"
+
+    def test_same_baseline_word_gap_joins_with_space(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("Slowly", 228.2, 264.0, 110.0),
+            self._frag("growing", 267.6, 310.0, 110.0),  # gap 3.6
+        ]
+        assert _merge_row_fragments(frags) == "Slowly growing"
+
+    def test_negative_gap_kerning_joins_without_space(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("gr", 270.0, 280.0, 110.0),
+            self._frag("o", 279.2, 285.0, 110.0),  # gap -0.8
+        ]
+        assert _merge_row_fragments(frags) == "gro"
+
+    def test_different_baselines_stay_separate_lines(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("body text line", 60.0, 200.0, 110.0),
+            self._frag("2", 200.5, 205.0, 105.0, y0=96.0, y1=104.0),  # superscript
+            self._frag("next line", 60.0, 150.0, 122.0, y0=112.0, y1=122.0),
+        ]
+        out = _merge_row_fragments(frags)
+        assert out.splitlines() == ["body text line", "2", "next line"]
+
+    def test_rows_ordered_by_baseline_fragments_by_x(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("second", 60.0, 100.0, 122.0, y0=112.0, y1=122.0),
+            self._frag("world", 120.0, 160.0, 110.0),
+            self._frag("hello", 60.0, 100.0, 110.0),
+        ]
+        assert _merge_row_fragments(frags) == "hello world\nsecond"
+
+    def test_single_fragment_passthrough(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        assert _merge_row_fragments([self._frag("only", 0, 10, 50)]) == "only"
+
+    def test_empty_returns_empty(self):
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        assert _merge_row_fragments([]) == ""
+
+
 def test_multicolumn_letterspaced_heading_not_fragmented():
     """Regression: a small-caps/letter-spaced heading split by rawdict into
     same-row fragments must reconstruct contiguously, not newline-joined.

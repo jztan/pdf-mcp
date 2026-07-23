@@ -643,19 +643,27 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
 
 def _rawdict_line_text_and_bbox(
     line: dict[str, Any],
-) -> tuple[str, tuple[float, float, float, float]]:
-    """Text and glyph-derived bbox for one rawdict line.
+) -> tuple[str, tuple[float, float, float, float], float]:
+    """Text, glyph-derived bbox, and baseline y for one rawdict line.
 
     Geometry comes from glyph bboxes (the deterministic rawdict data), not
     the line's own bbox field. Spans concatenate their glyph chars with no
-    separator (rawdict glyphs already include inter-glyph spacing).
+    separator (rawdict glyphs already include inter-glyph spacing). The
+    baseline is the first span's origin y (identical for fragments of the
+    same visual row, shifted for super/subscripts); falls back to the
+    bbox bottom when spans carry no origin.
     """
     chars: list[str] = []
     xs0: list[float] = []
     ys0: list[float] = []
     xs1: list[float] = []
     ys1: list[float] = []
+    baseline: float | None = None
     for span in line.get("spans", []):
+        if baseline is None:
+            origin = span.get("origin")
+            if origin is not None:
+                baseline = origin[1]
         for ch in span.get("chars", []):
             bx0, by0, bx1, by1 = ch["bbox"]
             xs0.append(bx0)
@@ -668,7 +676,9 @@ def _rawdict_line_text_and_bbox(
         bbox = (min(xs0), min(ys0), max(xs1), max(ys1))
     else:
         bbox = (0.0, 0.0, 0.0, 0.0)
-    return text, bbox
+    if baseline is None:
+        baseline = bbox[3]
+    return text, bbox, baseline
 
 
 def _rect_overlap(
@@ -692,6 +702,100 @@ def _merge_bboxes(
     )
 
 
+# Fragments whose baselines differ by no more than this are the same visual
+# row (same-row rawdict fragments share an identical baseline; super- and
+# subscripts shift by more than 1pt).
+_ROW_BASELINE_TOL = 0.5
+
+
+_RowFrag = tuple[int, str, tuple[float, float, float, float], float]
+
+
+def _row_y_range(row: list[_RowFrag]) -> tuple[float, float]:
+    """Vertical extent (min y0, max y1) spanned by a row's fragments."""
+    return (min(f[2][1] for f in row), max(f[2][3] for f in row))
+
+
+def _render_row(row: list[_RowFrag]) -> str:
+    """Join one row's fragments left-to-right, spacing word gaps.
+
+    The gap threshold scales with the row's typical fragment height, so
+    larger fonts (e.g. letter-spaced headings) get proportionally wider
+    inter-word gaps without being read as adjacent letters. The median
+    (not max) height is used: a single tall outlier fragment (a symbol
+    glyph with a deep descender/ascender sharing the row's baseline)
+    would otherwise inflate the threshold for the whole row and glue
+    ordinary word gaps together. A large negative gap (heavy x-overlap)
+    also gets a space: plain letter kerning overlaps only slightly, so
+    a deep overlap instead signals a separate token (e.g. a subscript
+    glued to the tail of the preceding one) rather than two glyphs of
+    the same word.
+    """
+    row = sorted(row, key=lambda f: (f[2][0], f[0]))
+    height = statistics.median(f[2][3] - f[2][1] for f in row) or 1.0
+    threshold = max(1.0, 0.25 * height)
+    merged = row[0][1]
+    for prev, cur in zip(row, row[1:]):
+        gap = cur[2][0] - prev[2][2]
+        merged += (" " if abs(gap) > threshold else "") + cur[1]
+    return merged
+
+
+def _merge_row_fragments(
+    lines: list[tuple[str, tuple[float, float, float, float], float]],
+) -> str:
+    """Merge rawdict line fragments of one run into visual rows.
+
+    Fragments are grouped into rows by baseline: a fragment joins the
+    first existing row whose anchor (first fragment) baseline is within
+    _ROW_BASELINE_TOL; otherwise it starts a new row. Rows are then
+    clustered by vertical (y0, y1) overlap (transitively, like merging
+    overlapping intervals): ordinary document lines have disjoint
+    y-ranges and each forms its own singleton cluster, so they keep
+    top-to-bottom order; a super/subscript's row vertically overlaps
+    its base line's row and clusters with it, in which case y alone
+    cannot separate them reliably, so members of a cluster instead keep
+    first-appearance (document) order. Clusters themselves are emitted
+    in top-to-bottom (y0) order. Fragments within a row are ordered by
+    x0; adjacent fragments join with a space only when the x-gap
+    exceeds max(1.0, 0.3 * row height), and smaller or negative
+    (kerning) gaps join directly, reuniting words that rawdict split
+    into same-row fragments. Rows join with newline.
+    """
+    if not lines:
+        return ""
+    rows: list[list[_RowFrag]] = []
+    for i, (text, bbox, baseline) in enumerate(lines):
+        for row in rows:
+            if abs(baseline - row[0][3]) <= _ROW_BASELINE_TOL:
+                row.append((i, text, bbox, baseline))
+                break
+        else:
+            rows.append([(i, text, bbox, baseline)])
+
+    # Cluster rows by vertical overlap via a merge-overlapping-intervals
+    # scan (sorted by y0); this is the transitive closure of "overlaps",
+    # so distinct clusters never overlap and a plain y0 scan order is a
+    # valid, stable total order over them.
+    by_y0 = sorted(rows, key=lambda r: _row_y_range(r)[0])
+    clusters: list[list[list[_RowFrag]]] = []
+    cluster_y1: float | None = None
+    for row in by_y0:
+        y0, y1 = _row_y_range(row)
+        if clusters and cluster_y1 is not None and y0 <= cluster_y1:
+            clusters[-1].append(row)
+            cluster_y1 = max(cluster_y1, y1)
+        else:
+            clusters.append([row])
+            cluster_y1 = y1
+
+    out_rows: list[str] = []
+    for cluster in clusters:
+        cluster.sort(key=lambda r: r[0][0])  # first-appearance order
+        out_rows.extend(_render_row(row) for row in cluster)
+    return "\n".join(out_rows)
+
+
 def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
     """Deterministic, dedup'd, column-major text from rawdict lines.
 
@@ -701,8 +805,10 @@ def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
     otherwise land entirely in a single column, scrambling reading order.
     Each line is assigned once to the column box it overlaps most
     (tiebreak: lowest box index); consecutive lines within a block that
-    share the same assignment are re-joined with a single newline so an
-    ordinary multi-line paragraph keeps its original line breaks. Boxes
+    share the same assignment form a run merged via _merge_row_fragments,
+    which reunites same-row fragments rawdict split apart (e.g. letter-
+    spaced headings) while keeping an ordinary multi-line paragraph's
+    original line breaks. Boxes
     are emitted in the reading order pymupdf4llm returns them; chunks
     within a box are sorted by rounded (y0, x0). Chunks overlapping no
     box are appended last in reading order. All geometry comes from
@@ -733,26 +839,34 @@ def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
     for blk in rd.get("blocks", []):
         if blk.get("type") != 0:
             continue
-        run_texts: list[str] = []
-        run_bboxes: list[tuple[float, float, float, float]] = []
+        run_lines: list[tuple[str, tuple[float, float, float, float], float]] = []
         run_assign: int | None = None
         run_open = False
         for line in blk.get("lines", []):
-            text, bbox = _rawdict_line_text_and_bbox(line)
+            text, bbox, baseline = _rawdict_line_text_and_bbox(line)
             if not text.strip():
                 continue
             j = assign_box(bbox)
             if run_open and j != run_assign:
                 items.append(
-                    ("\n".join(run_texts), _merge_bboxes(run_bboxes), run_assign)
+                    (
+                        _merge_row_fragments(run_lines),
+                        _merge_bboxes([b for _t, b, _bl in run_lines]),
+                        run_assign,
+                    )
                 )
-                run_texts, run_bboxes = [], []
-            run_texts.append(text)
-            run_bboxes.append(bbox)
+                run_lines = []
+            run_lines.append((text, bbox, baseline))
             run_assign = j
             run_open = True
         if run_open:
-            items.append(("\n".join(run_texts), _merge_bboxes(run_bboxes), run_assign))
+            items.append(
+                (
+                    _merge_row_fragments(run_lines),
+                    _merge_bboxes([b for _t, b, _bl in run_lines]),
+                    run_assign,
+                )
+            )
 
     parts: list[str] = []
     for j in range(len(boxes)):

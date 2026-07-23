@@ -2762,5 +2762,104 @@ def test_render_write_is_atomic_no_tmp_residue(tmp_path):
     assert list(tmp_path.glob("*.tmp")) == []
 
 
+def test_multicolumn_dedup_overlapping_boxes(monkeypatch):
+    """Overlapping column boxes must NOT duplicate a block's text.
+
+    The old clip path extracted the overlap region under each box, so a
+    block in the overlap appeared twice. The rawdict assembly assigns each
+    block to exactly one box.
+    """
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "leftonly alpha")  # box0 only
+    page.insert_text((250, 100), "sharedmiddle")  # fully inside the overlap
+    page.insert_text((520, 100), "rightonly delta")  # box1 only
+
+    monkeypatch.setattr(extractor, "is_confidently_single_column", lambda b: False)
+    # Two boxes overlapping on x=200..400. "sharedmiddle" at x=250 sits fully
+    # inside BOTH, so the old clip path extracted it under each box (twice).
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 400, 800), pymupdf.Rect(200, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+
+    assert out.count("sharedmiddle") == 1  # assigned to exactly one box
+    assert out.count("leftonly alpha") == 1
+    assert out.count("rightonly delta") == 1
+
+
+def test_multicolumn_reading_order_column_major(monkeypatch):
+    """Whole left column precedes the right column (reading order)."""
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    for i, y in enumerate((100, 130, 160)):
+        page.insert_text((60, y), f"leftrow{i}")
+        page.insert_text((360, y), f"rightrow{i}")
+
+    monkeypatch.setattr(extractor, "is_confidently_single_column", lambda b: False)
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    out = extractor.extract_text_from_page(page)
+    doc.close()
+
+    assert out.index("leftrow2") < out.index("rightrow0")
+
+
+def test_multicolumn_helper_is_deterministic(monkeypatch):
+    """The helper returns identical output across repeated calls."""
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    for i, y in enumerate((100, 130, 160, 190)):
+        page.insert_text((60, y), f"leftrow{i} text")
+        page.insert_text((360, y), f"rightrow{i} text")
+    boxes = [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)]
+    outs = {extractor._assemble_columns_from_rawdict(page, boxes) for _ in range(15)}
+    doc.close()
+    assert len(outs) == 1
+
+
+def test_multicolumn_falls_back_on_helper_error(monkeypatch):
+    """If the assembly helper raises, extraction degrades to positional sort."""
+    import pymupdf
+    from pdf_mcp import extractor
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((60, 100), "some body text on the page")
+
+    monkeypatch.setattr(extractor, "is_confidently_single_column", lambda b: False)
+    monkeypatch.setattr(
+        extractor,
+        "detect_column_boxes",
+        lambda p: [pymupdf.Rect(0, 0, 300, 800), pymupdf.Rect(300, 0, 600, 800)],
+    )
+    monkeypatch.setattr(
+        extractor,
+        "_assemble_columns_from_rawdict",
+        lambda p, b: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    out = extractor.extract_text_from_page(page)
+    expected = "\n\n".join(
+        b[4] for b in page.get_text("blocks", sort=True) if b[6] == 0
+    )
+    doc.close()
+    assert out == expected  # positional-sort fallback, not an exception
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

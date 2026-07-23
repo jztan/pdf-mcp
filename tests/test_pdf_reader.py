@@ -2861,5 +2861,30 @@ def test_multicolumn_falls_back_on_helper_error(monkeypatch):
     assert out == expected  # positional-sort fallback, not an exception
 
 
+@pytest.mark.xfail(strict=True, reason="fragment merge lands in the next commit")
+def test_multicolumn_letterspaced_heading_not_fragmented():
+    """Regression: a small-caps/letter-spaced heading split by rawdict into
+    same-row fragments must reconstruct contiguously, not newline-joined.
+    Skips if the local corpus is absent."""
+    import pymupdf
+    import pytest as _pytest
+    from pathlib import Path
+    from pdf_mcp import extractor
+
+    pdf = (
+        Path(__file__).parent.parent
+        / "benchmark_data"
+        / ".reading_order_pdfs"
+        / "0706.0954.pdf"
+    )
+    if not pdf.exists():
+        _pytest.skip("local reading-order corpus not present")
+
+    doc = pymupdf.open(str(pdf))
+    text = extractor.extract_text_from_page(doc[10])  # page 11
+    doc.close()
+    assert "Slowly growing diffeomorphisms" in text
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

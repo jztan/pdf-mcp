@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can return a slightly different column set across runs; it is masked by the
   mtime-keyed cache (each page is extracted once) and documented as a known
   limitation, with a deterministic detector tracked as a follow-up.
+  Same-row fragments that PyMuPDF splits across multiple rawdict lines
+  (letter-spaced or small-caps headings) are re-joined with gap-based spacing,
+  so headings extract contiguously instead of newline-fragmented.
 
 ## [1.21.0] - 2026-07-17
 ### Added

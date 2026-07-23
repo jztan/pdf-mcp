@@ -641,6 +641,134 @@ def _is_multi_column_layout(boxes: list[Any]) -> bool:
     return 2 <= tall <= _MAX_COLUMNS
 
 
+def _rawdict_line_text_and_bbox(
+    line: dict[str, Any],
+) -> tuple[str, tuple[float, float, float, float]]:
+    """Text and glyph-derived bbox for one rawdict line.
+
+    Geometry comes from glyph bboxes (the deterministic rawdict data), not
+    the line's own bbox field. Spans concatenate their glyph chars with no
+    separator (rawdict glyphs already include inter-glyph spacing).
+    """
+    chars: list[str] = []
+    xs0: list[float] = []
+    ys0: list[float] = []
+    xs1: list[float] = []
+    ys1: list[float] = []
+    for span in line.get("spans", []):
+        for ch in span.get("chars", []):
+            bx0, by0, bx1, by1 = ch["bbox"]
+            xs0.append(bx0)
+            ys0.append(by0)
+            xs1.append(bx1)
+            ys1.append(by1)
+            chars.append(ch["c"])
+    text = "".join(chars)
+    if xs0:
+        bbox = (min(xs0), min(ys0), max(xs1), max(ys1))
+    else:
+        bbox = (0.0, 0.0, 0.0, 0.0)
+    return text, bbox
+
+
+def _rect_overlap(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> float:
+    """Intersection area of two (x0, y0, x1, y1) rectangles."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    return ix * iy
+
+
+def _merge_bboxes(
+    bboxes: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    """Bounding box enclosing a list of (x0, y0, x1, y1) rectangles."""
+    return (
+        min(b[0] for b in bboxes),
+        min(b[1] for b in bboxes),
+        max(b[2] for b in bboxes),
+        max(b[3] for b in bboxes),
+    )
+
+
+def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
+    """Deterministic, dedup'd, column-major text from rawdict lines.
+
+    Assignment happens per rawdict *line* (not per block): a block whose
+    lines straddle two column boxes (pymupdf4llm's block detector can
+    group short, widely spaced same-row lines into one block) would
+    otherwise land entirely in a single column, scrambling reading order.
+    Each line is assigned once to the column box it overlaps most
+    (tiebreak: lowest box index); consecutive lines within a block that
+    share the same assignment are re-joined with a single newline so an
+    ordinary multi-line paragraph keeps its original line breaks. Boxes
+    are emitted in the reading order pymupdf4llm returns them; chunks
+    within a box are sorted by rounded (y0, x0). Chunks overlapping no
+    box are appended last in reading order. All geometry comes from
+    deterministic rawdict glyph data, no clip extraction, so output is
+    fully deterministic.
+    """
+    rd = page.get_text("rawdict")
+
+    def r(v: float) -> float:
+        return round(v, 1)
+
+    rboxes = [(r(bx.x0), r(bx.y0), r(bx.x1), r(bx.y1)) for bx in boxes]
+
+    def assign_box(bbox: tuple[float, float, float, float]) -> int | None:
+        rb = (r(bbox[0]), r(bbox[1]), r(bbox[2]), r(bbox[3]))
+        best_j: int | None = None
+        best_ov = 0.0
+        for j, rbox in enumerate(rboxes):
+            ov = _rect_overlap(rb, rbox)
+            if ov > best_ov:
+                best_ov = ov
+                best_j = j
+        return best_j
+
+    # (text, bbox, column_index_or_None) chunks, formed by merging
+    # consecutive same-column lines within each block.
+    items: list[tuple[str, tuple[float, float, float, float], int | None]] = []
+    for blk in rd.get("blocks", []):
+        if blk.get("type") != 0:
+            continue
+        run_texts: list[str] = []
+        run_bboxes: list[tuple[float, float, float, float]] = []
+        run_assign: int | None = None
+        run_open = False
+        for line in blk.get("lines", []):
+            text, bbox = _rawdict_line_text_and_bbox(line)
+            if not text.strip():
+                continue
+            j = assign_box(bbox)
+            if run_open and j != run_assign:
+                items.append(
+                    ("\n".join(run_texts), _merge_bboxes(run_bboxes), run_assign)
+                )
+                run_texts, run_bboxes = [], []
+            run_texts.append(text)
+            run_bboxes.append(bbox)
+            run_assign = j
+            run_open = True
+        if run_open:
+            items.append(("\n".join(run_texts), _merge_bboxes(run_bboxes), run_assign))
+
+    parts: list[str] = []
+    for j in range(len(boxes)):
+        col = [item for item in items if item[2] == j]
+        col.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
+        joined = "\n\n".join(text for text, _bbox, _j in col)
+        if joined.strip():
+            parts.append(joined)
+    orphans = [item for item in items if item[2] is None]
+    orphans.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
+    orphan_text = "\n\n".join(text for text, _bbox, _j in orphans)
+    if orphan_text.strip():
+        parts.append(orphan_text)
+    return "\n\n".join(parts)
+
+
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
     """
     Extract text from a PDF page.
@@ -661,14 +789,26 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
             # distinct from the heuristic vote which filters to non-empty blocks.
             text_blocks = [block[4] for block in blocks if block[6] == 0]
             return "\n\n".join(text_blocks)
+        # NOTE: the rawdict assembly below is deterministic and dedup'd given
+        # a fixed set of column boxes, but detect_column_boxes (pymupdf4llm's
+        # column_boxes()) can itself return a varying box count across
+        # repeated opens of the same page, so multi-column extraction is not
+        # fully deterministic on re-extraction. The mtime-keyed cache masks
+        # this in steady state (extraction runs once per file). A
+        # deterministic column detector is a deferred follow-up.
         boxes = detect_column_boxes(page)
         if _is_multi_column_layout(boxes):
-            # Multi-column: extract each column in reading order so the
-            # text is not interleaved row-by-row across columns.
-            parts = (
-                page.get_text("text", clip=box, sort=True).strip() for box in boxes
-            )
-            return "\n\n".join(part for part in parts if part)
+            # Multi-column: assemble each column in reading order from
+            # deterministic rawdict line data (each line used once), so the
+            # text is neither interleaved row-by-row nor duplicated by
+            # overlapping column boxes. Any failure degrades to the
+            # positional block-sort below.
+            try:
+                assembled = _assemble_columns_from_rawdict(page, boxes)
+            except Exception:  # pragma: no cover - defensive fail-safe
+                assembled = ""
+            if assembled:
+                return assembled
         # Single-column (or detection unavailable): positional block sort.
         # blocks format: (x0, y0, x1, y1, "text", block_no, block_type)
         text_blocks = [block[4] for block in blocks if block[6] == 0]

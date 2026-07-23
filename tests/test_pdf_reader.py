@@ -2926,6 +2926,45 @@ class TestMergeRowFragments:
 
         assert _merge_row_fragments([]) == ""
 
+    def test_large_negative_gap_deep_overlap_joins_with_space(self):
+        # height=10 (default y0=100,y1=110) -> threshold = max(1.0, 0.25*10)
+        # = 2.5. gap = 204.0 - 210.0 = -6.0, |gap|=6.0 well above threshold.
+        # A one-sided `gap > threshold` rule (any negative gap joins
+        # directly) would glue this into "Tisub"; the shipped rule requires
+        # |gap| > threshold, so a deep overlap still gets a space.
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("Ti", 200.0, 210.0, 110.0),
+            self._frag("sub", 204.0, 220.0, 110.0),
+        ]
+        assert _merge_row_fragments(frags) == "Ti sub"
+
+    def test_gap_between_quarter_and_third_height_joins_with_space(self):
+        # height=10 -> 0.25*h=2.5, 0.3*h=3.0. gap=2.7 sits strictly between
+        # them: the shipped 0.25 multiplier requires a space (2.7 > 2.5),
+        # but a 0.3 multiplier would not (2.7 < 3.0), so this fails if the
+        # multiplier reverts to 0.3.
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("al", 200.0, 210.0, 110.0),
+            self._frag("pha", 212.7, 225.0, 110.0),
+        ]
+        assert _merge_row_fragments(frags) == "al pha"
+
+    def test_gap_just_under_quarter_height_joins_without_space(self):
+        # height=10 -> 0.25*h=2.5. gap=2.3 < 2.5, so no space: the mirror
+        # of the previous test, pinning the same 0.25 multiplier from the
+        # other side.
+        from pdf_mcp.extractor import _merge_row_fragments
+
+        frags = [
+            self._frag("al", 200.0, 210.0, 110.0),
+            self._frag("pha", 212.3, 225.0, 110.0),
+        ]
+        assert _merge_row_fragments(frags) == "alpha"
+
 
 def test_multicolumn_letterspaced_heading_not_fragmented():
     """Regression: a small-caps/letter-spaced heading split by rawdict into

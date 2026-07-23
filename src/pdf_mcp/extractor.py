@@ -757,10 +757,14 @@ def _merge_row_fragments(
     cannot separate them reliably, so members of a cluster instead keep
     first-appearance (document) order. Clusters themselves are emitted
     in top-to-bottom (y0) order. Fragments within a row are ordered by
-    x0; adjacent fragments join with a space only when the x-gap
-    exceeds max(1.0, 0.3 * row height), and smaller or negative
-    (kerning) gaps join directly, reuniting words that rawdict split
-    into same-row fragments. Rows join with newline.
+    x0; adjacent fragments join with a space only when the absolute
+    x-gap exceeds max(1.0, 0.25 * median row height), reuniting words
+    that rawdict split into same-row fragments when the gap is small
+    (plain kerning). A large negative gap (deep x-overlap) also gets a
+    space rather than being read as kerning: a real subscript glued to
+    the tail of the preceding fragment overlaps far more than ordinary
+    kerning does, so it needs a separate token, not a merge. Rows join
+    with newline.
     """
     if not lines:
         return ""

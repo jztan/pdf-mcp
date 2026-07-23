@@ -789,6 +789,13 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
             # distinct from the heuristic vote which filters to non-empty blocks.
             text_blocks = [block[4] for block in blocks if block[6] == 0]
             return "\n\n".join(text_blocks)
+        # NOTE: the rawdict assembly below is deterministic and dedup'd given
+        # a fixed set of column boxes, but detect_column_boxes (pymupdf4llm's
+        # column_boxes()) can itself return a varying box count across
+        # repeated opens of the same page, so multi-column extraction is not
+        # fully deterministic on re-extraction. The mtime-keyed cache masks
+        # this in steady state (extraction runs once per file). A
+        # deterministic column detector is a deferred follow-up.
         boxes = detect_column_boxes(page)
         if _is_multi_column_layout(boxes):
             # Multi-column: assemble each column in reading order from

@@ -179,7 +179,7 @@ Read text, embedded images, and tables from selected pages. Each page entry incl
 Reading order depends on page layout:
 
 - **Standard pages** — positional block sort.
-- **Multi-column pages** — column reading order when `pdf-mcp[multicolumn]` is installed; falls back to positional sort without it (columns may interleave).
+- **Multi-column pages** — column reading order when `pdf-mcp[multicolumn]` is installed; falls back to positional sort without it (columns may interleave). Reading order is deterministic and dedup'd given a fixed column layout, but the underlying column detector is occasionally nondeterministic across runs, so re-extracting a multi-column page after a cache invalidation may rarely produce a slightly different reading order. Single-column pages are unaffected.
 - **Vertical-script pages** (Japanese/Chinese tategaki / 直排) — auto-detected; reconstructed top-to-bottom, right-to-left from glyph geometry. Dense magazine layouts are segmented by drawn rules; decorative-font mojibake is filtered. See `server_info` → `extraction.vertical_aware`. Limitations: pages delimited only by colored boxes or header styles are not segmented; whole-page decorative fonts produce no extractable text. The reorder is script-agnostic (glyph geometry, not language) and is validated on a Japanese vertical corpus; Traditional Chinese vertical is expected to work by the same path but is not corpus-validated.
 
 **Parameters:**

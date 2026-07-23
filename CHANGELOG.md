@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python 3.14 support: tested in CI (test matrix extended to 3.14) and
   declared in the PyPI classifiers.
 
+### Fixed
+- Multi-column text extraction no longer duplicates text, and its reading
+  order is deterministic for a given column layout. The multi-column path
+  extracted each detected column with PyMuPDF `get_text(clip=..., sort=True)`,
+  which re-read text shared by overlapping column boxes (inflating the output
+  with duplicated lines) and was intermittently nondeterministic. Extraction
+  now assembles each column from deterministic `rawdict` glyph data, assigning
+  every text line to exactly one column, so the output is dedup'd and stable
+  given a fixed column layout. Single-column pages are unchanged (byte-for-byte),
+  and the coherence corpus shows no reading-order regression. The
+  extraction-logic version is bumped, so cached multi-column `page_text`,
+  embeddings, and FTS rows re-extract on next read. A rare residual
+  nondeterminism remains in the upstream column detector (`pymupdf4llm`), which
+  can return a slightly different column set across runs; it is masked by the
+  mtime-keyed cache (each page is extracted once) and documented as a known
+  limitation, with a deterministic detector tracked as a follow-up.
+
 ## [1.21.0] - 2026-07-17
 ### Added
 - `pdf_extract_chart`: extract exact `(x, y)` data tables from born-digital

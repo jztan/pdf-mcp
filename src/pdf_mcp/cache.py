@@ -1576,19 +1576,32 @@ class PDFCache:
     ) -> str | None:
         """Build an excerpt from ORIGINAL page text for a CJK match.
 
-        Returns a context window centered on the literal query substring (query
-        chars rejoined, whitespace removed). Returns None when the literal
-        substring is absent — the contiguity post-filter that drops rare
-        cross-separator false positives.
+        Query tokens (whitespace-split, AND semantics matching the FTS5 query)
+        are checked independently: EACH token must appear as a literal
+        substring of the page text. This is the contiguity post-filter that
+        drops rare cross-separator false positives, applied per token rather
+        than to the whole query, so a multi-term query is not required to
+        appear as one contiguous run. Returns None when any token's literal
+        substring is absent. Otherwise returns a context window centered on
+        the earliest-occurring token (lowest string index) among those found.
         """
         text = self.get_page_text(path, page_num) or ""
-        needle = "".join(query.split())
-        idx = text.find(needle)
-        if idx < 0:
+        tokens = query.split()
+        if not tokens:
             return None
-        half = max(0, (context_chars - len(needle)) // 2)
-        start = max(0, idx - half)
-        end = min(len(text), idx + len(needle) + half)
+        best_idx: int | None = None
+        best_needle = ""
+        for token in tokens:
+            idx = text.find(token)
+            if idx < 0:
+                return None
+            if best_idx is None or idx < best_idx:
+                best_idx = idx
+                best_needle = token
+        assert best_idx is not None
+        half = max(0, (context_chars - len(best_needle)) // 2)
+        start = max(0, best_idx - half)
+        end = min(len(text), best_idx + len(best_needle) + half)
         prefix = "..." if start > 0 else ""
         suffix = "..." if end < len(text) else ""
         return f"{prefix}{text[start:end]}{suffix}"

@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Same-row fragments that PyMuPDF splits across multiple rawdict lines
   (letter-spaced or small-caps headings) are re-joined with gap-based spacing,
   so headings extract contiguously instead of newline-fragmented.
+- Multi-term CJK keyword queries (e.g. `四十八願 議論 本願`) returned no
+  results in both `pdf_search` and `pdf_corpus_search`, even when every term
+  was present on the page. The CJK excerpt builder's contiguity post-filter
+  concatenated all query terms into a single literal substring, which almost
+  never occurs verbatim, so every otherwise-matching hit was dropped. It now
+  checks each term's contiguity independently and centers the excerpt on the
+  earliest match; single-term CJK queries are unaffected.
 
 ## [1.21.0] - 2026-07-17
 ### Added

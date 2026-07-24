@@ -2582,6 +2582,83 @@ def test_cjk_keyword_search_two_char_term(tmp_path):
     assert [r["page"] for r in results] == [1]
 
 
+def test_cjk_multi_token_search_finds_separate_sentences(tmp_path):
+    """Multi-term CJK keyword query: each term appears in a SEPARATE
+    sentence (not adjacent). Per-token contiguity should still accept the
+    page and center the excerpt on the earliest-occurring token."""
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(
+        str(pdf), 0, "東京の天気は晴れです。大阪の交通情報を伝えます。"
+    )
+    results = cache.search_fts(str(pdf), "東京 大阪", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+    assert results[0]["excerpt"] is not None
+    assert "東京" in results[0]["excerpt"]
+
+
+def test_cjk_single_token_search_excerpt_unchanged(tmp_path):
+    """Single-token CJK query behavior is byte-identical to the pre-fix
+    code path (benchmark-pinned: 厚木基地 recall)."""
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    cache.save_page_text(str(pdf), 0, "本紙は厚木基地をめぐる課題を扱う。")
+    results = cache.search_fts(str(pdf), "厚木基地", max_results=10, context_chars=80)
+    assert [r["page"] for r in results] == [1]
+    text = "本紙は厚木基地をめぐる課題を扱う。"
+    idx = text.find("厚木基地")
+    half = max(0, (80 - len("厚木基地")) // 2)
+    start = max(0, idx - half)
+    end = min(len(text), idx + len("厚木基地") + half)
+    expected = text[start:end]
+    assert results[0]["excerpt"] == expected
+
+
+def test_cjk_single_token_cross_separator_false_positive_dropped(tmp_path):
+    """A token whose characters are not contiguous in the original page
+    text (only whitespace between them, collapsed away by _cjk_split) is
+    caught by the per-token contiguity post-filter, even though FTS itself
+    marks it as a match. This is the false-positive protection the filter
+    exists for."""
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    # "大" ends one block, "阪" starts an unrelated block; only whitespace
+    # separates them in the original text, so FTS (which collapses
+    # whitespace via _cjk_split) treats them as adjacent, but the literal
+    # substring "大阪" never appears in the original page text.
+    cache.save_page_text(str(pdf), 0, "大\n\n阪")
+    results = cache.search_fts(str(pdf), "大阪", max_results=10, context_chars=80)
+    assert results == []
+
+
+def test_cjk_multi_token_missing_token_returns_no_results(tmp_path):
+    """Multi-token query where one token's characters are present (so FTS
+    AND-matches) but never contiguous in the original text: the per-token
+    post-filter still drops the whole hit, even though the other token
+    ("大阪") is genuinely contiguous."""
+    from pdf_mcp.cache import PDFCache
+
+    cache = PDFCache(cache_dir=tmp_path)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 stub")
+    # "大阪" is a real contiguous match; "東" and "京" are only
+    # whitespace-separated (no other characters between them), so FTS
+    # (which collapses whitespace via _cjk_split) matches "東京" as a
+    # phrase, but the literal substring "東京" never appears.
+    cache.save_page_text(str(pdf), 0, "大阪の話です。東\n\n京の天気も伝えます。")
+    results = cache.search_fts(str(pdf), "東京 大阪", max_results=10, context_chars=80)
+    assert results == []
+
+
 def test_english_search_unchanged_by_cjk_path(tmp_path):
     from pdf_mcp.cache import PDFCache
 

@@ -22,7 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   benchmark). Mirrors single-doc `pdf_search`'s three modes (keyword,
   semantic, auto/hybrid) and excerpt styles, with a coverage-honest
   envelope (`unprocessed`, `budget_exhausted`) shared with the other
-  corpus tools.
+  corpus tools. Measured on the production tool with real embeddings
+  (100 docs, 64 graded queries, adversarial distractor classes): hybrid
+  NDCG@10 0.674 with a gold document in the top 3 for 100% of queries
+  (doc-hit@3 1.000), under 0.5s per query on a warmed corpus; per-class
+  detail in `benchmark_data/corpus_search/modes_results.md`.
 
 ### Fixed
 - Multi-column text extraction no longer duplicates text, and its reading
@@ -49,7 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   concatenated all query terms into a single literal substring, which almost
   never occurs verbatim, so every otherwise-matching hit was dropped. It now
   checks each term's contiguity independently and centers the excerpt on the
-  earliest match; single-term CJK queries are unaffected.
+  earliest match; single-term CJK queries are unaffected (anchor benchmark
+  unchanged: `厚木基地` 3 hits, vertical-jp recall 1.00). On the corpus mode
+  benchmark the fix recovers keyword needle NDCG@10 from 0.688 to 0.968,
+  exactly matching the design-spike reference.
 
 ## [1.21.0] - 2026-07-17
 ### Added

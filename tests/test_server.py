@@ -24,6 +24,7 @@ from pdf_mcp.server import (
     pdf_get_toc,
     pdf_corpus_warm,
     pdf_corpus_overview,
+    pdf_corpus_search,
     pdf_cache_stats,
     pdf_cache_clear,
     pdf_render_pages,
@@ -3903,3 +3904,54 @@ class TestPdfCorpusOverview:
         card_paths = [c["path"] for c in result["docs"]]
         assert target_path not in card_paths
         assert len(result["docs"]) == 2
+
+
+class TestPdfCorpusSearchKeyword:
+    def test_cross_doc_keyword_hits_with_provenance(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert "error" not in result
+        assert result["search_mode"] == "keyword"
+        assert result["total_matches"] == len(result["matches"]) > 0
+        paths = {m["path"] for m in result["matches"]}
+        assert len(paths) >= 2  # "budget" appears in every corpus doc
+        for m in result["matches"]:
+            assert m["page"] >= 1 and "excerpt" in m and "doc_title" in m
+
+    def test_hit_fieldset_is_single_doc_plus_provenance(
+        self, corpus_dir, isolated_server
+    ):
+        single = pdf_search(
+            str(corpus_dir / "alpha.pdf"),
+            "budget",
+            mode="keyword",
+            excerpt_style="snippet",
+        )
+        multi = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", excerpt_style="snippet"
+        )
+        single_fields = set(single["matches"][0].keys())
+        multi_fields = set(multi["matches"][0].keys())
+        assert multi_fields == single_fields | {"path", "doc_title"}
+
+    def test_doc_match_counts_and_coverage(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        # every doc that produced a match is counted, with a positive count
+        for m in result["matches"]:
+            assert result["doc_match_counts"][m["path"]] >= 1
+        assert result["coverage"] == {"searched": 3, "corpus": 3}
+
+    def test_empty_query_inline_error(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "   ", mode="keyword")
+        assert "error" in result
+
+    def test_no_hits_returns_empty_not_error(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "zzzqqqxyzzy", mode="keyword")
+        assert result["matches"] == [] and result["total_matches"] == 0
+
+    def test_paragraph_style_carries_geometry(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"]
+        geo = [m for m in result["matches"] if "bbox" in m]
+        assert geo and all("clip" in m and "page_rect" in m for m in geo)

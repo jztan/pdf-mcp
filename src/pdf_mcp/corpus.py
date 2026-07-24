@@ -20,16 +20,24 @@ from .extractor import extract_metadata, extract_text_from_page, extract_toc
 
 __all__ = [
     "CORPUS_MAX_FILES",
+    "CORPUS_RRF_K",
     "resolve_corpus",
     "warm_docs",
     "text_coverage_label",
     "build_overview_card",
+    "rrf_fuse_doc_rankings",
+    "rrf_fuse_two_rankings",
 ]
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
 # explicit. Beyond this, corpus tools return an inline error instead
 # of silently truncating.
 CORPUS_MAX_FILES = 100
+
+# RRF constant for cross-document fusion; matches server._RRF_K so corpus
+# fusion and single-doc hybrid fusion share one k. Design decided by the
+# stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
+CORPUS_RRF_K = 60
 
 
 def _validate_file(
@@ -331,3 +339,44 @@ def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, An
         "size_bytes": meta["file_size"],
         "from_cache": from_cache,
     }
+
+
+def rrf_fuse_doc_rankings(
+    rank_lists: list[list[tuple[str, int]]],
+    k: int = CORPUS_RRF_K,
+    top_k: int | None = None,
+) -> list[tuple[str, int]]:
+    """Fuse per-document rank lists into one global ranking via RRF.
+
+    Each inner list is one document's (doc_path, page) hits, best first.
+    Every item appears in exactly one list, so the fused score is
+    1 / (k + rank): items interleave by within-document rank. Ties
+    break deterministically by (doc_path, page).
+    """
+    scored: list[tuple[float, str, int]] = []
+    for hits in rank_lists:
+        for rank, (doc, page) in enumerate(hits):
+            scored.append((1.0 / (k + rank), doc, page))
+    scored.sort(key=lambda t: (-t[0], t[1], t[2]))
+    fused = [(doc, page) for _s, doc, page in scored]
+    return fused[:top_k] if top_k is not None else fused
+
+
+def rrf_fuse_two_rankings(
+    a: list[tuple[str, int]],
+    b: list[tuple[str, int]],
+    k: int = CORPUS_RRF_K,
+    top_k: int | None = None,
+) -> list[tuple[str, int]]:
+    """RRF across two global rankings (auto mode: keyword + semantic).
+
+    The same (doc_path, page) may appear in both lists; its RRF
+    contributions add. Ties break deterministically by (doc_path, page).
+    """
+    scores: dict[tuple[str, int], float] = {}
+    for ranking in (a, b):
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
+    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
+    fused = [item for item, _s in ordered]
+    return fused[:top_k] if top_k is not None else fused

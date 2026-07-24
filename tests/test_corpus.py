@@ -269,3 +269,33 @@ class TestOverviewCards:
         card = corpus.build_overview_card(path, cache, from_cache=False)
         assert card["toc_top"] == ["Intro", "Results", "End"]
         assert card["has_toc"] is True
+
+
+class TestCorpusFusion:
+    def test_doc_rankings_interleave_by_within_doc_rank(self):
+        lists = [
+            [("a.pdf", 3), ("a.pdf", 7)],
+            [("b.pdf", 1), ("b.pdf", 2)],
+        ]
+        fused = corpus.rrf_fuse_doc_rankings(lists)
+        assert fused[:2] == [("a.pdf", 3), ("b.pdf", 1)]
+        assert fused[2:] == [("a.pdf", 7), ("b.pdf", 2)]
+
+    def test_doc_rankings_tiebreak_deterministic(self):
+        fused = corpus.rrf_fuse_doc_rankings([[("z.pdf", 5)], [("a.pdf", 9)]])
+        assert fused == [("a.pdf", 9), ("z.pdf", 5)]
+
+    def test_doc_rankings_top_k(self):
+        lists = [[("a.pdf", 1), ("a.pdf", 2)], [("b.pdf", 1)]]
+        assert len(corpus.rrf_fuse_doc_rankings(lists, top_k=2)) == 2
+
+    def test_two_rankings_shared_item_scores_add(self):
+        a = [("x.pdf", 1), ("y.pdf", 2)]
+        b = [("y.pdf", 2), ("z.pdf", 3)]
+        fused = corpus.rrf_fuse_two_rankings(a, b)
+        # ("y.pdf", 2): 1/(60+1) + 1/(60+0) beats x's 1/(60+0)
+        assert fused[0] == ("y.pdf", 2)
+
+    def test_two_rankings_empty_sides(self):
+        assert corpus.rrf_fuse_two_rankings([], []) == []
+        assert corpus.rrf_fuse_two_rankings([("a.pdf", 1)], []) == [("a.pdf", 1)]

@@ -3955,3 +3955,77 @@ class TestPdfCorpusSearchKeyword:
         assert result["matches"]
         geo = [m for m in result["matches"] if "bbox" in m]
         assert geo and all("clip" in m and "page_rect" in m for m in geo)
+
+
+class TestPdfCorpusSearchSemanticAuto:
+    @staticmethod
+    def _fake_embedder(monkeypatch):
+        import numpy as np
+        import pdf_mcp.embedder as emb
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            # deterministic unit vectors: dim0 weighted by "budget" count
+            out = []
+            for t in texts:
+                v = np.zeros(4, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("budget")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.1, 0.0, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+
+    def test_semantic_mode_confidence_signals(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert "error" not in result
+        assert result["search_mode"] == "semantic"
+        assert result["confidence_threshold"] == 0.5
+        assert all("low_confidence" in m for m in result["matches"])
+        assert "all_results_low_confidence" in result
+        assert result["total_matches"] == len(result["matches"])
+
+    def test_auto_mode_fuses_and_reports_hybrid(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        assert result["matches"] and "low_confidence" not in result["matches"][0]
+        assert "all_results_low_confidence" not in result
+
+    def test_auto_degrades_without_fastembed(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "keyword"
+        assert result["semantic_unavailable"] is True
+
+    def test_semantic_mode_error_without_fastembed(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert "error" in result

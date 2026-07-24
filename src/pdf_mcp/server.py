@@ -2552,15 +2552,19 @@ def pdf_corpus_search(
           plus geometry fields when excerpt_style is 'paragraph'.
           Keyword-mode hits also carry `score` (per-doc BM25,
           comparable only within that hit's own document). Semantic-
-          mode hits carry `semantic_score` (cosine, rounded 4dp) and
-          `low_confidence` (cosine below `confidence_threshold`).
-          Hybrid (auto, embeddings available) hits carry neither
-          score field nor `low_confidence` (RRF order is not a clean
-          per-hit confidence signal). The ORDER of `matches` is
-          governed by Reciprocal Rank Fusion (see
-          `corpus.rrf_fuse_doc_rankings`, `corpus.rrf_fuse_two_rankings`,
-          `corpus.CORPUS_RRF_K`) except in pure semantic mode, which
-          ranks by cosine directly.
+          mode hits carry `score` (cosine, rounded 4dp) and
+          `low_confidence` (cosine below `confidence_threshold`) -
+          same fields as single-doc `pdf_search(mode="semantic")`.
+          Hybrid (auto, embeddings available) hits carry `score` (the
+          fused RRF score, rounded 4dp), `semantic_score` (cosine,
+          rounded 4dp; 0.0 when the page had no cached embedding), and
+          `low_confidence` (page absent from the keyword arm's hits
+          AND `semantic_score` below `confidence_threshold`) - same
+          shape as single-doc `pdf_search(mode="auto")`'s hybrid hits.
+          The ORDER of `matches` is governed by Reciprocal Rank Fusion
+          (see `corpus.rrf_fuse_doc_rankings`,
+          `corpus.rrf_fuse_two_rankings_scored`, `corpus.CORPUS_RRF_K`)
+          except in pure semantic mode, which ranks by cosine directly.
         - total_matches: len(matches)
         - doc_match_counts: per-doc hit count, keyed by path. In
           keyword and hybrid modes this counts the keyword arm's raw
@@ -2580,8 +2584,9 @@ def pdf_corpus_search(
         - semantic_unprocessed: (semantic/hybrid only) paths that were
           warmed/cached but had no cached embeddings (e.g. warm raced
           the embeddings budget); additive to `unprocessed`
-        - all_results_low_confidence, confidence_threshold, model_name:
-          semantic mode only
+        - all_results_low_confidence, confidence_threshold: semantic
+          and hybrid modes
+        - model_name: semantic mode only
         - semantic_unavailable, semantic_unavailable_reason: auto mode
           only, present when embeddings are unavailable and the search
           degraded to keyword
@@ -2705,7 +2710,7 @@ def pdf_corpus_search(
                 "doc_title": _title_for(path),
                 "page": page,
                 "excerpt": text[:context_chars],
-                "semantic_score": score,
+                "score": score,
                 "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "position": 0,
                 "source": "extracted",
@@ -2791,11 +2796,17 @@ def pdf_corpus_search(
     scored, semantic_unprocessed = _corpus_semantic_scores(
         ready_paths, embed_model, query_vec
     )
+    sem_score_map = {(path, page): s for path, page, s in scored}
     scored.sort(key=lambda t: (-t[2], t[0], t[1]))
     sem_limit = min(top_k * 3, len(scored))
     sem_ranking = [(path, page) for path, page, _s in scored[:sem_limit]]
 
-    fused = corpus.rrf_fuse_two_rankings(kw_fused, sem_ranking, top_k=top_k)
+    fused_scored = corpus.rrf_fuse_two_rankings_scored(
+        kw_fused, sem_ranking, top_k=top_k
+    )
+    fused = [item for item, _s in fused_scored]
+    rrf_score_map = dict(fused_scored)
+    keyword_pages_set = set(kw_payload.keys())
 
     def _hybrid_build(path: str, page: int, idx: int) -> dict[str, Any]:
         if (path, page) in kw_payload:
@@ -2803,11 +2814,23 @@ def pdf_corpus_search(
         else:
             text = cache.get_page_text(path, page - 1) or ""
             excerpt = text[:context_chars]
+        sem_score = sem_score_map.get((path, page), 0.0)
+        # A hybrid match is low-confidence when (a) it has no keyword
+        # hit on the page AND (b) the underlying semantic cosine is
+        # below the confidence threshold. Keyword-hit pages always
+        # count as confident: the query terms literally appear.
+        low_confidence = (
+            path,
+            page,
+        ) not in keyword_pages_set and sem_score < _SEMANTIC_CONFIDENCE_THRESHOLD
         return {
             "path": path,
             "doc_title": _title_for(path),
             "page": page,
             "excerpt": excerpt,
+            "score": round(rrf_score_map[(path, page)], 4),
+            "semantic_score": round(sem_score, 4),
+            "low_confidence": low_confidence,
             "position": 0,
             "source": "extracted",
             "_fused_pos": idx,
@@ -2817,6 +2840,9 @@ def pdf_corpus_search(
         fused, _hybrid_build, excerpt_style, query, kw_excerpts_by_doc
     )
     hidden_text_detected = any(m.get("hidden_text") for m in matches)
+    all_results_low_confidence = bool(matches) and all(
+        m["low_confidence"] for m in matches
+    )
 
     return {
         "matches": matches,
@@ -2826,6 +2852,8 @@ def pdf_corpus_search(
         "excerpt_style": excerpt_style,
         "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
         "hidden_text_detected": hidden_text_detected,
+        "all_results_low_confidence": all_results_low_confidence,
+        "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
         "unprocessed": warm["unprocessed"],
         "semantic_unprocessed": semantic_unprocessed,
         "skipped": skipped,

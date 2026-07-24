@@ -3993,8 +3993,27 @@ class TestPdfCorpusSearchSemanticAuto:
         assert result["search_mode"] == "semantic"
         assert result["confidence_threshold"] == 0.5
         assert all("low_confidence" in m for m in result["matches"])
+        assert all("score" in m for m in result["matches"])
+        assert not any("semantic_score" in m for m in result["matches"])
         assert "all_results_low_confidence" in result
         assert result["total_matches"] == len(result["matches"])
+
+    def test_semantic_hit_fieldset_matches_single_doc_plus_provenance(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        single = pdf_search(
+            str(corpus_dir / "alpha.pdf"),
+            "budget",
+            mode="semantic",
+            excerpt_style="snippet",
+        )
+        multi = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="semantic", excerpt_style="snippet"
+        )
+        single_fields = set(single["matches"][0].keys())
+        multi_fields = set(multi["matches"][0].keys())
+        assert multi_fields == single_fields | {"path", "doc_title"}
 
     def test_auto_mode_fuses_and_reports_hybrid(
         self, corpus_dir, isolated_server, monkeypatch
@@ -4002,8 +4021,13 @@ class TestPdfCorpusSearchSemanticAuto:
         self._fake_embedder(monkeypatch)
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
         assert result["search_mode"] == "hybrid"
-        assert result["matches"] and "low_confidence" not in result["matches"][0]
-        assert "all_results_low_confidence" not in result
+        assert result["matches"]
+        for m in result["matches"]:
+            assert "score" in m
+            assert "semantic_score" in m
+            assert "low_confidence" in m
+        assert "all_results_low_confidence" in result
+        assert result["confidence_threshold"] == 0.5
 
     def test_auto_degrades_without_fastembed(
         self, corpus_dir, isolated_server, monkeypatch

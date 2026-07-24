@@ -27,6 +27,7 @@ __all__ = [
     "build_overview_card",
     "rrf_fuse_doc_rankings",
     "rrf_fuse_two_rankings",
+    "rrf_fuse_two_rankings_scored",
 ]
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
@@ -362,6 +363,26 @@ def rrf_fuse_doc_rankings(
     return fused[:top_k] if top_k is not None else fused
 
 
+def rrf_fuse_two_rankings_scored(
+    a: list[tuple[str, int]],
+    b: list[tuple[str, int]],
+    k: int = CORPUS_RRF_K,
+    top_k: int | None = None,
+) -> list[tuple[tuple[str, int], float]]:
+    """RRF across two global rankings (auto mode: keyword + semantic),
+    returning each item's fused score alongside it.
+
+    The same (doc_path, page) may appear in both lists; its RRF
+    contributions add. Ties break deterministically by (doc_path, page).
+    """
+    scores: dict[tuple[str, int], float] = {}
+    for ranking in (a, b):
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
+    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
+    return ordered[:top_k] if top_k is not None else ordered
+
+
 def rrf_fuse_two_rankings(
     a: list[tuple[str, int]],
     b: list[tuple[str, int]],
@@ -373,10 +394,5 @@ def rrf_fuse_two_rankings(
     The same (doc_path, page) may appear in both lists; its RRF
     contributions add. Ties break deterministically by (doc_path, page).
     """
-    scores: dict[tuple[str, int], float] = {}
-    for ranking in (a, b):
-        for rank, item in enumerate(ranking):
-            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
-    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
-    fused = [item for item, _s in ordered]
-    return fused[:top_k] if top_k is not None else fused
+    ordered = rrf_fuse_two_rankings_scored(a, b, k=k, top_k=top_k)
+    return [item for item, _s in ordered]

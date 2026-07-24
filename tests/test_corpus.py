@@ -299,3 +299,19 @@ class TestCorpusFusion:
     def test_two_rankings_empty_sides(self):
         assert corpus.rrf_fuse_two_rankings([], []) == []
         assert corpus.rrf_fuse_two_rankings([("a.pdf", 1)], []) == [("a.pdf", 1)]
+
+    def test_two_rankings_scored_shared_item_sums_contributions(self):
+        a = [("x.pdf", 1), ("y.pdf", 2)]
+        b = [("y.pdf", 2), ("z.pdf", 3)]
+        scored = corpus.rrf_fuse_two_rankings_scored(a, b)
+        by_item = dict(scored)
+        k = corpus.CORPUS_RRF_K
+        assert by_item[("y.pdf", 2)] == 1.0 / (k + 1) + 1.0 / (k + 0)
+        assert by_item[("x.pdf", 1)] == 1.0 / (k + 0)
+        assert scored[0][0] == ("y.pdf", 2)
+
+    def test_two_rankings_scored_tiebreak_matches_unscored(self):
+        a = [("z.pdf", 5)]
+        b = [("a.pdf", 9)]
+        scored = corpus.rrf_fuse_two_rankings_scored(a, b)
+        assert [item for item, _s in scored] == corpus.rrf_fuse_two_rankings(a, b)

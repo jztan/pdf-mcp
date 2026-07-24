@@ -275,6 +275,7 @@ The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate 
 | `pdf_get_toc` | Full table of contents for documents with >50 bookmarks |
 | `pdf_corpus_warm` | Warm a folder (or list) of PDFs into the cache, text and optional embeddings, within a time budget. Returns per-doc status plus `unprocessed`/`skipped`. |
 | `pdf_corpus_overview` | Per-document triage cards for a folder: title, page count, top TOC entries, text coverage. Auto-warms within the budget. |
+| `pdf_corpus_search` | Search across a folder of PDFs (keyword, semantic, or hybrid), returning ranked hits with document and page provenance, excerpts, and coverage. |
 | `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables, each with source `bbox` + `clip` coordinates. Always returns `hidden_text_detected` (response level) and per-page `hidden_text`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |

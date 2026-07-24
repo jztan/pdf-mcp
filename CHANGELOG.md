@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count, top TOC entries, text coverage). Budget-exhausted docs are
   reported in `unprocessed`; repeat calls continue where warming
   stopped. Corpora are capped at 100 files; URLs are not accepted.
+- `pdf_corpus_search`: cross-document search over a folder of PDFs,
+  fusing per-document rankings into one cross-corpus result via
+  Reciprocal Rank Fusion (design chosen by a 100-doc/64-query
+  benchmark). Mirrors single-doc `pdf_search`'s three modes (keyword,
+  semantic, auto/hybrid) and excerpt styles, with a coverage-honest
+  envelope (`unprocessed`, `budget_exhausted`) shared with the other
+  corpus tools.
 
 ### Fixed
 - Multi-column text extraction no longer duplicates text, and its reading

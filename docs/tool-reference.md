@@ -788,7 +788,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.
 - `total_matches` (int): `len(matches)`.
 - `doc_match_counts` (object): per-doc hit count keyed by path. In keyword and hybrid modes this is the keyword arm's raw per-doc FTS hit count (independent of the fused `top_k`); in pure semantic mode it's how many of that doc's pages landed in the global `top_k`.
-- `search_mode` (string): `"keyword"`, `"semantic"`, or `"hybrid"` — the mode actually run (`"auto"` resolves to `"hybrid"` when embeddings are available, else `"keyword"`).
+- `search_mode` (string): `"keyword"`, `"semantic"`, or `"hybrid"`, the mode actually run (`"auto"` resolves to `"hybrid"` when embeddings are available, else `"keyword"`).
 - `excerpt_style`: echoed input.
 - `coverage` (object): `{"searched": docs actually queried, "corpus": total resolved files}`.
 - `hidden_text_detected` (bool): `true` if any returned hit's page carries text invisible to a human reader.

@@ -787,7 +787,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.
 - `total_matches` (int): `len(matches)`.
-- `doc_match_counts` (object): per-doc hit count keyed by path. In keyword and hybrid modes this is the keyword arm's raw per-doc FTS hit count (independent of the fused `top_k`); in pure semantic mode it's how many of that doc's pages landed in the global `top_k`.
+- `doc_match_counts` (object): per-doc hit count keyed by path. In keyword and hybrid modes this is the keyword arm's per-doc FTS hit count, capped at `top_k` per document (independent of which pages the fused ranking selects); in pure semantic mode it's how many of that doc's pages landed in the global `top_k`.
 - `search_mode` (string): `"keyword"`, `"semantic"`, or `"hybrid"`, the mode actually run (`"auto"` resolves to `"hybrid"` when embeddings are available, else `"keyword"`).
 - `excerpt_style`: echoed input.
 - `coverage` (object): `{"searched": docs actually queried, "corpus": total resolved files}`.
@@ -816,10 +816,10 @@ pdf_corpus_search("/path/to/papers/", "lottery ticket hypothesis", mode="keyword
 #   "matches": [
 #     {"path": "/path/to/papers/1803.03635.pdf", "doc_title": null,
 #      "page": 3, "excerpt": "...When randomly reinitialized, winning tickets perform far...",
-#      "score": -6.2, "position": 0, "source": "extracted", "hidden_text": false},
+#      "score": 6.2, "position": 0, "source": "extracted", "hidden_text": false},
 #     {"path": "/path/to/papers/2205.14135.pdf", "doc_title": null,
 #      "page": 12, "excerpt": "...The lottery ticket hypothesis: Finding sparse, trainable...",
-#      "score": -5.1, "position": 0, "source": "extracted", "hidden_text": false}
+#      "score": 5.1, "position": 0, "source": "extracted", "hidden_text": false}
 #   ],
 #   "total_matches": 2,
 #   "doc_match_counts": {"/path/to/papers/1803.03635.pdf": 2,

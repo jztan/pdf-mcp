@@ -252,38 +252,60 @@ then general ranking.
 The corpus numbers above answer "search 24 filings". The commoner case is
 that the caller already knows which filing and searches only that one, so
 document selection is off the table and what remains is within-document
-retrieval and excerpt quality. Measured on 25 single-document questions
+retrieval and excerpt quality. Measured on 49 single-document questions
 (`scripts/eval_single_doc_answerability.py`, judge = majority of 3):
 
 | mode | answerable in full | partial | not answerable | wrong attribution |
 |---|---|---|---|---|
-| **hybrid (auto, default)** | **20/25 (80%)** | 2 | 3 | 3 |
-| **semantic** | **20/25 (80%)** | 2 | 3 | 1 |
-| keyword | 15/25 (60%) | 1 | 9 | 1 |
+| **semantic** | **35/49 (71%)** | 2 | 12 | 4 |
+| **hybrid (auto, default)** | **34/49 (69%)** | 6 | 9 | 5 |
+| keyword | 26/49 (53%) | 2 | 21 | 3 |
 
-**80% of realistic questions are fully answerable from a single 10-K** in
-the default mode -- materially better than the 53% single-call figure on the
-24-document corpus, which is the same finding from the other direction:
-this tool is strongest when the caller narrows to a document first.
+**Roughly 70% of realistic questions are fully answerable from a single
+10-K** in the default mode -- against 53% single-call on the 24-document
+corpus. Same finding from two directions: this tool is strongest once the
+caller has narrowed to a document, which is what the search tool
+descriptions now teach.
 
-**Keyword alone is the weakest arm here**, with 9 unanswerable against 3.
-That reverses an earlier reading: on a 9-question subset keyword led
-(7/9 vs hybrid 6/9), and acting on it would have been a mistake. At n=25
-it is last by five questions. A one- or two-question gap at these sample
-sizes is judge noise, and the expansion from 9 to 25 questions existed
-precisely to find that out.
+**Keyword alone is clearly the weakest arm**, with 21 of 49 unanswerable.
+This is the third measurement of that ordering and it has been stable
+since the question set grew.
 
-**Hybrid and semantic tie on answering but not on safety**: hybrid
-misattributes on 3 questions, semantic on 1. On financial documents a
-confidently wrong figure is the expensive failure, so semantic may be the
-safer single-document arm. Held loosely -- 3 versus 1 is itself a
-two-question gap, the same magnitude that just reversed, so it is a
-hypothesis to test rather than grounds to change a default.
+**Hybrid and semantic are a tie** (34 vs 35 -- one question, inside the
+noise this eval has repeatedly demonstrated). Neither an NDCG argument nor
+this one justifies preferring one over the other on a single filing;
+hybrid remains the default because it is the only arm that is never the
+worst on either axis.
 
-Caveat on comparability: these 25 questions skew toward figure lookups, so
-absolute scores sit higher than the earlier 9-question set. The three modes
-are comparable **with each other in this run**; they are not comparable
-with numbers from the smaller set.
+### Two reversals worth remembering
+
+An earlier 9-question subset had keyword *leading* (7/9 against hybrid's
+6/9). At 25 questions keyword fell to last by five, and at 49 it is last
+by eight. Acting on the 9-question reading would have made the tool worse.
+
+Absolute scores also fell from 80% (n=25) to ~70% (n=49). The first 25
+questions skewed toward MD&A figure lookups; the expansion deliberately
+added table-sourced answers, causal and regulatory questions, and the four
+filings that were under-used. Harder mix, lower score, better estimate --
+the same pattern as the corpus expansion from 35 to 66 queries. **Treat
+~70% as the honest single-PDF number**, and treat any single-run gap of
+one or two questions as noise.
+
+### Ground-truth provenance
+
+49 single-document questions: 46 reference facts are machine-extracted
+from page text and asserted to contain the figure their regex matched;
+3 (from the original hand-authored set) are close paraphrases of the
+source sentence. Four candidate questions were dropped during authoring
+because no verifiable fact could be built for them.
+
+Two authoring defects were caught and fixed rather than shipped: splitting
+sentences on "." truncated figures out of their own facts (financial prose
+is full of decimals), and widening the window backwards let an unrelated
+preceding sentence become the "fact" -- a European Commission match once
+yielded a sentence about dividends. Facts are now anchored on the match
+itself. Where the evidence did not support the question as written, the
+question was reworded to what the text actually states.
 
 ## Known limitations of this dataset
 

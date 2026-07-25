@@ -2,8 +2,8 @@
   "description": "Single-document answerability on 10-K filings: each question scoped to the one filing that answers it, so document selection is off the table. Judge = majority of 3. Reproduce with scripts/eval_single_doc_answerability.py <mode>.",
   "modes": {
     "auto": {
-      "judge_ballot_errors": 1,
-      "n": 25,
+      "judge_ballot_errors": 0,
+      "n": 49,
       "per_question": [
         {
           "answerable": "full",
@@ -22,7 +22,7 @@
           "id": "concentration-nvda",
           "votes": [
             "full",
-            "full",
+            "partial",
             "full"
           ],
           "wrong_attribution": false
@@ -72,11 +72,11 @@
           "wrong_attribution": false
         },
         {
-          "answerable": "full",
+          "answerable": "partial",
           "doc": "meta-fy2022",
           "id": "workforce-meta",
           "votes": [
-            "full",
+            "partial",
             "full",
             "partial"
           ],
@@ -146,14 +146,14 @@
             "no",
             "no"
           ],
-          "wrong_attribution": true
+          "wrong_attribution": false
         },
         {
           "answerable": "partial",
           "doc": "msft-fy2025",
           "id": "sd-msft-growth-2025",
           "votes": [
-            "no",
+            "partial",
             "partial",
             "partial"
           ],
@@ -187,8 +187,8 @@
           "id": "sd-aapl-services-2023",
           "votes": [
             "partial",
-            "no",
-            "partial"
+            "partial",
+            "no"
           ],
           "wrong_attribution": false
         },
@@ -230,7 +230,7 @@
           "doc": "amzn-fy2023",
           "id": "sd-amzn-aws-2023",
           "votes": [
-            "error",
+            "no",
             "no",
             "no"
           ],
@@ -278,19 +278,283 @@
             "full",
             "full"
           ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-income-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-revenue-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2023",
+          "id": "sd-msft-cloud-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
           "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2022",
+          "id": "sd-amzn-aws-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2023",
+          "id": "sd-meta-dap-2023",
+          "votes": [
+            "full",
+            "partial",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-total-sales-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-total-costs-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-total-revenues-2025",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2025",
+          "id": "sd-aapl-rd-2025",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-opinc-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2026",
+          "id": "sd-nvda-total-revenue-2026",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-gross-margin-2024",
+          "votes": [
+            "partial",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-credit-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2024",
+          "id": "sd-amzn-fulfillment-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-capex-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-attendance-2024",
+          "votes": [
+            "partial",
+            "partial",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "partial",
+          "doc": "googl-fy2024",
+          "id": "sd-googl-ec-2024",
+          "votes": [
+            "full",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-dma-2024",
+          "votes": [
+            "partial",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-debt-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-hopper-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-firstrepublic-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-intl-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-iphone-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-youtube-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
         }
       ],
       "tally": {
-        "full": 20,
-        "no": 3,
-        "partial": 2,
-        "wrong_attribution": 3
+        "full": 34,
+        "no": 9,
+        "partial": 6,
+        "wrong_attribution": 5
       }
     },
     "keyword": {
       "judge_ballot_errors": 0,
-      "n": 25,
+      "n": 49,
       "per_question": [
         {
           "answerable": "no",
@@ -345,7 +609,7 @@
             "full",
             "full"
           ],
-          "wrong_attribution": true
+          "wrong_attribution": false
         },
         {
           "answerable": "full",
@@ -359,11 +623,11 @@
           "wrong_attribution": false
         },
         {
-          "answerable": "partial",
+          "answerable": "full",
           "doc": "meta-fy2022",
           "id": "workforce-meta",
           "votes": [
-            "partial",
+            "full",
             "partial",
             "full"
           ],
@@ -387,7 +651,7 @@
           "votes": [
             "no",
             "no",
-            "partial"
+            "no"
           ],
           "wrong_attribution": false
         },
@@ -440,7 +704,7 @@
           "doc": "msft-fy2025",
           "id": "sd-msft-growth-2025",
           "votes": [
-            "full",
+            "partial",
             "full",
             "full"
           ],
@@ -473,19 +737,19 @@
           "doc": "aapl-fy2023",
           "id": "sd-aapl-services-2023",
           "votes": [
-            "no",
+            "full",
             "no",
             "no"
           ],
           "wrong_attribution": false
         },
         {
-          "answerable": "no",
+          "answerable": "full",
           "doc": "amc-fy2024",
           "id": "sd-amc-liquidity-2024",
           "votes": [
-            "no",
-            "no",
+            "full",
+            "full",
             "no"
           ],
           "wrong_attribution": false
@@ -566,18 +830,282 @@
             "full"
           ],
           "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-income-2022",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-revenue-2022",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2023",
+          "id": "sd-msft-cloud-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2022",
+          "id": "sd-amzn-aws-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2023",
+          "id": "sd-meta-dap-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-total-sales-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-total-costs-2024",
+          "votes": [
+            "partial",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-total-revenues-2025",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2025",
+          "id": "sd-aapl-rd-2025",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-opinc-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "nvda-fy2026",
+          "id": "sd-nvda-total-revenue-2026",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-gross-margin-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-credit-2024",
+          "votes": [
+            "no",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "no",
+          "doc": "amzn-fy2024",
+          "id": "sd-amzn-fulfillment-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-capex-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-attendance-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2024",
+          "id": "sd-googl-ec-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-dma-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "no",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-debt-2024",
+          "votes": [
+            "no",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-hopper-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-firstrepublic-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-intl-2023",
+          "votes": [
+            "partial",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-iphone-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-youtube-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
         }
       ],
       "tally": {
-        "full": 15,
-        "no": 9,
-        "partial": 1,
-        "wrong_attribution": 1
+        "full": 26,
+        "no": 21,
+        "partial": 2,
+        "wrong_attribution": 3
       }
     },
     "semantic": {
       "judge_ballot_errors": 0,
-      "n": 25,
+      "n": 49,
       "per_question": [
         {
           "answerable": "full",
@@ -613,13 +1141,13 @@
           "wrong_attribution": false
         },
         {
-          "answerable": "partial",
+          "answerable": "no",
           "doc": "aapl-fy2025",
           "id": "figure-aapl-buyback",
           "votes": [
-            "partial",
             "no",
-            "partial"
+            "no",
+            "no"
           ],
           "wrong_attribution": false
         },
@@ -657,15 +1185,15 @@
           "wrong_attribution": false
         },
         {
-          "answerable": "full",
+          "answerable": "no",
           "doc": "googl-fy2023",
           "id": "workforce-alphabet",
           "votes": [
-            "full",
-            "full",
+            "partial",
+            "no",
             "no"
           ],
-          "wrong_attribution": false
+          "wrong_attribution": true
         },
         {
           "answerable": "full",
@@ -723,15 +1251,15 @@
           "wrong_attribution": true
         },
         {
-          "answerable": "partial",
+          "answerable": "no",
           "doc": "msft-fy2025",
           "id": "sd-msft-growth-2025",
           "votes": [
             "partial",
-            "partial",
-            "partial"
+            "no",
+            "no"
           ],
-          "wrong_attribution": false
+          "wrong_attribution": true
         },
         {
           "answerable": "full",
@@ -756,13 +1284,13 @@
           "wrong_attribution": false
         },
         {
-          "answerable": "no",
+          "answerable": "partial",
           "doc": "aapl-fy2023",
           "id": "sd-aapl-services-2023",
           "votes": [
-            "no",
-            "no",
-            "no"
+            "partial",
+            "partial",
+            "partial"
           ],
           "wrong_attribution": false
         },
@@ -853,15 +1381,279 @@
             "full"
           ],
           "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-income-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2022",
+          "id": "sd-jpm-revenue-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2023",
+          "id": "sd-msft-cloud-2023",
+          "votes": [
+            "full",
+            "full",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2022",
+          "id": "sd-amzn-aws-2022",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "meta-fy2023",
+          "id": "sd-meta-dap-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-total-sales-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-total-costs-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-total-revenues-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2025",
+          "id": "sd-aapl-rd-2025",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-opinc-2025",
+          "votes": [
+            "full",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2026",
+          "id": "sd-nvda-total-revenue-2026",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-gross-margin-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-credit-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2024",
+          "id": "sd-amzn-fulfillment-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-capex-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-attendance-2024",
+          "votes": [
+            "partial",
+            "partial",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2024",
+          "id": "sd-googl-ec-2024",
+          "votes": [
+            "full",
+            "full",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-dma-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-debt-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-hopper-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-firstrepublic-2023",
+          "votes": [
+            "partial",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-intl-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2024",
+          "id": "sd-aapl-iphone-2024",
+          "votes": [
+            "no",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-youtube-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
         }
       ],
       "tally": {
-        "full": 20,
-        "no": 3,
+        "full": 35,
+        "no": 12,
         "partial": 2,
-        "wrong_attribution": 1
+        "wrong_attribution": 4
       }
     }
   },
-  "questions": 25
+  "questions": 49
 }

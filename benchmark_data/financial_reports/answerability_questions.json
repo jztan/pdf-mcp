@@ -424,6 +424,318 @@
         "compensation expenses, which included $479 million of charges related to employee severance associated with the reduction in our workforce. Additionally, other cost of revenues benefited from a reduction in depr"
       ],
       "confusable_with": "the $264 million severance figure on a different expense line"
+    },
+    {
+      "id": "sd-jpm-income-2022",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What net income did JPMorgan Chase report for 2022?",
+      "expect_docs": [
+        "jpm-fy2022"
+      ],
+      "reference_facts": [
+        "Firmwide overview JPMorgan Chase reported net income of $37.7 billion for 2022, down 22%, earnings per share of $12.09, ROE of 14% and ROTCE of 18%. \u2022 Total net revenue was $128.7 billion, up 6%, reflecting: \u2013 Net interest income of $66.7 billion, up 28%, driven by higher rates and loan growth, partially offset by"
+      ],
+      "confusable_with": "the 2023 figure of $49.6 billion in the adjacent filing"
+    },
+    {
+      "id": "sd-jpm-revenue-2022",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What was JPMorgan Chase's total net revenue in 2022?",
+      "expect_docs": [
+        "jpm-fy2022"
+      ],
+      "reference_facts": [
+        "income of $37.7 billion for 2022, down 22%, earnings per share of $12.09, ROE of 14% and ROTCE of 18%. \u2022 Total net revenue was $128.7 billion, up 6%, reflecting: \u2013 Net interest income of $66.7 billion, up 28%, driven by higher rates and loan growth, partially offset by lower Markets net interest income."
+      ],
+      "confusable_with": "net income, reported in the same paragraph"
+    },
+    {
+      "id": "sd-msft-cloud-2023",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How much did Microsoft's Intelligent Cloud revenue increase in fiscal 2023?",
+      "expect_docs": [
+        "msft-fy2023"
+      ],
+      "reference_facts": [
+        "and operating income included an unfavorable foreign currency impact of 5%, 5%, and 8%, respectively. Intelligent Cloud Revenue increased $12.9 billion or 17%. \u2022 Server products and cloud services revenue increased $12.6 billion or 19% driven by Azure and other cloud services."
+      ],
+      "confusable_with": "the fiscal 2024 increase of $17.5 billion, worded almost identically"
+    },
+    {
+      "id": "sd-amzn-aws-2022",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How fast did AWS sales grow in 2022?",
+      "expect_docs": [
+        "amzn-fy2022"
+      ],
+      "reference_facts": [
+        "Changes in foreign currency exchange rates reduced International net sales by $15.0 billion in 2022. AWS sales increased 29% in 2022, compared to the prior year."
+      ],
+      "confusable_with": "the 2023 growth rate of 13% in the following year's report"
+    },
+    {
+      "id": "sd-meta-dap-2023",
+      "scope": "single-doc",
+      "type": "definition",
+      "question": "What is Meta's Family daily active people metric?",
+      "expect_docs": [
+        "meta-fy2023"
+      ],
+      "reference_facts": [
+        "Family of Apps Metrics \u2022 Family daily active people (DAP) was 3.19 billion on average for December 2023, an increase of 8% year-over-year. \u2022 Family monthly active people (MAP) was 3.98 billion as of December 31, 2023, an increase of 6% year-over-year. \u2022 Facebook daily active users (DAUs) were 2.11 billion on average"
+      ],
+      "confusable_with": "monthly active people (MAP), defined alongside"
+    },
+    {
+      "id": "sd-aapl-total-sales-2024",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What were Apple's total net sales in 2024?",
+      "expect_docs": [
+        "aapl-fy2024"
+      ],
+      "reference_facts": [
+        "25,052 3 % 24,257 (7) % 25,977 Rest of Asia Pacific 30,658 4 % 29,615 1 % 29,375 Total net sales $ 391,035 2 % $ 383,285 (3) % $ 394,328 Americas Americas net sales increased during 2024 compared to 2023 due primarily to higher net sales of Services."
+      ],
+      "confusable_with": "segment or category subtotals in the same table"
+    },
+    {
+      "id": "sd-meta-total-costs-2024",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What were Meta's total costs and expenses in 2024?",
+      "expect_docs": [
+        "meta-fy2024"
+      ],
+      "reference_facts": [
+        "38,483 35,338 Marketing and sales 11,347 12,301 15,262 General and administrative 9,740 11,408 11,816 Total costs and expenses 95,121 88,151 87,665 Income from operations 69,380 46,751 28,944 Interest and other income (expense), net 1,283 677 (125) Income before provision for income t"
+      ],
+      "confusable_with": "revenue or income lines in the same statement"
+    },
+    {
+      "id": "sd-googl-total-revenues-2025",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What were Alphabet's total revenues in 2025?",
+      "expect_docs": [
+        "googl-fy2025"
+      ],
+      "reference_facts": [
+        "342,721 Google Cloud 43,229 58,705 Other Bets 1,648 1,537 Hedging gains (losses) 211 (127) Total revenues $ 350,018 $ 402,836 Google Services Google Advertising Google Search & other Google Search & other revenues increased $26.4 billion from 2024 to 2025. The over"
+      ],
+      "confusable_with": "segment revenue lines in the same table"
+    },
+    {
+      "id": "sd-aapl-rd-2025",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What did Apple spend on research and development in 2025?",
+      "expect_docs": [
+        "aapl-fy2025"
+      ],
+      "reference_facts": [
+        "expenses for 2025, 2024 and 2023 were as follows (dollars in millions): 2025 Change 2024 Change 2023 Research and development $ 34,550 10 % $ 31,370 5 % $ 29,915 Percentage of total net sales 8% 8% 8% Selling, general and administrative $ 27,601 6 % $ 26,097 5 % $ 24,932 Percentage of total net sales 7% 7% 7%"
+      ],
+      "confusable_with": "selling, general and administrative expense on the adjacent line"
+    },
+    {
+      "id": "sd-msft-opinc-2025",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What was Microsoft's operating income in fiscal 2025?",
+      "expect_docs": [
+        "msft-fy2025"
+      ],
+      "reference_facts": [
+        "amounts) 2025 2024 Percentage Change Revenue $ 281,724 $ 245,122 15% Gross margin 193,893 171,008 13% Operating income 128,528 109,433 17% Net income 101,832 88,136 16% Diluted earnings per share 13.64 11.80 16% Fiscal Year 2025 Compared with Fiscal Year 2024 Revenue increased $36.6 billion or 15% with growth"
+      ],
+      "confusable_with": "gross margin or net income lines nearby"
+    },
+    {
+      "id": "sd-nvda-total-revenue-2026",
+      "scope": "single-doc",
+      "type": "table",
+      "question": "What was NVIDIA's total revenue in fiscal 2026?",
+      "expect_docs": [
+        "nvda-fy2026"
+      ],
+      "reference_facts": [
+        "2026 Summary Year Ended Jan 25, 2026 Jan 26, 2025 Change ($ in millions, except per share data) Revenue $ 215,938 $ 130,497 Up 65% Gross margin 71.1 % 75.0 % -3.9 pts Operating expenses $ 23,076 $ 16,405 Up 41% Operating income $ 130,387 $ 81,453 Up 60% Net income $ 120,067 $ 72,880 Up 65% Net income per diluted"
+      ],
+      "confusable_with": "segment revenue lines in the same table"
+    },
+    {
+      "id": "sd-aapl-gross-margin-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What happened to Apple's gross margin percentage in 2024?",
+      "expect_docs": [
+        "aapl-fy2024"
+      ],
+      "reference_facts": [
+        "782 Gross margin percentage: Products 37.2% 36.5% 36.3% Services 73.9% 70.8% 71.7% Total gross margin percentage 46.2% 44.1% 43.3% Products Gross Margin Products gross margin and Products gross margin percentage increased during 2024 compared to 2023 due to cost savings, partially offset by a different Products mix"
+      ],
+      "confusable_with": "the products vs services margin split discussed alongside"
+    },
+    {
+      "id": "sd-jpm-credit-2024",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What provision for credit losses did JPMorgan record in 2024?",
+      "expect_docs": [
+        "jpm-fy2024"
+      ],
+      "reference_facts": [
+        "a $725 million increase to the FDIC special assessment recognized in the first quarter of 2024. \u2022 The provision for credit losses was $10.7 billion, reflecting $8.6 billion of net charge-offs and a net addition to the allowance for credit losses of $2.0 billion."
+      ],
+      "confusable_with": "net charge-offs, discussed in the same section"
+    },
+    {
+      "id": "sd-amzn-fulfillment-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What do Amazon's fulfillment costs consist of?",
+      "expect_docs": [
+        "amzn-fy2024"
+      ],
+      "reference_facts": [
+        "Fulfillment Fulfillment costs primarily consist of those costs incurred in operating and staffing our North America and International fulfillment centers, physical stores, and customer service centers and payment processing costs."
+      ],
+      "confusable_with": "shipping or technology and infrastructure costs nearby"
+    },
+    {
+      "id": "sd-meta-capex-2024",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What were Meta's capital expenditures in 2024?",
+      "expect_docs": [
+        "meta-fy2024"
+      ],
+      "reference_facts": [
+        "$62.36 billion, with diluted earnings per share (EPS) of $23.86 for the year ended December 31, 2024. \u2022 Capital expenditures, including principal payments on finance leases, were $39.23 billion for the year ended December 31, 2024. \u2022 Share repurchases of our Class A common stock were $29.75 billion and total"
+      ],
+      "confusable_with": "operating cash flow in the same liquidity discussion"
+    },
+    {
+      "id": "sd-amc-attendance-2024",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What was AMC's attendance in 2024?",
+      "expect_docs": [
+        "amc-fy2024"
+      ],
+      "reference_facts": [
+        "year ended December 31, 2024, compared to the year ended December 31, 2023, primarily due to a decrease in attendance of 6.4% from 239.5 million patrons to 224.2 million patrons, partially offset by a 1.7% increase in average ticket price."
+      ],
+      "confusable_with": "admissions revenue, reported alongside attendance"
+    },
+    {
+      "id": "sd-googl-ec-2024",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What European Commission decisions affect Alphabet?",
+      "expect_docs": [
+        "googl-fy2024"
+      ],
+      "reference_facts": [
+        "the future, subject to review and approval by the company\u2019s Board of Directors in its sole discretion. European Commission Fines In 2017, 2018, and 2019, the European Commission (EC) announced decisions that certain actions taken by Google infringed European competition law and imposed fines of \u20ac2.4 billion ($2.7"
+      ],
+      "confusable_with": "US Department of Justice antitrust cases in the same note"
+    },
+    {
+      "id": "sd-meta-dma-2024",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "Which EU regulations does Meta identify as affecting its business?",
+      "expect_docs": [
+        "meta-fy2024"
+      ],
+      "reference_facts": [
+        "including the Digital Services Act, Digital Markets Act, EU AI Act and similar statutes in non-EU countries such as the UK Digital Markets, Competition and Consumer Act, and new fining guidelines under existing regulatory regimes like the General Data Protection Regulation (GDPR). We are facing inquiries and investigations regarding various aspects of our regulatory compli"
+      ],
+      "confusable_with": "GDPR obligations discussed in the same risk factor"
+    },
+    {
+      "id": "sd-amc-debt-2024",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What debt did AMC repurchase or exchange in 2024?",
+      "expect_docs": [
+        "amc-fy2024"
+      ],
+      "reference_facts": [
+        "As of December 31, 2024, we completed open market purchases of $1,895.0 million aggregate principal amount of our Existing Term Loans and issued $2,024.3 million aggregate principal amount of the New Term Loans."
+      ],
+      "confusable_with": "the revolving credit facility termination nearby"
+    },
+    {
+      "id": "sd-nvda-hopper-2025",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "What drove NVIDIA's Data Center growth in fiscal 2025?",
+      "expect_docs": [
+        "nvda-fy2025"
+      ],
+      "reference_facts": [
+        "Demand for our Hopper architecture drove our significant growth for the full year."
+      ],
+      "confusable_with": "the Blackwell architecture ramp in the same paragraph"
+    },
+    {
+      "id": "sd-jpm-firstrepublic-2023",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How many new Commercial Banking relationships did JPMorgan add in 2023?",
+      "expect_docs": [
+        "jpm-fy2023"
+      ],
+      "reference_facts": [
+        "Investment Banking market share; Commercial Banking (CB) added over 5,000 new relationships (excluding First Republic Bank), roughly doubling the prior year\u2019s achievement; and Asset & Wealth Management (AWM) saw record client asset net inflows of $490 billion, over 20% higher than its prior record."
+      ],
+      "confusable_with": "First Republic Bank relationships, which the sentence explicitly excludes"
+    },
+    {
+      "id": "sd-amzn-intl-2023",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How did Amazon's International segment perform in 2023?",
+      "expect_docs": [
+        "amzn-fy2023"
+      ],
+      "reference_facts": [
+        "Foreign Exchange Risk During 2023, net sales from our International segment accounted for 23% of our consolidated revenues."
+      ],
+      "confusable_with": "the North America segment results alongside"
+    },
+    {
+      "id": "sd-aapl-iphone-2024",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How did Apple's iPhone net sales change in 2024?",
+      "expect_docs": [
+        "aapl-fy2024"
+      ],
+      "reference_facts": [
+        "amortization of the deferred value of services bundled in the sales price of certain products. iPhone iPhone net sales were relatively flat during 2024 compared to 2023. Mac Mac net sales increased during 2024 compared to 2023 due primarily to higher net sales of laptops. iPad iPad net sales decreased during 2024"
+      ],
+      "confusable_with": "Mac or iPad net sales in the same table"
+    },
+    {
+      "id": "sd-googl-youtube-2025",
+      "scope": "single-doc",
+      "type": "figure",
+      "question": "How much did YouTube ads revenue grow in 2025?",
+      "expect_docs": [
+        "googl-fy2025"
+      ],
+      "reference_facts": [
+        "YouTube ads YouTube ads revenues increased $4.2 billion from 2024 to 2025. The growth was driven by our direct response advertising products followed by our brand advertising products, both of which benefited from increased spending by our advertisers."
+      ],
+      "confusable_with": "Google Cloud revenue growth on the same page"
     }
   ]
 }

@@ -345,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         "top_k": TOP_K,
         "queries": len(queries["queries"]),
         "summary": summary,
+        "single_doc": single,
         "per_query": {m: per_mode[m]["per_query"] for m in MODES},
     }
     (data / "modes_results.json").write_text(
@@ -412,6 +413,22 @@ def main(argv: list[str] | None = None) -> int:
             lines.append(
                 f"| {mode} | {s['cjk_subset']['ndcg']:.3f} |"
                 f" {s['non_cjk']['ndcg']:.3f} |"
+            )
+    if single:
+        lines += [
+            "",
+            "## Single-doc arm (pdf_search against the one gold document)",
+            "",
+            "The common agent flow: a question asked of a single known"
+            " document, not the whole corpus. Same page labels, restricted"
+            " to queries whose gold pages sit in exactly one document.",
+            "",
+            "| mode | NDCG@10 | n |",
+            "|---|---|---|",
+        ]
+        for mode in MODES:
+            lines.append(
+                f"| {mode} | {single[mode]['ndcg']:.3f} | {single[mode]['n']} |"
             )
     lines += ["", sanity_note, ""] if sanity_note else ["", ""]
     # Preserve the hand-appended interpretation section across reruns.

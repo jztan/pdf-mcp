@@ -4,9 +4,9 @@ Corpus: 100 docs. Queries: 64 (graded ground truth, stage-2). top_k=10. The tool
 
 | mode | overall NDCG@10 | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|
-| keyword (keyword) | 0.547 | 0.968 | 0.381 | 0.476 | 0.859 | 0.38 |
-| semantic (semantic) | 0.579 | 0.861 | 0.215 | 0.785 | 0.875 | 0.19 |
-| auto (hybrid) | 0.674 | 0.996 | 0.392 | 0.776 | 1.000 | 0.44 |
+| keyword (keyword) | 0.547 | 0.968 | 0.381 | 0.476 | 0.859 | 0.39 |
+| semantic (semantic) | 0.579 | 0.861 | 0.215 | 0.785 | 0.875 | 0.22 |
+| auto (hybrid) | 0.674 | 0.996 | 0.392 | 0.776 | 1.000 | 0.46 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 

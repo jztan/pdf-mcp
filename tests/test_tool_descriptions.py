@@ -77,3 +77,31 @@ def test_server_advertises_pdf_mcp_version_in_handshake():
         f"FastMCP server.version is {mcp.version!r}, expected {__version__!r}. "
         f"Did the FastMCP() constructor lose its `version=` kwarg?"
     )
+
+
+class TestSearchGuidanceInDescriptions:
+    """The tool description is what an agent reads BEFORE calling, so the two
+    query behaviours it cannot guess must be stated there: keyword terms are
+    AND-matched (with an OR retry), and one ranked list cannot carry a
+    question that spans several documents. Measured on a 24-filing corpus:
+    a single corpus call left 'compare A with B' questions answerable only
+    in part, while the same questions answered cleanly when asked once per
+    document."""
+
+    def test_both_search_tools_state_the_and_matching_and_or_retry(self):
+        tools = _registered_tools()
+        for name in ("pdf_search", "pdf_corpus_search"):
+            desc = getattr(tools[name], "description", "") or ""
+            lowered = desc.lower()
+            assert "and-matched" in lowered, f"{name} omits AND-matching"
+            assert "or-joined" in lowered, f"{name} omits the OR retry"
+
+    def test_corpus_search_teaches_per_document_decomposition(self):
+        desc = (
+            getattr(_registered_tools()["pdf_corpus_search"], "description", "") or ""
+        )
+        lowered = desc.lower()
+        assert "separately" in lowered, "corpus tool omits decomposition guidance"
+        assert (
+            "doc_match_counts" in lowered
+        ), "corpus tool omits the signal that names documents missing from matches"

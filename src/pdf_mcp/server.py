@@ -1600,7 +1600,10 @@ def _pdf_search_section_mode(
     description=_tool_description(
         "Search the PDF using keyword, semantic, or auto (hybrid RRF)"
         " modes, at page or section granularity. Returns ranked"
-        " matches. Excerpts default to structural text blocks"
+        " matches. Keyword terms are AND-matched independently, so"
+        " prefer short specific terms (1-3 words); a longer query"
+        " that matches nothing is retried with its terms OR-joined."
+        " Excerpts default to structural text blocks"
         " (excerpt_style='paragraph'); pass excerpt_style='snippet'"
         " for fixed-width windows. Section-mode `matches_omitted`"
         " counts byte-cap drops only — raise `max_results` to"
@@ -2624,9 +2627,18 @@ def _finalize_corpus_matches(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
         " Auto-warms uncached docs up to a time budget. Keyword terms"
-        " are AND-matched independently. Use short, specific terms"
-        " (1-3 words, e.g. entity names or technical terms); a full"
-        " question or one rare extra word can return nothing."
+        " are AND-matched independently, so prefer short specific"
+        " terms (1-3 words, e.g. entity names); a longer query that"
+        " matches nothing is retried with its terms OR-joined."
+        " IMPORTANT for questions spanning several documents"
+        " (comparing two companies, a trend across years): one"
+        " ranked list of top_k hits cannot carry every document's"
+        " answer — whichever document matches hardest takes the"
+        " slots. Search each document separately (pass its path) and"
+        " combine the results. `doc_match_counts` reports every"
+        " document with matching pages, including ones absent from"
+        " `matches` — treat a document listed there but missing from"
+        " `matches` as one you still need to query."
     )
 )
 def pdf_corpus_search(

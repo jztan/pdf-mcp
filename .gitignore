@@ -80,6 +80,7 @@ benchmark_results/
 benchmark_data/.reading_order_pdfs/
 benchmark_data/.chart_samples/
 benchmark_data/.real_pdfs/
+benchmark_data/.financial_pdfs/
 
 # Content-trust corpus PDFs (synthetic ones are regenerable via
 # content_trust_corpus/generate.py; real/ holds third-party samples — never

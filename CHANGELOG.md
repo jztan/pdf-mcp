@@ -5,10 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.22.0] - 2026-07-25
+## [Unreleased]
 ### Added
-- Python 3.14 support: tested in CI (test matrix extended to 3.14) and
-  declared in the PyPI classifiers.
 - `pdf_corpus_warm` and `pdf_corpus_overview`: stage-1 multi-document
   corpus tools. Point them at a folder (or explicit list) of local
   PDFs to warm text (and optionally embeddings) into the cache within
@@ -55,6 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the short match; otherwise the short matching block wins and the
   geometry stays on the true hit. Excerpt-quality gate passes with no
   regressions.
+
+## [1.22.0] - 2026-07-25
+### Added
+- Python 3.14 support: tested in CI (test matrix extended to 3.14) and
+  declared in the PyPI classifiers.
+
+### Fixed
 - Multi-column text extraction no longer duplicates text, and its reading
   order is deterministic for a given column layout. The multi-column path
   extracted each detected column with PyMuPDF `get_text(clip=..., sort=True)`,

@@ -168,6 +168,61 @@ fails is fitting that page into a corpus-wide top-10 drawn from 3,545
 pages of recurring phrasing. This is the known label-sparsity floor,
 sharper on 10-Ks than on 20-page papers.
 
+## Answerability: what the rank metrics miss
+
+Rank metrics ask "is the gold page in the top 10". A caller asks "can I
+answer my question from what came back". Those diverge badly on 10-Ks.
+`scripts/eval_financial_answerability.py` puts 15 realistic analyst
+questions through `pdf_corpus_search` and grades the payload the caller
+actually receives, against hand-verified reference facts.
+
+| metric | result |
+|---|---|
+| answerable in full | **7 / 15 (47%)** |
+| partial | 1 / 15 (7%) |
+| not answerable | **7 / 15 (47%)** |
+| wrong attribution | **3 / 15 (20%)** |
+| mean doc coverage | 0.93 |
+
+Set against hybrid's doc-NDCG of 0.776 and doc-hit@3 of 0.818, this is the
+headline finding of the whole corpus: **retrieval that scores 0.78 leaves
+fewer than half of real questions answerable.**
+
+### Root cause 1: the excerpt quotes the wrong paragraph of the right page
+
+The dominant failure, and the dangerous one. Asked *"Why did Apple's
+Greater China net sales fall in 2024?"*, retrieval returned
+`aapl-fy2024 p25` at **rank 1** -- the correct page, which carries the
+sentence "Greater China net sales decreased during 2024 compared to 2023
+due primarily to lower net sales of iPhone and iPad". The excerpt shown to
+the caller was the *segment net-sales table* from the same page. The
+retrieval benchmark scores this a perfect hit (it is `needle-04`); the
+caller cannot answer the question.
+
+Worse, on multi-segment MD&A pages the excerpt lands on a *confusable
+neighbour*: asked about Google Cloud's operating income, the top excerpt
+reads "Google Services operating income increased $25.4 billion" -- a
+different segment's figure, in the position where the answer belongs. A
+caller trusting the excerpt reports the wrong number. That is the
+`wrong_attribution` failure, and it fires on 20% of questions.
+
+### Root cause 2: comparisons come back one-sided
+
+"Compare AWS growth with Microsoft Cloud growth" and "Compare Apple's and
+Alphabet's R&D" both returned evidence for exactly one of the two
+companies (doc coverage 0.50, balance 0.00). Nothing in the response says
+the other side is missing. Multi-year trend questions show the same skew
+more mildly (the thinnest year gets 10-20% of the hits).
+
+### Root cause 3: genuine page misses
+
+A minority: the $479M Alphabet severance charge (p39) and AMC's
+$1,276.1M goodwill impairment (p58) were simply not in the top 10.
+
+The order of work these findings imply is: fix the excerpt picker first
+(it converts correct retrieval into wrong answers), then per-document
+balance, and only then ranking.
+
 ## Known limitations of this dataset
 
 - **Concept labels are inherently ambiguous.** Eight filers all discuss

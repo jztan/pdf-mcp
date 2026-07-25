@@ -81,6 +81,7 @@ benchmark_data/.reading_order_pdfs/
 benchmark_data/.chart_samples/
 benchmark_data/.real_pdfs/
 benchmark_data/.financial_pdfs/
+benchmark_data/.answerability_cache/
 
 # Content-trust corpus PDFs (synthetic ones are regenerable via
 # content_trust_corpus/generate.py; real/ holds third-party samples — never
@@ -110,3 +111,4 @@ release_notes_v*.md
 # Node tooling (demo GIF recorder)
 scripts/demo-recorder/node_modules/
 scripts/demo-recorder/package-lock.json
+.playwright-mcp

@@ -1,0 +1,167 @@
+{
+  "description": "Realistic analyst questions over the financial-report corpus, graded on ANSWERABILITY rather than rank. The retrieval benchmark (queries.json) asks 'is the gold page in the top 10'; this asks the question that matters to a caller: could the question be answered correctly and completely from the returned payload alone? Wrong attribution (a figure belonging to a different segment, company or year, presented where the answer should be) counts as a failure, not a hit -- it is worse than returning nothing. Reference facts are hand-verified against extracted page text; the judge compares the payload against them and never supplies ground truth itself.",
+  "questions": [
+    {
+      "id": "trend-cloud-profitability",
+      "type": "trend",
+      "question": "How did Google Cloud's operating income change across 2023, 2024 and 2025?",
+      "expect_docs": ["googl-fy2023", "googl-fy2024", "googl-fy2025"],
+      "reference_facts": [
+        "Google Cloud operating income was $1.7 billion for 2023, versus an operating loss of $1.9 billion for 2022",
+        "Google Cloud operating income increased $4.4 billion from 2023 to 2024",
+        "Google Cloud operating income increased $7.8 billion from 2024 to 2025"
+      ],
+      "confusable_with": "Google Services operating income (a different segment, discussed in the same paragraphs: it increased $25.4 billion from 2023 to 2024)"
+    },
+    {
+      "id": "attrib-google-services",
+      "type": "attribution",
+      "question": "How much did Alphabet's Google Services operating income increase in 2024?",
+      "expect_docs": ["googl-fy2024"],
+      "reference_facts": [
+        "Google Services operating income increased $25.4 billion from 2023 to 2024"
+      ],
+      "confusable_with": "Google Cloud operating income, which increased $4.4 billion over the same period and appears in the same section"
+    },
+    {
+      "id": "trend-cloud-revenue",
+      "type": "trend",
+      "question": "How much did Google Cloud revenue grow in 2024 and in 2025?",
+      "expect_docs": ["googl-fy2024", "googl-fy2025"],
+      "reference_facts": [
+        "Google Cloud revenues increased $10.1 billion from 2023 to 2024",
+        "Google Cloud revenues increased $15.5 billion from 2024 to 2025"
+      ],
+      "confusable_with": "the near-identical sentence in the adjacent fiscal year's filing"
+    },
+    {
+      "id": "compare-cloud-growth",
+      "type": "cross-company",
+      "question": "Compare AWS revenue growth with Microsoft Cloud revenue growth in their most recent fiscal years.",
+      "expect_docs": ["amzn-fy2024", "msft-fy2024"],
+      "reference_facts": [
+        "AWS sales increased 19% in 2024",
+        "Microsoft Cloud revenue increased 23% to $137.4 billion in fiscal 2024"
+      ],
+      "confusable_with": "AWS growth of 13% in 2023 (the prior year)"
+    },
+    {
+      "id": "compare-rd-spend",
+      "type": "cross-company",
+      "question": "Compare Apple's and Alphabet's research and development spending.",
+      "expect_docs": ["aapl-fy2025", "googl-fy2025"],
+      "reference_facts": [
+        "Apple reports research and development expense in its segment reconciliation",
+        "Alphabet reports research and development expenses in its income statement and MD&A"
+      ],
+      "confusable_with": "returning evidence for only one of the two companies"
+    },
+    {
+      "id": "risk-nvda-export",
+      "type": "risk-synthesis",
+      "question": "What risks does NVIDIA disclose from US export controls on China?",
+      "expect_docs": ["nvda-fy2024", "nvda-fy2025", "nvda-fy2026"],
+      "reference_facts": [
+        "US government licensing requirements impact exports to China of A100 and H100 integrated circuits and systems incorporating them",
+        "NVIDIA ramped new products designed specifically for China that do not require an export control license",
+        "Data Center revenue in China as a percentage of total Data Center revenue remains well below levels seen prior to the onset of export controls in October 2023"
+      ],
+      "confusable_with": "generic supply-chain or competition risk boilerplate that mentions China without describing export licensing"
+    },
+    {
+      "id": "concentration-nvda",
+      "type": "figure",
+      "question": "How concentrated is NVIDIA's customer base in fiscal 2026?",
+      "expect_docs": ["nvda-fy2026"],
+      "reference_facts": [
+        "For fiscal year 2026, sales to one direct customer represented 22% of total revenue",
+        "sales to another direct customer represented 14% of total revenue"
+      ],
+      "confusable_with": "the fiscal 2025 figures (12% and two customers at 11%), which appear on the same pages"
+    },
+    {
+      "id": "trend-jpm-income",
+      "type": "trend",
+      "question": "What net income did JPMorgan Chase report for 2022, 2023 and 2024?",
+      "expect_docs": ["jpm-fy2022", "jpm-fy2023", "jpm-fy2024"],
+      "reference_facts": [
+        "JPMorgan Chase reported net income of $37.7 billion for 2022",
+        "JPMorgan Chase reported net income of $49.6 billion for 2023",
+        "JPMorgan Chase reported net income of $58.5 billion for 2024"
+      ],
+      "confusable_with": "a single year's figure presented as if it answered all three"
+    },
+    {
+      "id": "cause-aapl-china",
+      "type": "causal",
+      "question": "Why did Apple's Greater China net sales fall in 2024?",
+      "expect_docs": ["aapl-fy2024"],
+      "reference_facts": [
+        "Greater China net sales decreased during 2024 compared to 2023 due primarily to lower net sales of iPhone and iPad",
+        "The weakness in the renminbi relative to the U.S. dollar had an unfavorable year-over-year impact on Greater China net sales during 2024"
+      ],
+      "confusable_with": "Japan net sales, which increased in the same paragraph"
+    },
+    {
+      "id": "figure-aapl-buyback",
+      "type": "figure",
+      "question": "How much of its own stock did Apple repurchase in fiscal 2025?",
+      "expect_docs": ["aapl-fy2025"],
+      "reference_facts": [
+        "During 2025, the Company repurchased 402 million shares of its common stock for $89.3 billion"
+      ],
+      "confusable_with": "the prior fiscal year's repurchase totals in the same note"
+    },
+    {
+      "id": "figure-amc-goodwill",
+      "type": "figure",
+      "question": "What goodwill impairment charges has AMC recorded, and for which reporting units?",
+      "expect_docs": ["amc-fy2022"],
+      "reference_facts": [
+        "goodwill impairment charges of $1,276.1 million and $1,030.3 million were recorded during the year ended December 31, 2020 for the Domestic Theatres and International Theatres reporting units respectively"
+      ],
+      "confusable_with": "the separate $151.2 million and $5.6 million charges recorded as of September 30, 2020"
+    },
+    {
+      "id": "action-amc-split",
+      "type": "figure",
+      "question": "When did AMC carry out its reverse stock split and at what ratio?",
+      "expect_docs": ["amc-fy2023"],
+      "reference_facts": [
+        "On August 24, 2023 the Company effectuated a reverse stock split at a ratio of one share of Common Stock for every ten shares of Common Stock"
+      ],
+      "confusable_with": "the one-for-ten reverse stock split effectuated by Hycroft on November 15, 2023, described in the same filing"
+    },
+    {
+      "id": "workforce-meta",
+      "type": "figure",
+      "question": "How large was Meta's 2022 restructuring and what did it involve?",
+      "expect_docs": ["meta-fy2022"],
+      "reference_facts": [
+        "a layoff of approximately 11,000 employees",
+        "facilities consolidation and a pivot in data center strategy were part of the 2022 restructuring"
+      ],
+      "confusable_with": "Meta's later 2023 facilities-consolidation charges"
+    },
+    {
+      "id": "workforce-alphabet",
+      "type": "figure",
+      "question": "What severance charges did Alphabet record for its workforce reduction?",
+      "expect_docs": ["googl-fy2023"],
+      "reference_facts": [
+        "$479 million of charges related to employee severance associated with the reduction in our workforce"
+      ],
+      "confusable_with": "the $264 million of employee severance charges reported for a different expense line in the same filing"
+    },
+    {
+      "id": "definition-aws",
+      "type": "definition",
+      "question": "What does Amazon's AWS segment include?",
+      "expect_docs": ["amzn-fy2024"],
+      "reference_facts": [
+        "The AWS segment consists of amounts earned from global sales of compute, storage, database, and other services for start-ups, enterprises, government agencies, and academic institutions"
+      ],
+      "confusable_with": "the North America or International segment definitions, which sit in the same note"
+    }
+  ]
+}

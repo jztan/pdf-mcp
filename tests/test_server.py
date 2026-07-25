@@ -1,6 +1,7 @@
 # tests/test_server.py
 """Tests for MCP server tools."""
 
+import base64
 import os
 import tempfile
 from typing import Any
@@ -22,6 +23,9 @@ from pdf_mcp.server import (
     pdf_read_all,
     pdf_search,
     pdf_get_toc,
+    pdf_corpus_warm,
+    pdf_corpus_overview,
+    pdf_corpus_search,
     pdf_cache_stats,
     pdf_cache_clear,
     pdf_render_pages,
@@ -1254,6 +1258,18 @@ class TestResolvePath:
         assert err is None
         assert local_path is not None
         assert os.path.isabs(local_path)
+
+    def test_tilde_path_expands(self, tmp_path, monkeypatch, isolated_server):
+        """~/... paths expand to the home directory, matching the corpus
+        tools (field feedback: pdf_get_toc rejected ~/Downloads/x.pdf)."""
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(tmp_path / "home_doc.pdf"))
+        doc.close()
+        monkeypatch.setenv("HOME", str(tmp_path))
+        local_path, err = _resolve_path("~/home_doc.pdf")
+        assert err is None
+        assert local_path == str((tmp_path / "home_doc.pdf").resolve())
 
     def test_url_http_status_error_inline(self, isolated_server):
         """HTTPStatusError from URL fetch returns inline error dict."""
@@ -3417,8 +3433,6 @@ class TestEncodedLen:
 
         for n in (0, 1, 2, 3, 4, 1000, 1001, 1002):
             raw = b"x" * n
-            import base64
-
             assert _encoded_len(raw) == len(base64.b64encode(raw))
 
     def test_budget_is_conservative(self):
@@ -3801,3 +3815,485 @@ def test_geometry_on_shifted_mediabox_pdf(isolated_server, tmp_path):
     # the emitted clip renders without error
     out = server.pdf_render_pages(str(pdf), pages="1", clip=hit["clip"])
     assert isinstance(out, list) and "error" not in out[0]
+
+
+class TestPdfCorpusWarm:
+    def test_warms_directory(self, corpus_dir, isolated_server):
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert "error" not in result
+        assert result["corpus_size"] == 3
+        assert result["warmed_this_call"] == 3
+        assert result["unprocessed"] == []
+        assert result["budget_exhausted"] is False
+        assert {d["status"] for d in result["docs"]} == {"warmed"}
+
+    def test_second_call_all_cached(self, corpus_dir, isolated_server):
+        pdf_corpus_warm(str(corpus_dir))
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert result["warmed_this_call"] == 0
+        assert {d["status"] for d in result["docs"]} == {"cached"}
+
+    def test_missing_directory_inline_error(self, isolated_server):
+        result = pdf_corpus_warm("/nonexistent-dir-for-corpus")
+        assert "error" in result
+        assert "hint" in result
+
+    def test_text_warm_reports_embeddings_cache_state(
+        self, corpus_dir, isolated_server
+    ):
+        """A text-only warm reports per-doc embeddings_cached from actual
+        cache state (no fastembed needed for the check), so a client can
+        decide whether an embeddings pass is required."""
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert all(d["embeddings_cached"] is False for d in result["docs"])
+        assert all("embeddings" not in d for d in result["docs"])
+
+    def test_list_mode_reports_skipped(self, corpus_dir, tmp_path, isolated_server):
+        result = pdf_corpus_warm(
+            [str(corpus_dir / "alpha.pdf"), str(tmp_path / "ghost.pdf")]
+        )
+        assert result["corpus_size"] == 1
+        assert len(result["skipped"]) == 1
+        assert "not found" in result["skipped"][0]["reason"]
+
+
+CORPUS_ENVELOPE_KEYS = {
+    "docs",
+    "unprocessed",
+    "skipped",
+    "corpus_size",
+    "warmed_this_call",
+    "budget_exhausted",
+}
+
+
+class TestPdfCorpusOverview:
+    def test_cards_for_all_docs(self, corpus_dir, isolated_server):
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert "error" not in result
+        assert len(result["docs"]) == 3
+        card = result["docs"][0]
+        assert set(card.keys()) == {
+            "path",
+            "title",
+            "pages",
+            "toc_top",
+            "has_toc",
+            "text_coverage",
+            "size_bytes",
+            "from_cache",
+        }
+        paths = [c["path"] for c in result["docs"]]
+        assert paths == sorted(paths)
+
+    def test_second_call_from_cache(self, corpus_dir, isolated_server):
+        pdf_corpus_overview(str(corpus_dir))
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert result["warmed_this_call"] == 0
+        assert all(c["from_cache"] for c in result["docs"])
+
+    def test_envelope_parity_with_warm(self, corpus_dir, isolated_server):
+        warm = pdf_corpus_warm(str(corpus_dir))
+        overview = pdf_corpus_overview(str(corpus_dir))
+        assert CORPUS_ENVELOPE_KEYS <= set(warm.keys())
+        assert CORPUS_ENVELOPE_KEYS <= set(overview.keys())
+
+    def test_metadata_invalidated_during_call_is_skipped_not_raised(
+        self, corpus_dir, isolated_server
+    ):
+        """cache.get_metadata(path) can return None if the file's mtime
+        changes between warm_docs validating it and the card build. The
+        tool must route that doc to `skipped` instead of crashing."""
+        test_cache, _ = isolated_server
+        pdf_corpus_overview(str(corpus_dir))
+
+        target_path = str(corpus_dir / "alpha.pdf")
+        original_get_metadata = test_cache.get_metadata
+
+        def flaky_get_metadata(path):
+            if path == target_path:
+                return None
+            return original_get_metadata(path)
+
+        test_cache.get_metadata = flaky_get_metadata
+
+        result = pdf_corpus_overview(str(corpus_dir))
+
+        assert "error" not in result
+        skipped_paths = {s["path"]: s["reason"] for s in result["skipped"]}
+        assert skipped_paths[target_path] == "cache invalidated during call"
+        card_paths = [c["path"] for c in result["docs"]]
+        assert target_path not in card_paths
+        assert len(result["docs"]) == 2
+
+
+class TestPdfCorpusSearchKeyword:
+    def test_cross_doc_keyword_hits_with_provenance(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert "error" not in result
+        assert result["search_mode"] == "keyword"
+        assert result["total_matches"] == len(result["matches"]) > 0
+        paths = {m["path"] for m in result["matches"]}
+        assert len(paths) >= 2  # "budget" appears in every corpus doc
+        for m in result["matches"]:
+            assert m["page"] >= 1 and "excerpt" in m and "doc_title" in m
+
+    def test_hit_fieldset_is_single_doc_plus_provenance(
+        self, corpus_dir, isolated_server
+    ):
+        single = pdf_search(
+            str(corpus_dir / "alpha.pdf"),
+            "budget",
+            mode="keyword",
+            excerpt_style="snippet",
+        )
+        multi = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", excerpt_style="snippet"
+        )
+        single_fields = set(single["matches"][0].keys())
+        multi_fields = set(multi["matches"][0].keys())
+        assert multi_fields == single_fields | {"path", "doc_title"}
+
+    def test_doc_match_counts_and_coverage(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        # every doc that produced a match is counted, with a positive count
+        for m in result["matches"]:
+            assert result["doc_match_counts"][m["path"]] >= 1
+        assert result["coverage"] == {"searched": 3, "corpus": 3}
+
+    def test_empty_query_inline_error(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "   ", mode="keyword")
+        assert "error" in result
+
+    def test_no_hits_returns_empty_not_error(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "zzzqqqxyzzy", mode="keyword")
+        assert result["matches"] == [] and result["total_matches"] == 0
+
+    def test_paragraph_style_carries_geometry(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"]
+        geo = [m for m in result["matches"] if "bbox" in m]
+        assert geo and all("clip" in m and "page_rect" in m for m in geo)
+
+
+class TestPdfCorpusSearchSemanticAuto:
+    @staticmethod
+    def _fake_embedder(monkeypatch):
+        import numpy as np
+        import pdf_mcp.embedder as emb
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            # deterministic unit vectors: dim0 weighted by "budget" count
+            out = []
+            for t in texts:
+                v = np.zeros(4, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("budget")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.1, 0.0, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+
+    def test_semantic_mode_confidence_signals(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert "error" not in result
+        assert result["search_mode"] == "semantic"
+        assert result["confidence_threshold"] == 0.5
+        assert all("low_confidence" in m for m in result["matches"])
+        assert all("score" in m for m in result["matches"])
+        assert not any("semantic_score" in m for m in result["matches"])
+        assert "all_results_low_confidence" in result
+        assert result["total_matches"] == len(result["matches"])
+
+    def test_semantic_hit_fieldset_matches_single_doc_plus_provenance(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        single = pdf_search(
+            str(corpus_dir / "alpha.pdf"),
+            "budget",
+            mode="semantic",
+            excerpt_style="snippet",
+        )
+        multi = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="semantic", excerpt_style="snippet"
+        )
+        single_fields = set(single["matches"][0].keys())
+        multi_fields = set(multi["matches"][0].keys())
+        assert multi_fields == single_fields | {"path", "doc_title"}
+
+    def test_auto_mode_fuses_and_reports_hybrid(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        assert result["matches"]
+        for m in result["matches"]:
+            assert "score" in m
+            assert "semantic_score" in m
+            assert "low_confidence" in m
+        assert "all_results_low_confidence" in result
+        assert result["confidence_threshold"] == 0.5
+
+    def test_auto_degrades_without_fastembed(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "keyword"
+        assert result["semantic_unavailable"] is True
+
+    def test_semantic_mode_error_without_fastembed(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert "error" in result
+
+
+class TestPdfCorpusSearchSourceLabel:
+    """Corpus hits report real per-page text provenance ('ocr' vs
+    'extracted'), matching single-doc pdf_search's source contract."""
+
+    @pytest.fixture
+    def mixed_corpus(self, tmp_path):
+        """One image-only (scan-like) PDF plus one text PDF, both
+        matching the query 'budget'."""
+        d = tmp_path / "mixed_corpus"
+        d.mkdir()
+        png_data = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png_data)
+        doc.save(str(d / "scanned.pdf"))
+        doc.close()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Report section 1. The quarterly budget grew.")
+        page.insert_text((50, 300), "Second block. Budget details and notes.")
+        doc.save(str(d / "textdoc.pdf"))
+        doc.close()
+        return d
+
+    @staticmethod
+    def _ocr_scanned(scanned_path, monkeypatch):
+        """OCR the scanned doc via the mocked worker (no Tesseract)."""
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "Scanned budget memo."),
+            ):
+                result = pdf_read_pages(scanned_path, "1", ocr=True)
+        assert "error" not in result
+
+    def _sources_by_path(self, result, mixed_corpus):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        textdoc = str((mixed_corpus / "textdoc.pdf").resolve())
+        assert "error" not in result
+        scanned_hits = [m for m in result["matches"] if m["path"] == scanned]
+        text_hits = [m for m in result["matches"] if m["path"] == textdoc]
+        assert scanned_hits and text_hits
+        return scanned_hits, text_hits
+
+    def test_keyword_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="keyword")
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+    def test_semantic_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="semantic")
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+    def test_hybrid_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+
+class TestPdfCorpusSearchNoFts:
+    """Without FTS5, corpus keyword search falls back to Python token
+    matching (parity with single-doc pdf_search) instead of silently
+    returning zero matches."""
+
+    def test_keyword_mode_returns_matches_without_fts(
+        self, corpus_dir, isolated_server
+    ):
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert "error" not in result
+        assert result["total_matches"] >= 1
+        paths = {m["path"] for m in result["matches"]}
+        assert len(paths) >= 2  # "budget" appears in every corpus doc
+        for m in result["matches"]:
+            assert m["excerpt"]
+        for path, count in result["doc_match_counts"].items():
+            assert count >= 1
+
+    def test_auto_degraded_returns_matches_without_fts(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "keyword"
+        assert result["semantic_unavailable"] is True
+        assert result["total_matches"] >= 1
+
+    def test_fallback_ranks_by_occurrence_within_doc(self, tmp_path, isolated_server):
+        """The fallback re-ranks a doc's hits best-first by token
+        occurrences so RRF fusion sees a relevance-ordered rank list."""
+        d = tmp_path / "one_doc_corpus"
+        d.mkdir()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Intro block mentioning budget once.")
+        page.insert_text((50, 300), "Unrelated filler text block.")
+        page = doc.new_page()
+        page.insert_text((50, 50), "Budget summary: the budget grew.")
+        page.insert_text((50, 300), "Detailed budget appendix table.")
+        doc.save(str(d / "single.pdf"))
+        doc.close()
+
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(d), "budget", mode="keyword")
+        assert "error" not in result
+        assert [m["page"] for m in result["matches"]] == [2, 1]
+
+
+class TestParagraphBlockTokenGuard:
+    """excerpt_style='paragraph' must not swap a high-coverage short
+    block for a longer block with lower query-token coverage
+    (field-reported: a datasheet table hit was replaced by an ESD note
+    block containing only one query term, with a bbox pointing at the
+    wrong region)."""
+
+    QUERY = "reverse standoff voltage"
+
+    @pytest.fixture
+    def datasheet_pdf(self, tmp_path):
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text(
+            (50, 60),
+            "The SP05 series provides transient protection for data lines.",
+        )
+        # Table-like region: short cell blocks.
+        page.insert_text((50, 150), "Parameter")
+        page.insert_text((250, 150), "Symbol")
+        page.insert_text((400, 150), "Value")
+        page.insert_text((50, 180), "Reverse Standoff Voltage")
+        page.insert_text((250, 180), "VRWM")
+        page.insert_text((400, 180), "5 V")
+        # Long note block (>80 chars) containing exactly one query token.
+        note = (
+            "Note: 1. ESD voltage applied between channel pins and ground "
+            "per IEC 61000-4-2 using the contact discharge method under "
+            "ambient conditions as specified in the qualification report."
+        )
+        page.insert_textbox(pymupdf.Rect(50, 300, 550, 400), note)
+        p = tmp_path / "sp05.pdf"
+        doc.save(str(p))
+        doc.close()
+        import pathlib
+
+        return str(pathlib.Path(p).resolve())
+
+    def test_single_doc_keeps_matching_table_block(
+        self, datasheet_pdf, isolated_server
+    ):
+        result = pdf_search(
+            datasheet_pdf, self.QUERY, mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"], result
+        m = result["matches"][0]
+        ex = m["excerpt"].lower()
+        assert "reverse standoff voltage" in ex
+        assert not ex.startswith("note:")
+        # Geometry stays on the true hit block, not the note.
+        assert "bbox" in m
+
+    def test_corpus_keeps_matching_table_block(self, datasheet_pdf, isolated_server):
+        result = pdf_corpus_search(
+            [datasheet_pdf], self.QUERY, mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"], result
+        ex = result["matches"][0]["excerpt"].lower()
+        assert "reverse standoff voltage" in ex
+        assert not ex.startswith("note:")
+
+    def test_retry_still_upgrades_on_equal_coverage(self, tmp_path, isolated_server):
+        """The min-chars retry keeps working when the substantive block
+        matches at least as well (existing caption-skip design)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 60), "Budget overview")  # short heading, 1 token
+        page.insert_textbox(
+            pymupdf.Rect(50, 150, 550, 250),
+            "The quarterly budget increased across departments this year, "
+            "with detailed allocations described in the appendix tables.",
+        )
+        p = tmp_path / "prose.pdf"
+        doc.save(str(p))
+        doc.close()
+        import pathlib
+
+        path = str(pathlib.Path(p).resolve())
+        result = pdf_search(path, "budget", mode="keyword", excerpt_style="paragraph")
+        assert result["matches"], result
+        assert result["matches"][0]["excerpt"].startswith("The quarterly")

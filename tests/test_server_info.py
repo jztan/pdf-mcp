@@ -95,3 +95,31 @@ class TestServerInfo:
         assert cfg["max_response_bytes"] == server.pdf_config.max_response_bytes
         assert cfg["cache_ttl_hours"] == server.cache.ttl_hours
         assert cfg["cache_dir"] == str(server.cache.cache_dir)
+
+    def test_server_info_corpus_block(self):
+        """corpus feature block advertises the cap, budget clamp, and
+        the tools; clients discover the corpus feature via server_info."""
+        from pdf_mcp.corpus import CORPUS_MAX_FILES
+
+        result = server_info()
+        corpus_feat = result["features"]["corpus"]
+        assert corpus_feat["max_files"] == CORPUS_MAX_FILES
+        assert corpus_feat["budget_seconds_range"] == [1, 300]
+        assert corpus_feat["tools"] == [
+            "pdf_corpus_warm",
+            "pdf_corpus_overview",
+            "pdf_corpus_search",
+        ]
+
+    def test_server_info_corpus_modes_track_search_modes(self):
+        """Corpus search mode availability mirrors single-doc search
+        (both depend on the same embedding availability)."""
+        with patch.object(
+            embedder, "check_available", side_effect=ImportError("no fastembed")
+        ):
+            feats = _detect_features()
+        assert feats["corpus"]["modes_available"] == ["keyword"]
+
+        with patch.object(embedder, "check_available", return_value=None):
+            feats = _detect_features()
+        assert feats["corpus"]["modes_available"] == ["keyword", "semantic", "auto"]

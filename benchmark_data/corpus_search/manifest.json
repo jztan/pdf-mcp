@@ -1,0 +1,505 @@
+{
+  "description": "Corpus for the cross-doc keyword ranking spike. PDFs are local-only (not committed); missing files are skipped loudly at run time.",
+  "docs": [
+    {
+      "id": "0705.4297",
+      "path": "benchmark_data/.reading_order_pdfs/0705.4297.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.0028",
+      "path": "benchmark_data/.reading_order_pdfs/0706.0028.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.0954",
+      "path": "benchmark_data/.reading_order_pdfs/0706.0954.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0706.2397",
+      "path": "benchmark_data/.reading_order_pdfs/0706.2397.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.0311",
+      "path": "benchmark_data/.reading_order_pdfs/0707.0311.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.1301",
+      "path": "benchmark_data/.reading_order_pdfs/0707.1301.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.3690",
+      "path": "benchmark_data/.reading_order_pdfs/0707.3690.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0707.4042",
+      "path": "benchmark_data/.reading_order_pdfs/0707.4042.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.2178",
+      "path": "benchmark_data/.reading_order_pdfs/0709.2178.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.2857",
+      "path": "benchmark_data/.reading_order_pdfs/0709.2857.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0709.4466",
+      "path": "benchmark_data/.reading_order_pdfs/0709.4466.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0710.2265",
+      "path": "benchmark_data/.reading_order_pdfs/0710.2265.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0710.2740",
+      "path": "benchmark_data/.reading_order_pdfs/0710.2740.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0711.0528",
+      "path": "benchmark_data/.reading_order_pdfs/0711.0528.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0711.3236",
+      "path": "benchmark_data/.reading_order_pdfs/0711.3236.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0802.0539",
+      "path": "benchmark_data/.reading_order_pdfs/0802.0539.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0802.0733",
+      "path": "benchmark_data/.reading_order_pdfs/0802.0733.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0811.0781",
+      "path": "benchmark_data/.reading_order_pdfs/0811.0781.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0811.0851",
+      "path": "benchmark_data/.reading_order_pdfs/0811.0851.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0902.1533",
+      "path": "benchmark_data/.reading_order_pdfs/0902.1533.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0903.1810",
+      "path": "benchmark_data/.reading_order_pdfs/0903.1810.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0904.1520",
+      "path": "benchmark_data/.reading_order_pdfs/0904.1520.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0905.2570",
+      "path": "benchmark_data/.reading_order_pdfs/0905.2570.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "0905.3502",
+      "path": "benchmark_data/.reading_order_pdfs/0905.3502.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1207.2761",
+      "path": "benchmark_data/.reading_order_pdfs/1207.2761.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1301.3570",
+      "path": "benchmark_data/.reading_order_pdfs/1301.3570.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1302.3440",
+      "path": "benchmark_data/.reading_order_pdfs/1302.3440.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1302.4245",
+      "path": "benchmark_data/.reading_order_pdfs/1302.4245.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1307.7059",
+      "path": "benchmark_data/.reading_order_pdfs/1307.7059.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1401.4991",
+      "path": "benchmark_data/.reading_order_pdfs/1401.4991.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1406.4582",
+      "path": "benchmark_data/.reading_order_pdfs/1406.4582.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1406.6799",
+      "path": "benchmark_data/.reading_order_pdfs/1406.6799.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1409.7193",
+      "path": "benchmark_data/.reading_order_pdfs/1409.7193.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1501.05624",
+      "path": "benchmark_data/.reading_order_pdfs/1501.05624.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1502.03167",
+      "path": "benchmark_data/.reading_order_pdfs/1502.03167.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1601.06071",
+      "path": "benchmark_data/.reading_order_pdfs/1601.06071.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1606.06090",
+      "path": "benchmark_data/.reading_order_pdfs/1606.06090.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1608.03983",
+      "path": "benchmark_data/.reading_order_pdfs/1608.03983.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1611.03530",
+      "path": "benchmark_data/.reading_order_pdfs/1611.03530.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1612.09007",
+      "path": "benchmark_data/.reading_order_pdfs/1612.09007.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1712.00409",
+      "path": "benchmark_data/.reading_order_pdfs/1712.00409.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1712.00712",
+      "path": "benchmark_data/.reading_order_pdfs/1712.00712.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1803.03635",
+      "path": "benchmark_data/.reading_order_pdfs/1803.03635.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1807.03386",
+      "path": "benchmark_data/.reading_order_pdfs/1807.03386.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1807.11632",
+      "path": "benchmark_data/.reading_order_pdfs/1807.11632.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1808.03354",
+      "path": "benchmark_data/.reading_order_pdfs/1808.03354.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1808.08321",
+      "path": "benchmark_data/.reading_order_pdfs/1808.08321.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1811.03679",
+      "path": "benchmark_data/.reading_order_pdfs/1811.03679.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1905.11946",
+      "path": "benchmark_data/.reading_order_pdfs/1905.11946.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1910.03474",
+      "path": "benchmark_data/.reading_order_pdfs/1910.03474.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "1912.02292",
+      "path": "benchmark_data/.reading_order_pdfs/1912.02292.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2005.14165",
+      "path": "benchmark_data/.reading_order_pdfs/2005.14165.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2010.11929",
+      "path": "benchmark_data/.reading_order_pdfs/2010.11929.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2010.14701",
+      "path": "benchmark_data/.reading_order_pdfs/2010.14701.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2201.02177",
+      "path": "benchmark_data/.reading_order_pdfs/2201.02177.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2203.15556",
+      "path": "benchmark_data/.reading_order_pdfs/2203.15556.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2205.14135",
+      "path": "benchmark_data/.reading_order_pdfs/2205.14135.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2206.07682",
+      "path": "benchmark_data/.reading_order_pdfs/2206.07682.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2312.00752",
+      "path": "benchmark_data/.reading_order_pdfs/2312.00752.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2605.06546",
+      "path": "benchmark_data/.reading_order_pdfs/2605.06546.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.02093",
+      "path": "benchmark_data/.reading_order_pdfs/2607.02093.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.02154",
+      "path": "benchmark_data/.reading_order_pdfs/2607.02154.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.02157",
+      "path": "benchmark_data/.reading_order_pdfs/2607.02157.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.02171",
+      "path": "benchmark_data/.reading_order_pdfs/2607.02171.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.03437",
+      "path": "benchmark_data/.reading_order_pdfs/2607.03437.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.03442",
+      "path": "benchmark_data/.reading_order_pdfs/2607.03442.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.03471",
+      "path": "benchmark_data/.reading_order_pdfs/2607.03471.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.03474",
+      "path": "benchmark_data/.reading_order_pdfs/2607.03474.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06338",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06338.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06346",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06346.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06360",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06360.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06373",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06373.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06422",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06422.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06690",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06690.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06744",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06744.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06755",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06755.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06828",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06828.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06844",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06844.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.06908",
+      "path": "benchmark_data/.reading_order_pdfs/2607.06908.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08040",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08040.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08082",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08082.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08169",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08169.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08175",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08175.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08291",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08291.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.08500",
+      "path": "benchmark_data/.reading_order_pdfs/2607.08500.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09556",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09556.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09566",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09566.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09876",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09876.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09906",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09906.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09951",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09951.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.09990",
+      "path": "benchmark_data/.reading_order_pdfs/2607.09990.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10297",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10297.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10385",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10385.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10430",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10430.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10439",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10439.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10451",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10451.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "2607.10460",
+      "path": "benchmark_data/.reading_order_pdfs/2607.10460.pdf",
+      "lang": "en"
+    },
+    {
+      "id": "chukobungaku_104-52",
+      "path": "docs_internal/sample_pdfs/vertical-jp/chukobungaku_104-52_vertical-jp-academic.pdf",
+      "lang": "cjk"
+    },
+    {
+      "id": "ibk_72-102",
+      "path": "docs_internal/sample_pdfs/vertical-jp/ibk_72-102_vertical-jp-academic_99pct.pdf",
+      "lang": "cjk"
+    },
+    {
+      "id": "iwaki_koho_2025-12",
+      "path": "docs_internal/sample_pdfs/vertical-jp/iwaki_koho_2025-12_vertical-jp.pdf",
+      "lang": "cjk"
+    }
+  ]
+}

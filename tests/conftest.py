@@ -361,3 +361,30 @@ def sample_pdf_with_table():
         doc.close()
         yield f.name
         os.unlink(f.name)
+
+
+@pytest.fixture
+def corpus_dir(tmp_path):
+    """Directory of 3 small PDFs with differing page counts.
+
+    Pages carry two text blocks with repeated terms ("budget") so
+    corpus fixtures follow the realistic multi-block pattern rather
+    than unique-phrase-per-page.
+    """
+    d = tmp_path / "corpus"
+    d.mkdir()
+    for name, pages in [("alpha.pdf", 2), ("bravo.pdf", 4), ("charlie.pdf", 1)]:
+        doc = pymupdf.open()
+        for i in range(pages):
+            page = doc.new_page()
+            page.insert_text(
+                (50, 50),
+                f"Report section {i + 1}. The quarterly budget increased.",
+            )
+            page.insert_text(
+                (50, 300),
+                f"Second block on page {i + 1}. Budget details and notes.",
+            )
+        doc.save(str(d / name))
+        doc.close()
+    return d

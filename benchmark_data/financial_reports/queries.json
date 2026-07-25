@@ -1,0 +1,989 @@
+{
+  "description": "Graded ground truth for the financial-report corpus (public-company 10-K and annual-report PDFs). Classes: needle (the answer sits on one identifiable page; evidence is a verbatim substring of that page's extracted text), route (document routing -- which filer-year answers this? doc-level labels only, no page, gain 2 for the target year and gain 1 for the same filer's adjacent years), trap (terms that are boilerplate across filings but substantive in one document), concept (semantic paraphrase sharing no distinctive keyword with the target text). Validate with: uv run python scripts/benchmark_corpus_modes.py --data-dir benchmark_data/financial_reports --validate",
+  "queries": [
+    {
+      "id": "needle-01",
+      "class": "needle",
+      "query": "Google Cloud revenue increase in 2024",
+      "labels": [
+        {
+          "doc": "googl-fy2024",
+          "page": 38,
+          "gain": 2,
+          "evidence": "Google Cloud revenues increased $10.1 billion"
+        }
+      ]
+    },
+    {
+      "id": "needle-02",
+      "class": "needle",
+      "query": "Alphabet employee severance charges from the workforce reduction",
+      "labels": [
+        {
+          "doc": "googl-fy2023",
+          "page": 39,
+          "gain": 2,
+          "evidence": "$479 million of charges related to employee severance"
+        }
+      ]
+    },
+    {
+      "id": "needle-03",
+      "class": "needle",
+      "query": "Google Cloud revenue increase in 2025",
+      "labels": [
+        {
+          "doc": "googl-fy2025",
+          "page": 35,
+          "gain": 2,
+          "evidence": "Google Cloud revenues increased $15.5 billion"
+        }
+      ]
+    },
+    {
+      "id": "needle-04",
+      "class": "needle",
+      "query": "Apple Greater China net sales decline in 2024",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "page": 25,
+          "gain": 2,
+          "evidence": "Greater China net sales decreased during 2024 compared to 2023"
+        }
+      ]
+    },
+    {
+      "id": "needle-05",
+      "class": "needle",
+      "query": "Apple common stock repurchased during 2025",
+      "labels": [
+        {
+          "doc": "aapl-fy2025",
+          "page": 47,
+          "gain": 2,
+          "evidence": "repurchased 402 million shares of its common stock for $89.3 billion"
+        }
+      ]
+    },
+    {
+      "id": "needle-06",
+      "class": "needle",
+      "query": "Apple research and development expense in the segment reconciliation 2023",
+      "labels": [
+        {
+          "doc": "aapl-fy2023",
+          "page": 50,
+          "gain": 2,
+          "evidence": "Research and development expense\n \n(29,915)"
+        }
+      ]
+    },
+    {
+      "id": "needle-07",
+      "class": "needle",
+      "query": "NVIDIA data center revenue growth in fiscal 2025",
+      "labels": [
+        {
+          "doc": "nvda-fy2025",
+          "page": 38,
+          "gain": 2,
+          "evidence": "Data Center revenue for fiscal year 2025 was up 142%"
+        }
+      ]
+    },
+    {
+      "id": "needle-08",
+      "class": "needle",
+      "query": "NVIDIA largest direct customer share of total revenue fiscal 2026",
+      "labels": [
+        {
+          "doc": "nvda-fy2026",
+          "page": 23,
+          "gain": 2,
+          "evidence": "sales to one direct customer represented 22% of total revenue"
+        }
+      ]
+    },
+    {
+      "id": "needle-09",
+      "class": "needle",
+      "query": "US export licensing requirements for A100 and H100 sales to China",
+      "labels": [
+        {
+          "doc": "nvda-fy2024",
+          "page": 26,
+          "gain": 2,
+          "evidence": "impact our A100 and H100 integrated circuits"
+        }
+      ]
+    },
+    {
+      "id": "needle-10",
+      "class": "needle",
+      "query": "AMC goodwill impairment charge for domestic theatres",
+      "labels": [
+        {
+          "doc": "amc-fy2022",
+          "page": 58,
+          "gain": 2,
+          "evidence": "goodwill impairment charges of\n$1,276.1 million"
+        }
+      ]
+    },
+    {
+      "id": "needle-11",
+      "class": "needle",
+      "query": "AMC reverse stock split effective date",
+      "labels": [
+        {
+          "doc": "amc-fy2023",
+          "page": 40,
+          "gain": 2,
+          "evidence": "reverse stock split on August 24, 2023"
+        }
+      ]
+    },
+    {
+      "id": "needle-12",
+      "class": "needle",
+      "query": "AMC theatres and screens operated at end of 2024",
+      "labels": [
+        {
+          "doc": "amc-fy2024",
+          "page": 41,
+          "gain": 2,
+          "evidence": "we owned, operated or had interests in 871 theatres"
+        }
+      ]
+    },
+    {
+      "id": "needle-13",
+      "class": "needle",
+      "query": "NVIDIA total revenue for fiscal year 2026",
+      "labels": [
+        {
+          "doc": "nvda-fy2026",
+          "page": 37,
+          "gain": 2,
+          "evidence": "Revenue for fiscal year 2026 was"
+        }
+      ]
+    },
+    {
+      "id": "needle-14",
+      "class": "needle",
+      "query": "Alphabet repurchases of Class A and Class C shares",
+      "labels": [
+        {
+          "doc": "googl-fy2024",
+          "page": 24,
+          "gain": 2,
+          "evidence": "repurchases of our Class A and Class C"
+        }
+      ]
+    },
+    {
+      "id": "trap-01",
+      "class": "trap",
+      "query": "reverse stock split ratio and effective date",
+      "labels": [
+        {
+          "doc": "amc-fy2023",
+          "page": 31,
+          "gain": 2,
+          "evidence": "Reverse Stock Split"
+        }
+      ]
+    },
+    {
+      "id": "trap-02",
+      "class": "trap",
+      "query": "goodwill impairment charges recorded for reporting units",
+      "labels": [
+        {
+          "doc": "amc-fy2022",
+          "page": 58,
+          "gain": 2,
+          "evidence": "goodwill impairment charges of"
+        }
+      ]
+    },
+    {
+      "id": "trap-03",
+      "class": "trap",
+      "query": "charges related to the reduction in workforce",
+      "labels": [
+        {
+          "doc": "googl-fy2023",
+          "page": 35,
+          "gain": 2,
+          "evidence": "reduction in our workforce"
+        }
+      ]
+    },
+    {
+      "id": "trap-04",
+      "class": "trap",
+      "query": "international theatre circuit operations",
+      "labels": [
+        {
+          "doc": "amc-fy2024",
+          "page": 7,
+          "gain": 2,
+          "evidence": "Odeon"
+        }
+      ]
+    },
+    {
+      "id": "trap-05",
+      "class": "trap",
+      "query": "Other Bets segment operating loss",
+      "labels": [
+        {
+          "doc": "googl-fy2024",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Other Bets"
+        }
+      ]
+    },
+    {
+      "id": "concept-01",
+      "class": "concept",
+      "query": "how the company protects itself from swings in exchange rates",
+      "labels": [
+        {
+          "doc": "aapl-fy2025",
+          "page": 30,
+          "gain": 2,
+          "evidence": "foreign exchange rate risk"
+        }
+      ]
+    },
+    {
+      "id": "concept-02",
+      "class": "concept",
+      "query": "what happens if the outside chip manufacturer cannot make enough",
+      "labels": [
+        {
+          "doc": "nvda-fy2024",
+          "page": 18,
+          "gain": 2,
+          "evidence": "depend on foundries"
+        }
+      ]
+    },
+    {
+      "id": "concept-03",
+      "class": "concept",
+      "query": "whether the business can keep paying its bills",
+      "labels": [
+        {
+          "doc": "amc-fy2022",
+          "page": 105,
+          "gain": 2,
+          "evidence": "sufficient liquidity"
+        }
+      ]
+    },
+    {
+      "id": "concept-04",
+      "class": "concept",
+      "query": "lawsuits claiming the company abuses its market power",
+      "labels": [
+        {
+          "doc": "googl-fy2024",
+          "page": 80,
+          "gain": 2,
+          "evidence": "filed a lawsuit in the U.S. District \nCourt for the District of Columbia"
+        }
+      ]
+    },
+    {
+      "id": "concept-05",
+      "class": "concept",
+      "query": "risk of depending on very few parts suppliers",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "page": 6,
+          "gain": 2,
+          "evidence": "single or limited sources"
+        }
+      ]
+    },
+    {
+      "id": "needle-15",
+      "class": "needle",
+      "query": "Microsoft Intelligent Cloud revenue growth driver in fiscal 2023",
+      "labels": [
+        {
+          "doc": "msft-fy2023",
+          "page": 36,
+          "gain": 2,
+          "evidence": "Intelligent Cloud revenue increased driven by Azure and\nother cloud services"
+        }
+      ]
+    },
+    {
+      "id": "needle-16",
+      "class": "needle",
+      "query": "what Azure and other cloud services revenue includes",
+      "labels": [
+        {
+          "doc": "msft-fy2025",
+          "page": 24,
+          "gain": 2,
+          "evidence": "Azure and other cloud services revenue\ngrowth"
+        }
+      ]
+    },
+    {
+      "id": "needle-17",
+      "class": "needle",
+      "query": "Meta reportable segments",
+      "labels": [
+        {
+          "doc": "meta-fy2024",
+          "page": 7,
+          "gain": 2,
+          "evidence": "Family of Apps (FoA) and Reality Labs (RL)"
+        }
+      ]
+    },
+    {
+      "id": "needle-18",
+      "class": "needle",
+      "query": "Meta family metrics DAP MAP and ARPP definitions",
+      "labels": [
+        {
+          "doc": "meta-fy2023",
+          "page": 5,
+          "gain": 2,
+          "evidence": "daily active people (DAP), monthly active people (MAP)"
+        }
+      ]
+    },
+    {
+      "id": "needle-19",
+      "class": "needle",
+      "query": "AWS sales growth in 2023",
+      "labels": [
+        {
+          "doc": "amzn-fy2023",
+          "page": 37,
+          "gain": 2,
+          "evidence": "AWS sales increased 13% in 2023"
+        }
+      ]
+    },
+    {
+      "id": "needle-20",
+      "class": "needle",
+      "query": "AWS sales growth in 2024",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "page": 37,
+          "gain": 2,
+          "evidence": "AWS sales increased 19% in 2024"
+        }
+      ]
+    },
+    {
+      "id": "needle-21",
+      "class": "needle",
+      "query": "JPMorgan Chase full year 2023 net income",
+      "labels": [
+        {
+          "doc": "jpm-fy2023",
+          "page": 87,
+          "gain": 2,
+          "evidence": "reported net income of $49.6 billion for \n2023"
+        }
+      ]
+    },
+    {
+      "id": "needle-22",
+      "class": "needle",
+      "query": "JPMorgan Chase full year 2024 net income",
+      "labels": [
+        {
+          "doc": "jpm-fy2024",
+          "page": 88,
+          "gain": 2,
+          "evidence": "reported net income of $58.5 billion \nfor 2024"
+        }
+      ]
+    },
+    {
+      "id": "needle-23",
+      "class": "needle",
+      "query": "JPMorgan Chase full year 2022 net income",
+      "labels": [
+        {
+          "doc": "jpm-fy2022",
+          "page": 67,
+          "gain": 2,
+          "evidence": "reported net income of $37.7 billion for \n2022"
+        }
+      ]
+    },
+    {
+      "id": "needle-24",
+      "class": "needle",
+      "query": "Meta 2022 restructuring charges and layoff size",
+      "labels": [
+        {
+          "doc": "meta-fy2022",
+          "page": 12,
+          "gain": 2,
+          "evidence": "a layoff of approximately 11,000 employees"
+        }
+      ]
+    },
+    {
+      "id": "needle-25",
+      "class": "needle",
+      "query": "Microsoft Cloud revenue in fiscal 2024",
+      "labels": [
+        {
+          "doc": "msft-fy2024",
+          "page": 31,
+          "gain": 2,
+          "evidence": "Microsoft Cloud revenue increased 23% to $137.4 billion"
+        }
+      ]
+    },
+    {
+      "id": "trap-06",
+      "class": "trap",
+      "query": "acquisition of a failed regional bank",
+      "labels": [
+        {
+          "doc": "jpm-fy2023",
+          "page": 2,
+          "gain": 2,
+          "evidence": "First Republic"
+        }
+      ]
+    },
+    {
+      "id": "trap-07",
+      "class": "trap",
+      "query": "metaverse investment strategy",
+      "labels": [
+        {
+          "doc": "meta-fy2022",
+          "page": 8,
+          "gain": 2,
+          "evidence": "metaverse"
+        }
+      ]
+    },
+    {
+      "id": "trap-08",
+      "class": "trap",
+      "query": "professional social network segment results",
+      "labels": [
+        {
+          "doc": "msft-fy2024",
+          "page": 6,
+          "gain": 2,
+          "evidence": "LinkedIn"
+        }
+      ]
+    },
+    {
+      "id": "trap-09",
+      "class": "trap",
+      "query": "fulfilment network capacity expansion",
+      "labels": [
+        {
+          "doc": "amzn-fy2023",
+          "page": 2,
+          "gain": 2,
+          "evidence": "fulfillment network"
+        }
+      ]
+    },
+    {
+      "id": "trap-10",
+      "class": "trap",
+      "query": "facilities consolidation and severance charges",
+      "labels": [
+        {
+          "doc": "meta-fy2023",
+          "page": 53,
+          "gain": 2,
+          "evidence": "facilities consolidation"
+        }
+      ]
+    },
+    {
+      "id": "concept-06",
+      "class": "concept",
+      "query": "how the bank cushions itself against loans going bad",
+      "labels": [
+        {
+          "doc": "jpm-fy2023",
+          "page": 84,
+          "gain": 2,
+          "evidence": "allowance for credit losses"
+        }
+      ]
+    },
+    {
+      "id": "concept-07",
+      "class": "concept",
+      "query": "European rules limiting how personal information can be used for advertising",
+      "labels": [
+        {
+          "doc": "meta-fy2024",
+          "page": 10,
+          "gain": 2,
+          "evidence": "General Data Protection Regulation"
+        }
+      ]
+    },
+    {
+      "id": "concept-08",
+      "class": "concept",
+      "query": "risk from organised labour representation in overseas operations",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "page": 19,
+          "gain": 2,
+          "evidence": "works councils and labor unions"
+        }
+      ]
+    },
+    {
+      "id": "concept-09",
+      "class": "concept",
+      "query": "money set aside for tax positions being disputed with authorities",
+      "labels": [
+        {
+          "doc": "msft-fy2024",
+          "page": 53,
+          "gain": 2,
+          "evidence": "uncertain tax positions"
+        }
+      ]
+    },
+    {
+      "id": "concept-10",
+      "class": "concept",
+      "query": "rules requiring the bank to hold enough capital",
+      "labels": [
+        {
+          "doc": "jpm-fy2022",
+          "page": 15,
+          "gain": 2,
+          "evidence": "Basel III"
+        }
+      ]
+    },
+    {
+      "id": "route-01",
+      "class": "route",
+      "query": "Apple fiscal 2024 annual report",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "aapl-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "aapl-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-02",
+      "class": "route",
+      "query": "Apple fiscal 2023 Form 10-K",
+      "labels": [
+        {
+          "doc": "aapl-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "aapl-fy2024",
+          "gain": 1
+        },
+        {
+          "doc": "aapl-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-03",
+      "class": "route",
+      "query": "Apple fiscal 2025 Form 10-K",
+      "labels": [
+        {
+          "doc": "aapl-fy2025",
+          "gain": 2
+        },
+        {
+          "doc": "aapl-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "aapl-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-04",
+      "class": "route",
+      "query": "Alphabet 2024 Form 10-K",
+      "labels": [
+        {
+          "doc": "googl-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "googl-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "googl-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-05",
+      "class": "route",
+      "query": "Alphabet 2023 annual report",
+      "labels": [
+        {
+          "doc": "googl-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "googl-fy2024",
+          "gain": 1
+        },
+        {
+          "doc": "googl-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-06",
+      "class": "route",
+      "query": "Alphabet 2025 Form 10-K",
+      "labels": [
+        {
+          "doc": "googl-fy2025",
+          "gain": 2
+        },
+        {
+          "doc": "googl-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "googl-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-07",
+      "class": "route",
+      "query": "NVIDIA fiscal 2025 Form 10-K",
+      "labels": [
+        {
+          "doc": "nvda-fy2025",
+          "gain": 2
+        },
+        {
+          "doc": "nvda-fy2024",
+          "gain": 1
+        },
+        {
+          "doc": "nvda-fy2026",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-08",
+      "class": "route",
+      "query": "NVIDIA fiscal 2026 annual report",
+      "labels": [
+        {
+          "doc": "nvda-fy2026",
+          "gain": 2
+        },
+        {
+          "doc": "nvda-fy2024",
+          "gain": 1
+        },
+        {
+          "doc": "nvda-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-09",
+      "class": "route",
+      "query": "NVIDIA fiscal 2024 Form 10-K",
+      "labels": [
+        {
+          "doc": "nvda-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "nvda-fy2025",
+          "gain": 1
+        },
+        {
+          "doc": "nvda-fy2026",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-10",
+      "class": "route",
+      "query": "AMC Entertainment 2023 Form 10-K",
+      "labels": [
+        {
+          "doc": "amc-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "amc-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "amc-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-11",
+      "class": "route",
+      "query": "AMC Entertainment 2022 annual report",
+      "labels": [
+        {
+          "doc": "amc-fy2022",
+          "gain": 2
+        },
+        {
+          "doc": "amc-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "amc-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-12",
+      "class": "route",
+      "query": "Microsoft fiscal 2024 annual report",
+      "labels": [
+        {
+          "doc": "msft-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "msft-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "msft-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-13",
+      "class": "route",
+      "query": "Microsoft fiscal 2025 annual report",
+      "labels": [
+        {
+          "doc": "msft-fy2025",
+          "gain": 2
+        },
+        {
+          "doc": "msft-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "msft-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-14",
+      "class": "route",
+      "query": "Microsoft fiscal 2023 annual report",
+      "labels": [
+        {
+          "doc": "msft-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "msft-fy2024",
+          "gain": 1
+        },
+        {
+          "doc": "msft-fy2025",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-15",
+      "class": "route",
+      "query": "Meta Platforms 2023 Form 10-K",
+      "labels": [
+        {
+          "doc": "meta-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "meta-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "meta-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-16",
+      "class": "route",
+      "query": "Meta Platforms 2024 Form 10-K",
+      "labels": [
+        {
+          "doc": "meta-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "meta-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "meta-fy2023",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-17",
+      "class": "route",
+      "query": "Meta Platforms 2022 Form 10-K",
+      "labels": [
+        {
+          "doc": "meta-fy2022",
+          "gain": 2
+        },
+        {
+          "doc": "meta-fy2023",
+          "gain": 1
+        },
+        {
+          "doc": "meta-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-18",
+      "class": "route",
+      "query": "Amazon 2023 annual report",
+      "labels": [
+        {
+          "doc": "amzn-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "amzn-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "amzn-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-19",
+      "class": "route",
+      "query": "Amazon 2024 annual report",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "amzn-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "amzn-fy2023",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-20",
+      "class": "route",
+      "query": "JPMorgan Chase 2023 annual report",
+      "labels": [
+        {
+          "doc": "jpm-fy2023",
+          "gain": 2
+        },
+        {
+          "doc": "jpm-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "jpm-fy2024",
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "id": "route-21",
+      "class": "route",
+      "query": "JPMorgan Chase 2024 annual report",
+      "labels": [
+        {
+          "doc": "jpm-fy2024",
+          "gain": 2
+        },
+        {
+          "doc": "jpm-fy2022",
+          "gain": 1
+        },
+        {
+          "doc": "jpm-fy2023",
+          "gain": 1
+        }
+      ]
+    }
+  ]
+}

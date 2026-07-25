@@ -1,5 +1,7 @@
 {
   "description": "Large public-company financial reports (10-K and glossy annual report PDFs) for the financial-report retrieval benchmark. PDFs are fetched, not committed: run scripts/fetch_financial_corpus.py. Each doc is pinned by sha256 so a rotted URL can be replaced by any mirror serving the identical file.",
+  "results_note": "graded ground truth over 8 filers x 3 fiscal years; classes are needle / route / trap / concept",
+  "sanity_note": "Page-level NDCG is floored by label sparsity on this corpus: one labeled page per needle against 3,545 pages in which the same phrasing recurs across fiscal years and across MD&A, the notes and the segment sections. Cite the doc-level table. Interpretation is appended by hand after the run.",
   "docs": [
     {
       "id": "googl-fy2025",

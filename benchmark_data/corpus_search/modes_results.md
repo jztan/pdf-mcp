@@ -8,6 +8,16 @@ Corpus: 100 docs. Queries: 64 (graded ground truth, stage-2). top_k=10. The tool
 | semantic (semantic) | 0.579 | 0.861 | 0.215 | 0.785 | 0.875 | 0.19 |
 | auto (hybrid) | 0.674 | 0.996 | 0.392 | 0.776 | 1.000 | 0.44 |
 
+## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
+
+Separates "wrong doc" from "right doc, unlabeled page": spread labels grade 2-3 (doc, page) pairs while gold docs match the query on many pages, so page-level NDCG floors on label sparsity there. Doc-level is the honest ceiling-side read for the spread class.
+
+| mode | overall | needle | spread | trap |
+|---|---|---|---|---|
+| keyword | 0.791 | 1.000 | 0.744 | 0.720 |
+| semantic | 0.829 | 0.974 | 0.576 | 1.000 |
+| auto | 0.913 | 1.000 | 0.777 | 1.000 |
+
 ## CJK subset (5 needle queries on Japanese docs; embedding model is English bge-small, so the semantic arm is expected to be weak there)
 
 | mode | CJK NDCG@10 (n=5) | non-CJK NDCG@10 |

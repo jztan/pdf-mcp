@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
+- `pdf_corpus_search` in hybrid mode reported `doc_match_counts` from the
+  keyword arm alone, so a question-shaped query — which the keyword arm
+  deliberately cannot match — returned `{}` even when the semantic arm had
+  found pages in several documents. That field is how a caller learns which
+  documents hold content beyond the pages that won a slot, i.e. when a
+  question spanning several documents should be re-asked once per document,
+  and it was blank exactly when it mattered. Hybrid now merges both arms
+  (max per document, since the arms are two views of the same pages).
+  Example: "Compare AWS revenue growth with Microsoft Cloud revenue growth"
+  over two filings returned `{}`; it now returns `{msft: 10, amzn: 5}`,
+  telling the caller Amazon has matching pages it was not shown.
 - `pdf_corpus_search` now defaults to `excerpt_style="paragraph"`, matching
   single-doc `pdf_search`. The corpus tool was built after `pdf_search`
   migrated its default from `"snippet"` to `"paragraph"` (a change justified

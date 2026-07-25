@@ -52,6 +52,7 @@ DEFAULT_MODEL = "claude-opus-4-8"
 DENIED_TOOLS = "Bash,Read,Write,Edit,WebFetch,WebSearch"
 JUDGE_TIMEOUT_S = 180
 TOP_K = 10
+FOLLOWUP_LIMIT = 3
 
 RUBRIC = """You are grading a document-retrieval result, not writing an answer.
 
@@ -84,6 +85,22 @@ Reply with ONLY a JSON object, no prose:
  "missing": "...", "reason": "one sentence"}"""
 
 
+def followup_docs(
+    matches: list[dict[str, Any]], doc_match_counts: dict[str, int], limit: int
+) -> list[str]:
+    """Documents worth a second, scoped call, ordered most-matching first.
+
+    Uses ONLY what the response exposes -- which documents appear in
+    `matches`, and which `doc_match_counts` says have matching pages. It
+    must never consult the eval's expected-document list: that would
+    measure an agent that already knew the answer.
+    """
+    represented = {m["path"] for m in matches}
+    pending = [(p, n) for p, n in doc_match_counts.items() if p not in represented]
+    pending.sort(key=lambda pair: (-pair[1], pair[0]))
+    return [p for p, _n in pending[:limit]]
+
+
 def build_payload(matches: list[dict[str, Any]], id_by_path: dict[str, str]) -> str:
     lines = []
     for i, m in enumerate(matches, 1):
@@ -106,6 +123,31 @@ def extract_json(text: str) -> dict[str, Any]:
             "wrong_attribution": False,
             "reason": "bad JSON",
         }
+
+
+def judge_majority(
+    question: dict[str, Any], payload: str, model: str, votes: int = 3
+) -> dict[str, Any]:
+    """Majority-of-N verdict, mirroring eval_coherence.py.
+
+    A single `claude -p` vote is demonstrably unstable here: on the first
+    run, two questions whose two payloads were byte-identical (no follow-up
+    calls were made) still received different verdicts. That noise floor was
+    wide enough to swamp the effect being measured, so every verdict is now
+    the majority of `votes` independent calls.
+    """
+    ballots = [judge_one(question, payload, model) for _ in range(votes)]
+    states = [b.get("answerable") for b in ballots]
+    winner = max(set(states), key=states.count)
+    wrong = sum(1 for b in ballots if b.get("wrong_attribution")) > votes // 2
+    chosen = next(b for b in ballots if b.get("answerable") == winner)
+    return {
+        **chosen,
+        "answerable": winner,
+        "wrong_attribution": wrong,
+        "votes": states,
+        "unanimous": len(set(states)) == 1,
+    }
 
 
 def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, Any]:
@@ -176,10 +218,33 @@ def main(argv: list[str] | None = None) -> int:
         warm = pdf_corpus_warm(paths, budget_seconds=600, embeddings=True)
     print(f"corpus warm ({len(paths)} docs)\n")
 
+    from pdf_mcp.server import pdf_search
+
     rows: list[dict[str, Any]] = []
     for q in questions["questions"]:
         res = pdf_corpus_search(paths, q["question"], mode=args.mode, top_k=TOP_K)
         matches = res.get("matches", [])
+        counts = res.get("doc_match_counts", {})
+
+        # The flow an agent should follow: a question spanning several
+        # documents cannot be served by one ranked list, so follow up on
+        # documents that matched but won no slot. Selection uses only the
+        # response, never expect_docs.
+        followups = followup_docs(matches, counts, FOLLOWUP_LIMIT)
+        followup_matches: list[dict[str, Any]] = []
+        for path in followups:
+            sub = pdf_search(path, q["question"], mode=args.mode, max_results=3)
+            for m in sub.get("matches", []):
+                followup_matches.append({**m, "path": path})
+
+        # Discoverability is objective: of the documents a complete answer
+        # needs, how many did the FIRST response either return or name in
+        # doc_match_counts? This is what the caller could have known.
+        visible = {id_by_path.get(m["path"], "") for m in matches}
+        visible |= {id_by_path.get(p, "") for p in counts}
+        expect_ids = q["expect_docs"]
+        discoverable = sum(1 for d in expect_ids if d in visible) / len(expect_ids)
+
         got_docs = [id_by_path.get(m["path"], "") for m in matches]
         expect = q["expect_docs"]
         present = [d for d in expect if d in got_docs]
@@ -197,7 +262,12 @@ def main(argv: list[str] | None = None) -> int:
                 "doc_counts": counts,
                 "balance": round(balance, 3),
                 "n_matches": len(matches),
+                "discoverable": round(discoverable, 3),
+                "followup_docs": [id_by_path.get(p, p) for p in followups],
                 "payload": build_payload(matches, id_by_path),
+                "payload_decomposed": build_payload(
+                    matches + followup_matches, id_by_path
+                ),
             }
         )
 
@@ -205,14 +275,34 @@ def main(argv: list[str] | None = None) -> int:
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             verdicts = list(
                 pool.map(
-                    lambda pair: judge_one(pair[0], pair[1]["payload"], args.model),
+                    lambda pair: judge_majority(
+                        pair[0], pair[1]["payload"], args.model
+                    ),
                     zip(questions["questions"], rows),
                 )
             )
-        for row, verdict in zip(rows, verdicts):
+            verdicts_dec = list(
+                pool.map(
+                    lambda pair: judge_majority(
+                        pair[0], pair[1]["payload_decomposed"], args.model
+                    ),
+                    zip(questions["questions"], rows),
+                )
+            )
+        for row, verdict, verdict_dec in zip(rows, verdicts, verdicts_dec):
             row["verdict"] = verdict
+            row["verdict_decomposed"] = verdict_dec
+
+    def tally(key: str) -> dict[str, int]:
+        return {
+            state: sum(1 for r in rows if r.get(key, {}).get("answerable") == state)
+            for state in ("full", "partial", "no")
+        } | {"wrong": sum(1 for r in rows if r.get(key, {}).get("wrong_attribution"))}
 
     n = len(rows)
+    single = tally("verdict")
+    decomposed = tally("verdict_decomposed")
+    disc = sum(r["discoverable"] for r in rows) / n
     full = sum(1 for r in rows if r.get("verdict", {}).get("answerable") == "full")
     partial = sum(
         1 for r in rows if r.get("verdict", {}).get("answerable") == "partial"
@@ -221,22 +311,45 @@ def main(argv: list[str] | None = None) -> int:
     wrong = sum(1 for r in rows if r.get("verdict", {}).get("wrong_attribution"))
     cov = sum(r["doc_coverage"] for r in rows) / n
 
-    print(f"{'id':28s} {'cov':>5s} {'bal':>5s}  answerable  wrong-attrib")
+    print(f"{'id':28s} {'disc':>5s}  {'1-call':10s} {'decomposed':10s} followups")
     for r in rows:
         v = r.get("verdict", {})
+        vd = r.get("verdict_decomposed", {})
         print(
-            f"{r['id']:28s} {r['doc_coverage']:5.2f} {r['balance']:5.2f}"
+            f"{r['id']:28s} {r['discoverable']:5.2f}"
             f"  {str(v.get('answerable', '-')):10s}"
-            f"  {'YES' if v.get('wrong_attribution') else '-'}"
+            f" {str(vd.get('answerable', '-')):10s}"
+            f" {','.join(r['followup_docs']) or '-'}"
         )
     print()
-    print(f"questions            : {n}")
-    print(f"mean doc coverage    : {cov:.2f}")
+    unan = sum(1 for r in rows if r.get("verdict", {}).get("unanimous"))
+    print(f"questions                     : {n}")
     if not args.dry_run:
-        print(f"answerable in full   : {full}/{n} ({full/n:.0%})")
-        print(f"partial              : {partial}/{n} ({partial/n:.0%})")
-        print(f"not answerable       : {none_}/{n} ({none_/n:.0%})")
-        print(f"WRONG ATTRIBUTION    : {wrong}/{n} ({wrong/n:.0%})")
+        print(
+            f"unanimous judge verdicts      : {unan}/{n}"
+            "   (low agreement => treat deltas cautiously)"
+        )
+    print(f"mean doc coverage (1 call)    : {cov:.2f}")
+    print(
+        f"mean DISCOVERABILITY          : {disc:.2f}"
+        "   <- of the docs a full answer needs, the share the first"
+    )
+    print(
+        "                                        response returned OR named"
+        " in doc_match_counts"
+    )
+    if not args.dry_run:
+        print()
+        print(f"{'':22s} {'1 call':>8s} {'decomposed':>12s}")
+        for label, key in (
+            ("answerable in full", "full"),
+            ("partial", "partial"),
+            ("not answerable", "no"),
+            ("WRONG ATTRIBUTION", "wrong"),
+        ):
+            print(
+                f"{label:22s} {single[key]:>3d}/{n:<4d} {decomposed[key]:>7d}/{n:<4d}"
+            )
 
     out = {
         "mode": args.mode,
@@ -245,6 +358,9 @@ def main(argv: list[str] | None = None) -> int:
         "summary": {
             "questions": n,
             "mean_doc_coverage": round(cov, 4),
+            "mean_discoverability": round(disc, 4),
+            "single_call": single,
+            "decomposed": decomposed,
             "full": full,
             "partial": partial,
             "no": none_,

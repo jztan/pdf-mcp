@@ -577,6 +577,21 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
 
+**How keyword matching treats your query.** Terms are whitespace-split and
+**AND-matched**: a page must contain every term to match, in any order.
+Short, specific terms therefore work best (`"Greater China net sales"`),
+while a full question can over-constrain the match — one word the document
+phrases differently ("decline" where the filing says "decreased") would
+otherwise return nothing at all. To keep question-shaped queries usable, a
+query of **three or more terms that matches nothing is retried with its
+terms OR-joined**, and BM25 ranks pages carrying more (and rarer) terms
+first. Queries of one or two terms keep strict AND, where requiring both
+terms is the point. The retry applies to keyword-only search (`mode="keyword"`,
+and the keyword arm of single-document `auto`); cross-document
+`pdf_corpus_search` in hybrid mode deliberately does not use it, because the
+semantic arm already covers those queries and fusing in loose single-term
+hits measurably lowers result quality.
+
 > **CJK queries (Japanese/Chinese/Korean):** FTS5 keyword matching is unreliable
 > on unspaced CJK text, so `mode='auto'`/`'keyword'` may miss embedded terms. The
 > tool attaches a `cjk_keyword_warning` advisory and steers you to

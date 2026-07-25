@@ -38,11 +38,13 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
 | Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted — hidden-text detection (`content_trust=True`) |
-| Tool design | Single monolithic tool | 12 specialized tools |
+| Folders of PDFs | One document at a time | Corpus tools: warm, triage, and search across a whole folder |
+| Tool design | Single monolithic tool | 13 specialized tools |
 
 ## Features
 
 - **Hybrid search** — find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
+- **Corpus search** — point the server at a folder of PDFs: warm them into the cache, get per-document triage cards, and search across all documents at once with ranked, document-attributed hits
 - **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
 - **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
 - **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
@@ -267,7 +269,7 @@ pdf-mcp --help
 
 ## Tools
 
-The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context.
+The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context. For a folder of PDFs, start with `pdf_corpus_overview` to triage, then `pdf_corpus_search` to search across documents.
 
 | Tool | What it does |
 |------|--------------|

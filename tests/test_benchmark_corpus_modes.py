@@ -171,3 +171,45 @@ class TestValidateQueries:
             ]
         }
         assert validate_queries(self.manifest, queries, lambda d, p: "") == []
+
+
+class TestToolContracts:
+    """The single-doc arm calls the production tools directly. Assert the
+    keyword arguments it sends actually exist -- a rename would otherwise
+    only surface as a crash minutes into a benchmark run."""
+
+    def test_pdf_search_accepts_the_kwargs_the_single_doc_arm_sends(self):
+        import inspect
+
+        from pdf_mcp.server import pdf_search
+
+        params = inspect.signature(pdf_search).parameters
+        for kw in ("path", "query", "mode", "max_results"):
+            assert kw in params, f"pdf_search lost the {kw} parameter"
+
+    def test_pdf_corpus_search_accepts_the_kwargs_the_corpus_arm_sends(self):
+        import inspect
+
+        from pdf_mcp.server import pdf_corpus_search
+
+        params = inspect.signature(pdf_corpus_search).parameters
+        for kw in ("paths", "query", "mode", "top_k"):
+            assert kw in params, f"pdf_corpus_search lost the {kw} parameter"
+
+
+class TestAggPageLevelNotApplicable:
+    def test_all_route_selection_reports_none_not_zero(self):
+        rows = {
+            "r1": {"ndcg": None, "doc_ndcg": 1.0, "dochit3": 1, "class": "route"},
+            "r2": {"ndcg": None, "doc_ndcg": 0.8, "dochit3": 1, "class": "route"},
+        }
+        out = agg(rows)
+        assert out["ndcg"] is None, "page-level score is n/a, not a zero score"
+        assert out["doc_ndcg"] == 0.9
+        assert out["n"] == 2
+
+    def test_fmt_renders_none_as_na(self):
+        from scripts.benchmark_corpus_modes import fmt
+
+        assert fmt(None) == "n/a"
+        assert fmt(0.6741) == "0.674"

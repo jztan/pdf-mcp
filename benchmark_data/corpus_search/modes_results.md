@@ -10,7 +10,7 @@ Corpus: 100 docs. Queries: 64 (graded ground truth, stage-2). top_k=10. The tool
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
-Separates "wrong doc" from "right doc, unlabeled page": spread labels grade 2-3 (doc, page) pairs while gold docs match the query on many pages, so page-level NDCG floors on label sparsity there. Doc-level is the honest ceiling-side read for the spread class.
+Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade only a few (doc, page) pairs while a gold doc matches the query on many pages, so page-level NDCG floors on label sparsity. Doc-level is the honest ceiling-side read wherever gold docs match on many more pages than are labeled.
 
 | mode | overall | needle | spread | trap |
 |---|---|---|---|---|

@@ -61,13 +61,21 @@ def agg(rows: dict, key=lambda r: True) -> dict[str, float]:
         return {"ndcg": 0.0, "doc_ndcg": 0.0, "dochit3": 0.0, "n": 0}
     paged = [r for r in sel if r["ndcg"] is not None]
     return {
+        # None, not 0.0, when nothing in the selection carries page labels.
+        # The route class has no page-level score to report, and printing
+        # 0.000 there reads as "scored zero" rather than "not applicable".
         "ndcg": (
-            round(sum(r["ndcg"] for r in paged) / len(paged), 4) if paged else 0.0
+            round(sum(r["ndcg"] for r in paged) / len(paged), 4) if paged else None
         ),
         "doc_ndcg": round(sum(r["doc_ndcg"] for r in sel) / len(sel), 4),
         "dochit3": round(sum(r["dochit3"] for r in sel) / len(sel), 4),
         "n": len(sel),
     }
+
+
+def fmt(value: float | None) -> str:
+    """Format an NDCG cell; page-level score is n/a for page-less classes."""
+    return "n/a" if value is None else f"{value:.3f}"
 
 
 def grade_query(query: dict, ranked: list[tuple[str, int]], top_k: int) -> dict:
@@ -300,7 +308,10 @@ def main(argv: list[str] | None = None) -> int:
                     for qid, doc_id in eligible:
                         q = query_by_id[qid]
                         res = pdf_search(
-                            path_by_id[doc_id], q["query"], mode=mode, top_k=TOP_K
+                            path_by_id[doc_id],
+                            q["query"],
+                            mode=mode,
+                            max_results=TOP_K,
                         )
                         if "error" in res:
                             print(f"ERROR single-doc {mode} {qid}: {res['error']}")
@@ -340,12 +351,19 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(out, indent=2, sort_keys=True) + "\n"
     )
 
+    dataset_note = manifest.get("results_note", "graded ground truth, stage-2")
+    sanity_note = manifest.get(
+        "sanity_note",
+        "Sanity cross-check: keyword overall should land near the stage-2"
+        " arm-B result (~0.547). Interpretation is appended by hand after"
+        " the run.",
+    )
     class_header = " | ".join(classes)
     lines = [
         "# pdf_corpus_search mode benchmark (production tool, real embeddings)",
         "",
         f"Corpus: {len(paths)} docs. Queries: {len(queries['queries'])}"
-        f" (graded ground truth, stage-2). top_k={TOP_K}. The tool itself is"
+        f" ({dataset_note}). top_k={TOP_K}. The tool itself is"
         " called per query on a warmed isolated cache, so numbers measure the"
         " agent-facing contract end to end.",
         "",
@@ -354,10 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     ]
     for mode in MODES:
         s = summary[mode]
-        cells = "".join(f" {s['by_class'][c]['ndcg']:.3f} |" for c in classes)
+        cells = "".join(f" {fmt(s['by_class'][c]['ndcg'])} |" for c in classes)
         lines.append(
             f"| {mode} ({'/'.join(s['search_mode_reported'])}) |"
-            f" {s['overall']['ndcg']:.3f} |"
+            f" {fmt(s['overall']['ndcg'])} |"
             f"{cells}"
             f" {s['overall']['dochit3']:.3f} |"
             f" {s['mean_query_seconds']:.2f} |"
@@ -366,10 +384,11 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)",
         "",
-        'Separates "wrong doc" from "right doc, unlabeled page": spread'
-        " labels grade 2-3 (doc, page) pairs while gold docs match the query"
-        " on many pages, so page-level NDCG floors on label sparsity there."
-        " Doc-level is the honest ceiling-side read for the spread class.",
+        'Separates "wrong doc" from "right doc, unlabeled page": sparse page'
+        " labels grade only a few (doc, page) pairs while a gold doc matches"
+        " the query on many pages, so page-level NDCG floors on label"
+        " sparsity. Doc-level is the honest ceiling-side read wherever gold"
+        " docs match on many more pages than are labeled.",
         "",
         f"| mode | overall | {class_header} |",
         "|---|---|" + "---|" * len(classes),
@@ -394,13 +413,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"| {mode} | {s['cjk_subset']['ndcg']:.3f} |"
                 f" {s['non_cjk']['ndcg']:.3f} |"
             )
-    lines += [
-        "",
-        "Sanity cross-check: keyword overall should land near the stage-2"
-        " arm-B result (~0.547). Interpretation is appended by hand after"
-        " the run.",
-        "",
-    ]
+    lines += ["", sanity_note, ""] if sanity_note else ["", ""]
     # Preserve the hand-appended interpretation section across reruns.
     md_path = data / "modes_results.md"
     interp = ""
@@ -413,9 +426,9 @@ def main(argv: list[str] | None = None) -> int:
     print("\nwrote modes_results.{json,md}")
     for mode in MODES:
         s = summary[mode]
-        per_class = " ".join(f"{c}={s['by_class'][c]['ndcg']:.3f}" for c in classes)
+        per_class = " ".join(f"{c}={fmt(s['by_class'][c]['ndcg'])}" for c in classes)
         print(
-            f"  {mode:8s} overall={s['overall']['ndcg']:.3f} "
+            f"  {mode:8s} overall={fmt(s['overall']['ndcg'])} "
             f"{per_class} "
             f"dochit3={s['overall']['dochit3']:.3f} "
             f"doc_ndcg={s['overall']['doc_ndcg']:.3f}"

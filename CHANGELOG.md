@@ -26,7 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (100 docs, 64 graded queries, adversarial distractor classes): hybrid
   NDCG@10 0.674 with a gold document in the top 3 for 100% of queries
   (doc-hit@3 1.000), under 0.5s per query on a warmed corpus; per-class
-  detail in `benchmark_data/corpus_search/modes_results.md`.
+  detail in `benchmark_data/corpus_search/modes_results.md`. Hits report
+  per-page text provenance (`source`: `extracted` or `ocr`) resolved
+  from cache exactly like single-doc `pdf_search`, and keyword search
+  falls back to Python token matching on SQLite builds without FTS5
+  (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
 - Multi-column text extraction no longer duplicates text, and its reading

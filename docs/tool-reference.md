@@ -626,7 +626,7 @@ pdf_search("/path/to/paper.pdf", "training process", max_results=5)
 #   "matches": [
 #     {"page": 7, "excerpt": "We trained the model using the Adam
 #        optimizer with β1 = 0.9, β2 = 0.98 and ε = 10−9.",
-#      "position": 412, "score": 0.0312, "source": "hybrid",
+#      "position": 412, "score": 0.0312, "source": "extracted",
 #      "semantic_score": 0.81, "low_confidence": false},
 #     ...
 #   ],

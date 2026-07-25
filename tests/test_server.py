@@ -1,6 +1,7 @@
 # tests/test_server.py
 """Tests for MCP server tools."""
 
+import base64
 import os
 import tempfile
 from typing import Any
@@ -3420,8 +3421,6 @@ class TestEncodedLen:
 
         for n in (0, 1, 2, 3, 4, 1000, 1001, 1002):
             raw = b"x" * n
-            import base64
-
             assert _encoded_len(raw) == len(base64.b64encode(raw))
 
     def test_budget_is_conservative(self):
@@ -4053,3 +4052,143 @@ class TestPdfCorpusSearchSemanticAuto:
         monkeypatch.setattr(emb, "check_available", boom)
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
         assert "error" in result
+
+
+class TestPdfCorpusSearchSourceLabel:
+    """Corpus hits report real per-page text provenance ('ocr' vs
+    'extracted'), matching single-doc pdf_search's source contract."""
+
+    @pytest.fixture
+    def mixed_corpus(self, tmp_path):
+        """One image-only (scan-like) PDF plus one text PDF, both
+        matching the query 'budget'."""
+        d = tmp_path / "mixed_corpus"
+        d.mkdir()
+        png_data = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+            "AAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        )
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_image(pymupdf.Rect(50, 50, 400, 600), stream=png_data)
+        doc.save(str(d / "scanned.pdf"))
+        doc.close()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Report section 1. The quarterly budget grew.")
+        page.insert_text((50, 300), "Second block. Budget details and notes.")
+        doc.save(str(d / "textdoc.pdf"))
+        doc.close()
+        return d
+
+    @staticmethod
+    def _ocr_scanned(scanned_path, monkeypatch):
+        """OCR the scanned doc via the mocked worker (no Tesseract)."""
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "Scanned budget memo."),
+            ):
+                result = pdf_read_pages(scanned_path, "1", ocr=True)
+        assert "error" not in result
+
+    def _sources_by_path(self, result, mixed_corpus):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        textdoc = str((mixed_corpus / "textdoc.pdf").resolve())
+        assert "error" not in result
+        scanned_hits = [m for m in result["matches"] if m["path"] == scanned]
+        text_hits = [m for m in result["matches"] if m["path"] == textdoc]
+        assert scanned_hits and text_hits
+        return scanned_hits, text_hits
+
+    def test_keyword_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="keyword")
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+    def test_semantic_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="semantic")
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+    def test_hybrid_hit_from_ocr_page_reports_source_ocr(
+        self, mixed_corpus, isolated_server, monkeypatch
+    ):
+        scanned = str((mixed_corpus / "scanned.pdf").resolve())
+        self._ocr_scanned(scanned, monkeypatch)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(mixed_corpus), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        scanned_hits, text_hits = self._sources_by_path(result, mixed_corpus)
+        assert all(m["source"] == "ocr" for m in scanned_hits)
+        assert all(m["source"] == "extracted" for m in text_hits)
+
+
+class TestPdfCorpusSearchNoFts:
+    """Without FTS5, corpus keyword search falls back to Python token
+    matching (parity with single-doc pdf_search) instead of silently
+    returning zero matches."""
+
+    def test_keyword_mode_returns_matches_without_fts(
+        self, corpus_dir, isolated_server
+    ):
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert "error" not in result
+        assert result["total_matches"] >= 1
+        paths = {m["path"] for m in result["matches"]}
+        assert len(paths) >= 2  # "budget" appears in every corpus doc
+        for m in result["matches"]:
+            assert m["excerpt"]
+        for path, count in result["doc_match_counts"].items():
+            assert count >= 1
+
+    def test_auto_degraded_returns_matches_without_fts(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def boom(model):
+            raise ImportError("fastembed not installed")
+
+        monkeypatch.setattr(emb, "check_available", boom)
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "keyword"
+        assert result["semantic_unavailable"] is True
+        assert result["total_matches"] >= 1
+
+    def test_fallback_ranks_by_occurrence_within_doc(self, tmp_path, isolated_server):
+        """The fallback re-ranks a doc's hits best-first by token
+        occurrences so RRF fusion sees a relevance-ordered rank list."""
+        d = tmp_path / "one_doc_corpus"
+        d.mkdir()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Intro block mentioning budget once.")
+        page.insert_text((50, 300), "Unrelated filler text block.")
+        page = doc.new_page()
+        page.insert_text((50, 50), "Budget summary: the budget grew.")
+        page.insert_text((50, 300), "Detailed budget appendix table.")
+        doc.save(str(d / "single.pdf"))
+        doc.close()
+
+        cache_instance, _ = isolated_server
+        cache_instance.fts_available = False
+        result = pdf_corpus_search(str(d), "budget", mode="keyword")
+        assert "error" not in result
+        assert [m["page"] for m in result["matches"]] == [2, 1]

@@ -2374,6 +2374,29 @@ def pdf_corpus_overview(
 # ============================================================================
 
 
+def _corpus_python_keyword_hits(
+    path: str,
+    query: str,
+    per_doc_k: int,
+    context_chars: int,
+) -> list[dict[str, Any]]:
+    """Per-doc `_python_search` fallback for corpus keyword search when
+    SQLite lacks FTS5, mirroring single-doc pdf_search's fallback.
+
+    Docs reaching this point are warm, so page text comes straight from
+    cache. `_python_search` emits matches in page order with score 0.0;
+    re-rank best-first by per-page token occurrences so the rank list
+    feeds RRF fusion the same way BM25-ordered FTS hits do.
+    """
+    meta = cache.get_metadata(path)
+    if meta is None:
+        return []
+    page_texts = cache.get_pages_text(path, list(range(meta["page_count"])))
+    matches, page_counts = _python_search(page_texts, query, per_doc_k, context_chars)
+    matches.sort(key=lambda m: (-page_counts.get(m["page"] - 1, 0), m["page"]))
+    return matches
+
+
 def _corpus_keyword_rankings(
     files: list[str],
     query: str,
@@ -2384,19 +2407,23 @@ def _corpus_keyword_rankings(
     dict[str, int],
     dict[tuple[str, int], dict[str, Any]],
 ]:
-    """Run per-doc FTS5 keyword search across a warmed corpus.
+    """Run per-doc keyword search across a warmed corpus (FTS5, or the
+    Python fallback when SQLite lacks FTS5).
 
     Returns (rank_lists, doc_match_counts, payload) where `rank_lists`
     is one best-first (doc_path, page) list per doc (input to
     `corpus.rrf_fuse_doc_rankings`), `doc_match_counts` counts hits per
-    doc (only docs with >=1 hit), and `payload` maps (path, page) to
-    the raw match dict (excerpt, score) from `cache.search_fts`.
+    doc (only docs with >=1 hit; capped at `per_doc_k` per doc), and
+    `payload` maps (path, page) to the raw match dict (excerpt, score).
     """
     rank_lists: list[list[tuple[str, int]]] = []
     doc_match_counts: dict[str, int] = {}
     payload: dict[tuple[str, int], dict[str, Any]] = {}
     for path in files:
-        hits = cache.search_fts(path, query, per_doc_k, context_chars)
+        if cache.fts_available:
+            hits = cache.search_fts(path, query, per_doc_k, context_chars)
+        else:
+            hits = _corpus_python_keyword_hits(path, query, per_doc_k, context_chars)
         if not hits:
             continue
         rank_list = [(path, m["page"]) for m in hits]
@@ -2462,8 +2489,10 @@ def _finalize_corpus_matches(
     keyword_excerpts_by_doc: dict[str, dict[int, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Shared per-doc finalize step for every `pdf_corpus_search` mode:
-    attach hidden-text flags, optionally upgrade excerpts to paragraphs,
-    then restore fused (cross-document) order.
+    attach hidden-text flags and per-page text provenance (`source`,
+    'extracted' or 'ocr', resolved from cache like single-doc
+    pdf_search), optionally upgrade excerpts to paragraphs, then
+    restore fused (cross-document) order.
 
     `build_hit(path, page[1-idx], fused_index)` returns one match dict
     already carrying its mode-specific fields (score/semantic_score/
@@ -2481,8 +2510,10 @@ def _finalize_corpus_matches(
         try:
             page_nums_0idx = [h["page"] - 1 for h in doc_hits]
             hidden = _resolve_hidden_flags(path, doc, page_nums_0idx)
+            sources = cache.get_pages_source(path, page_nums_0idx)
             for h in doc_hits:
                 h["hidden_text"] = hidden.get(h["page"] - 1, False)
+                h["source"] = sources.get(h["page"] - 1, "extracted")
             if excerpt_style == "paragraph":
                 kw_excerpts = None
                 if keyword_excerpts_by_doc is not None:
@@ -2567,10 +2598,11 @@ def pdf_corpus_search(
           except in pure semantic mode, which ranks by cosine directly.
         - total_matches: len(matches)
         - doc_match_counts: per-doc hit count, keyed by path. In
-          keyword and hybrid modes this counts the keyword arm's raw
-          per-doc FTS hits (independent of the fused top_k). In pure
-          semantic mode it instead counts how many of that doc's pages
-          landed in the global top_k (a post-selection count).
+          keyword and hybrid modes this counts the keyword arm's
+          per-doc FTS hits, capped at top_k per document (independent
+          of which pages the fused ranking selects). In pure semantic
+          mode it instead counts how many of that doc's pages landed
+          in the global top_k (a post-selection count).
         - search_mode: 'keyword', 'semantic', or 'hybrid' (echoes the
           mode actually run; 'auto' resolves to 'hybrid' when
           embeddings are available, else 'keyword')
@@ -2713,7 +2745,6 @@ def pdf_corpus_search(
                 "score": score,
                 "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "position": 0,
-                "source": "extracted",
                 "_fused_pos": idx,
             }
 
@@ -2761,7 +2792,6 @@ def pdf_corpus_search(
                 "excerpt": m["excerpt"],
                 "score": m["score"],
                 "position": 0,
-                "source": "extracted",
                 "_fused_pos": idx,
             }
 
@@ -2832,7 +2862,6 @@ def pdf_corpus_search(
             "semantic_score": round(sem_score, 4),
             "low_confidence": low_confidence,
             "position": 0,
-            "source": "extracted",
             "_fused_pos": idx,
         }
 

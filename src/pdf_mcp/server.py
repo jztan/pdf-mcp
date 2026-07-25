@@ -2430,6 +2430,7 @@ def _corpus_keyword_rankings(
     query: str,
     per_doc_k: int,
     context_chars: int,
+    allow_or_fallback: bool = True,
 ) -> tuple[
     list[list[tuple[str, int]]],
     dict[str, int],
@@ -2444,21 +2445,55 @@ def _corpus_keyword_rankings(
     doc (only docs with >=1 hit; capped at `per_doc_k` per doc), and
     `payload` maps (path, page) to the raw match dict (excerpt, score).
     """
-    rank_lists: list[list[tuple[str, int]]] = []
-    doc_match_counts: dict[str, int] = {}
-    payload: dict[tuple[str, int], dict[str, Any]] = {}
-    for path in files:
-        if cache.fts_available:
-            hits = cache.search_fts(path, query, per_doc_k, context_chars)
-        else:
-            hits = _corpus_python_keyword_hits(path, query, per_doc_k, context_chars)
-        if not hits:
-            continue
-        rank_list = [(path, m["page"]) for m in hits]
-        rank_lists.append(rank_list)
-        doc_match_counts[path] = len(hits)
-        for m in hits:
-            payload[(path, m["page"])] = m
+
+    def _collect(
+        allow_or_fallback: bool,
+    ) -> tuple[
+        list[list[tuple[str, int]]],
+        dict[str, int],
+        dict[tuple[str, int], dict[str, Any]],
+    ]:
+        rank_lists: list[list[tuple[str, int]]] = []
+        doc_match_counts: dict[str, int] = {}
+        payload: dict[tuple[str, int], dict[str, Any]] = {}
+        for path in files:
+            if cache.fts_available:
+                hits = cache.search_fts(
+                    path,
+                    query,
+                    per_doc_k,
+                    context_chars,
+                    allow_or_fallback=allow_or_fallback,
+                )
+            else:
+                hits = _corpus_python_keyword_hits(
+                    path, query, per_doc_k, context_chars
+                )
+            if not hits:
+                continue
+            rank_lists.append([(path, m["page"]) for m in hits])
+            doc_match_counts[path] = len(hits)
+            for m in hits:
+                payload[(path, m["page"])] = m
+        return rank_lists, doc_match_counts, payload
+
+    # Strict AND per document first. Relaxing each document independently
+    # would flood the cross-document comparison with loose single-term hits
+    # and swamp the one document that actually matched; the whole point of
+    # a corpus search is that a document contributing nothing is a signal.
+    # Only when NO document matched anywhere is the query retried relaxed,
+    # which turns an empty answer into a useful one without costing
+    # discrimination.
+    #
+    # The rescue itself is keyword-only. In hybrid mode the semantic arm
+    # already answers a query the keyword arm cannot, so feeding RRF a
+    # corpus-wide spray of single-term hits dilutes a ranking that was
+    # working: measured on both benchmark corpora, hybrid doc-NDCG fell
+    # (0.776 -> 0.749 financial, 0.913 -> 0.890 corpus_search) when the
+    # fallback fired there, while keyword-only mode improved.
+    rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=False)
+    if not rank_lists and allow_or_fallback:
+        rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=True)
     return rank_lists, doc_match_counts, payload
 
 
@@ -2804,7 +2839,11 @@ def pdf_corpus_search(
 
     # ── mode="keyword" or mode="auto" (both need the keyword arm) ─────
     rank_lists, kw_doc_match_counts, kw_payload = _corpus_keyword_rankings(
-        ready_paths, query, top_k, context_chars
+        ready_paths,
+        query,
+        top_k,
+        context_chars,
+        allow_or_fallback=(mode == "keyword"),
     )
     kw_fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k)
     kw_excerpts_by_doc = _group_excerpts_by_doc(kw_payload)

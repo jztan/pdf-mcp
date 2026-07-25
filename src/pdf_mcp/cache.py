@@ -137,6 +137,36 @@ def _escape_fts5_query(query: str) -> str:
     return " ".join(tokens)
 
 
+def _fts5_or_fallback(query: str) -> str | None:
+    """
+    OR-joined variant of `_escape_fts5_query`, or None when the query does
+    not qualify for a retry.
+
+    Callers run this only after the AND form matched no rows. A question-
+    shaped query ("Greater China net sales decline in 2024") otherwise
+    returns nothing whenever a single word is absent from the page --
+    "decline" where the filing says "decreased" -- even though the rest of
+    the query identifies the page precisely. BM25 still ranks pages
+    carrying more (and rarer) query terms first, so recovered results stay
+    ordered sensibly.
+
+    Queries of one or two tokens do NOT qualify. Two terms is a deliberate
+    conjunction ("pgvector unicorn"), where AND's guarantee that every term
+    is present is the point; relaxing it there would trade precision for
+    recall in exactly the case the caller was being specific. The fallback
+    targets longer queries, where some words are incidental connective
+    tissue rather than search terms.
+    """
+    tokens: list[str] = []
+    for raw in query.split():
+        cleaned = _FTS_TOKEN_STRIP.sub("", raw)
+        if cleaned:
+            tokens.append(f'"{cleaned}"')
+    if len(tokens) < 3:
+        return None
+    return " OR ".join(tokens)
+
+
 def _escape_fts5_query_cjk(query: str) -> str:
     """Escape a query for the char-split CJK FTS index.
 
@@ -1688,6 +1718,7 @@ class PDFCache:
         query: str,
         max_results: int,
         context_chars: int,
+        allow_or_fallback: bool = True,
     ) -> list[dict[str, Any]]:
         """
         Search the FTS5 index for pages matching query.
@@ -1699,6 +1730,12 @@ class PDFCache:
         Args:
             path: Path to PDF file (must match the value stored at index time)
             query: Search query (Porter stemming applied; FTS5 operators escaped)
+            allow_or_fallback: retry an unmatched multi-word query with the
+                tokens OR-joined (see `_fts5_or_fallback`). Callers that
+                search MANY documents and compare them must pass False:
+                relaxing every document independently floods the comparison
+                with loose single-term hits and destroys the discrimination
+                that "this document matched and that one did not" provides.
             max_results: Maximum number of results to return
             context_chars: Approximate characters of context in excerpts
         """
@@ -1740,16 +1777,24 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             try:
                 self._build_temp_page_fts(conn, path, cjk=False)
-                rows = conn.execute(
+                sql = (
                     "SELECT page_num,"
                     " snippet(doc_fts, 1, '', '', '...', ?),"
                     " -bm25(doc_fts)"
                     " FROM doc_fts"
                     " WHERE doc_fts MATCH ?"
                     " ORDER BY bm25(doc_fts)"
-                    " LIMIT ?",
-                    (num_tokens, escaped, max_results),
-                ).fetchall()
+                    " LIMIT ?"
+                )
+                rows = conn.execute(sql, (num_tokens, escaped, max_results)).fetchall()
+                if not rows and allow_or_fallback:
+                    # Every AND token must share a page; one absent word
+                    # zeroes an otherwise precise question-shaped query.
+                    alt = _fts5_or_fallback(query)
+                    if alt is not None:
+                        rows = conn.execute(
+                            sql, (num_tokens, alt, max_results)
+                        ).fetchall()
             except sqlite3.OperationalError:
                 return []
 
@@ -1809,12 +1854,18 @@ class PDFCache:
 
         with sqlite3.connect(self.db_path) as conn:
             try:
-                rows = conn.execute(
+                sql = (
                     "SELECT page_num, text"
                     " FROM pdf_search_fts"
-                    " WHERE pdf_search_fts MATCH ? AND file_path = ?",
-                    (escaped, path),
-                ).fetchall()
+                    " WHERE pdf_search_fts MATCH ? AND file_path = ?"
+                )
+                rows = conn.execute(sql, (escaped, path)).fetchall()
+                if not rows:
+                    # Mirror search_fts's fallback so the documented
+                    # invariant holds: every page in `matches` appears here.
+                    alt = _fts5_or_fallback(query)
+                    if alt is not None:
+                        rows = conn.execute(sql, (alt, path)).fetchall()
             except sqlite3.OperationalError:
                 return {}
 
@@ -1993,15 +2044,19 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             try:
                 self._build_temp_section_fts(conn, path, cjk=False)
-                rows = conn.execute(
+                sql = (
                     "SELECT section_id, title, start_page, end_page,"
                     " title_source, -bm25(doc_sec_fts)"
                     " FROM doc_sec_fts"
                     " WHERE doc_sec_fts MATCH ?"
                     " ORDER BY bm25(doc_sec_fts)"
-                    " LIMIT ?",
-                    (escaped, max_results),
-                ).fetchall()
+                    " LIMIT ?"
+                )
+                rows = conn.execute(sql, (escaped, max_results)).fetchall()
+                if not rows:
+                    alt = _fts5_or_fallback(query)
+                    if alt is not None:
+                        rows = conn.execute(sql, (alt, max_results)).fetchall()
             except sqlite3.OperationalError:
                 return []
         return [

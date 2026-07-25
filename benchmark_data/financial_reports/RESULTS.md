@@ -61,24 +61,32 @@ segment sections.
 
 | mode | doc-NDCG@10 | doc-hit@3 | page-NDCG@10 | single-doc NDCG@10 | s/query |
 |---|---|---|---|---|---|
-| keyword | 0.595 | 0.712 | 0.195 | 0.291 | 0.21 |
+| keyword | 0.633 | 0.758 | 0.209 | 0.419 | 0.21 |
 | semantic | 0.759 | 0.818 | 0.172 | 0.367 | 0.13 |
-| **hybrid** | **0.776** | **0.818** | **0.298** | **0.478** | 0.23 |
+| **hybrid** | **0.776** | **0.818** | **0.298** | **0.488** | 0.23 |
+
+These are post-fix numbers. This corpus surfaced a real defect in
+keyword search (see "The AND cliff" below); the keyword and single-doc
+columns are the repaired values, and hybrid is unchanged by the fix.
 
 Warm (text + embeddings, 24 docs / 3,545 pages): 173s. Queries run against
 an isolated cache warmed once per run.
 
 Hybrid wins overall, reproducing the fusion result the shipped RRF work
 established on a genuinely different document distribution. It is the only
-arm that is strong on both axes: keyword collapses on paraphrase queries
-(concept doc-NDCG 0.000 -- with no shared terms there is nothing to match),
-while semantic alone gives up ground on needles and traps.
+arm that is strong on both axes: keyword is weakest on paraphrase
+queries (concept doc-NDCG 0.186, against semantic's 0.488), because
+those queries are written to share no distinctive vocabulary with the
+target text, while semantic alone gives up ground on needles and traps.
+Before the AND-cliff fix below, keyword scored exactly 0.000 on the
+concept class -- those queries returned nothing at all rather than
+returning something poor.
 
 ### Per class (doc-level NDCG@10)
 
 | mode | needle | route | trap | concept |
 |---|---|---|---|---|
-| keyword | 0.602 | 0.864 | 0.610 | 0.000 |
+| keyword | 0.627 | 0.864 | 0.610 | 0.186 |
 | semantic | 0.767 | 0.937 | 0.639 | 0.488 |
 | hybrid | 0.807 | 0.927 | 0.689 | 0.468 |
 
@@ -87,6 +95,32 @@ the benchmark: doc-hit@3 of 1.000 on all eleven stage-A routing queries and
 doc-NDCG 0.927-0.937 in the semantic and hybrid arms. Asking for "the
 FY2024 Apple 10-K" against three near-identical Apple filings reliably
 returns the right year.
+
+## The AND cliff: a real defect this corpus surfaced
+
+The first run of this benchmark scored keyword far lower still
+(doc-NDCG 0.595, single-doc 0.291). Diagnosis showed why: FTS5 queries
+are AND-joined, so **every** word of a query had to appear on the same
+page. A question-shaped query like "Apple Greater China net sales
+decline in 2024" returned *nothing* because the filing says "decreased",
+not "decline" — 17 of 45 page-labeled queries (38%) returned zero
+results. Rephrasing to "Greater China net sales" returned the gold page
+at rank 1 immediately.
+
+This was a recall cliff, not a ranking weakness, and not specific to
+financial documents. It went unmeasured until now because the arXiv
+corpus's queries are 3-token technical noun-phrases lifted from the
+papers themselves, so every token is present by construction and the
+AND-join cannot fail. Financial filings force the other style: a fact in
+a 10-K has no distinctive name, so it must be described, and
+near-duplicate fiscal years force qualifiers. Median query length is 6
+tokens here versus 3 there.
+
+The fix (an OR retry when a 3+ word query matches nothing, scoped to
+keyword-only search) is in the changelog. Scoping matters: an earlier
+version applied it in hybrid mode too and *lowered* hybrid doc-NDCG to
+0.749, because the semantic arm already covers what keyword misses and
+the loose matches only diluted fusion.
 
 **Fusion slightly dilutes pure semantic on the concept class** (0.468 vs
 0.488). The keyword arm contributes only noise where the query shares no

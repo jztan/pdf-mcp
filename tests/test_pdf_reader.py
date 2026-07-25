@@ -3069,3 +3069,125 @@ def test_multicolumn_letterspaced_heading_not_fragmented():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestFTS5OrFallback:
+    """An AND-joined query needs every token on the same page, so a
+    natural-language question returns nothing when one word is absent.
+    Falling back to OR keeps question-shaped queries usable."""
+
+    def test_or_fallback_expression_joins_tokens_with_or(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("revenue decline 2024") == (
+            '"revenue" OR "decline" OR "2024"'
+        )
+
+    def test_or_fallback_is_none_for_a_single_token(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        # One token: the AND form already is the OR form, so there is
+        # nothing to retry and the caller must not run a second query.
+        assert _fts5_or_fallback("revenue") is None
+
+    def test_or_fallback_is_none_for_a_two_token_query(self):
+        """Two terms is a deliberate conjunction ("pgvector unicorn"), and
+        AND's precision guarantee is the point of it. Only longer,
+        question-shaped queries -- where some words are incidental
+        connective tissue -- earn the fallback."""
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("pgvector unicorn") is None
+
+    def test_or_fallback_is_none_when_no_tokens_survive(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("   ***   ") is None
+
+    def test_question_shaped_query_finds_the_page(self, cache, sample_pdf):
+        """The real bug: every AND token must appear, so one absent word
+        ('decline' vs the page's 'decreased') zeroed the whole query."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+        cache.save_page_text(sample_pdf, 30, "Unrelated liquidity discussion")
+
+        results = cache.search_fts(
+            sample_pdf,
+            "Greater China net sales decline in 2024",
+            max_results=10,
+            context_chars=100,
+        )
+
+        assert results, "question-shaped query returned nothing"
+        assert results[0]["page"] == 25
+
+    def test_and_match_still_wins_when_all_tokens_present(self, cache, sample_pdf):
+        """The fallback must not change ranking for queries that already
+        match: a page carrying every token outranks a page carrying one."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(sample_pdf, 0, "alpha beta gamma together on one page")
+        cache.save_page_text(sample_pdf, 1, "alpha only here")
+
+        results = cache.search_fts(
+            sample_pdf, "alpha beta gamma", max_results=10, context_chars=100
+        )
+
+        assert len(results) == 1, "AND matched, so the fallback must not fire"
+        assert results[0]["page"] == 1
+
+    def test_page_match_counts_agree_with_returned_matches(self, cache, sample_pdf):
+        """Invariant: pages in `matches` must also appear in the per-page
+        counts, so the fallback has to apply to both paths."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+
+        query = "Greater China net sales decline in 2024"
+        results = cache.search_fts(sample_pdf, query, max_results=10, context_chars=100)
+        counts = cache.get_fts_page_counts(sample_pdf, query)
+
+        assert results, "precondition: search returned matches"
+        for match in results:
+            assert (match["page"] - 1) in counts, (
+                f"page {match['page']} returned by search_fts but missing"
+                " from get_fts_page_counts"
+            )
+
+
+class TestFTS5OrFallbackIsOptional:
+    """Corpus search must not relax each document independently: a document
+    that lacks the terms contributing nothing is what lets the one document
+    holding a real match win. The fallback is therefore opt-out."""
+
+    def test_fallback_can_be_disabled(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+        query = "Greater China net sales decline in 2024"
+
+        assert cache.search_fts(
+            sample_pdf, query, max_results=10, context_chars=100
+        ), "precondition: the fallback finds this page by default"
+
+        assert (
+            cache.search_fts(
+                sample_pdf,
+                query,
+                max_results=10,
+                context_chars=100,
+                allow_or_fallback=False,
+            )
+            == []
+        ), "with the fallback disabled, strict AND semantics apply"

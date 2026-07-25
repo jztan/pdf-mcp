@@ -4297,3 +4297,42 @@ class TestParagraphBlockTokenGuard:
         result = pdf_search(path, "budget", mode="keyword", excerpt_style="paragraph")
         assert result["matches"], result
         assert result["matches"][0]["excerpt"].startswith("The quarterly")
+
+
+class TestCorpusKeywordOrFallbackScope:
+    """The OR fallback rescues a keyword-only search that found nothing.
+    In hybrid mode the semantic arm already covers that gap, so injecting
+    loose single-term matches into RRF only dilutes a good ranking --
+    measured on two corpora, hybrid regressed when it fired there."""
+
+    def test_keyword_mode_rescues_a_question_shaped_query(
+        self, corpus_dir, isolated_server
+    ):
+        result = pdf_corpus_search(
+            str(corpus_dir),
+            "what does the budget say about unicorn provisioning",
+            mode="keyword",
+        )
+        assert "error" not in result
+        assert result["total_matches"] >= 1, (
+            "keyword-only mode should fall back to OR when the strict"
+            " AND query matches nothing anywhere"
+        )
+
+    def test_auto_mode_does_not_use_the_keyword_or_fallback(
+        self, corpus_dir, isolated_server
+    ):
+        from pdf_mcp.server import _corpus_keyword_rankings
+
+        files = sorted(str(p) for p in corpus_dir.glob("*.pdf"))
+        pdf_corpus_warm(files)
+        query = "what does the budget say about unicorn provisioning"
+
+        rescued, _, _ = _corpus_keyword_rankings(
+            files, query, 10, 200, allow_or_fallback=True
+        )
+        strict, _, _ = _corpus_keyword_rankings(
+            files, query, 10, 200, allow_or_fallback=False
+        )
+        assert rescued, "precondition: the fallback finds something"
+        assert not strict, "strict mode must stay empty for the hybrid arm"

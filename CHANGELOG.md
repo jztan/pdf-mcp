@@ -40,6 +40,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
+- Keyword search no longer returns nothing when a question-shaped query
+  contains one word the page does not use. FTS5 queries are AND-joined,
+  so `pdf_search(mode="keyword")` with "Apple Greater China net sales
+  decline in 2024" matched no page at all when the filing said
+  "decreased" rather than "decline" — even though the rest of the query
+  identified the page exactly. A query of three or more words that
+  matches nothing is now retried with its terms OR-joined, and BM25
+  ranks pages carrying more (and rarer) terms first. Measured on a
+  24-document corpus of public-company financial filings: keyword
+  queries returning zero results fell from 17 of 45 to 0, the gold page
+  reached the top 3 for 51% of queries (was 38%), and single-document
+  keyword NDCG@10 rose to 0.419 (was 0.291). Two-word queries keep
+  strict AND semantics — there, requiring both terms is the point.
+  The retry is deliberately scoped to keyword-only search: in hybrid
+  mode the semantic arm already covers a query keyword cannot answer,
+  and benchmarking showed feeding fused ranking a corpus-wide spray of
+  single-term hits *lowered* hybrid quality. Hybrid results are
+  unchanged on both benchmark corpora (NDCG@10 0.674 and doc-hit@3
+  1.000 on the 100-document corpus).
 - Single-doc tools now expand `~` in local paths (`pdf_get_toc("~/Downloads/x.pdf")`
   previously failed with "PDF file not found"), matching the corpus
   tools' path handling.

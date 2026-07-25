@@ -1133,36 +1133,46 @@ class PDFCache:
             )
 
     def embeddings_complete(self, path: str, model_name: str) -> bool:
-        """True when cached page text exists for `path` and every cached
-        non-empty page has an embedding for `model_name` (all rows
-        mtime-valid).
+        """True when cached page text exists for `path` and every
+        embedding-eligible cached page has an embedding for
+        `model_name` (all rows mtime-valid).
 
-        Cheap COUNT-based check backing the corpus warm envelope's
-        per-doc `embeddings_cached` field, so a text-only warm can
-        report embeddings cache state without re-reading page text.
-        Scoped to the pages currently cached; corpus warm callers only
-        see it on docs that are fully text-warm.
+        Eligibility MUST match the embedder's page predicate,
+        ``text.strip()`` — the same one corpus warm's skip logic uses —
+        or the two disagree forever on docs with whitespace-only pages
+        (text_length > 0 but never embedded; real 368-page field
+        sample). SQL narrows to unembedded text-bearing pages (zero
+        rows on a healthy doc, so page text is normally never read),
+        then Python ``strip()`` gives exact parity on the residue.
+
+        Backs the corpus warm envelope's per-doc `embeddings_cached`
+        field. Scoped to the pages currently cached; corpus warm
+        callers only see it on docs that are fully text-warm.
         """
         try:
             mtime, _ = self._get_file_info(path)
         except OSError:
             return False
         with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*),"
-                " SUM(CASE WHEN text_length > 0 THEN 1 ELSE 0 END)"
-                " FROM page_text WHERE file_path = ? AND file_mtime = ?",
+            (n_rows,) = conn.execute(
+                "SELECT COUNT(*) FROM page_text"
+                " WHERE file_path = ? AND file_mtime = ?",
                 (path, mtime),
             ).fetchone()
-            n_rows, n_nonempty = int(row[0]), int(row[1] or 0)
-            if n_rows == 0:
+            if int(n_rows) == 0:
                 return False
-            (n_emb,) = conn.execute(
-                "SELECT COUNT(*) FROM page_embeddings"
-                " WHERE file_path = ? AND file_mtime = ? AND model = ?",
-                (path, mtime, model_name),
-            ).fetchone()
-        return int(n_emb) >= n_nonempty
+            rows = conn.execute(
+                "SELECT pt.text FROM page_text pt"
+                " LEFT JOIN page_embeddings pe"
+                "   ON pe.file_path = pt.file_path"
+                "   AND pe.page_num = pt.page_num"
+                "   AND pe.file_mtime = pt.file_mtime"
+                "   AND pe.model = ?"
+                " WHERE pt.file_path = ? AND pt.file_mtime = ?"
+                "   AND pt.text_length > 0 AND pe.page_num IS NULL",
+                (model_name, path, mtime),
+            ).fetchall()
+        return all(not (text or "").strip() for (text,) in rows)
 
     def get_section_embeddings(
         self, path: str, section_ids: list[int]

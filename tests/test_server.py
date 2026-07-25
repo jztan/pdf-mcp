@@ -1259,6 +1259,18 @@ class TestResolvePath:
         assert local_path is not None
         assert os.path.isabs(local_path)
 
+    def test_tilde_path_expands(self, tmp_path, monkeypatch, isolated_server):
+        """~/... paths expand to the home directory, matching the corpus
+        tools (field feedback: pdf_get_toc rejected ~/Downloads/x.pdf)."""
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(tmp_path / "home_doc.pdf"))
+        doc.close()
+        monkeypatch.setenv("HOME", str(tmp_path))
+        local_path, err = _resolve_path("~/home_doc.pdf")
+        assert err is None
+        assert local_path == str((tmp_path / "home_doc.pdf").resolve())
+
     def test_url_http_status_error_inline(self, isolated_server):
         """HTTPStatusError from URL fetch returns inline error dict."""
         mock_response = Mock()

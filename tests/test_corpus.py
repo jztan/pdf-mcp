@@ -245,6 +245,48 @@ class TestWarmDocs:
         )
         assert all(d["embeddings_cached"] is False for d in out3["docs"])
 
+    def test_embeddings_cached_agrees_with_warm_skip_logic(self, cache, tmp_path):
+        """Field-reported stuck state: a doc with a whitespace-only page
+        read status=cached (skip logic uses t.strip()) but
+        embeddings_cached=False forever, and no call could converge the
+        two. Both sides must share the embedder's page-eligibility
+        predicate."""
+        p = tmp_path / "ws.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.new_page()
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+
+        cache.save_metadata(
+            path,
+            2,
+            {},
+            [],
+            text_coverage=[
+                {"page": 1, "text_chars": 30, "raster_images": 0},
+                {"page": 2, "text_chars": 0, "raster_images": 1},
+            ],
+        )
+        cache.save_pages_text(path, {0: "Real content on the first page.", 1: "\n  \n"})
+        cache.save_page_embeddings(path, {0: b"\x00\x01"}, "fake-model")
+
+        def _boom(texts):
+            raise AssertionError("embed called on an embeddings-warm doc")
+
+        out = corpus.warm_docs(
+            [path],
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=_boom,
+            clock=SteppingClock(0),
+        )
+        assert out["docs"][0]["status"] == "cached"
+        assert out["docs"][0]["embeddings_cached"] is True
+
     def test_warm_preserves_cached_ocr_text(self, cache, tmp_path):
         # A "scanned" doc: one blank page, no extractable native text.
         p = tmp_path / "scan.pdf"

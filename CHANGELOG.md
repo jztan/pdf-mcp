@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
+- Single-doc tools now expand `~` in local paths (`pdf_get_toc("~/Downloads/x.pdf")`
+  previously failed with "PDF file not found"), matching the corpus
+  tools' path handling.
 - `pdf_search` and `pdf_corpus_search` with `excerpt_style="paragraph"`
   could replace a correct table-cell hit with a nearby prose block that
   shared only one query term, returning an excerpt and `bbox`/`clip`

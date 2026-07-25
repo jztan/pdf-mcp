@@ -271,8 +271,9 @@ def _resolve_path(
                 )
             return None, {"error": msg, "hint": hint}
 
-    # Local path - resolve to absolute
-    path = Path(source)
+    # Local path - expand ~ and resolve to absolute (tilde expansion
+    # matches the corpus tools' path handling)
+    path = Path(source).expanduser()
     if not path.is_absolute():
         path = Path.cwd() / path
 

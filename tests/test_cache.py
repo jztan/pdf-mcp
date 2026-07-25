@@ -41,6 +41,18 @@ class TestEmbeddingsComplete:
     def test_missing_file_is_false(self, cache):
         assert cache.embeddings_complete("/nonexistent/x.pdf", "m") is False
 
+    def test_whitespace_only_page_needs_no_embedding(self, cache, sample_pdf):
+        """Parity with the embedder's page-eligibility predicate
+        (t.strip()): a whitespace-only page has text_length > 0 but is
+        legitimately never embedded, and must not read as incomplete
+        (field-reported false negative on a 368-page image-heavy PDF
+        that made warm's skip logic and embeddings_cached disagree
+        forever)."""
+        model = "test-model"
+        cache.save_pages_text(sample_pdf, {0: "alpha", 1: "\n  \n"})
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00\x01"}, model)
+        assert cache.embeddings_complete(sample_pdf, model) is True
+
 
 class TestCacheValidation:
     """Tests for cache validation edge cases."""

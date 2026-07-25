@@ -884,15 +884,23 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         </span>
         <h3>Whole-folder triage</h3>
-        <p>Point <code>pdf_corpus_overview</code> at a folder of PDFs for per-document cards (title, pages, top TOC entries, text coverage); <code>pdf_corpus_warm</code> pre-populates the cache for the search and read calls that follow, all within a time budget.</p>
+        <p>Warms a whole folder into the cache on a time budget and returns a triage card per document: title, pages, TOC, text coverage.</p>
       </div>
 
       <div class="feature-card">
         <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         </span>
         <h3>Cross-document search</h3>
-        <p><code>pdf_corpus_search</code> runs keyword, semantic, or hybrid search across a whole folder of PDFs and returns one relevance-ranked hit list spanning every document, with document and page provenance on each hit.</p>
+        <p>One query across a folder of PDFs, fused into a single ranked hit list with document and page provenance on every hit.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </span>
+        <h3>Fetch PDFs by URL</h3>
+        <p>Downloads remote PDFs over HTTPS with SSRF protection built in; private and local network ranges are blocked.</p>
       </div>
 
     </div>

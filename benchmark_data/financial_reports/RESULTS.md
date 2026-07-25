@@ -176,13 +176,18 @@ answer my question from what came back". Those diverge badly on 10-Ks.
 questions through `pdf_corpus_search` and grades the payload the caller
 actually receives, against hand-verified reference facts.
 
-| metric | result |
-|---|---|
-| answerable in full | **7 / 15 (47%)** |
-| partial | 1 / 15 (7%) |
-| not answerable | **7 / 15 (47%)** |
-| wrong attribution | **3 / 15 (20%)** |
-| mean doc coverage | 0.93 |
+| metric | before excerpt fix | after |
+|---|---|---|
+| answerable in full | 7 / 15 (47%) | **9 / 15 (60%)** |
+| partial | 1 / 15 (7%) | 3 / 15 (20%) |
+| not answerable | 7 / 15 (47%) | **3 / 15 (20%)** |
+| wrong attribution | 3 / 15 (20%) | 3 / 15 (20%) |
+| mean doc coverage | 0.93 | 0.93 |
+
+The "after" column reflects `pdf_corpus_search` defaulting to
+`excerpt_style="paragraph"` (see the changelog). Note what did **not**
+move: wrong attribution held at 20%, and its character changed for the
+worse -- see below.
 
 Set against hybrid's doc-NDCG of 0.776 and doc-hit@3 of 0.818, this is the
 headline finding of the whole corpus: **retrieval that scores 0.78 leaves
@@ -219,9 +224,28 @@ more mildly (the thinnest year gets 10-20% of the hits).
 A minority: the $479M Alphabet severance charge (p39) and AMC's
 $1,276.1M goodwill impairment (p58) were simply not in the top 10.
 
-The order of work these findings imply is: fix the excerpt picker first
-(it converts correct retrieval into wrong answers), then per-document
-balance, and only then ranking.
+### What the excerpt fix did and did not solve
+
+Fixing the excerpt default converted six questions from unanswerable to
+answerable, because the payload finally quoted the sentence carrying the
+answer rather than a window over a nearby table.
+
+It did **not** reduce wrong attribution, and it sharpened one case. Asked
+how much stock Apple repurchased in fiscal 2025, retrieval ranks
+`aapl-fy2024 p47` first -- the *prior* year's filing -- and the FY2025
+figure never appears. Under the old snippet default that page produced a
+vague window about the fair value of Notes; under paragraph mode it
+produces a crisp, quotable "During 2024, the Company repurchased 499
+million shares of its common stock for $95.0 billion". The ranking error
+is identical in both runs; better excerpts simply made the wrong answer
+more convincing.
+
+That is the real remaining defect and it is a **ranking** problem, not an
+excerpt one: on a corpus of near-duplicate fiscal years, the wrong year
+outranks the right one and nothing in the response signals it. The order
+of work these findings imply is therefore: excerpt quality (done),
+then per-document/per-year balance and year disambiguation, and only
+then general ranking.
 
 ## Known limitations of this dataset
 

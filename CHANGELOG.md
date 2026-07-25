@@ -40,6 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
+- `pdf_corpus_search` now defaults to `excerpt_style="paragraph"`, matching
+  single-doc `pdf_search`. The corpus tool was built after `pdf_search`
+  migrated its default from `"snippet"` to `"paragraph"` (a change justified
+  by 97% vs 80% answer containment) and had kept the legacy default, so the
+  same query against the same page returned the sentence that answered it
+  from one tool and a fixed-width window over a table header from the other.
+  Measured on 15 realistic 10-K questions
+  (`scripts/eval_financial_answerability.py`): questions answerable in full
+  from the returned payload rose from 7/15 to 9/15, and questions not
+  answerable at all fell from 7/15 to 3/15. `excerpt_style="snippet"`
+  remains available explicitly. Not a breaking change: the corpus tools are
+  unreleased.
 - Keyword search no longer returns nothing when a question-shaped query
   contains one word the page does not use. FTS5 queries are AND-joined,
   so `pdf_search(mode="keyword")` with "Apple Greater China net sales

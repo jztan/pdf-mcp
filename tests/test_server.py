@@ -4336,3 +4336,30 @@ class TestCorpusKeywordOrFallbackScope:
         )
         assert rescued, "precondition: the fallback finds something"
         assert not strict, "strict mode must stay empty for the hybrid arm"
+
+
+class TestCorpusSearchExcerptStyleDefault:
+    """pdf_search moved its default from "snippet" to "paragraph" after
+    benchmarking 97% vs 80% answer containment. pdf_corpus_search was built
+    later and kept the legacy default, so the same query against the same
+    page returned the answer sentence from one tool and a fixed-width window
+    over a table header from the other."""
+
+    def test_default_excerpt_style_is_paragraph(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget")
+        assert "error" not in result
+        assert result["excerpt_style"] == "paragraph"
+
+    def test_default_matches_carry_block_geometry(self, corpus_dir, isolated_server):
+        """Paragraph mode adds bbox/clip; snippet mode does not. Asserting on
+        the geometry proves the paragraph path actually ran, rather than the
+        echoed field alone."""
+        result = pdf_corpus_search(str(corpus_dir), "budget")
+        assert result["matches"], "precondition: query returned matches"
+        assert any(
+            "bbox" in m for m in result["matches"]
+        ), "paragraph mode should attach block geometry to at least one match"
+
+    def test_snippet_remains_available_explicitly(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", excerpt_style="snippet")
+        assert result["excerpt_style"] == "snippet"

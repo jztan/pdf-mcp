@@ -2609,7 +2609,7 @@ def pdf_corpus_search(
     query: str,
     mode: str = "auto",
     top_k: int = 10,
-    excerpt_style: str = "snippet",
+    excerpt_style: str = "paragraph",
     context_chars: int = 200,
     budget_seconds: int = 45,
     recursive: bool = False,
@@ -2631,9 +2631,10 @@ def pdf_corpus_search(
             are available, else degrades to keyword), 'keyword', or
             'semantic'.
         top_k: Maximum fused matches to return (clamped to 1-100).
-        excerpt_style: 'snippet' (default) fixed-width context window;
-            'paragraph' upgrades to the enclosing text block (adds
-            `bbox`/`page_rect`/`clip`) where one can be located.
+        excerpt_style: 'paragraph' (default) returns the enclosing text
+            block -- the sentence or bullet that matched -- and adds
+            `bbox`/`page_rect`/`clip`; 'snippet' is the legacy
+            fixed-width context window. Matches single-doc pdf_search.
         context_chars: Characters of context around each match
             (clamped to 50-2000).
         budget_seconds: Wall-clock budget for warming uncached docs

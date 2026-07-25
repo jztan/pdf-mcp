@@ -247,6 +247,44 @@ of work these findings imply is therefore: excerpt quality (done),
 then per-document/per-year balance and year disambiguation, and only
 then general ranking.
 
+## Single-PDF performance, and what mode to use
+
+The corpus numbers above answer "search 24 filings". The commoner case is
+that the caller already knows which filing and searches only that one, so
+document selection is off the table and what remains is within-document
+retrieval and excerpt quality. Measured on 25 single-document questions
+(`scripts/eval_single_doc_answerability.py`, judge = majority of 3):
+
+| mode | answerable in full | partial | not answerable | wrong attribution |
+|---|---|---|---|---|
+| **hybrid (auto, default)** | **20/25 (80%)** | 2 | 3 | 3 |
+| **semantic** | **20/25 (80%)** | 2 | 3 | 1 |
+| keyword | 15/25 (60%) | 1 | 9 | 1 |
+
+**80% of realistic questions are fully answerable from a single 10-K** in
+the default mode -- materially better than the 53% single-call figure on the
+24-document corpus, which is the same finding from the other direction:
+this tool is strongest when the caller narrows to a document first.
+
+**Keyword alone is the weakest arm here**, with 9 unanswerable against 3.
+That reverses an earlier reading: on a 9-question subset keyword led
+(7/9 vs hybrid 6/9), and acting on it would have been a mistake. At n=25
+it is last by five questions. A one- or two-question gap at these sample
+sizes is judge noise, and the expansion from 9 to 25 questions existed
+precisely to find that out.
+
+**Hybrid and semantic tie on answering but not on safety**: hybrid
+misattributes on 3 questions, semantic on 1. On financial documents a
+confidently wrong figure is the expensive failure, so semantic may be the
+safer single-document arm. Held loosely -- 3 versus 1 is itself a
+two-question gap, the same magnitude that just reversed, so it is a
+hypothesis to test rather than grounds to change a default.
+
+Caveat on comparability: these 25 questions skew toward figure lookups, so
+absolute scores sit higher than the earlier 9-question set. The three modes
+are comparable **with each other in this run**; they are not comparable
+with numbers from the smaller set.
+
 ## Known limitations of this dataset
 
 - **Concept labels are inherently ambiguous.** Eight filers all discuss

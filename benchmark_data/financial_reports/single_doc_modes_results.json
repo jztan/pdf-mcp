@@ -1,0 +1,867 @@
+{
+  "description": "Single-document answerability on 10-K filings: each question scoped to the one filing that answers it, so document selection is off the table. Judge = majority of 3. Reproduce with scripts/eval_single_doc_answerability.py <mode>.",
+  "modes": {
+    "auto": {
+      "judge_ballot_errors": 1,
+      "n": 25,
+      "per_question": [
+        {
+          "answerable": "full",
+          "doc": "googl-fy2024",
+          "id": "attrib-google-services",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2026",
+          "id": "concentration-nvda",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "cause-aapl-china",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2025",
+          "id": "figure-aapl-buyback",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2022",
+          "id": "figure-amc-goodwill",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2023",
+          "id": "action-amc-split",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2022",
+          "id": "workforce-meta",
+          "votes": [
+            "full",
+            "full",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "googl-fy2023",
+          "id": "workforce-alphabet",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2024",
+          "id": "definition-aws",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-revenue-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-nii-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-server-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-intelligent-cloud-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "partial",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-growth-2025",
+          "votes": [
+            "no",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-gaming-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-blackwell",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-services-2023",
+          "votes": [
+            "partial",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-liquidity-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-foa-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-cloud-rev-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-aws-2023",
+          "votes": [
+            "error",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2024",
+          "id": "sd-nvda-export-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-china-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-goodwill-balance",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2023",
+          "id": "sd-googl-severance-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": true
+        }
+      ],
+      "tally": {
+        "full": 20,
+        "no": 3,
+        "partial": 2,
+        "wrong_attribution": 3
+      }
+    },
+    "keyword": {
+      "judge_ballot_errors": 0,
+      "n": 25,
+      "per_question": [
+        {
+          "answerable": "no",
+          "doc": "googl-fy2024",
+          "id": "attrib-google-services",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2026",
+          "id": "concentration-nvda",
+          "votes": [
+            "full",
+            "full",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "cause-aapl-china",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2025",
+          "id": "figure-aapl-buyback",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2022",
+          "id": "figure-amc-goodwill",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2023",
+          "id": "action-amc-split",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "meta-fy2022",
+          "id": "workforce-meta",
+          "votes": [
+            "partial",
+            "partial",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2023",
+          "id": "workforce-alphabet",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "amzn-fy2024",
+          "id": "definition-aws",
+          "votes": [
+            "no",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-revenue-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-nii-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-server-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-intelligent-cloud-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-growth-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-gaming-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-blackwell",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-services-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-liquidity-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-foa-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-cloud-rev-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-aws-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2024",
+          "id": "sd-nvda-export-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-china-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-goodwill-balance",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2023",
+          "id": "sd-googl-severance-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        }
+      ],
+      "tally": {
+        "full": 15,
+        "no": 9,
+        "partial": 1,
+        "wrong_attribution": 1
+      }
+    },
+    "semantic": {
+      "judge_ballot_errors": 0,
+      "n": 25,
+      "per_question": [
+        {
+          "answerable": "full",
+          "doc": "googl-fy2024",
+          "id": "attrib-google-services",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "nvda-fy2026",
+          "id": "concentration-nvda",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2024",
+          "id": "cause-aapl-china",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "partial",
+          "doc": "aapl-fy2025",
+          "id": "figure-aapl-buyback",
+          "votes": [
+            "partial",
+            "no",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2022",
+          "id": "figure-amc-goodwill",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2023",
+          "id": "action-amc-split",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2022",
+          "id": "workforce-meta",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2023",
+          "id": "workforce-alphabet",
+          "votes": [
+            "full",
+            "full",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2024",
+          "id": "definition-aws",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2024",
+          "id": "sd-jpm-revenue-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "jpm-fy2023",
+          "id": "sd-jpm-nii-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-server-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "msft-fy2024",
+          "id": "sd-msft-intelligent-cloud-2024",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": true
+        },
+        {
+          "answerable": "partial",
+          "doc": "msft-fy2025",
+          "id": "sd-msft-growth-2025",
+          "votes": [
+            "partial",
+            "partial",
+            "partial"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-gaming-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2025",
+          "id": "sd-nvda-blackwell",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "no",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-services-2023",
+          "votes": [
+            "no",
+            "no",
+            "no"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-liquidity-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "meta-fy2024",
+          "id": "sd-meta-foa-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2025",
+          "id": "sd-googl-cloud-rev-2025",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amzn-fy2023",
+          "id": "sd-amzn-aws-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "nvda-fy2024",
+          "id": "sd-nvda-export-2024",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "aapl-fy2023",
+          "id": "sd-aapl-china-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "amc-fy2024",
+          "id": "sd-amc-goodwill-balance",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        },
+        {
+          "answerable": "full",
+          "doc": "googl-fy2023",
+          "id": "sd-googl-severance-2023",
+          "votes": [
+            "full",
+            "full",
+            "full"
+          ],
+          "wrong_attribution": false
+        }
+      ],
+      "tally": {
+        "full": 20,
+        "no": 3,
+        "partial": 2,
+        "wrong_attribution": 1
+      }
+    }
+  },
+  "questions": 25
+}

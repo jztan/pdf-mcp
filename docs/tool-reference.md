@@ -588,7 +588,7 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"page"` — returns matching pages. Best for pinpoint lookups. Honors `mode`.
   - `"section"` — returns matching sections (TOC-first with heuristic fallback). Sections come from the PDF's TOC when available (~95% of academic PDFs); the heuristic fallback uses 7 signals (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length). Validated on arxiv PDFs: detector F1 0.80–0.94.
 - `excerpt_style` (string, optional, default `"paragraph"`):
-  - `"paragraph"` — returns the PyMuPDF text block containing the hit instead of a fixed-width window. On structured documents (bullets, numbered lists, headings), the result is typically more focused than snippet — just the unit that matched, without adjacent content. On long-form prose, the result may be longer than snippet, capped at 2000 chars with snippet fallback. Short blocks under 80 chars (headings, figure captions) are skipped in favor of substantive body blocks when available. On prose pages with prominent figure captions, the caption may be preferred over the body paragraph when both contain the query terms. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`. Best results with `mode="keyword"` or `mode="auto"` where the FTS5 keyword excerpt anchors block selection; pure `mode="semantic"` uses token overlap only, which may pick a topically related but not optimal block.
+  - `"paragraph"` — returns the PyMuPDF text block containing the hit instead of a fixed-width window. On structured documents (bullets, numbered lists, headings), the result is typically more focused than snippet — just the unit that matched, without adjacent content. On long-form prose, the result may be longer than snippet, capped at 2000 chars with snippet fallback. Short blocks under 80 chars (headings, figure captions) are skipped in favor of substantive body blocks when one matches the query at least as well; when every longer block matches worse (e.g. the hit is a table cell), the short matching block is kept so the excerpt and its geometry stay on the true hit. On prose pages with prominent figure captions, the caption may be preferred over the body paragraph when both contain the query terms. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`. Best results with `mode="keyword"` or `mode="auto"` where the FTS5 keyword excerpt anchors block selection; pure `mode="semantic"` uses token overlap only, which may pick a topically related but not optimal block.
   - `"snippet"` — fixed-width context window around each hit (controlled by `context_chars`).
 
 **Returns (page mode, `granularity="page"`):**
@@ -911,6 +911,10 @@ Reports which optional features are installed and which configuration values are
   - `search.modes_available` (array) — always includes `"keyword"`; includes `"semantic"` and `"auto"` only when `fastembed` is installed and the configured embedding model is valid.
   - `search.default_mode` (string) — `"auto"`.
   - `search.embedding_model` (string, conditional) — present **only** when semantic search is available; omitted otherwise.
+  - `corpus.tools` (array) — the multi-document tools (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`).
+  - `corpus.max_files` (int) — corpus size cap (100).
+  - `corpus.budget_seconds_range` (array) — clamp range for `budget_seconds` on the corpus tools (`[1, 300]`).
+  - `corpus.modes_available` (array) — corpus search modes; mirrors `search.modes_available` (same embedding availability).
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 8)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.
@@ -935,6 +939,12 @@ server_info()
 #       "modes_available": ["keyword", "semantic", "auto"],
 #       "default_mode": "auto",
 #       "embedding_model": "BAAI/bge-small-en-v1.5"
+#     },
+#     "corpus": {
+#       "tools": ["pdf_corpus_warm", "pdf_corpus_overview", "pdf_corpus_search"],
+#       "max_files": 100,
+#       "budget_seconds_range": [1, 300],
+#       "modes_available": ["keyword", "semantic", "auto"]
 #     }
 #   },
 #   "config": {

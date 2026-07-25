@@ -427,6 +427,18 @@ def _detect_features() -> dict[str, Any]:
             },
         },
         "search": search,
+        # Corpus search mode availability mirrors single-doc search:
+        # both depend on the same embedding availability probe above.
+        "corpus": {
+            "tools": [
+                "pdf_corpus_warm",
+                "pdf_corpus_overview",
+                "pdf_corpus_search",
+            ],
+            "max_files": corpus.CORPUS_MAX_FILES,
+            "budget_seconds_range": [1, 300],
+            "modes_available": list(search["modes_available"]),
+        },
     }
 
 
@@ -1434,13 +1446,17 @@ def _upgrade_excerpts_to_paragraphs(
     Short blocks (headings, captions) are caught by a minimum-length
     floor: if the chosen block is under ``_PARAGRAPH_MIN_CHARS``, the
     picker retries with the floor applied so only substantive blocks
-    are candidates.
+    are candidates.  The retry result is kept only when it covers at
+    least as many query tokens as the short block; otherwise the short
+    matching block wins, so a table-cell hit is never traded for a
+    nearby prose block that merely shares one term (and its geometry
+    keeps pointing at the true hit region).
 
     Deduplicates matches sharing the same (page, block_index).  Falls
     back to the original snippet when the block exceeds the cap or
     can't be located.
     """
-    from .extractor import _PARAGRAPH_MIN_CHARS
+    from .extractor import _PARAGRAPH_MIN_CHARS, count_query_tokens
 
     seen: dict[tuple[int, int], int] = {}  # (page, block_idx) -> index in upgraded
     upgraded: list[dict[str, Any]] = []
@@ -1472,7 +1488,12 @@ def _upgrade_excerpts_to_paragraphs(
             alt_text, alt_idx = get_best_paragraph_for_query(
                 page, query, min_chars=_PARAGRAPH_MIN_CHARS
             )
-            if alt_text is not None and alt_idx is not None:
+            if (
+                alt_text is not None
+                and alt_idx is not None
+                and count_query_tokens(alt_text, query)
+                >= count_query_tokens(block_text, query)
+            ):
                 block_text, block_idx = alt_text, alt_idx
 
         if block_text is not None and block_idx is not None:
@@ -2971,7 +2992,10 @@ def server_info() -> dict[str, Any]:
             extraction: {column_aware, ocr} — each {available, description},
             search: {modes_available, default_mode, embedding_model?}
                 (embedding_model present only when semantic search is
-                 available).
+                 available),
+            corpus: {tools, max_files, budget_seconds_range,
+                modes_available} — multi-document tool limits; corpus
+                mode availability mirrors single-doc search.
           }
         - config: {max_workers, max_response_bytes, cache_ttl_hours,
                    cache_dir}. cache_dir is a local filesystem path

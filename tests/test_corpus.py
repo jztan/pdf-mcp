@@ -73,6 +73,15 @@ class TestResolveCorpus:
         res = corpus.resolve_corpus([p, p])
         assert len(res["files"]) == 1
 
+    def test_url_as_directory_gets_url_specific_error(self):
+        """A URL passed as the paths string gets a URL-specific error,
+        not the generic 'Not a directory' (field feedback)."""
+        res = corpus.resolve_corpus("https://arxiv.org/pdf/1803.03635")
+        assert "error" in res
+        assert "URL" in res["error"]
+        assert "Not a directory" not in res["error"]
+        assert "hint" in res
+
 
 class SteppingClock:
     """Fake monotonic clock: advances a fixed step on every call."""
@@ -107,9 +116,14 @@ class TestWarmDocs:
         assert {d["status"] for d in out["docs"]} == {"cached"}
 
     def test_smallest_page_count_warms_first(self, corpus_dir, cache):
-        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
-        order = [Path(d["path"]).name for d in out["docs"] if d["status"] == "warmed"]
-        assert order == ["charlie.pdf", "alpha.pdf", "bravo.pdf"]
+        # Budget admits two docs (checks read 6, 12, 18 > 15): smallest
+        # two (charlie 1p, alpha 2p) warm; bravo (4p) is left over. The
+        # docs list itself is path-sorted, so order is observed via
+        # which docs made the cut, not list position.
+        out = corpus.warm_docs(_files(corpus_dir), 15, cache, clock=SteppingClock(6))
+        warmed = {Path(d["path"]).name for d in out["docs"] if d["status"] == "warmed"}
+        assert warmed == {"charlie.pdf", "alpha.pdf"}
+        assert [Path(p).name for p in out["unprocessed"]] == ["bravo.pdf"]
 
     def test_budget_exhaustion_reports_unprocessed(self, corpus_dir, cache):
         # Clock steps 6s per call, budget 10s: start=0, first check
@@ -119,6 +133,19 @@ class TestWarmDocs:
         assert len(out["unprocessed"]) == 2
         assert out["budget_exhausted"] is True
         assert Path(out["docs"][0]["path"]).name == "charlie.pdf"
+
+    def test_docs_list_sorted_by_path_across_calls(self, corpus_dir, cache):
+        """The docs envelope is path-sorted on both a mixed
+        cached+warmed call and an all-cached resume call, so successive
+        envelopes diff cleanly (field feedback: first call listed docs
+        by page count, the resume call alphabetically)."""
+        files = _files(corpus_dir)
+        first = corpus.warm_docs(files, 10, cache, clock=SteppingClock(6))
+        assert first["budget_exhausted"] is True  # mixed outcome
+        resume = corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        for out in (first, resume):
+            paths = [d["path"] for d in out["docs"]]
+            assert paths == sorted(paths)
 
     def test_corrupt_pdf_skipped_others_warm(self, corpus_dir, cache):
         (corpus_dir / "corrupt.pdf").write_bytes(b"not a real pdf")
@@ -269,6 +296,40 @@ class TestOverviewCards:
         card = corpus.build_overview_card(path, cache, from_cache=False)
         assert card["toc_top"] == ["Intro", "Results", "End"]
         assert card["has_toc"] is True
+
+    def _card_for_pdf(self, cache, tmp_path, title=None, toc=None):
+        p = tmp_path / "meta.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Body text for warming.")
+        if title is not None:
+            doc.set_metadata({"title": title})
+        if toc is not None:
+            doc.set_toc(toc)
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+        corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+        return corpus.build_overview_card(path, cache, from_cache=False)
+
+    def test_whitespace_toc_entries_dropped(self, cache, tmp_path):
+        """Whitespace-only TOC titles are junk for triage; drop them
+        (field feedback: a 368-page doc's toc_top was [' '])."""
+        card = self._card_for_pdf(
+            cache, tmp_path, toc=[[1, " ", 1], [1, "Real Chapter", 1]]
+        )
+        assert card["toc_top"] == ["Real Chapter"]
+
+    def test_placeholder_titles_nulled(self, cache, tmp_path):
+        """Known exporter placeholders read as no-title (field
+        feedback: 'Pdf Document', 'Untitled 3.pages')."""
+        for junk in ("Pdf Document", "Untitled 3.pages", "   "):
+            card = self._card_for_pdf(cache, tmp_path, title=junk)
+            assert card["title"] is None, junk
+
+    def test_real_title_passes_through(self, cache, tmp_path):
+        card = self._card_for_pdf(cache, tmp_path, title="Annual Report 2026")
+        assert card["title"] == "Annual Report 2026"
 
 
 class TestCorpusFusion:

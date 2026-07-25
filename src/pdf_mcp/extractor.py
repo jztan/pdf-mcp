@@ -969,6 +969,25 @@ def get_paragraph_for_offset(
 _PARAGRAPH_MIN_CHARS = 80
 
 
+def _query_tokens(query: str) -> list[str]:
+    """Tokenise a query the way the paragraph picker scores blocks:
+    lowercase, whitespace-split, surrounding punctuation stripped."""
+    tokens = [t.strip(".,;:!?\"'()[]{}") for t in query.lower().split()]
+    return [t for t in tokens if t]
+
+
+def count_query_tokens(text: str, query: str) -> int:
+    """Count query tokens present in *text* (case-insensitive
+    substring), with the same tokenisation as
+    `get_best_paragraph_for_query` so coverage comparisons between
+    candidate blocks use identical scoring."""
+    tokens = _query_tokens(query)
+    if not tokens:
+        return 0
+    lower = text.lower()
+    return sum(1 for t in tokens if t in lower)
+
+
 def get_best_paragraph_for_query(
     page: Any,
     query: str,
@@ -992,8 +1011,7 @@ def get_best_paragraph_for_query(
     Returns (block_text, block_index) or (None, None) if no tokens
     match or the best block exceeds max_chars.
     """
-    tokens = [t.strip(".,;:!?\"'()[]{}") for t in query.lower().split()]
-    tokens = [t for t in tokens if t]
+    tokens = _query_tokens(query)
     if not tokens:
         return None, None
 

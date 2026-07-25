@@ -88,6 +88,15 @@ def resolve_corpus(
     skipped: list[dict[str, str]] = []
 
     if isinstance(paths, str):
+        if "://" in paths:
+            return {
+                "error": f"URLs are not accepted: {paths}",
+                "hint": (
+                    "Corpus tools operate on local files only. Use"
+                    " single-doc tools (pdf_info, pdf_search) for URLs,"
+                    " or download the file locally first."
+                ),
+            }
         root = Path(paths).expanduser()
         if not root.is_absolute():
             root = Path.cwd() / root
@@ -252,7 +261,8 @@ def warm_docs(
     Cached docs are free (never charged against the budget). Uncached
     docs warm smallest-first, one at a time, atomically; the clock is
     checked between docs only. Per-doc failures land in ``skipped``
-    and never abort the batch.
+    and never abort the batch. The returned ``docs`` list is sorted by
+    path so successive envelopes (first warm vs resume) diff cleanly.
     """
     start = clock()
     docs: list[dict[str, Any]] = []
@@ -303,7 +313,7 @@ def warm_docs(
         )
 
     return {
-        "docs": docs,
+        "docs": sorted(docs, key=lambda d: str(d["path"])),
         "unprocessed": unprocessed,
         "skipped": skipped,
         "warmed_this_call": warmed,
@@ -325,16 +335,44 @@ def text_coverage_label(coverage: list[dict[str, int]]) -> str:
     return "partial"
 
 
+# Exporter boilerplate that reads as "no title" for triage purposes.
+# Matched case-insensitively; "untitled" is a prefix match (iWork
+# exports produce e.g. "Untitled 3.pages").
+_PLACEHOLDER_TITLES = {"pdf document"}
+
+
+def _clean_title(title: Any) -> str | None:
+    """Null out empty/whitespace and known-placeholder titles."""
+    if not isinstance(title, str):
+        return None
+    stripped = title.strip()
+    if not stripped:
+        return None
+    low = stripped.lower()
+    if low in _PLACEHOLDER_TITLES or low.startswith("untitled"):
+        return None
+    return stripped
+
+
 def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, Any]:
-    """Build one triage card from cached data only (doc must be warm)."""
+    """Build one triage card from cached data only (doc must be warm).
+
+    Junk metadata is filtered rather than passed through: whitespace-only
+    TOC entries are dropped and placeholder titles read as null, since
+    the cards exist for orientation."""
     meta = cache.get_metadata(path)
     toc = meta.get("toc") or []
-    title = (meta.get("metadata") or {}).get("title") or None
+    title = _clean_title((meta.get("metadata") or {}).get("title"))
+    toc_top = [
+        (e.get("title") or "").strip()
+        for e in toc
+        if e["level"] == 1 and (e.get("title") or "").strip()
+    ]
     return {
         "path": path,
         "title": title,
         "pages": meta["page_count"],
-        "toc_top": [e["title"] for e in toc if e["level"] == 1][:8],
+        "toc_top": toc_top[:8],
         "has_toc": bool(toc),
         "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
         "size_bytes": meta["file_size"],

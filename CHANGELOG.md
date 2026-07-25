@@ -15,7 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a time budget, and to get per-document triage cards (title, page
   count, top TOC entries, text coverage). Budget-exhausted docs are
   reported in `unprocessed`; repeat calls continue where warming
-  stopped. Corpora are capped at 100 files; URLs are not accepted.
+  stopped. Corpora are capped at 100 files; URLs are not accepted (a
+  URL argument gets a corpus-specific error pointing at the single-doc
+  tools). Triage cards filter junk metadata (whitespace-only TOC
+  entries and placeholder titles like "Untitled" read as absent), warm
+  envelopes list docs path-sorted so successive calls diff cleanly,
+  and `server_info` gains a `corpus` feature block (tool list,
+  100-file cap, budget clamp range, search-mode availability).
 - `pdf_corpus_search`: cross-document search over a folder of PDFs,
   fusing per-document rankings into one cross-corpus result via
   Reciprocal Rank Fusion (design chosen by a 100-doc/64-query
@@ -33,6 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (again matching `pdf_search`) instead of returning zero matches.
 
 ### Fixed
+- `pdf_search` and `pdf_corpus_search` with `excerpt_style="paragraph"`
+  could replace a correct table-cell hit with a nearby prose block that
+  shared only one query term, returning an excerpt and `bbox`/`clip`
+  geometry pointing at the wrong region (observed on a component
+  datasheet, where an ESD note block displaced the matching
+  Electrical Characteristics row). The short-block retry now keeps the
+  longer block only when it covers at least as many query tokens as
+  the short match; otherwise the short matching block wins and the
+  geometry stays on the true hit. Excerpt-quality gate passes with no
+  regressions.
 - Multi-column text extraction no longer duplicates text, and its reading
   order is deterministic for a given column layout. The multi-column path
   extracted each detected column with PyMuPDF `get_text(clip=..., sort=True)`,

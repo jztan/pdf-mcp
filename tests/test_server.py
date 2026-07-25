@@ -4192,3 +4192,86 @@ class TestPdfCorpusSearchNoFts:
         result = pdf_corpus_search(str(d), "budget", mode="keyword")
         assert "error" not in result
         assert [m["page"] for m in result["matches"]] == [2, 1]
+
+
+class TestParagraphBlockTokenGuard:
+    """excerpt_style='paragraph' must not swap a high-coverage short
+    block for a longer block with lower query-token coverage
+    (field-reported: a datasheet table hit was replaced by an ESD note
+    block containing only one query term, with a bbox pointing at the
+    wrong region)."""
+
+    QUERY = "reverse standoff voltage"
+
+    @pytest.fixture
+    def datasheet_pdf(self, tmp_path):
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text(
+            (50, 60),
+            "The SP05 series provides transient protection for data lines.",
+        )
+        # Table-like region: short cell blocks.
+        page.insert_text((50, 150), "Parameter")
+        page.insert_text((250, 150), "Symbol")
+        page.insert_text((400, 150), "Value")
+        page.insert_text((50, 180), "Reverse Standoff Voltage")
+        page.insert_text((250, 180), "VRWM")
+        page.insert_text((400, 180), "5 V")
+        # Long note block (>80 chars) containing exactly one query token.
+        note = (
+            "Note: 1. ESD voltage applied between channel pins and ground "
+            "per IEC 61000-4-2 using the contact discharge method under "
+            "ambient conditions as specified in the qualification report."
+        )
+        page.insert_textbox(pymupdf.Rect(50, 300, 550, 400), note)
+        p = tmp_path / "sp05.pdf"
+        doc.save(str(p))
+        doc.close()
+        import pathlib
+
+        return str(pathlib.Path(p).resolve())
+
+    def test_single_doc_keeps_matching_table_block(
+        self, datasheet_pdf, isolated_server
+    ):
+        result = pdf_search(
+            datasheet_pdf, self.QUERY, mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"], result
+        m = result["matches"][0]
+        ex = m["excerpt"].lower()
+        assert "reverse standoff voltage" in ex
+        assert not ex.startswith("note:")
+        # Geometry stays on the true hit block, not the note.
+        assert "bbox" in m
+
+    def test_corpus_keeps_matching_table_block(self, datasheet_pdf, isolated_server):
+        result = pdf_corpus_search(
+            [datasheet_pdf], self.QUERY, mode="keyword", excerpt_style="paragraph"
+        )
+        assert result["matches"], result
+        ex = result["matches"][0]["excerpt"].lower()
+        assert "reverse standoff voltage" in ex
+        assert not ex.startswith("note:")
+
+    def test_retry_still_upgrades_on_equal_coverage(self, tmp_path, isolated_server):
+        """The min-chars retry keeps working when the substantive block
+        matches at least as well (existing caption-skip design)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 60), "Budget overview")  # short heading, 1 token
+        page.insert_textbox(
+            pymupdf.Rect(50, 150, 550, 250),
+            "The quarterly budget increased across departments this year, "
+            "with detailed allocations described in the appendix tables.",
+        )
+        p = tmp_path / "prose.pdf"
+        doc.save(str(p))
+        doc.close()
+        import pathlib
+
+        path = str(pathlib.Path(p).resolve())
+        result = pdf_search(path, "budget", mode="keyword", excerpt_style="paragraph")
+        assert result["matches"], result
+        assert result["matches"][0]["excerpt"].startswith("The quarterly")

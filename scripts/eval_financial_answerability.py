@@ -255,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(
             {
                 "id": q["id"],
+                "scope": q["scope"],
                 "type": q["type"],
                 "question": q["question"],
                 "doc_coverage": len(present) / len(expect),

@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped. Corpora are capped at 100 files; URLs are not accepted (a
   URL argument gets a corpus-specific error pointing at the single-doc
   tools). Triage cards filter junk metadata (whitespace-only TOC
-  entries and placeholder titles like "Untitled" read as absent), warm
-  envelopes list docs path-sorted so successive calls diff cleanly,
-  and `server_info` gains a `corpus` feature block (tool list,
-  100-file cap, budget clamp range, search-mode availability).
+  entries and placeholder titles like "Untitled" read as absent, and
+  `has_toc` reflects post-filter reality), warm envelopes list docs
+  path-sorted so successive calls diff cleanly and report per-doc
+  `embeddings_cached` from actual cache state (a cheap text-only call
+  answers whether an embeddings pass is needed before semantic
+  search), and `server_info` gains a `corpus` feature block (tool
+  list, 100-file cap, budget clamp range, search-mode availability).
 - `pdf_corpus_search`: cross-document search over a folder of PDFs,
   fusing per-document rankings into one cross-corpus result via
   Reciprocal Rank Fusion (design chosen by a 100-doc/64-query

@@ -179,7 +179,7 @@ class TestWarmDocs:
             clock=SteppingClock(0),
         )
         assert out["warmed_this_call"] == 3
-        assert all(d["embeddings"] for d in out["docs"])
+        assert all(d["embeddings_cached"] for d in out["docs"])
         alpha = [f for f in files if f.endswith("alpha.pdf")][0]
         embs = cache.get_page_embeddings(alpha, [0, 1], "fake-model")
         assert len(embs) == 2
@@ -210,6 +210,40 @@ class TestWarmDocs:
         )
         # Text is cached but embeddings are missing -> re-warm.
         assert out["warmed_this_call"] == 3
+
+    def test_embeddings_cached_reflects_cache_state_not_request(
+        self, corpus_dir, cache
+    ):
+        """Per-doc embeddings_cached reports actual cache state for the
+        configured model, so a cheap text-only warm answers 'do I need
+        an embeddings pass before semantic search?' (field feedback:
+        the old field echoed the request flag)."""
+        files = _files(corpus_dir)
+        # Fresh text-only warm: nothing embedded yet.
+        out = corpus.warm_docs(
+            files, 60, cache, model_name="fake-model", clock=SteppingClock(0)
+        )
+        assert all(d["embeddings_cached"] is False for d in out["docs"])
+        assert all("embeddings" not in d for d in out["docs"])
+        # Warm embeddings, then ask again with a text-only call.
+        corpus.warm_docs(
+            files,
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._fake_embed,
+            clock=SteppingClock(0),
+        )
+        out2 = corpus.warm_docs(
+            files, 60, cache, model_name="fake-model", clock=SteppingClock(0)
+        )
+        assert all(d["embeddings_cached"] is True for d in out2["docs"])
+        # A different configured model reads as not-cached.
+        out3 = corpus.warm_docs(
+            files, 60, cache, model_name="other-model", clock=SteppingClock(0)
+        )
+        assert all(d["embeddings_cached"] is False for d in out3["docs"])
 
     def test_warm_preserves_cached_ocr_text(self, cache, tmp_path):
         # A "scanned" doc: one blank page, no extractable native text.
@@ -330,6 +364,23 @@ class TestOverviewCards:
     def test_real_title_passes_through(self, cache, tmp_path):
         card = self._card_for_pdf(cache, tmp_path, title="Annual Report 2026")
         assert card["title"] == "Annual Report 2026"
+
+    def test_all_junk_toc_reads_as_no_toc(self, cache, tmp_path):
+        """A TOC whose every title is whitespace is junk for orientation
+        AND for section titling; has_toc reflects post-filter reality so
+        clients never see has_toc=true with an empty preview for it."""
+        card = self._card_for_pdf(cache, tmp_path, toc=[[1, " ", 1], [2, "  ", 1]])
+        assert card["has_toc"] is False
+        assert card["toc_top"] == []
+
+    def test_junk_level1_real_level2_keeps_has_toc(self, cache, tmp_path):
+        """A real title at any level keeps has_toc true even when the
+        level-1 preview is empty (rare but genuinely accurate combo)."""
+        card = self._card_for_pdf(
+            cache, tmp_path, toc=[[1, " ", 1], [2, "Real Subsection", 1]]
+        )
+        assert card["has_toc"] is True
+        assert card["toc_top"] == []
 
 
 class TestCorpusFusion:

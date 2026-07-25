@@ -3826,6 +3826,16 @@ class TestPdfCorpusWarm:
         assert "error" in result
         assert "hint" in result
 
+    def test_text_warm_reports_embeddings_cache_state(
+        self, corpus_dir, isolated_server
+    ):
+        """A text-only warm reports per-doc embeddings_cached from actual
+        cache state (no fastembed needed for the check), so a client can
+        decide whether an embeddings pass is required."""
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert all(d["embeddings_cached"] is False for d in result["docs"])
+        assert all("embeddings" not in d for d in result["docs"])
+
     def test_list_mode_reports_skipped(self, corpus_dir, tmp_path, isolated_server):
         result = pdf_corpus_warm(
             [str(corpus_dir / "alpha.pdf"), str(tmp_path / "ghost.pdf")]

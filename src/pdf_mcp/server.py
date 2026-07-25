@@ -2255,7 +2255,10 @@ def pdf_corpus_warm(
 
     Returns:
         - docs: per-doc rows {path, status: "warmed"|"cached", pages,
-          embeddings}
+          embeddings_cached}. embeddings_cached reports actual cache
+          state for the configured embedding model (not the request
+          flag), so a text-only call answers whether an embeddings
+          pass is needed before semantic search.
         - unprocessed: resolved paths not warmed (budget ran out)
         - skipped: [{path, reason}] for invalid/corrupt/denied files
         - corpus_size, warmed_this_call, budget_exhausted
@@ -2271,13 +2274,16 @@ def pdf_corpus_warm(
     if "error" in res:
         return res
 
-    model_name: str | None = None
+    # The configured model name is passed even for text-only calls so
+    # warm_docs can report per-doc embeddings_cached from cache state
+    # (a string lookup; needs no fastembed). Availability is validated
+    # only when embeddings are actually requested.
+    model_name: str = pdf_config.embedding_model
     embed_fn: Callable[[list[str]], list[bytes]] | None = None
     if embeddings:
         from . import embedder as _embedder
 
-        _mn: str = pdf_config.embedding_model
-        model_name = _mn
+        _mn: str = model_name
         try:
             _embedder.check_available(_mn)
         except Exception as e:

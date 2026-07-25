@@ -1132,6 +1132,38 @@ class PDFCache:
                 ],
             )
 
+    def embeddings_complete(self, path: str, model_name: str) -> bool:
+        """True when cached page text exists for `path` and every cached
+        non-empty page has an embedding for `model_name` (all rows
+        mtime-valid).
+
+        Cheap COUNT-based check backing the corpus warm envelope's
+        per-doc `embeddings_cached` field, so a text-only warm can
+        report embeddings cache state without re-reading page text.
+        Scoped to the pages currently cached; corpus warm callers only
+        see it on docs that are fully text-warm.
+        """
+        try:
+            mtime, _ = self._get_file_info(path)
+        except OSError:
+            return False
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*),"
+                " SUM(CASE WHEN text_length > 0 THEN 1 ELSE 0 END)"
+                " FROM page_text WHERE file_path = ? AND file_mtime = ?",
+                (path, mtime),
+            ).fetchone()
+            n_rows, n_nonempty = int(row[0]), int(row[1] or 0)
+            if n_rows == 0:
+                return False
+            (n_emb,) = conn.execute(
+                "SELECT COUNT(*) FROM page_embeddings"
+                " WHERE file_path = ? AND file_mtime = ? AND model = ?",
+                (path, mtime, model_name),
+            ).fetchone()
+        return int(n_emb) >= n_nonempty
+
     def get_section_embeddings(
         self, path: str, section_ids: list[int]
     ) -> dict[int, bytes]:

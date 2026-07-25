@@ -695,7 +695,7 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `docs` (array): `[{path, status: "warmed" | "cached", pages, embeddings}, ...]`.
+- `docs` (array, sorted by path): `[{path, status: "warmed" | "cached", pages, embeddings_cached}, ...]`. `embeddings_cached` reports actual per-doc cache state for the configured embedding model (not an echo of the `embeddings` request flag), so a cheap text-only call answers "do I need an embeddings pass before semantic search?".
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
 
 **Limitations:**
@@ -732,7 +732,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`.
+- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...") read as `null`, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
   - `title`: PDF metadata title, or `null` if absent. **Untrusted content from the PDF.**
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.

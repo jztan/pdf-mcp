@@ -22,6 +22,26 @@ def cache_with_data(cache, sample_pdf):
     return cache, sample_pdf
 
 
+class TestEmbeddingsComplete:
+    """embeddings_complete: cheap per-doc embeddings cache-state check."""
+
+    def test_state_transitions(self, cache, sample_pdf):
+        model = "test-model"
+        # Nothing cached at all.
+        assert cache.embeddings_complete(sample_pdf, model) is False
+        # Text cached (one empty page), no embeddings yet.
+        cache.save_pages_text(sample_pdf, {0: "alpha", 1: "beta", 2: ""})
+        assert cache.embeddings_complete(sample_pdf, model) is False
+        # Every non-empty page embedded; the empty page needs none.
+        cache.save_page_embeddings(sample_pdf, {0: b"\x00\x01", 1: b"\x02"}, model)
+        assert cache.embeddings_complete(sample_pdf, model) is True
+        # A different model reads as not-cached.
+        assert cache.embeddings_complete(sample_pdf, "other-model") is False
+
+    def test_missing_file_is_false(self, cache):
+        assert cache.embeddings_complete("/nonexistent/x.pdf", "m") is False
+
+
 class TestCacheValidation:
     """Tests for cache validation edge cases."""
 

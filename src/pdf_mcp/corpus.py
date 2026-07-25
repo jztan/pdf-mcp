@@ -263,7 +263,19 @@ def warm_docs(
     checked between docs only. Per-doc failures land in ``skipped``
     and never abort the batch. The returned ``docs`` list is sorted by
     path so successive envelopes (first warm vs resume) diff cleanly.
+
+    Each doc row carries ``embeddings_cached``: actual embeddings cache
+    state for ``model_name`` (not an echo of the ``embeddings`` request
+    flag), so a text-only call still answers whether an embeddings pass
+    is needed. Pass ``model_name`` even when ``embeddings`` is False to
+    get that report; with ``model_name=None`` it reads False.
     """
+
+    def _emb_cached(path: str) -> bool:
+        if model_name is None:
+            return False
+        return bool(cache.embeddings_complete(path, model_name))
+
     start = clock()
     docs: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
@@ -277,7 +289,7 @@ def warm_docs(
                     "path": path,
                     "status": "cached",
                     "pages": pages,
-                    "embeddings": embeddings,
+                    "embeddings_cached": _emb_cached(path),
                 }
             )
             continue
@@ -308,7 +320,7 @@ def warm_docs(
                 "path": path,
                 "status": "warmed",
                 "pages": page_count,
-                "embeddings": embeddings,
+                "embeddings_cached": _emb_cached(path),
             }
         )
 
@@ -373,7 +385,10 @@ def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, An
         "title": title,
         "pages": meta["page_count"],
         "toc_top": toc_top[:8],
-        "has_toc": bool(toc),
+        # Post-filter reality: a TOC whose every title is whitespace is
+        # junk for orientation and section titling alike, so it reads
+        # as no TOC. Any level counts, not just the level-1 preview.
+        "has_toc": any((e.get("title") or "").strip() for e in toc),
         "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
         "size_bytes": meta["file_size"],
         "from_cache": from_cache,

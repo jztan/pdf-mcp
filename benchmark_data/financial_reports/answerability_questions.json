@@ -736,6 +736,253 @@
         "YouTube ads YouTube ads revenues increased $4.2 billion from 2024 to 2025. The growth was driven by our direct response advertising products followed by our brand advertising products, both of which benefited from increased spending by our advertisers."
       ],
       "confusable_with": "Google Cloud revenue growth on the same page"
+    },
+    {
+      "id": "sd-c-aapl-services-2025",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "Why did Apple's Services net sales increase in 2025?",
+      "expect_docs": [
+        "aapl-fy2025"
+      ],
+      "reference_facts": [
+        "Services Services net sales increased during 2025 compared to 2024 primarily due to higher net sales from advertising, the App Store and cloud services."
+      ],
+      "confusable_with": "Products net sales, discussed in the adjacent paragraph"
+    },
+    {
+      "id": "sd-c-aapl-iphone-2025",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What explains the change in Apple's iPhone net sales in 2025?",
+      "expect_docs": [
+        "aapl-fy2025"
+      ],
+      "reference_facts": [
+        "amortization of the deferred value of services bundled in the sales price of certain products. iPhone iPhone net sales increased during 2025 compared to 2024 due to higher net sales of Pro models."
+      ],
+      "confusable_with": "Mac, iPad or Wearables net sales in the same section"
+    },
+    {
+      "id": "sd-c-googl-youtube-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove YouTube ads revenue growth in 2024?",
+      "expect_docs": [
+        "googl-fy2024"
+      ],
+      "reference_facts": [
+        "YouTube ads YouTube ads revenues increased $4.6 billion from 2023 to 2024. The growth was driven by our brand advertising products followed by our direct response advertising products, both of which benefited from increased spending by our advertisers."
+      ],
+      "confusable_with": "Google Search & other revenue growth in the same discussion"
+    },
+    {
+      "id": "sd-c-googl-search-2025",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove Google Search & other revenue growth in 2025?",
+      "expect_docs": [
+        "googl-fy2025"
+      ],
+      "reference_facts": [
+        "Total revenues $ 350,018 $ 402,836 Google Services Google Advertising Google Search & other Google Search & other revenues increased $26.4 billion from 2024 to 2025. The overall growth was driven by interrelated factors including increases in search queries resulting from growth in user adoption and usage on mobile devices; growth i"
+      ],
+      "confusable_with": "YouTube ads or Google Cloud growth on the same page"
+    },
+    {
+      "id": "sd-c-nvda-datacenter-2026",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove NVIDIA's Data Center revenue growth in fiscal 2026?",
+      "expect_docs": [
+        "nvda-fy2026"
+      ],
+      "reference_facts": [
+        "share $ 4.90 $ 2.94 Up 67% Revenue for fiscal year 2026 was $215.9 billion, up 65% from a year ago. Data Center revenue for fiscal year 2026 was up 68% from a year ago. The strong year-on-year growth was driven by the major platform shifts \u2013 accelerated computing and AI."
+      ],
+      "confusable_with": "Gaming or Professional Visualization revenue in the same summary"
+    },
+    {
+      "id": "sd-c-msft-mpc-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove Microsoft's More Personal Computing revenue in fiscal 2024?",
+      "expect_docs": [
+        "msft-fy2024"
+      ],
+      "reference_facts": [
+        "Productivity and Business Processes revenue increased driven by Office 365 Commercial. More Personal Computing revenue increased driven by Gaming. Cost of revenue increased $8.3 billion or 13% driven by growth in Microsoft Cloud and Gaming, offset in part by a decline in Devices."
+      ],
+      "confusable_with": "Intelligent Cloud or Productivity segment commentary alongside"
+    },
+    {
+      "id": "sd-c-amzn-na-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove Amazon's North America segment results in 2024?",
+      "expect_docs": [
+        "amzn-fy2024"
+      ],
+      "reference_facts": [
+        "line item changes on pages 25 to 27, and \u201cNote 10 \u2014 Segment Information\u201d on page 65. The increase in North America operating income in 2024, compared to the prior year, is primarily due to increased unit sales and increased advertising sales, partially offset by increased fulfillment and shipping costs."
+      ],
+      "confusable_with": "the International segment results in the same discussion"
+    },
+    {
+      "id": "sd-c-amzn-intl-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove Amazon's International segment results in 2024?",
+      "expect_docs": [
+        "amzn-fy2024"
+      ],
+      "reference_facts": [
+        "The International operating income in 2024, as compared to the operating loss in the prior year, is primarily due to increased unit sales and increased advertising sales, partially offset by increased shipping and fulfillment costs."
+      ],
+      "confusable_with": "the North America segment results in the same discussion"
+    },
+    {
+      "id": "sd-c-amc-admissions-2023",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "Why did AMC's admissions revenue change in 2023?",
+      "expect_docs": [
+        "amc-fy2023"
+      ],
+      "reference_facts": [
+        "1.2 million, or 23.0%, during the year ended December 31, 2023, compared to the year ended December 31, 2022. Admissions revenues increased $489.1 million, or 22.2%, during the year ended December 31, 2023, compared to the year ended December 31, 2022, primarily due to an increase in attendance of 19.2% from 201.0 million patrons to"
+      ],
+      "confusable_with": "food and beverage revenue, reported alongside"
+    },
+    {
+      "id": "sd-c-amc-foodbev-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "Why did AMC's food and beverage revenue change in 2024?",
+      "expect_docs": [
+        "amc-fy2024"
+      ],
+      "reference_facts": [
+        "PLF screen volumes as a percentage of attendance, and increases in attendance for alternative content. Food and beverage revenues decreased $44.9 million, or 2.7%, during the year ended December 31, 2024, compared to the year ended December 31, 2023, primarily due to the decrease in attendance, partially offset by an increase in food"
+      ],
+      "confusable_with": "admissions revenue, reported alongside"
+    },
+    {
+      "id": "sd-c-jpm-nii-2024",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove the change in JPMorgan's net interest income in 2024?",
+      "expect_docs": [
+        "jpm-fy2024"
+      ],
+      "reference_facts": [
+        "on Visa shares; and Notes 6 and 34 for additional information on the First Republic acquisition. Net interest income increased driven by the impact of balance sheet actions, primarily reinvestments in the investment securities portfolio, higher revolving balances in Card Services, the timing impact of First Republic, higher"
+      ],
+      "confusable_with": "noninterest revenue, reported in the same overview"
+    },
+    {
+      "id": "sd-c-msft-margin-2025",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove Microsoft's gross margin change in fiscal 2025?",
+      "expect_docs": [
+        "msft-fy2025"
+      ],
+      "reference_facts": [
+        "Gross margin increased $22.9 billion or 13% with growth across each of our segments. \u2022 Gross margin percentage decreased slightly driven by Intelligent Cloud, offset in part by More Personal Computing. \u2022 Microsoft Cloud gross margin percentage decreased to 69% driven by the impact of scaling our AI infrastructure, offset in part by"
+      ],
+      "confusable_with": "operating expense growth in the same section"
+    },
+    {
+      "id": "sd-c-nvda-gaming-2026",
+      "scope": "single-doc",
+      "type": "causal",
+      "question": "What drove NVIDIA's Gaming revenue in fiscal 2026?",
+      "expect_docs": [
+        "nvda-fy2026"
+      ],
+      "reference_facts": [
+        "The strong year-on-year growth was driven by the major platform shifts \u2013 accelerated computing and AI. Gaming revenue for fiscal year 2026 was up 41% from a year ago, driven by strong Blackwell demand."
+      ],
+      "confusable_with": "Data Center revenue in the same summary"
+    },
+    {
+      "id": "sd-r-nvda-china-2026",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What does NVIDIA disclose about export controls affecting China in fiscal 2026?",
+      "expect_docs": [
+        "nvda-fy2026"
+      ],
+      "reference_facts": [
+        "In addition to export controls, the USG may impose restrictions on the import and sale of products that incorporate technologies developed or manufactured in whole or in part in China. For example, the USG adopted \u201cConnected Vehicle\u201d restrictions on the import and sale of certain automotive products in the United States, which if adopted"
+      ],
+      "confusable_with": "general competition risk in China"
+    },
+    {
+      "id": "sd-r-googl-doj-2025",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What US antitrust proceedings does Alphabet disclose?",
+      "expect_docs": [
+        "googl-fy2025"
+      ],
+      "reference_facts": [
+        "The US Department of Justice (DOJ), various states, and other plaintiffs have filed, and may continue to file in the future, several antitrust lawsuits about aspects of our business, including our advertising technologies and practices, the operation and distribution of Google Search, and the operation and distribution of Android"
+      ],
+      "confusable_with": "European Commission proceedings, described separately"
+    },
+    {
+      "id": "sd-r-meta-litigation-2023",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What significant litigation does Meta disclose for 2023?",
+      "expect_docs": [
+        "meta-fy2023"
+      ],
+      "reference_facts": [
+        "Beginning in 2020, we became subject to a lawsuit by the FTC alleging that we violated antitrust laws, including by acquiring Instagram in 2012 and WhatsApp in 2014. The complaint seeks a permanent injunction against our company's alleged violations of the antitrust laws, and other equitable relief, including divestiture or"
+      ],
+      "confusable_with": "regulatory inquiries that are not litigation"
+    },
+    {
+      "id": "sd-r-amzn-labor-2024",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What workforce or labour risk does Amazon disclose?",
+      "expect_docs": [
+        "amzn-fy2024"
+      ],
+      "reference_facts": [
+        "We are also subject to labor union efforts to organize groups of our employees from time to time. These organizational efforts, if successful, decrease our operational flexibility, which could adversely affect our operating efficiency."
+      ],
+      "confusable_with": "fulfillment capacity risk in the same Item 1A"
+    },
+    {
+      "id": "sd-r-amc-liquidity-2024",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What liquidity risk does AMC disclose?",
+      "expect_docs": [
+        "amc-fy2024"
+      ],
+      "reference_facts": [
+        "Risks \u25cf absent more normalized levels of attendance and revenues, our ability to obtain additional liquidity, which if not realized or is insufficient, likely would result in us seeking an in-court or out-of-court restructuring of our liabilities, and in the event of such future liquidation or bankruptcy proceeding, holders of"
+      ],
+      "confusable_with": "goodwill impairment, an accounting rather than liquidity matter"
+    },
+    {
+      "id": "sd-r-googl-ai-2025",
+      "scope": "single-doc",
+      "type": "risk-synthesis",
+      "question": "What AI-related risks does Alphabet disclose?",
+      "expect_docs": [
+        "googl-fy2025"
+      ],
+      "reference_facts": [
+        "In addition, new and evolving products and services, including those that use AI, raise ethical, technological, legal, regulatory, and other challenges, which could harm our brands and demand for our products and services."
+      ],
+      "confusable_with": "general competition risk in the same Item 1A"
     }
   ]
 }

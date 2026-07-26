@@ -1,33 +1,153 @@
 # Financial-Report Retrieval Benchmark: Results
 
-A persistent benchmark over real public-company financial filings, built to
-measure `pdf_corpus_search` and `pdf_search` on a document distribution the
-existing corpus benchmark does not cover: very large, table-dense filings
-whose fiscal years are near-duplicates of one another.
+A persistent benchmark over real public-company filings, built to measure
+`pdf_search` and `pdf_corpus_search` on a distribution the arXiv corpus does
+not cover: very large, table-dense documents whose fiscal years are
+near-duplicates of one another.
 
-> **Read this first — two calibrations that govern every judged number
-> below.**
->
-> **1. The LLM judge disagrees with itself on 13% of verdicts.** Measured,
-> not modelled: the same 100 payloads judged twice under identical
-> configuration moved 13 verdicts, and the headline count landed on 74, 71,
-> 67 across three passes (see *How much of this is judge noise*). Treat a
-> judged figure as ±4 points and a per-class breakdown on fewer than ~30
-> questions as indicative only. Retrieval metrics — NDCG, doc-hit@3,
-> needle — are deterministic and unaffected.
->
-> **2. Grading the search payload alone understates the product by about
-> 20 points.** This server's documented flow is search-to-locate, then
-> `pdf_read_pages` to answer. On the same 100 single-document questions,
-> search-only scores 65/100 and search-then-read scores 86/100. Sections
-> that report a search-only figure are measuring excerpt quality, not what
-> a caller can answer.
->
-> Sections are dated where their numbers predate these calibrations.
+24 documents · 3,545 pages · 8 filers × 3 years · 66 retrieval queries ·
+106 answerability questions.
 
-## Corpus
+---
 
-24 documents, 3,545 pages, 8 filers x 3 fiscal years.
+## 1. Results
+
+### Can a caller answer the question?
+
+100 single-document questions, hybrid mode, majority-of-3 judge. Both arms
+graded in the same run.
+
+| arm | answerable in full | partial | not answerable | wrong attribution |
+|---|---|---|---|---|
+| search only | 65/100 | 14 | 21 | 10 |
+| **search, then read the top 2 pages** | **86/100** | 7 | 7 | 8 |
+
+**Cite 86%, and name the flow.** This server documents search-to-locate,
+then `pdf_read_pages` to answer. 24 questions improved and 0 worsened —
+one-directional and far outside the ±4 judge resolution. The search-only
+column measures excerpt quality, not what a caller can answer.
+
+### Retrieval quality
+
+Deterministic; no judge, no noise floor. Cite the **doc-level** columns —
+page-level is floored by label sparsity (§2).
+
+| mode | doc-NDCG@10 | doc-hit@3 | page-NDCG@10 | single-doc NDCG@10 | s/query |
+|---|---|---|---|---|---|
+| keyword | 0.633 | 0.758 | 0.209 | 0.419 | 0.21 |
+| semantic | 0.759 | 0.818 | 0.172 | 0.367 | 0.13 |
+| **hybrid** | **0.776** | **0.818** | **0.298** | **0.488** | 0.23 |
+
+Per class, doc-NDCG@10:
+
+| mode | needle | route | trap | concept |
+|---|---|---|---|---|
+| keyword | 0.627 | 0.864 | 0.610 | 0.186 |
+| semantic | 0.767 | 0.937 | 0.639 | 0.488 |
+| hybrid | 0.807 | 0.927 | 0.689 | 0.468 |
+
+Hybrid wins overall, reproducing the shipped RRF result on a genuinely
+different document distribution. It is the only arm strong on both axes:
+keyword collapses on paraphrase queries (concept 0.186), semantic gives up
+ground on needles and traps.
+
+**Year discrimination works** — route (which filer-year answers this?) is
+the strongest class at 0.927, which is what this corpus was built to test.
+
+**Fusion slightly dilutes pure semantic on concept** (0.468 vs 0.488): the
+keyword arm contributes noise where the query shares no vocabulary with the
+target, and RRF still gives it rank mass. Small, repeatable, worth watching
+if paraphrase queries become a priority.
+
+Warm (text + embeddings, 24 docs / 3,545 pages): 173s.
+
+### What the benchmark found
+
+Four defects, all fixed and covered by tests:
+
+| defect | evidence |
+|---|---|
+| **FTS5 AND cliff** | 17 of 45 page-labeled queries (38%) returned *nothing*; keyword concept class scored exactly 0.000 |
+| `pdf_corpus_search` snippet default | disagreed with `pdf_search`, which defaulted to paragraph |
+| hybrid `doc_match_counts` | returned `{}`, so callers had no signal to decompose on |
+| paragraph-picker tie-break | ties fell to document order, favouring prose over the block with the numbers |
+
+The AND cliff alone justifies the corpus. FTS5 AND-joins query terms, so
+**every** word had to appear on one page: "Apple Greater China net sales
+decline in 2024" returned nothing because the filing says *decreased*.
+Rephrasing to "Greater China net sales" returned the gold page at rank 1.
+
+It went unmeasured for a year because the arXiv corpus's queries are
+3-token noun-phrases lifted from the papers, so every token is present by
+construction and the AND-join cannot fail. Financial filings force the
+other style — a fact in a 10-K has no distinctive name, so it must be
+described. Median query length is 6 tokens here versus 3 there.
+
+The fix (OR retry when a 3+ word query matches nothing) is **scoped to
+keyword mode**: an earlier version applied it in hybrid too and *lowered*
+hybrid doc-NDCG to 0.749, because the semantic arm already covers what
+keyword misses and loose matches only diluted fusion.
+
+---
+
+## 2. How to read these numbers
+
+Four calibrations govern everything above. They were measured, not assumed.
+
+### The judge disagrees with itself on 13% of verdicts
+
+Judged metrics come from `claude -p`. Judging the same 100 payloads twice
+under identical configuration moved **13 verdicts**, and the headline
+landed on **74, 71, 67, 65** across four passes.
+
+| pair | verdicts moved |
+|---|---|
+| old judge context vs new | 11/100 |
+| **identical config, twice** | **13/100** |
+
+- Treat a judged figure as **±4 points**. A single run is one draw.
+- **Differences below ~7 points are not findings.** Mode gaps survive
+  (hybrid 69% vs semantic 60% vs keyword 54% at n=68 — spreads of 9 and 15).
+  Per-type breakdowns on 8–13 questions do not.
+- **Do not model the floor from ballot data.** Estimated from recorded
+  triples it ranges 7%–35% depending on estimator, because 3 ballots cannot
+  pin a distribution. An earlier draft quoted the 7% figure as if it were
+  the floor, which made an 11% comparison look like a real effect.
+- The noise is **symmetric**, so mode-vs-mode comparisons on the same
+  question set stay meaningful. It is the small specific claims that break.
+
+Re-measure with `scripts/measure_judge_noise_floor.py` whenever the judge
+model, its context flags, or the ballot rule changes.
+
+### Grading the search payload alone understates by ~20 points
+
+See §1. Any section reporting a search-only figure is measuring excerpts.
+
+### Page-level retrieval scores are floored by labelling, not failure
+
+Verified rather than assumed:
+
+- every zero-scoring needle has doc-NDCG 1.000 and doc-hit@3 1 — the right
+  document is retrieved and ranked first
+- searching the gold document directly returns the labeled page at **rank 1**
+  (checked on `needle-01` in `googl-fy2024`, `needle-21` in the 372-page
+  `jpm-fy2023`)
+
+Retrieval finds the right document and the right page within it. What fails
+is fitting that page into a corpus-wide top-10 drawn from 3,545 pages of
+recurring phrasing, with one labeled page per needle.
+
+### Not every question needs a judge
+
+`scripts/diagnose_excerpt_fidelity.py` asks whether the excerpt for a
+verifiably-correct page carries the answer — deterministic, free, immune to
+the noise floor. On the 100 questions: **75 ok, 20 excerpt-miss, 5
+recall-miss**. Retrieval located the answering page in **95 of 100**. Prefer
+it to a judged run whenever the question is about excerpts.
+
+---
+
+## 3. Corpus
 
 | filer | years | doc type | pages (per year) |
 |---|---|---|---|
@@ -41,514 +161,221 @@ whose fiscal years are near-duplicates of one another.
 | JPMorgan Chase | FY2022-24 | annual report | 328 / 364 / 372 |
 
 Three filers publish no standalone 10-K PDF. Microsoft's investor site
-serves `.docx`, so its rows are the SEC-hosted ARS filings; Amazon and
-JPMorgan publish a single combined annual report that embeds the complete
-Form 10-K. JPMorgan's are the hardest documents in the corpus: 328-372
-pages of heavily designed multi-column layout with the 10-K starting around
-page 66-86.
+serves `.docx`, so its rows are SEC-hosted ARS filings; Amazon and JPMorgan
+publish a combined annual report embedding the complete Form 10-K.
+JPMorgan's are the hardest documents here: 328–372 pages of heavily designed
+multi-column layout with the 10-K starting around page 66–86.
 
-PDFs are fetched, not committed (`scripts/fetch_financial_corpus.py`), and
-each is pinned by SHA256 so a rotted URL can be replaced by any mirror
-serving the identical bytes. sec.gov requires a declaring User-Agent and
-rate-limits by IP, so the fetcher serializes downloads and backs off on
-403/429.
+PDFs are fetched, not committed (`scripts/fetch_financial_corpus.py`), each
+pinned by SHA256 so a rotted URL can be replaced by any mirror serving
+identical bytes. sec.gov requires a declaring User-Agent and rate-limits by
+IP, so the fetcher serializes downloads and backs off on 403/429.
 
-## Query design
+---
 
-66 queries in four classes. Every page-level label's `evidence` string is a
-verbatim substring of that page's extracted text, checked by
+## 4. Queries and ground truth
+
+**66 retrieval queries** in four classes. Every page label's `evidence`
+string is a verbatim substring of that page's extracted text, checked by
 `--validate` against the same extraction path the tool uses.
 
 | class | n | what it measures |
 |---|---|---|
 | needle | 25 | the answer sits on one identifiable page |
-| route | 21 | which filer-year answers this? (doc-level labels, no page) |
+| route | 21 | which filer-year answers this? (doc-level, no page) |
 | trap | 10 | terms that are boilerplate across filings, substantive in one |
 | concept | 10 | paraphrase sharing no distinctive keyword with the target |
 
 The route class exists because this corpus's defining difficulty is
-near-duplicate fiscal years: the gold year scores gain 2 and the same
-filer's adjacent years score gain 1, so a system that finds "an Apple
-10-K" but not "the FY2024 one" is visibly penalised.
-
-## Headline
-
-Cite the **doc-level** numbers. Page-level NDCG is floored by label
-sparsity here far more than on the arXiv corpus: one labeled page per
-needle competes against 3,545 pages in which the same sentence patterns
-recur across three fiscal years and across MD&A, the notes, and the
-segment sections.
-
-| mode | doc-NDCG@10 | doc-hit@3 | page-NDCG@10 | single-doc NDCG@10 | s/query |
-|---|---|---|---|---|---|
-| keyword | 0.633 | 0.758 | 0.209 | 0.419 | 0.21 |
-| semantic | 0.759 | 0.818 | 0.172 | 0.367 | 0.13 |
-| **hybrid** | **0.776** | **0.818** | **0.298** | **0.488** | 0.23 |
-
-These are post-fix numbers. This corpus surfaced a real defect in
-keyword search (see "The AND cliff" below); the keyword and single-doc
-columns are the repaired values, and hybrid is unchanged by the fix.
-
-Warm (text + embeddings, 24 docs / 3,545 pages): 173s. Queries run against
-an isolated cache warmed once per run.
-
-Hybrid wins overall, reproducing the fusion result the shipped RRF work
-established on a genuinely different document distribution. It is the only
-arm that is strong on both axes: keyword is weakest on paraphrase
-queries (concept doc-NDCG 0.186, against semantic's 0.488), because
-those queries are written to share no distinctive vocabulary with the
-target text, while semantic alone gives up ground on needles and traps.
-Before the AND-cliff fix below, keyword scored exactly 0.000 on the
-concept class -- those queries returned nothing at all rather than
-returning something poor.
-
-### Per class (doc-level NDCG@10)
-
-| mode | needle | route | trap | concept |
-|---|---|---|---|---|
-| keyword | 0.627 | 0.864 | 0.610 | 0.186 |
-| semantic | 0.767 | 0.937 | 0.639 | 0.488 |
-| hybrid | 0.807 | 0.927 | 0.689 | 0.468 |
-
-**Year discrimination works.** The route class is the strongest result in
-the benchmark: doc-hit@3 of 1.000 on all eleven stage-A routing queries and
-doc-NDCG 0.927-0.937 in the semantic and hybrid arms. Asking for "the
-FY2024 Apple 10-K" against three near-identical Apple filings reliably
-returns the right year.
-
-## The AND cliff: a real defect this corpus surfaced
-
-The first run of this benchmark scored keyword far lower still
-(doc-NDCG 0.595, single-doc 0.291). Diagnosis showed why: FTS5 queries
-are AND-joined, so **every** word of a query had to appear on the same
-page. A question-shaped query like "Apple Greater China net sales
-decline in 2024" returned *nothing* because the filing says "decreased",
-not "decline" — 17 of 45 page-labeled queries (38%) returned zero
-results. Rephrasing to "Greater China net sales" returned the gold page
-at rank 1 immediately.
-
-This was a recall cliff, not a ranking weakness, and not specific to
-financial documents. It went unmeasured until now because the arXiv
-corpus's queries are 3-token technical noun-phrases lifted from the
-papers themselves, so every token is present by construction and the
-AND-join cannot fail. Financial filings force the other style: a fact in
-a 10-K has no distinctive name, so it must be described, and
-near-duplicate fiscal years force qualifiers. Median query length is 6
-tokens here versus 3 there.
-
-The fix (an OR retry when a 3+ word query matches nothing, scoped to
-keyword-only search) is in the changelog. Scoping matters: an earlier
-version applied it in hybrid mode too and *lowered* hybrid doc-NDCG to
-0.749, because the semantic arm already covers what keyword misses and
-the loose matches only diluted fusion.
-
-**Fusion slightly dilutes pure semantic on the concept class** (0.468 vs
-0.488). The keyword arm contributes only noise where the query shares no
-vocabulary with the target, and RRF still gives it rank mass. The margin is
-small and hybrid remains far ahead overall, but it is a real, repeatable
-direction worth watching if concept-style queries become a priority.
-
-## Stage-A to full expansion
-
-Ground truth was authored and validated on 4 filers (35 queries) first,
-then expanded to all 8 (66 queries), per the repo's quality loop. Both runs
-used the same 24-document corpus, so the delta isolates the effect of
-covering four more filers -- including the three whose 10-K content is
-embedded in a glossy annual report.
-
-| metric (hybrid) | stage A (35 q) | full (66 q) | delta |
-|---|---|---|---|
-| doc-NDCG@10 | 0.814 | 0.776 | -0.038 |
-| doc-hit@3 | 0.886 | 0.818 | -0.068 |
-| page-NDCG@10 | 0.325 | 0.298 | -0.027 |
-| single-doc NDCG@10 | 0.496 | 0.478 | -0.018 |
-
-Every metric moved down. This is the expected direction and the reason the
-quality loop mandates expansion: the smaller sample overstated quality by
-roughly 4-7% relative, and the queries added over Microsoft, Amazon and
-JPMorgan -- the combined annual reports -- are where the losses concentrate.
-
-No stage-A trap term had to be replaced when re-checked against all 24
-documents; the trap terms chosen (`First Republic`, `reverse stock split`,
-`Odeon`, `Other Bets`, `facilities consolidation`) stayed concentrated.
-
-## Verified diagnosis of the low page-level scores
-
-The page-level numbers look alarming beside the arXiv corpus (hybrid 0.674
-overall, 0.996 needle). They were checked rather than assumed:
-
-- Every zero-scoring needle in the stage-A run has doc-NDCG 1.000 and
-  doc-hit@3 1 -- the right document is retrieved and ranked first.
-- Searching the gold document directly returns the labeled page at **rank
-  1** (verified on `needle-01` in `googl-fy2024` and `needle-21` in the
-  372-page `jpm-fy2023`).
-
-So retrieval finds the right document and, within it, the right page. What
-fails is fitting that page into a corpus-wide top-10 drawn from 3,545
-pages of recurring phrasing. This is the known label-sparsity floor,
-sharper on 10-Ks than on 20-page papers.
-
-## Answerability: what the rank metrics miss
-
-Rank metrics ask "is the gold page in the top 10". A caller asks "can I
-answer my question from what came back". Those diverge badly on 10-Ks.
-`scripts/eval_financial_answerability.py` puts 15 realistic analyst
-questions through `pdf_corpus_search` and grades the payload the caller
-actually receives, against hand-verified reference facts.
-
-| metric | before excerpt fix | after |
-|---|---|---|
-| answerable in full | 7 / 15 (47%) | 9 / 15 (60%) |
-| partial | 1 / 15 (7%) | 3 / 15 (20%) |
-| not answerable | 7 / 15 (47%) | 3 / 15 (20%) |
-| wrong attribution | 3 / 15 (20%) | 3 / 15 (20%) |
-| mean doc coverage | 0.93 | 0.93 |
-
-> **These numbers are underpowered and predate both calibrations above.**
-> Kept for the record, not to be cited. Three specific problems:
->
-> - **n=15 against a 13% per-verdict noise floor** is about 2 questions of
->   judge-only movement -- exactly the size of the 7→9 "improvement". The
->   before/after is not separable from re-running the judge.
-> - **Judged before majority-of-3 landed** on this branch, so these are
->   single ballots, which disagree with a majority verdict 5.7% of the time.
-> - **Search-payload-only**, the contract later measured as understating by
->   ~20 points.
->
-> The excerpt-style change these numbers were meant to evaluate is
-> independently justified: `pdf_corpus_search` was defaulting to snippet
-> excerpts while `pdf_search` defaulted to paragraph, so the two tools
-> disagreed. That inconsistency is the reason to fix it; this table is not.
->
-> The single-document arm below (n=100, majority-of-3, both contracts
-> graded) supersedes this section for anything load-bearing. Re-running the
-> corpus arm under the current judge is open work.
-
-Set against hybrid's doc-NDCG of 0.776 and doc-hit@3 of 0.818, the
-*direction* is still worth stating: a corpus that retrieves the right
-document reliably can still leave a caller short of an answer, because
-document rank and answer-in-hand are different things. That is the
-observation the single-document arm was built to measure properly, and
-there it resolves as 65/100 search-only against 86/100 search-then-read --
-so the gap is real but is largely closed by the documented flow, not by
-better ranking.
-
-### Root cause 1: the excerpt quotes the wrong paragraph of the right page
-
-The dominant failure, and the dangerous one. Asked *"Why did Apple's
-Greater China net sales fall in 2024?"*, retrieval returned
-`aapl-fy2024 p25` at **rank 1** -- the correct page, which carries the
-sentence "Greater China net sales decreased during 2024 compared to 2023
-due primarily to lower net sales of iPhone and iPad". The excerpt shown to
-the caller was the *segment net-sales table* from the same page. The
-retrieval benchmark scores this a perfect hit (it is `needle-04`); the
-caller cannot answer the question.
-
-Worse, on multi-segment MD&A pages the excerpt lands on a *confusable
-neighbour*: asked about Google Cloud's operating income, the top excerpt
-reads "Google Services operating income increased $25.4 billion" -- a
-different segment's figure, in the position where the answer belongs. A
-caller trusting the excerpt reports the wrong number. That is the
-`wrong_attribution` failure. (The 20% quoted from this n=15 run is
-unreliable; the properly powered figure is 9-13 of 100 from the
-single-document arm below.)
-
-### Root cause 2: comparisons come back one-sided
-
-"Compare AWS growth with Microsoft Cloud growth" and "Compare Apple's and
-Alphabet's R&D" both returned evidence for exactly one of the two
-companies (doc coverage 0.50, balance 0.00). Nothing in the response says
-the other side is missing. Multi-year trend questions show the same skew
-more mildly (the thinnest year gets 10-20% of the hits).
-
-### Root cause 3: genuine page misses
-
-A minority: the $479M Alphabet severance charge (p39) and AMC's
-$1,276.1M goodwill impairment (p58) were simply not in the top 10.
-
-### What the excerpt fix did and did not solve
-
-Fixing the excerpt default converted six questions from unanswerable to
-answerable, because the payload finally quoted the sentence carrying the
-answer rather than a window over a nearby table.
-
-It did **not** reduce wrong attribution, and it sharpened one case. Asked
-how much stock Apple repurchased in fiscal 2025, retrieval ranks
-`aapl-fy2024 p47` first -- the *prior* year's filing -- and the FY2025
-figure never appears. Under the old snippet default that page produced a
-vague window about the fair value of Notes; under paragraph mode it
-produces a crisp, quotable "During 2024, the Company repurchased 499
-million shares of its common stock for $95.0 billion". The ranking error
-is identical in both runs; better excerpts simply made the wrong answer
-more convincing.
-
-On the corpus this is a **ranking** problem, not an excerpt one: across
-near-duplicate fiscal years the wrong year outranks the right one and
-nothing in the response signals it.
-
-**Two different attribution failures, and it matters not to conflate
-them.** The single-document arm later isolated a second one:
-
-| setting | what goes wrong | evidence |
-|---|---|---|
-| across documents | wrong **fiscal year** wins the rank | the Apple buyback case above |
-| within one document | wrong **scope** -- a segment's figure read as the entity's | all 6 confirmed cases in the single-doc arm |
-
-The within-document failure is not a ranking problem: retrieval returned
-the right page in 95 of 100 questions, and 4 of the 6 confirmed cases had
-the correct page at rank 1. It is documented as a known limitation, with
-two rejected fixes recorded, because separating a segment figure from a
-consolidated one requires scope information that lives in a heading
-outside the scored text.
-
-Revised order of work, after the single-document measurements: excerpt
-quality (partly done), then cross-document year disambiguation, then
-candidate-set snippet generation -- and *not* within-document scope
-resolution, which was measured and parked.
-
-## Single-PDF performance, and what mode to use
-
-The corpus numbers above answer "search 24 filings". The commoner case is
-that the caller already knows which filing and searches only that one, so
-document selection is off the table and what remains is within-document
-retrieval and excerpt quality (`scripts/eval_single_doc_answerability.py`,
-judge = majority of 3).
-
-The default mode is measured on all 100 single-document questions; the two
-alternatives were measured on the first 68 and not re-run, because their
-ordering held across every expansion (n=9 → 25 → 49 → 68) and re-running
-them costs more than the answer is worth:
-
-**Grade the flow the server documents, not just the search call.** This
-server's stated flow is search-to-locate, then `pdf_read_pages` to answer.
-Grading the search payload alone measures an agent that never opens a
-page, and understates the product by about 20 points:
-
-| arm | answerable in full | partial | not answerable | wrong attribution |
-|---|---|---|---|---|
-| search only | 65/100 | 14 | 21 | 10 |
-| **search, then read the top 2 pages** | **86/100** | 7 | 7 | 8 |
-
-**24 questions improved and 0 worsened** -- one-directional, far outside
-the 13% judge noise floor, and spread across every question type (figure
-9, causal 7, table 4, risk-synthesis 3, definition 1). Both arms were
-judged in the same run on the same questions, so the comparison is paired.
-
-**So the headline is 86%, not 65%.** The search-only column is a
-diagnostic of excerpt quality, not a measure of what a caller can answer.
-
-Search-only across four runs of the same 100 payloads: 74, 71, 67, 65 --
-consistent with the noise floor, and the reason no single value is quoted.
-
-| mode (search only) | n | answerable in full | partial | not answerable | wrong attribution |
-|---|---|---|---|---|---|
-| hybrid (auto, default) | 100 | 65-74/100 | 9-14 | 17-21 | 9-13 |
-| hybrid, first 68 only | 68 | 47/68 (69%) | 7 | 14 | 9 |
-| semantic | 68 | 41/68 (60%) | 9 | 18 | 6 |
-| keyword | 68 | 37/68 (54%) | 7 | 24 | 3 |
-
-Against 53% single-call on the 24-document corpus, the same finding
-arrives from two directions: this tool is strongest once the caller has
-narrowed to a document.
-
-### Wrong attribution survives reading the page
-
-The one failure that reading does not fix. 10 cases search-only, 8 after
-reading -- a difference well inside the noise floor, and the composition
-is worse than the total suggests:
-
-- **6 persist** through reading the full page: `sd-jpm-credit-2024`,
-  `sd-amc-attendance-2024`, `sd-c-amc-foodbev-2024`, `sd-c2-jpm-nii-2023`,
-  `sd-c2-msft-opex-2025`, `figure-amc-goodwill`.
-- **2 are NEW**, caused by reading: `sd-c-jpm-nii-2024`,
-  `sd-r-meta-litigation-2023`. A full page carries more confusable
-  figures than an excerpt does, so more context is not a mitigation here
-  and can be a mild risk.
-
-Every confirmed case is **segment-vs-consolidated scope confusion**, not
-the fiscal-year confusion the label suggests: a segment's $10 million
-provision against the firmwide $10.7 billion, Office Commercial against
-Intelligent Cloud, one theatre segment's attendance against the total.
-
-This is the failure worth engineering against. "The answer is missing" is
-recoverable by reading on -- 24 of 24 such questions were. "A wrong
-figure looks like the answer" is not.
-
-The hybrid row is a **range, not a point**, and that is the honest form.
-The same 100 payloads judged three times scored 74, 71, and 67 -- see
-"How much of this is judge noise" below. The 69% at n=68 is inside that
-range, so the apparent 69% → 74% improvement is not one; the 68 are also a
-subset of the 100, so it compares question mixes, not versions.
-
-Wrong attribution (9-13 of 100) is the failure mode worth working on: the
-top excerpts lead a reader to the wrong company, segment, or fiscal year.
-An earlier draft of this document called it "the stable signal" because it
-read 13% at both n=68 and n=100. Re-judging showed it moves between 9 and
-13 on identical payloads, so its stability across the expansion was luck.
-
-### By question type
-
-Hybrid at n=100; the semantic column is the n=68 run, shown only where the
-two overlap enough to compare:
-
-| type | n | hybrid | semantic (n=68) |
-|---|---|---|---|
-| definition | 8 | 88% | -- |
-| causal | 25 | 76% | 59% |
-| figure | 35 | 74% | 67% |
-| table | 18 | 72% | 67% |
-| risk-synthesis | 13 | 62% | 33% |
-
-**Read this table for shape, not for ranking.** At a 13% per-verdict noise
-floor, a type with 8-13 questions carries roughly ±1-2 questions of
-judge-only movement, which is 8-15 percentage points. Nothing here except
-the spread between the extremes is separable from noise, and even that is
-marginal.
-
-**The causal weakness reported at n=68 did not survive.** That run put
-causal at 59% in both hybrid and semantic on 17 questions, which read as a
-mode-independent deficiency pointing at the search-then-read contract
-rather than at ranking. At 25 questions causal is 76%. Part of that is the
-larger sample and part is judge variance; the two cannot be separated after
-the fact. Either way the original finding was not solid enough to act on.
-
-### Four small-sample readings that reversed
-
-Every one of these would have justified a wrong decision if acted on:
-
-1. On 9 questions **keyword led** (7/9 vs hybrid 6/9). At 25 it was last
-   by five, at 49 last by eight, at 68 last by ten.
-2. At 49 questions hybrid and semantic **tied** (34 vs 35). At 68, after
-   adding causal and risk questions, hybrid leads by six.
-3. On 3 risk-synthesis questions hybrid looked **diluted** (returning
-   "partial" where a single arm returned "full"), suggesting fusion hurt
-   synthesis. At 9 questions hybrid scores 67% against semantic's 33% --
-   twice as good, the opposite conclusion.
-4. At 17 questions **causal was the weak type** at 59%, equal in both
-   modes -- a finding specific enough to have justified redesigning the
-   search-to-read contract around it. At 25 it is 76%, near the top.
-
-The pattern is consistent: a one-or-two-question gap at these sample sizes
-is judge noise. Only differences that survive an expansion are real, and
-the more specific and actionable a small-sample finding looks, the more
-carefully it needs retesting before anything is built on it.
-
-Note that expansion alone is not sufficient -- it addresses sampling, not
-judge variance. Two of the four reversals above are partly attributable to
-the 13% noise floor rather than to the larger sample, and after the fact
-the two causes cannot be separated. A claim is only safe when the gap
-exceeds the measured floor.
-
-### How much of this is judge noise
-
-Every number above is a difference between judged runs, which means none of
-them can be read without knowing how much the judge disagrees with itself.
-That cannot be derived from one run's ballots -- it has to be measured, by
-judging identical stored payloads twice under identical configuration
-(`scripts/measure_judge_noise_floor.py`; retrieval is deterministic, so the
-judge is the only thing that varies).
-
-**13% of verdicts move between two identical runs.** The same 100 payloads
-scored 74, 71, and 67 "answerable in full" across three passes.
-
-| pair | verdicts moved | headline |
-|---|---|---|
-| old judge context vs new | 11/100 | 74 → 71 |
-| **identical config, twice** | **13/100** | **71 → 67** |
-
-Consequences, applied throughout this document:
-
-- **The headline is 67-74, not 74.** Treat ~±4 points as the resolution of
-  this metric. A single run's number is one draw from that range.
-- **Differences below ~7 points are not findings.** The mode gaps survive
-  comfortably (hybrid 74 vs semantic 60 vs keyword 54 at n=68, spreads of
-  14 and 20 points). Per-type breakdowns on 8-13 questions do not.
-- **Modelling the noise floor from ballot data does not work.** Estimated
-  from the recorded triples it comes out anywhere from 7% to 35% depending
-  on the estimator, because 3 ballots cannot pin a distribution -- a
-  question whose ballots happened to agree looks deterministic. An earlier
-  draft of this section quoted the 7% figure as if it were the floor. It
-  was the most optimistic end of a wide range, and it made an 11% flag
-  comparison look like a possible effect when the true floor is higher
-  still.
-
-The one methodological consolation: this noise is *symmetric* and affects
-all arms equally, so mode-vs-mode comparisons run on the same question set
-remain meaningful at the magnitudes seen here. It is the small, specific
-claims -- one type, one expansion, one metric moving a few questions --
-that this floor invalidates.
-
-### Judge cost, and why the ballots are not all spent
-
-Each verdict is the majority of 3 independent `claude -p` calls. A single
-ballot is not enough: across the 204 recorded ballot triples, 16% of
-questions split, 6 of them returning both "full" and "no" on identical
-evidence, and a lone ballot disagrees with the majority 5.7% of the time --
-noise the same size as the mode gaps being measured.
-
-Ballots are spent one at a time and stop as soon as the rest cannot change
-either verdict, which is lossless by construction: two agreeing ballots are
-already a majority of three. Replayed over those triples the rule costs
-2.11 calls per question and changes no verdict; the n=100 run spent 2.08.
-
-A cheaper rule -- one ballot, escalate only when it is not "full" -- was
-measured and rejected at 1.76 calls: it grades 14 "partial" and 4 "no"
-questions as "full", biasing the headline upward by ~1.5 points in one
-direction only.
-
-### Ground-truth provenance
+near-duplicate fiscal years: the gold year scores gain 2, the same filer's
+adjacent years gain 1, so a system that finds "an Apple 10-K" but not "the
+FY2024 one" is visibly penalised.
+
+**106 answerability questions** (100 single-document, 6 multi-document),
+typed figure / causal / table / risk-synthesis / definition / attribution.
 
 Reference facts are extracted from page text by regex and asserted to
 contain the figure their regex matched, then verified verbatim against the
-source pages; three older hand-authored facts are close paraphrases.
-Candidates with no verifiable fact are dropped rather than guessed at.
+source pages. Candidates with no verifiable fact are dropped, not guessed.
 
-Four authoring defects were caught rather than shipped: splitting
-sentences on "." truncated figures out of their own facts; widening the
-window backwards let an unrelated sentence become the fact (a European
-Commission match once yielded a sentence about dividends); topic-only risk
-anchors matched the shareholder letter and the business description rather
-than Item 1A; and a double-escaped character class silently dropped 23
-specs at once. Where evidence did not support the question as written, the
-question was reworded to what the text states.
+Four authoring defects were caught rather than shipped: splitting sentences
+on "." truncated figures out of their own facts; widening the window
+backwards let an unrelated sentence become the fact (a European Commission
+match once yielded a sentence about dividends); topic-only risk anchors
+matched the shareholder letter instead of Item 1A; and a double-escaped
+character class silently dropped 23 specs at once.
 
-## Known limitations of this dataset
+---
+
+## 5. Where answers are lost
+
+Retrieval finds the answering page 95 times in 100. The losses are
+downstream of that.
+
+**The excerpt quotes the wrong paragraph of the right page.** Asked *"Why
+did Apple's Greater China net sales fall in 2024?"*, retrieval returned
+`aapl-fy2024 p25` at rank 1 — the correct page — and the excerpt shown was
+the segment net-sales *table* from that page. The rank metric scores a
+perfect hit; the caller cannot answer.
+
+**Comparisons come back one-sided.** "Compare AWS growth with Microsoft
+Cloud growth" returned evidence for exactly one company (doc coverage 0.50,
+balance 0.00), with nothing in the response saying the other side is
+missing.
+
+**A minority are genuine page misses** — 5 of 100.
+
+### Two different attribution failures
+
+The dangerous ones, and they are not the same problem:
+
+| setting | what goes wrong | evidence |
+|---|---|---|
+| across documents | wrong **fiscal year** wins the rank | asked about FY2025 buybacks, `aapl-fy2024 p47` ranks first and the FY2025 figure never appears |
+| within one document | wrong **scope** — a segment's figure read as the entity's | all 6 confirmed cases in the single-doc arm |
+
+The cross-document one is a ranking problem. The within-document one is
+not: the right page was returned in 95 of 100 questions, and 4 of the 6
+confirmed cases had it at **rank 1**.
+
+Better excerpts can make the cross-document failure *worse*. Under the old
+snippet default the wrong-year page produced a vague window about the fair
+value of Notes; under paragraph mode it produces a crisp, quotable "During
+2024, the Company repurchased 499 million shares … for $95.0 billion". The
+ranking error is identical; the excerpt just made the wrong answer more
+convincing.
+
+### Wrong attribution survives reading the page
+
+The one failure reading does not fix: 10 cases search-only, 8 after reading
+— a difference inside the noise floor, and the composition is worse than
+the total suggests.
+
+- **6 persist** through reading the full page.
+- **2 are new**, caused by reading: a full page carries more confusable
+  figures than an excerpt, so more context is a mild risk here.
+
+Every confirmed case is segment-vs-consolidated scope confusion, not the
+fiscal-year confusion the label suggests: a segment's $10 million provision
+against the firmwide $10.7 billion; Office Commercial against Intelligent
+Cloud; one theatre segment's attendance against the total.
+
+Documented as a known limitation with two rejected fixes recorded. "The
+answer is missing" is recoverable by reading on — 24 of 24 such questions
+were. "A wrong figure looks like the answer" is not.
+
+### By question type
+
+Hybrid, search-only, n=100. **Read for shape, not ranking** — at a 13%
+floor, a type with 8–13 questions carries 8–15 points of judge-only
+movement.
+
+| type | n | full |
+|---|---|---|
+| definition | 8 | 88% |
+| causal | 25 | 76% |
+| figure | 35 | 74% |
+| table | 18 | 72% |
+| risk-synthesis | 13 | 62% |
+
+---
+
+## 6. Method
+
+### The judge
+
+Verdicts are the majority of 3 independent `claude -p` calls. A single
+ballot is not enough: across 204 recorded triples, 16% of questions split —
+6 returning both "full" and "no" on identical evidence — and a lone ballot
+disagrees with the majority 5.7% of the time.
+
+Ballots are spent one at a time and stop once the rest cannot change either
+verdict. This is lossless by construction: two agreeing ballots are already
+a majority of three. Replayed over those triples it costs **2.11 calls per
+question**; the n=100 run spent 2.08.
+
+A cheaper rule — one ballot, escalate only when it is not "full" — was
+measured at 1.76 calls and **rejected**: it grades 14 "partial" and 4 "no"
+questions as "full", biasing the headline upward in one direction only.
+
+Judge context is stripped to what it can use (`--setting-sources ''`,
+empty MCP config): **20,704 → 7,170 fresh input tokens per call**. Verified
+not to change verdicts — 11/100 moved, fewer than the 13/100 two identical
+runs move. Ballots are cached by prompt hash and replayed, so an
+interrupted run resumes for free.
+
+### Why the numbers moved as the sample grew
+
+Ground truth was authored on 4 filers (35 queries) first, then expanded to
+all 8 (66 queries), per the repo's quality loop.
+
+| metric (hybrid) | stage A (35 q) | full (66 q) | delta |
+|---|---|---|---|
+| doc-NDCG@10 | 0.814 | 0.776 | −0.038 |
+| doc-hit@3 | 0.886 | 0.818 | −0.068 |
+| page-NDCG@10 | 0.325 | 0.298 | −0.027 |
+| single-doc NDCG@10 | 0.496 | 0.478 | −0.018 |
+
+Every metric moved down — the expected direction, and the reason the
+quality loop mandates expansion. The smaller sample overstated quality by
+4–7% relative, with losses concentrated in the combined annual reports.
+
+**Four small-sample readings that reversed.** Each would have justified a
+wrong decision:
+
+1. On 9 questions **keyword led** (7/9 vs hybrid 6/9). At 25 it was last by
+   five, at 49 by eight, at 68 by ten.
+2. At 49 questions hybrid and semantic **tied** (34 vs 35). At 68 hybrid
+   leads by six.
+3. On 3 risk-synthesis questions hybrid looked **diluted**, suggesting
+   fusion hurt synthesis. At 9 it scores 67% against semantic's 33% — the
+   opposite conclusion.
+4. At 17 questions **causal was the weak type** at 59% in both modes —
+   specific enough to have justified redesigning the search-to-read
+   contract. At 25 it is 76%, near the top.
+
+Expansion alone is not sufficient: it addresses sampling, not judge
+variance. Two of the four are partly attributable to the 13% floor, and
+after the fact the causes cannot be separated. A claim is safe only when
+the gap exceeds the measured floor.
+
+### Superseded: the corpus answerability arm (n=15)
+
+An earlier run put 15 analyst questions through `pdf_corpus_search` and
+reported 7/15 → 9/15 across the excerpt-default fix, concluding that
+"retrieval scoring 0.78 leaves fewer than half of real questions
+answerable". **Do not cite it.** n=15 against a 13% floor is ~2 questions
+of judge-only movement — exactly the size of the reported improvement; it
+predates majority-of-3, so those are single ballots; and it grades the
+search payload alone.
+
+The excerpt-default fix it was meant to evaluate stands on a different
+ground: `pdf_corpus_search` and `pdf_search` disagreed with each other.
+Re-running the corpus arm under the current judge is open work.
+
+---
+
+## 7. Known limitations of this dataset
 
 - **Concept labels are inherently ambiguous.** Eight filers all discuss
   supplier concentration, antitrust exposure and currency hedging, so
-  pinning one "correct" document for a paraphrase query is partly
-  arbitrary. `concept-04` (antitrust -> Alphabet) and `concept-05`
-  (supplier concentration -> Apple) miss the labeled document entirely;
-  the retrieved documents are not obviously wrong answers to the question
-  as asked. Read concept-class numbers as a rough signal, not a verdict.
+  pinning one "correct" document for a paraphrase is partly arbitrary.
+  `concept-04` and `concept-05` miss the labeled document entirely, and the
+  retrieved documents are not obviously wrong answers.
 - **One labeled page per needle.** Sibling pages that legitimately answer
-  the query earn no partial credit, which is why page-level NDCG
-  understates real-world usefulness on this corpus.
+  the query earn no partial credit.
 - **Fiscal-year windows differ per filer** (NVIDIA FY2024-26 vs Meta
-  FY2022-24) because filing calendars and availability differ. Route
-  queries always name the filer's own fiscal-year label.
+  FY2022-24) because filing calendars differ. Route queries always name the
+  filer's own fiscal-year label.
 - **Microsoft page 1 carries no extractable text** (image cover on the ARS
-  filings), which is normal for glossy reports but worth knowing when
-  labeling.
-- **Judged metrics carry a 13% per-verdict noise floor**; retrieval
-  metrics (NDCG, doc-hit@3, needle) are deterministic and do not. Any
-  answerability difference under ~7 points, or any per-class breakdown on
-  fewer than ~30 questions, is not a finding. Measure the floor again with
-  `scripts/measure_judge_noise_floor.py` whenever the judge model, its
-  context flags, or the ballot rule changes.
-- **The corpus answerability arm (n=15) is stale.** Single-ballot, judged
-  before majority-of-3, and graded on the search payload alone. The
-  single-document arm (n=100, both contracts) supersedes it. Re-running
-  the corpus arm under the current judge is open work.
-- **Excerpt-quality questions are answerable without a judge.**
-  `scripts/diagnose_excerpt_fidelity.py` asks whether the excerpt for a
-  verifiably-correct page actually carries the answer -- deterministic,
-  free, and immune to the noise floor. Prefer it over a judged run when
-  the question is about excerpts rather than answerability.
+  filings) — normal for glossy reports, worth knowing when labeling.
+- **Judged metrics carry the 13% floor; retrieval metrics do not.**
 
-## Reproducing
+---
 
-Free and deterministic — no judge, run these first:
+## 8. Reproducing
+
+Free and deterministic — run these first:
 
 ```bash
 uv run python scripts/fetch_financial_corpus.py                # 24 PDFs, SHA256-checked
@@ -560,10 +387,10 @@ uv run python scripts/diagnose_excerpt_fidelity.py             # excerpt carries
 ```
 
 Billed — each spends `claude -p` calls (~2.1 ballots per question, cached
-and resumable; a killed run costs nothing to restart):
+and resumable; a killed run restarts for free):
 
 ```bash
 uv run python scripts/eval_single_doc_answerability.py auto --decomposed
 uv run python scripts/measure_judge_noise_floor.py             # re-measure the 13% floor
-uv run python scripts/eval_financial_answerability.py          # corpus arm (stale, see above)
+uv run python scripts/eval_financial_answerability.py          # corpus arm (superseded)
 ```

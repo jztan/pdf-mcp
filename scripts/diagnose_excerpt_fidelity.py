@@ -177,26 +177,40 @@ def main(argv: list[str] | None = None) -> int:
 
         got = [m["page"] for m in matches]
         hit = [p for p in gold if p in got]
+        # BOTH measures are always reported. They answer different
+        # questions and neither is "the" fidelity, so the script does not
+        # choose between them:
+        #
+        #   best  -- does the excerpt for the BEST-RANKED answering page
+        #            carry the answer? one page per question, so the
+        #            single-document and corpus settings are comparable.
+        #   any   -- does ANY returned answering page's excerpt carry it?
+        #            closer to what the caller's payload actually offers,
+        #            but not comparable across settings: a single-document
+        #            search gives all 10 slots to the answering filing
+        #            (367 gold pages over 100 questions) while a corpus
+        #            search shares 10 across 24 documents (172), so it
+        #            gets more attempts at the same question.
         if not gold:
-            bucket = "unlocatable"
-            quotes = carries = False
+            bucket = bucket_any = "unlocatable"
+            quotes = carries = carries_any = False
         elif not hit:
             # In corpus mode, distinguish losing the DOCUMENT from finding
             # the document but ranking the wrong page inside it.
             bucket = "DOC MISS" if (args.corpus and not doc_returned) else "PAGE MISS"
-            quotes = carries = False
+            bucket_any = bucket
+            quotes = carries = carries_any = False
         else:
-            # Score ONE page per question -- the best-ranked gold page.
-            # Scoring every returned gold page made the settings
-            # incomparable: a single-document search gives all 10 slots to
-            # the answering filing (367 gold pages over 100 questions),
-            # while a corpus search shares 10 slots across 24 documents
-            # (172). The corpus then looked worse at excerpt selection when
-            # it had simply been given fewer chances at the same question.
             best = next(m for m in matches if m["page"] in hit)
-            ex = [m.get("excerpt") or "" for m in matches if m["page"] == best["page"]]
-            quotes, carries = classify(q["reference_facts"][0], ex)
+            ex_best = [
+                m.get("excerpt") or "" for m in matches if m["page"] == best["page"]
+            ]
+            quotes, carries = classify(q["reference_facts"][0], ex_best)
             bucket = "ok" if carries else "EXCERPT MISS"
+
+            ex_any = [m.get("excerpt") or "" for m in matches if m["page"] in hit]
+            _, carries_any = classify(q["reference_facts"][0], ex_any)
+            bucket_any = "ok" if carries_any else "EXCERPT MISS"
         rows.append(
             {
                 "id": q["id"],
@@ -207,8 +221,10 @@ def main(argv: list[str] | None = None) -> int:
                     (i + 1 for i, m in enumerate(matches) if m["page"] in gold), None
                 ),
                 "bucket": bucket,
+                "bucket_any_gold_page": bucket_any,
                 "quotes_fact": quotes,
                 "carries_figure": carries,
+                "carries_figure_any_gold_page": carries_any,
             }
         )
 
@@ -229,16 +245,32 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     n = len(rows)
-    counts = {b: sum(1 for r in rows if r["bucket"] == b) for b in order}
     setting = "24-doc corpus" if args.corpus else "one filing"
     print(f"\n{n} questions, {setting}, mode={args.mode}")
-    for b in ("ok", "EXCERPT MISS", "PAGE MISS", "DOC MISS", "unlocatable"):
-        print(f"  {b:14s}: {counts[b]:3d}  ({counts[b]/n:.0%})")
-    fixable = counts["EXCERPT MISS"]
+    labels = ("ok", "EXCERPT MISS", "PAGE MISS", "DOC MISS", "unlocatable")
+    counts = {b: sum(1 for r in rows if r["bucket"] == b) for b in order}
+    counts_any = {
+        b: sum(1 for r in rows if r["bucket_any_gold_page"] == b) for b in order
+    }
+    print(f"  {'':14s} {'best-ranked page':>18s} {'any gold page':>15s}")
+    for b in labels:
+        print(f"  {b:14s} {counts[b]:>13d}      {counts_any[b]:>10d}")
+    found = n - counts["PAGE MISS"] - counts["DOC MISS"] - counts["unlocatable"]
+    print(f"\n  recall (answering page returned) : {found}/{n} = {found/n:.0%}")
+    if found:
+        print(
+            f"  fidelity, best-ranked page       : {counts['ok']}/{found}"
+            f" = {counts['ok']/found:.0%}"
+        )
+        print(
+            f"  fidelity, any returned gold page : {counts_any['ok']}/{found}"
+            f" = {counts_any['ok']/found:.0%}"
+        )
     print(
-        f"\n{fixable} questions have the answer on a retrieved page but not in"
-        " the excerpt.\nThat is excerpt selection, not retrieval -- and it is"
-        " testable without a judge."
+        f"\n{counts['EXCERPT MISS']} questions (best-ranked) /"
+        f" {counts_any['EXCERPT MISS']} (any gold page) have the answer on a"
+        "\nretrieved page but not in the excerpt. That is excerpt selection,"
+        " not retrieval,\nand it is testable without a judge."
     )
     scope = "corpus" if args.corpus else "singledoc"
     out = DATA / f"excerpt_fidelity_{scope}_{args.mode}.json"

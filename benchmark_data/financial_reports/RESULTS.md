@@ -185,45 +185,67 @@ verifiably-correct page carries the answer — deterministic, free, immune to
 the noise floor. Prefer it to a judged run whenever the question is about
 excerpts rather than answerability.
 
-It scores one page per question — the best-ranked page that verifiably
-states the fact — so the two settings are comparable:
+**It reports two fidelity measures and does not choose between them.** They
+answer different questions, and the choice changes the number by 26 points,
+so both are always printed:
 
-| | one filing | 24-doc corpus |
-|---|---|---|
-| `ok` (excerpt carries the answer) | 51 | 46 |
-| `EXCERPT MISS` (page found, wrong block) | 44 | 41 |
-| `PAGE MISS` (right document, wrong page) | 5 | 12 |
-| `DOC MISS` (wrong document) | 0 | 1 |
-| **recall** (answering page returned) | **95%** | **87%** |
-| **fidelity** (of those, excerpt carries it) | **54%** | **53%** |
+- **best-ranked page** — does the excerpt for the highest-ranked answering
+  page carry the answer? One page per question, so the two settings are
+  comparable.
+- **any gold page** — does *any* returned answering page's excerpt carry
+  it? Closer to what the caller's payload actually offers, but **not
+  comparable across settings**: a single-document search gives all 10 slots
+  to the answering filing (367 gold pages over 100 questions) while a
+  corpus search shares 10 across 24 documents (172), so it gets more
+  attempts at the same question.
 
-Three things follow.
+| | one filing | | 24-doc corpus | |
+|---|---|---|---|---|
+| | best-ranked | any gold | best-ranked | any gold |
+| `ok` | 51 | 76 | 46 | 58 |
+| `EXCERPT MISS` | 44 | 19 | 41 | 29 |
+| `PAGE MISS` | 5 | 5 | 12 | 12 |
+| `DOC MISS` | 0 | 0 | 1 | 1 |
+| **recall** | **95%** | **95%** | **87%** | **87%** |
+| **fidelity** | **54%** | **80%** | **53%** | **67%** |
+
+Recall is identical under both — the disagreement is entirely about
+excerpts.
+
+Four things follow.
 
 **Document routing is not the corpus problem.** `DOC MISS` is 1 in 100 —
 consistent with the route class scoring 0.927. The corpus penalty is that
 the answering page must win a top-10 slot against 3,545 pages instead of
 ~100, so `PAGE MISS` goes 5 → 12.
 
-**The corpus is no worse at excerpt selection** — 54% vs 53%. An earlier
-version of this diagnostic reported 80% vs 67% and looked like a real
-regression. It was an instrument bug: it scored *every* returned gold page,
-and a single-document search gives all 10 slots to the answering filing
-(367 gold pages over 100 questions) while a corpus search shares 10 slots
-across 24 documents (172). The corpus was being given fewer attempts at the
-same question. A direct check found 139 of 150 shared (page, question)
-excerpts byte-identical, and the 11 that differ are not systematically
-worse.
+**The corpus is no worse at excerpt selection, but only the comparable
+measure shows that.** Best-ranked: 54% vs 53%. Any-gold-page: 80% vs 67%,
+which reads as a 13-point corpus regression and is an artifact of the slot
+count above. A direct check settled it: of 150 (page, question) pairs
+returned by both tools, 139 excerpts are byte-identical and the 11 that
+differ are not systematically worse — on one, the corpus picked the better
+block.
 
-**Snippet-side losses dominate retrieval-side losses** — 44 vs 5 on one
-filing, 41 vs 13 on the corpus. Once recall is this high, excerpt selection
-has more headroom than ranking does.
+**Snippet-side losses dominate retrieval-side losses under either
+measure** — 44 vs 5 or 19 vs 5 on one filing; 41 vs 13 or 29 vs 13 on the
+corpus. The ratio is 9:1 or 4:1 single-document, 3:1 or 2:1 corpus. The
+conclusion does not depend on which measure you pick, only its size does.
+
+**Which to cite:** best-ranked for comparing settings or tracking a change,
+any-gold-page for describing what a caller's payload contains. Reporting
+one alone invites the reader to treat it as *the* fidelity, which it is
+not.
 
 > **Do not multiply these terms.** `recall × fidelity` does not predict
-> answerability: 0.95 × 0.54 = 0.51 against a measured 0.65, which would
-> imply a "reasoning" factor above 1.0. The payload returns ten excerpts,
-> and the answer can come from a page this diagnostic never flagged as
-> gold — a per-page measure has no term for that. The stages are not
-> independent and the payload is not a single snippet.
+> answerability under either measure: 0.95 × 0.54 = 0.51 and 0.95 × 0.80 =
+> 0.76, against a measured 0.65. The first implies a "reasoning" factor
+> above 1.0, the second below it, and neither is a real quantity — the
+> payload returns ten excerpts and the answer can come from a page this
+> diagnostic never flagged as gold. The stages are not independent and the
+> payload is not a single snippet. That the two measures bracket the
+> measured value from opposite sides is the clearest sign the
+> multiplicative form is fitting, not explaining.
 
 ---
 
@@ -292,7 +314,8 @@ character class silently dropped 23 specs at once.
 Retrieval finds the answering page 95 times in 100 on a single filing, 87
 across the corpus, and picks the wrong *document* once in 100. The losses
 are downstream of retrieval: 44 excerpt misses against 5 page misses on one
-filing, 41 against 13 on the corpus (§2).
+filing, 41 against 13 on the corpus — or 19 against 5 and 29 against 13
+under the other fidelity measure; the direction holds either way (§2).
 
 **The excerpt quotes the wrong paragraph of the right page.** Asked *"Why
 did Apple's Greater China net sales fall in 2024?"*, retrieval returned

@@ -28,8 +28,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "concentration-nvda",
@@ -76,8 +78,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "definition-aws",
@@ -89,8 +93,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "figure-amc-goodwill",
@@ -213,8 +219,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-aapl-gross-margin-2024",
@@ -225,8 +233,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-aapl-iphone-2024",
@@ -240,8 +250,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-aapl-services-2023",
@@ -254,8 +266,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-aapl-total-sales-2024",
@@ -269,8 +283,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c-aapl-iphone-2025",
@@ -283,8 +299,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-amc-admissions-2023",
@@ -423,8 +441,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-amzn-na-2024",
@@ -464,8 +484,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c-jpm-nii-2024",
@@ -486,8 +508,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c-nvda-datacenter-2026",
@@ -501,8 +525,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c2-jpm-nii-2023",
@@ -530,8 +556,10 @@
       ],
       "gold_rank": 3,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c2-msft-opex-2025",
@@ -545,8 +573,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-nvda-dc-2025",
@@ -558,8 +588,10 @@
       ],
       "gold_rank": 4,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-d-nvda-compute",
@@ -571,8 +603,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-googl-cloud-rev-2025",
@@ -619,8 +653,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-googl-severance-2023",
@@ -632,8 +668,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-googl-total-revenues-2025",
@@ -649,8 +687,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-jpm-credit-2024",
@@ -679,8 +719,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-jpm-firstrepublic-2023",
@@ -707,8 +749,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-jpm-income-2022",
@@ -861,8 +905,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-jpm-nii-2023",
@@ -1034,8 +1080,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-jpm-revenue-2024",
@@ -1195,8 +1243,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-meta-dap-2023",
@@ -1262,8 +1312,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-msft-cloud-2023",
@@ -1282,8 +1334,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-msft-growth-2025",
@@ -1294,8 +1348,10 @@
       ],
       "gold_rank": 4,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-msft-intelligent-cloud-2024",
@@ -1313,8 +1369,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-msft-opinc-2025",
@@ -1341,8 +1399,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r-amzn-labor-2024",
@@ -1353,8 +1413,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r-meta-litigation-2023",
@@ -1373,8 +1435,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-r-nvda-china-2026",
@@ -1385,8 +1449,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r2-amzn-fulfil-2024",
@@ -1398,8 +1464,10 @@
       ],
       "gold_rank": 6,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r2-googl-antitrust-2023",
@@ -1415,8 +1483,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-aapl-sales-2023",
@@ -1431,8 +1501,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-aapl-sales-2025",
@@ -1446,8 +1518,10 @@
       ],
       "gold_rank": 2,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": true,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-t-amc-rev-2024",
@@ -1497,8 +1571,10 @@
       ],
       "gold_rank": 3,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-googl-rev-2024",
@@ -1515,8 +1591,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-jpm-rev-2023",
@@ -1542,8 +1620,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-msft-opinc-2023",
@@ -1566,8 +1646,10 @@
       ],
       "gold_rank": 3,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-msft-opinc-2024",
@@ -1589,8 +1671,10 @@
       ],
       "gold_rank": 6,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-t-nvda-rev-2025",
@@ -1644,8 +1728,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "workforce-alphabet",
@@ -1657,8 +1743,10 @@
       ],
       "gold_rank": 1,
       "bucket": "EXCERPT MISS",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-c-nvda-gaming-2026",
@@ -1671,8 +1759,10 @@
       ],
       "gold_rank": null,
       "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-meta-dma-2024",
@@ -1683,8 +1773,10 @@
       ],
       "gold_rank": null,
       "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r-googl-ai-2025",
@@ -1695,8 +1787,10 @@
       ],
       "gold_rank": null,
       "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r2-amc-debt-2023",
@@ -1707,8 +1801,10 @@
       ],
       "gold_rank": null,
       "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "sd-r2-jpm-operational-2024",
@@ -1719,8 +1815,10 @@
       ],
       "gold_rank": null,
       "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
-      "carries_figure": false
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "attrib-google-services",
@@ -1731,8 +1829,10 @@
       ],
       "gold_rank": 3,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "cause-aapl-china",
@@ -1745,8 +1845,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "figure-aapl-buyback",
@@ -1793,8 +1895,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-aapl-china-2023",
@@ -1807,8 +1911,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-aapl-rd-2025",
@@ -1848,8 +1954,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amc-attendance-2024",
@@ -1982,8 +2090,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amc-debt-2024",
@@ -2115,8 +2225,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amc-goodwill-balance",
@@ -2246,8 +2358,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amc-liquidity-2024",
@@ -2378,8 +2492,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amzn-aws-2022",
@@ -2422,8 +2538,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amzn-aws-2023",
@@ -2446,8 +2564,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amzn-fulfillment-2024",
@@ -2459,8 +2579,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-amzn-intl-2023",
@@ -2504,8 +2626,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-aapl-services-2025",
@@ -2518,8 +2642,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-amc-foodbev-2024",
@@ -2574,8 +2700,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-amzn-intl-2024",
@@ -2620,8 +2748,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-googl-search-2025",
@@ -2637,8 +2767,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-googl-youtube-2024",
@@ -2651,8 +2783,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-msft-margin-2025",
@@ -2667,8 +2801,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c-msft-mpc-2024",
@@ -2681,8 +2817,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-aapl-iphone-2023",
@@ -2695,8 +2833,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-amc-rev-2022",
@@ -2852,8 +2992,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-amzn-na-2023",
@@ -2896,8 +3038,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-googl-rev-2023",
@@ -2914,8 +3058,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-c2-msft-rev-2023",
@@ -2932,8 +3078,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-d-amc-plf",
@@ -2946,8 +3094,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-d-amzn-na-segment",
@@ -2958,8 +3108,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-d-googl-services",
@@ -2971,8 +3123,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-d-msft-pbp",
@@ -2984,8 +3138,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-f-googl-employees-2024",
@@ -3062,8 +3218,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-f-nvda-gross-2026",
@@ -3119,8 +3277,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-googl-ec-2024",
@@ -3135,8 +3295,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-googl-youtube-2025",
@@ -3149,8 +3311,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-jpm-revenue-2022",
@@ -3282,8 +3446,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-meta-capex-2024",
@@ -3353,8 +3519,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-meta-foa-2024",
@@ -3411,8 +3579,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-meta-total-costs-2024",
@@ -3430,8 +3600,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-msft-server-2024",
@@ -3446,8 +3618,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-nvda-blackwell",
@@ -3460,8 +3634,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-nvda-export-2024",
@@ -3474,8 +3650,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-nvda-gaming-2025",
@@ -3488,8 +3666,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-nvda-hopper-2025",
@@ -3500,8 +3680,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-nvda-total-revenue-2026",
@@ -3558,8 +3740,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": false,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-r-amc-liquidity-2024",
@@ -3571,8 +3755,10 @@
       ],
       "gold_rank": 7,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-r-googl-doj-2025",
@@ -3583,8 +3769,10 @@
       ],
       "gold_rank": 8,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-r2-nvda-foundry-2026",
@@ -3595,8 +3783,10 @@
       ],
       "gold_rank": 3,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-amzn-sales-2024",
@@ -3612,8 +3802,10 @@
       ],
       "gold_rank": 4,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-googl-rev-2023",
@@ -3630,8 +3822,10 @@
       ],
       "gold_rank": 3,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-meta-costs-2022",
@@ -3647,8 +3841,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "sd-t-meta-costs-2023",
@@ -3664,8 +3860,10 @@
       ],
       "gold_rank": 2,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     },
     {
       "id": "workforce-meta",
@@ -3680,8 +3878,10 @@
       ],
       "gold_rank": 1,
       "bucket": "ok",
+      "bucket_any_gold_page": "ok",
       "quotes_fact": true,
-      "carries_figure": true
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
     }
   ]
 }

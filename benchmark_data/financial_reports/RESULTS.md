@@ -252,60 +252,70 @@ then general ranking.
 The corpus numbers above answer "search 24 filings". The commoner case is
 that the caller already knows which filing and searches only that one, so
 document selection is off the table and what remains is within-document
-retrieval and excerpt quality. Measured on 49 single-document questions
+retrieval and excerpt quality. Measured on 68 single-document questions
 (`scripts/eval_single_doc_answerability.py`, judge = majority of 3):
 
 | mode | answerable in full | partial | not answerable | wrong attribution |
 |---|---|---|---|---|
-| **semantic** | **35/49 (71%)** | 2 | 12 | 4 |
-| **hybrid (auto, default)** | **34/49 (69%)** | 6 | 9 | 5 |
-| keyword | 26/49 (53%) | 2 | 21 | 3 |
+| **hybrid (auto, default)** | **47/68 (69%)** | 7 | 14 | 9 |
+| semantic | 41/68 (60%) | 9 | 18 | 6 |
+| keyword | 37/68 (54%) | 7 | 24 | 3 |
 
 **Roughly 70% of realistic questions are fully answerable from a single
-10-K** in the default mode -- against 53% single-call on the 24-document
+10-K** in the default mode, against 53% single-call on the 24-document
 corpus. Same finding from two directions: this tool is strongest once the
-caller has narrowed to a document, which is what the search tool
-descriptions now teach.
+caller has narrowed to a document.
 
-**Keyword alone is clearly the weakest arm**, with 21 of 49 unanswerable.
-This is the third measurement of that ordering and it has been stable
-since the question set grew.
+### By question type (hybrid vs semantic)
 
-**Hybrid and semantic are a tie** (34 vs 35 -- one question, inside the
-noise this eval has repeatedly demonstrated). Neither an NDCG argument nor
-this one justifies preferring one over the other on a single filing;
-hybrid remains the default because it is the only arm that is never the
-worst on either axis.
+| type | n | hybrid | semantic |
+|---|---|---|---|
+| figure | 33 | 76% | 67% |
+| risk-synthesis | 9 | **67%** | 33% |
+| table | 6 | 67% | 67% |
+| causal | 17 | **59%** | **59%** |
 
-### Two reversals worth remembering
+**Causal is the weak type, and it is weak in both modes** -- 7 of 17
+questions fail regardless of how retrieval ranks. That points away from
+ranking and toward the shape of the answer: "why did X change" needs the
+surrounding explanation, and a single excerpt block often does not carry
+it. This server's designed flow is search-to-locate then `pdf_read_pages`
+to answer; this eval grades the search payload alone, so part of the
+causal gap may be the eval's contract rather than the tool.
 
-An earlier 9-question subset had keyword *leading* (7/9 against hybrid's
-6/9). At 25 questions keyword fell to last by five, and at 49 it is last
-by eight. Acting on the 9-question reading would have made the tool worse.
+### Three small-sample readings that reversed
 
-Absolute scores also fell from 80% (n=25) to ~70% (n=49). The first 25
-questions skewed toward MD&A figure lookups; the expansion deliberately
-added table-sourced answers, causal and regulatory questions, and the four
-filings that were under-used. Harder mix, lower score, better estimate --
-the same pattern as the corpus expansion from 35 to 66 queries. **Treat
-~70% as the honest single-PDF number**, and treat any single-run gap of
-one or two questions as noise.
+Every one of these would have justified a wrong decision if acted on:
+
+1. On 9 questions **keyword led** (7/9 vs hybrid 6/9). At 25 it was last
+   by five, at 49 last by eight, at 68 last by ten.
+2. At 49 questions hybrid and semantic **tied** (34 vs 35). At 68, after
+   adding causal and risk questions, hybrid leads by six.
+3. On 3 risk-synthesis questions hybrid looked **diluted** (returning
+   "partial" where a single arm returned "full"), suggesting fusion hurt
+   synthesis. At 9 questions hybrid scores 67% against semantic's 33% --
+   twice as good, the opposite conclusion.
+
+The pattern is consistent: a one-or-two-question gap at these sample sizes
+is judge noise. Only differences that survive an expansion are real. The
+committed question set has since grown to 100 single-document questions
+for this reason; the table above covers the 68 measured so far.
 
 ### Ground-truth provenance
 
-49 single-document questions: 46 reference facts are machine-extracted
-from page text and asserted to contain the figure their regex matched;
-3 (from the original hand-authored set) are close paraphrases of the
-source sentence. Four candidate questions were dropped during authoring
-because no verifiable fact could be built for them.
+Reference facts are extracted from page text by regex and asserted to
+contain the figure their regex matched, then verified verbatim against the
+source pages; three older hand-authored facts are close paraphrases.
+Candidates with no verifiable fact are dropped rather than guessed at.
 
-Two authoring defects were caught and fixed rather than shipped: splitting
-sentences on "." truncated figures out of their own facts (financial prose
-is full of decimals), and widening the window backwards let an unrelated
-preceding sentence become the "fact" -- a European Commission match once
-yielded a sentence about dividends. Facts are now anchored on the match
-itself. Where the evidence did not support the question as written, the
-question was reworded to what the text actually states.
+Four authoring defects were caught rather than shipped: splitting
+sentences on "." truncated figures out of their own facts; widening the
+window backwards let an unrelated sentence become the fact (a European
+Commission match once yielded a sentence about dividends); topic-only risk
+anchors matched the shareholder letter and the business description rather
+than Item 1A; and a double-escaped character class silently dropped 23
+specs at once. Where evidence did not support the question as written, the
+question was reworded to what the text states.
 
 ## Known limitations of this dataset
 

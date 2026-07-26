@@ -1600,7 +1600,10 @@ def _pdf_search_section_mode(
     description=_tool_description(
         "Search the PDF using keyword, semantic, or auto (hybrid RRF)"
         " modes, at page or section granularity. Returns ranked"
-        " matches. Excerpts default to structural text blocks"
+        " matches. Keyword terms are AND-matched independently, so"
+        " prefer short specific terms (1-3 words); a longer query"
+        " that matches nothing is retried with its terms OR-joined."
+        " Excerpts default to structural text blocks"
         " (excerpt_style='paragraph'); pass excerpt_style='snippet'"
         " for fixed-width windows. Section-mode `matches_omitted`"
         " counts byte-cap drops only — raise `max_results` to"
@@ -2430,6 +2433,7 @@ def _corpus_keyword_rankings(
     query: str,
     per_doc_k: int,
     context_chars: int,
+    allow_or_fallback: bool = True,
 ) -> tuple[
     list[list[tuple[str, int]]],
     dict[str, int],
@@ -2444,22 +2448,81 @@ def _corpus_keyword_rankings(
     doc (only docs with >=1 hit; capped at `per_doc_k` per doc), and
     `payload` maps (path, page) to the raw match dict (excerpt, score).
     """
-    rank_lists: list[list[tuple[str, int]]] = []
-    doc_match_counts: dict[str, int] = {}
-    payload: dict[tuple[str, int], dict[str, Any]] = {}
-    for path in files:
-        if cache.fts_available:
-            hits = cache.search_fts(path, query, per_doc_k, context_chars)
-        else:
-            hits = _corpus_python_keyword_hits(path, query, per_doc_k, context_chars)
-        if not hits:
-            continue
-        rank_list = [(path, m["page"]) for m in hits]
-        rank_lists.append(rank_list)
-        doc_match_counts[path] = len(hits)
-        for m in hits:
-            payload[(path, m["page"])] = m
+
+    def _collect(
+        allow_or_fallback: bool,
+    ) -> tuple[
+        list[list[tuple[str, int]]],
+        dict[str, int],
+        dict[tuple[str, int], dict[str, Any]],
+    ]:
+        rank_lists: list[list[tuple[str, int]]] = []
+        doc_match_counts: dict[str, int] = {}
+        payload: dict[tuple[str, int], dict[str, Any]] = {}
+        for path in files:
+            if cache.fts_available:
+                hits = cache.search_fts(
+                    path,
+                    query,
+                    per_doc_k,
+                    context_chars,
+                    allow_or_fallback=allow_or_fallback,
+                )
+            else:
+                hits = _corpus_python_keyword_hits(
+                    path, query, per_doc_k, context_chars
+                )
+            if not hits:
+                continue
+            rank_lists.append([(path, m["page"]) for m in hits])
+            doc_match_counts[path] = len(hits)
+            for m in hits:
+                payload[(path, m["page"])] = m
+        return rank_lists, doc_match_counts, payload
+
+    # Strict AND per document first. Relaxing each document independently
+    # would flood the cross-document comparison with loose single-term hits
+    # and swamp the one document that actually matched; the whole point of
+    # a corpus search is that a document contributing nothing is a signal.
+    # Only when NO document matched anywhere is the query retried relaxed,
+    # which turns an empty answer into a useful one without costing
+    # discrimination.
+    #
+    # The rescue itself is keyword-only. In hybrid mode the semantic arm
+    # already answers a query the keyword arm cannot, so feeding RRF a
+    # corpus-wide spray of single-term hits dilutes a ranking that was
+    # working: measured on both benchmark corpora, hybrid doc-NDCG fell
+    # (0.776 -> 0.749 financial, 0.913 -> 0.890 corpus_search) when the
+    # fallback fired there, while keyword-only mode improved.
+    rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=False)
+    if not rank_lists and allow_or_fallback:
+        rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=True)
     return rank_lists, doc_match_counts, payload
+
+
+def _merge_doc_match_counts(
+    kw_counts: dict[str, int], sem_ranking: list[tuple[str, int]]
+) -> dict[str, int]:
+    """Per-doc match counts across BOTH hybrid arms.
+
+    `doc_match_counts` tells a caller which documents hold content for this
+    query beyond the pages that won a slot in the fused top_k -- the signal
+    that a multi-document question should be re-asked per document. Taking
+    it from the keyword arm alone made it empty for question-shaped queries,
+    which the keyword arm deliberately cannot match, so the caller was told
+    nothing precisely when the semantic arm was carrying the query.
+
+    Counts are merged with max(), not sum: the two arms are separate views
+    of the same pages, so the value means "at least this many pages in this
+    document matched", never a total of both views.
+    """
+    merged = dict(kw_counts)
+    sem_counts: dict[str, int] = {}
+    for path, _page in sem_ranking:
+        sem_counts[path] = sem_counts.get(path, 0) + 1
+    for path, count in sem_counts.items():
+        merged[path] = max(merged.get(path, 0), count)
+    return merged
 
 
 def _corpus_semantic_scores(
@@ -2564,9 +2627,18 @@ def _finalize_corpus_matches(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
         " Auto-warms uncached docs up to a time budget. Keyword terms"
-        " are AND-matched independently. Use short, specific terms"
-        " (1-3 words, e.g. entity names or technical terms); a full"
-        " question or one rare extra word can return nothing."
+        " are AND-matched independently, so prefer short specific"
+        " terms (1-3 words, e.g. entity names); a longer query that"
+        " matches nothing is retried with its terms OR-joined."
+        " IMPORTANT for questions spanning several documents"
+        " (comparing two companies, a trend across years): one"
+        " ranked list of top_k hits cannot carry every document's"
+        " answer — whichever document matches hardest takes the"
+        " slots. Search each document separately (pass its path) and"
+        " combine the results. `doc_match_counts` reports every"
+        " document with matching pages, including ones absent from"
+        " `matches` — treat a document listed there but missing from"
+        " `matches` as one you still need to query."
     )
 )
 def pdf_corpus_search(
@@ -2574,7 +2646,7 @@ def pdf_corpus_search(
     query: str,
     mode: str = "auto",
     top_k: int = 10,
-    excerpt_style: str = "snippet",
+    excerpt_style: str = "paragraph",
     context_chars: int = 200,
     budget_seconds: int = 45,
     recursive: bool = False,
@@ -2596,9 +2668,10 @@ def pdf_corpus_search(
             are available, else degrades to keyword), 'keyword', or
             'semantic'.
         top_k: Maximum fused matches to return (clamped to 1-100).
-        excerpt_style: 'snippet' (default) fixed-width context window;
-            'paragraph' upgrades to the enclosing text block (adds
-            `bbox`/`page_rect`/`clip`) where one can be located.
+        excerpt_style: 'paragraph' (default) returns the enclosing text
+            block -- the sentence or bullet that matched -- and adds
+            `bbox`/`page_rect`/`clip`; 'snippet' is the legacy
+            fixed-width context window. Matches single-doc pdf_search.
         context_chars: Characters of context around each match
             (clamped to 50-2000).
         budget_seconds: Wall-clock budget for warming uncached docs
@@ -2625,9 +2698,15 @@ def pdf_corpus_search(
           `corpus.rrf_fuse_two_rankings_scored`, `corpus.CORPUS_RRF_K`)
           except in pure semantic mode, which ranks by cosine directly.
         - total_matches: len(matches)
-        - doc_match_counts: per-doc hit count, keyed by path. In
-          keyword and hybrid modes this counts the keyword arm's
-          per-doc FTS hits, capped at top_k per document (independent
+        - doc_match_counts: per-doc hit count, keyed by path -- which
+          documents hold content for this query, INCLUDING documents
+          whose pages did not win a slot in `matches`. Use it to decide
+          when a question spanning several documents should be re-asked
+          once per document. In keyword mode this counts the keyword
+          arm's per-doc FTS hits, capped at top_k per document; in
+          hybrid mode it merges both arms (max per document), so a
+          question-shaped query the keyword arm cannot match still
+          reports what the semantic arm found (independent
           of which pages the fused ranking selects). In pure semantic
           mode it instead counts how many of that doc's pages landed
           in the global top_k (a post-selection count).
@@ -2804,7 +2883,11 @@ def pdf_corpus_search(
 
     # ── mode="keyword" or mode="auto" (both need the keyword arm) ─────
     rank_lists, kw_doc_match_counts, kw_payload = _corpus_keyword_rankings(
-        ready_paths, query, top_k, context_chars
+        ready_paths,
+        query,
+        top_k,
+        context_chars,
+        allow_or_fallback=(mode == "keyword"),
     )
     kw_fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k)
     kw_excerpts_by_doc = _group_excerpts_by_doc(kw_payload)
@@ -2904,7 +2987,7 @@ def pdf_corpus_search(
     return {
         "matches": matches,
         "total_matches": len(matches),
-        "doc_match_counts": kw_doc_match_counts,
+        "doc_match_counts": _merge_doc_match_counts(kw_doc_match_counts, sem_ranking),
         "search_mode": "hybrid",
         "excerpt_style": excerpt_style,
         "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},

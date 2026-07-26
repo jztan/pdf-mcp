@@ -4297,3 +4297,103 @@ class TestParagraphBlockTokenGuard:
         result = pdf_search(path, "budget", mode="keyword", excerpt_style="paragraph")
         assert result["matches"], result
         assert result["matches"][0]["excerpt"].startswith("The quarterly")
+
+
+class TestCorpusKeywordOrFallbackScope:
+    """The OR fallback rescues a keyword-only search that found nothing.
+    In hybrid mode the semantic arm already covers that gap, so injecting
+    loose single-term matches into RRF only dilutes a good ranking --
+    measured on two corpora, hybrid regressed when it fired there."""
+
+    def test_keyword_mode_rescues_a_question_shaped_query(
+        self, corpus_dir, isolated_server
+    ):
+        result = pdf_corpus_search(
+            str(corpus_dir),
+            "what does the budget say about unicorn provisioning",
+            mode="keyword",
+        )
+        assert "error" not in result
+        assert result["total_matches"] >= 1, (
+            "keyword-only mode should fall back to OR when the strict"
+            " AND query matches nothing anywhere"
+        )
+
+    def test_auto_mode_does_not_use_the_keyword_or_fallback(
+        self, corpus_dir, isolated_server
+    ):
+        from pdf_mcp.server import _corpus_keyword_rankings
+
+        files = sorted(str(p) for p in corpus_dir.glob("*.pdf"))
+        pdf_corpus_warm(files)
+        query = "what does the budget say about unicorn provisioning"
+
+        rescued, _, _ = _corpus_keyword_rankings(
+            files, query, 10, 200, allow_or_fallback=True
+        )
+        strict, _, _ = _corpus_keyword_rankings(
+            files, query, 10, 200, allow_or_fallback=False
+        )
+        assert rescued, "precondition: the fallback finds something"
+        assert not strict, "strict mode must stay empty for the hybrid arm"
+
+
+class TestCorpusSearchExcerptStyleDefault:
+    """pdf_search moved its default from "snippet" to "paragraph" after
+    benchmarking 97% vs 80% answer containment. pdf_corpus_search was built
+    later and kept the legacy default, so the same query against the same
+    page returned the answer sentence from one tool and a fixed-width window
+    over a table header from the other."""
+
+    def test_default_excerpt_style_is_paragraph(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget")
+        assert "error" not in result
+        assert result["excerpt_style"] == "paragraph"
+
+    def test_default_matches_carry_block_geometry(self, corpus_dir, isolated_server):
+        """Paragraph mode adds bbox/clip; snippet mode does not. Asserting on
+        the geometry proves the paragraph path actually ran, rather than the
+        echoed field alone."""
+        result = pdf_corpus_search(str(corpus_dir), "budget")
+        assert result["matches"], "precondition: query returned matches"
+        assert any(
+            "bbox" in m for m in result["matches"]
+        ), "paragraph mode should attach block geometry to at least one match"
+
+    def test_snippet_remains_available_explicitly(self, corpus_dir, isolated_server):
+        result = pdf_corpus_search(str(corpus_dir), "budget", excerpt_style="snippet")
+        assert result["excerpt_style"] == "snippet"
+
+
+class TestHybridDocMatchCounts:
+    """In hybrid mode doc_match_counts came from the keyword arm alone, so a
+    question-shaped query (which the keyword arm cannot match, by design)
+    reported {} even when the semantic arm found pages in several documents.
+    That is the one signal telling an agent "other documents also matched --
+    go ask them separately", and it was blank exactly when it mattered."""
+
+    def test_keyword_counts_survive_when_semantic_adds_nothing(self):
+        from pdf_mcp.server import _merge_doc_match_counts
+
+        assert _merge_doc_match_counts({"a.pdf": 3}, []) == {"a.pdf": 3}
+
+    def test_semantic_only_docs_are_reported(self):
+        from pdf_mcp.server import _merge_doc_match_counts
+
+        # The bug: keyword matched nothing, so the caller saw {}.
+        out = _merge_doc_match_counts({}, [("a.pdf", 1), ("a.pdf", 7), ("b.pdf", 2)])
+        assert out == {"a.pdf": 2, "b.pdf": 1}
+
+    def test_overlapping_arms_do_not_double_count(self):
+        from pdf_mcp.server import _merge_doc_match_counts
+
+        # Both arms saw the same document; the count is "at least this many
+        # pages matched", not the sum of two views of the same pages.
+        out = _merge_doc_match_counts({"a.pdf": 5}, [("a.pdf", 1), ("a.pdf", 2)])
+        assert out == {"a.pdf": 5}
+
+    def test_semantic_wins_when_it_saw_more_pages(self):
+        from pdf_mcp.server import _merge_doc_match_counts
+
+        out = _merge_doc_match_counts({"a.pdf": 1}, [("a.pdf", 1), ("a.pdf", 2)])
+        assert out == {"a.pdf": 2}

@@ -1,0 +1,258 @@
+{
+  "description": "Large public-company financial reports (10-K and glossy annual report PDFs) for the financial-report retrieval benchmark. PDFs are fetched, not committed: run scripts/fetch_financial_corpus.py. Each doc is pinned by sha256 so a rotted URL can be replaced by any mirror serving the identical file.",
+  "results_note": "graded ground truth over 8 filers x 3 fiscal years; classes are needle / route / trap / concept",
+  "sanity_note": "Page-level NDCG is floored by label sparsity on this corpus: one labeled page per needle against 3,545 pages in which the same phrasing recurs across fiscal years and across MD&A, the notes and the segment sections. Cite the doc-level table. Interpretation is appended by hand after the run.",
+  "docs": [
+    {
+      "id": "googl-fy2025",
+      "filer": "alphabet",
+      "fiscal_year": 2025,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/googl-fy2025.pdf",
+      "url": "https://s206.q4cdn.com/479360582/files/doc_financials/2025/q4/GOOG-10-K-2025.pdf",
+      "sha256": "9953e8d2e70b18c5bf0af3b2b2a1e96de0555f51cbb39a625497b434e19fb43a"
+    },
+    {
+      "id": "googl-fy2024",
+      "filer": "alphabet",
+      "fiscal_year": 2024,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/googl-fy2024.pdf",
+      "url": "https://s206.q4cdn.com/479360582/files/doc_financials/2024/q4/goog-10-k-2024.pdf",
+      "sha256": "3a2de615984a4fa9fd382fdb1fb3a40dfd17d21b51486f2e03015214b68454a9"
+    },
+    {
+      "id": "googl-fy2023",
+      "filer": "alphabet",
+      "fiscal_year": 2023,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/googl-fy2023.pdf",
+      "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0001652044/4b8e828a-944d-4821-862e-2dc9bfb2bd78.pdf",
+      "sha256": "1dceed8775b7b56432618aff917e08f9fe9573921f397a79b14bad5ab31e469a",
+      "source_note": "Q4 filing host; not on the q4cdn doc_financials path used by FY2024/2025."
+    },
+    {
+      "id": "aapl-fy2025",
+      "filer": "apple",
+      "fiscal_year": 2025,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/aapl-fy2025.pdf",
+      "url": "https://s2.q4cdn.com/470004039/files/doc_financials/2025/ar/_10-K-2025-As-Filed.pdf",
+      "sha256": "3eb270b22acb7d8d8e9c32a43dc221dec3345f8e4bca02755fdbc1ee16c823de"
+    },
+    {
+      "id": "aapl-fy2024",
+      "filer": "apple",
+      "fiscal_year": 2024,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/aapl-fy2024.pdf",
+      "url": "https://s2.q4cdn.com/470004039/files/doc_earnings/2024/q4/filing/10-Q4-2024-As-Filed.pdf",
+      "sha256": "319e1217afe72f194575e63350ea6c813eaf5caf0c24e59ce8b221fc1b3ea0d4"
+    },
+    {
+      "id": "aapl-fy2023",
+      "filer": "apple",
+      "fiscal_year": 2023,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/aapl-fy2023.pdf",
+      "url": "https://s2.q4cdn.com/470004039/files/doc_earnings/2023/q4/filing/_10-K-Q4-2023-As-Filed.pdf",
+      "sha256": "e36d41ed3a32874efba3e33dc89ef7e1329e32a26e91b453cb0e9b680288a783"
+    },
+    {
+      "id": "nvda-fy2026",
+      "filer": "nvidia",
+      "fiscal_year": 2026,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/nvda-fy2026.pdf",
+      "url": "https://s201.q4cdn.com/141608511/files/doc_financials/2026/q4/10K-NVDA.pdf",
+      "sha256": "a056b59e4170c0123217a8e861a39af4a4a48d2df0d27b641017a618a280a396"
+    },
+    {
+      "id": "nvda-fy2025",
+      "filer": "nvidia",
+      "fiscal_year": 2025,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/nvda-fy2025.pdf",
+      "url": "https://s201.q4cdn.com/141608511/files/doc_financials/2025/q4/177440d5-3b32-4185-8cc8-95500a9dc783.pdf",
+      "sha256": "b67bd67a64488a54886de001c788bc5059a965fc6ef5b4d8b71624951e13df8e"
+    },
+    {
+      "id": "nvda-fy2024",
+      "filer": "nvidia",
+      "fiscal_year": 2024,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/nvda-fy2024.pdf",
+      "url": "https://s201.q4cdn.com/141608511/files/doc_financials/2024/q4/1cbe8fe7-e08a-46e3-8dcc-b429fc06c1a4.pdf",
+      "sha256": "536f66d7f1c3413abbf643e0a02bd0aab65639116fe630225f3f93529244658b"
+    },
+    {
+      "id": "msft-fy2025",
+      "filer": "microsoft",
+      "fiscal_year": 2025,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/msft-fy2025.pdf",
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312525245177/d61995dars.pdf",
+      "sha256": "e88c300dcc58dcc93a88fa4afc6bd7b2e63a2095c7a6479d49d57692e1d19a6d",
+      "source_note": "ARS filing on sec.gov; Microsoft publishes no public 10-K PDF (IR serves .docx). Requires a declaring User-Agent."
+    },
+    {
+      "id": "msft-fy2024",
+      "filer": "microsoft",
+      "fiscal_year": 2024,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/msft-fy2024.pdf",
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312524242888/d815777dars.pdf",
+      "sha256": "979a3f8199702397e080719dc1212242eb2580bed78b5dab92d3f576d6abf5bc",
+      "source_note": "ARS filing on sec.gov. Requires a declaring User-Agent."
+    },
+    {
+      "id": "msft-fy2023",
+      "filer": "microsoft",
+      "fiscal_year": 2023,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/msft-fy2023.pdf",
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312523259254/d506673dars.pdf",
+      "sha256": "5eba1f84118d8ef4ba383e5fa57a03b61224a146cacb2b35197ab6f508784e02",
+      "source_note": "ARS filing on sec.gov. Requires a declaring User-Agent."
+    },
+    {
+      "id": "meta-fy2024",
+      "filer": "meta",
+      "fiscal_year": 2024,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/meta-fy2024.pdf",
+      "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0001326801/a8eb8302-b52c-4db5-964f-a2d796c05f4b.pdf",
+      "sha256": "be49f4b35fc1e04ef48562c4c93763d00f316d8002cf7adbe7fb6d3aff6d64b9"
+    },
+    {
+      "id": "meta-fy2023",
+      "filer": "meta",
+      "fiscal_year": 2023,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/meta-fy2023.pdf",
+      "url": "https://www.annualreports.com/HostedData/AnnualReportArchive/m/NASDAQ_META_2023.pdf",
+      "sha256": "e8fadc2448e4f99ad0ec2dc2e41d13b864204955238cf1f7cd9c96839f274a6c",
+      "source_note": "Third-party mirror; Meta's own CDN copy of the FY2023 10-K could not be located. sha256 pins the exact file."
+    },
+    {
+      "id": "meta-fy2022",
+      "filer": "meta",
+      "fiscal_year": 2022,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/meta-fy2022.pdf",
+      "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0001326801/e574646c-c642-42d9-9229-3892b13aabfb.pdf",
+      "sha256": "68c72974a1cb928c3810ffc8519b7d1bb844d08641b1dd170d6eac1d2ac482e7"
+    },
+    {
+      "id": "amzn-fy2024",
+      "filer": "amazon",
+      "fiscal_year": 2024,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amzn-fy2024.pdf",
+      "url": "https://s2.q4cdn.com/299287126/files/doc_financials/2025/ar/Amazon-2024-Annual-Report.pdf",
+      "sha256": "d6c8919af431fbf38d5d92f2060ba8f45d084f26495c6f17ce81232102977908",
+      "source_note": "Combined annual report embedding the full Form 10-K. CDN folder year is the filing year, not the fiscal year."
+    },
+    {
+      "id": "amzn-fy2023",
+      "filer": "amazon",
+      "fiscal_year": 2023,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amzn-fy2023.pdf",
+      "url": "https://s2.q4cdn.com/299287126/files/doc_financials/2024/ar/Amazon-com-Inc-2023-Annual-Report.pdf",
+      "sha256": "3d822639c87e3be4b7731ccc5d8b3f990f90196ca7c2e7252271b07a7894cae7",
+      "source_note": "Combined annual report embedding the full Form 10-K."
+    },
+    {
+      "id": "amzn-fy2022",
+      "filer": "amazon",
+      "fiscal_year": 2022,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amzn-fy2022.pdf",
+      "url": "https://s2.q4cdn.com/299287126/files/doc_financials/2023/ar/Amazon-2022-Annual-Report.pdf",
+      "sha256": "03401abb4272daad181f08878a2aef0382616accf4c9c8852b417b8558bae329",
+      "source_note": "Combined annual report embedding the full Form 10-K."
+    },
+    {
+      "id": "amc-fy2024",
+      "filer": "amc",
+      "fiscal_year": 2024,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amc-fy2024.pdf",
+      "url": "https://investor.amctheatres.com/sec-filings/all-sec-filings/content/0001411579-25-000042/0001411579-25-000042.pdf",
+      "sha256": "b5896a3e3519a7deec0fed928c7e44ee857ab0be1a7c426d75f9e5fd8fa2f29c"
+    },
+    {
+      "id": "amc-fy2023",
+      "filer": "amc",
+      "fiscal_year": 2023,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amc-fy2023.pdf",
+      "url": "https://investor.amctheatres.com/sec-filings/all-sec-filings/content/0001411579-24-000021/0001411579-24-000021.pdf",
+      "sha256": "48f2b193370229a0a48436db2c78aba069fd35caae5620896cfc01b507a8f92c"
+    },
+    {
+      "id": "amc-fy2022",
+      "filer": "amc",
+      "fiscal_year": 2022,
+      "doc_type": "10-K",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/amc-fy2022.pdf",
+      "url": "https://investor.amctheatres.com/sec-filings/all-sec-filings/content/0001411579-23-000038/0001411579-23-000038.pdf",
+      "sha256": "645a33da7fbab3c91e1363d1f71e531b64be0e78dcab1f0952869e3eab894d3d"
+    },
+    {
+      "id": "jpm-fy2024",
+      "filer": "jpm",
+      "fiscal_year": 2024,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/jpm-fy2024.pdf",
+      "url": "https://www.jpmorganchase.com/content/dam/jpmc/jpmorgan-chase-and-co/investor-relations/documents/annualreport-2024.pdf",
+      "sha256": "78443e60b3188a70673ca7042d0bf9e4dc596d04072af729242886d22bd0a4e3",
+      "source_note": "Glossy annual report embedding the full Form 10-K (10-K cover around p.86)."
+    },
+    {
+      "id": "jpm-fy2023",
+      "filer": "jpm",
+      "fiscal_year": 2023,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/jpm-fy2023.pdf",
+      "url": "https://www.jpmorganchase.com/content/dam/jpmc/jpmorgan-chase-and-co/investor-relations/documents/annualreport-2023.pdf",
+      "sha256": "bebb7c4abb278396187cadcac8006951ffcee7dde7c7b458ef364befacbd8908",
+      "source_note": "Glossy annual report embedding the full Form 10-K (10-K cover around p.86)."
+    },
+    {
+      "id": "jpm-fy2022",
+      "filer": "jpm",
+      "fiscal_year": 2022,
+      "doc_type": "annual-report",
+      "lang": "en",
+      "path": "benchmark_data/.financial_pdfs/jpm-fy2022.pdf",
+      "url": "https://www.jpmorganchase.com/content/dam/jpmc/jpmorgan-chase-and-co/investor-relations/documents/annualreport-2022.pdf",
+      "sha256": "e2a82330efb82c9ab38b30cd043fa59c0c4b7debb5108559ce3c788bbe7942c6",
+      "source_note": "Glossy annual report embedding the full Form 10-K (10-K cover around p.66)."
+    }
+  ]
+}

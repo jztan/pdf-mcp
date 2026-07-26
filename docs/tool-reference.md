@@ -577,6 +577,21 @@ The first call on a new document embeds all pages or builds the section index (o
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
 
+**How keyword matching treats your query.** Terms are whitespace-split and
+**AND-matched**: a page must contain every term to match, in any order.
+Short, specific terms therefore work best (`"Greater China net sales"`),
+while a full question can over-constrain the match — one word the document
+phrases differently ("decline" where the filing says "decreased") would
+otherwise return nothing at all. To keep question-shaped queries usable, a
+query of **three or more terms that matches nothing is retried with its
+terms OR-joined**, and BM25 ranks pages carrying more (and rarer) terms
+first. Queries of one or two terms keep strict AND, where requiring both
+terms is the point. The retry applies to keyword-only search (`mode="keyword"`,
+and the keyword arm of single-document `auto`); cross-document
+`pdf_corpus_search` in hybrid mode deliberately does not use it, because the
+semantic arm already covers those queries and fusing in loose single-term
+hits measurably lowers result quality.
+
 > **CJK queries (Japanese/Chinese/Korean):** FTS5 keyword matching is unreliable
 > on unspaced CJK text, so `mode='auto'`/`'keyword'` may miss embedded terms. The
 > tool attaches a `cjk_keyword_warning` advisory and steers you to
@@ -787,7 +802,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.
 - `total_matches` (int): `len(matches)`.
-- `doc_match_counts` (object): per-doc hit count keyed by path. In keyword and hybrid modes this is the keyword arm's per-doc FTS hit count, capped at `top_k` per document (independent of which pages the fused ranking selects); in pure semantic mode it's how many of that doc's pages landed in the global `top_k`.
+- `doc_match_counts` (object): per-doc hit count keyed by path — **which documents hold content for this query, including documents whose pages did not win a slot in `matches`**. Use it to decide when a question spanning several documents ("compare A with B", "the trend across three years") should be re-asked once per document. In keyword mode it is the keyword arm's per-doc FTS hit count, capped at `top_k` per document; in hybrid mode it merges both arms (max per document, since the arms are two views of the same pages), so a question-shaped query the keyword arm cannot match still reports the documents the semantic arm found; in pure semantic mode it's how many of that doc's pages landed in the global `top_k`. Counts are independent of which pages the fused ranking selects.
 - `search_mode` (string): `"keyword"`, `"semantic"`, or `"hybrid"`, the mode actually run (`"auto"` resolves to `"hybrid"` when embeddings are available, else `"keyword"`).
 - `excerpt_style`: echoed input.
 - `coverage` (object): `{"searched": docs actually queried, "corpus": total resolved files}`.

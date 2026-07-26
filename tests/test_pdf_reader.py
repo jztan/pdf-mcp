@@ -15,6 +15,7 @@ from pdf_mcp import extractor
 from pdf_mcp.cache import PDFCache, _contains_cjk
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
+    count_query_tokens,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -1624,6 +1625,81 @@ class TestGetBestParagraphForQuery:
             doc2.close()
             os.unlink(f.name)
 
+    @staticmethod
+    def _two_block_page(first: str, second: str):
+        """A page with two real paragraph blocks (not one block per line)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(50, 50, 520, 170), first, fontsize=10)
+        page.insert_textbox(pymupdf.Rect(50, 220, 520, 340), second, fontsize=10)
+        handle = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        doc.save(handle.name)
+        doc.close()
+        return handle.name
+
+    def test_quantitative_query_prefers_a_tied_block_that_has_the_figures(self):
+        """On a tie, the block carrying the numbers wins.
+
+        Measured defect: of 20 single-document 10-K questions whose answer
+        was on a retrieved page but missing from the excerpt, the gold
+        block already TIED the winning score in 10. It lost only because
+        `score > best_score` keeps whichever block came first in document
+        order. For a question asking "how much", a tied block containing
+        no figures cannot be the better answer.
+        """
+        query = "What total gross margin percentage during 2024?"
+        prose = (
+            "Total gross margin percentage during 2024 declined relative to "
+            "prior periods, reflecting a different product mix."
+        )
+        figures = (
+            "Total gross margin percentage during 2024: 46.2% versus 44.1% "
+            "and 43.3% for the two preceding periods."
+        )
+        path = self._two_block_page(prose, figures)
+        try:
+            doc = pymupdf.open(path)
+            blocks = [b[4] for b in doc[0].get_text("blocks", sort=True) if b[6] == 0]
+            assert len(blocks) == 2, blocks
+            # Precondition: the blocks must genuinely TIE, or this test
+            # would pass on the old code and prove nothing. Three earlier
+            # drafts of this fixture did exactly that.
+            scores = [count_query_tokens(b, query) for b in blocks]
+            assert scores[0] == scores[1], f"fixture does not tie: {scores}"
+
+            text, _idx = get_best_paragraph_for_query(doc[0], query)
+            assert text is not None
+            assert "46.2%" in text, f"picked the figure-less block: {text!r}"
+            doc.close()
+        finally:
+            os.unlink(path)
+
+    def test_non_quantitative_query_keeps_document_order_on_a_tie(self):
+        """The figure preference must not fire on non-numeric questions.
+
+        Otherwise any page mixing prose with a table would start returning
+        the table for definition and risk questions.
+        """
+        first = (
+            "The Company faces risks relating to cybersecurity incidents "
+            "that could disrupt its operations and harm its reputation."
+        )
+        second = (
+            "Cybersecurity spending totalled 1,234 in 2024 and 5,678 in "
+            "2023 across the segments listed above in this filing."
+        )
+        path = self._two_block_page(first, second)
+        try:
+            doc = pymupdf.open(path)
+            text, _idx = get_best_paragraph_for_query(
+                doc[0], "What cybersecurity risks does the Company disclose?"
+            )
+            assert text is not None
+            assert "risks relating to cybersecurity" in text
+            doc.close()
+        finally:
+            os.unlink(path)
+
     def test_no_overlap_returns_none(self):
         """No matching tokens returns (None, None)."""
         doc = pymupdf.open()
@@ -3069,3 +3145,125 @@ def test_multicolumn_letterspaced_heading_not_fragmented():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestFTS5OrFallback:
+    """An AND-joined query needs every token on the same page, so a
+    natural-language question returns nothing when one word is absent.
+    Falling back to OR keeps question-shaped queries usable."""
+
+    def test_or_fallback_expression_joins_tokens_with_or(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("revenue decline 2024") == (
+            '"revenue" OR "decline" OR "2024"'
+        )
+
+    def test_or_fallback_is_none_for_a_single_token(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        # One token: the AND form already is the OR form, so there is
+        # nothing to retry and the caller must not run a second query.
+        assert _fts5_or_fallback("revenue") is None
+
+    def test_or_fallback_is_none_for_a_two_token_query(self):
+        """Two terms is a deliberate conjunction ("pgvector unicorn"), and
+        AND's precision guarantee is the point of it. Only longer,
+        question-shaped queries -- where some words are incidental
+        connective tissue -- earn the fallback."""
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("pgvector unicorn") is None
+
+    def test_or_fallback_is_none_when_no_tokens_survive(self):
+        from pdf_mcp.cache import _fts5_or_fallback
+
+        assert _fts5_or_fallback("   ***   ") is None
+
+    def test_question_shaped_query_finds_the_page(self, cache, sample_pdf):
+        """The real bug: every AND token must appear, so one absent word
+        ('decline' vs the page's 'decreased') zeroed the whole query."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+        cache.save_page_text(sample_pdf, 30, "Unrelated liquidity discussion")
+
+        results = cache.search_fts(
+            sample_pdf,
+            "Greater China net sales decline in 2024",
+            max_results=10,
+            context_chars=100,
+        )
+
+        assert results, "question-shaped query returned nothing"
+        assert results[0]["page"] == 25
+
+    def test_and_match_still_wins_when_all_tokens_present(self, cache, sample_pdf):
+        """The fallback must not change ranking for queries that already
+        match: a page carrying every token outranks a page carrying one."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(sample_pdf, 0, "alpha beta gamma together on one page")
+        cache.save_page_text(sample_pdf, 1, "alpha only here")
+
+        results = cache.search_fts(
+            sample_pdf, "alpha beta gamma", max_results=10, context_chars=100
+        )
+
+        assert len(results) == 1, "AND matched, so the fallback must not fire"
+        assert results[0]["page"] == 1
+
+    def test_page_match_counts_agree_with_returned_matches(self, cache, sample_pdf):
+        """Invariant: pages in `matches` must also appear in the per-page
+        counts, so the fallback has to apply to both paths."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+
+        query = "Greater China net sales decline in 2024"
+        results = cache.search_fts(sample_pdf, query, max_results=10, context_chars=100)
+        counts = cache.get_fts_page_counts(sample_pdf, query)
+
+        assert results, "precondition: search returned matches"
+        for match in results:
+            assert (match["page"] - 1) in counts, (
+                f"page {match['page']} returned by search_fts but missing"
+                " from get_fts_page_counts"
+            )
+
+
+class TestFTS5OrFallbackIsOptional:
+    """Corpus search must not relax each document independently: a document
+    that lacks the terms contributing nothing is what lets the one document
+    holding a real match win. The fallback is therefore opt-out."""
+
+    def test_fallback_can_be_disabled(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+
+        cache.save_page_text(
+            sample_pdf, 24, "Greater China net sales decreased during 2024"
+        )
+        query = "Greater China net sales decline in 2024"
+
+        assert cache.search_fts(
+            sample_pdf, query, max_results=10, context_chars=100
+        ), "precondition: the fallback finds this page by default"
+
+        assert (
+            cache.search_fts(
+                sample_pdf,
+                query,
+                max_results=10,
+                context_chars=100,
+                allow_or_fallback=False,
+            )
+            == []
+        ), "with the fallback disabled, strict AND semantics apply"

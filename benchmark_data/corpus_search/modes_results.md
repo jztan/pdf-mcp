@@ -4,17 +4,17 @@ Corpus: 100 docs. Queries: 64 (graded ground truth, stage-2). top_k=10. The tool
 
 | mode | overall NDCG@10 | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|
-| keyword (keyword) | 0.547 | 0.968 | 0.381 | 0.476 | 0.859 | 0.38 |
-| semantic (semantic) | 0.579 | 0.861 | 0.215 | 0.785 | 0.875 | 0.19 |
-| auto (hybrid) | 0.674 | 0.996 | 0.392 | 0.776 | 1.000 | 0.44 |
+| keyword (keyword) | 0.557 | 0.968 | 0.381 | 0.502 | 0.891 | 0.39 |
+| semantic (semantic) | 0.579 | 0.861 | 0.215 | 0.785 | 0.875 | 0.20 |
+| auto (hybrid) | 0.674 | 0.996 | 0.392 | 0.776 | 1.000 | 0.45 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
-Separates "wrong doc" from "right doc, unlabeled page": spread labels grade 2-3 (doc, page) pairs while gold docs match the query on many pages, so page-level NDCG floors on label sparsity there. Doc-level is the honest ceiling-side read for the spread class.
+Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade only a few (doc, page) pairs while a gold doc matches the query on many pages, so page-level NDCG floors on label sparsity. Doc-level is the honest ceiling-side read wherever gold docs match on many more pages than are labeled.
 
 | mode | overall | needle | spread | trap |
 |---|---|---|---|---|
-| keyword | 0.791 | 1.000 | 0.744 | 0.720 |
+| keyword | 0.816 | 1.000 | 0.744 | 0.785 |
 | semantic | 0.829 | 0.974 | 0.576 | 1.000 |
 | auto | 0.913 | 1.000 | 0.777 | 1.000 |
 
@@ -22,7 +22,7 @@ Separates "wrong doc" from "right doc, unlabeled page": spread labels grade 2-3 
 
 | mode | CJK NDCG@10 (n=5) | non-CJK NDCG@10 |
 |---|---|---|
-| keyword | 0.985 | 0.510 |
+| keyword | 0.985 | 0.520 |
 | semantic | 0.684 | 0.570 |
 | auto | 0.990 | 0.647 |
 

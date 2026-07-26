@@ -103,9 +103,17 @@ Four defects, all fixed and covered by tests:
 | defect | evidence |
 |---|---|
 | **FTS5 AND cliff** | 17 of 45 page-labeled queries (38%) returned *nothing*; keyword concept class scored exactly 0.000 |
-| `pdf_corpus_search` snippet default | disagreed with `pdf_search`, which defaulted to paragraph |
+| `pdf_corpus_search` snippet default | **23% → 61% answerable** (search-only, n=106, paired, p<0.0001); also disagreed with `pdf_search` |
 | hybrid `doc_match_counts` | returned `{}`, so callers had no signal to decompose on |
 | paragraph-picker tie-break | ties fell to document order, favouring prose over the block with the numbers |
+
+The excerpt-default fix is the branch's largest measured improvement.
+Re-judging the same 106 questions with `excerpt_style="snippet"` — byte-for-
+byte the pre-branch behavior, still a supported parameter — scored **24/106
+(23%) answerable in full against 65/106 (61%)** with paragraph excerpts:
+51 questions improved, 6 worsened, and wrong attribution fell 26 → 17.
+Before this branch, a caller grading corpus search payloads alone got
+snippet windows that answered fewer than a quarter of realistic questions.
 
 The AND cliff alone justifies the corpus. FTS5 AND-joins query terms, so
 **every** word had to appear on one page: "Apple Greater China net sales
@@ -474,6 +482,11 @@ ranks documents well (doc-NDCG 0.776) still leaves 39% of questions
 unanswerable from search alone — but the magnitude was never measurable at
 n=15, and "fewer than half" was wrong: it is 61% search-only, 72% after
 reading.
+
+The snippet-vs-paragraph comparison it attempted (7/15 → 9/15) has also
+been re-measured properly: on all 106 questions, paired, the excerpt
+default is worth **23% → 61%** (see §1). The n=15 arm had the right
+direction and understated the effect by an order of magnitude.
 
 The excerpt-default fix it was meant to evaluate stands on a different
 ground anyway: `pdf_corpus_search` and `pdf_search` disagreed with each

@@ -394,6 +394,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument(
+        "--excerpt-style",
+        default="paragraph",
+        choices=["paragraph", "snippet"],
+        help=(
+            "excerpt style passed to pdf_corpus_search. 'snippet' is"
+            " byte-for-byte the pre-branch default, so judging the search"
+            " arm under it measures the tool as it was before this branch."
+        ),
+    )
+    ap.add_argument(
         "--arms",
         default="search,followup",
         help=(
@@ -439,7 +449,13 @@ def main(argv: list[str] | None = None) -> int:
 
     rows: list[dict[str, Any]] = []
     for q in questions["questions"]:
-        res = pdf_corpus_search(paths, q["question"], mode=args.mode, top_k=TOP_K)
+        res = pdf_corpus_search(
+            paths,
+            q["question"],
+            mode=args.mode,
+            top_k=TOP_K,
+            excerpt_style=args.excerpt_style,
+        )
         matches = res.get("matches", [])
         counts = res.get("doc_match_counts", {})
 
@@ -574,6 +590,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out = {
         "mode": args.mode,
+        "excerpt_style": args.excerpt_style,
         "model": args.model,
         "judge_context_flags": JUDGE_CONTEXT_FLAGS,
         "top_k": TOP_K,
@@ -591,10 +608,11 @@ def main(argv: list[str] | None = None) -> int:
         },
         "per_question": rows,
     }
-    (DATA / "answerability_results.json").write_text(
+    suffix = "" if args.excerpt_style == "paragraph" else f"_{args.excerpt_style}"
+    (DATA / f"answerability_results{suffix}.json").write_text(
         json.dumps(out, indent=2, sort_keys=True) + "\n"
     )
-    print(f"\nwrote {DATA / 'answerability_results.json'}")
+    print(f"\nwrote {DATA / ('answerability_results' + suffix + '.json')}")
     return 0
 
 

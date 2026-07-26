@@ -54,7 +54,18 @@ class TestJudgeContextFlags:
     QUESTION = {"question": "q", "reference_facts": ["f"], "confusable_with": ""}
 
     def _argv(self) -> list[str]:
-        with patch("scripts.eval_financial_answerability.subprocess.run") as run:
+        # Isolate from the ballot cache in BOTH directions: a cached ballot
+        # would skip the subprocess entirely (call_args = None), and an
+        # unpatched _record_ballot would write this mocked verdict into the
+        # PRODUCTION cache file -- which happened, and poisoned later runs.
+        with (
+            patch(
+                "scripts.eval_financial_answerability._take_cached_ballot",
+                return_value=None,
+            ),
+            patch("scripts.eval_financial_answerability._record_ballot"),
+            patch("scripts.eval_financial_answerability.subprocess.run") as run,
+        ):
             run.return_value.returncode = 0
             run.return_value.stdout = '{"answerable": "full"}'
             judge_one(self.QUESTION, "payload", "claude-opus-4-8")

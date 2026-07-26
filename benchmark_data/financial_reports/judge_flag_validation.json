@@ -1,0 +1,76 @@
+{
+  "changed": [
+    {
+      "after": "partial",
+      "before": "full",
+      "id": "concentration-nvda"
+    },
+    {
+      "after": "partial",
+      "before": "full",
+      "id": "workforce-meta"
+    },
+    {
+      "after": "full",
+      "before": "partial",
+      "id": "sd-aapl-gross-margin-2024"
+    },
+    {
+      "after": "partial",
+      "before": "no",
+      "id": "sd-aapl-iphone-2024"
+    },
+    {
+      "after": "partial",
+      "before": "full",
+      "id": "sd-c-amzn-na-2024"
+    },
+    {
+      "after": "no",
+      "before": "full",
+      "id": "sd-c-amzn-intl-2024"
+    },
+    {
+      "after": "full",
+      "before": "no",
+      "id": "sd-r-nvda-china-2026"
+    },
+    {
+      "after": "full",
+      "before": "no",
+      "id": "sd-t-msft-opinc-2023"
+    },
+    {
+      "after": "no",
+      "before": "full",
+      "id": "sd-d-googl-services"
+    },
+    {
+      "after": "no",
+      "before": "partial",
+      "id": "sd-r2-amc-debt-2023"
+    },
+    {
+      "after": "partial",
+      "before": "full",
+      "id": "sd-c2-msft-rev-2023"
+    }
+  ],
+  "flags": [
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{}}"
+  ],
+  "full_after": 71,
+  "full_before": 74,
+  "graded_higher": 4,
+  "graded_lower": 7,
+  "model": "claude-opus-4-8",
+  "noise_floor_estimate": 0.065,
+  "questions": 100,
+  "verdict_changes": 11,
+  "wrong_after": 9,
+  "wrong_before": 13
+}

@@ -252,38 +252,65 @@ then general ranking.
 The corpus numbers above answer "search 24 filings". The commoner case is
 that the caller already knows which filing and searches only that one, so
 document selection is off the table and what remains is within-document
-retrieval and excerpt quality. Measured on 68 single-document questions
-(`scripts/eval_single_doc_answerability.py`, judge = majority of 3):
+retrieval and excerpt quality (`scripts/eval_single_doc_answerability.py`,
+judge = majority of 3).
 
-| mode | answerable in full | partial | not answerable | wrong attribution |
-|---|---|---|---|---|
-| **hybrid (auto, default)** | **47/68 (69%)** | 7 | 14 | 9 |
-| semantic | 41/68 (60%) | 9 | 18 | 6 |
-| keyword | 37/68 (54%) | 7 | 24 | 3 |
+The default mode is measured on all 100 single-document questions; the two
+alternatives were measured on the first 68 and not re-run, because their
+ordering held across every expansion (n=9 → 25 → 49 → 68) and re-running
+them costs more than the answer is worth:
+
+| mode | n | answerable in full | partial | not answerable | wrong attribution |
+|---|---|---|---|---|---|
+| **hybrid (auto, default)** | **100** | **67-74/100 (see below)** | 9 | 17 | 9-13 |
+| hybrid, first 68 only | 68 | 47/68 (69%) | 7 | 14 | 9 |
+| semantic | 68 | 41/68 (60%) | 9 | 18 | 6 |
+| keyword | 68 | 37/68 (54%) | 7 | 24 | 3 |
 
 **Roughly 70% of realistic questions are fully answerable from a single
 10-K** in the default mode, against 53% single-call on the 24-document
 corpus. Same finding from two directions: this tool is strongest once the
 caller has narrowed to a document.
 
-### By question type (hybrid vs semantic)
+The hybrid row is a **range, not a point**, and that is the honest form.
+The same 100 payloads judged three times scored 74, 71, and 67 -- see
+"How much of this is judge noise" below. The 69% at n=68 is inside that
+range, so the apparent 69% → 74% improvement is not one; the 68 are also a
+subset of the 100, so it compares question mixes, not versions.
 
-| type | n | hybrid | semantic |
+Wrong attribution (9-13 of 100) is the failure mode worth working on: the
+top excerpts lead a reader to the wrong company, segment, or fiscal year.
+An earlier draft of this document called it "the stable signal" because it
+read 13% at both n=68 and n=100. Re-judging showed it moves between 9 and
+13 on identical payloads, so its stability across the expansion was luck.
+
+### By question type
+
+Hybrid at n=100; the semantic column is the n=68 run, shown only where the
+two overlap enough to compare:
+
+| type | n | hybrid | semantic (n=68) |
 |---|---|---|---|
-| figure | 33 | 76% | 67% |
-| risk-synthesis | 9 | **67%** | 33% |
-| table | 6 | 67% | 67% |
-| causal | 17 | **59%** | **59%** |
+| definition | 8 | 88% | -- |
+| causal | 25 | 76% | 59% |
+| figure | 35 | 74% | 67% |
+| table | 18 | 72% | 67% |
+| risk-synthesis | 13 | 62% | 33% |
 
-**Causal is the weak type, and it is weak in both modes** -- 7 of 17
-questions fail regardless of how retrieval ranks. That points away from
-ranking and toward the shape of the answer: "why did X change" needs the
-surrounding explanation, and a single excerpt block often does not carry
-it. This server's designed flow is search-to-locate then `pdf_read_pages`
-to answer; this eval grades the search payload alone, so part of the
-causal gap may be the eval's contract rather than the tool.
+**Read this table for shape, not for ranking.** At a 13% per-verdict noise
+floor, a type with 8-13 questions carries roughly ±1-2 questions of
+judge-only movement, which is 8-15 percentage points. Nothing here except
+the spread between the extremes is separable from noise, and even that is
+marginal.
 
-### Three small-sample readings that reversed
+**The causal weakness reported at n=68 did not survive.** That run put
+causal at 59% in both hybrid and semantic on 17 questions, which read as a
+mode-independent deficiency pointing at the search-then-read contract
+rather than at ranking. At 25 questions causal is 76%. Part of that is the
+larger sample and part is judge variance; the two cannot be separated after
+the fact. Either way the original finding was not solid enough to act on.
+
+### Four small-sample readings that reversed
 
 Every one of these would have justified a wrong decision if acted on:
 
@@ -295,11 +322,77 @@ Every one of these would have justified a wrong decision if acted on:
    "partial" where a single arm returned "full"), suggesting fusion hurt
    synthesis. At 9 questions hybrid scores 67% against semantic's 33% --
    twice as good, the opposite conclusion.
+4. At 17 questions **causal was the weak type** at 59%, equal in both
+   modes -- a finding specific enough to have justified redesigning the
+   search-to-read contract around it. At 25 it is 76%, near the top.
 
 The pattern is consistent: a one-or-two-question gap at these sample sizes
-is judge noise. Only differences that survive an expansion are real. The
-committed question set has since grown to 100 single-document questions
-for this reason; the table above covers the 68 measured so far.
+is judge noise. Only differences that survive an expansion are real, and
+the more specific and actionable a small-sample finding looks, the more
+carefully it needs retesting before anything is built on it.
+
+Note that expansion alone is not sufficient -- it addresses sampling, not
+judge variance. Two of the four reversals above are partly attributable to
+the 13% noise floor rather than to the larger sample, and after the fact
+the two causes cannot be separated. A claim is only safe when the gap
+exceeds the measured floor.
+
+### How much of this is judge noise
+
+Every number above is a difference between judged runs, which means none of
+them can be read without knowing how much the judge disagrees with itself.
+That cannot be derived from one run's ballots -- it has to be measured, by
+judging identical stored payloads twice under identical configuration
+(`scripts/measure_judge_noise_floor.py`; retrieval is deterministic, so the
+judge is the only thing that varies).
+
+**13% of verdicts move between two identical runs.** The same 100 payloads
+scored 74, 71, and 67 "answerable in full" across three passes.
+
+| pair | verdicts moved | headline |
+|---|---|---|
+| old judge context vs new | 11/100 | 74 → 71 |
+| **identical config, twice** | **13/100** | **71 → 67** |
+
+Consequences, applied throughout this document:
+
+- **The headline is 67-74, not 74.** Treat ~±4 points as the resolution of
+  this metric. A single run's number is one draw from that range.
+- **Differences below ~7 points are not findings.** The mode gaps survive
+  comfortably (hybrid 74 vs semantic 60 vs keyword 54 at n=68, spreads of
+  14 and 20 points). Per-type breakdowns on 8-13 questions do not.
+- **Modelling the noise floor from ballot data does not work.** Estimated
+  from the recorded triples it comes out anywhere from 7% to 35% depending
+  on the estimator, because 3 ballots cannot pin a distribution -- a
+  question whose ballots happened to agree looks deterministic. An earlier
+  draft of this section quoted the 7% figure as if it were the floor. It
+  was the most optimistic end of a wide range, and it made an 11% flag
+  comparison look like a possible effect when the true floor is higher
+  still.
+
+The one methodological consolation: this noise is *symmetric* and affects
+all arms equally, so mode-vs-mode comparisons run on the same question set
+remain meaningful at the magnitudes seen here. It is the small, specific
+claims -- one type, one expansion, one metric moving a few questions --
+that this floor invalidates.
+
+### Judge cost, and why the ballots are not all spent
+
+Each verdict is the majority of 3 independent `claude -p` calls. A single
+ballot is not enough: across the 204 recorded ballot triples, 16% of
+questions split, 6 of them returning both "full" and "no" on identical
+evidence, and a lone ballot disagrees with the majority 5.7% of the time --
+noise the same size as the mode gaps being measured.
+
+Ballots are spent one at a time and stop as soon as the rest cannot change
+either verdict, which is lossless by construction: two agreeing ballots are
+already a majority of three. Replayed over those triples the rule costs
+2.11 calls per question and changes no verdict; the n=100 run spent 2.08.
+
+A cheaper rule -- one ballot, escalate only when it is not "full" -- was
+measured and rejected at 1.76 calls: it grades 14 "partial" and 4 "no"
+questions as "full", biasing the headline upward by ~1.5 points in one
+direction only.
 
 ### Ground-truth provenance
 

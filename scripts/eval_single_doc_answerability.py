@@ -6,10 +6,11 @@ one. Only questions whose answer lives in a single document are used, so
 "the wrong document won" is off the table and what remains is purely
 within-document retrieval + excerpt quality.
 
-Reuses the committed eval's judge (majority of 3) so the numbers are
-comparable with the corpus arm.
+Reuses the committed eval's judge (majority of 3, with lossless early
+stopping) so the numbers are comparable with the corpus arm.
 """
 
+import argparse
 import json
 import sys
 
@@ -24,16 +25,26 @@ DATA = REPO / "benchmark_data" / "financial_reports"
 TOP_K = 10
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     import pdf_mcp.server as server_module
 
     from eval_financial_answerability import (
         DEFAULT_MODEL,
+        JUDGE_CONTEXT_FLAGS,
         build_payload,
         judge_majority,
     )
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_search
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "mode", nargs="?", default="auto", choices=["auto", "keyword", "semantic"]
+    )
+    ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--votes", type=int, default=3)
+    ap.add_argument("--workers", type=int, default=4)
+    args = ap.parse_args(argv)
 
     server_module.cache = PDFCache(
         cache_dir=REPO / "benchmark_data" / ".answerability_cache", ttl_hours=24 * 30
@@ -44,9 +55,12 @@ def main() -> int:
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
     id_by_path = {v: k for k, v in path_by_id.items()}
 
-    mode = sys.argv[1] if len(sys.argv) > 1 else "auto"
+    mode = args.mode
     single = [q for q in questions["questions"] if q["scope"] == "single-doc"]
-    print(f"{len(single)} questions, ONE filing each, mode={mode}\n")
+    print(
+        f"{len(single)} questions, ONE filing each, mode={mode},"
+        f" model={args.model}, votes<={args.votes}\n"
+    )
 
     rows = []
     for q in single:
@@ -62,10 +76,12 @@ def main() -> int:
             }
         )
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
         verdicts = list(
             pool.map(
-                lambda pair: judge_majority(pair[0], pair[1]["payload"], DEFAULT_MODEL),
+                lambda pair: judge_majority(
+                    pair[0], pair[1]["payload"], args.model, votes=args.votes
+                ),
                 zip(single, rows),
             )
         )
@@ -89,6 +105,7 @@ def main() -> int:
             f"  {','.join(v.get('votes', []))}"
         )
     n = len(rows)
+    spent = sum(v.get("ballots_spent", len(v.get("votes", []))) for v in verdicts)
     print()
     print(
         f"[{mode}] answerable in full     : {tally['full']}/{n} ({tally['full']/n:.0%})"
@@ -96,6 +113,37 @@ def main() -> int:
     print(f"partial                       : {tally['partial']}/{n}")
     print(f"not answerable                : {tally['no']}/{n}")
     print(f"wrong attribution             : {tally['wrong']}/{n}")
+    print(
+        f"judge ballots spent           : {spent} ({spent/n:.2f}/question,"
+        f" vs {args.votes}.00 without early stopping)"
+    )
+
+    # Persist immediately. An earlier run printed its numbers and kept none
+    # of them; the results had to be rebuilt from a scrollback dump.
+    out_path = DATA / f"single_doc_{mode}_results.json"
+    out_path.write_text(
+        json.dumps(
+            {
+                "mode": mode,
+                "model": args.model,
+                "votes_max": args.votes,
+                # The judge's context is part of the experiment: two runs
+                # with different flags here are not directly comparable.
+                "judge_context_flags": JUDGE_CONTEXT_FLAGS,
+                "top_k": TOP_K,
+                "questions": n,
+                "ballots_spent": spent,
+                "tally": tally,
+                "per_question": [
+                    {**row, "verdict": verdict} for row, verdict in zip(rows, verdicts)
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    print(f"wrote {out_path}")
     return 0
 
 

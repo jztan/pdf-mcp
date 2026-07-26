@@ -6,7 +6,14 @@ expected-document list. A rule that peeked at ground truth would measure
 an agent that already knows the answer.
 """
 
-from scripts.eval_financial_answerability import followup_docs
+from unittest.mock import patch
+
+from scripts.eval_financial_answerability import (
+    JUDGE_CONTEXT_FLAGS,
+    ballots_decided,
+    followup_docs,
+    judge_one,
+)
 
 
 class TestFollowupDocs:
@@ -32,6 +39,80 @@ class TestFollowupDocs:
         """The pre-fix hybrid behaviour: doc_match_counts came back {}, so an
         agent had no signal to follow up on and the flow could not start."""
         assert followup_docs([{"path": "a.pdf"}], {}, limit=3) == []
+
+
+class TestJudgeContextFlags:
+    """The judge subprocess must not reload context it cannot use.
+
+    Measured on this project: 20,704 fresh input tokens per call, of which
+    the rubric and payload were 2,495. Dropping CLAUDE.md and the MCP tool
+    schemas more than halves the cost of every eval run, and a run makes
+    hundreds of calls -- so losing these flags in a refactor is expensive
+    and silent. The command is asserted, not the saving.
+    """
+
+    QUESTION = {"question": "q", "reference_facts": ["f"], "confusable_with": ""}
+
+    def _argv(self) -> list[str]:
+        with patch("scripts.eval_financial_answerability.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = '{"answerable": "full"}'
+            judge_one(self.QUESTION, "payload", "claude-opus-4-8")
+        return run.call_args[0][0]
+
+    def test_claude_md_is_not_loaded_into_the_judge(self):
+        argv = self._argv()
+        assert "--setting-sources" in argv
+        assert argv[argv.index("--setting-sources") + 1] == ""
+
+    def test_mcp_servers_are_not_loaded_into_the_judge(self):
+        argv = self._argv()
+        assert "--strict-mcp-config" in argv
+        assert '{"mcpServers":{}}' in argv
+
+    def test_the_default_system_prompt_is_kept(self):
+        """Replacing it measured MORE expensive (23,680 fresh tokens, zero
+        cache reads) because a custom prompt busts the shared cache prefix."""
+        assert "--system-prompt" not in self._argv()
+
+    def test_every_context_flag_reaches_the_subprocess(self):
+        argv = self._argv()
+        for flag in JUDGE_CONTEXT_FLAGS:
+            assert flag in argv
+
+
+class TestBallotsDecided:
+    """Early stopping must be LOSSLESS: it may skip a ballot only when that
+    ballot could not change the majority-of-N verdict. Simulated against the
+    204 recorded ballot triples, this rule costs 2.11 calls per question
+    instead of 3 and changes zero verdicts. A cheaper rule that stops on a
+    single `full` ballot was rejected: it graded 14 `partial` and 4 `no`
+    questions as `full`, biasing the headline number upward.
+    """
+
+    def test_two_agreeing_ballots_settle_a_majority_of_three(self):
+        assert ballots_decided(["full", "full"], [False, False], votes=3)
+
+    def test_two_disagreeing_ballots_do_not(self):
+        assert not ballots_decided(["full", "partial"], [False, False], votes=3)
+
+    def test_a_single_ballot_never_settles_anything(self):
+        assert not ballots_decided(["full"], [False], votes=3)
+
+    def test_the_final_ballot_always_settles(self):
+        assert ballots_decided(["full", "partial", "no"], [False] * 3, votes=3)
+
+    def test_agreement_on_answerable_is_not_enough_when_wrong_is_open(self):
+        """wrong_attribution is tallied separately and needs its own majority.
+        Two ballots agreeing on `full` while splitting on the trap flag leave
+        the trap undecided -- a third ballot could still carry it."""
+        assert not ballots_decided(["full", "full"], [True, False], votes=3)
+
+    def test_both_dimensions_agreeing_settles(self):
+        assert ballots_decided(["full", "full"], [True, True], votes=3)
+
+    def test_wrong_cannot_reach_a_majority_once_two_ballots_deny_it(self):
+        assert ballots_decided(["no", "no"], [False, False], votes=3)
 
 
 class TestQuestionScopeField:

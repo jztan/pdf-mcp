@@ -40,6 +40,7 @@ import shutil
 import subprocess
 import sys
 
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,34 @@ DATA = REPO / "benchmark_data" / "financial_reports"
 DEFAULT_MODEL = "claude-opus-4-8"
 DENIED_TOOLS = "Bash,Read,Write,Edit,WebFetch,WebSearch"
 JUDGE_TIMEOUT_S = 180
+
+# Strip context the judge cannot use. Measured per call on this project:
+# 20,704 fresh input tokens, of which the rubric and payload were 2,495 --
+# the other 88% was Claude Code reloading its own scaffolding on every one
+# of the hundreds of invocations a run makes.
+#
+#   --setting-sources ''  drops the global and project CLAUDE.md
+#                         (19,853 -> 8,807 tokens; the dominant saving)
+#   --strict-mcp-config   drops the tool schemas of 10 MCP servers, none of
+#     + empty config      which the judge may call anyway (-11%)
+#
+# Deliberately NOT set: --system-prompt. Replacing the default prompt looks
+# cheaper on total context but bills MORE (23,680 fresh, zero cache reads),
+# because a custom prompt busts the cache prefix the default one shares
+# across invocations.
+#
+# Dropping CLAUDE.md is also correct on the merits: a grader should not
+# inherit the repo's commit conventions and prose rules while scoring
+# retrieval. But it does change the judge's context, so verdicts from
+# JUDGE_CONTEXT_FLAGS runs are only comparable with earlier runs once an
+# agreement check on identical payloads says so.
+JUDGE_CONTEXT_FLAGS = [
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    '{"mcpServers":{}}',
+]
 TOP_K = 10
 FOLLOWUP_LIMIT = 3
 
@@ -125,6 +154,29 @@ def extract_json(text: str) -> dict[str, Any]:
         }
 
 
+def ballots_decided(states: list[str], wrongs: list[bool], votes: int) -> bool:
+    """True when the remaining ballots cannot change either verdict.
+
+    Both dimensions must be settled: `answerable` takes the plurality, and
+    `wrong_attribution` needs a strict majority of all `votes`. A leader is
+    unassailable once it beats the runner-up by more than the number of
+    ballots still unspent -- so two agreeing ballots settle a majority of
+    three, and the third call is pure waste.
+    """
+    remaining = votes - len(states)
+    tally = sorted(Counter(states).values(), reverse=True)
+    best = tally[0] if tally else 0
+    runner_up = tally[1] if len(tally) > 1 else 0
+    # With no ballots left the verdict stands however the counts fell --
+    # including a three-way tie, which the plurality resolves by tie-break.
+    answerable_settled = remaining <= 0 or best > runner_up + remaining
+
+    needed = votes // 2 + 1
+    trues = sum(1 for w in wrongs if w)
+    wrong_settled = trues >= needed or trues + remaining < needed
+    return answerable_settled and wrong_settled
+
+
 def judge_majority(
     question: dict[str, Any], payload: str, model: str, votes: int = 3
 ) -> dict[str, Any]:
@@ -132,20 +184,41 @@ def judge_majority(
 
     A single `claude -p` vote is demonstrably unstable here: on the first
     run, two questions whose two payloads were byte-identical (no follow-up
-    calls were made) still received different verdicts. That noise floor was
-    wide enough to swamp the effect being measured, so every verdict is now
-    the majority of `votes` independent calls.
+    calls were made) still received different verdicts. Across the 204
+    recorded ballot triples, 16% of questions split, and a lone ballot
+    disagrees with the majority 5.7% of the time -- noise of the same order
+    as the mode differences being measured. So every verdict is the majority
+    of `votes` independent calls.
+
+    Ballots are spent one at a time and stop early once `ballots_decided`
+    says the rest cannot matter. This is lossless by construction, not an
+    approximation: replayed over those same triples it costs 2.11 calls per
+    question instead of 3 and changes no verdict.
     """
-    ballots = [judge_one(question, payload, model) for _ in range(votes)]
-    states = [b.get("answerable") for b in ballots]
-    winner = max(set(states), key=states.count)
-    wrong = sum(1 for b in ballots if b.get("wrong_attribution")) > votes // 2
+    ballots: list[dict[str, Any]] = []
+    states: list[str] = []
+    wrongs: list[bool] = []
+    for _ in range(votes):
+        ballot = judge_one(question, payload, model)
+        ballots.append(ballot)
+        states.append(ballot.get("answerable"))
+        wrongs.append(bool(ballot.get("wrong_attribution")))
+        if ballots_decided(states, wrongs, votes):
+            break
+
+    # Deterministic tie-break. `max(set(states), ...)` iterated a set of
+    # strings, whose order is hash-randomised per process, so a three-way
+    # split (2 of the 204 recorded triples) could grade differently on a
+    # rerun of identical ballots. Ties now fall to the same state every time.
+    winner = min(sorted(set(states)), key=lambda s: -states.count(s))
+    wrong = sum(wrongs) > votes // 2
     chosen = next(b for b in ballots if b.get("answerable") == winner)
     return {
         **chosen,
         "answerable": winner,
         "wrong_attribution": wrong,
         "votes": states,
+        "ballots_spent": len(states),
         "unanimous": len(set(states)) == 1,
     }
 
@@ -162,7 +235,15 @@ def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, A
     )
     try:
         result = subprocess.run(
-            ["claude", "-p", "--model", model, "--disallowedTools", DENIED_TOOLS],
+            [
+                "claude",
+                "-p",
+                "--model",
+                model,
+                "--disallowedTools",
+                DENIED_TOOLS,
+                *JUDGE_CONTEXT_FLAGS,
+            ],
             input=prompt,
             capture_output=True,
             text=True,
@@ -354,6 +435,8 @@ def main(argv: list[str] | None = None) -> int:
 
     out = {
         "mode": args.mode,
+        "model": args.model,
+        "judge_context_flags": JUDGE_CONTEXT_FLAGS,
         "top_k": TOP_K,
         "corpus_docs": len(paths),
         "summary": {

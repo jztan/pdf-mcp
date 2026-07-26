@@ -116,12 +116,21 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", default="auto", choices=["auto", "keyword", "semantic"])
     ap.add_argument("--ids", help="comma-separated question ids (default: all)")
+    ap.add_argument(
+        "--corpus",
+        action="store_true",
+        help=(
+            "search all 24 documents with pdf_corpus_search instead of the"
+            " one filing that answers the question. Splits recall failure"
+            " into wrong-document and right-document-wrong-page."
+        ),
+    )
     args = ap.parse_args(argv)
 
     import pdf_mcp.server as server_module
 
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import pdf_search
+    from pdf_mcp.server import pdf_corpus_search, pdf_search
 
     cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
     server_module.cache = cache
@@ -139,12 +148,25 @@ def main(argv: list[str] | None = None) -> int:
         keep = set(args.ids.split(","))
         questions = [q for q in questions if q["id"] in keep]
 
+    corpus_paths = [p for p in path_by_id.values() if Path(p).exists()]
+
     rows: list[dict[str, Any]] = []
     for q in questions:
         doc = q["expect_docs"][0]
         path = path_by_id[doc]
-        info = pdf_search(path, q["question"], mode=args.mode, max_results=TOP_K)
-        matches = info.get("matches", [])
+        if args.corpus:
+            info = pdf_corpus_search(
+                corpus_paths, q["question"], mode=args.mode, top_k=TOP_K
+            )
+            # keep only hits in the document that actually answers it; a hit
+            # elsewhere cannot carry the gold page
+            all_matches = info.get("matches", [])
+            matches = [m for m in all_matches if m.get("path") == path]
+            doc_returned = bool(matches)
+        else:
+            info = pdf_search(path, q["question"], mode=args.mode, max_results=TOP_K)
+            matches = info.get("matches", [])
+            doc_returned = True
 
         # get_pages_text is an INTERNAL API: 0-indexed. pdf_search returns
         # 1-indexed pages. Convert here, or every comparison below is off by
@@ -159,10 +181,20 @@ def main(argv: list[str] | None = None) -> int:
             bucket = "unlocatable"
             quotes = carries = False
         elif not hit:
-            bucket = "RECALL MISS"
+            # In corpus mode, distinguish losing the DOCUMENT from finding
+            # the document but ranking the wrong page inside it.
+            bucket = "DOC MISS" if (args.corpus and not doc_returned) else "PAGE MISS"
             quotes = carries = False
         else:
-            ex = [m.get("excerpt") or "" for m in matches if m["page"] in hit]
+            # Score ONE page per question -- the best-ranked gold page.
+            # Scoring every returned gold page made the settings
+            # incomparable: a single-document search gives all 10 slots to
+            # the answering filing (367 gold pages over 100 questions),
+            # while a corpus search shares 10 slots across 24 documents
+            # (172). The corpus then looked worse at excerpt selection when
+            # it had simply been given fewer chances at the same question.
+            best = next(m for m in matches if m["page"] in hit)
+            ex = [m.get("excerpt") or "" for m in matches if m["page"] == best["page"]]
             quotes, carries = classify(q["reference_facts"][0], ex)
             bucket = "ok" if carries else "EXCERPT MISS"
         rows.append(
@@ -180,7 +212,13 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
-    order = {"EXCERPT MISS": 0, "RECALL MISS": 1, "unlocatable": 2, "ok": 3}
+    order = {
+        "EXCERPT MISS": 0,
+        "PAGE MISS": 1,
+        "DOC MISS": 2,
+        "unlocatable": 3,
+        "ok": 4,
+    }
     rows.sort(key=lambda r: (order[r["bucket"]], r["id"]))
     print(f"{'question':32s} {'type':15s} {'gold':>10s} {'rank':>5s}  bucket")
     print("-" * 92)
@@ -192,8 +230,9 @@ def main(argv: list[str] | None = None) -> int:
 
     n = len(rows)
     counts = {b: sum(1 for r in rows if r["bucket"] == b) for b in order}
-    print(f"\n{n} single-document questions, mode={args.mode}")
-    for b in ("ok", "EXCERPT MISS", "RECALL MISS", "unlocatable"):
+    setting = "24-doc corpus" if args.corpus else "one filing"
+    print(f"\n{n} questions, {setting}, mode={args.mode}")
+    for b in ("ok", "EXCERPT MISS", "PAGE MISS", "DOC MISS", "unlocatable"):
         print(f"  {b:14s}: {counts[b]:3d}  ({counts[b]/n:.0%})")
     fixable = counts["EXCERPT MISS"]
     print(
@@ -201,7 +240,8 @@ def main(argv: list[str] | None = None) -> int:
         " the excerpt.\nThat is excerpt selection, not retrieval -- and it is"
         " testable without a judge."
     )
-    out = DATA / f"excerpt_fidelity_{args.mode}.json"
+    scope = "corpus" if args.corpus else "singledoc"
+    out = DATA / f"excerpt_fidelity_{scope}_{args.mode}.json"
     out.write_text(json.dumps({"mode": args.mode, "rows": rows}, indent=2) + "\n")
     print(f"\nwrote {out}")
     return 0

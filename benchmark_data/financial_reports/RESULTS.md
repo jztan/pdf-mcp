@@ -14,18 +14,53 @@ near-duplicates of one another.
 
 ### Can a caller answer the question?
 
-100 single-document questions, hybrid mode, majority-of-3 judge. Both arms
-graded in the same run.
+Hybrid mode, majority-of-3 judge, both arms graded in the same run so the
+comparison is paired.
+
+**One filing — the caller already knows which document** (n=100):
 
 | arm | answerable in full | partial | not answerable | wrong attribution |
 |---|---|---|---|---|
 | search only | 65/100 | 14 | 21 | 10 |
-| **search, then read the top 2 pages** | **86/100** | 7 | 7 | 8 |
+| **search, then read the top 2 pages** | **86/100 (86%)** | 7 | 7 | 8 |
 
-**Cite 86%, and name the flow.** This server documents search-to-locate,
-then `pdf_read_pages` to answer. 24 questions improved and 0 worsened —
-one-directional and far outside the ±4 judge resolution. The search-only
-column measures excerpt quality, not what a caller can answer.
+24 improved, 0 worsened.
+
+**24-document corpus — the document must be found first** (n=106, includes
+the 6 multi-document questions):
+
+| arm | answerable in full | partial | not answerable | wrong attribution |
+|---|---|---|---|---|
+| search only | 65/106 (61%) | 14 | 27 | 17 |
+| **search, then read the top 2 pages** | **76/106 (72%)** | 12 | 18 | 19 |
+
+18 improved, 5 worsened (sign test p = 0.005).
+
+**Cite 86% for the single-document case and 72% for the corpus, and name
+the flow.** This server documents search-to-locate, then `pdf_read_pages`
+to answer; the search-only rows measure excerpt quality, not what a caller
+can answer.
+
+**The two settings differ in a way worth stating.**
+
+| | one filing | 24-doc corpus |
+|---|---|---|
+| search only | 65% | 61% |
+| search + read | **86%** | **72%** |
+| questions reading made **worse** | 0 | 5 |
+| wrong attribution | 10% | 16% |
+
+Reading the located pages is close to free when the filing is already
+known. Across a corpus it is a weaker and *riskier* move: the top pages can
+come from the wrong filing, so reading imports a confusable year's figures
+instead of resolving anything. Wrong attribution rises rather than falls
+(17 → 19), and sits 6 points above the single-document rate.
+
+Multi-document questions (n=6) barely move — 1 → 2 full, 4 partial in both
+arms. Reading two pages cannot answer a question spanning two filings;
+that is what the follow-up arm (`--arms followup`, scoped re-searches of
+documents that matched but won no slot) exists for, and it was not run
+here.
 
 ### Retrieval quality
 
@@ -119,9 +154,15 @@ landed on **74, 71, 67, 65** across four passes.
 Re-measure with `scripts/measure_judge_noise_floor.py` whenever the judge
 model, its context flags, or the ballot rule changes.
 
-### Grading the search payload alone understates by ~20 points
+### Grading the search payload alone understates the product
 
-See §1. Any section reporting a search-only figure is measuring excerpts.
+By ~21 points on a single filing (65 → 86) and ~11 across the corpus
+(61 → 72). Any section reporting a search-only figure is measuring excerpt
+quality, not answerability.
+
+The gap is not uniform, and reading is not uniformly safe: on one filing it
+worsened nothing, across the corpus it worsened 5 questions and raised
+wrong attribution. Quote the arm and the setting together.
 
 ### Page-level retrieval scores are floored by labelling, not failure
 
@@ -247,22 +288,36 @@ convincing.
 
 ### Wrong attribution survives reading the page
 
-The one failure reading does not fix: 10 cases search-only, 8 after reading
-— a difference inside the noise floor, and the composition is worse than
-the total suggests.
+The one failure reading does not fix — in either setting.
 
-- **6 persist** through reading the full page.
-- **2 are new**, caused by reading: a full page carries more confusable
-  figures than an excerpt, so more context is a mild risk here.
+| setting | search only | after reading |
+|---|---|---|
+| one filing | 10/100 | 8/100 |
+| 24-doc corpus | 17/106 | **19/106** |
 
-Every confirmed case is segment-vs-consolidated scope confusion, not the
-fiscal-year confusion the label suggests: a segment's $10 million provision
-against the firmwide $10.7 billion; Office Commercial against Intelligent
-Cloud; one theatre segment's attendance against the total.
+On one filing the difference is inside the noise floor, and the composition
+is worse than the total suggests: **6 persist** through reading the full
+page, and **2 are new**, caused by it — a full page carries more confusable
+figures than an excerpt does.
 
-Documented as a known limitation with two rejected fixes recorded. "The
-answer is missing" is recoverable by reading on — 24 of 24 such questions
-were. "A wrong figure looks like the answer" is not.
+Across the corpus it gets worse rather than better, and the base rate is 6
+points higher. The mechanism is different in each setting:
+
+- **within one filing**, every confirmed case is segment-vs-consolidated
+  scope confusion — a segment's $10 million provision against the firmwide
+  $10.7 billion; Office Commercial against Intelligent Cloud; one theatre
+  segment's attendance against the total
+- **across the corpus**, the top pages can belong to the *wrong filing*, so
+  reading imports a confusable fiscal year rather than resolving anything
+
+So "read more context" is a fix for missing answers, not for wrong ones,
+and across a corpus it actively feeds the wrong-answer failure. The
+within-document case is documented as a known limitation with two rejected
+fixes recorded; the cross-document case is a ranking problem (§5).
+
+"The answer is missing" is recoverable by reading on — 24 of 24 such
+questions were on one filing. "A wrong figure looks like the answer" is
+not.
 
 ### By question type
 
@@ -339,19 +394,26 @@ variance. Two of the four are partly attributable to the 13% floor, and
 after the fact the causes cannot be separated. A claim is safe only when
 the gap exceeds the measured floor.
 
-### Superseded: the corpus answerability arm (n=15)
+### Retired: the first corpus answerability arm (n=15)
 
 An earlier run put 15 analyst questions through `pdf_corpus_search` and
 reported 7/15 → 9/15 across the excerpt-default fix, concluding that
 "retrieval scoring 0.78 leaves fewer than half of real questions
-answerable". **Do not cite it.** n=15 against a 13% floor is ~2 questions
-of judge-only movement — exactly the size of the reported improvement; it
-predates majority-of-3, so those are single ballots; and it grades the
-search payload alone.
+answerable". That claim rested on n=15 against a 13% floor — about 2
+questions of judge-only movement, exactly the size of the improvement it
+reported — judged with single ballots before majority-of-3 landed, and
+graded on the search payload alone.
+
+**Superseded by the n=106 corpus run in §1**, which uses the current judge,
+majority-of-3, and both contracts. The direction survives — a corpus that
+ranks documents well (doc-NDCG 0.776) still leaves 39% of questions
+unanswerable from search alone — but the magnitude was never measurable at
+n=15, and "fewer than half" was wrong: it is 61% search-only, 72% after
+reading.
 
 The excerpt-default fix it was meant to evaluate stands on a different
-ground: `pdf_corpus_search` and `pdf_search` disagreed with each other.
-Re-running the corpus arm under the current judge is open work.
+ground anyway: `pdf_corpus_search` and `pdf_search` disagreed with each
+other.
 
 ---
 
@@ -370,6 +432,15 @@ Re-running the corpus arm under the current judge is open work.
 - **Microsoft page 1 carries no extractable text** (image cover on the ARS
   filings) — normal for glossy reports, worth knowing when labeling.
 - **Judged metrics carry the 13% floor; retrieval metrics do not.**
+- **The corpus follow-up arm is unmeasured.** The n=106 run graded
+  search-only and search+read. `--arms followup` (scoped re-searches of
+  documents that matched but won no slot) exists and is the mechanism
+  multi-document questions actually need, but has not been judged under the
+  current setup. The 6 multi-document questions sit mostly at "partial" in
+  both measured arms.
+- **Mode comparisons were measured search-only.** Whether hybrid's lead over
+  semantic and keyword survives the read flow is untested; reading the right
+  page plausibly narrows it.
 
 ---
 

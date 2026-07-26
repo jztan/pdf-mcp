@@ -182,9 +182,48 @@ recurring phrasing, with one labeled page per needle.
 
 `scripts/diagnose_excerpt_fidelity.py` asks whether the excerpt for a
 verifiably-correct page carries the answer — deterministic, free, immune to
-the noise floor. On the 100 questions: **75 ok, 20 excerpt-miss, 5
-recall-miss**. Retrieval located the answering page in **95 of 100**. Prefer
-it to a judged run whenever the question is about excerpts.
+the noise floor. Prefer it to a judged run whenever the question is about
+excerpts rather than answerability.
+
+It scores one page per question — the best-ranked page that verifiably
+states the fact — so the two settings are comparable:
+
+| | one filing | 24-doc corpus |
+|---|---|---|
+| `ok` (excerpt carries the answer) | 51 | 46 |
+| `EXCERPT MISS` (page found, wrong block) | 44 | 41 |
+| `PAGE MISS` (right document, wrong page) | 5 | 12 |
+| `DOC MISS` (wrong document) | 0 | 1 |
+| **recall** (answering page returned) | **95%** | **87%** |
+| **fidelity** (of those, excerpt carries it) | **54%** | **53%** |
+
+Three things follow.
+
+**Document routing is not the corpus problem.** `DOC MISS` is 1 in 100 —
+consistent with the route class scoring 0.927. The corpus penalty is that
+the answering page must win a top-10 slot against 3,545 pages instead of
+~100, so `PAGE MISS` goes 5 → 12.
+
+**The corpus is no worse at excerpt selection** — 54% vs 53%. An earlier
+version of this diagnostic reported 80% vs 67% and looked like a real
+regression. It was an instrument bug: it scored *every* returned gold page,
+and a single-document search gives all 10 slots to the answering filing
+(367 gold pages over 100 questions) while a corpus search shares 10 slots
+across 24 documents (172). The corpus was being given fewer attempts at the
+same question. A direct check found 139 of 150 shared (page, question)
+excerpts byte-identical, and the 11 that differ are not systematically
+worse.
+
+**Snippet-side losses dominate retrieval-side losses** — 44 vs 5 on one
+filing, 41 vs 13 on the corpus. Once recall is this high, excerpt selection
+has more headroom than ranking does.
+
+> **Do not multiply these terms.** `recall × fidelity` does not predict
+> answerability: 0.95 × 0.54 = 0.51 against a measured 0.65, which would
+> imply a "reasoning" factor above 1.0. The payload returns ten excerpts,
+> and the answer can come from a page this diagnostic never flagged as
+> gold — a per-page measure has no term for that. The stages are not
+> independent and the payload is not a single snippet.
 
 ---
 
@@ -250,8 +289,10 @@ character class silently dropped 23 specs at once.
 
 ## 5. Where answers are lost
 
-Retrieval finds the answering page 95 times in 100. The losses are
-downstream of that.
+Retrieval finds the answering page 95 times in 100 on a single filing, 87
+across the corpus, and picks the wrong *document* once in 100. The losses
+are downstream of retrieval: 44 excerpt misses against 5 page misses on one
+filing, 41 against 13 on the corpus (§2).
 
 **The excerpt quotes the wrong paragraph of the right page.** Asked *"Why
 did Apple's Greater China net sales fall in 2024?"*, retrieval returned
@@ -454,7 +495,8 @@ uv run python scripts/benchmark_corpus_modes.py \
     --data-dir benchmark_data/financial_reports --validate     # label check
 uv run python scripts/benchmark_corpus_modes.py \
     --data-dir benchmark_data/financial_reports --single-doc-arm
-uv run python scripts/diagnose_excerpt_fidelity.py             # excerpt carries the answer?
+uv run python scripts/diagnose_excerpt_fidelity.py             # one filing
+uv run python scripts/diagnose_excerpt_fidelity.py --corpus    # all 24 documents
 ```
 
 Billed — each spends `claude -p` calls (~2.1 ballots per question, cached

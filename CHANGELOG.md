@@ -7,94 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- `pdf_corpus_warm` and `pdf_corpus_overview`: stage-1 multi-document
-  corpus tools. Point them at a folder (or explicit list) of local
-  PDFs to warm text (and optionally embeddings) into the cache within
-  a time budget, and to get per-document triage cards (title, page
-  count, top TOC entries, text coverage). Budget-exhausted docs are
-  reported in `unprocessed`; repeat calls continue where warming
-  stopped. Corpora are capped at 100 files; URLs are not accepted (a
-  URL argument gets a corpus-specific error pointing at the single-doc
-  tools). Triage cards filter junk metadata (whitespace-only TOC
-  entries and placeholder titles like "Untitled" read as absent, and
-  `has_toc` reflects post-filter reality), warm envelopes list docs
-  path-sorted so successive calls diff cleanly and report per-doc
-  `embeddings_cached` from actual cache state (a cheap text-only call
-  answers whether an embeddings pass is needed before semantic
-  search), and `server_info` gains a `corpus` feature block (tool
-  list, 100-file cap, budget clamp range, search-mode availability).
-- `pdf_corpus_search`: cross-document search over a folder of PDFs,
-  fusing per-document rankings into one cross-corpus result via
-  Reciprocal Rank Fusion (design chosen by a 100-doc/64-query
-  benchmark). Mirrors single-doc `pdf_search`'s three modes (keyword,
-  semantic, auto/hybrid) and excerpt styles, with a coverage-honest
-  envelope (`unprocessed`, `budget_exhausted`) shared with the other
-  corpus tools. Measured on the production tool with real embeddings
-  (100 docs, 64 graded queries, adversarial distractor classes): hybrid
-  NDCG@10 0.674 with a gold document in the top 3 for 100% of queries
-  (doc-hit@3 1.000), under 0.5s per query on a warmed corpus; per-class
-  detail in `benchmark_data/corpus_search/modes_results.md`. Hits report
-  per-page text provenance (`source`: `extracted` or `ocr`) resolved
-  from cache exactly like single-doc `pdf_search`, and keyword search
-  falls back to Python token matching on SQLite builds without FTS5
-  (again matching `pdf_search`) instead of returning zero matches.
+- Corpus tools: `pdf_corpus_warm`, `pdf_corpus_overview`, and
+  `pdf_corpus_search` work over a folder of local PDFs (cap 100): budgeted
+  cache warming with resume, per-document triage cards, and cross-document
+  search fusing per-document rankings via RRF. `pdf_corpus_search` mirrors
+  `pdf_search` (three modes, excerpt styles, `source` provenance, FTS5
+  fallback). Benchmarked: hybrid NDCG@10 0.674 / doc-hit@3 1.000 on a
+  100-doc corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial
+  filings (details in `benchmark_data/`).
 
 ### Fixed
-- `pdf_corpus_search` in hybrid mode reported `doc_match_counts` from the
-  keyword arm alone, so a question-shaped query — which the keyword arm
-  deliberately cannot match — returned `{}` even when the semantic arm had
-  found pages in several documents. That field is how a caller learns which
-  documents hold content beyond the pages that won a slot, i.e. when a
-  question spanning several documents should be re-asked once per document,
-  and it was blank exactly when it mattered. Hybrid now merges both arms
-  (max per document, since the arms are two views of the same pages).
-  Example: "Compare AWS revenue growth with Microsoft Cloud revenue growth"
-  over two filings returned `{}`; it now returns `{msft: 10, amzn: 5}`,
-  telling the caller Amazon has matching pages it was not shown.
-- `pdf_corpus_search` now defaults to `excerpt_style="paragraph"`, matching
-  single-doc `pdf_search`. The corpus tool was built after `pdf_search`
-  migrated its default from `"snippet"` to `"paragraph"` (a change justified
-  by 97% vs 80% answer containment) and had kept the legacy default, so the
-  same query against the same page returned the sentence that answered it
-  from one tool and a fixed-width window over a table header from the other.
-  Measured on 15 realistic 10-K questions
-  (`scripts/eval_financial_answerability.py`): questions answerable in full
-  from the returned payload rose from 7/15 to 9/15, and questions not
-  answerable at all fell from 7/15 to 3/15. `excerpt_style="snippet"`
-  remains available explicitly. Not a breaking change: the corpus tools are
-  unreleased.
-- Keyword search no longer returns nothing when a question-shaped query
-  contains one word the page does not use. FTS5 queries are AND-joined,
-  so `pdf_search(mode="keyword")` with "Apple Greater China net sales
-  decline in 2024" matched no page at all when the filing said
-  "decreased" rather than "decline" — even though the rest of the query
-  identified the page exactly. A query of three or more words that
-  matches nothing is now retried with its terms OR-joined, and BM25
-  ranks pages carrying more (and rarer) terms first. Measured on a
-  24-document corpus of public-company financial filings: keyword
-  queries returning zero results fell from 17 of 45 to 0, the gold page
-  reached the top 3 for 51% of queries (was 38%), and single-document
-  keyword NDCG@10 rose to 0.419 (was 0.291). Two-word queries keep
-  strict AND semantics — there, requiring both terms is the point.
-  The retry is deliberately scoped to keyword-only search: in hybrid
-  mode the semantic arm already covers a query keyword cannot answer,
-  and benchmarking showed feeding fused ranking a corpus-wide spray of
-  single-term hits *lowered* hybrid quality. Hybrid results are
-  unchanged on both benchmark corpora (NDCG@10 0.674 and doc-hit@3
-  1.000 on the 100-document corpus).
-- Single-doc tools now expand `~` in local paths (`pdf_get_toc("~/Downloads/x.pdf")`
-  previously failed with "PDF file not found"), matching the corpus
-  tools' path handling.
-- `pdf_search` and `pdf_corpus_search` with `excerpt_style="paragraph"`
-  could replace a correct table-cell hit with a nearby prose block that
-  shared only one query term, returning an excerpt and `bbox`/`clip`
-  geometry pointing at the wrong region (observed on a component
-  datasheet, where an ESD note block displaced the matching
-  Electrical Characteristics row). The short-block retry now keeps the
-  longer block only when it covers at least as many query tokens as
-  the short match; otherwise the short matching block wins and the
-  geometry stays on the true hit. Excerpt-quality gate passes with no
-  regressions.
+- Hybrid `pdf_corpus_search` reported `doc_match_counts` from the keyword
+  arm alone, returning `{}` for question-shaped queries. Now merges both
+  arms, so callers can see which documents to re-ask individually.
+- `pdf_corpus_search` now defaults to `excerpt_style="paragraph"` like
+  `pdf_search`. Judged on 106 realistic financial questions (paired,
+  majority-of-3): answerable-in-full rose 23% to 61%, p < 0.0001;
+  misattributed figures fell 26 to 17. `"snippet"` remains available.
+- Keyword queries of 3+ words that match nothing (FTS5 AND-joins every
+  term, so one absent word returned zero results) are retried OR-joined.
+  On 24 financial filings: zero-result queries 17/45 to 0, keyword
+  NDCG@10 0.291 to 0.419. Scoped to keyword mode: hybrid already covers
+  this via the semantic arm and is unchanged on both corpora.
+- Paragraph excerpts broke block-selection ties by document order,
+  favouring prose over the tied block carrying the numbers. Quantitative
+  queries now prefer the figures-bearing block on ties; non-numeric
+  queries unaffected. Answer-missing excerpts 20 to 17 (semantic),
+  20 to 19 (hybrid). No gate regressions.
+- Single-doc tools now expand `~` in local paths, matching the corpus
+  tools.
+- Paragraph excerpts could swap a correct table-cell hit for a prose
+  block sharing one query term, moving excerpt and `bbox` geometry off
+  the true hit. The short-block retry now keeps the longer block only if
+  it covers at least as many query tokens. No gate regressions.
 
 ## [1.22.0] - 2026-07-25
 ### Added

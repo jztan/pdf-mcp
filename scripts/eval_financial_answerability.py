@@ -143,6 +143,59 @@ def build_payload(matches: list[dict[str, Any]], id_by_path: dict[str, str]) -> 
     return "\n".join(lines) if lines else "(no results returned)"
 
 
+READ_PAGES = 2
+READ_CHARS = 6000
+
+
+def pages_to_read(
+    matches: list[dict[str, Any]], limit: int = READ_PAGES
+) -> list[tuple[str, int]]:
+    """The (document, page) pairs an agent would open, best-ranked first.
+
+    Uses only the response's own ranking, never `expect_docs` -- selecting
+    by the answer key would measure an agent that already knew it.
+    """
+    seen: list[tuple[str, int]] = []
+    for m in matches:
+        key = (m["path"], m["page"])
+        if key not in seen:
+            seen.append(key)
+        if len(seen) == limit:
+            break
+    return seen
+
+
+def build_read_payload(
+    search_payload: str, matches: list[dict[str, Any]], mode: str
+) -> str:
+    """Corpus search excerpts plus the full text of the pages opened.
+
+    The corpus analogue of the single-document eval's decomposed arm: the
+    flow this server documents is search to locate, then pdf_read_pages to
+    answer. Grading the search payload alone measures excerpt quality.
+    """
+    from pdf_mcp.server import pdf_read_pages
+
+    parts = [search_payload, ""]
+    for path, page in pages_to_read(matches):
+        try:
+            result = pdf_read_pages(path, str(page))
+        except Exception as exc:  # a read failure is data, not a crash
+            parts.append(f"(could not read {Path(path).stem} page {page}: {exc})")
+            continue
+        for got in result.get("pages") or []:
+            text = " ".join((got.get("text") or "").split())[:READ_CHARS]
+            parts.append(
+                f"--- FULL TEXT OF {Path(path).stem} PAGE {got.get('page')} ---"
+            )
+            parts.append(text)
+            tables = got.get("tables") or []
+            if tables:
+                parts.append(f"--- TABLES ON PAGE {got.get('page')} ---")
+                parts.append(json.dumps(tables, default=str)[:READ_CHARS])
+    return "\n".join(parts)
+
+
 def extract_json(text: str) -> dict[str, Any]:
     start = text.find("{")
     end = text.rfind("}")
@@ -322,7 +375,12 @@ def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, A
             "wrong_attribution": False,
             "reason": f"exit {result.returncode}",
         }
-    return extract_json(result.stdout)
+    ballot = extract_json(result.stdout)
+    # Record only real verdicts. Caching an error would replay a transient
+    # failure forever; those must be retried on the next run.
+    if ballot.get("answerable") in ("full", "partial", "no"):
+        _record_ballot(key, ballot)
+    return ballot
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -335,7 +393,23 @@ def main(argv: list[str] | None = None) -> int:
         help="run retrieval and objective metrics only; no billed judge calls",
     )
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument(
+        "--arms",
+        default="search,followup",
+        help=(
+            "comma-separated arms to grade. 'search' = the corpus_search"
+            " payload alone; 'followup' = plus scoped re-searches of"
+            " documents that matched but won no slot; 'read' = plus the full"
+            " text of the top pages, the flow this server documents. Each"
+            " arm costs a full judged pass."
+        ),
+    )
     args = ap.parse_args(argv)
+    arms = [a.strip() for a in args.arms.split(",") if a.strip()]
+    for a in arms:
+        if a not in ("search", "followup", "read"):
+            print(f"ERROR: unknown arm {a!r}")
+            return 2
 
     if not args.dry_run and shutil.which("claude") is None:
         print("ERROR: the 'claude' CLI is not on PATH — the judge cannot run.")
@@ -412,30 +486,33 @@ def main(argv: list[str] | None = None) -> int:
                 "payload_decomposed": build_payload(
                     matches + followup_matches, id_by_path
                 ),
+                "payload_read": build_read_payload(
+                    build_payload(matches, id_by_path), matches, args.mode
+                ),
             }
         )
 
+    KEY = {
+        "search": ("payload", "verdict"),
+        "followup": ("payload_decomposed", "verdict_decomposed"),
+        "read": ("payload_read", "verdict_read"),
+    }
     if not args.dry_run:
-        with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            verdicts = list(
-                pool.map(
-                    lambda pair: judge_majority(
-                        pair[0], pair[1]["payload"], args.model
-                    ),
-                    zip(questions["questions"], rows),
+        for arm in arms:
+            payload_key, verdict_key = KEY[arm]
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                got = list(
+                    pool.map(
+                        lambda pair: judge_majority(
+                            pair[0], pair[1][payload_key], args.model
+                        ),
+                        zip(questions["questions"], rows),
+                    )
                 )
-            )
-            verdicts_dec = list(
-                pool.map(
-                    lambda pair: judge_majority(
-                        pair[0], pair[1]["payload_decomposed"], args.model
-                    ),
-                    zip(questions["questions"], rows),
-                )
-            )
-        for row, verdict, verdict_dec in zip(rows, verdicts, verdicts_dec):
-            row["verdict"] = verdict
-            row["verdict_decomposed"] = verdict_dec
+            for row, verdict in zip(rows, got):
+                row[verdict_key] = verdict
+            full = sum(1 for v in got if v.get("answerable") == "full")
+            print(f"arm {arm:9s}: answerable in full {full}/{len(rows)}", flush=True)
 
     def tally(key: str) -> dict[str, int]:
         return {

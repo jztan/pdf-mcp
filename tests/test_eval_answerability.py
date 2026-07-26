@@ -223,6 +223,41 @@ class TestBallotCache:
         assert out["answerable"] == "full"
         sub.run.assert_not_called()
 
+    def test_a_fresh_ballot_is_written_to_the_cache(self):
+        """The half that was missing: reads were wired, writes were not.
+
+        `_record_ballot` existed and was never called, so a run spent
+        hundreds of calls and saved none of them -- while the two tests
+        above still passed, because one mocked the reader and the other
+        poked the cache dict directly. Neither exercised the write path.
+        """
+        mod = self._mod()
+        question = {"question": "q", "reference_facts": ["f"], "confusable_with": ""}
+        with (
+            patch.object(mod, "_take_cached_ballot", return_value=None),
+            patch.object(mod, "_record_ballot") as record,
+            patch.object(mod, "subprocess") as sub,
+        ):
+            sub.run.return_value.returncode = 0
+            sub.run.return_value.stdout = '{"answerable": "full"}'
+            mod.judge_one(question, "payload", "claude-opus-4-8")
+        record.assert_called_once()
+        assert record.call_args[0][1]["answerable"] == "full"
+
+    def test_an_error_ballot_is_not_cached(self):
+        """Caching a transient failure would replay it forever."""
+        mod = self._mod()
+        question = {"question": "q", "reference_facts": ["f"], "confusable_with": ""}
+        with (
+            patch.object(mod, "_take_cached_ballot", return_value=None),
+            patch.object(mod, "_record_ballot") as record,
+            patch.object(mod, "subprocess") as sub,
+        ):
+            sub.run.return_value.returncode = 1
+            sub.run.return_value.stdout = ""
+            mod.judge_one(question, "payload", "claude-opus-4-8")
+        record.assert_not_called()
+
     def test_each_cached_ballot_is_consumed_once(self):
         """Otherwise a majority of 3 becomes one ballot counted three times."""
         mod = self._mod()

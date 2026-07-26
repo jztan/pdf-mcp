@@ -5,6 +5,26 @@ measure `pdf_corpus_search` and `pdf_search` on a document distribution the
 existing corpus benchmark does not cover: very large, table-dense filings
 whose fiscal years are near-duplicates of one another.
 
+> **Read this first — two calibrations that govern every judged number
+> below.**
+>
+> **1. The LLM judge disagrees with itself on 13% of verdicts.** Measured,
+> not modelled: the same 100 payloads judged twice under identical
+> configuration moved 13 verdicts, and the headline count landed on 74, 71,
+> 67 across three passes (see *How much of this is judge noise*). Treat a
+> judged figure as ±4 points and a per-class breakdown on fewer than ~30
+> questions as indicative only. Retrieval metrics — NDCG, doc-hit@3,
+> needle — are deterministic and unaffected.
+>
+> **2. Grading the search payload alone understates the product by about
+> 20 points.** This server's documented flow is search-to-locate, then
+> `pdf_read_pages` to answer. On the same 100 single-document questions,
+> search-only scores 65/100 and search-then-read scores 86/100. Sections
+> that report a search-only figure are measuring excerpt quality, not what
+> a caller can answer.
+>
+> Sections are dated where their numbers predate these calibrations.
+
 ## Corpus
 
 24 documents, 3,545 pages, 8 filers x 3 fiscal years.
@@ -178,20 +198,40 @@ actually receives, against hand-verified reference facts.
 
 | metric | before excerpt fix | after |
 |---|---|---|
-| answerable in full | 7 / 15 (47%) | **9 / 15 (60%)** |
+| answerable in full | 7 / 15 (47%) | 9 / 15 (60%) |
 | partial | 1 / 15 (7%) | 3 / 15 (20%) |
-| not answerable | 7 / 15 (47%) | **3 / 15 (20%)** |
+| not answerable | 7 / 15 (47%) | 3 / 15 (20%) |
 | wrong attribution | 3 / 15 (20%) | 3 / 15 (20%) |
 | mean doc coverage | 0.93 | 0.93 |
 
-The "after" column reflects `pdf_corpus_search` defaulting to
-`excerpt_style="paragraph"` (see the changelog). Note what did **not**
-move: wrong attribution held at 20%, and its character changed for the
-worse -- see below.
+> **These numbers are underpowered and predate both calibrations above.**
+> Kept for the record, not to be cited. Three specific problems:
+>
+> - **n=15 against a 13% per-verdict noise floor** is about 2 questions of
+>   judge-only movement -- exactly the size of the 7→9 "improvement". The
+>   before/after is not separable from re-running the judge.
+> - **Judged before majority-of-3 landed** on this branch, so these are
+>   single ballots, which disagree with a majority verdict 5.7% of the time.
+> - **Search-payload-only**, the contract later measured as understating by
+>   ~20 points.
+>
+> The excerpt-style change these numbers were meant to evaluate is
+> independently justified: `pdf_corpus_search` was defaulting to snippet
+> excerpts while `pdf_search` defaulted to paragraph, so the two tools
+> disagreed. That inconsistency is the reason to fix it; this table is not.
+>
+> The single-document arm below (n=100, majority-of-3, both contracts
+> graded) supersedes this section for anything load-bearing. Re-running the
+> corpus arm under the current judge is open work.
 
-Set against hybrid's doc-NDCG of 0.776 and doc-hit@3 of 0.818, this is the
-headline finding of the whole corpus: **retrieval that scores 0.78 leaves
-fewer than half of real questions answerable.**
+Set against hybrid's doc-NDCG of 0.776 and doc-hit@3 of 0.818, the
+*direction* is still worth stating: a corpus that retrieves the right
+document reliably can still leave a caller short of an answer, because
+document rank and answer-in-hand are different things. That is the
+observation the single-document arm was built to measure properly, and
+there it resolves as 65/100 search-only against 86/100 search-then-read --
+so the gap is real but is largely closed by the documented flow, not by
+better ranking.
 
 ### Root cause 1: the excerpt quotes the wrong paragraph of the right page
 
@@ -209,7 +249,9 @@ neighbour*: asked about Google Cloud's operating income, the top excerpt
 reads "Google Services operating income increased $25.4 billion" -- a
 different segment's figure, in the position where the answer belongs. A
 caller trusting the excerpt reports the wrong number. That is the
-`wrong_attribution` failure, and it fires on 20% of questions.
+`wrong_attribution` failure. (The 20% quoted from this n=15 run is
+unreliable; the properly powered figure is 9-13 of 100 from the
+single-document arm below.)
 
 ### Root cause 2: comparisons come back one-sided
 
@@ -240,12 +282,29 @@ million shares of its common stock for $95.0 billion". The ranking error
 is identical in both runs; better excerpts simply made the wrong answer
 more convincing.
 
-That is the real remaining defect and it is a **ranking** problem, not an
-excerpt one: on a corpus of near-duplicate fiscal years, the wrong year
-outranks the right one and nothing in the response signals it. The order
-of work these findings imply is therefore: excerpt quality (done),
-then per-document/per-year balance and year disambiguation, and only
-then general ranking.
+On the corpus this is a **ranking** problem, not an excerpt one: across
+near-duplicate fiscal years the wrong year outranks the right one and
+nothing in the response signals it.
+
+**Two different attribution failures, and it matters not to conflate
+them.** The single-document arm later isolated a second one:
+
+| setting | what goes wrong | evidence |
+|---|---|---|
+| across documents | wrong **fiscal year** wins the rank | the Apple buyback case above |
+| within one document | wrong **scope** -- a segment's figure read as the entity's | all 6 confirmed cases in the single-doc arm |
+
+The within-document failure is not a ranking problem: retrieval returned
+the right page in 95 of 100 questions, and 4 of the 6 confirmed cases had
+the correct page at rank 1. It is documented as a known limitation, with
+two rejected fixes recorded, because separating a segment figure from a
+consolidated one requires scope information that lives in a heading
+outside the scored text.
+
+Revised order of work, after the single-document measurements: excerpt
+quality (partly done), then cross-document year disambiguation, then
+candidate-set snippet generation -- and *not* within-document scope
+resolution, which was measured and parked.
 
 ## Single-PDF performance, and what mode to use
 
@@ -471,8 +530,25 @@ question was reworded to what the text states.
 - **Microsoft page 1 carries no extractable text** (image cover on the ARS
   filings), which is normal for glossy reports but worth knowing when
   labeling.
+- **Judged metrics carry a 13% per-verdict noise floor**; retrieval
+  metrics (NDCG, doc-hit@3, needle) are deterministic and do not. Any
+  answerability difference under ~7 points, or any per-class breakdown on
+  fewer than ~30 questions, is not a finding. Measure the floor again with
+  `scripts/measure_judge_noise_floor.py` whenever the judge model, its
+  context flags, or the ballot rule changes.
+- **The corpus answerability arm (n=15) is stale.** Single-ballot, judged
+  before majority-of-3, and graded on the search payload alone. The
+  single-document arm (n=100, both contracts) supersedes it. Re-running
+  the corpus arm under the current judge is open work.
+- **Excerpt-quality questions are answerable without a judge.**
+  `scripts/diagnose_excerpt_fidelity.py` asks whether the excerpt for a
+  verifiably-correct page actually carries the answer -- deterministic,
+  free, and immune to the noise floor. Prefer it over a judged run when
+  the question is about excerpts rather than answerability.
 
 ## Reproducing
+
+Free and deterministic — no judge, run these first:
 
 ```bash
 uv run python scripts/fetch_financial_corpus.py                # 24 PDFs, SHA256-checked
@@ -480,4 +556,14 @@ uv run python scripts/benchmark_corpus_modes.py \
     --data-dir benchmark_data/financial_reports --validate     # label check
 uv run python scripts/benchmark_corpus_modes.py \
     --data-dir benchmark_data/financial_reports --single-doc-arm
+uv run python scripts/diagnose_excerpt_fidelity.py             # excerpt carries the answer?
+```
+
+Billed — each spends `claude -p` calls (~2.1 ballots per question, cached
+and resumable; a killed run costs nothing to restart):
+
+```bash
+uv run python scripts/eval_single_doc_answerability.py auto --decomposed
+uv run python scripts/measure_judge_noise_floor.py             # re-measure the 13% floor
+uv run python scripts/eval_financial_answerability.py          # corpus arm (stale, see above)
 ```

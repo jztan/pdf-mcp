@@ -260,17 +260,60 @@ alternatives were measured on the first 68 and not re-run, because their
 ordering held across every expansion (n=9 → 25 → 49 → 68) and re-running
 them costs more than the answer is worth:
 
-| mode | n | answerable in full | partial | not answerable | wrong attribution |
+**Grade the flow the server documents, not just the search call.** This
+server's stated flow is search-to-locate, then `pdf_read_pages` to answer.
+Grading the search payload alone measures an agent that never opens a
+page, and understates the product by about 20 points:
+
+| arm | answerable in full | partial | not answerable | wrong attribution |
+|---|---|---|---|---|
+| search only | 65/100 | 14 | 21 | 10 |
+| **search, then read the top 2 pages** | **86/100** | 7 | 7 | 8 |
+
+**24 questions improved and 0 worsened** -- one-directional, far outside
+the 13% judge noise floor, and spread across every question type (figure
+9, causal 7, table 4, risk-synthesis 3, definition 1). Both arms were
+judged in the same run on the same questions, so the comparison is paired.
+
+**So the headline is 86%, not 65%.** The search-only column is a
+diagnostic of excerpt quality, not a measure of what a caller can answer.
+
+Search-only across four runs of the same 100 payloads: 74, 71, 67, 65 --
+consistent with the noise floor, and the reason no single value is quoted.
+
+| mode (search only) | n | answerable in full | partial | not answerable | wrong attribution |
 |---|---|---|---|---|---|
-| **hybrid (auto, default)** | **100** | **67-74/100 (see below)** | 9 | 17 | 9-13 |
+| hybrid (auto, default) | 100 | 65-74/100 | 9-14 | 17-21 | 9-13 |
 | hybrid, first 68 only | 68 | 47/68 (69%) | 7 | 14 | 9 |
 | semantic | 68 | 41/68 (60%) | 9 | 18 | 6 |
 | keyword | 68 | 37/68 (54%) | 7 | 24 | 3 |
 
-**Roughly 70% of realistic questions are fully answerable from a single
-10-K** in the default mode, against 53% single-call on the 24-document
-corpus. Same finding from two directions: this tool is strongest once the
-caller has narrowed to a document.
+Against 53% single-call on the 24-document corpus, the same finding
+arrives from two directions: this tool is strongest once the caller has
+narrowed to a document.
+
+### Wrong attribution survives reading the page
+
+The one failure that reading does not fix. 10 cases search-only, 8 after
+reading -- a difference well inside the noise floor, and the composition
+is worse than the total suggests:
+
+- **6 persist** through reading the full page: `sd-jpm-credit-2024`,
+  `sd-amc-attendance-2024`, `sd-c-amc-foodbev-2024`, `sd-c2-jpm-nii-2023`,
+  `sd-c2-msft-opex-2025`, `figure-amc-goodwill`.
+- **2 are NEW**, caused by reading: `sd-c-jpm-nii-2024`,
+  `sd-r-meta-litigation-2023`. A full page carries more confusable
+  figures than an excerpt does, so more context is not a mitigation here
+  and can be a mild risk.
+
+Every confirmed case is **segment-vs-consolidated scope confusion**, not
+the fiscal-year confusion the label suggests: a segment's $10 million
+provision against the firmwide $10.7 billion, Office Commercial against
+Intelligent Cloud, one theatre segment's attendance against the total.
+
+This is the failure worth engineering against. "The answer is missing" is
+recoverable by reading on -- 24 of 24 such questions were. "A wrong
+figure looks like the answer" is not.
 
 The hybrid row is a **range, not a point**, and that is the honest form.
 The same 100 payloads judged three times scored 74, 71, and 67 -- see

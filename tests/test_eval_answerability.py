@@ -151,3 +151,85 @@ class TestQuestionScopeField:
         assert len(by_scope) > len(
             by_prefix
         ), "if these ever match, someone has re-coupled ids to scope"
+
+
+class TestPagesToRead:
+    """Which pages a decomposed run opens.
+
+    Must come from the response's own ranking only. Selecting by the
+    eval's known-good page would measure an agent that already had the
+    answer, which is the same trap `followup_docs` guards against.
+    """
+
+    @staticmethod
+    def _fn():
+        from scripts.eval_single_doc_answerability import pages_to_read
+
+        return pages_to_read
+
+    def test_takes_the_best_ranked_pages_in_order(self):
+        matches = [{"page": 7}, {"page": 3}, {"page": 9}]
+        assert self._fn()(matches, limit=2) == [7, 3]
+
+    def test_deduplicates_repeated_pages(self):
+        """Several excerpts often come from one page; that is one page to open."""
+        matches = [{"page": 7}, {"page": 7}, {"page": 3}]
+        assert self._fn()(matches, limit=2) == [7, 3]
+
+    def test_empty_matches_open_nothing(self):
+        assert self._fn()([], limit=2) == []
+
+
+class TestBallotCache:
+    """A paid-for ballot is reused; a stale one never is.
+
+    A run killed 26 questions in threw away 53 completed judge calls
+    because verdicts were written only at the end. Ballots are now
+    appended as they complete and replayed on the next run.
+    """
+
+    @staticmethod
+    def _mod():
+        import scripts.eval_financial_answerability as mod
+
+        return mod
+
+    def test_the_key_changes_when_the_payload_changes(self):
+        mod = self._mod()
+        a = mod._cache_key("prompt A", "claude-opus-4-8")
+        b = mod._cache_key("prompt B", "claude-opus-4-8")
+        assert a != b
+
+    def test_the_key_changes_when_the_model_changes(self):
+        """A ballot from one judge must never be served for another."""
+        mod = self._mod()
+        a = mod._cache_key("same prompt", "claude-opus-4-8")
+        b = mod._cache_key("same prompt", "claude-haiku-4-5")
+        assert a != b
+
+    def test_surrounding_whitespace_does_not_change_the_key(self):
+        mod = self._mod()
+        assert mod._cache_key("p", "m") == mod._cache_key("  p\n", "m")
+
+    def test_a_cached_ballot_is_used_instead_of_spending_a_call(self):
+        mod = self._mod()
+        question = {"question": "q", "reference_facts": ["f"], "confusable_with": ""}
+        with (
+            patch.object(mod, "_take_cached_ballot") as take,
+            patch.object(mod, "subprocess") as sub,
+        ):
+            take.return_value = {"answerable": "full", "wrong_attribution": False}
+            out = mod.judge_one(question, "payload", "claude-opus-4-8")
+        assert out["answerable"] == "full"
+        sub.run.assert_not_called()
+
+    def test_each_cached_ballot_is_consumed_once(self):
+        """Otherwise a majority of 3 becomes one ballot counted three times."""
+        mod = self._mod()
+        mod._BALLOT_CACHE = {"k": [{"answerable": "full"}, {"answerable": "no"}]}
+        first = mod._take_cached_ballot("k")
+        second = mod._take_cached_ballot("k")
+        third = mod._take_cached_ballot("k")
+        assert first != second
+        assert third is None
+        mod._BALLOT_CACHE = None

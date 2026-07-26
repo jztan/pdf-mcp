@@ -35,10 +35,12 @@ Run:  uv run python scripts/eval_financial_answerability.py
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
 import sys
+import threading
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -52,6 +54,8 @@ DATA = REPO / "benchmark_data" / "financial_reports"
 DEFAULT_MODEL = "claude-opus-4-8"
 DENIED_TOOLS = "Bash,Read,Write,Edit,WebFetch,WebSearch"
 JUDGE_TIMEOUT_S = 180
+# Every ballot ever paid for, appended as it completes.
+BALLOT_CACHE = DATA / "judge_ballot_cache.jsonl"
 
 # Strip context the judge cannot use. Measured per call on this project:
 # 20,704 fresh input tokens, of which the rubric and payload were 2,495 --
@@ -223,6 +227,60 @@ def judge_majority(
     }
 
 
+def _cache_key(prompt: str, model: str) -> str:
+    """Identity of a judge call: the exact prompt, on the exact model.
+
+    Hashing the whole prompt means a cached ballot is reused only for
+    byte-identical input -- change the rubric, the payload, or the
+    question and the key changes, so a stale ballot can never be served.
+    """
+    return hashlib.sha256(f"{model}\0{prompt.strip()}".encode()).hexdigest()
+
+
+def _load_ballot_cache() -> dict[str, list[dict[str, Any]]]:
+    cache: dict[str, list[dict[str, Any]]] = {}
+    if not BALLOT_CACHE.exists():
+        return cache
+    for line in BALLOT_CACHE.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        cache.setdefault(row["key"], []).append(row["ballot"])
+    return cache
+
+
+_CACHE_LOCK = threading.Lock()
+_BALLOT_CACHE: dict[str, list[dict[str, Any]]] | None = None
+
+
+def _take_cached_ballot(key: str) -> dict[str, Any] | None:
+    """Consume one stored ballot for this prompt, if any remain.
+
+    Ballots are i.i.d. samples, so replaying a previously paid-for one is
+    statistically identical to drawing a fresh one -- it just costs
+    nothing. Each is consumed once so a majority of 3 never becomes the
+    same ballot counted three times.
+    """
+    global _BALLOT_CACHE
+    with _CACHE_LOCK:
+        if _BALLOT_CACHE is None:
+            _BALLOT_CACHE = _load_ballot_cache()
+        pending = _BALLOT_CACHE.get(key)
+        return pending.pop(0) if pending else None
+
+
+def _record_ballot(key: str, ballot: dict[str, Any]) -> None:
+    """Append immediately, so an interrupted run keeps everything it paid
+    for. A previous run was killed 26 questions in and threw away 53
+    completed calls because results were written only at the end."""
+    with _CACHE_LOCK:
+        with BALLOT_CACHE.open("a") as fh:
+            fh.write(json.dumps({"key": key, "ballot": ballot}) + "\n")
+
+
 def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, Any]:
     facts = "\n".join(f"- {f}" for f in question["reference_facts"])
     confusable = question.get("confusable_with", "")
@@ -233,6 +291,10 @@ def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, A
         f"COMMONLY CONFUSED WITH: {confusable}\n\n"
         f"PAYLOAD THE CALLER RECEIVED:\n{payload}\n"
     )
+    key = _cache_key(prompt, model)
+    cached = _take_cached_ballot(key)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
             [

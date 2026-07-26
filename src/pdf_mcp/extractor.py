@@ -976,6 +976,27 @@ def _query_tokens(query: str) -> list[str]:
     return [t for t in tokens if t]
 
 
+# A question that asks for a quantity. Kept deliberately narrow: it only
+# ever breaks a TIE, so a false positive costs nothing unless two blocks
+# score identically, and a false negative just preserves the old
+# behaviour.
+_QUANT_CUE_RE = re.compile(
+    r"\b(?:how much|how many|how fast|how large|"
+    r"what (?:was|were|is|are|total)|percentage)\b",
+    re.IGNORECASE,
+)
+
+# Currency, decimals, percentages and thousands-separated numbers -- the
+# shapes a financial answer actually takes. A bare integer such as a year
+# is excluded on purpose: almost every block on a filing page contains
+# one, so counting it would make this signal useless.
+_FIGURE_RE = re.compile(r"[$€£¥]\s?\d|(?<![\w.])\d[\d,]*\.\d|\d\s?%|\d{1,3}(?:,\d{3})+")
+
+
+def _wants_a_figure(query: str) -> bool:
+    return bool(_QUANT_CUE_RE.search(query))
+
+
 def count_query_tokens(text: str, query: str) -> int:
     """Count query tokens present in *text* (case-insensitive
     substring), with the same tokenisation as
@@ -1018,7 +1039,10 @@ def get_best_paragraph_for_query(
     blocks = page.get_text("blocks", sort=True)
     text_blocks = [block[4] for block in blocks if block[6] == 0]
 
+    prefer_figures = _wants_a_figure(query)
+
     best_score = 0
+    best_key: tuple[int, int] = (0, 0)
     best_idx: int | None = None
     best_text: str | None = None
 
@@ -1028,7 +1052,14 @@ def get_best_paragraph_for_query(
             continue
         lower = raw_text.lower()
         score = sum(1 for t in tokens if t in lower)
-        if score > best_score:
+        # Tie-break only: token overlap still decides the winner, and the
+        # figure flag separates blocks that overlap equally. Ties were
+        # previously broken by document order, which on a 10-K page put
+        # the narrative paragraph ahead of the one carrying the numbers.
+        carries = 1 if prefer_figures and _FIGURE_RE.search(raw_text) else 0
+        key = (score, carries)
+        if key > best_key:
+            best_key = key
             best_score = score
             best_idx = idx
             best_text = raw_text

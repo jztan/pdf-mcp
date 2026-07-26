@@ -304,22 +304,6 @@
       "carries_figure": false
     },
     {
-      "id": "sd-t-aapl-sales-2023",
-      "type": "table",
-      "doc": "aapl-fy2023",
-      "gold_pages": [
-        23,
-        24,
-        25,
-        38,
-        50
-      ],
-      "gold_rank": 2,
-      "bucket": "EXCERPT MISS",
-      "quotes_fact": false,
-      "carries_figure": false
-    },
-    {
       "id": "sd-t-aapl-sales-2025",
       "type": "table",
       "doc": "aapl-fy2025",
@@ -3419,6 +3403,22 @@
         15
       ],
       "gold_rank": 3,
+      "bucket": "ok",
+      "quotes_fact": true,
+      "carries_figure": true
+    },
+    {
+      "id": "sd-t-aapl-sales-2023",
+      "type": "table",
+      "doc": "aapl-fy2023",
+      "gold_pages": [
+        23,
+        24,
+        25,
+        38,
+        50
+      ],
+      "gold_rank": 2,
       "bucket": "ok",
       "quotes_fact": true,
       "carries_figure": true

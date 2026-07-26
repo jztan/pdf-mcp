@@ -15,6 +15,7 @@ from pdf_mcp import extractor
 from pdf_mcp.cache import PDFCache, _contains_cjk
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.extractor import (
+    count_query_tokens,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -1623,6 +1624,81 @@ class TestGetBestParagraphForQuery:
             assert "cat" in text
             doc2.close()
             os.unlink(f.name)
+
+    @staticmethod
+    def _two_block_page(first: str, second: str):
+        """A page with two real paragraph blocks (not one block per line)."""
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(50, 50, 520, 170), first, fontsize=10)
+        page.insert_textbox(pymupdf.Rect(50, 220, 520, 340), second, fontsize=10)
+        handle = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        doc.save(handle.name)
+        doc.close()
+        return handle.name
+
+    def test_quantitative_query_prefers_a_tied_block_that_has_the_figures(self):
+        """On a tie, the block carrying the numbers wins.
+
+        Measured defect: of 20 single-document 10-K questions whose answer
+        was on a retrieved page but missing from the excerpt, the gold
+        block already TIED the winning score in 10. It lost only because
+        `score > best_score` keeps whichever block came first in document
+        order. For a question asking "how much", a tied block containing
+        no figures cannot be the better answer.
+        """
+        query = "What total gross margin percentage during 2024?"
+        prose = (
+            "Total gross margin percentage during 2024 declined relative to "
+            "prior periods, reflecting a different product mix."
+        )
+        figures = (
+            "Total gross margin percentage during 2024: 46.2% versus 44.1% "
+            "and 43.3% for the two preceding periods."
+        )
+        path = self._two_block_page(prose, figures)
+        try:
+            doc = pymupdf.open(path)
+            blocks = [b[4] for b in doc[0].get_text("blocks", sort=True) if b[6] == 0]
+            assert len(blocks) == 2, blocks
+            # Precondition: the blocks must genuinely TIE, or this test
+            # would pass on the old code and prove nothing. Three earlier
+            # drafts of this fixture did exactly that.
+            scores = [count_query_tokens(b, query) for b in blocks]
+            assert scores[0] == scores[1], f"fixture does not tie: {scores}"
+
+            text, _idx = get_best_paragraph_for_query(doc[0], query)
+            assert text is not None
+            assert "46.2%" in text, f"picked the figure-less block: {text!r}"
+            doc.close()
+        finally:
+            os.unlink(path)
+
+    def test_non_quantitative_query_keeps_document_order_on_a_tie(self):
+        """The figure preference must not fire on non-numeric questions.
+
+        Otherwise any page mixing prose with a table would start returning
+        the table for definition and risk questions.
+        """
+        first = (
+            "The Company faces risks relating to cybersecurity incidents "
+            "that could disrupt its operations and harm its reputation."
+        )
+        second = (
+            "Cybersecurity spending totalled 1,234 in 2024 and 5,678 in "
+            "2023 across the segments listed above in this filing."
+        )
+        path = self._two_block_page(first, second)
+        try:
+            doc = pymupdf.open(path)
+            text, _idx = get_best_paragraph_for_query(
+                doc[0], "What cybersecurity risks does the Company disclose?"
+            )
+            assert text is not None
+            assert "risks relating to cybersecurity" in text
+            doc.close()
+        finally:
+            os.unlink(path)
 
     def test_no_overlap_returns_none(self):
         """No matching tokens returns (None, None)."""

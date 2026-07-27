@@ -1060,6 +1060,331 @@
           "evidence": "Bitwise Neural Networks"
         }
       ]
+    },
+    {
+      "id": "described-01",
+      "class": "described",
+      "query": "does normalizing layer inputs converge in fewer training steps at equal accuracy",
+      "labels": [
+        {
+          "doc": "1502.03167",
+          "page": 1,
+          "gain": 2,
+          "evidence": "achieves the same accuracy with 14 times fewer training steps"
+        }
+      ]
+    },
+    {
+      "id": "described-02",
+      "class": "described",
+      "query": "what error rates were reached on the two small image benchmarks",
+      "labels": [
+        {
+          "doc": "1608.03983",
+          "page": 1,
+          "gain": 2,
+          "evidence": "we demonstrate new state-of-the-art results at 3.14% and 16.21%"
+        }
+      ]
+    },
+    {
+      "id": "described-03",
+      "class": "described",
+      "query": "do weight decay and dropout prevent networks from memorising randomly assigned labels",
+      "labels": [
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "This phenomenon is qualitatively unaffected by explicit regularization"
+        }
+      ]
+    },
+    {
+      "id": "described-04",
+      "class": "described",
+      "query": "how does required model size grow as the training collection expands",
+      "labels": [
+        {
+          "doc": "1712.00409",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We also show that model size scales sublinearly with data size"
+        }
+      ]
+    },
+    {
+      "id": "described-05",
+      "class": "described",
+      "query": "what proportion of the original network do the trainable subnetworks occupy",
+      "labels": [
+        {
+          "doc": "1803.03635",
+          "page": 1,
+          "gain": 2,
+          "evidence": "winning tickets that are less than 10-20% of the size"
+        }
+      ]
+    },
+    {
+      "id": "described-06",
+      "class": "described",
+      "query": "what top-one accuracy does the largest scaled convolutional model reach",
+      "labels": [
+        {
+          "doc": "1905.11946",
+          "page": 1,
+          "gain": 2,
+          "evidence": "achieves state-of-the-art 84.3% top-1 accuracy on ImageNet"
+        }
+      ]
+    },
+    {
+      "id": "described-07",
+      "class": "described",
+      "query": "can adding more training examples ever hurt performance at test time",
+      "labels": [
+        {
+          "doc": "1912.02292",
+          "page": 1,
+          "gain": 2,
+          "evidence": "samples actually hurts test performance"
+        }
+      ]
+    },
+    {
+      "id": "described-08",
+      "class": "described",
+      "query": "does generalization improve long after the training set is fully fitted",
+      "labels": [
+        {
+          "doc": "2201.02177",
+          "page": 1,
+          "gain": 2,
+          "evidence": "improving generalization performance from random chance level to perfect generalization"
+        }
+      ]
+    },
+    {
+      "id": "described-09",
+      "class": "described",
+      "query": "how should tokens and parameters be traded off under a fixed compute budget",
+      "labels": [
+        {
+          "doc": "2203.15556",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the number of training tokens should be scaled equally"
+        }
+      ]
+    },
+    {
+      "id": "described-10",
+      "class": "described",
+      "query": "how much wall-clock speedup was measured on the mid-sized language model",
+      "labels": [
+        {
+          "doc": "2205.14135",
+          "page": 1,
+          "gain": 2,
+          "evidence": "3× speedup on GPT-2"
+        }
+      ]
+    },
+    {
+      "id": "described-11",
+      "class": "described",
+      "query": "what makes a capability count as emergent rather than predictable",
+      "labels": [
+        {
+          "doc": "2206.07682",
+          "page": 1,
+          "gain": 2,
+          "evidence": "not present in smaller models but is present in larger models"
+        }
+      ]
+    },
+    {
+      "id": "described-12",
+      "class": "described",
+      "query": "how much higher is inference throughput than a comparable transformer",
+      "labels": [
+        {
+          "doc": "2312.00752",
+          "page": 1,
+          "gain": 2,
+          "evidence": "5× higher throughput than Transformers"
+        }
+      ]
+    },
+    {
+      "id": "described-13",
+      "class": "described",
+      "query": "how much pre-training time is saved at the largest evaluated scale",
+      "labels": [
+        {
+          "doc": "2605.06546",
+          "page": 1,
+          "gain": 2,
+          "evidence": "2.5x reduction in total pre-training time at the 10B A1B scale"
+        }
+      ]
+    },
+    {
+      "id": "described-14",
+      "class": "described",
+      "query": "can images be classified without convolutions by treating regions as tokens",
+      "labels": [
+        {
+          "doc": "2010.11929",
+          "page": 1,
+          "gain": 2,
+          "evidence": "a pure transformer applied directly to sequences of image patches"
+        }
+      ]
+    },
+    {
+      "id": "described-15",
+      "class": "described",
+      "query": "what functional form describes how loss falls as compute grows",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 1,
+          "gain": 2,
+          "evidence": "following a power-law plus constant scaling law"
+        }
+      ]
+    },
+    {
+      "id": "described-16",
+      "class": "described",
+      "query": "how many weights does the model have and how does that compare to earlier dense models",
+      "labels": [
+        {
+          "doc": "2005.14165",
+          "page": 1,
+          "gain": 2,
+          "evidence": "175 billion parameters, 10x more than any previous non-sparse language model"
+        }
+      ]
+    },
+    {
+      "id": "described-17",
+      "class": "described",
+      "query": "which collection was used to show binary networks stay competitive",
+      "labels": [
+        {
+          "doc": "1601.06071",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the MNIST dataset, represented using binary features"
+        }
+      ]
+    },
+    {
+      "id": "described-18",
+      "class": "described",
+      "query": "how large was the news archive the topic model was demonstrated on",
+      "labels": [
+        {
+          "doc": "1301.3570",
+          "page": 1,
+          "gain": 2,
+          "evidence": "1.8 million documents from The New York Times"
+        }
+      ]
+    },
+    {
+      "id": "described-19",
+      "class": "described",
+      "query": "how many companies are covered by the equities data used for qualitative evaluation",
+      "labels": [
+        {
+          "doc": "1501.05624",
+          "page": 1,
+          "gain": 2,
+          "evidence": "roughly 6,500 companies"
+        }
+      ]
+    },
+    {
+      "id": "described-20",
+      "class": "described",
+      "query": "what convergence guarantee is proved for the momentum based sparse solver",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 1,
+          "gain": 2,
+          "evidence": "prove its convergence to a local minimizer"
+        }
+      ]
+    },
+    {
+      "id": "described-21",
+      "class": "described",
+      "query": "what strategy was introduced to stop the fusion network overfitting its embeddings",
+      "labels": [
+        {
+          "doc": "1612.09007",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the kernel dropout regularization strategy"
+        }
+      ]
+    },
+    {
+      "id": "described-22",
+      "class": "described",
+      "query": "which optimiser was reinterpreted probabilistically to approximate the weight posterior",
+      "labels": [
+        {
+          "doc": "1811.03679",
+          "page": 1,
+          "gain": 2,
+          "evidence": "adaptive optimisation algorithms such as ADAGRAD and ADAM"
+        }
+      ]
+    },
+    {
+      "id": "described-23",
+      "class": "described",
+      "query": "how many sentiment categories does the finer task distinguish",
+      "labels": [
+        {
+          "doc": "1910.03474",
+          "page": 1,
+          "gain": 2,
+          "evidence": "classes (very negative, negative, neutral, positive, and very positive)"
+        }
+      ]
+    },
+    {
+      "id": "described-24",
+      "class": "described",
+      "query": "what signal to noise penalty does the concatenated design incur at moderate levels",
+      "labels": [
+        {
+          "doc": "0709.4466",
+          "page": 1,
+          "gain": 2,
+          "evidence": "incurs an SNR penalty of about 2 dB at low to medium SNRs"
+        }
+      ]
+    },
+    {
+      "id": "described-25",
+      "class": "described",
+      "query": "which two enhancements distinguish the revised cluster routing scheme",
+      "labels": [
+        {
+          "doc": "1307.7059",
+          "page": 1,
+          "gain": 2,
+          "evidence": "cluster head replacement scheme and dual transmitting power levels"
+        }
+      ]
     }
   ]
 }

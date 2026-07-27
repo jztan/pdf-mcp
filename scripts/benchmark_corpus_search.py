@@ -286,7 +286,7 @@ def _page_text_lookup_factory(manifest: dict):
     return lookup
 
 
-def run_benchmark() -> int:
+def run_benchmark(force: bool = False) -> int:
     """Warm the corpus, run both arms over all queries, apply the
     pre-committed decision rule, write results.json + RESULTS.md."""
     import tempfile
@@ -397,14 +397,14 @@ def run_benchmark() -> int:
     (OUT_DIR / "results.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n"
     )
-    _write_results_md(results)
+    _write_results_md(results, force=force)
     print(f"decision: {decision['winner']}")
     for r in decision["reasons"]:
         print(f"  - {r}")
     return 0
 
 
-def _write_results_md(results: dict) -> None:
+def _write_results_md(results: dict, force: bool = False) -> None:
     d = results["decision"]
     lines = [
         "# Cross-Doc Keyword Ranking Spike: Results",
@@ -444,7 +444,33 @@ def _write_results_md(results: dict) -> None:
         " (amortized in production as persistent per-doc indexes)",
         "",
     ]
-    (OUT_DIR / "RESULTS.md").write_text("\n".join(lines))
+    write_results_md("\n".join(lines), force=force)
+
+
+# Everything below the spike's own generated sections is hand-written:
+# the interpretation, and later arms appended by other benchmarks (the
+# described-query arm lives in this same file). A blind overwrite silently
+# destroys all of it, so refuse unless the caller says otherwise.
+_GENERATED_MARKER = "# Cross-Doc Keyword Ranking Spike: Results"
+
+
+def write_results_md(body: str, force: bool = False) -> None:
+    """Write RESULTS.md, refusing to clobber hand-written sections."""
+    out = OUT_DIR / "RESULTS.md"
+    if out.exists() and not force:
+        existing = out.read_text()
+        generated_len = len(body)
+        if not existing.startswith(_GENERATED_MARKER) or len(existing) > generated_len:
+            print(
+                f"REFUSING to overwrite {out}: it carries "
+                f"{len(existing) - generated_len} bytes this script did not "
+                "generate (hand-written interpretation and/or later benchmark "
+                "arms).\nRe-run with --force to overwrite anyway, or diff the "
+                "generated body against the file by hand."
+            )
+            return
+    out.write_text(body)
+    print(f"wrote {out}")
 
 
 def main() -> int:
@@ -452,6 +478,11 @@ def main() -> int:
     ap.add_argument("--build-manifest", action="store_true")
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--run", action="store_true")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite RESULTS.md even if it carries hand-written sections",
+    )
     args = ap.parse_args()
 
     if args.build_manifest:
@@ -474,7 +505,7 @@ def main() -> int:
         return 1 if errors else 0
 
     if args.run:
-        return run_benchmark()  # Task 4
+        return run_benchmark(force=args.force)  # Task 4
 
     ap.print_help()
     return 2

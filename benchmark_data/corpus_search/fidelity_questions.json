@@ -1,0 +1,205 @@
+{
+  "description": "Excerpt-fidelity questions for the described-query class. One record per described-NN query in queries.json, same id. answer_span is the verbatim string the excerpt must carry; reference_fact locates the gold pages.",
+  "questions": [
+    {
+      "id": "described-01",
+      "type": "result",
+      "question": "does normalizing layer inputs converge in fewer training steps at equal accuracy",
+      "expect_doc": "1502.03167",
+      "reference_fact": "achieves the same accuracy with 14 times fewer training steps, and beats the original model",
+      "answer_span": "14 times fewer training steps"
+    },
+    {
+      "id": "described-02",
+      "type": "result",
+      "question": "what error rates were reached on the two small image benchmarks",
+      "expect_doc": "1608.03983",
+      "reference_fact": "we demonstrate new state-of-the-art results at 3.14% and 16.21%, respectively",
+      "answer_span": "3.14% and 16.21%"
+    },
+    {
+      "id": "described-03",
+      "type": "result",
+      "question": "do weight decay and dropout prevent networks from memorising randomly assigned labels",
+      "expect_doc": "1611.03530",
+      "reference_fact": "This phenomenon is qualitatively unaffected by explicit regularization",
+      "answer_span": "qualitatively unaffected by explicit regularization"
+    },
+    {
+      "id": "described-04",
+      "type": "result",
+      "question": "how does required model size grow as the training collection expands",
+      "expect_doc": "1712.00409",
+      "reference_fact": "We also show that model size scales sublinearly with data size",
+      "answer_span": "model size scales sublinearly with data size"
+    },
+    {
+      "id": "described-05",
+      "type": "result",
+      "question": "what proportion of the original network do the trainable subnetworks occupy",
+      "expect_doc": "1803.03635",
+      "reference_fact": "winning tickets that are less than 10-20% of the size of several fully-connected and convolutional feed-forward architectures",
+      "answer_span": "less than 10-20% of the size"
+    },
+    {
+      "id": "described-06",
+      "type": "result",
+      "question": "what top-one accuracy does the largest scaled convolutional model reach",
+      "expect_doc": "1905.11946",
+      "reference_fact": "achieves state-of-the-art 84.3% top-1 accuracy on ImageNet, while being 8.4x smaller",
+      "answer_span": "84.3% top-1 accuracy"
+    },
+    {
+      "id": "described-07",
+      "type": "result",
+      "question": "can adding more training examples ever hurt performance at test time",
+      "expect_doc": "1912.02292",
+      "reference_fact": "increasing (even quadrupling) the number of train samples actually hurts test performance",
+      "answer_span": "actually hurts test performance"
+    },
+    {
+      "id": "described-08",
+      "type": "result",
+      "question": "does generalization improve long after the training set is fully fitted",
+      "expect_doc": "2201.02177",
+      "reference_fact": "improving generalization performance from random chance level to perfect generalization",
+      "answer_span": "from random chance level to perfect generalization"
+    },
+    {
+      "id": "described-09",
+      "type": "method",
+      "question": "how should tokens and parameters be traded off under a fixed compute budget",
+      "expect_doc": "2203.15556",
+      "reference_fact": "the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled",
+      "answer_span": "for every doubling of model size the number of training tokens should also be doubled"
+    },
+    {
+      "id": "described-10",
+      "type": "result",
+      "question": "how much wall-clock speedup was measured on the mid-sized language model",
+      "expect_doc": "2205.14135",
+      "reference_fact": "3× speedup on GPT-2 (seq. length 1K), and 2.4× speedup on long-range arena",
+      "answer_span": "3× speedup on GPT-2"
+    },
+    {
+      "id": "described-11",
+      "type": "definition",
+      "question": "what makes a capability count as emergent rather than predictable",
+      "expect_doc": "2206.07682",
+      "reference_fact": "We consider an ability to be emergent if it is not present in smaller models but is present in larger models",
+      "answer_span": "not present in smaller models but is present in larger models"
+    },
+    {
+      "id": "described-12",
+      "type": "result",
+      "question": "how much higher is inference throughput than a comparable transformer",
+      "expect_doc": "2312.00752",
+      "reference_fact": "Mamba enjoys fast inference (5× higher throughput than Transformers) and linear scaling in sequence length",
+      "answer_span": "5× higher throughput than Transformers"
+    },
+    {
+      "id": "described-13",
+      "type": "result",
+      "question": "how much pre-training time is saved at the largest evaluated scale",
+      "expect_doc": "2605.06546",
+      "reference_fact": "TST yields up to a 2.5x reduction in total pre-training time at the 10B A1B scale",
+      "answer_span": "2.5x reduction in total pre-training time"
+    },
+    {
+      "id": "described-14",
+      "type": "method",
+      "question": "can images be classified without convolutions by treating regions as tokens",
+      "expect_doc": "2010.11929",
+      "reference_fact": "We show that this reliance on CNNs is not necessary and a pure transformer applied directly to sequences of image patches",
+      "answer_span": "a pure transformer applied directly to sequences of image patches"
+    },
+    {
+      "id": "described-15",
+      "type": "result",
+      "question": "what functional form describes how loss falls as compute grows",
+      "expect_doc": "2010.14701",
+      "reference_fact": "model size and compute budgets increase, following a power-law plus constant scaling law",
+      "answer_span": "a power-law plus constant scaling law"
+    },
+    {
+      "id": "described-16",
+      "type": "figure",
+      "question": "how many weights does the model have and how does that compare to earlier dense models",
+      "expect_doc": "2005.14165",
+      "reference_fact": "an autoregressive language model with 175 billion parameters, 10x more than any previous non-sparse language model",
+      "answer_span": "175 billion parameters, 10x more than any previous non-sparse language model"
+    },
+    {
+      "id": "described-17",
+      "type": "method",
+      "question": "which collection was used to show binary networks stay competitive",
+      "expect_doc": "1601.06071",
+      "reference_fact": "We test the proposed network on the MNIST dataset, represented using binary features",
+      "answer_span": "the MNIST dataset, represented using binary features"
+    },
+    {
+      "id": "described-18",
+      "type": "figure",
+      "question": "how large was the news archive the topic model was demonstrated on",
+      "expect_doc": "1301.3570",
+      "reference_fact": "We demonstrate our algorithm on 1.8 million documents from The New York Times",
+      "answer_span": "1.8 million documents from The New York Times"
+    },
+    {
+      "id": "described-19",
+      "type": "figure",
+      "question": "how many companies are covered by the equities data used for qualitative evaluation",
+      "expect_doc": "1501.05624",
+      "reference_fact": "a set of 39 million stock returns divided across roughly 6,500 companies from the years 1962",
+      "answer_span": "roughly 6,500 companies"
+    },
+    {
+      "id": "described-20",
+      "type": "result",
+      "question": "what convergence guarantee is proved for the momentum based sparse solver",
+      "expect_doc": "1409.7193",
+      "reference_fact": "prove its convergence to a local minimizer",
+      "answer_span": "convergence to a local minimizer"
+    },
+    {
+      "id": "described-21",
+      "type": "method",
+      "question": "what strategy was introduced to stop the fusion network overfitting its embeddings",
+      "expect_doc": "1612.09007",
+      "reference_fact": "we introduce the kernel dropout regularization strategy coupled with the use of an expanded set of composition kernels",
+      "answer_span": "the kernel dropout regularization strategy"
+    },
+    {
+      "id": "described-22",
+      "type": "method",
+      "question": "which optimiser was reinterpreted probabilistically to approximate the weight posterior",
+      "expect_doc": "1811.03679",
+      "reference_fact": "based on a new probabilistic interpretation of adaptive optimisation algorithms such as ADAGRAD and ADAM",
+      "answer_span": "adaptive optimisation algorithms such as ADAGRAD and ADAM"
+    },
+    {
+      "id": "described-23",
+      "type": "definition",
+      "question": "how many sentiment categories does the finer task distinguish",
+      "expect_doc": "1910.03474",
+      "reference_fact": "classes (very negative, negative, neutral, positive, and very positive)",
+      "answer_span": "very negative, negative, neutral, positive, and very positive"
+    },
+    {
+      "id": "described-24",
+      "type": "result",
+      "question": "what signal to noise penalty does the concatenated design incur at moderate levels",
+      "expect_doc": "0709.4466",
+      "reference_fact": "incurs an SNR penalty of about 2 dB at low to medium SNRs",
+      "answer_span": "an SNR penalty of about 2 dB"
+    },
+    {
+      "id": "described-25",
+      "type": "method",
+      "question": "which two enhancements distinguish the revised cluster routing scheme",
+      "expect_doc": "1307.7059",
+      "reference_fact": "cluster head replacement scheme and dual transmitting power levels",
+      "answer_span": "cluster head replacement scheme and dual transmitting power levels"
+    }
+  ]
+}

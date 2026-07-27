@@ -41,13 +41,14 @@ import json
 import re
 import sys
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-DATA = REPO / "benchmark_data" / "financial_reports"
+DEFAULT_DATA = REPO / "benchmark_data" / "financial_reports"
 CACHE_DIR = REPO / "benchmark_data" / ".answerability_cache"
 TOP_K = 10
 ANCHOR_WORDS = 8
@@ -55,6 +56,61 @@ MAX_PAGES = 400
 
 # "$12.9 billion", "17%", "224.2" -- the tokens an answer actually turns on.
 FIGURE = re.compile(r"\$?\d[\d,]*(?:\.\d+)?%?")
+
+QUESTION_FILES = ("fidelity_questions.json", "answerability_questions.json")
+
+
+@dataclass(frozen=True)
+class Question:
+    """One question, normalized across the two dataset schemas."""
+
+    id: str
+    type: str
+    question: str
+    doc: str
+    fact: str
+    span: str | None
+
+
+def load_dataset(data_dir: Path) -> list[Question]:
+    """Read the questions file, whichever schema the dataset uses.
+
+    The financial set nests values in lists (expect_docs, reference_facts)
+    and carries a scope field; the arXiv set uses singular keys, has no
+    scope, and adds answer_span. Everything downstream sees one shape.
+    """
+    for name in QUESTION_FILES:
+        path = data_dir / name
+        if path.exists():
+            raw = json.loads(path.read_text())["questions"]
+            break
+    else:
+        raise SystemExit(
+            f"no questions file in {data_dir}; expected one of"
+            f" {', '.join(QUESTION_FILES)}"
+        )
+
+    out: list[Question] = []
+    for q in raw:
+        if q.get("scope", "single-doc") != "single-doc":
+            continue
+        docs = q.get("expect_docs")
+        facts = q.get("reference_facts")
+        if docs is not None and not docs:
+            raise SystemExit(f"{q['id']}: expect_docs is an empty list")
+        if facts is not None and not facts:
+            raise SystemExit(f"{q['id']}: reference_facts is an empty list")
+        out.append(
+            Question(
+                id=q["id"],
+                type=q.get("type", "?"),
+                question=q["question"],
+                doc=docs[0] if docs else q["expect_doc"],
+                fact=facts[0] if facts else q["reference_fact"],
+                span=q.get("answer_span"),
+            )
+        )
+    return out
 
 
 def norm(text: str) -> str:
@@ -99,14 +155,24 @@ def locate(fact: str, pages: dict[int, str]) -> list[int]:
     return sorted(hits)
 
 
-def classify(fact: str, excerpts: list[str]) -> tuple[bool, bool]:
-    """(quotes_fact, carries_figure) for the excerpts of the gold page."""
+def classify(
+    fact: str, excerpts: list[str], span: str | None = None
+) -> tuple[bool, bool]:
+    """(quotes_fact, carries_answer) for the excerpts of the gold page.
+
+    `span` is the verbatim string the answer turns on. Datasets whose facts
+    do not turn on a figure supply it explicitly; without it the figure
+    heuristic below runs exactly as it always has, which is what keeps the
+    financial results reproducible.
+    """
     joined = norm(" ".join(excerpts))
     toks = norm(fact).split()
     quotes = any(
         " ".join(toks[i : i + ANCHOR_WORDS]) in joined
         for i in range(max(1, len(toks) - ANCHOR_WORDS + 1))
     )
+    if span is not None:
+        return quotes, norm(span) in joined
     want = figures(fact)
     carries = bool(want & figures(joined)) if want else quotes
     return quotes, carries
@@ -125,7 +191,14 @@ def main(argv: list[str] | None = None) -> int:
             " into wrong-document and right-document-wrong-page."
         ),
     )
+    ap.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA,
+        help="dataset directory holding manifest.json and a questions file",
+    )
     args = ap.parse_args(argv)
+    data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
     import pdf_mcp.server as server_module
 
@@ -135,28 +208,22 @@ def main(argv: list[str] | None = None) -> int:
     cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
     server_module.cache = cache
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((data / "manifest.json").read_text())
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
-    questions = [
-        q
-        for q in json.loads((DATA / "answerability_questions.json").read_text())[
-            "questions"
-        ]
-        if q["scope"] == "single-doc"
-    ]
+    questions = load_dataset(data)
     if args.ids:
         keep = set(args.ids.split(","))
-        questions = [q for q in questions if q["id"] in keep]
+        questions = [q for q in questions if q.id in keep]
 
     corpus_paths = [p for p in path_by_id.values() if Path(p).exists()]
 
     rows: list[dict[str, Any]] = []
     for q in questions:
-        doc = q["expect_docs"][0]
+        doc = q.doc
         path = path_by_id[doc]
         if args.corpus:
             info = pdf_corpus_search(
-                corpus_paths, q["question"], mode=args.mode, top_k=TOP_K
+                corpus_paths, q.question, mode=args.mode, top_k=TOP_K
             )
             # keep only hits in the document that actually answers it; a hit
             # elsewhere cannot carry the gold page
@@ -164,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             matches = [m for m in all_matches if m.get("path") == path]
             doc_returned = bool(matches)
         else:
-            info = pdf_search(path, q["question"], mode=args.mode, max_results=TOP_K)
+            info = pdf_search(path, q.question, mode=args.mode, max_results=TOP_K)
             matches = info.get("matches", [])
             doc_returned = True
 
@@ -173,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         # one -- which silently reports a located page as a recall miss.
         raw = cache.get_pages_text(path, list(range(0, MAX_PAGES)))
         pages = {n + 1: t for n, t in raw.items()}
-        gold = locate(q["reference_facts"][0], pages)
+        gold = locate(q.fact, pages)
 
         got = [m["page"] for m in matches]
         hit = [p for p in gold if p in got]
@@ -205,16 +272,16 @@ def main(argv: list[str] | None = None) -> int:
             ex_best = [
                 m.get("excerpt") or "" for m in matches if m["page"] == best["page"]
             ]
-            quotes, carries = classify(q["reference_facts"][0], ex_best)
+            quotes, carries = classify(q.fact, ex_best, q.span)
             bucket = "ok" if carries else "EXCERPT MISS"
 
             ex_any = [m.get("excerpt") or "" for m in matches if m["page"] in hit]
-            _, carries_any = classify(q["reference_facts"][0], ex_any)
+            _, carries_any = classify(q.fact, ex_any, q.span)
             bucket_any = "ok" if carries_any else "EXCERPT MISS"
         rows.append(
             {
-                "id": q["id"],
-                "type": q["type"],
+                "id": q.id,
+                "type": q.type,
                 "doc": doc,
                 "gold_pages": gold,
                 "gold_rank": next(
@@ -273,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         " not retrieval,\nand it is testable without a judge."
     )
     scope = "corpus" if args.corpus else "singledoc"
-    out = DATA / f"excerpt_fidelity_{scope}_{args.mode}.json"
+    out = data / f"excerpt_fidelity_{scope}_{args.mode}.json"
     out.write_text(json.dumps({"mode": args.mode, "rows": rows}, indent=2) + "\n")
     print(f"\nwrote {out}")
     return 0

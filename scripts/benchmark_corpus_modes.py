@@ -144,6 +144,175 @@ def normalize(text: str) -> str:
     return _WS.sub(" ", text).strip().casefold()
 
 
+MIN_DESCRIBED_TOKENS = 5
+
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+# Small closed list: enough to stop function words counting toward the
+# described-query floor without pulling in a dependency.
+_STOPWORDS = {
+    "about",
+    "after",
+    "also",
+    "been",
+    "before",
+    "being",
+    "between",
+    "both",
+    "does",
+    "each",
+    "from",
+    "have",
+    "into",
+    "more",
+    "most",
+    "other",
+    "over",
+    "same",
+    "some",
+    "such",
+    "than",
+    "that",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "under",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "would",
+}
+
+
+def stem(token: str) -> str:
+    """Crude suffix stripper standing in for FTS5's porter tokenizer.
+
+    The gate below asks whether a query token is ABSENT from the gold page.
+    FTS5 stems, so "declines" against a page saying "decline" is found by
+    the real search; scoring it absent would admit a query that never
+    exercises the AND path and make the gate weaker than it claims to be.
+    This is not porter and will not always agree with it. Measured against
+    real FTS5 `porter unicode61`, it errs the UNSAFE way on 7 of the 25
+    shipped queries: it calls a genuinely-present token absent (an
+    inflection pair the crude rules here miss, e.g. "companies"/"company",
+    "coding"/"code"), which is the wrong direction for a gate whose job is
+    to reject lifted queries -- a lifted query using such a pair could be
+    wrongly admitted as "described". All 25 shipped queries were
+    re-verified against real porter and none has a true margin of 0, so
+    none is misclassified today; this is a documentation-accuracy note,
+    not a behaviour change.
+
+    The trailing-"e" strip is not cosmetic: without it "declines" reduces
+    to "declin" while "decline" stays whole, so the two never match and the
+    stemmer fails the one job it has. The output is not required to be a
+    real word, only to be the same for every inflection of one word.
+    """
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(token) > len(suffix) + 3 and token.endswith(suffix):
+            token = token[: -len(suffix)]
+            break
+    return token[:-1] if len(token) > 4 and token.endswith("e") else token
+
+
+def content_tokens(text: str) -> list[str]:
+    """Tokens longer than 3 characters that are not function words."""
+    return [
+        t for t in _TOKEN.findall(text.casefold()) if len(t) > 3 and t not in _STOPWORDS
+    ]
+
+
+def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
+    """Enforce the described-not-named property mechanically.
+
+    A described query must (a) carry at least MIN_DESCRIBED_TOKENS content
+    tokens and (b) have at least one content token that appears on none of
+    its labeled pages. (b) is the AND-cliff condition: the financial case
+    that exposed it was "decline" against a filing saying "decreased".
+    Without this check the property erodes silently as queries are edited.
+    """
+    errors: list[str] = []
+    for q in queries["queries"]:
+        if q.get("class") != "described":
+            continue
+        toks = content_tokens(q["query"])
+        if len(toks) < MIN_DESCRIBED_TOKENS:
+            errors.append(
+                f"{q['id']}: {len(toks)} content tokens, need"
+                f" {MIN_DESCRIBED_TOKENS}: {toks}"
+            )
+        docs = {lb["doc"] for lb in q["labels"]}
+        if len(docs) > 1:
+            errors.append(
+                f"{q['id']}: described queries must be single-gold-document,"
+                f" got {sorted(docs)}"
+            )
+        paged = [lb for lb in q["labels"] if "page" in lb]
+        if not paged:
+            errors.append(f"{q['id']}: described query has no page labels")
+            continue
+        page_toks = set()
+        for lb in paged:
+            page_toks |= {
+                stem(t) for t in content_tokens(page_text_lookup(lb["doc"], lb["page"]))
+            }
+        if toks and all(stem(t) in page_toks for t in toks):
+            errors.append(
+                f"{q['id']}: every content token appears on a labeled page;"
+                " query is lifted, not described"
+            )
+    return errors
+
+
+def validate_fidelity_questions(
+    questions: dict, queries: dict, page_text_lookup
+) -> list[str]:
+    """Check the fidelity questions against the graded queries.
+
+    answer_span is the string the excerpt must contain, so it has to be
+    both a real substring of the reference fact (or it could drift into
+    checking something the fact does not claim) and verbatim present on a
+    labeled page (or no excerpt could ever carry it).
+    """
+    errors: list[str] = []
+    by_id = {q["id"]: q for q in queries["queries"]}
+    for item in questions["questions"]:
+        qid = item["id"]
+        query = by_id.get(qid)
+        if query is None:
+            errors.append(f"{qid}: no query with this id in queries.json")
+            continue
+        span = normalize(item["answer_span"])
+        if span not in normalize(item["reference_fact"]):
+            errors.append(f"{qid}: answer_span is not a substring of reference_fact")
+        labeled = [
+            lb
+            for lb in query["labels"]
+            if "page" in lb and lb["doc"] == item["expect_doc"]
+        ]
+        if not labeled:
+            errors.append(
+                f"{qid}: expect_doc {item['expect_doc']} has no page labels"
+                " in queries.json"
+            )
+            continue
+        if not any(
+            span in normalize(page_text_lookup(lb["doc"], lb["page"])) for lb in labeled
+        ):
+            errors.append(
+                f"{qid}: answer_span not found on any labeled page of"
+                f" {item['expect_doc']}: {item['answer_span']!r}"
+            )
+    return errors
+
+
 def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[str]:
     """Check every label: the doc exists in the manifest, and (for labels
     carrying a page) the evidence substring is present in that page's
@@ -219,9 +388,19 @@ def main(argv: list[str] | None = None) -> int:
             return pages[page - 1] if 1 <= page <= len(pages) else ""
 
         errors = validate_queries(manifest, queries, lookup)
+        errors += validate_described_queries(queries, lookup)
+        fidelity_path = data / "fidelity_questions.json"
+        n_questions = 0
+        if fidelity_path.exists():
+            fidelity = json.loads(fidelity_path.read_text())
+            n_questions = len(fidelity["questions"])
+            errors += validate_fidelity_questions(fidelity, queries, lookup)
         for err in errors:
             print(f"INVALID {err}")
-        print(f"\n{len(queries['queries'])} queries checked, {len(errors)} errors")
+        print(
+            f"\n{len(queries['queries'])} queries and {n_questions} fidelity"
+            f" questions checked, {len(errors)} errors"
+        )
         return 1 if errors else 0
 
     paths = [p for p in id_by_path if Path(p).exists()]

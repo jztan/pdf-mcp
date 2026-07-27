@@ -93,3 +93,182 @@ quality class, is robust to distractor flooding on multi-document queries,
 and is far cheaper at query time. A hybrid that grafts global-IDF
 discrimination onto fusion's distractor-robustness is a possible later
 refinement, but the base design is per-document fusion.
+
+---
+
+## Described queries
+
+The 64 queries above are 2-4 token noun phrases lifted verbatim from the
+papers they target, so every token is present by construction and the FTS5
+AND-join cannot fail. 25 `described` queries were added to remove that
+guarantee: each describes a fact instead of naming it, and `--validate`
+rejects any query whose content tokens all appear on its labelled pages.
+
+Set properties: 25 queries over 25 distinct CS/ML papers, one each, median
+8 content tokens against roughly 3 for the lifted set. Measured with the
+crude stemmer this validator uses, no query clears the gate by fewer than 2
+absent content tokens; re-checked against real FTS5 porter stemming, the
+true minimum is 1 (described-22).
+
+**Pre-registered before the run.** `_fts5_or_fallback` (`src/pdf_mcp/cache.py`)
+already retries OR-joined when a 3+ word query matches nothing, so:
+
+> **H0:** keyword-mode doc-NDCG@10 on the described queries is within 0.05
+> of the lifted queries.
+>
+> - **Confirm** -> the shipped fix generalizes to a second query
+>   distribution, and the described set stays as a regression guard.
+> - **Reject** -> the OR retry has a trigger gap, and that gap is the
+>   finding.
+
+H0 was rejected, but **the mechanism named in that second bullet turned out
+to be wrong**: the OR retry fires on every one of these queries. The
+prediction is left above exactly as registered; what actually causes the
+failure is below.
+
+The 0.05 band matches the trap-class decision threshold used above.
+
+Excerpt fidelity carries no prior on this corpus and is reported
+descriptively, with no threshold attached.
+
+### Result: H0 rejected
+
+Keyword-mode doc-NDCG@10, described against lifted, same corpus and run:
+
+| mode | described (n=25) | lifted (n=64) | gap |
+|---|---|---|---|
+| **keyword** | **0.000** | **0.816** | **+0.816** |
+| semantic | 0.698 | 0.829 | +0.131 |
+| hybrid | 0.698 | 0.913 | +0.215 |
+
+**H0 predicted a gap within 0.05. The measured keyword gap is 0.816, larger
+by a factor of sixteen.** It is not a degradation: all 25 described queries
+score exactly 0.000, and keyword doc-hit@3 on the class is 0.000. Not one
+described query returned its gold document anywhere in the top 10.
+
+The failure is real and large; see below for what actually causes it.
+
+### The retry fires every time; RRF-over-per-document-rank collapses to alphabetical order
+
+The obvious first hypothesis was that `pdf_corpus_search`'s corpus-wide
+OR-retry gate (`src/pdf_mcp/server.py`, `if not rank_lists and
+allow_or_fallback:`) was being suppressed by an incidental AND match
+elsewhere in the corpus. That hypothesis is **falsified**: verified
+directly against the shipped server on the real 100-doc corpus, all 25
+described queries match zero documents under the strict AND form, so
+`rank_lists` is empty and the OR retry fires every single time. The gate
+suppresses nothing here.
+
+The real mechanism is downstream, in fusion. After the OR retry, a
+described query typically matches most of the corpus: 98 of 100 documents
+for described-01. `rrf_fuse_doc_rankings` (`src/pdf_mcp/corpus.py`) scores
+each item `1/(k + rank)`, and every matching document contributes its own
+rank-1 page, so all 98 documents tie at exactly `1/60`. The documented
+tie-break for equal scores is `(doc_path, page)`, which is alphabetical.
+For described-01 the returned top-10 is exactly the ten alphabetically
+first arXiv IDs in the corpus:
+
+```
+0705.4297, 0706.0028, 0706.0954, 0706.2397, 0707.0311,
+0707.1301, 0707.3690, 0707.4042, 0709.2178, 0709.2857
+```
+
+Gold (`1502.03167`) is unreachable by construction: alphabetically it sorts
+well past 10.
+
+The contrast that establishes this as the mechanism: lifted queries match a
+median of 1.5 documents after OR-retry (more than 10 documents for only 9
+of 64 queries), so the degenerate 98-way tie never bites and they score
+0.816. Described queries, being phrased around a fact rather than the
+paper's own vocabulary, retry into near-corpus-wide OR matches almost every
+time, so they hit the tie on nearly every query.
+
+**True root cause: cross-document keyword ranking carries no relevance
+signal once more than `top_k` documents match.** BM25 order is used only
+*within* a document; RRF fusion over per-document rankings gives every
+matching document the same score at its own rank-1 page, so once matches
+exceed `top_k` the cross-corpus ordering collapses to alphabetical path
+order, with no relationship to relevance.
+
+The corpus-size dependence in the earlier draft of this analysis is real
+but does not test the retry-suppression hypothesis: zero documents
+AND-matched at every size tested (10, 25, 50, 100). Gold appeared at
+n=10 only because all 10 documents OR-matched and `top_k=10` handed every
+document a slot, with gold sitting at rank 10 of 10, last. At larger sizes
+more than `top_k` documents OR-match and the tie-break pushes gold out
+entirely. The size dependence is a `top_k`-versus-candidate-count effect,
+not evidence of a suppressed retry.
+
+This also means the "rrf-fusion wins on the spread class" conclusion
+earlier in this document rests on the same per-document RRF fusion path
+that produces this collapse. That conclusion was not retested here and
+this finding does not overturn it, but it warrants a recheck against a
+query class that, like the described set, drives match counts past
+`top_k`.
+
+The AND-cliff fix that shipped for `pdf_search` works correctly per
+document and was validated per document; this failure is downstream of it,
+in how the corpus tool fuses many correctly-produced per-document rankings
+together.
+
+**Not fixed here.** This branch measures the shipped server and does not
+modify `src/`. The described-query class is now a standing regression guard
+for whatever fix lands.
+
+### What still works
+
+Semantic and hybrid both score 0.698 doc-NDCG and 0.720 doc-hit@3 on the
+described class, but not because they dodge a corpus-wide gate: hybrid's
+keyword arm is disabled outright for this query class. `src/pdf_mcp/server.py`
+sets `allow_or_fallback=(mode == "keyword")`, so in hybrid mode the OR
+retry never fires at all, by design, regardless of what else matches in
+the corpus. Hybrid's 0.698 here is really semantic alone; its keyword arm
+contributes nothing because it never gets a chance to retry, not because a
+corpus-wide gate suppressed it. Hybrid remains the strongest mode overall
+(0.853 doc-NDCG across all 89 queries). A caller on the default
+`mode="auto"` does not hit the fusion collapse above. A caller who selects
+`mode="keyword"` for a described question gets nothing.
+
+Note that hybrid earns no advantage over semantic on the described class
+(0.698 both, identical). Its usual lead comes from the keyword arm, which
+contributes nothing here.
+
+### Excerpt fidelity
+
+No prior; descriptive, per the pre-registration. Hybrid mode, both
+measures reported.
+
+| | single document | 100-doc corpus |
+|---|---|---|
+| `ok` (best-ranked / any gold) | 11 / 14 | 5 / 6 |
+| `EXCERPT MISS` | 11 / 8 | 7 / 6 |
+| `PAGE MISS` | 3 | 9 |
+| `DOC MISS` | 0 | 4 |
+| **recall** | **88%** | **48%** |
+| **fidelity** (best-ranked / any gold) | **50% / 64%** | **42% / 50%** |
+
+Excerpt-side and retrieval-side losses are comparable on a single document
+(11 excerpt misses against 3 page misses) but retrieval dominates across the
+corpus (7 against 13). That is the opposite of the financial corpus, where
+snippet-side losses dominated under either measure. The likely cause is the
+same disabled retry: these are hybrid-mode numbers, and hybrid's keyword
+arm never retries on this query class (`allow_or_fallback=(mode ==
+"keyword")` disables it by design in hybrid mode, not any corpus-wide
+gate), so the corpus run is effectively semantic-only.
+
+### Limitations of this query set
+
+- **All 25 labels are on page 1.** Deliberate: 61 of the 102 lifted labels
+  are also page 1, and holding page depth roughly constant is what isolates
+  query phrasing, the variable H0 is about. A deep-page described set would
+  confound phrasing with page depth. It is the natural follow-on and would
+  measure something this set cannot.
+- **25 queries support the aggregate claim only.** No per-type breakdown is
+  reported. The headline effect is a 0.816 gap with every query at zero, far
+  outside anything a sample of this size could manufacture, but a subtler
+  effect would not be resolvable here.
+- **One paper each, all CS/ML.** Conclusions about other fields in the
+  corpus are not supported.
+- The `diagnose_excerpt_fidelity.py` console header prints "24-doc corpus"
+  regardless of dataset, a leftover from the financial arm. The run above
+  searched all 100 documents. Cosmetic, affects no recorded number.

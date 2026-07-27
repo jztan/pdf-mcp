@@ -99,14 +99,24 @@ def locate(fact: str, pages: dict[int, str]) -> list[int]:
     return sorted(hits)
 
 
-def classify(fact: str, excerpts: list[str]) -> tuple[bool, bool]:
-    """(quotes_fact, carries_figure) for the excerpts of the gold page."""
+def classify(
+    fact: str, excerpts: list[str], span: str | None = None
+) -> tuple[bool, bool]:
+    """(quotes_fact, carries_answer) for the excerpts of the gold page.
+
+    `span` is the verbatim string the answer turns on. Datasets whose facts
+    do not turn on a figure supply it explicitly; without it the figure
+    heuristic below runs exactly as it always has, which is what keeps the
+    financial results reproducible.
+    """
     joined = norm(" ".join(excerpts))
     toks = norm(fact).split()
     quotes = any(
         " ".join(toks[i : i + ANCHOR_WORDS]) in joined
         for i in range(max(1, len(toks) - ANCHOR_WORDS + 1))
     )
+    if span is not None:
+        return quotes, norm(span) in joined
     want = figures(fact)
     carries = bool(want & figures(joined)) if want else quotes
     return quotes, carries

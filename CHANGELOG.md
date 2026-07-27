@@ -40,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   block sharing one query term, moving excerpt and `bbox` geometry off
   the true hit. The short-block retry now keeps the longer block only if
   it covers at least as many query tokens. No gate regressions.
+- Cross-document keyword ranking ordered results by file path whenever
+  more than one document matched. `pdf_corpus_search` fuses per-document
+  rankings with RRF, so every matching document's best page scored
+  identically and the tie broke on `(path, page)`. With 98 of 100
+  documents matching a natural-language query, the returned top ten were
+  the ten alphabetically-first files, none of which answered it. Ties now
+  break by how many distinct query terms a document carries, weighted by
+  each term's rarity across the matching documents. On a 100-document
+  arXiv corpus, `mode="keyword"` doc-NDCG@10 rose 0.587 to 0.772 and
+  doc-hit@3 0.640 to 0.831; on 25 natural-language queries it rose 0.000
+  to 0.495. `mode="auto"` is unchanged in quality (0.829 to 0.827 once
+  the naming effect is removed from both), and both modes are markedly
+  less sensitive to file naming.
 
 ## [1.22.0] - 2026-07-25
 ### Added

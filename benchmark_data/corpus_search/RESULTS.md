@@ -350,3 +350,94 @@ gate), so the corpus run is effectively semantic-only.
 - The `diagnose_excerpt_fidelity.py` console header prints "24-doc corpus"
   regardless of dataset, a leftover from the financial arm. The run above
   searched all 100 documents. Cosmetic, affects no recorded number.
+
+---
+
+## Fix: cross-document ranking by term coverage
+
+The described-query arm above showed keyword mode scoring 0.000 doc-NDCG on
+all 25 queries, because every matching document's rank-1 page ties at
+`1/(k+0)` and the `(doc_path, page)` tie-break ordered the whole top ten
+alphabetically. The same degeneracy, in milder form, inflated the stage-2
+spike's spread class (see CORRECTION above).
+
+The fix breaks that tie by **how many distinct query terms a document
+carries, weighted by how rare each term is across the matching documents**.
+Document frequencies come from the documents this query already matched, so
+it costs no extra I/O and needs no corpus-wide index. This is the "graft
+global-IDF discrimination onto fusion's distractor-robustness" refinement
+the spike named but did not build.
+
+### Per-document BM25 was tried first and is worse than filenames
+
+The obvious candidate -- carry the BM25 score already in the payload -- is
+not merely uncalibrated across documents, it is **inverted**. Each document
+is searched against its own FTS index, so IDF is computed within that
+document: a paper genuinely about the query mentions its terms on many
+pages, which lowers its within-document IDF and its score.
+
+Measured on described-01, gold `1502.03167` (Batch Normalization) ranked
+**86th of 98** by per-document BM25 and **1st** by term coverage; over ten
+described queries the median gold rank was 39.5 by BM25 against 2.5 by
+coverage. Shipping it would have moved keyword doc-NDCG 0.587 -> 0.524,
+below the alphabetical order it replaced.
+
+Document match counts are no use either: capped at `per_doc_k`, all 98
+matching documents sit at 10.
+
+### Retrieval quality
+
+doc-NDCG@10, 100-doc corpus:
+
+| class | keyword before | keyword after | hybrid before | hybrid after |
+|---|---|---|---|---|
+| described | **0.000** | **0.495** | 0.698 | 0.698 |
+| needle | 1.000 | 1.000 | 1.000 | 1.000 |
+| trap | 0.785 | **0.960** | 1.000 | 1.000 |
+| spread | 0.744 | 0.735 | 0.777 | 0.727 |
+| **overall** | **0.587** | **0.772** | 0.852 | 0.838 |
+| doc-hit@3 | 0.640 | 0.831 | 0.921 | 0.899 |
+
+Keyword mode gains 0.185 overall. Hybrid appears to lose 0.014 -- the next
+section shows that is inflation being removed, not quality lost.
+
+### Name-order dependence (the acceptance gate)
+
+`scripts/recheck_production_tiebreak.py` re-fuses every query under four
+stable renamings of the whole corpus. Drift is permuted minus real: a
+ranking that carries relevance is invariant, one that reports filename
+order moves.
+
+| | keyword before | keyword after | hybrid before | hybrid after |
+|---|---|---|---|---|
+| described | +0.064 | **-0.018** | 0.000 | 0.000 |
+| trap | -0.086 | **-0.004** | -0.007 | -0.007 |
+| spread | -0.127 | -0.070 | -0.077 | **-0.032** |
+| overall (hybrid) | | | -0.024 | **-0.011** |
+
+Needle drift is 0.000 everywhere and is the control: a needle query matches
+one document, so nothing ties.
+
+**Read the permuted columns to compare the two rankings honestly.** On that
+basis keyword improves on every class (spread 0.664 against 0.617, trap
+0.956 against 0.699) and **hybrid is neutral: 0.827 against 0.829 overall,
+a difference of 0.002.** The visible hybrid drop from 0.852 to 0.838 is
+almost entirely the alphabetical credit being withdrawn, not ranking
+quality being lost. Callers on the default `mode="auto"` are unaffected;
+callers on `mode="keyword"` gain a great deal.
+
+### What is not fixed
+
+**Spread retains real name-order dependence** (-0.070 keyword, -0.032
+hybrid), halved but not removed. Spread queries are the original 2-4 token
+lifted phrases, so coverage-times-IDF has little to discriminate on: few
+terms, few matching documents, and many exact score ties still falling
+through to `(doc_path, page)`. A finer signal for short queries -- term
+proximity, or page-level rather than document-level coverage -- is the
+open follow-up.
+
+**Hybrid still scores 0.698 on the described class** and hybrid page-NDCG
+is 0.241. The keyword arm runs with the OR retry disabled in hybrid by
+design (`allow_or_fallback=(mode == "keyword")`), so this fix barely
+touches that path. The corpus penalty on natural-language queries carrying
+no routing signal is reduced, not solved.

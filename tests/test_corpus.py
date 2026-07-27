@@ -439,6 +439,51 @@ class TestCorpusFusion:
         fused = corpus.rrf_fuse_doc_rankings([[("z.pdf", 5)], [("a.pdf", 9)]])
         assert fused == [("a.pdf", 9), ("z.pdf", 5)]
 
+    def test_relevance_outranks_alphabetical_order(self):
+        # Every document contributes its own rank-1 page, so all tie at
+        # 1/(k+0). Without a relevance signal the order is alphabetical,
+        # which is how a described-query search returned the ten
+        # alphabetically-first documents in the corpus and scored 0.000.
+        lists = [[("z.pdf", 5)], [("a.pdf", 9)]]
+        scores = {("z.pdf", 5): 9.0, ("a.pdf", 9): 1.0}
+        fused = corpus.rrf_fuse_doc_rankings(lists, scores=scores)
+        assert fused == [("z.pdf", 5), ("a.pdf", 9)]
+
+    def test_relevance_only_breaks_ties_never_beats_rrf_rank(self):
+        # A document's rank-2 page must not outrank another's rank-1 page
+        # however high its score: within-document rank is the primary key.
+        lists = [[("a.pdf", 1), ("a.pdf", 2)], [("b.pdf", 1)]]
+        scores = {("a.pdf", 1): 0.1, ("a.pdf", 2): 99.0, ("b.pdf", 1): 0.2}
+        fused = corpus.rrf_fuse_doc_rankings(lists, scores=scores)
+        assert fused[:2] == [("b.pdf", 1), ("a.pdf", 1)]
+        assert fused[2] == ("a.pdf", 2)
+
+    def test_missing_scores_fall_back_to_alphabetical(self):
+        lists = [[("z.pdf", 5)], [("a.pdf", 9)]]
+        fused = corpus.rrf_fuse_doc_rankings(lists, scores={})
+        assert fused == [("a.pdf", 9), ("z.pdf", 5)]
+
+    def test_equal_scores_still_break_deterministically(self):
+        lists = [[("z.pdf", 5)], [("a.pdf", 9)]]
+        scores = {("z.pdf", 5): 4.0, ("a.pdf", 9): 4.0}
+        fused = corpus.rrf_fuse_doc_rankings(lists, scores=scores)
+        assert fused == [("a.pdf", 9), ("z.pdf", 5)]
+
+    def test_ranking_is_invariant_under_document_renaming(self):
+        # The property both shipped bugs violated: renaming documents must
+        # not reorder results. Checked by mapping names through a
+        # permutation that reverses alphabetical order.
+        lists = [[("a.pdf", 1)], [("m.pdf", 2)], [("z.pdf", 3)]]
+        scores = {("a.pdf", 1): 1.0, ("m.pdf", 2): 5.0, ("z.pdf", 3): 3.0}
+        fused = corpus.rrf_fuse_doc_rankings(lists, scores=scores)
+
+        rename = {"a.pdf": "z9.pdf", "m.pdf": "m9.pdf", "z.pdf": "a9.pdf"}
+        r_lists = [[(rename[d], p)] for lst in lists for d, p in lst]
+        r_scores = {(rename[d], p): s for (d, p), s in scores.items()}
+        r_fused = corpus.rrf_fuse_doc_rankings(r_lists, scores=r_scores)
+
+        assert [rename[d] for d, _p in fused] == [d for d, _p in r_fused]
+
     def test_doc_rankings_top_k(self):
         lists = [[("a.pdf", 1), ("a.pdf", 2)], [("b.pdf", 1)]]
         assert len(corpus.rrf_fuse_doc_rankings(lists, top_k=2)) == 2

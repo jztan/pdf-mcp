@@ -1,10 +1,14 @@
 """Tests for the corpus-modes benchmark runner (pure logic only)."""
 
 from scripts.benchmark_corpus_modes import (
+    MIN_DESCRIBED_TOKENS,
     agg,
     class_names,
+    content_tokens,
     grade_query,
     nonlatin_ids,
+    stem,
+    validate_described_queries,
     validate_queries,
 )
 
@@ -213,3 +217,133 @@ class TestAggPageLevelNotApplicable:
 
         assert fmt(None) == "n/a"
         assert fmt(0.6741) == "0.674"
+
+
+class TestContentTokens:
+    def test_drops_short_tokens_and_stopwords(self):
+        assert content_tokens("does this method need labeled data") == [
+            "method",
+            "need",
+            "labeled",
+            "data",
+        ]
+
+    def test_casefolds_and_splits_on_punctuation(self):
+        assert content_tokens("Noetherian-type, splitting!") == [
+            "noetherian",
+            "type",
+            "splitting",
+        ]
+
+
+class TestStem:
+    def test_inflections_of_one_word_collapse_together(self):
+        # The ONLY property that matters: all forms must agree with each
+        # other. The stem itself is not required to be a real word.
+        forms = {stem(w) for w in ("decline", "declines", "declined", "declining")}
+        assert len(forms) == 1
+
+    def test_collapses_plural_with_singular(self):
+        assert stem("label") == stem("labels")
+        assert stem("time") == stem("times")
+
+    def test_leaves_short_tokens_alone(self):
+        assert stem("gas") == "gas"
+
+    def test_does_not_collapse_unrelated_words(self):
+        assert stem("decline") != stem("decrease")
+
+
+class TestValidateDescribedQueries:
+    def _lookup(self, text):
+        return lambda doc, page: text
+
+    def test_accepts_query_with_an_absent_content_token(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "described-01",
+                    "class": "described",
+                    "query": "does this method need labeled data at inference",
+                    "labels": [{"doc": "d1", "page": 4, "gain": 2}],
+                }
+            ]
+        }
+        lookup = self._lookup("the method needs labeled data at test time")
+        assert validate_described_queries(queries, lookup) == []
+
+    def test_rejects_query_whose_every_token_is_present(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "described-02",
+                    "class": "described",
+                    "query": "does this method need labeled data at inference",
+                    "labels": [{"doc": "d1", "page": 4, "gain": 2}],
+                }
+            ]
+        }
+        lookup = self._lookup("method need labeled data inference")
+        errors = validate_described_queries(queries, lookup)
+        assert len(errors) == 1
+        assert "lifted" in errors[0]
+
+    def test_absence_is_checked_after_stemming(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "described-03",
+                    "class": "described",
+                    "query": "why did revenue declines follow supplier changes",
+                    "labels": [{"doc": "d1", "page": 1, "gain": 2}],
+                }
+            ]
+        }
+        lookup = self._lookup("revenue decline followed supplier change")
+        errors = validate_described_queries(queries, lookup)
+        assert len(errors) == 1
+        assert "lifted" in errors[0]
+
+    def test_rejects_query_under_the_token_floor(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "described-04",
+                    "class": "described",
+                    "query": "splitting families noetherian",
+                    "labels": [{"doc": "d1", "page": 1, "gain": 2}],
+                }
+            ]
+        }
+        errors = validate_described_queries(queries, self._lookup("unrelated"))
+        assert any(str(MIN_DESCRIBED_TOKENS) in e for e in errors)
+
+    def test_rejects_multi_document_described_query(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "described-05",
+                    "class": "described",
+                    "query": "does this method need labeled data at inference",
+                    "labels": [
+                        {"doc": "d1", "page": 1, "gain": 2},
+                        {"doc": "d2", "page": 1, "gain": 2},
+                    ],
+                }
+            ]
+        }
+        errors = validate_described_queries(queries, self._lookup("unrelated"))
+        assert any("single-gold-document" in e for e in errors)
+
+    def test_ignores_non_described_classes(self):
+        queries = {
+            "queries": [
+                {
+                    "id": "needle-01",
+                    "class": "needle",
+                    "query": "short lifted phrase",
+                    "labels": [{"doc": "d1", "page": 1, "gain": 2}],
+                }
+            ]
+        }
+        assert validate_described_queries(queries, self._lookup("short lifted")) == []

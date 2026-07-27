@@ -144,6 +144,126 @@ def normalize(text: str) -> str:
     return _WS.sub(" ", text).strip().casefold()
 
 
+MIN_DESCRIBED_TOKENS = 5
+
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+# Small closed list: enough to stop function words counting toward the
+# described-query floor without pulling in a dependency.
+_STOPWORDS = {
+    "about",
+    "after",
+    "also",
+    "been",
+    "before",
+    "being",
+    "between",
+    "both",
+    "does",
+    "each",
+    "from",
+    "have",
+    "into",
+    "more",
+    "most",
+    "other",
+    "over",
+    "same",
+    "some",
+    "such",
+    "than",
+    "that",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "under",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "would",
+}
+
+
+def stem(token: str) -> str:
+    """Crude suffix stripper standing in for FTS5's porter tokenizer.
+
+    The gate below asks whether a query token is ABSENT from the gold page.
+    FTS5 stems, so "declines" against a page saying "decline" is found by
+    the real search; scoring it absent would admit a query that never
+    exercises the AND path and make the gate weaker than it claims to be.
+    This is not porter and will not always agree with it. It errs toward
+    calling tokens present, which is the safe direction for a gate whose
+    job is to reject lifted queries.
+
+    The trailing-"e" strip is not cosmetic: without it "declines" reduces
+    to "declin" while "decline" stays whole, so the two never match and the
+    stemmer fails the one job it has. The output is not required to be a
+    real word, only to be the same for every inflection of one word.
+    """
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(token) > len(suffix) + 3 and token.endswith(suffix):
+            token = token[: -len(suffix)]
+            break
+    return token[:-1] if len(token) > 4 and token.endswith("e") else token
+
+
+def content_tokens(text: str) -> list[str]:
+    """Tokens longer than 3 characters that are not function words."""
+    return [
+        t for t in _TOKEN.findall(text.casefold()) if len(t) > 3 and t not in _STOPWORDS
+    ]
+
+
+def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
+    """Enforce the described-not-named property mechanically.
+
+    A described query must (a) carry at least MIN_DESCRIBED_TOKENS content
+    tokens and (b) have at least one content token that appears on none of
+    its labeled pages. (b) is the AND-cliff condition: the financial case
+    that exposed it was "decline" against a filing saying "decreased".
+    Without this check the property erodes silently as queries are edited.
+    """
+    errors: list[str] = []
+    for q in queries["queries"]:
+        if q.get("class") != "described":
+            continue
+        toks = content_tokens(q["query"])
+        if len(toks) < MIN_DESCRIBED_TOKENS:
+            errors.append(
+                f"{q['id']}: {len(toks)} content tokens, need"
+                f" {MIN_DESCRIBED_TOKENS}: {toks}"
+            )
+        docs = {lb["doc"] for lb in q["labels"]}
+        if len(docs) > 1:
+            errors.append(
+                f"{q['id']}: described queries must be single-gold-document,"
+                f" got {sorted(docs)}"
+            )
+        paged = [lb for lb in q["labels"] if "page" in lb]
+        if not paged:
+            errors.append(f"{q['id']}: described query has no page labels")
+            continue
+        page_toks = set()
+        for lb in paged:
+            page_toks |= {
+                stem(t) for t in content_tokens(page_text_lookup(lb["doc"], lb["page"]))
+            }
+        if toks and all(stem(t) in page_toks for t in toks):
+            errors.append(
+                f"{q['id']}: every content token appears on a labeled page;"
+                " query is lifted, not described"
+            )
+    return errors
+
+
 def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[str]:
     """Check every label: the doc exists in the manifest, and (for labels
     carrying a page) the evidence substring is present in that page's

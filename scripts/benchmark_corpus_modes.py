@@ -199,9 +199,16 @@ def stem(token: str) -> str:
     FTS5 stems, so "declines" against a page saying "decline" is found by
     the real search; scoring it absent would admit a query that never
     exercises the AND path and make the gate weaker than it claims to be.
-    This is not porter and will not always agree with it. It errs toward
-    calling tokens present, which is the safe direction for a gate whose
-    job is to reject lifted queries.
+    This is not porter and will not always agree with it. Measured against
+    real FTS5 `porter unicode61`, it errs the UNSAFE way on 7 of the 25
+    shipped queries: it calls a genuinely-present token absent (an
+    inflection pair the crude rules here miss, e.g. "companies"/"company",
+    "coding"/"code"), which is the wrong direction for a gate whose job is
+    to reject lifted queries -- a lifted query using such a pair could be
+    wrongly admitted as "described". All 25 shipped queries were
+    re-verified against real porter and none has a true margin of 0, so
+    none is misclassified today; this is a documentation-accuracy note,
+    not a behaviour change.
 
     The trailing-"e" strip is not cosmetic: without it "declines" reduces
     to "declin" while "decline" stays whole, so the two never match and the

@@ -96,6 +96,10 @@ def load_dataset(data_dir: Path) -> list[Question]:
             continue
         docs = q.get("expect_docs")
         facts = q.get("reference_facts")
+        if docs is not None and not docs:
+            raise SystemExit(f"{q['id']}: expect_docs is an empty list")
+        if facts is not None and not facts:
+            raise SystemExit(f"{q['id']}: reference_facts is an empty list")
         out.append(
             Question(
                 id=q["id"],

@@ -174,3 +174,43 @@ class TestLoadDataset:
     def test_raises_when_no_questions_file_exists(self, tmp_path):
         with pytest.raises(SystemExit):
             load_dataset(tmp_path)
+
+    def test_raises_a_clear_error_for_empty_reference_facts(self, tmp_path):
+        _write(
+            tmp_path,
+            "answerability_questions.json",
+            {
+                "questions": [
+                    {
+                        "id": "q1",
+                        "scope": "single-doc",
+                        "type": "figure",
+                        "question": "how did Greater China net sales move?",
+                        "expect_docs": ["aapl-fy2024"],
+                        "reference_facts": [],
+                    }
+                ]
+            },
+        )
+        with pytest.raises(SystemExit, match="q1"):
+            load_dataset(tmp_path)
+
+    def test_raises_a_clear_error_for_empty_expect_docs(self, tmp_path):
+        _write(
+            tmp_path,
+            "answerability_questions.json",
+            {
+                "questions": [
+                    {
+                        "id": "q2",
+                        "scope": "single-doc",
+                        "type": "figure",
+                        "question": "how did Greater China net sales move?",
+                        "expect_docs": [],
+                        "reference_facts": ["net sales decreased 8%"],
+                    }
+                ]
+            },
+        )
+        with pytest.raises(SystemExit, match="q2"):
+            load_dataset(tmp_path)

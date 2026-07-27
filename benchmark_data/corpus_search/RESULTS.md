@@ -93,3 +93,33 @@ quality class, is robust to distractor flooding on multi-document queries,
 and is far cheaper at query time. A hybrid that grafts global-IDF
 discrimination onto fusion's distractor-robustness is a possible later
 refinement, but the base design is per-document fusion.
+
+---
+
+## Described queries
+
+The 64 queries above are 2-4 token noun phrases lifted verbatim from the
+papers they target, so every token is present by construction and the FTS5
+AND-join cannot fail. 25 `described` queries were added to remove that
+guarantee: each describes a fact instead of naming it, and `--validate`
+rejects any query whose content tokens all appear on its labelled pages.
+
+Set properties: 25 queries over 25 distinct CS/ML papers, one each, median
+8 content tokens against roughly 3 for the lifted set. No query clears the
+gate by fewer than 2 absent content tokens.
+
+**Pre-registered before the run.** `_fts5_or_fallback` (`src/pdf_mcp/cache.py`)
+already retries OR-joined when a 3+ word query matches nothing, so:
+
+> **H0:** keyword-mode doc-NDCG@10 on the described queries is within 0.05
+> of the lifted queries.
+>
+> - **Confirm** -> the shipped fix generalizes to a second query
+>   distribution, and the described set stays as a regression guard.
+> - **Reject** -> the OR retry has a trigger gap, and that gap is the
+>   finding.
+
+The 0.05 band matches the trap-class decision threshold used above.
+
+Excerpt fidelity carries no prior on this corpus and is reported
+descriptively, with no threshold attached.

@@ -4,7 +4,7 @@ Corpus: 100 docs. Queries: 89 (graded ground truth, stage-2). top_k=10. The tool
 
 | mode | overall NDCG@10 | described | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
-| keyword (keyword) | 0.459 | 0.134 | 0.968 | 0.361 | 0.596 | 0.832 | 0.48 |
+| keyword (keyword) | 0.459 | 0.134 | 0.968 | 0.361 | 0.596 | 0.832 | 0.47 |
 | semantic (semantic) | 0.484 | 0.241 | 0.861 | 0.215 | 0.785 | 0.832 | 0.25 |
 | auto (hybrid) | 0.541 | 0.241 | 0.996 | 0.350 | 0.776 | 0.899 | 0.47 |
 
@@ -25,6 +25,16 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 | keyword | 0.985 | 0.428 |
 | semantic | 0.684 | 0.472 |
 | auto | 0.990 | 0.514 |
+
+## Single-doc arm (pdf_search against the one gold document)
+
+The common agent flow: a question asked of a single known document, not the whole corpus. Same page labels, restricted to queries whose gold pages sit in exactly one document.
+
+| mode | NDCG@10 | n |
+|---|---|---|
+| keyword | 0.710 | 64 |
+| semantic | 0.684 | 64 |
+| auto | 0.757 | 64 |
 
 Sanity cross-check: keyword overall should land near the stage-2 arm-B result (~0.547). Interpretation is appended by hand after the run.
 ## Interpretation (final run, with the CJK multi-token excerpt fix)

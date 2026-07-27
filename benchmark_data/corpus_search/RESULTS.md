@@ -123,3 +123,112 @@ The 0.05 band matches the trap-class decision threshold used above.
 
 Excerpt fidelity carries no prior on this corpus and is reported
 descriptively, with no threshold attached.
+
+### Result: H0 rejected
+
+Keyword-mode doc-NDCG@10, described against lifted, same corpus and run:
+
+| mode | described (n=25) | lifted (n=64) | gap |
+|---|---|---|---|
+| **keyword** | **0.000** | **0.816** | **+0.816** |
+| semantic | 0.698 | 0.829 | +0.131 |
+| hybrid | 0.698 | 0.913 | +0.215 |
+
+**H0 predicted a gap within 0.05. The measured keyword gap is 0.816, larger
+by a factor of sixteen.** It is not a degradation: all 25 described queries
+score exactly 0.000, and keyword doc-hit@3 on the class is 0.000. Not one
+described query returned its gold document anywhere in the top 10.
+
+The OR retry has a trigger gap, and this is the finding.
+
+### The retry is gated corpus-wide, not per document
+
+`pdf_corpus_search` collects per-document rank lists, then decides whether
+to retry (`src/pdf_mcp/server.py`):
+
+```python
+rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=False)
+if not rank_lists and allow_or_fallback:
+    rank_lists, doc_match_counts, payload = _collect(allow_or_fallback=True)
+```
+
+`rank_lists` is empty only when **no document in the entire corpus**
+produced an AND match. One incidental match anywhere suppresses the retry
+for every document, including the one that answers the query. The
+single-document path retries per document (`if not rows:` in
+`PDFCache.search_fts`), which is why `pdf_search` never showed this.
+
+The failure is therefore a function of corpus size. Holding the query and
+the gold document fixed and growing the corpus around it:
+
+| corpus size | gold document returned |
+|---|---|
+| 10 | yes |
+| 25 | no |
+| 50 | no |
+| 100 | no |
+
+At 10 documents no document AND-matched, the retry fired, and the gold
+document came back. By 25 some unrelated document matched all tokens, the
+retry was suppressed, and the gold document was never reachable. Nothing
+about the query or the gold document changed.
+
+This is the AND cliff again, at corpus scale, in the tool that was supposed
+to have been fixed. The fix that shipped works per document and was
+validated per document; the corpus tool re-gated it and the regression went
+unmeasured because every existing corpus query was a lifted phrase whose
+tokens are all present by construction.
+
+**Not fixed here.** This branch measures the shipped server and does not
+modify `src/`. The described-query class is now a standing regression guard
+for whatever fix lands.
+
+### What still works
+
+Semantic and hybrid are unaffected by the gate: both score 0.698 doc-NDCG
+and 0.720 doc-hit@3 on the described class. Hybrid remains the strongest
+mode overall (0.853 doc-NDCG across all 89 queries). A caller on the
+default `mode="auto"` does not hit this cliff. A caller who selects
+`mode="keyword"` for a described question gets nothing.
+
+Note that hybrid earns no advantage over semantic on the described class
+(0.698 both, identical). Its usual lead comes from the keyword arm, which
+contributes nothing here.
+
+### Excerpt fidelity
+
+No prior; descriptive, per the pre-registration. Hybrid mode, both
+measures reported.
+
+| | single document | 100-doc corpus |
+|---|---|---|
+| `ok` (best-ranked / any gold) | 11 / 14 | 5 / 6 |
+| `EXCERPT MISS` | 11 / 8 | 7 / 6 |
+| `PAGE MISS` | 3 | 9 |
+| `DOC MISS` | 0 | 4 |
+| **recall** | **88%** | **48%** |
+| **fidelity** (best-ranked / any gold) | **50% / 64%** | **42% / 50%** |
+
+Excerpt-side and retrieval-side losses are comparable on a single document
+(11 excerpt misses against 3 page misses) but retrieval dominates across the
+corpus (7 against 13). That is the opposite of the financial corpus, where
+snippet-side losses dominated under either measure. The likely cause is the
+same gate: these are hybrid-mode numbers, and hybrid's keyword arm is dead
+on this query class, so the corpus run is effectively semantic-only.
+
+### Limitations of this query set
+
+- **All 25 labels are on page 1.** Deliberate: 61 of the 95 lifted labels
+  are also page 1, and holding page depth roughly constant is what isolates
+  query phrasing, the variable H0 is about. A deep-page described set would
+  confound phrasing with page depth. It is the natural follow-on and would
+  measure something this set cannot.
+- **25 queries support the aggregate claim only.** No per-type breakdown is
+  reported. The headline effect is a 0.816 gap with every query at zero, far
+  outside anything a sample of this size could manufacture, but a subtler
+  effect would not be resolvable here.
+- **One paper each, all CS/ML.** Conclusions about other fields in the
+  corpus are not supported.
+- The `diagnose_excerpt_fidelity.py` console header prints "24-doc corpus"
+  regardless of dataset, a leftover from the financial arm. The run above
+  searched all 100 documents. Cosmetic, affects no recorded number.

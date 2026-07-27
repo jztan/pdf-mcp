@@ -9,6 +9,7 @@ from scripts.benchmark_corpus_modes import (
     nonlatin_ids,
     stem,
     validate_described_queries,
+    validate_fidelity_questions,
     validate_queries,
 )
 
@@ -347,3 +348,64 @@ class TestValidateDescribedQueries:
             ]
         }
         assert validate_described_queries(queries, self._lookup("short lifted")) == []
+
+
+QUERIES = {
+    "queries": [
+        {
+            "id": "described-01",
+            "class": "described",
+            "query": "does this method need labeled data at inference",
+            "labels": [{"doc": "d1", "page": 4, "gain": 2}],
+        }
+    ]
+}
+
+
+def _question(**over):
+    base = {
+        "id": "described-01",
+        "type": "method",
+        "question": "does this method need labeled data at inference",
+        "expect_doc": "d1",
+        "reference_fact": "requires no labeled examples at test time, offline",
+        "answer_span": "no labeled examples at test time",
+    }
+    base.update(over)
+    return {"questions": [base]}
+
+
+class TestValidateFidelityQuestions:
+    def test_accepts_a_well_formed_question(self):
+        lookup = (  # noqa: E731
+            lambda doc, page: "it requires no labeled examples at test time"
+        )
+        assert validate_fidelity_questions(_question(), QUERIES, lookup) == []
+
+    def test_rejects_span_not_inside_the_reference_fact(self):
+        lookup = lambda doc, page: "anything"  # noqa: E731
+        errors = validate_fidelity_questions(
+            _question(answer_span="computed offline in advance"), QUERIES, lookup
+        )
+        assert any("reference_fact" in e for e in errors)
+
+    def test_rejects_span_absent_from_every_labeled_page(self):
+        lookup = (  # noqa: E731
+            lambda doc, page: "an unrelated paragraph about convergence"
+        )
+        errors = validate_fidelity_questions(_question(), QUERIES, lookup)
+        assert any("not found on any labeled page" in e for e in errors)
+
+    def test_rejects_question_with_no_matching_query_id(self):
+        lookup = lambda doc, page: "anything"  # noqa: E731
+        errors = validate_fidelity_questions(
+            _question(id="described-99"), QUERIES, lookup
+        )
+        assert any("no query with this id" in e for e in errors)
+
+    def test_rejects_expect_doc_with_no_page_labels(self):
+        lookup = lambda doc, page: "anything"  # noqa: E731
+        errors = validate_fidelity_questions(
+            _question(expect_doc="d2"), QUERIES, lookup
+        )
+        assert any("no page labels" in e for e in errors)

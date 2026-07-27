@@ -264,6 +264,48 @@ def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
     return errors
 
 
+def validate_fidelity_questions(
+    questions: dict, queries: dict, page_text_lookup
+) -> list[str]:
+    """Check the fidelity questions against the graded queries.
+
+    answer_span is the string the excerpt must contain, so it has to be
+    both a real substring of the reference fact (or it could drift into
+    checking something the fact does not claim) and verbatim present on a
+    labeled page (or no excerpt could ever carry it).
+    """
+    errors: list[str] = []
+    by_id = {q["id"]: q for q in queries["queries"]}
+    for item in questions["questions"]:
+        qid = item["id"]
+        query = by_id.get(qid)
+        if query is None:
+            errors.append(f"{qid}: no query with this id in queries.json")
+            continue
+        span = normalize(item["answer_span"])
+        if span not in normalize(item["reference_fact"]):
+            errors.append(f"{qid}: answer_span is not a substring of reference_fact")
+        labeled = [
+            lb
+            for lb in query["labels"]
+            if "page" in lb and lb["doc"] == item["expect_doc"]
+        ]
+        if not labeled:
+            errors.append(
+                f"{qid}: expect_doc {item['expect_doc']} has no page labels"
+                " in queries.json"
+            )
+            continue
+        if not any(
+            span in normalize(page_text_lookup(lb["doc"], lb["page"])) for lb in labeled
+        ):
+            errors.append(
+                f"{qid}: answer_span not found on any labeled page of"
+                f" {item['expect_doc']}: {item['answer_span']!r}"
+            )
+    return errors
+
+
 def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[str]:
     """Check every label: the doc exists in the manifest, and (for labels
     carrying a page) the evidence substring is present in that page's
@@ -339,9 +381,19 @@ def main(argv: list[str] | None = None) -> int:
             return pages[page - 1] if 1 <= page <= len(pages) else ""
 
         errors = validate_queries(manifest, queries, lookup)
+        errors += validate_described_queries(queries, lookup)
+        fidelity_path = data / "fidelity_questions.json"
+        n_questions = 0
+        if fidelity_path.exists():
+            fidelity = json.loads(fidelity_path.read_text())
+            n_questions = len(fidelity["questions"])
+            errors += validate_fidelity_questions(fidelity, queries, lookup)
         for err in errors:
             print(f"INVALID {err}")
-        print(f"\n{len(queries['queries'])} queries checked, {len(errors)} errors")
+        print(
+            f"\n{len(queries['queries'])} queries and {n_questions} fidelity"
+            f" questions checked, {len(errors)} errors"
+        )
         return 1 if errors else 0
 
     paths = [p for p in id_by_path if Path(p).exists()]

@@ -121,6 +121,11 @@ already retries OR-joined when a 3+ word query matches nothing, so:
 > - **Reject** -> the OR retry has a trigger gap, and that gap is the
 >   finding.
 
+H0 was rejected, but **the mechanism named in that second bullet turned out
+to be wrong**: the OR retry fires on every one of these queries. The
+prediction is left above exactly as registered; what actually causes the
+failure is below.
+
 The 0.05 band matches the trap-class decision threshold used above.
 
 Excerpt fidelity carries no prior on this corpus and is reported

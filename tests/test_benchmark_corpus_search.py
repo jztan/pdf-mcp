@@ -14,6 +14,7 @@ from scripts.benchmark_corpus_search import (
     search_corpus,
     search_per_doc_rrf,
     validate_queries,
+    write_results_md,
 )
 
 
@@ -235,3 +236,41 @@ class TestValidation:
             page_text_lookup=lambda d, p: "We analyze the IO\ncomplexity here.",
         )
         assert errors == []
+
+
+class TestWriteResultsMdGuard:
+    """RESULTS.md carries hand-written interpretation and a second
+    benchmark arm appended by another script. A blind --run overwrite
+    silently destroyed all of it before this guard existed."""
+
+    GENERATED = "# Cross-Doc Keyword Ranking Spike: Results\n\nbody\n"
+
+    def _patch_out_dir(self, monkeypatch, tmp_path):
+        import scripts.benchmark_corpus_search as bcs
+
+        monkeypatch.setattr(bcs, "OUT_DIR", tmp_path)
+        return tmp_path / "RESULTS.md"
+
+    def test_writes_when_no_file_exists(self, monkeypatch, tmp_path):
+        out = self._patch_out_dir(monkeypatch, tmp_path)
+        write_results_md(self.GENERATED)
+        assert out.read_text() == self.GENERATED
+
+    def test_refuses_to_clobber_hand_written_sections(self, monkeypatch, tmp_path):
+        out = self._patch_out_dir(monkeypatch, tmp_path)
+        edited = self.GENERATED + "\n## Described queries\n\nhand-written\n"
+        out.write_text(edited)
+        write_results_md(self.GENERATED)
+        assert out.read_text() == edited, "guard let a hand-written section die"
+
+    def test_force_overwrites(self, monkeypatch, tmp_path):
+        out = self._patch_out_dir(monkeypatch, tmp_path)
+        out.write_text(self.GENERATED + "\n## Described queries\n\nhand-written\n")
+        write_results_md(self.GENERATED, force=True)
+        assert out.read_text() == self.GENERATED
+
+    def test_regenerates_an_untouched_file(self, monkeypatch, tmp_path):
+        out = self._patch_out_dir(monkeypatch, tmp_path)
+        out.write_text(self.GENERATED)
+        write_results_md(self.GENERATED.replace("body", "newer body"))
+        assert "newer body" in out.read_text()

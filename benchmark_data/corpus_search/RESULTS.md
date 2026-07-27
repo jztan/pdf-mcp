@@ -10,6 +10,11 @@ Corpus: 100 docs, 2238 pages (0 manifest docs missing locally).
 - spread-class regresses 0.049 > 0.02
 - arm-A mean per-query cost 2.327s >= 1.0s budget
 
+> **Corrected 2026-07-27.** The two NDCG reasons above do not survive a
+> tie-break permutation test: they measure this corpus's filenames, not the
+> ranking. The cost reason stands. See "CORRECTION" below before citing
+> anything in this section.
+
 ## Per-class NDCG@10
 
 | class | temp-fts (A) | rrf-fusion (B) |
@@ -83,6 +88,79 @@ persistent corpus-wide index would neutralize, so it is weighted less than
 the spread finding. It does not change the decision: rrf-fusion already
 wins on quality alone (overall NDCG, no trap edge for A, spread win for B),
 independent of cost.
+
+## CORRECTION (2026-07-27): the quality argument above does not survive
+
+**The spread-class result, and therefore the overall winner, is an artifact
+of this corpus's filenames.** The cost argument is unaffected and still
+stands. Everything above is left as originally written; this section
+corrects it.
+
+`rrf_fuse_doc_rankings` gives every matching document its own rank-1 page,
+so all matching documents tie at exactly `1/(k+0)` and the documented
+`(doc_path, page)` tie-break decides their order. Alphabetical order
+therefore carries the ranking whenever more than one document matches.
+
+That is only harmless if filenames are uncorrelated with relevance. Here
+they are not: the labelled documents are the original corpus (old, low
+arXiv IDs) and the 79 distractors added in the expansion are newer, higher
+IDs. Measured: 58 of 100 documents are labelled, mean alphabetical position
+44.1 against 49.5 for uniform, 24 of the first 30 labelled against 16 of the
+last 30. Arm B collects free credit from that skew on every tied query.
+
+Renaming every document with a stable hash removes the skew and changes
+nothing else (`scripts/recheck_tiebreak_permutation.py`, six seeds):
+
+| run | needle | spread | trap | overall |
+|---|---|---|---|---|
+| arm A (control) | 0.970 | **0.332** | 0.482 | **0.531** |
+| arm B, real filenames | 0.968 | **0.381** | 0.476 | **0.547** |
+| arm B, permuted mean | 0.968 | **0.293** | 0.450 | **0.502** |
+| arm B, permuted range | 0.968 | 0.254-0.326 | 0.436-0.462 | 0.489-0.510 |
+
+**Both decision-driving comparisons reverse.** The published table has arm B
+winning spread (+0.049) and overall (+0.016). Under all six renamings arm A
+wins spread (0.332 against 0.254-0.326) and overall (0.531 against
+0.489-0.510). The published arm B value lies outside the entire permuted
+range on both.
+
+Two internal controls say the effect is the tie-break and not the method:
+arm A never uses a document tie-break and does not move; needle scores
+0.968 under every seed, because a needle query matches a median of one
+document and nothing ties. Spread queries match a median of six, which is
+enough to tie without flooding the top ten -- NDCG is position-weighted, so
+the skew pays out through ordering, not only through which documents make
+the cut.
+
+**What is retracted:** the sentence "rrf-fusion already wins on quality
+alone (overall NDCG, no trap edge for A, spread win for B), independent of
+cost", and the framing of distractor-flooding robustness as a measured
+spread win. Arm B's structural robustness argument may still be sound; it
+is simply not what these numbers demonstrate.
+
+**What stands:** the cost gate (arm A rebuilds a corpus-wide index per query
+at 2.24-2.33s against arm B's amortized per-document indexes), the needle
+and trap ties, and the finding that the initial 21-document spike was too
+small. The stage-3 decision to implement per-document fusion may still be
+correct on cost and architecture grounds. It is not supported by a quality
+margin.
+
+This was found by the described-query arm below, which exposed the same
+tie-degeneracy in its acute form: when ~98 of 100 documents match, the
+entire top ten is decided alphabetically. The mild version had been
+inflating this table since the expansion run.
+
+**The mechanism was never hidden.** `tests/test_benchmark_corpus_search.py`
+has asserted it since the spike:
+`test_rrf_arm_cannot_discriminate_across_docs` states that "every doc's
+within-doc best hit fuses at the same RRF score; alphabetical tie-break puts
+a boilerplate page first ... it cannot discriminate across docs by content,
+only by within-doc rank." It was recorded as a property of arm B and then
+used to score arm B, and nobody connected the two. The lesson is narrower
+than "check the code": a known ranking degeneracy is also a measurement
+hazard, and the corpus has to be checked for correlation with whatever the
+tie-break sorts on. `scripts/recheck_tiebreak_permutation.py` now does that
+check in one command.
 
 ## What stage 3 implements
 

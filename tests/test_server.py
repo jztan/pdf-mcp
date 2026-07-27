@@ -14,6 +14,7 @@ from unittest.mock import patch, Mock
 
 import httpx
 
+import pdf_mcp.server as server
 from pdf_mcp.server import (
     _resolve_path,
     _python_search,
@@ -4397,3 +4398,75 @@ class TestHybridDocMatchCounts:
 
         out = _merge_doc_match_counts({"a.pdf": 1}, [("a.pdf", 1), ("a.pdf", 2)])
         assert out == {"a.pdf": 2}
+
+
+class TestCorpusCoverageScoring:
+    """Cross-document relevance for keyword fusion.
+
+    Every document's rank-1 page ties at 1/(k+0) in RRF, so whatever
+    breaks that tie IS the cross-document ranking. It used to be filename
+    order, which scored 0.000 doc-NDCG on the described-query class.
+    """
+
+    def test_query_terms_drop_function_words(self):
+        terms = server._corpus_query_terms(
+            "does normalizing layer inputs converge at equal accuracy"
+        )
+        assert "normalizing" in terms and "accuracy" in terms
+        # 3-char tokens are in nearly every document and would flatten
+        # the signal rather than sharpen it.
+        assert "at" not in terms and "does" in terms
+
+    def test_query_terms_are_lowercased_and_split_on_punctuation(self):
+        assert server._corpus_query_terms("Batch-Normalization, ReLU!") == {
+            "batch",
+            "normalization",
+            "relu",
+        }
+
+    def test_rarer_terms_outweigh_ubiquitous_ones(self):
+        # "transformer" is in every document; "grokking" in one. The
+        # document with the single distinctive term must outrank the
+        # documents with the common one.
+        covered = {
+            "a.pdf": {"transformer"},
+            "b.pdf": {"transformer"},
+            "c.pdf": {"transformer"},
+            "d.pdf": {"grokking"},
+        }
+        scores = server._corpus_coverage_scores(covered)
+        assert scores["d.pdf"] > scores["a.pdf"]
+
+    def test_more_covered_terms_scores_higher_all_else_equal(self):
+        covered = {"a.pdf": {"alpha", "bravo"}, "b.pdf": {"alpha"}}
+        scores = server._corpus_coverage_scores(covered)
+        assert scores["a.pdf"] > scores["b.pdf"]
+
+    def test_document_covering_nothing_scores_zero(self):
+        scores = server._corpus_coverage_scores({"a.pdf": set(), "b.pdf": {"x"}})
+        assert scores["a.pdf"] == 0.0
+        assert scores["b.pdf"] > 0.0
+
+    def test_empty_input(self):
+        assert server._corpus_coverage_scores({}) == {}
+
+    def test_scores_do_not_depend_on_document_names(self):
+        # The property both shipped bugs violated.
+        covered = {"a.pdf": {"x", "y"}, "m.pdf": {"x"}, "z.pdf": {"y", "q"}}
+        renamed = {"z9.pdf": {"x", "y"}, "m9.pdf": {"x"}, "a9.pdf": {"y", "q"}}
+        s1 = server._corpus_coverage_scores(covered)
+        s2 = server._corpus_coverage_scores(renamed)
+        assert s1["a.pdf"] == s2["z9.pdf"]
+        assert s1["z.pdf"] == s2["a9.pdf"]
+
+    def test_covered_terms_returns_empty_without_cache(self, monkeypatch):
+        monkeypatch.setattr(server, "cache", None)
+        assert server._doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
+
+    def test_covered_terms_survives_a_cache_error(self, monkeypatch):
+        class Boom:
+            def get_pages_text(self, *a, **k):
+                raise RuntimeError("cache unavailable")
+
+        monkeypatch.setattr(server, "cache", Boom())
+        assert server._doc_covered_terms("x.pdf", [1], {"alpha"}) == set()

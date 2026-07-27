@@ -399,20 +399,42 @@ def rrf_fuse_doc_rankings(
     rank_lists: list[list[tuple[str, int]]],
     k: int = CORPUS_RRF_K,
     top_k: int | None = None,
+    scores: dict[tuple[str, int], float] | None = None,
 ) -> list[tuple[str, int]]:
     """Fuse per-document rank lists into one global ranking via RRF.
 
     Each inner list is one document's (doc_path, page) hits, best first.
     Every item appears in exactly one list, so the fused score is
-    1 / (k + rank): items interleave by within-document rank. Ties
-    break deterministically by (doc_path, page).
+    1 / (k + rank): items interleave by within-document rank.
+
+    That leaves every document's rank-1 page tied at 1/(k+0), and the
+    tie covers the whole top of the ranking whenever many documents
+    match. `scores` breaks those ties by relevance -- pass the per-page
+    BM25 relevance from the per-document search, higher meaning better.
+    Without it the tie falls to (doc_path, page), i.e. alphabetical
+    order, which carries no relevance at all: a query matching 98 of 100
+    documents returned the 10 alphabetically-first ones and scored 0.000
+    doc-NDCG, and the same degeneracy silently inflated the stage-2
+    spike's spread class, whose labelled documents sorted early.
+
+    BM25 here is computed per document, so scores are not calibrated
+    across documents the way a corpus-wide index would calibrate them.
+    They are still a real signal -- a document where the query terms are
+    rare scores above one where they are boilerplate -- and any relevance
+    signal beats sorting by filename. Ranking quality is measured by the
+    `described` class in `benchmark_data/corpus_search`.
+
+    Ties in `scores` (and missing entries, which sort last) fall back to
+    (doc_path, page) so the result stays deterministic.
     """
-    scored: list[tuple[float, str, int]] = []
+    lookup = scores or {}
+    scored: list[tuple[float, float, str, int]] = []
     for hits in rank_lists:
         for rank, (doc, page) in enumerate(hits):
-            scored.append((1.0 / (k + rank), doc, page))
-    scored.sort(key=lambda t: (-t[0], t[1], t[2]))
-    fused = [(doc, page) for _s, doc, page in scored]
+            relevance = lookup.get((doc, page), float("-inf"))
+            scored.append((1.0 / (k + rank), relevance, doc, page))
+    scored.sort(key=lambda t: (-t[0], -t[1], t[2], t[3]))
+    fused = [(doc, page) for _s, _r, doc, page in scored]
     return fused[:top_k] if top_k is not None else fused
 
 

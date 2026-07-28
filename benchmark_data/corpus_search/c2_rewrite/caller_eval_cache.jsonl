@@ -1,0 +1,78 @@
+{"key": "682ecbff931ac725c05574e5", "query": "volatility clustering long memory"}
+{"key": "1d0708ec13c3e29775fc3d13", "query": "Noetherian splitting"}
+{"key": "e9f2d3975d1bccfb873d3772", "query": "birth death passage time"}
+{"key": "38710b9a7d817955d7873432", "query": "Thomson problem"}
+{"key": "17807fcfbd4357b8ab41af40", "query": "Chern numbers"}
+{"key": "1c68bcc5286ad972f9c85829", "query": "airline boarding"}
+{"key": "143ecb18dbab1da5f37e8257", "query": "ubiquitin unfolding"}
+{"key": "1cb3f7a988cdb408b77ff0ed", "query": "spiral turbulence"}
+{"key": "4fcaddec8dee4503d241133c", "query": "cluster web interface"}
+{"key": "bd515597c72ed6748b3b1e67", "query": "\u56db\u5341\u516b\u9858 \u672c\u9858"}
+{"key": "36c2bb2a40f439aa1e505fca", "query": "\u751f\u7523\u8005 \u3081\u3050\u307f \u8a87\u308a"}
+{"key": "c87752f2bbfecdef3f360ad6", "query": "\u7384\u7fa9\u5206"}
+{"key": "326e1a4e9619a426100cc55e", "query": "\u30d6\u30eb\u30fc\u30d9\u30ea\u30fc \u30d5\u30a1\u30fc\u30e0"}
+{"key": "34819a3fdeb35582f53beb27", "query": "\u8fb2\u696d \u6c34\u7523\u696d \u3044\u308f\u304d"}
+{"key": "958a66fa245f38b4c4861b7b", "query": "normalization convergence"}
+{"key": "f845e010a49e49932419848b", "query": "random labels memorization"}
+{"key": "898d817432d105b00e66769c", "query": "model size scaling data"}
+{"key": "0e64cf8bc578a454af972a69", "query": "error rate MNIST CIFAR"}
+{"key": "31aeb576c7203e2e60bef1af", "query": "winning ticket sparsity"}
+{"key": "b68c3064e373ec65f2c80a7d", "query": "top-1 accuracy convolutional"}
+{"key": "2df49cb4158147dc21140526", "query": "grokking generalization"}
+{"key": "dfb3b35b00a514e694beec2a", "query": "compute-optimal tokens parameters"}
+{"key": "4c3f1ab4639ef43c30e7b141", "query": "training data generalization"}
+{"key": "210a8791e31bec6a2a6b5ce7", "query": "keyword emergent capability"}
+{"key": "7b198efd31801ca52fe77e30", "query": "wall-clock speedup"}
+{"key": "bb009dd06c994bc27ab47de6", "query": "inference throughput transformer"}
+{"key": "718ac28741f7bed0b541f4db", "query": "pretraining speedup"}
+{"key": "b635fb9e955de873f3b4f0cb", "query": "image patches transformer"}
+{"key": "8c9dc8a7b2dea543904f1ca0", "query": "scaling laws"}
+{"key": "b529a91d4cd78884dd72ae94", "query": "parameters dense"}
+{"key": "06c039db7c7231613013652e", "query": "binary networks"}
+{"key": "2980a71d56e580a39b653cee", "query": "news topic model"}
+{"key": "80f8202193de2f77b8701829", "query": "equities qualitative evaluation"}
+{"key": "c35859567e37ea983852865d", "query": "momentum sparse convergence"}
+{"key": "e998429a21489f302108fc39", "query": "fusion embedding overfitting"}
+{"key": "f2fc5e7bd79540c7702d4b5f", "query": "optimizer weight posterior"}
+{"key": "1bc8cfa2e6f0788d1a679889", "query": "concatenated SNR penalty"}
+{"key": "41875d66846bc377a5cdff4a", "query": "FinER sentiment categories"}
+{"key": "90addfbb2c527cd76752d5a5", "query": "batch normalization convergence training steps"}
+{"key": "5e66e6dad8ca6db935df6658", "query": "birth-and-death chain passage time"}
+{"key": "6dc0c4933f19a78686a7ee52", "query": "cluster routing"}
+{"key": "ad96d92ab9f9d48d9b549107", "query": "Thomson problem spherical crystals"}
+{"key": "e80ac4bee33389fc502e61d1", "query": "batch normalization convergence training steps"}
+{"key": "3dfd12987d1fcb017c75059d", "query": "ubiquitin unfolding pathways"}
+{"key": "20ac53977805091bd646e9e3", "query": "spiral turbulence excitable media"}
+{"key": "b2f964e97755c10dfb74f623", "query": "batch normalization convergence training steps"}
+{"key": "b0b2588db9370e3425e89dd2", "query": "Chern numbers projective varieties"}
+{"key": "055d9cba4162b9df45ec685e", "query": "\u56db\u5341\u516b\u9858 \u8b70\u8ad6 \u672c\u9858"}
+{"key": "367af6f418a4eaf314fbcaee", "query": "batch normalization convergence training steps"}
+{"key": "2caab97fd7212b96cf7835ad", "query": "\u751f\u7523\u8005 \u3081\u3050\u307f \u8a87\u308a"}
+{"key": "90bf39df27e0051d5f315da0", "query": "\u5584\u5c0e \u89b3\u7d4c\u758f \u7384\u7fa9\u5206"}
+{"key": "61c57e2dd3338d378c106474", "query": "\u30d6\u30eb\u30fc\u30d9\u30ea\u30fc \u30d5\u30a1\u30fc\u30e0"}
+{"key": "de9f7633b8f3c317b5f517ab", "query": "\u8fb2\u696d \u6c34\u7523\u696d \u3044\u308f\u304d"}
+{"key": "cb5f093dd6e7c42e782dbaf5", "query": "batch normalization convergence fewer training steps accuracy"}
+{"key": "3876bcc72fd86f9b7ffa4148", "query": "compute-optimal scaling laws parameters training tokens"}
+{"key": "4acc95f3f0918663dbc2766b", "query": "test error rate CIFAR-10 CIFAR-100"}
+{"key": "ffd8bb8bd7e098c05a96012c", "query": "weight decay dropout regularization random labels memorization"}
+{"key": "1da4c0e198b81503f76b816b", "query": "lottery ticket winning subnetwork remaining weights percentage"}
+{"key": "4f205fb162be53f612d39f1e", "query": "batch normalization convergence training steps"}
+{"key": "2265362dfe729350af388aad", "query": "grokking generalization long after overfitting"}
+{"key": "11df408a5ea13efed0c60fb3", "query": "ImageNet top-1 accuracy compound scaling convolutional network"}
+{"key": "349efa3b89ff519273557de5", "query": "more training data hurt generalization test error double descent"}
+{"key": "e96d10b11b619f67d8759e67", "query": "wall-clock training speedup language model"}
+{"key": "2c391addf23b08f076557ca0", "query": "inference throughput speedup versus transformer baseline"}
+{"key": "6ebce3a6d0f4a808a45b1f64", "query": "emergent abilities unpredictable sharp scaling large language models"}
+{"key": "0b34f1cff1313e282de1405a", "query": "pre-training speedup wall-clock time largest model scale"}
+{"key": "0142d4d786a9be6101317d9c", "query": "image classification transformer image patches tokens"}
+{"key": "ab2d07a63b502edf2fa92be9", "query": "neural scaling laws power law loss compute budget"}
+{"key": "505a6033f1955ab6e4c2103d", "query": "mixture-of-experts parameter count versus dense model"}
+{"key": "8cc2935e682f960a9c8059b6", "query": "binary neural networks classification accuracy competitive"}
+{"key": "eee3191e461ed3f76acf986e", "query": "equities dataset qualitative evaluation companies"}
+{"key": "c09b2ee6b4d385b871181c8a", "query": "topic model news articles corpus documents"}
+{"key": "5f1da2a51f74c51090127ca9", "query": "momentum accelerated sparse optimization convergence rate guarantee"}
+{"key": "2d64e460fefabbc55f6f8940", "query": "fusion network embedding regularization overfitting dropout"}
+{"key": "dbab5f2f6bb3dd5b72701f04", "query": "Adam optimizer variational inference approximate weight posterior"}
+{"key": "66c35210480d7e1c08e3b047", "query": "FiNER fine-grained sentiment categories financial"}
+{"key": "130ff417eaf184d982195088", "query": "concatenation signal-to-noise ratio penalty moderate SNR degradation"}
+{"key": "1ca97e86fcab0cc41663920e", "query": "cluster routing algorithm two enhancements improvements"}

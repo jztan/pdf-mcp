@@ -1,0 +1,30 @@
+{
+  "description": "C2 ceiling experiment (2026-07-28): terms-of-art rewrites of the 25 described queries, authored by an LLM (Claude) from the question text ONLY, blind to gold labels, answer spans, and corpus contents, following the draft C2 tool-description teaching (rewrite toward terms of art the answering page would use, 3-8 content-bearing terms, keep literal specifics). Simulates a caller-side rewrite; measures the C2 ceiling on the described arm. See docs_internal/corpus-routing-research.md section 5 step 1.",
+  "rewrites": {
+    "described-01": "batch normalization internal covariate shift training steps convergence accuracy",
+    "described-02": "test error rate MNIST CIFAR-10 image classification benchmarks",
+    "described-03": "weight decay dropout regularization memorization random labels generalization",
+    "described-04": "model size scaling with dataset size power law capacity data scaling",
+    "described-05": "lottery ticket winning subnetwork sparsity fraction pruning trainable parameters",
+    "described-06": "EfficientNet compound scaling ImageNet top-1 accuracy convolutional network",
+    "described-07": "more training data degrades test performance double descent non-monotonic sample size",
+    "described-08": "grokking delayed generalization long after overfitting training set memorization",
+    "described-09": "compute-optimal trade-off training tokens model parameters fixed FLOPs budget",
+    "described-10": "wall-clock training speedup language model throughput optimization",
+    "described-11": "emergent abilities large language models unpredictable scale phase transition",
+    "described-12": "inference throughput recurrent state space architecture versus transformer",
+    "described-13": "pre-training compute time savings largest model scale efficiency",
+    "described-14": "vision transformer image patches tokens classification without convolutions",
+    "described-15": "power-law scaling loss versus compute training curves scaling laws",
+    "described-16": "parameter count sparse expert model comparison dense language models weights",
+    "described-17": "binary neural network ImageNet dataset competitive accuracy binarized",
+    "described-18": "topic model large news article archive corpus documents",
+    "described-19": "equities dataset company coverage universe qualitative evaluation stocks",
+    "described-20": "convergence rate proof momentum accelerated sparse optimization solver",
+    "described-21": "fusion network embedding overfitting prevention regularization strategy",
+    "described-22": "optimizer probabilistic reinterpretation approximate Bayesian weight posterior variational",
+    "described-23": "fine-grained sentiment analysis classification number of categories classes",
+    "described-24": "signal-to-noise ratio penalty concatenated architecture moderate SNR dB",
+    "described-25": "cluster routing enhancements capsule network revised routing algorithm"
+  }
+}

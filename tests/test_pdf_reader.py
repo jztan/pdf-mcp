@@ -1700,6 +1700,38 @@ class TestGetBestParagraphForQuery:
         finally:
             os.unlink(path)
 
+    def test_hyphenated_page_text_matches_unhyphenated_query_token(self):
+        """'pretraining' must match a block that spells it 'pre-training'.
+
+        Measured defect (described-13, 2026-07-28): the caller's query
+        'pretraining speedup' scored the span-bearing abstract at 0
+        because substring matching is hyphen-blind, so the picker could
+        not choose it under any tie-break.
+        """
+        first = (
+            "Figure 1 shows loss curves for the two model variants "
+            "described in the sections that follow this one."
+        )
+        second = (
+            "Pre-training large language models is prohibitively "
+            "expensive and the total wall-clock budget keeps growing."
+        )
+        path = self._two_block_page(first, second)
+        try:
+            doc = pymupdf.open(path)
+            text, _idx = get_best_paragraph_for_query(doc[0], "pretraining")
+            assert text is not None, "hyphen-blind matching scored 0 everywhere"
+            assert "Pre-training" in text
+            doc.close()
+        finally:
+            os.unlink(path)
+
+    def test_count_query_tokens_folds_hyphens(self):
+        """count_query_tokens must share the picker's hyphen folding, or
+        the short-block retry comparison in the server would disagree
+        with the picker about coverage."""
+        assert count_query_tokens("Pre-training is costly.", "pretraining") == 1
+
     def test_no_overlap_returns_none(self):
         """No matching tokens returns (None, None)."""
         doc = pymupdf.open()

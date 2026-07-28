@@ -997,16 +997,24 @@ def _wants_a_figure(query: str) -> bool:
     return bool(_QUANT_CUE_RE.search(query))
 
 
+def _fold_for_match(text: str) -> str:
+    """Lowercase and drop hyphens so 'pretraining' matches
+    'Pre-training' (and hyphenated line breaks). Substring matching is
+    already fuzzy across word boundaries; folding hyphens keeps the
+    same semantics for the one separator PDFs insert inside words."""
+    return text.lower().replace("-", "")
+
+
 def count_query_tokens(text: str, query: str) -> int:
-    """Count query tokens present in *text* (case-insensitive
-    substring), with the same tokenisation as
+    """Count query tokens present in *text* (case-insensitive,
+    hyphen-folded substring), with the same tokenisation and folding as
     `get_best_paragraph_for_query` so coverage comparisons between
     candidate blocks use identical scoring."""
     tokens = _query_tokens(query)
     if not tokens:
         return 0
-    lower = text.lower()
-    return sum(1 for t in tokens if t in lower)
+    folded = _fold_for_match(text)
+    return sum(1 for t in tokens if _fold_for_match(t) in folded)
 
 
 def get_best_paragraph_for_query(
@@ -1019,10 +1027,11 @@ def get_best_paragraph_for_query(
     Find the text block on *page* best matching *query* by token overlap.
 
     Scores each block by the count of distinct query tokens found
-    (case-insensitive substring) and returns the highest-scoring block.
-    Blocks shorter than *min_chars* (after stripping) are skipped —
-    this filters out section headings and figure captions that score
-    well on token overlap but carry no useful context.
+    (case-insensitive, hyphen-folded substring) and returns the
+    highest-scoring block. Blocks shorter than *min_chars* (after
+    stripping) are skipped — this filters out section headings and
+    figure captions that score well on token overlap but carry no
+    useful context.
 
     Works well for keyword and hybrid modes where query terms appear
     literally in the text.  For pure semantic queries (conceptual
@@ -1046,16 +1055,22 @@ def get_best_paragraph_for_query(
     best_idx: int | None = None
     best_text: str | None = None
 
+    folded_tokens = [_fold_for_match(t) for t in tokens]
     for idx, raw_text in enumerate(text_blocks):
         stripped = raw_text.strip()
         if len(stripped) < min_chars:
             continue
-        lower = raw_text.lower()
-        score = sum(1 for t in tokens if t in lower)
+        folded = _fold_for_match(raw_text)
+        score = sum(1 for t in folded_tokens if t in folded)
         # Tie-break only: token overlap still decides the winner, and the
         # figure flag separates blocks that overlap equally. Ties were
         # previously broken by document order, which on a 10-K page put
         # the narrative paragraph ahead of the one carrying the numbers.
+        # A richer tie-break (total occurrences) was prototyped and
+        # REJECTED 2026-07-28: it fixed 4 page-1 abstract misses on the
+        # arXiv set but regressed the excerpt gate (l04), because on
+        # ties the answer is in the long block on one dataset and the
+        # short one on the other — no query-side signal separates them.
         carries = 1 if prefer_figures and _FIGURE_RE.search(raw_text) else 0
         key = (score, carries)
         if key > best_key:

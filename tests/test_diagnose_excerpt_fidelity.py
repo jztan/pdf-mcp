@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from scripts.diagnose_excerpt_fidelity import Question, classify, figures, load_dataset
+from scripts.diagnose_excerpt_fidelity import (
+    Question,
+    classify,
+    figures,
+    load_dataset,
+    route_docs,
+)
 
 FACT = "Greater China net sales decreased 8% to $66.9 billion during 2024"
 
@@ -12,6 +18,30 @@ FACT = "Greater China net sales decreased 8% to $66.9 billion during 2024"
 def _write(tmp_path, name, payload):
     (tmp_path / name).write_text(json.dumps(payload))
     return tmp_path
+
+
+class TestRouteDocs:
+    """Routing order drives the two-hop arm's DOC MISS bucket, so an
+    ordering bug here would silently misreport routing quality."""
+
+    def test_orders_by_first_appearance_and_dedupes(self):
+        info = {
+            "matches": [
+                {"path": "/b.pdf", "page": 3},
+                {"path": "/a.pdf", "page": 1},
+                {"path": "/b.pdf", "page": 9},
+                {"path": "/c.pdf", "page": 2},
+            ]
+        }
+        assert route_docs(info) == ["/b.pdf", "/a.pdf", "/c.pdf"]
+
+    def test_empty_when_nothing_matched(self):
+        assert route_docs({"matches": []}) == []
+        assert route_docs({}) == []
+
+    def test_skips_hits_with_no_path(self):
+        info = {"matches": [{"page": 1}, {"path": "/a.pdf", "page": 2}]}
+        assert route_docs(info) == ["/a.pdf"]
 
 
 class TestFiguresUnchanged:

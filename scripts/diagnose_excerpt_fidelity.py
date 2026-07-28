@@ -178,6 +178,24 @@ def classify(
     return quotes, carries
 
 
+def route_docs(info: dict[str, Any]) -> list[str]:
+    """Documents in routing order: first appearance in the fused ranking.
+
+    `doc_match_counts` also names documents that hold matching pages, but it
+    is a count keyed by path with no ordering, and in keyword mode it is
+    capped per document -- so its counts do not rank. The fused `matches`
+    list is the only ordered cross-document signal the tool emits, and the
+    order a document first appears in it is the tool's own answer to "which
+    document is this query about".
+    """
+    seen: list[str] = []
+    for m in info.get("matches", []):
+        p = m.get("path")
+        if p is not None and p not in seen:
+            seen.append(p)
+    return seen
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", default="auto", choices=["auto", "keyword", "semantic"])
@@ -189,6 +207,27 @@ def main(argv: list[str] | None = None) -> int:
             "search all 24 documents with pdf_corpus_search instead of the"
             " one filing that answers the question. Splits recall failure"
             " into wrong-document and right-document-wrong-page."
+        ),
+    )
+    ap.add_argument(
+        "--two-hop",
+        action="store_true",
+        help=(
+            "route with pdf_corpus_search, then search the winning"
+            " document(s) with single-doc pdf_search. This is the workflow"
+            " the tool description tells callers to use, and it is the only"
+            " arm whose recall is not capped by sharing top_k slots across"
+            " the whole corpus. Implies --corpus for the routing hop."
+        ),
+    )
+    ap.add_argument(
+        "--route-k",
+        type=int,
+        default=1,
+        help=(
+            "two-hop only: how many top-routed documents to search in hop 2"
+            " (default 1). Routing order is the order documents first appear"
+            " in the fused corpus ranking."
         ),
     )
     ap.add_argument(
@@ -221,7 +260,27 @@ def main(argv: list[str] | None = None) -> int:
     for q in questions:
         doc = q.doc
         path = path_by_id[doc]
-        if args.corpus:
+        doc_rank = None
+        if args.two_hop:
+            # HOP 1 -- pick the document. This must not see `path`: routing
+            # is exactly what is being measured, so peeking at the gold
+            # document here would make the arm meaningless.
+            routed = route_docs(
+                pdf_corpus_search(corpus_paths, q.question, mode=args.mode, top_k=TOP_K)
+            )
+            picked = routed[: max(1, args.route_k)]
+            doc_rank = routed.index(path) + 1 if path in routed else None
+            doc_returned = path in picked
+            # HOP 2 -- full single-doc search of each routed document, in
+            # routing order. Only the gold document's hits can carry the
+            # answer, so the others cost nothing but are searched anyway to
+            # keep the arm honest about what the caller would actually pay.
+            matches = []
+            for p in picked:
+                hits = pdf_search(p, q.question, mode=args.mode, max_results=TOP_K)
+                if p == path:
+                    matches = hits.get("matches", [])
+        elif args.corpus:
             info = pdf_corpus_search(
                 corpus_paths, q.question, mode=args.mode, top_k=TOP_K
             )
@@ -230,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
             all_matches = info.get("matches", [])
             matches = [m for m in all_matches if m.get("path") == path]
             doc_returned = bool(matches)
+            routed = route_docs(info)
+            doc_rank = routed.index(path) + 1 if path in routed else None
         else:
             info = pdf_search(path, q.question, mode=args.mode, max_results=TOP_K)
             matches = info.get("matches", [])
@@ -264,7 +325,8 @@ def main(argv: list[str] | None = None) -> int:
         elif not hit:
             # In corpus mode, distinguish losing the DOCUMENT from finding
             # the document but ranking the wrong page inside it.
-            bucket = "DOC MISS" if (args.corpus and not doc_returned) else "PAGE MISS"
+            multi_doc = args.corpus or args.two_hop
+            bucket = "DOC MISS" if (multi_doc and not doc_returned) else "PAGE MISS"
             bucket_any = bucket
             quotes = carries = carries_any = False
         else:
@@ -287,6 +349,7 @@ def main(argv: list[str] | None = None) -> int:
                 "gold_rank": next(
                     (i + 1 for i, m in enumerate(matches) if m["page"] in gold), None
                 ),
+                "doc_rank": doc_rank,
                 "bucket": bucket,
                 "bucket_any_gold_page": bucket_any,
                 "quotes_fact": quotes,
@@ -312,7 +375,13 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     n = len(rows)
-    setting = "24-doc corpus" if args.corpus else "one filing"
+    n_docs = len(corpus_paths)
+    if args.two_hop:
+        setting = f"two-hop, route top {args.route_k} of {n_docs} docs"
+    elif args.corpus:
+        setting = f"{n_docs}-doc corpus"
+    else:
+        setting = "one document"
     print(f"\n{n} questions, {setting}, mode={args.mode}")
     labels = ("ok", "EXCERPT MISS", "PAGE MISS", "DOC MISS", "unlocatable")
     counts = {b: sum(1 for r in rows if r["bucket"] == b) for b in order}
@@ -339,9 +408,34 @@ def main(argv: list[str] | None = None) -> int:
         "\nretrieved page but not in the excerpt. That is excerpt selection,"
         " not retrieval,\nand it is testable without a judge."
     )
-    scope = "corpus" if args.corpus else "singledoc"
+    if args.two_hop:
+        scope = f"twohop{args.route_k}"
+    elif args.corpus:
+        scope = "corpus"
+    else:
+        scope = "singledoc"
+    # Routing is measurable on its own: how often the gold document was
+    # reachable at all, versus how often it was reachable at the depth this
+    # run actually searched. The gap between them is what --route-k buys.
+    ranked = [r["doc_rank"] for r in rows if r["doc_rank"]]
+    if args.two_hop or args.corpus:
+        for k in (1, 3, 5):
+            got = sum(1 for d in ranked if d <= k)
+            print(f"  routing doc-hit@{k:<2d}               : {got}/{n} = {got/n:.0%}")
     out = data / f"excerpt_fidelity_{scope}_{args.mode}.json"
-    out.write_text(json.dumps({"mode": args.mode, "rows": rows}, indent=2) + "\n")
+    out.write_text(
+        json.dumps(
+            {
+                "mode": args.mode,
+                "setting": setting,
+                "route_k": args.route_k if args.two_hop else None,
+                "corpus_docs": n_docs,
+                "rows": rows,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     print(f"\nwrote {out}")
     return 0
 

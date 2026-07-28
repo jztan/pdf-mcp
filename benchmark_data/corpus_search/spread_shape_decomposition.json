@@ -1,0 +1,180 @@
+{
+ "top_k": 10,
+ "rows": [
+  {
+   "id": "spread-01",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "top_share": 0.8
+  },
+  {
+   "id": "spread-02",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 0.6666666666666666,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-03",
+   "gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 0.3333333333333333,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-04",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.7
+  },
+  {
+   "id": "spread-05",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.3
+  },
+  {
+   "id": "spread-06",
+   "gold": 2,
+   "flat_cov": 0.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-07",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-08",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 0.5,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-09",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "top_share": 0.6
+  },
+  {
+   "id": "spread-10",
+   "gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 0.6666666666666666,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-11",
+   "gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.3
+  },
+  {
+   "id": "spread-12",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.3
+  },
+  {
+   "id": "spread-13",
+   "gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.1
+  },
+  {
+   "id": "spread-14",
+   "gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.6
+  },
+  {
+   "id": "spread-15",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "top_share": 0.7
+  },
+  {
+   "id": "spread-16",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 0.5,
+   "top_share": 1.0
+  },
+  {
+   "id": "spread-17",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "top_share": 0.3
+  },
+  {
+   "id": "spread-18",
+   "gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.3
+  },
+  {
+   "id": "spread-19",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.7
+  },
+  {
+   "id": "spread-20",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "top_share": 0.5
+  },
+  {
+   "id": "spread-21",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.5
+  },
+  {
+   "id": "spread-22",
+   "gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "top_share": 0.2
+  },
+  {
+   "id": "spread-23",
+   "gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "top_share": 0.4
+  },
+  {
+   "id": "spread-24",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "top_share": 0.9
+  },
+  {
+   "id": "spread-25",
+   "gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "top_share": 0.6
+  }
+ ]
+}

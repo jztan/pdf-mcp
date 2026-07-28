@@ -74,6 +74,41 @@ what ships today.
   queries (not raw benchmark strings) is now the honest measurement for
   any future routing work, including the C1/C7 residual spike.
 
+## Part 2: recall and fidelity on caller-emitted queries (2026-07-28)
+
+Follow-up closing the gap Part 1 left open: the fidelity harness re-run
+with the 25 described questions replaced by the old-arm (shipped
+description) caller emissions. Free and deterministic
+(`excerpt_fidelity_caller_{corpus,twohop3}_auto.json`).
+
+| arm | raw strings | hand-rewrite ceiling | caller-emitted |
+|---|---|---|---|
+| corpus single-hop recall | 48% | 80% | **80%** |
+| two-hop k=3 recall | 64% | 88% | **84%** |
+| fidelity, best-ranked page | 42% | 60% | 60% |
+| single-doc reference (raw strings) | 88% | — | — |
+
+Failure decomposition, single-hop, best-ranked measure: **8 EXCERPT
+MISS, 4 PAGE MISS, 1 DOC MISS.**
+
+Findings:
+
+1. **The corpus recall penalty for a real caller is ~8 points, not 40**
+   (80% vs the 88% raw-string single-doc reference; note the reference
+   was not re-measured with caller phrasing, so the true gap could be
+   somewhat smaller or larger).
+2. **Caller queries hit the hand-rewrite ceiling exactly.** There is no
+   headroom left in query formulation.
+3. **Routing is no longer the recall bottleneck**: 1 DOC MISS out of 25.
+   The residual case for a doc-level routing prior (C1/C7 in
+   `corpus-routing-research.md`) is 3 route-misses at doc-hit@3, a
+   marginal target.
+4. **Excerpt selection is now the dominant defect by a wide margin**:
+   8 of 25 questions have the answer on a returned page but not in the
+   excerpt, twice the combined page+doc misses. This matches the
+   cross-arm 42-50% fidelity finding and is where quality work should go
+   next.
+
 ## Caveats
 
 - One caller model (`claude-opus-4-8`), n=39 questions, single emission
@@ -82,4 +117,8 @@ what ships today.
   needles) are structural failures, not marginal deltas.
 - Emissions are cached in `caller_eval_cache.jsonl`; delete it to force a
   fresh sample.
-- Deterministic grading measures routing only, not excerpt fidelity.
+- Part 1's grading measures routing only; Part 2 adds recall/fidelity
+  but inherits the n=25 aggregate-claim-only limit.
+- The single-doc 88% reference remains raw-string-based; a caller-phrased
+  single-doc arm would need another emission run with a one-document
+  framing.

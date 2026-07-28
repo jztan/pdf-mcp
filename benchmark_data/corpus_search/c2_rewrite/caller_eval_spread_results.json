@@ -1,0 +1,306 @@
+{
+ "model": "claude-opus-4-8",
+ "judge_context_flags": [
+  "--setting-sources",
+  "",
+  "--strict-mcp-config",
+  "--mcp-config",
+  "{\"mcpServers\":{}}"
+ ],
+ "per_call_budget_usd": "0.50",
+ "classes": [
+  "spread"
+ ],
+ "arms": [
+  "old"
+ ],
+ "caller_calls": 25,
+ "call_errors": 0,
+ "spread": {
+  "original": {
+   "hit1": "20/25",
+   "hit3": "23/25"
+  },
+  "old": {
+   "hit1": "19/25",
+   "hit3": "23/25"
+  }
+ },
+ "rows": [
+  {
+   "id": "spread-01",
+   "class": "spread",
+   "original": "genus surfaces topology",
+   "original_query": "genus surfaces topology",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "genus surfaces",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-02",
+   "class": "spread",
+   "original": "Markov chain model",
+   "original_query": "Markov chain model",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "Markov chain",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-03",
+   "class": "spread",
+   "original": "Monte Carlo simulation",
+   "original_query": "Monte Carlo simulation",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "Monte Carlo",
+   "old_hit1": false,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-04",
+   "class": "spread",
+   "original": "diffeomorphism invariants",
+   "original_query": "diffeomorphism invariants",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "diffeomorphism invariants",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-05",
+   "class": "spread",
+   "original": "Coulomb interaction electrons",
+   "original_query": "Coulomb interaction electrons",
+   "original_hit1": false,
+   "original_hit3": true,
+   "old_query": "Coulomb interaction",
+   "old_hit1": false,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-06",
+   "class": "spread",
+   "original": "eigenvalue spectrum",
+   "original_query": "eigenvalue spectrum",
+   "original_hit1": false,
+   "original_hit3": false,
+   "old_query": "eigenvalue spectrum",
+   "old_hit1": false,
+   "old_hit3": false
+  },
+  {
+   "id": "spread-07",
+   "class": "spread",
+   "original": "entropy measure",
+   "original_query": "entropy measure",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "entropy measure",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-08",
+   "class": "spread",
+   "original": "stochastic dynamics",
+   "original_query": "stochastic dynamics",
+   "original_hit1": false,
+   "original_hit3": true,
+   "old_query": "stochastic dynamics",
+   "old_hit1": false,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-09",
+   "class": "spread",
+   "original": "Hamiltonian interaction energy",
+   "original_query": "Hamiltonian interaction energy",
+   "original_hit1": false,
+   "original_hit3": true,
+   "old_query": "Hamiltonian interaction",
+   "old_hit1": false,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-10",
+   "class": "spread",
+   "original": "numerical simulation methods",
+   "original_query": "numerical simulation methods",
+   "original_hit1": false,
+   "original_hit3": false,
+   "old_query": "numerical simulation",
+   "old_hit1": false,
+   "old_hit3": false
+  },
+  {
+   "id": "spread-11",
+   "class": "spread",
+   "original": "scaling laws language models",
+   "original_query": "scaling laws language models",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "scaling laws language models",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-12",
+   "class": "spread",
+   "original": "double descent generalization",
+   "original_query": "double descent generalization",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "double descent generalization",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-13",
+   "class": "spread",
+   "original": "compute-optimal training",
+   "original_query": "compute-optimal training",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "compute-optimal training",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-14",
+   "class": "spread",
+   "original": "portfolio optimization",
+   "original_query": "portfolio optimization",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "portfolio optimization",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-15",
+   "class": "spread",
+   "original": "dark matter candidate",
+   "original_query": "dark matter candidate",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "dark matter",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-16",
+   "class": "spread",
+   "original": "magnetic fields turbulence galaxy clusters",
+   "original_query": "magnetic fields turbulence galaxy clusters",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "magnetic fields turbulence clusters",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-17",
+   "class": "spread",
+   "original": "quantum computing applications",
+   "original_query": "quantum computing applications",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "quantum computing",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-18",
+   "class": "spread",
+   "original": "self-attention transformer architecture",
+   "original_query": "self-attention transformer architecture",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "self-attention transformer",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-19",
+   "class": "spread",
+   "original": "neural network pruning",
+   "original_query": "neural network pruning",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "neural network pruning",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-20",
+   "class": "spread",
+   "original": "selective state space models",
+   "original_query": "selective state space models",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "selective state space models",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-21",
+   "class": "spread",
+   "original": "international trade economy",
+   "original_query": "international trade economy",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "international trade economy",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-22",
+   "class": "spread",
+   "original": "stochastic gradient descent",
+   "original_query": "stochastic gradient descent",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "stochastic gradient descent",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-23",
+   "class": "spread",
+   "original": "few-shot learning",
+   "original_query": "few-shot learning",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "few-shot learning",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-24",
+   "class": "spread",
+   "original": "emergent abilities large models",
+   "original_query": "emergent abilities large models",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "emergent abilities large models",
+   "old_hit1": true,
+   "old_hit3": true
+  },
+  {
+   "id": "spread-25",
+   "class": "spread",
+   "original": "Gaussian process kernels",
+   "original_query": "Gaussian process kernels",
+   "original_hit1": true,
+   "original_hit3": true,
+   "old_query": "Gaussian process kernels",
+   "old_hit1": true,
+   "old_hit3": true
+  }
+ ]
+}

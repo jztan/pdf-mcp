@@ -109,6 +109,25 @@ Findings:
    cross-arm 42-50% fidelity finding and is where quality work should go
    next.
 
+## Part 3: spread caller baseline (2026-07-28)
+
+25 further calls (`--classes spread --arms old`,
+`caller_eval_spread_results.json`) close the last missing caller
+baseline. Two findings:
+
+1. **Spread routing was already caller-honest.** Raw strings 20/25
+   doc-hit@1, caller-emitted 19/25; @3 identical at 23/25. Spread
+   questions carry topical anchors, so caller rephrasing changes little —
+   unlike described, where it moved routing 20 points. The
+   raw-vs-caller distinction matters per class, not universally.
+2. **The shape gap is population-stable.** Re-running the
+   ranking-vs-shape decomposition (`spike_spread_shape.py --emissions`)
+   on caller queries: `doc_match_counts` covers 93% of gold docs
+   (all-gold 21/25) vs 75% for the flat `matches` list (all-gold 13/25),
+   top-doc slot share 39%; the same queries show the gap in both
+   populations (raw: 91% / 71% / 42%). The grouped-response mandate
+   (research doc C6) stands on caller-honest data.
+
 ## Caveats
 
 - One caller model (`claude-opus-4-8`), n=39 questions, single emission

@@ -32,7 +32,18 @@ SPIKE_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
 TOP_K = 10
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--emissions",
+        type=Path,
+        help="caller-eval results JSON; replaces each query's text with"
+        " the caller-emitted old-arm query (id-matched)",
+    )
+    args = ap.parse_args(argv)
+
     import pdf_mcp.server as server_module
 
     from pdf_mcp.cache import PDFCache
@@ -48,6 +59,18 @@ def main() -> int:
         for q in json.loads((DATA / "queries.json").read_text())["queries"]
         if q["class"] == "spread"
     ]
+
+    label = "raw strings"
+    if args.emissions:
+        emitted = {
+            r["id"]: r["old_query"]
+            for r in json.loads(args.emissions.read_text())["rows"]
+            if r.get("old_query")
+        }
+        queries = [
+            {**q, "query": emitted[q["id"]]} for q in queries if q["id"] in emitted
+        ]
+        label = f"caller-emitted ({args.emissions.name})"
 
     rows = []
     for q in queries:
@@ -71,10 +94,13 @@ def main() -> int:
         )
 
     n = len(rows)
-    out = DATA / "spread_shape_decomposition.json"
-    out.write_text(json.dumps({"top_k": TOP_K, "rows": rows}, indent=1))
+    suffix = "_caller" if args.emissions else ""
+    out = DATA / f"spread_shape_decomposition{suffix}.json"
+    out.write_text(
+        json.dumps({"top_k": TOP_K, "queries": label, "rows": rows}, indent=1)
+    )
     print(f"wrote {out}\n")
-    print(f"SPREAD DECOMPOSITION (n={n}, raw strings, hybrid, top_k={TOP_K})")
+    print(f"SPREAD DECOMPOSITION (n={n}, {label}, hybrid, top_k={TOP_K})")
     for key, label in (
         ("flat_cov", "gold docs represented in flat matches"),
         ("dmc_cov", "gold docs present in doc_match_counts"),

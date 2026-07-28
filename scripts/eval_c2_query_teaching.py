@@ -144,7 +144,25 @@ def _ask_caller(prompt: str, model: str) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument(
+        "--classes",
+        default="described,needle",
+        help="comma-separated query classes to run (default: described,needle)",
+    )
+    ap.add_argument(
+        "--arms",
+        default="old,new",
+        help="comma-separated description arms to run (default: old,new)",
+    )
+    ap.add_argument(
+        "--out",
+        default="caller_eval_results.json",
+        help="output filename under c2_rewrite/ (default:" " caller_eval_results.json)",
+    )
     args = ap.parse_args(argv)
+    classes = tuple(c.strip() for c in args.classes.split(",") if c.strip())
+    arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
+    assert all(a in ("old", "new") for a in arms), arms
 
     import pdf_mcp.server as server_module
 
@@ -157,12 +175,10 @@ def main(argv: list[str] | None = None) -> int:
     queries = json.loads((DATA / "queries.json").read_text())["queries"]
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
-    subjects = [q for q in queries if q["class"] in ("described", "needle")]
+    subjects = [q for q in queries if q["class"] in classes]
 
     cache = _load_cache()
-    jobs: list[tuple[str, dict]] = [
-        (arm, q) for arm in ("old", "new") for q in subjects
-    ]
+    jobs: list[tuple[str, dict]] = [(arm, q) for arm in arms for q in subjects]
 
     def run_job(job: tuple[str, dict]) -> tuple[str, str, str | None]:
         arm, q = job
@@ -198,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     for q in subjects:
         gold = {lab["doc"] for lab in q["labels"] if lab.get("gain", 0) > 0}
         row: dict = {"id": q["id"], "class": q["class"], "original": q["query"]}
-        for arm in ("original", "old", "new"):
+        for arm in ("original", *arms):
             text = q["query"] if arm == "original" else emitted_by.get((arm, q["id"]))
             if text is None:
                 row[f"{arm}_hit1"] = row[f"{arm}_hit3"] = None
@@ -219,25 +235,26 @@ def main(argv: list[str] | None = None) -> int:
         "model": args.model,
         "judge_context_flags": JUDGE_CONTEXT_FLAGS,
         "per_call_budget_usd": PER_CALL_BUDGET_USD,
+        "classes": list(classes),
+        "arms": list(arms),
         "caller_calls": len(jobs),
         "call_errors": n_errors,
-        "described": {
-            arm: {k: agg("described", arm, k) for k in ("hit1", "hit3")}
-            for arm in ("original", "old", "new")
-        },
-        "needle": {
-            arm: {k: agg("needle", arm, k) for k in ("hit1", "hit3")}
-            for arm in ("original", "old", "new")
+        **{
+            cls: {
+                arm: {k: agg(cls, arm, k) for k in ("hit1", "hit3")}
+                for arm in ("original", *arms)
+            }
+            for cls in classes
         },
         "rows": rows,
     }
-    out = OUT_DIR / "caller_eval_results.json"
+    out = OUT_DIR / args.out
     out.write_text(json.dumps(summary, indent=1))
     print(f"wrote {out}\n")
     print(f"caller model={args.model}  calls={len(jobs)}  errors={n_errors}")
     print(f"{'class':<11}{'arm':<10}{'doc-hit@1':>10}{'doc-hit@3':>10}")
-    for cls in ("described", "needle"):
-        for arm in ("original", "old", "new"):
+    for cls in classes:
+        for arm in ("original", *arms):
             print(
                 f"{cls:<11}{arm:<10}{agg(cls, arm, 'hit1'):>10}"
                 f"{agg(cls, arm, 'hit3'):>10}"

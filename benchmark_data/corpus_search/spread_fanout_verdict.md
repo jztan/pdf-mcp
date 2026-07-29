@@ -52,6 +52,54 @@ documents for fan-out (or an ordered variant of the doc knowledge the
 response already carries) — not a re-ranking of the fused page list,
 which C6's rejection showed is a minefield.
 
+## Follow-up: the ordering race (2026-07-29) — REJECTED, ceiling reached
+
+A three-stream research sweep (resource selection read as a selection
+task, RAG multi-evidence selection, OSS implementations) produced a
+convergent candidate list, raced on this harness
+(`scripts/spike_fanout_ordering.py`, `fanout_ordering_race.json`;
+all arms permutation-clean, knob-free or literature defaults):
+
+| variant | sel@3 | sel@5 |
+|---|---|---|
+| base (shipped ordering) | 61% | 69% |
+| f1_vote (decayed-vote, the literature's #1) | 53% | 66% |
+| f1_lex (best-then-count) | 61% | 69% |
+| f2_xquad (residual-term-coverage greedy) | 61% | 69% |
+| f3_docrrf (doc-level two-arm RRF) | 53% | 71% |
+| f1+f2 composed | 53% | 66% |
+
+(Baseline reads 69% here vs 73% in the workflow measurement because the
+race replicates internals with kw-only counts and a deeper fused list;
+comparisons are internally consistent.)
+
+**No variant beats the shipped ordering.** The reachability diagnostic
+explains why: of the 19 hard parts (gold doc outside base top-5), only
+3 are reachable at @5 by ANY ordering, and 5 are absent from every
+variant's entire top-10. The gold documents' evidence under the query —
+keyword and semantic, under every aggregation — genuinely ranks below
+5+ other documents. This is evidence ABSENCE, not evidence
+mis-aggregation: each part-document matches a fragment of the
+multi-part question while non-gold documents match the whole theme.
+
+That is precisely the one-shot retrieval ceiling MultiHop-RAG
+documents (Hits@10 0.672 for bge-large; rerankers buy only 7-14
+points). The shipped ordering is at the practical ceiling of the
+available signals.
+
+**Where the residual actually lives**: interactive, hop-conditioned
+retrieval — after reading part 1, re-query with what it taught you
+(IRCoT-class, +11-21 recall points in the literature). In this
+architecture that is the CALLER's natural behavior, not a server
+ranking feature. Whether real callers do it is the only remaining
+measurable question, and it is a caller-behavior eval, not server work.
+
+Do not re-propose re-ordering the fan-out list from existing signals
+(see `what-we-tried.md` §8). Second-wave candidates needing new
+infrastructure (corpus-global FTS with global IDF, doc fingerprints,
+FAST feature models) remain unraced but face the same reachability
+wall: 16 of 19 hard parts are invisible to every existing signal.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

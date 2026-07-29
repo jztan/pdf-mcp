@@ -228,6 +228,10 @@ class TestConcurrentWarm:
         assert len(out["docs"]) == 3
 
     def test_corrupt_doc_skipped_under_pool(self, corpus_dir, cache, monkeypatch):
+        # Caught by warm_docs's parent-side pymupdf.open() probe, before
+        # _warm_concurrent ever sees the doc -- this pins the probe-path
+        # contract, not the pool's own post-submission failure branch
+        # (see test_post_submission_failure_lands_in_skipped for that).
         self._force_pool(monkeypatch)
         bad = corpus_dir / "delta.pdf"
         bad.write_bytes(b"%PDF-1.4 truncated garbage")
@@ -239,6 +243,30 @@ class TestConcurrentWarm:
         assert out["warmed_this_call"] == 3
         assert len(out["skipped"]) == 1
         assert "delta.pdf" in out["skipped"][0]["path"]
+
+    def test_post_submission_failure_lands_in_skipped(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        # Pins the except-branch inside _warm_concurrent itself (a
+        # failure from fut.result()/_finalize_doc after a doc's
+        # extraction already succeeded in a real spawn worker), which
+        # the probe-path corrupt-doc test above cannot reach.
+        self._force_pool(monkeypatch)
+        files = _files(corpus_dir)
+        target = next(f for f in files if f.endswith("alpha.pdf"))
+        real_finalize = corpus._finalize_doc
+
+        def failing(path, *args, **kwargs):
+            if path == target:
+                raise ValueError("simulated finalize failure")
+            return real_finalize(path, *args, **kwargs)
+
+        monkeypatch.setattr(corpus, "_finalize_doc", failing)
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 2
+        assert len(out["skipped"]) == 1
+        assert "alpha.pdf" in out["skipped"][0]["path"]
+        assert "simulated finalize failure" in out["skipped"][0]["reason"]
 
     def test_broken_pool_falls_back_sequential(self, corpus_dir, cache, monkeypatch):
         self._force_pool(monkeypatch)

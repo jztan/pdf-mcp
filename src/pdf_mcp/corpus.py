@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 import pymupdf
 
-from .extractor import extract_metadata, extract_text_from_page, extract_toc
+from .extractor import _warm_extract_worker
 
 __all__ = [
     "CORPUS_MAX_FILES",
@@ -176,40 +176,23 @@ def _cached_pages(
     return pages
 
 
-def _warm_one_doc(
+def _finalize_doc(
     path: str,
+    page_count: int,
+    metadata: dict[str, Any],
+    toc: list[Any],
+    texts: dict[int, str],
+    coverage: list[dict[str, int]],
     cache: Any,
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
 ) -> int:
-    """Extract everything for one doc, then write to cache.
+    """Parent-side tail of warming one doc: OCR preservation, per-doc
+    encode, then the three cache writes together (atomic per doc).
 
-    Extraction completes fully before any write, so a failure leaves
-    the cache untouched (atomic per doc). Coverage counts use raw
-    ``get_text()`` chars, matching pdf_info's coverage scan.
+    Always runs in the parent process — every SQLite touch is here.
     """
-    doc = pymupdf.open(path)
-    blobs: dict[int, bytes] = {}
-    try:
-        page_count = len(doc)
-        metadata = extract_metadata(doc)
-        toc = extract_toc(doc)
-        coverage: list[dict[str, int]] = []
-        texts: dict[int, str] = {}
-        for pn in range(page_count):
-            page = doc[pn]
-            texts[pn] = extract_text_from_page(page, sort_by_position=True)
-            coverage.append(
-                {
-                    "page": pn + 1,
-                    "text_chars": len(page.get_text()),
-                    "raster_images": len({img[0] for img in page.get_images()}),
-                }
-            )
-    finally:
-        doc.close()
-
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
     # this doc was never "fully warm" (e.g. missing metadata/text_coverage
@@ -230,6 +213,7 @@ def _warm_one_doc(
                 texts[pn] = cached_text
                 preserved.add(pn)
 
+    blobs: dict[int, bytes] = {}
     if embeddings:
         assert embed is not None and model_name is not None
         non_empty = {pn: t for pn, t in texts.items() if t.strip()}
@@ -245,6 +229,22 @@ def _warm_one_doc(
     if blobs and model_name is not None:
         cache.save_page_embeddings(path, blobs, model_name)
     return page_count
+
+
+def _warm_one_doc(
+    path: str,
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+) -> int:
+    """Extract everything for one doc, then write to cache.
+
+    Extraction completes fully before any write, so a failure leaves
+    the cache untouched (atomic per doc).
+    """
+    payload = _warm_extract_worker(path)
+    return _finalize_doc(path, *payload, cache, embeddings, model_name, embed)
 
 
 def warm_docs(

@@ -1449,6 +1449,40 @@ def _render_page_worker(
         return page_num, PageError(repr(exc))
 
 
+def _warm_extract_worker(
+    path: str,
+) -> tuple[int, dict[str, Any], list[Any], dict[int, str], list[dict[str, int]]]:
+    """Picklable whole-doc extraction worker for concurrent corpus warm.
+
+    Extracts everything one doc needs (metadata, TOC, per-page text,
+    coverage) with NO cache access, so the parent can write atomically
+    after the fact. Raises on failure; the parent maps the exception to
+    a ``skipped`` entry. Lives in extractor.py so spawn re-imports only
+    PyMuPDF, never FastMCP (same rule as the per-page workers above).
+    Coverage counts use raw ``get_text()`` chars, matching pdf_info.
+    """
+    doc = pymupdf.open(path)
+    try:
+        page_count = len(doc)
+        metadata = extract_metadata(doc)
+        toc = extract_toc(doc)
+        texts: dict[int, str] = {}
+        coverage: list[dict[str, int]] = []
+        for pn in range(page_count):
+            page = doc[pn]
+            texts[pn] = extract_text_from_page(page, sort_by_position=True)
+            coverage.append(
+                {
+                    "page": pn + 1,
+                    "text_chars": len(page.get_text()),
+                    "raster_images": len({img[0] for img in page.get_images()}),
+                }
+            )
+    finally:
+        doc.close()
+    return page_count, metadata, toc, texts, coverage
+
+
 # A detected "table" whose bounding box spans almost the entire page body in
 # BOTH dimensions is almost always a false positive: the table finder latched
 # onto the page's main text block. This is common on dense CJK / academic prose

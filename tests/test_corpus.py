@@ -1,10 +1,12 @@
 """Tests for corpus resolution and warm orchestration (corpus.py)."""
 
+import pickle
 from pathlib import Path
 
 import pymupdf
 
 from pdf_mcp import corpus
+from pdf_mcp.extractor import _warm_extract_worker
 
 
 class TestResolveCorpus:
@@ -514,3 +516,20 @@ class TestCorpusFusion:
         b = [("a.pdf", 9)]
         scored = corpus.rrf_fuse_two_rankings_scored(a, b)
         assert [item for item, _s in scored] == corpus.rrf_fuse_two_rankings(a, b)
+
+
+class TestWarmExtractWorker:
+    def test_payload_shape(self, corpus_dir):
+        path = str(corpus_dir / "alpha.pdf")
+        page_count, metadata, toc, texts, coverage = _warm_extract_worker(path)
+        assert page_count == 2
+        assert set(texts) == {0, 1}
+        assert all(t.strip() for t in texts.values())
+        assert [c["page"] for c in coverage] == [1, 2]
+        assert isinstance(metadata, dict)
+        assert isinstance(toc, list)
+
+    def test_picklable_for_spawn(self):
+        # Module-scope function: pickles by qualified name, spawn-safe.
+        clone = pickle.loads(pickle.dumps(_warm_extract_worker))
+        assert clone is _warm_extract_worker

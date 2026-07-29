@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `benchmark_data/corpus_search/spread_fanout_verdict.md`.
 
 ### Fixed
+- Paragraph-excerpt block scoring is now hyphen-insensitive: a query token
+  like `pretraining` matches page text spelled `pre-training` (including
+  hyphenated line breaks) in both the block picker and its coverage
+  comparison. Previously such blocks scored zero and could never be
+  selected. No behavior change on the excerpt-quality gate or either
+  fidelity benchmark; the fix removes a latent matching blind spot.
 - Hybrid `pdf_corpus_search` reported `doc_match_counts` from the keyword
   arm alone, returning `{}` for question-shaped queries. Now merges both
   arms, so callers can see which documents to re-ask individually.

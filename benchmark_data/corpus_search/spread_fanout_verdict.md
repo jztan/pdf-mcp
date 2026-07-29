@@ -267,11 +267,25 @@ Five checks run before the ship decision; v1 passed all gates.
 - **No k-explosion on a boilerplate-heavy corpus** (the pre-registered
   risk): 10-K fspread median k 6, mean 8.2, max 18 — inside the ≤10
   gate despite doc_match_counts naming most of the 24 filings.
-- **The gain survives live deployment, attenuated**: +7 points and +3
-  complete answers in real sessions (vs +13 single-turn). At n=25 the
-  live delta (+4 parts, +3 complete) is at the suggestive-to-real
-  boundary; the cross-condition consistency (positive in all five
-  cells, negative in none) is the stronger evidence.
+- **RETRACTED, then corrected, 2026-07-29.** The first live "v1 arm"
+  was invalid twice over: the worktree changed the DOCSTRING while
+  agents receive the `@mcp.tool(description=...)` decorator text
+  (identical in both arms), and its env lacked the `[semantic]` extra
+  (keyword-degraded server). Caught by the description-lock test
+  staying red when the ship edit targeted the docstring. Its true value:
+  an accidental repeat of the old condition, measuring the
+  **session-level noise band at ~±7 points** (61% vs 68% under
+  near-identical conditions). Two wiring lessons now standing: eval the
+  REGISTERED tool surface, and install deployment extras in eval envs.
+- **Corrected live run** (v1 on the registered surface, hybrid server;
+  `multiturn_results_v1d.json`): coverage **69% (9/25 complete)** vs
+  old-text live 61% (5/25). **Live effect: indeterminate** — +8 sits
+  inside the measured ±7 noise band, and live k barely moves under any
+  text (mean 1.4-1.6) even though stated plans move strongly
+  (single-turn k 2→5). No cell anywhere is negative. Proving a live
+  effect would need ~4 repeat runs per arm (~$50) against that band;
+  not spent. The behavioral case for v1 rests on the controlled
+  single-turn evidence across two corpora, not on a live-session claim.
 - Bonus finding: financial callers re-phrase per-document naturally
   (16/16 fspread, 24/25 needle) — the arXiv zero-re-phrasing is a
   corpus-style effect (no obvious per-doc anchors), not universal

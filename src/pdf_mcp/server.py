@@ -2710,11 +2710,14 @@ def _finalize_corpus_matches(
         " (comparing two companies, a trend across years): one"
         " ranked list of top_k hits cannot carry every document's"
         " answer — whichever document matches hardest takes the"
-        " slots. Search each document separately (pass its path) and"
-        " combine the results. `doc_match_counts` reports every"
-        " document with matching pages, including ones absent from"
-        " `matches` — treat a document listed there but missing from"
-        " `matches` as one you still need to query."
+        " slots. `doc_match_counts` reports every document with"
+        " matching pages, including ones absent from `matches`."
+        " For a question whose answer may span several documents,"
+        " re-ask EVERY document listed here with pdf_search, not"
+        " just the top matches -- stopping after the top few"
+        " documents typically recovers only about half of a"
+        " multi-document answer. For a single-document question,"
+        " follow up on the best match only."
     )
 )
 def pdf_corpus_search(
@@ -2776,9 +2779,13 @@ def pdf_corpus_search(
         - total_matches: len(matches)
         - doc_match_counts: per-doc hit count, keyed by path -- which
           documents hold content for this query, INCLUDING documents
-          whose pages did not win a slot in `matches`. Use it to decide
-          when a question spanning several documents should be re-asked
-          once per document. In keyword mode this counts the keyword
+          whose pages did not win a slot in `matches`. For a question
+          whose answer may span several documents, re-ask EVERY
+          document listed here with pdf_search, not just the top
+          matches -- stopping after the top few documents typically
+          recovers only about half of a multi-document answer. For a
+          single-document question, follow up on the best match only.
+          In keyword mode this counts the keyword
           arm's per-doc FTS hits, capped at top_k per document; in
           hybrid mode it merges both arms (max per document), so a
           question-shaped query the keyword arm cannot match still

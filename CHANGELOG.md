@@ -10,23 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corpus tools: `pdf_corpus_warm`, `pdf_corpus_overview`, and
   `pdf_corpus_search` work over a folder of local PDFs (cap 100): budgeted
   cache warming with resume, per-document triage cards, and cross-document
-  search fusing per-document rankings via RRF. `pdf_corpus_search` mirrors
-  `pdf_search` (three modes, excerpt styles, `source` provenance, FTS5
-  fallback). Benchmarked: hybrid NDCG@10 0.674 / doc-hit@3 1.000 on a
-  100-doc corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial
-  filings (details in `benchmark_data/`).
-
-### Changed
-- `pdf_corpus_search`'s description now instructs callers to re-ask EVERY
-  document named in `doc_match_counts` for questions spanning several
-  documents, replacing the softer per-document hint. Behaviorally A/B
-  tested (78+ simulated-caller runs across two corpora): callers moved
-  from a median of 2 follow-up documents to 5-6, multi-document answer
-  coverage rose 56%→69% (arXiv) and 59%→70% (10-K), single-answer
-  queries cost ~1.6 extra sub-second searches on one corpus and gained
-  coverage on the other. Wording is locked by
-  `tests/test_tool_descriptions.py`; evidence in
-  `benchmark_data/corpus_search/spread_fanout_verdict.md`.
+  search fusing per-document rankings via RRF, with cross-document ties
+  broken by how many distinct query terms a document carries (weighted by
+  each term's rarity) rather than by file order. `pdf_corpus_search`
+  mirrors `pdf_search` (three modes, paragraph excerpts by default,
+  `source` provenance, FTS5 fallback), reports `doc_match_counts` from
+  both arms in hybrid mode, and its description directs callers to re-ask
+  every matched document on questions spanning several documents.
+  Benchmarked: hybrid NDCG@10 0.674 / doc-hit@3 1.000 on a 100-doc
+  corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial filings
+  (details in `benchmark_data/`).
 
 ### Fixed
 - Paragraph-excerpt block scoring is now hyphen-insensitive: a query token
@@ -35,13 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comparison. Previously such blocks scored zero and could never be
   selected. No behavior change on the excerpt-quality gate or either
   fidelity benchmark; the fix removes a latent matching blind spot.
-- Hybrid `pdf_corpus_search` reported `doc_match_counts` from the keyword
-  arm alone, returning `{}` for question-shaped queries. Now merges both
-  arms, so callers can see which documents to re-ask individually.
-- `pdf_corpus_search` now defaults to `excerpt_style="paragraph"` like
-  `pdf_search`. Judged on 106 realistic financial questions (paired,
-  majority-of-3): answerable-in-full rose 23% to 61%, p < 0.0001;
-  misattributed figures fell 26 to 17. `"snippet"` remains available.
 - Keyword queries of 3+ words that match nothing (FTS5 AND-joins every
   term, so one absent word returned zero results) are retried OR-joined.
   On 24 financial filings: zero-result queries 17/45 to 0, keyword
@@ -58,19 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   block sharing one query term, moving excerpt and `bbox` geometry off
   the true hit. The short-block retry now keeps the longer block only if
   it covers at least as many query tokens. No gate regressions.
-- Cross-document keyword ranking ordered results by file path whenever
-  more than one document matched. `pdf_corpus_search` fuses per-document
-  rankings with RRF, so every matching document's best page scored
-  identically and the tie broke on `(path, page)`. With 98 of 100
-  documents matching a natural-language query, the returned top ten were
-  the ten alphabetically-first files, none of which answered it. Ties now
-  break by how many distinct query terms a document carries, weighted by
-  each term's rarity across the matching documents. On a 100-document
-  arXiv corpus, `mode="keyword"` doc-NDCG@10 rose 0.587 to 0.772 and
-  doc-hit@3 0.640 to 0.831; on 25 natural-language queries it rose 0.000
-  to 0.495. `mode="auto"` is unchanged in quality (0.829 to 0.827 once
-  the naming effect is removed from both), and both modes are markedly
-  less sensitive to file naming.
 
 ## [1.22.0] - 2026-07-25
 ### Added

@@ -34,7 +34,8 @@ def check_available(model_name: str) -> None:
     except ImportError as exc:
         raise ImportError(
             "pdf_search semantic mode requires the 'fastembed' package. "
-            "Install it with: pip install 'pdf-mcp[semantic]'"
+            "It ships with the default install; restore it with: "
+            "pip install fastembed"
         ) from exc
     supported = {m["model"] for m in TextEmbedding.list_supported_models()}
     if model_name not in supported:
@@ -54,7 +55,8 @@ def _get_model(model_name: str) -> Any:
         except ImportError as exc:
             raise ImportError(
                 "pdf_search semantic mode requires the 'fastembed' package. "
-                "Install it with: pip install 'pdf-mcp[semantic]'"
+                "It ships with the default install; restore it with: "
+                "pip install fastembed"
             ) from exc
         _model = TextEmbedding(model_name)
         _model_name_loaded = model_name

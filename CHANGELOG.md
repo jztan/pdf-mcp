@@ -24,6 +24,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workers for text, 4 with embeddings), measured ~3.9x faster text warm
   at the 100-document cap; small corpora stay sequential.
 
+### Changed
+- Semantic search is now part of the default install: `fastembed` moved
+  from the `[semantic]` extra into core dependencies, so hybrid `auto`
+  search and CJK semantic search work on every install channel (PyPI,
+  MCP Registry, uvx) without an extra. `[semantic]` and `[cjk]` remain
+  as no-op aliases, so existing install instructions keep working.
+  Install footprint grows (onnxruntime plus a ~67 MB embedding model
+  downloaded on first semantic use). Platform note: onnxruntime has no
+  wheels for Intel macOS on Python 3.14+ or Alpine/musl; those
+  environments need Python 3.13 or earlier.
+- `pdf_search(mode="auto")` without fastembed in the environment no
+  longer degrades to keyword-only silently: the response now carries
+  `semantic_unavailable: true` and a `semantic_unavailable_reason` with
+  an install hint, matching `pdf_corpus_search`'s existing behavior.
+
 ### Fixed
 - Paragraph-excerpt block scoring is now hyphen-insensitive: a query token
   like `pretraining` matches page text spelled `pre-training` (including

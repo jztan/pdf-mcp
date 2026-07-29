@@ -370,19 +370,26 @@ class TestPdfSearchModes:
         assert result.get("search_mode") == "keyword"
         assert result.get("semantic_unavailable") is True
 
-    def test_auto_mode_no_fastembed_omits_unavailable_flag(
+    def test_auto_mode_no_fastembed_sets_unavailable_flag(
         self, sample_pdf, isolated_server
     ):
-        """ImportError fallback (fastembed missing) does not set
-        semantic_unavailable — that flag is for installed-but-broken cases."""
+        """ImportError fallback (fastembed missing) sets semantic_unavailable
+        with an actionable install hint, matching pdf_corpus_search. Silent
+        keyword degradation hid that the default install runs without the
+        semantic arm every benchmark validates."""
         with patch(
             "pdf_mcp.embedder.check_available",
-            side_effect=ImportError("fastembed not installed"),
+            side_effect=ImportError(
+                "pdf_search semantic mode requires the 'fastembed' package. "
+                "It ships with the default install; restore it with: "
+                "pip install fastembed"
+            ),
         ):
             result = pdf_search(sample_pdf, "page", mode="auto")
 
         assert result.get("search_mode") == "keyword"
-        assert "semantic_unavailable" not in result
+        assert result.get("semantic_unavailable") is True
+        assert "fastembed" in result["semantic_unavailable_reason"]
 
     def test_auto_mode_with_fastembed_returns_hybrid(self, sample_pdf, isolated_server):
         """mode='auto' with fastembed available returns search_mode='hybrid'."""

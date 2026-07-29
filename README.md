@@ -72,11 +72,11 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 pip install pdf-mcp
 ```
 
-For semantic search (adds `fastembed` and `numpy`, ~67 MB model download on first use):
-
-```bash
-pip install 'pdf-mcp[semantic]'
-```
+Semantic search is included by default (hybrid `auto` search is built on it;
+~67 MB embedding model download on first use). The former `[semantic]` and
+`[cjk]` extras remain as no-op aliases. Platform note: the bundled
+`onnxruntime` has no wheels for Intel macOS on Python 3.14+ or Alpine/musl;
+use Python ≤ 3.13 there.
 
 For correct reading order on multi-column PDFs (adds `pymupdf4llm`, which pulls `pymupdf_layout`/`onnxruntime`):
 
@@ -86,13 +86,9 @@ pip install 'pdf-mcp[multicolumn]'
 
 Without it, multi-column pages fall back to positional-sort extraction, which can interleave columns.
 
-For Japanese/Chinese/Korean PDFs, CJK *keyword* search works out of the box
-(a char-split FTS index matches unspaced CJK terms). The `[cjk]` extra adds
-*semantic* CJK search (embeddings); extraction works without either:
-
-```bash
-pip install 'pdf-mcp[cjk]'
-```
+Japanese/Chinese/Korean PDFs work out of the box: keyword search uses a
+char-split FTS index that matches unspaced CJK terms, and semantic CJK
+search is covered by the default install.
 
 For OCR on scanned PDFs (requires system Tesseract):
 

@@ -1868,6 +1868,7 @@ version = "1.22.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "fastembed" },
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "joserfc" },
@@ -1882,9 +1883,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-cjk = [
-    { name = "fastembed" },
-]
 dev = [
     { name = "black" },
     { name = "flake8" },
@@ -1902,15 +1900,12 @@ dev = [
 multicolumn = [
     { name = "pymupdf4llm" },
 ]
-semantic = [
-    { name = "fastembed" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.3.1" },
     { name = "click", specifier = ">=8.3.3" },
-    { name = "fastembed", marker = "extra == 'semantic'", specifier = ">=0.7,<1.0" },
+    { name = "fastembed", specifier = ">=0.7,<1.0" },
     { name = "fastmcp", specifier = ">=3.0.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -1920,7 +1915,6 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pdf-mcp", extras = ["multicolumn"], marker = "extra == 'dev'" },
-    { name = "pdf-mcp", extras = ["semantic"], marker = "extra == 'cjk'" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=12.3.0" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=26.1.2" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7.0" },

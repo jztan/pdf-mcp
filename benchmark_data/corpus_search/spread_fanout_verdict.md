@@ -142,6 +142,35 @@ moves it — the C2 rejection proves teaching effects cannot be assumed),
 quote this table as a curve, never as a single spread number. Same
 trap class as "benchmark queries are not caller queries".
 
+## The trap resolved (2026-07-29): caller k measured, and it is 2
+
+`scripts/eval_spread_fanout_behavior.py` (25 caller simulations, real
+docstring + real responses, deterministic grading;
+`c2_rewrite/fanout_behavior_results.json`):
+
+- **k distribution: median 2, mean 2.3, min 0, max 8.** The width
+  curve's upper half is territory no caller visits unprompted, despite
+  the description's "re-ask once per document" and the full
+  `doc_match_counts` in hand.
+- **Zero per-document re-phrasing (0/25).** The hop-conditioned
+  behavior previously assumed to be "the caller's natural job" does not
+  occur in one-shot planning.
+- **Field-realistic part coverage: 56% (35/62), complete answers 6/25**
+  — fairly graded as parts already delivered in the corpus response
+  (20) plus parts the caller's own follow-ups found (8, +7 overlap).
+  Single-turn simulation is a floor: a live agent iterating on results
+  could do better, but the assumption that it does is now unbacked.
+
+**Bottom line for the spread class: 56% today, 87% reachable, and the
+entire 31-point gap is caller fan-out behavior — not ranking, not
+retrieval.** The one testable lever left is description-level: an A/B
+of the current text against a stronger fan-out instruction, graded on
+this same harness (does k rise, does realized coverage follow, do
+needle/described calls stay lean) — the C2 lesson applies (teaching
+text must earn its keep behaviorally; the last drafted teaching text
+failed and one inline example got copied verbatim), so nothing ships
+without that eval passing.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

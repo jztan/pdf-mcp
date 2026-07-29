@@ -1,0 +1,431 @@
+{
+ "model": "claude-opus-4-8",
+ "judge_context_flags": [
+  "--setting-sources",
+  "",
+  "--strict-mcp-config",
+  "--mcp-config",
+  "{\"mcpServers\":{}}"
+ ],
+ "per_call_budget_usd": "0.50",
+ "rows": [
+  {
+   "id": "spread-01",
+   "k": 2,
+   "chosen": [
+    "0706.0028",
+    "0706.2397"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0706.0028",
+    "0706.2397",
+    "0709.2857"
+   ],
+   "parts_found": [
+    "0706.0028"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-02",
+   "k": 8,
+   "chosen": [
+    "0707.4042",
+    "1302.4245",
+    "1406.4582",
+    "1606.06090",
+    "2607.02154",
+    "2607.02171",
+    "2607.08291",
+    "2607.10297"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.4042",
+    "0710.2740",
+    "0802.0733"
+   ],
+   "parts_found": [
+    "0707.4042"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-03",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "0707.1301",
+    "0709.4466",
+    "0802.0733"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-04",
+   "k": 3,
+   "chosen": [
+    "0706.0028",
+    "0706.2397",
+    "0709.2857"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0706.0954",
+    "0709.2857"
+   ],
+   "parts_found": [
+    "0709.2857"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-05",
+   "k": 3,
+   "chosen": [
+    "0811.0781",
+    "2607.06422",
+    "2607.08040"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.3690",
+    "0802.0539"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-06",
+   "k": 2,
+   "chosen": [
+    "0707.4042",
+    "2607.06373"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.4042",
+    "0802.0539"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-07",
+   "k": 4,
+   "chosen": [
+    "0709.2178",
+    "2010.14701",
+    "2607.02154",
+    "2607.02157"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0709.2178",
+    "0811.0781"
+   ],
+   "parts_found": [
+    "0709.2178"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-08",
+   "k": 5,
+   "chosen": [
+    "1501.05624",
+    "2607.02157",
+    "2607.02171",
+    "2607.08291",
+    "2607.08500"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.4042",
+    "0710.2265"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-09",
+   "k": 4,
+   "chosen": [
+    "0706.0028",
+    "2607.02093",
+    "2607.02157",
+    "2607.08040"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.1301",
+    "0802.0539",
+    "0811.0781"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-10",
+   "k": 5,
+   "chosen": [
+    "0707.3690",
+    "2607.06373",
+    "2607.06744",
+    "2607.08291",
+    "2607.09906"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.1301",
+    "0710.2265",
+    "0802.0539"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-11",
+   "k": 2,
+   "chosen": [
+    "1712.00409",
+    "2010.14701"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2005.14165",
+    "2010.14701",
+    "2206.07682"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-12",
+   "k": 1,
+   "chosen": [
+    "1912.02292"
+   ],
+   "rephrased": [],
+   "gold": [
+    "1912.02292",
+    "2201.02177"
+   ],
+   "parts_found": [
+    "1912.02292"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-13",
+   "k": 3,
+   "chosen": [
+    "2010.14701",
+    "2203.15556",
+    "2605.06546"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2010.14701",
+    "2203.15556",
+    "2206.07682"
+   ],
+   "parts_found": [
+    "2010.14701",
+    "2203.15556"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-14",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "2607.09556",
+    "2607.09566",
+    "2607.10297"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-15",
+   "k": 2,
+   "chosen": [
+    "2607.06755",
+    "2607.06844"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0905.2570",
+    "2607.06755",
+    "2607.08082"
+   ],
+   "parts_found": [
+    "2607.06755"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-16",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "2607.06346",
+    "2607.06744"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-17",
+   "k": 1,
+   "chosen": [
+    "2607.10451"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2607.08169",
+    "2607.09906",
+    "2607.10451"
+   ],
+   "parts_found": [
+    "2607.10451"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-18",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "2010.11929",
+    "2312.00752",
+    "2607.08175"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-19",
+   "k": 3,
+   "chosen": [
+    "1502.03167",
+    "1803.03635",
+    "1811.03679"
+   ],
+   "rephrased": [],
+   "gold": [
+    "1803.03635",
+    "1905.11946"
+   ],
+   "parts_found": [
+    "1803.03635"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-20",
+   "k": 1,
+   "chosen": [
+    "2312.00752"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2312.00752",
+    "2607.02154"
+   ],
+   "parts_found": [
+    "2312.00752"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-21",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "2607.09951",
+    "2607.09990"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-22",
+   "k": 1,
+   "chosen": [
+    "1912.02292"
+   ],
+   "rephrased": [],
+   "gold": [
+    "1502.03167",
+    "1608.03983"
+   ],
+   "parts_found": [],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-23",
+   "k": 2,
+   "chosen": [
+    "2010.11929",
+    "2206.07682"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2005.14165",
+    "2010.11929",
+    "2206.07682"
+   ],
+   "parts_found": [
+    "2010.11929",
+    "2206.07682"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-24",
+   "k": 5,
+   "chosen": [
+    "1712.00409",
+    "2005.14165",
+    "2010.14701",
+    "2607.02171",
+    "2607.10430"
+   ],
+   "rephrased": [],
+   "gold": [
+    "2206.07682",
+    "2607.10430"
+   ],
+   "parts_found": [
+    "2607.10430"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "spread-25",
+   "k": 1,
+   "chosen": [
+    "1302.4245"
+   ],
+   "rephrased": [],
+   "gold": [
+    "1302.4245",
+    "1811.03679"
+   ],
+   "parts_found": [
+    "1302.4245"
+   ],
+   "reply_missing": false
+  }
+ ]
+}

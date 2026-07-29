@@ -100,8 +100,28 @@ class TestSearchGuidanceInDescriptions:
         desc = (
             getattr(_registered_tools()["pdf_corpus_search"], "description", "") or ""
         )
-        lowered = desc.lower()
-        assert "separately" in lowered, "corpus tool omits decomposition guidance"
+        lowered = " ".join(desc.lower().split())
+        assert (
+            "cannot carry every document's answer" in lowered
+        ), "corpus tool omits why one ranked list fails multi-document questions"
         assert (
             "doc_match_counts" in lowered
         ), "corpus tool omits the signal that names documents missing from matches"
+
+    def test_corpus_search_instructs_exhaustive_fanout_for_multi_doc(self):
+        """The doc_match_counts guidance must carry the A/B-validated
+        fan-out instruction (2026-07-29, spread_fanout_verdict.md):
+        're-ask EVERY document listed' moved caller fan-out from a
+        median of 2 documents to 5 and multi-document answer coverage
+        from 56% to 69%, and was the only text of three tested that
+        moved behavior without erasing the gain. The wording is
+        LOCKED to the tested text; a paraphrase is a different,
+        unvalidated intervention.
+        """
+        desc = (
+            getattr(_registered_tools()["pdf_corpus_search"], "description", "") or ""
+        )
+        lowered = " ".join(desc.lower().split())
+        assert "re-ask every document listed here" in lowered
+        assert "recovers only about half of a multi-document answer" in lowered
+        assert "single-document question, follow up on the best match only" in lowered

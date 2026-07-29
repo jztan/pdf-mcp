@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   100-doc corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial
   filings (details in `benchmark_data/`).
 
+### Changed
+- `pdf_corpus_search`'s description now instructs callers to re-ask EVERY
+  document named in `doc_match_counts` for questions spanning several
+  documents, replacing the softer per-document hint. Behaviorally A/B
+  tested (78+ simulated-caller runs across two corpora): callers moved
+  from a median of 2 follow-up documents to 5-6, multi-document answer
+  coverage rose 56%→69% (arXiv) and 59%→70% (10-K), single-answer
+  queries cost ~1.6 extra sub-second searches on one corpus and gained
+  coverage on the other. Wording is locked by
+  `tests/test_tool_descriptions.py`; evidence in
+  `benchmark_data/corpus_search/spread_fanout_verdict.md`.
+
 ### Fixed
 - Hybrid `pdf_corpus_search` reported `doc_match_counts` from the keyword
   arm alone, returning `{}` for question-shaped queries. Now merges both

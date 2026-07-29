@@ -77,8 +77,31 @@ pdf_search("<path>", "<query>")
 If you would make no follow-up calls, reply with the single word: none"""
 
 
-def _cache_key(qid: str, model: str) -> str:
-    return hashlib.sha256(f"fanout|{qid}|{model}".encode()).hexdigest()[:24]
+OLD_SENTENCE_RE = re.compile(
+    r"Use it to decide\s+when a question spanning several documents"
+    r" should be re-asked\s+once per document\."
+)
+NEW_INSTRUCTION = (
+    "For a question whose answer may span several documents, re-ask"
+    " EVERY document listed here with pdf_search, not just the top"
+    " matches -- stopping after the top few documents typically"
+    " recovers only about half of a multi-document answer. For a"
+    " single-document question, follow up on the best match only."
+)
+NEW_INSTRUCTION_V2 = (
+    "First decide whether this question is answered by ONE document or"
+    " requires SEVERAL (comparisons, trends across works, claims that"
+    " need multiple sources). If one document answers it, follow up on"
+    " the best match only and stop. Only when the answer must span"
+    " several documents, re-ask EVERY document listed here with"
+    " pdf_search rather than the top few -- shallow fan-out typically"
+    " recovers only about half of a multi-document answer."
+)
+
+
+def _cache_key(qid: str, model: str, arm: str) -> str:
+    tag = "fanout" if arm == "old" else f"fanout|{arm}"
+    return hashlib.sha256(f"{tag}|{qid}|{model}".encode()).hexdigest()[:24]
 
 
 def _load_cache() -> dict[str, str]:
@@ -129,7 +152,10 @@ CALL_RE = re.compile(r'pdf_search\(\s*"([^"]+)"\s*,\s*"([^"]+)"')
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--arm", default="old", choices=["old", "new", "new2"])
+    ap.add_argument("--classes", default="spread")
     args = ap.parse_args(argv)
+    wanted = tuple(c.strip() for c in args.classes.split(",") if c.strip())
 
     import pdf_mcp.server as server_module
 
@@ -138,6 +164,11 @@ def main(argv: list[str] | None = None) -> int:
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
     corpus_doc = (pdf_corpus_search.__doc__ or "").strip()
+    if args.arm in ("new", "new2"):
+        repl = NEW_INSTRUCTION if args.arm == "new" else NEW_INSTRUCTION_V2
+        patched, n_subs = OLD_SENTENCE_RE.subn(repl, corpus_doc)
+        assert n_subs == 1, f"docstring target sentence not found ({n_subs})"
+        corpus_doc = patched
 
     manifest = json.loads((DATA / "manifest.json").read_text())
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
@@ -145,14 +176,13 @@ def main(argv: list[str] | None = None) -> int:
     queries = [
         q
         for q in json.loads((DATA / "queries.json").read_text())["queries"]
-        if q["class"] == "spread"
+        if q["class"] in wanted
     ]
-    emitted = {
-        r["id"]: r["old_query"]
-        for r in json.loads((OUT_DIR / "caller_eval_spread_results.json").read_text())[
-            "rows"
-        ]
-    }
+    emitted = {}
+    for name in ("caller_eval_spread_results.json", "caller_eval_results.json"):
+        for r in json.loads((OUT_DIR / name).read_text())["rows"]:
+            if r.get("old_query"):
+                emitted.setdefault(r["id"], r["old_query"])
 
     cache = _load_cache()
 
@@ -172,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             "total_matches": r["total_matches"],
             "search_mode": r["search_mode"],
         }
-        key = _cache_key(q["id"], args.model)
+        key = _cache_key(q["id"], args.model, args.arm)
         if key in cache:
             return q["id"], cache[key], compact
         prompt = CALLER_PROMPT.format(
@@ -211,16 +241,23 @@ def main(argv: list[str] | None = None) -> int:
             if doc is not None and doc not in chosen:
                 chosen[doc] = query_text
 
+        # fair grading: parts already delivered by hop-1 count as covered
+        inhand = set()
+        for m in _compact["matches"]:
+            doc = id_by_path.get(m["path"])
+            if doc in gold_pages and m["page"] in gold_pages[doc]:
+                inhand.add(doc)
         found = []
         for doc, qtext in chosen.items():
-            if doc not in gold_pages:
+            if doc not in gold_pages or doc in inhand:
                 continue
             p = next(p for p, i in id_by_path.items() if i == doc)
             s = pdf_search(p, qtext, mode="auto", max_results=10)
             pages = {m["page"] for m in s.get("matches", [])}
             if pages & gold_pages[doc]:
                 found.append(doc)
-        covered += len(found)
+        got = inhand | set(found)
+        covered += len(got)
         rows.append(
             {
                 "id": qid,
@@ -228,13 +265,20 @@ def main(argv: list[str] | None = None) -> int:
                 "chosen": sorted(chosen),
                 "rephrased": sorted(set(chosen.values()) - {emitted[qid]}),
                 "gold": sorted(gold_pages),
+                "inhand_hop1": sorted(inhand),
                 "parts_found": sorted(found),
+                "parts_total_covered": sorted(got),
                 "reply_missing": reply is None,
             }
         )
 
     ks = sorted(r["k"] for r in rows)
-    out = OUT_DIR / "fanout_behavior_results.json"
+    suffix = (
+        ""
+        if (args.arm == "old" and wanted == ("spread",))
+        else (f"_{args.arm}_{'-'.join(wanted)}")
+    )
+    out = OUT_DIR / f"fanout_behavior_results{suffix}.json"
     out.write_text(
         json.dumps(
             {
@@ -248,7 +292,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"wrote {out}\n")
     n = len(rows)
-    print(f"CALLER FAN-OUT BEHAVIOR (n={n} spread questions)")
+    print(
+        f"CALLER FAN-OUT BEHAVIOR (arm={args.arm},"
+        f" classes={','.join(wanted)}, n={n})"
+    )
     print(
         f"  k distribution: min={ks[0]} median={ks[n // 2]} max={ks[-1]}"
         f"  mean={sum(ks) / n:.1f}"
@@ -257,9 +304,11 @@ def main(argv: list[str] | None = None) -> int:
     rephrase = sum(1 for r in rows if r["rephrased"])
     print(f"  questions where caller re-phrased per-doc queries: {rephrase}/{n}")
     print(
-        f"  REALIZED part coverage (their docs, their queries):"
+        f"  FAIR realized part coverage (hop-1 in-hand OR follow-up):"
         f" {covered}/{total_parts} = {covered / total_parts:.0%}"
     )
+    comp = sum(1 for r in rows if set(r["gold"]) <= set(r["parts_total_covered"]))
+    print(f"  complete answers: {comp}/{n}")
     print("  width-curve reference: 56% @3 / 65% @5 / 79% @10 / 87% all-named")
     return 0
 

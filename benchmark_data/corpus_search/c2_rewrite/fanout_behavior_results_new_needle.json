@@ -1,0 +1,303 @@
+{
+ "model": "claude-opus-4-8",
+ "judge_context_flags": [
+  "--setting-sources",
+  "",
+  "--strict-mcp-config",
+  "--mcp-config",
+  "{\"mcpServers\":{}}"
+ ],
+ "per_call_budget_usd": "0.50",
+ "rows": [
+  {
+   "id": "needle-01",
+   "k": 1,
+   "chosen": [
+    "0705.4297"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0705.4297"
+   ],
+   "inhand_hop1": [
+    "0705.4297"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0705.4297"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-02",
+   "k": 1,
+   "chosen": [
+    "0707.3690"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.3690"
+   ],
+   "inhand_hop1": [
+    "0707.3690"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0707.3690"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-03",
+   "k": 1,
+   "chosen": [
+    "0707.4042"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0707.4042"
+   ],
+   "inhand_hop1": [
+    "0707.4042"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0707.4042"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-04",
+   "k": 11,
+   "chosen": [
+    "0709.2178",
+    "1302.4245",
+    "1501.05624",
+    "2607.02157",
+    "2607.06908",
+    "2607.08291",
+    "2607.08500",
+    "2607.09566",
+    "2607.09906",
+    "2607.10297",
+    "2607.10430"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0709.2178"
+   ],
+   "inhand_hop1": [
+    "0709.2178"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0709.2178"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-05",
+   "k": 2,
+   "chosen": [
+    "0706.0954",
+    "2607.08040"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0709.2857"
+   ],
+   "inhand_hop1": [
+    "0709.2857"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0709.2857"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-06",
+   "k": 7,
+   "chosen": [
+    "0706.2397",
+    "0710.2265",
+    "0905.2570",
+    "0905.3502",
+    "2607.06346",
+    "2607.10430",
+    "2607.10439"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0710.2265"
+   ],
+   "inhand_hop1": [
+    "0710.2265"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0710.2265"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-07",
+   "k": 3,
+   "chosen": [
+    "0811.0851",
+    "2607.09951",
+    "2607.10385"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0802.0733"
+   ],
+   "inhand_hop1": [
+    "0802.0733"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0802.0733"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-08",
+   "k": 1,
+   "chosen": [
+    "0905.3502"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0811.0781"
+   ],
+   "inhand_hop1": [
+    "0811.0781"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0811.0781"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-09",
+   "k": 1,
+   "chosen": [
+    "0711.0528"
+   ],
+   "rephrased": [],
+   "gold": [
+    "0711.0528"
+   ],
+   "inhand_hop1": [
+    "0711.0528"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "0711.0528"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-10",
+   "k": 2,
+   "chosen": [
+    "chukobungaku_104-52",
+    "ibk_72-102"
+   ],
+   "rephrased": [],
+   "gold": [
+    "ibk_72-102"
+   ],
+   "inhand_hop1": [
+    "ibk_72-102"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "ibk_72-102"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-11",
+   "k": 1,
+   "chosen": [
+    "ibk_72-102"
+   ],
+   "rephrased": [],
+   "gold": [
+    "ibk_72-102"
+   ],
+   "inhand_hop1": [
+    "ibk_72-102"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "ibk_72-102"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-12",
+   "k": 3,
+   "chosen": [
+    "chukobungaku_104-52",
+    "ibk_72-102",
+    "iwaki_koho_2025-12"
+   ],
+   "rephrased": [],
+   "gold": [
+    "iwaki_koho_2025-12"
+   ],
+   "inhand_hop1": [
+    "iwaki_koho_2025-12"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "iwaki_koho_2025-12"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-13",
+   "k": 3,
+   "chosen": [
+    "chukobungaku_104-52",
+    "ibk_72-102",
+    "iwaki_koho_2025-12"
+   ],
+   "rephrased": [],
+   "gold": [
+    "iwaki_koho_2025-12"
+   ],
+   "inhand_hop1": [
+    "iwaki_koho_2025-12"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "iwaki_koho_2025-12"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-14",
+   "k": 1,
+   "chosen": [
+    "iwaki_koho_2025-12"
+   ],
+   "rephrased": [],
+   "gold": [
+    "iwaki_koho_2025-12"
+   ],
+   "inhand_hop1": [
+    "iwaki_koho_2025-12"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "iwaki_koho_2025-12"
+   ],
+   "reply_missing": false
+  }
+ ]
+}

@@ -171,6 +171,38 @@ text must earn its keep behaviorally; the last drafted teaching text
 failed and one inline example got copied verbatim), so nothing ships
 without that eval passing.
 
+## The description A/B (2026-07-29): the lever works, with a cost knob
+
+Two candidate texts for the `doc_match_counts` sentence, A/B'd on the
+behavior harness (`eval_spread_fanout_behavior.py --arm new|new2`;
+single-sentence docstring change, everything else identical; all cells
+cached):
+
+| arm | spread coverage | spread complete | spread k (med) | needle k (mean) |
+|---|---|---|---|---|
+| old (shipped) | 56% | 6/25 | 2 | 1.1 |
+| v1: "re-ask EVERY document listed" | **69%** | **11/25** | 5 | 2.7 (max 11) |
+| v2: classify-first, then every-doc | 56% | 5/25 | 1 | 0.9 |
+
+- **v1 passes the primary gate**: +13 points coverage, complete answers
+  nearly doubled — the first intervention in the whole investigation to
+  move its target. Cost: ~1.6 extra local searches (~0.8s + the
+  caller's tool-call round-trips) on single-answer queries, with no
+  quality harm (needle 100% both arms).
+- **v2 shows the seesaw**: leading with classification restores needle
+  discipline perfectly and erases the spread gain entirely (callers
+  classify spread questions as single-doc and stop).
+- Iteration stopped at two texts by pre-commitment: prose tuning is a
+  hill-climb with per-step cost and overfitting risk (n=25, in-sample).
+
+**Ship decision (open)**: v1's trade — 13 points of multi-document
+answer coverage against ~1.6 wasted searches on single-answer queries.
+The corpus feature's differentiator is multi-document questions, which
+argues for v1; the cost lands on every single-answer corpus query. A
+maintainer call, not a measurement. If v1 ships: description change on
+the corpus feature (convenient with v1.23.0), locked by
+tests/test_tool_descriptions.py, and the n=25 in-sample caveat noted.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

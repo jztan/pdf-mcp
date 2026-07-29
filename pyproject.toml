@@ -53,8 +53,16 @@ dependencies = [
     "mcp>=1.28.1,<2.0",
     # Required at import time by chart_extractor (unconditional `import numpy`),
     # which server.py imports on every startup — so it's a core runtime dep, not
-    # optional. Also re-used by the semantic extra.
+    # optional. Also used by fastembed.
     "numpy>=1.24",
+    # Semantic/hybrid search. Core, not an extra (since the corpus-search
+    # release): hybrid RRF is the validated core of the tool and every install
+    # channel (PyPI, MCP Registry, uvx) should deliver it. Platform note: pulls onnxruntime, which
+    # has no wheels for Intel macOS on Python 3.14+ or musl/Alpine — those
+    # environments need Python <= 3.13 or a from-source onnxruntime build.
+    # Do not declare a new Python version in classifiers/CI before
+    # fastembed/onnxruntime ship wheels for it.
+    "fastembed>=0.7,<1.0",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
@@ -91,17 +99,13 @@ dev = [
     "pdf-mcp[multicolumn]",
 ]
 
-# numpy is a core dependency (see [project].dependencies), so it's not repeated
-# here — installing this extra only adds fastembed.
-semantic = [
-    "fastembed>=0.7,<1.0",
-]
+# No-op compatibility alias: fastembed is a core dependency now.
+# Kept so existing install instructions ('pdf-mcp[semantic]') keep working.
+semantic = []
 
-# CJK (Japanese/Chinese/Korean) search. FTS5 keyword matching is unreliable on
-# unspaced CJK, so semantic search is effectively required for usable CJK
-# retrieval. Extraction itself (read/render) needs no extra. Self-referential
-# extra → pulls exactly fastembed (numpy is already a core dep).
-cjk = ["pdf-mcp[semantic]"]
+# No-op compatibility alias (see semantic): CJK keyword AND semantic search
+# both work in the default install.
+cjk = []
 
 # Column-aware reading order for multi-column PDFs. Optional because it pulls
 # pymupdf_layout/onnxruntime; without it, extraction gracefully falls back to

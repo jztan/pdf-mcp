@@ -572,7 +572,7 @@ The first call on a new document embeds all pages or builds the section index (o
 - `path` (string, required) — Path to PDF file.
 - `query` (string, required) — Text to search for.
 - `mode` (string, optional, default `"auto"`):
-  - `"auto"` — hybrid Reciprocal Rank Fusion (RRF) when `pdf-mcp[semantic]` is installed; keyword-only otherwise. Transparent fallback.
+  - `"auto"` — hybrid Reciprocal Rank Fusion (RRF) when fastembed is available (included in the default install); falls back to keyword-only and flags `semantic_unavailable` if it is missing.
   - `"keyword"` — BM25/FTS5 only. Best for exact identifiers, product codes, precise terms. Ranking is document-local — BM25 reflects only the queried PDF, so page/section order is stable regardless of what else is cached.
   - `"semantic"` — embeddings only. Best for conceptual queries. Returns an inline `error` if `fastembed` is not installed.
   - **Ignored when `granularity="section"`** — section search is always BM25/FTS5 over section text.
@@ -822,7 +822,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - Keyword-mode `score` is per-document BM25 and is comparable only within that hit's own document, not across documents. Cross-document order is governed entirely by RRF, not by comparing raw scores between docs.
 - The 100-file cap, budget clamp, and URL rejection shared with `pdf_corpus_warm`/`pdf_corpus_overview` apply.
 - Keyword terms are AND-matched independently per document (FTS5); use short, specific terms and drop rare extra words, since a full question or one uncommon word can return nothing even when a document is otherwise relevant.
-- Semantic and hybrid modes require the `[semantic]` extra and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
+- Semantic and hybrid modes require fastembed (included in the default install) and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
 
 **Example:**
 

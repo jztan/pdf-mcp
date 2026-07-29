@@ -14,7 +14,7 @@ def test_check_available_raises_when_fastembed_missing():
     import pdf_mcp.embedder as emb
 
     with patch.dict(sys.modules, {"fastembed": None}):
-        with pytest.raises(ImportError, match="pip install 'pdf-mcp\\[semantic\\]'"):
+        with pytest.raises(ImportError, match="pip install fastembed"):
             emb.check_available(DEFAULT)
 
 
@@ -67,9 +67,7 @@ def test_encode_raises_when_fastembed_missing():
     emb._model_name_loaded = None
     try:
         with patch.dict(sys.modules, {"fastembed": None}):
-            with pytest.raises(
-                ImportError, match="pip install 'pdf-mcp\\[semantic\\]'"
-            ):
+            with pytest.raises(ImportError, match="pip install fastembed"):
                 emb.encode(["hello"], DEFAULT)
     finally:
         emb._model = None

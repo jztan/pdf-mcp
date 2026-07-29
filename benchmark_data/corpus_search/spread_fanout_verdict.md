@@ -132,6 +132,16 @@ documentation-grade guidance, not server code. Documented in
 `docs/tool-reference.md`'s `pdf_corpus_search` limitations when the
 corpus feature ships.
 
+**TRAP (flagged 2026-07-29, unresolved): every row of this table
+assumes a fan-out budget k that no one has observed.** How many
+documents a real agent actually re-searches after a corpus response is
+unmeasured. If real callers check 2-3 docs, the field number is ~56%;
+if they walk all of `doc_match_counts`, 87%. Until a caller-behavior
+eval measures the k distribution (and whether tool-reference guidance
+moves it — the C2 rejection proves teaching effects cannot be assumed),
+quote this table as a curve, never as a single spread number. Same
+trap class as "benchmark queries are not caller queries".
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

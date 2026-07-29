@@ -1,0 +1,543 @@
+{
+ "model": "claude-opus-4-8",
+ "judge_context_flags": [
+  "--setting-sources",
+  "",
+  "--strict-mcp-config",
+  "--mcp-config",
+  "{\"mcpServers\":{}}"
+ ],
+ "per_call_budget_usd": "0.50",
+ "rows": [
+  {
+   "id": "needle-01",
+   "k": 1,
+   "chosen": [
+    "googl-fy2024"
+   ],
+   "rephrased": [],
+   "gold": [
+    "googl-fy2024"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-02",
+   "k": 3,
+   "chosen": [
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "severance charges workforce reduction"
+   ],
+   "gold": [
+    "googl-fy2023"
+   ],
+   "inhand_hop1": [
+    "googl-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-03",
+   "k": 1,
+   "chosen": [
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "Google Cloud revenue increase 2025"
+   ],
+   "gold": [
+    "googl-fy2025"
+   ],
+   "inhand_hop1": [
+    "googl-fy2025"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-04",
+   "k": 1,
+   "chosen": [
+    "aapl-fy2024"
+   ],
+   "rephrased": [
+    "Greater China net sales decreased 2024"
+   ],
+   "gold": [
+    "aapl-fy2024"
+   ],
+   "inhand_hop1": [
+    "aapl-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "aapl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-05",
+   "k": 1,
+   "chosen": [
+    "aapl-fy2025"
+   ],
+   "rephrased": [
+    "common stock repurchased during 2025"
+   ],
+   "gold": [
+    "aapl-fy2025"
+   ],
+   "inhand_hop1": [
+    "aapl-fy2025"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "aapl-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-06",
+   "k": 1,
+   "chosen": [
+    "aapl-fy2023"
+   ],
+   "rephrased": [
+    "research and development expense segment reconciliation 2023"
+   ],
+   "gold": [
+    "aapl-fy2023"
+   ],
+   "inhand_hop1": [
+    "aapl-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "aapl-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-07",
+   "k": 1,
+   "chosen": [
+    "nvda-fy2025"
+   ],
+   "rephrased": [
+    "data center revenue growth fiscal 2025"
+   ],
+   "gold": [
+    "nvda-fy2025"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "nvda-fy2025"
+   ],
+   "parts_total_covered": [
+    "nvda-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-08",
+   "k": 1,
+   "chosen": [
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "direct customer percentage of total revenue fiscal 2026"
+   ],
+   "gold": [
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "nvda-fy2026"
+   ],
+   "parts_total_covered": [
+    "nvda-fy2026"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-09",
+   "k": 3,
+   "chosen": [
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "A100 H100 China export license"
+   ],
+   "gold": [
+    "nvda-fy2024"
+   ],
+   "inhand_hop1": [
+    "nvda-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "nvda-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-10",
+   "k": 3,
+   "chosen": [
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024"
+   ],
+   "rephrased": [
+    "goodwill impairment Domestic Theatres"
+   ],
+   "gold": [
+    "amc-fy2022"
+   ],
+   "inhand_hop1": [
+    "amc-fy2022"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amc-fy2022"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-11",
+   "k": 3,
+   "chosen": [
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024"
+   ],
+   "rephrased": [
+    "reverse stock split effective date"
+   ],
+   "gold": [
+    "amc-fy2023"
+   ],
+   "inhand_hop1": [
+    "amc-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amc-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-12",
+   "k": 1,
+   "chosen": [
+    "amc-fy2024"
+   ],
+   "rephrased": [
+    "theatres and screens operated as of December 31, 2024"
+   ],
+   "gold": [
+    "amc-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-13",
+   "k": 1,
+   "chosen": [
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "Revenue Year Ended Jan 25, 2026 cost of revenue gross profit"
+   ],
+   "gold": [
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "nvda-fy2026"
+   ],
+   "parts_total_covered": [
+    "nvda-fy2026"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-14",
+   "k": 3,
+   "chosen": [
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "repurchases of Class A and Class C shares"
+   ],
+   "gold": [
+    "googl-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "googl-fy2024"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-15",
+   "k": 1,
+   "chosen": [
+    "msft-fy2023"
+   ],
+   "rephrased": [
+    "Intelligent Cloud revenue growth driven by Azure"
+   ],
+   "gold": [
+    "msft-fy2023"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "msft-fy2023"
+   ],
+   "parts_total_covered": [
+    "msft-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-16",
+   "k": 3,
+   "chosen": [
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025"
+   ],
+   "rephrased": [
+    "Azure and other cloud services revenue includes"
+   ],
+   "gold": [
+    "msft-fy2025"
+   ],
+   "inhand_hop1": [
+    "msft-fy2025"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "msft-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-17",
+   "k": 1,
+   "chosen": [
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "reportable segments"
+   ],
+   "gold": [
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "meta-fy2024"
+   ],
+   "parts_total_covered": [
+    "meta-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-18",
+   "k": 2,
+   "chosen": [
+    "googl-fy2025",
+    "msft-fy2024"
+   ],
+   "rephrased": [
+    "DAP MAP ARPP Family metrics definitions"
+   ],
+   "gold": [
+    "meta-fy2023"
+   ],
+   "inhand_hop1": [
+    "meta-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-19",
+   "k": 1,
+   "chosen": [
+    "amzn-fy2023"
+   ],
+   "rephrased": [
+    "AWS sales growth 2023"
+   ],
+   "gold": [
+    "amzn-fy2023"
+   ],
+   "inhand_hop1": [
+    "amzn-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amzn-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-20",
+   "k": 1,
+   "chosen": [
+    "amzn-fy2024"
+   ],
+   "rephrased": [
+    "AWS sales growth 2024"
+   ],
+   "gold": [
+    "amzn-fy2024"
+   ],
+   "inhand_hop1": [
+    "amzn-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-21",
+   "k": 1,
+   "chosen": [
+    "jpm-fy2023"
+   ],
+   "rephrased": [
+    "full year 2023 net income"
+   ],
+   "gold": [
+    "jpm-fy2023"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-22",
+   "k": 1,
+   "chosen": [
+    "jpm-fy2024"
+   ],
+   "rephrased": [
+    "full year 2024 net income"
+   ],
+   "gold": [
+    "jpm-fy2024"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-23",
+   "k": 1,
+   "chosen": [
+    "jpm-fy2022"
+   ],
+   "rephrased": [
+    "full year 2022 net income"
+   ],
+   "gold": [
+    "jpm-fy2022"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2022"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2022"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-24",
+   "k": 3,
+   "chosen": [
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "2022 restructuring charges and layoff size"
+   ],
+   "gold": [
+    "meta-fy2022"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-25",
+   "k": 1,
+   "chosen": [
+    "msft-fy2024"
+   ],
+   "rephrased": [
+    "Microsoft Cloud revenue fiscal 2024"
+   ],
+   "gold": [
+    "msft-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "msft-fy2024"
+   ],
+   "parts_total_covered": [
+    "msft-fy2024"
+   ],
+   "reply_missing": false
+  }
+ ]
+}

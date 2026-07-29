@@ -1,0 +1,471 @@
+{
+ "model": "claude-opus-4-8",
+ "judge_context_flags": [
+  "--setting-sources",
+  "",
+  "--strict-mcp-config",
+  "--mcp-config",
+  "{\"mcpServers\":{}}"
+ ],
+ "per_call_budget_usd": "0.50",
+ "rows": [
+  {
+   "id": "fspread-01",
+   "k": 6,
+   "chosen": [
+    "amzn-fy2024",
+    "googl-fy2025",
+    "jpm-fy2024",
+    "meta-fy2024",
+    "msft-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "quantum computing frontier technology"
+   ],
+   "gold": [
+    "googl-fy2025",
+    "jpm-fy2024",
+    "msft-fy2025"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2024",
+    "msft-fy2025"
+   ],
+   "parts_found": [
+    "googl-fy2025"
+   ],
+   "parts_total_covered": [
+    "googl-fy2025",
+    "jpm-fy2024",
+    "msft-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-02",
+   "k": 2,
+   "chosen": [
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "cash dividend first paid"
+   ],
+   "gold": [
+    "googl-fy2024",
+    "meta-fy2023"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [
+    "meta-fy2023"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024",
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-03",
+   "k": 2,
+   "chosen": [
+    "nvda-fy2024",
+    "nvda-fy2025"
+   ],
+   "rephrased": [
+    "Board approved additional share repurchase authorization"
+   ],
+   "gold": [
+    "googl-fy2024",
+    "nvda-fy2025"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [
+    "nvda-fy2025"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024",
+    "nvda-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-04",
+   "k": 3,
+   "chosen": [
+    "aapl-fy2023",
+    "amzn-fy2023",
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "Digital Markets Act investigation compliance obligations"
+   ],
+   "gold": [
+    "aapl-fy2025",
+    "googl-fy2025",
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [
+    "aapl-fy2025"
+   ],
+   "parts_found": [
+    "googl-fy2025"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2025",
+    "googl-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-05",
+   "k": 2,
+   "chosen": [
+    "googl-fy2023",
+    "meta-fy2023"
+   ],
+   "rephrased": [
+    "2023 restructuring severance charges facilities consolidation",
+    "January 2023 workforce reduction severance charges"
+   ],
+   "gold": [
+    "googl-fy2023",
+    "meta-fy2022",
+    "meta-fy2023"
+   ],
+   "inhand_hop1": [
+    "googl-fy2023",
+    "meta-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2023",
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-06",
+   "k": 5,
+   "chosen": [
+    "amzn-fy2024",
+    "googl-fy2024",
+    "meta-fy2024",
+    "msft-fy2023",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "foundry single source Taiwan Asia concentrated critical components",
+    "single or limited source suppliers components",
+    "single or limited supply sources components",
+    "single or limited supply sources components Asia foundry",
+    "single or limited supply sources critical components"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-07",
+   "k": 3,
+   "chosen": [
+    "aapl-fy2025",
+    "googl-fy2025",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "DOJ antitrust lawsuit",
+    "FTC antitrust lawsuit"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "googl-fy2023",
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [
+    "googl-fy2023"
+   ],
+   "parts_found": [
+    "meta-fy2024"
+   ],
+   "parts_total_covered": [
+    "googl-fy2023",
+    "meta-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-08",
+   "k": 3,
+   "chosen": [
+    "amzn-fy2024",
+    "googl-fy2025",
+    "msft-fy2025"
+   ],
+   "rephrased": [
+    "AWS revenue growth",
+    "Google Cloud revenue growth",
+    "Microsoft Cloud revenue growth"
+   ],
+   "gold": [
+    "amzn-fy2024",
+    "googl-fy2024",
+    "msft-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "amzn-fy2024"
+   ],
+   "parts_total_covered": [
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-09",
+   "k": 3,
+   "chosen": [
+    "aapl-fy2025",
+    "amzn-fy2024",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "number of employees",
+    "number of full-time and part-time employees",
+    "number of full-time employees"
+   ],
+   "gold": [
+    "aapl-fy2025",
+    "amzn-fy2024",
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "aapl-fy2025",
+    "amzn-fy2024"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2025",
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-10",
+   "k": 5,
+   "chosen": [
+    "amzn-fy2023",
+    "jpm-fy2023",
+    "meta-fy2024",
+    "msft-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "carbon negative net zero emissions target",
+    "net zero emissions operations target",
+    "net zero emissions target",
+    "net-zero carbon emissions target"
+   ],
+   "gold": [
+    "googl-fy2024",
+    "jpm-fy2024",
+    "msft-fy2024"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-11",
+   "k": 17,
+   "chosen": [
+    "amc-fy2024",
+    "amzn-fy2022",
+    "amzn-fy2023",
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025",
+    "nvda-fy2024",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "generative AI transformative competitive threat to our business"
+   ],
+   "gold": [
+    "amc-fy2024",
+    "amzn-fy2024",
+    "jpm-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "amc-fy2024",
+    "jpm-fy2024"
+   ],
+   "parts_total_covered": [
+    "amc-fy2024",
+    "jpm-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-12",
+   "k": 12,
+   "chosen": [
+    "aapl-fy2024",
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024",
+    "googl-fy2024",
+    "googl-fy2025",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "climate change increased frequency severe weather natural disasters"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-13",
+   "k": 2,
+   "chosen": [
+    "googl-fy2024",
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "Tensor Processing Unit custom-designed AI chips TPU"
+   ],
+   "gold": [
+    "amzn-fy2023",
+    "amzn-fy2024",
+    "googl-fy2025"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "googl-fy2025"
+   ],
+   "parts_total_covered": [
+    "googl-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-14",
+   "k": 4,
+   "chosen": [
+    "amc-fy2022",
+    "amzn-fy2022",
+    "jpm-fy2022",
+    "meta-fy2022"
+   ],
+   "rephrased": [
+    "lingering ongoing COVID-19 pandemic effects on business"
+   ],
+   "gold": [
+    "amc-fy2022",
+    "amzn-fy2022",
+    "meta-fy2022"
+   ],
+   "inhand_hop1": [
+    "amc-fy2022"
+   ],
+   "parts_found": [
+    "amzn-fy2022",
+    "meta-fy2022"
+   ],
+   "parts_total_covered": [
+    "amc-fy2022",
+    "amzn-fy2022",
+    "meta-fy2022"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-15",
+   "k": 4,
+   "chosen": [
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024",
+    "jpm-fy2024"
+   ],
+   "rephrased": [
+    "interest rate risk exposure"
+   ],
+   "gold": [
+    "amc-fy2024",
+    "jpm-fy2023"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-16",
+   "k": 4,
+   "chosen": [
+    "aapl-fy2023",
+    "aapl-fy2025",
+    "googl-fy2025",
+    "nvda-fy2024"
+   ],
+   "rephrased": [
+    "foreign exchange forward derivative contracts hedge"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "googl-fy2024",
+    "nvda-fy2025"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  }
+ ]
+}

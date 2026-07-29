@@ -1,6 +1,6 @@
 {
   "mode": "auto",
-  "setting": "one document",
+  "setting": "100-doc corpus",
   "route_k": null,
   "corpus_docs": 100,
   "rows": [
@@ -14,8 +14,8 @@
         7,
         8
       ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "gold_rank": 2,
+      "doc_rank": 2,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -38,8 +38,8 @@
         39,
         40
       ],
-      "gold_rank": 2,
-      "doc_rank": null,
+      "gold_rank": 1,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -56,23 +56,8 @@
         6,
         7
       ],
-      "gold_rank": 3,
-      "doc_rank": null,
-      "bucket": "EXCERPT MISS",
-      "bucket_any_gold_page": "EXCERPT MISS",
-      "quotes_fact": false,
-      "carries_figure": false,
-      "carries_figure_any_gold_page": false
-    },
-    {
-      "id": "described-08",
-      "type": "result",
-      "doc": "2201.02177",
-      "gold_pages": [
-        1
-      ],
       "gold_rank": 1,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -88,13 +73,13 @@
         2,
         4
       ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "gold_rank": 4,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
-      "bucket_any_gold_page": "ok",
+      "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
       "carries_figure": false,
-      "carries_figure_any_gold_page": true
+      "carries_figure_any_gold_page": false
     },
     {
       "id": "described-10",
@@ -106,23 +91,8 @@
         7,
         8
       ],
-      "gold_rank": 1,
-      "doc_rank": null,
-      "bucket": "EXCERPT MISS",
-      "bucket_any_gold_page": "ok",
-      "quotes_fact": false,
-      "carries_figure": false,
-      "carries_figure_any_gold_page": true
-    },
-    {
-      "id": "described-14",
-      "type": "method",
-      "doc": "2010.11929",
-      "gold_pages": [
-        1
-      ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "gold_rank": 2,
+      "doc_rank": 4,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -130,15 +100,15 @@
       "carries_figure_any_gold_page": false
     },
     {
-      "id": "described-18",
-      "type": "figure",
-      "doc": "1301.3570",
+      "id": "described-11",
+      "type": "definition",
+      "doc": "2206.07682",
       "gold_pages": [
         1,
         2
       ],
       "gold_rank": 1,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "ok",
       "quotes_fact": false,
@@ -153,22 +123,7 @@
         1
       ],
       "gold_rank": 1,
-      "doc_rank": null,
-      "bucket": "EXCERPT MISS",
-      "bucket_any_gold_page": "EXCERPT MISS",
-      "quotes_fact": false,
-      "carries_figure": false,
-      "carries_figure_any_gold_page": false
-    },
-    {
-      "id": "described-23",
-      "type": "definition",
-      "doc": "1910.03474",
-      "gold_pages": [
-        1
-      ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -182,8 +137,8 @@
       "gold_pages": [
         1
       ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "gold_rank": 4,
+      "doc_rank": 1,
       "bucket": "EXCERPT MISS",
       "bucket_any_gold_page": "EXCERPT MISS",
       "quotes_fact": false,
@@ -198,7 +153,7 @@
         1
       ],
       "gold_rank": null,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "PAGE MISS",
       "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
@@ -206,14 +161,14 @@
       "carries_figure_any_gold_page": false
     },
     {
-      "id": "described-15",
+      "id": "described-13",
       "type": "result",
-      "doc": "2010.14701",
+      "doc": "2605.06546",
       "gold_pages": [
         1
       ],
       "gold_rank": null,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "PAGE MISS",
       "bucket_any_gold_page": "PAGE MISS",
       "quotes_fact": false,
@@ -228,9 +183,39 @@
         1
       ],
       "gold_rank": null,
-      "doc_rank": null,
+      "doc_rank": 3,
       "bucket": "PAGE MISS",
       "bucket_any_gold_page": "PAGE MISS",
+      "quotes_fact": false,
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
+    },
+    {
+      "id": "described-19",
+      "type": "figure",
+      "doc": "1501.05624",
+      "gold_pages": [
+        1
+      ],
+      "gold_rank": null,
+      "doc_rank": 3,
+      "bucket": "PAGE MISS",
+      "bucket_any_gold_page": "PAGE MISS",
+      "quotes_fact": false,
+      "carries_figure": false,
+      "carries_figure_any_gold_page": false
+    },
+    {
+      "id": "described-17",
+      "type": "method",
+      "doc": "1601.06071",
+      "gold_pages": [
+        1
+      ],
+      "gold_rank": null,
+      "doc_rank": null,
+      "bucket": "DOC MISS",
+      "bucket_any_gold_page": "DOC MISS",
       "quotes_fact": false,
       "carries_figure": false,
       "carries_figure_any_gold_page": false
@@ -242,8 +227,8 @@
       "gold_pages": [
         1
       ],
-      "gold_rank": 4,
-      "doc_rank": null,
+      "gold_rank": 2,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -258,8 +243,8 @@
         1,
         13
       ],
-      "gold_rank": 5,
-      "doc_rank": null,
+      "gold_rank": 3,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -274,7 +259,7 @@
         1
       ],
       "gold_rank": 5,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -282,15 +267,14 @@
       "carries_figure_any_gold_page": true
     },
     {
-      "id": "described-11",
-      "type": "definition",
-      "doc": "2206.07682",
+      "id": "described-08",
+      "type": "result",
+      "doc": "2201.02177",
       "gold_pages": [
-        1,
-        2
+        1
       ],
-      "gold_rank": 3,
-      "doc_rank": null,
+      "gold_rank": 1,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -305,7 +289,7 @@
         1
       ],
       "gold_rank": 7,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -313,29 +297,14 @@
       "carries_figure_any_gold_page": true
     },
     {
-      "id": "described-13",
-      "type": "result",
-      "doc": "2605.06546",
-      "gold_pages": [
-        1
-      ],
-      "gold_rank": 2,
-      "doc_rank": null,
-      "bucket": "ok",
-      "bucket_any_gold_page": "ok",
-      "quotes_fact": true,
-      "carries_figure": true,
-      "carries_figure_any_gold_page": true
-    },
-    {
-      "id": "described-17",
+      "id": "described-14",
       "type": "method",
-      "doc": "1601.06071",
+      "doc": "2010.11929",
       "gold_pages": [
         1
       ],
       "gold_rank": 2,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -343,14 +312,30 @@
       "carries_figure_any_gold_page": true
     },
     {
-      "id": "described-19",
-      "type": "figure",
-      "doc": "1501.05624",
+      "id": "described-15",
+      "type": "result",
+      "doc": "2010.14701",
       "gold_pages": [
         1
       ],
-      "gold_rank": 2,
-      "doc_rank": null,
+      "gold_rank": 3,
+      "doc_rank": 1,
+      "bucket": "ok",
+      "bucket_any_gold_page": "ok",
+      "quotes_fact": true,
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
+    },
+    {
+      "id": "described-18",
+      "type": "figure",
+      "doc": "1301.3570",
+      "gold_pages": [
+        1,
+        2
+      ],
+      "gold_rank": 1,
+      "doc_rank": 2,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -365,7 +350,7 @@
         1
       ],
       "gold_rank": 1,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -379,8 +364,23 @@
       "gold_pages": [
         1
       ],
+      "gold_rank": 2,
+      "doc_rank": 2,
+      "bucket": "ok",
+      "bucket_any_gold_page": "ok",
+      "quotes_fact": true,
+      "carries_figure": true,
+      "carries_figure_any_gold_page": true
+    },
+    {
+      "id": "described-23",
+      "type": "definition",
+      "doc": "1910.03474",
+      "gold_pages": [
+        1
+      ],
       "gold_rank": 1,
-      "doc_rank": null,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,
@@ -394,8 +394,8 @@
       "gold_pages": [
         1
       ],
-      "gold_rank": 1,
-      "doc_rank": null,
+      "gold_rank": 2,
+      "doc_rank": 1,
       "bucket": "ok",
       "bucket_any_gold_page": "ok",
       "quotes_fact": true,

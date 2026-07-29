@@ -1,0 +1,304 @@
+{
+ "rows": [
+  {
+   "id": "fspread-01",
+   "n_gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "googl-fy2025": true,
+    "msft-fy2025": true,
+    "jpm-fy2024": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.6666666666666666,
+   "cov_k5": 0.6666666666666666,
+   "cov_k7": 0.6666666666666666,
+   "cov_k10": 0.6666666666666666,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-02",
+   "n_gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "meta-fy2023": true,
+    "googl-fy2024": true
+   },
+   "sel5_base": 1.0,
+   "sel5_f1": 1.0,
+   "cov_k3": 0.5,
+   "cov_k5": 1.0,
+   "cov_k7": 1.0,
+   "cov_k10": 1.0,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-03",
+   "n_gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "nvda-fy2025": false,
+    "googl-fy2024": true
+   },
+   "sel5_base": 1.0,
+   "sel5_f1": 1.0,
+   "cov_k3": 0.5,
+   "cov_k5": 0.5,
+   "cov_k7": 0.5,
+   "cov_k10": 0.5,
+   "cov_all_named": 0.5
+  },
+  {
+   "id": "fspread-04",
+   "n_gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "aapl-fy2025": true,
+    "googl-fy2025": true,
+    "meta-fy2024": false
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.0,
+   "cov_k5": 0.3333333333333333,
+   "cov_k7": 0.3333333333333333,
+   "cov_k10": 0.6666666666666666,
+   "cov_all_named": 0.6666666666666666
+  },
+  {
+   "id": "fspread-05",
+   "n_gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "meta-fy2022": true,
+    "googl-fy2023": true,
+    "meta-fy2023": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 1.0,
+   "cov_k3": 0.6666666666666666,
+   "cov_k5": 0.6666666666666666,
+   "cov_k7": 1.0,
+   "cov_k10": 1.0,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-06",
+   "n_gold": 2,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "aapl-fy2024": true,
+    "nvda-fy2026": false
+   },
+   "sel5_base": 1.0,
+   "sel5_f1": 1.0,
+   "cov_k3": 0.5,
+   "cov_k5": 0.5,
+   "cov_k7": 0.5,
+   "cov_k10": 0.5,
+   "cov_all_named": 0.5
+  },
+  {
+   "id": "fspread-07",
+   "n_gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "googl-fy2023": true,
+    "aapl-fy2024": true,
+    "meta-fy2024": true
+   },
+   "sel5_base": 0.3333333333333333,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.3333333333333333,
+   "cov_k5": 0.3333333333333333,
+   "cov_k7": 0.6666666666666666,
+   "cov_k10": 1.0,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-08",
+   "n_gold": 3,
+   "flat_cov": 1.0,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "amzn-fy2024": false,
+    "googl-fy2024": false,
+    "msft-fy2024": true
+   },
+   "sel5_base": 1.0,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.3333333333333333,
+   "cov_k5": 0.3333333333333333,
+   "cov_k7": 0.3333333333333333,
+   "cov_k10": 0.3333333333333333,
+   "cov_all_named": 0.3333333333333333
+  },
+  {
+   "id": "fspread-09",
+   "n_gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "amzn-fy2024": false,
+    "nvda-fy2026": false,
+    "aapl-fy2025": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.0,
+   "cov_k5": 0.0,
+   "cov_k7": 0.0,
+   "cov_k10": 0.3333333333333333,
+   "cov_all_named": 0.3333333333333333
+  },
+  {
+   "id": "fspread-10",
+   "n_gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "msft-fy2024": true,
+    "googl-fy2024": true,
+    "jpm-fy2024": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.3333333333333333,
+   "cov_k3": 0.6666666666666666,
+   "cov_k5": 0.6666666666666666,
+   "cov_k7": 0.6666666666666666,
+   "cov_k10": 0.6666666666666666,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-11",
+   "n_gold": 3,
+   "flat_cov": 0.0,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "jpm-fy2024": true,
+    "amzn-fy2024": true,
+    "amc-fy2024": true
+   },
+   "sel5_base": 0.0,
+   "sel5_f1": 0.0,
+   "cov_k3": 0.0,
+   "cov_k5": 0.0,
+   "cov_k7": 0.0,
+   "cov_k10": 0.0,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-12",
+   "n_gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "aapl-fy2024": true,
+    "meta-fy2024": false,
+    "amc-fy2024": true
+   },
+   "sel5_base": 0.0,
+   "sel5_f1": 0.0,
+   "cov_k3": 0.0,
+   "cov_k5": 0.0,
+   "cov_k7": 0.0,
+   "cov_k10": 0.3333333333333333,
+   "cov_all_named": 0.6666666666666666
+  },
+  {
+   "id": "fspread-13",
+   "n_gold": 3,
+   "flat_cov": 0.3333333333333333,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "amzn-fy2024": true,
+    "googl-fy2025": false,
+    "amzn-fy2023": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.0,
+   "cov_k5": 0.3333333333333333,
+   "cov_k7": 0.6666666666666666,
+   "cov_k10": 0.6666666666666666,
+   "cov_all_named": 0.6666666666666666
+  },
+  {
+   "id": "fspread-14",
+   "n_gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "amc-fy2022": true,
+    "amzn-fy2022": true,
+    "meta-fy2022": true
+   },
+   "sel5_base": 0.6666666666666666,
+   "sel5_f1": 0.6666666666666666,
+   "cov_k3": 0.6666666666666666,
+   "cov_k5": 0.6666666666666666,
+   "cov_k7": 1.0,
+   "cov_k10": 1.0,
+   "cov_all_named": 1.0
+  },
+  {
+   "id": "fspread-15",
+   "n_gold": 2,
+   "flat_cov": 0.5,
+   "dmc_cov": 1.0,
+   "named_cov": 1.0,
+   "hop2": {
+    "amc-fy2024": true,
+    "jpm-fy2023": false
+   },
+   "sel5_base": 1.0,
+   "sel5_f1": 1.0,
+   "cov_k3": 0.0,
+   "cov_k5": 0.5,
+   "cov_k7": 0.5,
+   "cov_k10": 0.5,
+   "cov_all_named": 0.5
+  },
+  {
+   "id": "fspread-16",
+   "n_gold": 3,
+   "flat_cov": 0.6666666666666666,
+   "dmc_cov": 0.6666666666666666,
+   "named_cov": 0.6666666666666666,
+   "hop2": {
+    "aapl-fy2024": true,
+    "nvda-fy2025": true,
+    "googl-fy2024": false
+   },
+   "sel5_base": 0.0,
+   "sel5_f1": 0.0,
+   "cov_k3": 0.0,
+   "cov_k5": 0.0,
+   "cov_k7": 0.0,
+   "cov_k10": 0.3333333333333333,
+   "cov_all_named": 0.3333333333333333
+  }
+ ]
+}

@@ -203,6 +203,49 @@ maintainer call, not a measurement. If v1 ships: description change on
 the corpus feature (convenient with v1.23.0), locked by
 tests/test_tool_descriptions.py, and the n=25 in-sample caveat noted.
 
+## Multi-turn sessions (2026-07-29): the floor is the field value
+
+The single-turn numbers carried a hedge: live agents reading results
+turn-by-turn might do better. Measured with 25 real agentic sessions
+(`scripts/eval_multiturn_fanout.py`: `claude -p` with pdf-mcp mounted as
+a real MCP server over the warmed cache, raw questions, transcripts
+graded by deterministic re-execution, `pdf_read_pages` counted):
+
+- tool calls median 4 (max 9); documents followed up **median 1**
+- per-document re-phrasing: **still zero** (median 1 distinct query
+  per session) — iteration does not produce reformulation either
+- part coverage **61%** vs the 56% single-turn floor; complete 5/25
+
+The hedge is resolved: live multi-turn behavior is statistically the
+single-turn floor. Nothing about seeing results makes agents fan out
+wider or re-query. This removes the last argument for waiting on
+"natural" caller behavior and strengthens the v1-instruction case:
+behavior only moved when the description told it to (k median 2 → 5).
+
+## Cross-corpus replication (2026-07-29): structure holds, plus one new limit
+
+16 independently-authored spread queries over the 24-filing 10-K corpus
+(44 verified labels, 19 filings; `spread_queries.json`,
+`spike_fspread_replication.py`, results in
+`financial_reports/spread_replication_results.json`):
+
+| metric | 10-K | arXiv |
+|---|---|---|
+| docs identified (`doc_match_counts`) | 98% | 93% |
+| flat top-10 coverage | 59% | 75% |
+| fan-out coverage @5 → all-named | 39% → 73% | 65% → 87% |
+| hop-2 ceiling | **75%** | 94% |
+| selection@5 shipped vs decayed-vote | 59% = 59% | 73% > 66% |
+
+Every structural finding replicates: near-total document
+identification, a large flat-response gap, a width dial that roughly
+doubles coverage (+34 points here, larger than arXiv's +22), and no
+ordering variant beating the shipped order. New limit: on 100+-page
+filings, hop-2 with the question query misses the gold page 25% of the
+time even on the right document — page-level retrieval depth, a known
+financial-corpus characteristic, independent of fan-out. The width
+dial's ceiling is corpus-dependent (73% vs 87%) but its slope is not.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

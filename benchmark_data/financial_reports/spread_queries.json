@@ -1,0 +1,380 @@
+{
+  "queries": [
+    {
+      "id": "fspread-01",
+      "class": "spread",
+      "query": "Which filers describe investing in quantum computing as a frontier technology?",
+      "labels": [
+        {
+          "doc": "googl-fy2025",
+          "page": 5,
+          "gain": 2,
+          "evidence": "other frontier technologies such as quantum computing"
+        },
+        {
+          "doc": "msft-fy2025",
+          "page": 4,
+          "gain": 2,
+          "evidence": "quantum chip with a topological core"
+        },
+        {
+          "doc": "jpm-fy2024",
+          "page": 62,
+          "gain": 2,
+          "evidence": "(AI) and quantum computing research"
+        }
+      ]
+    },
+    {
+      "id": "fspread-02",
+      "class": "spread",
+      "query": "When did Meta and Alphabet each begin paying a cash dividend to shareholders?",
+      "labels": [
+        {
+          "doc": "meta-fy2023",
+          "page": 58,
+          "gain": 2,
+          "evidence": "On February 1, 2024 we announced the initiation of our first ever"
+        },
+        {
+          "doc": "googl-fy2024",
+          "page": 24,
+          "gain": 2,
+          "evidence": "we announced the approval of our cash dividend program"
+        }
+      ]
+    },
+    {
+      "id": "fspread-03",
+      "class": "spread",
+      "query": "How much additional share repurchase authorization did the boards of Nvidia and Alphabet approve during 2024?",
+      "labels": [
+        {
+          "doc": "nvda-fy2025",
+          "page": 33,
+          "gain": 2,
+          "evidence": "approved an additional $50 billion to our share repurchase authorization"
+        },
+        {
+          "doc": "googl-fy2024",
+          "page": 44,
+          "gain": 2,
+          "evidence": "Alphabet authorized the company to repurchase up to an additional $70.0"
+        }
+      ]
+    },
+    {
+      "id": "fspread-04",
+      "class": "spread",
+      "query": "Which filers are under investigation or facing new compliance obligations under the EU Digital Markets Act?",
+      "labels": [
+        {
+          "doc": "aapl-fy2025",
+          "page": 21,
+          "gain": 2,
+          "evidence": "Digital Markets Act Investigations"
+        },
+        {
+          "doc": "googl-fy2025",
+          "page": 21,
+          "gain": 2,
+          "evidence": "Digital Markets Act, which requires in-scope companies to obtain user consent"
+        },
+        {
+          "doc": "meta-fy2024",
+          "page": 55,
+          "gain": 2,
+          "evidence": "requirements under Article 5(2) of the Digital Markets Act"
+        }
+      ]
+    },
+    {
+      "id": "fspread-05",
+      "class": "spread",
+      "query": "What did the 2022 and 2023 workforce reductions at Meta and Alphabet involve, and what charges did they produce?",
+      "labels": [
+        {
+          "doc": "meta-fy2022",
+          "page": 12,
+          "gain": 2,
+          "evidence": "announced a layoff of approximately 11,000 employees"
+        },
+        {
+          "doc": "googl-fy2023",
+          "page": 40,
+          "gain": 2,
+          "evidence": "charges related to the reduction in force and our office space optimization"
+        },
+        {
+          "doc": "meta-fy2023",
+          "page": 105,
+          "gain": 1,
+          "evidence": "announced three rounds of planned layoffs to further reduce our company size"
+        }
+      ]
+    },
+    {
+      "id": "fspread-06",
+      "class": "spread",
+      "query": "Which filers depend on single or limited supply sources or Asia-concentrated foundries for critical components?",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "page": 6,
+          "gain": 2,
+          "evidence": "components are currently obtained from single or limited sources"
+        },
+        {
+          "doc": "nvda-fy2026",
+          "page": 8,
+          "gain": 2,
+          "evidence": "foundries, such as Taiwan Semiconductor Manufacturing Company Limited, or TSMC"
+        }
+      ]
+    },
+    {
+      "id": "fspread-07",
+      "class": "spread",
+      "query": "What antitrust actions do Google, Apple, and Meta each face from the DOJ or FTC?",
+      "labels": [
+        {
+          "doc": "googl-fy2023",
+          "page": 21,
+          "gain": 2,
+          "evidence": "various U.S. states, and other plaintiffs have filed several antitrust lawsuits"
+        },
+        {
+          "doc": "aapl-fy2024",
+          "page": 21,
+          "gain": 2,
+          "evidence": "the U.S. Department of Justice (the \u201cDOJ\u201d) and a number of state and district attorneys general"
+        },
+        {
+          "doc": "meta-fy2024",
+          "page": 42,
+          "gain": 2,
+          "evidence": "a lawsuit by the FTC alleging that we violated antitrust laws"
+        }
+      ]
+    },
+    {
+      "id": "fspread-08",
+      "class": "spread",
+      "query": "How fast did cloud revenue grow at Amazon, Alphabet, and Microsoft in their most recent fiscal years?",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "page": 37,
+          "gain": 2,
+          "evidence": "AWS sales increased 19% in 2024, compared to the prior year"
+        },
+        {
+          "doc": "googl-fy2024",
+          "page": 38,
+          "gain": 2,
+          "evidence": "Google Cloud revenues increased $10.1 billion from 2023 to 2024"
+        },
+        {
+          "doc": "msft-fy2024",
+          "page": 31,
+          "gain": 2,
+          "evidence": "Microsoft Cloud revenue increased 23% to $137.4 billion"
+        }
+      ]
+    },
+    {
+      "id": "fspread-09",
+      "class": "spread",
+      "query": "How many employees do Amazon, Nvidia, and Apple report in their most recent annual filings?",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "page": 16,
+          "gain": 2,
+          "evidence": "approximately 1,556,000 full-time and part-time employees"
+        },
+        {
+          "doc": "nvda-fy2026",
+          "page": 11,
+          "gain": 2,
+          "evidence": "approximately 42,000 employees in 38 countries"
+        },
+        {
+          "doc": "aapl-fy2025",
+          "page": 7,
+          "gain": 2,
+          "evidence": "approximately 166,000 full-time equivalent employees"
+        }
+      ]
+    },
+    {
+      "id": "fspread-10",
+      "class": "spread",
+      "query": "Which filers have committed to net-zero, carbon-negative, or zero-emissions operations targets?",
+      "labels": [
+        {
+          "doc": "msft-fy2024",
+          "page": 17,
+          "gain": 2,
+          "evidence": "committed to being a carbon negative, water positive, and zero waste company by 2030"
+        },
+        {
+          "doc": "googl-fy2024",
+          "page": 10,
+          "gain": 2,
+          "evidence": "an ambitious goal to reach net-zero emissions across all of our operations and value chain"
+        },
+        {
+          "doc": "jpm-fy2024",
+          "page": 63,
+          "gain": 1,
+          "evidence": "with net zero operational emissions"
+        }
+      ]
+    },
+    {
+      "id": "fspread-11",
+      "class": "spread",
+      "query": "Which filers describe generative AI as transformative for their business or a competitive threat?",
+      "labels": [
+        {
+          "doc": "jpm-fy2024",
+          "page": 62,
+          "gain": 2,
+          "evidence": "we launched our flagship generative AI"
+        },
+        {
+          "doc": "amzn-fy2024",
+          "page": 6,
+          "gain": 2,
+          "evidence": "Generative AI is going to reinvent virtually every customer experience we know"
+        },
+        {
+          "doc": "amc-fy2024",
+          "page": 25,
+          "gain": 2,
+          "evidence": "new technology, including generative AI, is"
+        }
+      ]
+    },
+    {
+      "id": "fspread-12",
+      "class": "spread",
+      "query": "Which filers warn that climate change is making natural disasters or severe weather more frequent?",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "page": 9,
+          "gain": 2,
+          "evidence": "certain types of natural disasters and extreme weather occurring more frequently"
+        },
+        {
+          "doc": "meta-fy2024",
+          "page": 29,
+          "gain": 2,
+          "evidence": "certain types of natural disasters occurring more frequently or with more intense"
+        },
+        {
+          "doc": "amc-fy2024",
+          "page": 20,
+          "gain": 2,
+          "evidence": "severe weather events or other events caused by climate change disrupting or limiting operations"
+        }
+      ]
+    },
+    {
+      "id": "fspread-13",
+      "class": "spread",
+      "query": "What custom-designed chips do Amazon and Alphabet highlight in their filings?",
+      "labels": [
+        {
+          "doc": "amzn-fy2024",
+          "page": 2,
+          "gain": 2,
+          "evidence": "our latest custom AI silicon (Trainium2)"
+        },
+        {
+          "doc": "googl-fy2025",
+          "page": 5,
+          "gain": 2,
+          "evidence": "our own custom-built Tensor Processing Units (TPUs)"
+        },
+        {
+          "doc": "amzn-fy2023",
+          "page": 3,
+          "gain": 1,
+          "evidence": "CPU chips (Graviton4), which provides up to 30% better compute performance"
+        }
+      ]
+    },
+    {
+      "id": "fspread-14",
+      "class": "spread",
+      "query": "How did filers describe lingering COVID-19 pandemic effects on their businesses in fiscal 2022?",
+      "labels": [
+        {
+          "doc": "amc-fy2022",
+          "page": 7,
+          "gain": 2,
+          "evidence": "COVID-19 pandemic resulted in the suspension of new movie production"
+        },
+        {
+          "doc": "amzn-fy2022",
+          "page": 34,
+          "gain": 2,
+          "evidence": "COVID-19 pandemic, global supply chain constraints, and global economic"
+        },
+        {
+          "doc": "meta-fy2022",
+          "page": 12,
+          "gain": 2,
+          "evidence": "we expect the lasting effects of the global COVID-19 pandemic will change how we work"
+        }
+      ]
+    },
+    {
+      "id": "fspread-15",
+      "class": "spread",
+      "query": "How are AMC and JPMorgan each exposed to rising interest rates?",
+      "labels": [
+        {
+          "doc": "amc-fy2024",
+          "page": 22,
+          "gain": 2,
+          "evidence": "we are exposed to fluctuations in interest rates because our term loans have variable rates of interest"
+        },
+        {
+          "doc": "jpm-fy2023",
+          "page": 22,
+          "gain": 2,
+          "evidence": "would not only come with higher interest rates but"
+        }
+      ]
+    },
+    {
+      "id": "fspread-16",
+      "class": "spread",
+      "query": "Which filers use forward or derivative contracts to hedge foreign exchange exposure?",
+      "labels": [
+        {
+          "doc": "aapl-fy2024",
+          "page": 19,
+          "gain": 2,
+          "evidence": "uses derivative instruments, such as foreign currency forward and option contracts"
+        },
+        {
+          "doc": "nvda-fy2025",
+          "page": 45,
+          "gain": 2,
+          "evidence": "related to our foreign exchange contracts before tax effect"
+        },
+        {
+          "doc": "googl-fy2024",
+          "page": 4,
+          "gain": 1,
+          "evidence": "hedging activities under our foreign exchange risk"
+        }
+      ]
+    }
+  ]
+}

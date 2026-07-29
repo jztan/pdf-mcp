@@ -2,19 +2,18 @@
 """
 scripts/benchmark_warm_concurrency.py
 
-Spike: does concurrent (process-pool) warm beat the current sequential
-`corpus.warm_docs`, and by how much, on a real corpus?
-
-Zero production-code changes. This script prototypes a concurrent warm
-(extraction in workers, ALL SQLite writes in the parent, mirroring the
-project's all-writes-in-parent rule) and times it against the real
-sequential `warm_docs`.
+Measures the SHIPPED concurrent `corpus.warm_docs` (process-pool extract,
+all SQLite writes in the parent) against its own sequential path, on a
+real corpus. Every arm below calls the real `warm_docs`; the pool size is
+forced via the shipped controls (`corpus.WARM_DOC_GATE` +
+`PDF_MCP_MAX_WORKERS`), not a prototype implementation.
 
 Two modes:
   --mode text        text-only warm (default)
-  --mode embeddings  text + embeddings warm (requires the [semantic] extra;
-                     concurrent variant extracts in workers, then does ONE
-                     parent-side batched encode)
+  --mode embeddings  text + embeddings warm via the real warm_docs
+                     (requires the [semantic] extra); extraction runs in
+                     spawn workers, per-doc encode and all SQLite writes
+                     happen in the parent (_finalize_doc)
 
 Correctness note: pdf-mcp's column-aware `extract_text_from_page` is itself
 nondeterministic on some multi-column pages (an intermittent PyMuPDF
@@ -34,96 +33,44 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 import time
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-import pymupdf  # noqa: E402
+from pdf_mcp import corpus as corpus_mod  # noqa: E402
 from pdf_mcp import embedder  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.config import PDFConfig  # noqa: E402
-from pdf_mcp.corpus import warm_docs  # noqa: E402  (sequential baseline)
-from pdf_mcp.extractor import (  # noqa: E402
-    extract_metadata,
-    extract_text_from_page,
-    extract_toc,
-)
+from pdf_mcp.corpus import warm_docs  # noqa: E402
 
 MANIFEST = REPO / "benchmark_data" / "corpus_search" / "manifest.json"
-WORKER_COUNTS = [1, 2, 4, 8]
+TEXT_WORKER_COUNTS = [2, 4, 8]
+EMBEDDINGS_WORKER_COUNTS = [2, 4]
 
 
-# Top-level, picklable worker (spawn-safe on macOS). A child re-imports this
-# module, so this must stay at module scope and re-import only PyMuPDF-level
-# deps (cheap), exactly like parallel.py's per-page workers.
-def _extract_doc(path: str) -> tuple:
-    """Extract everything one doc needs, in a worker. No cache writes here."""
-    doc = pymupdf.open(path)
+def run_warm(paths, cache, mode, model, embed_fn, workers):
+    """One warm pass via the real warm_docs, pool size forced via the
+    shipped controls (gate + PDF_MCP_MAX_WORKERS)."""
+    corpus_mod.WARM_DOC_GATE = 1 if workers > 1 else 10**9
+    os.environ["PDF_MCP_MAX_WORKERS"] = str(workers)
     try:
-        page_count = len(doc)
-        metadata = extract_metadata(doc)
-        toc = extract_toc(doc)
-        texts: dict[int, str] = {}
-        coverage: list[dict[str, int]] = []
-        for pn in range(page_count):
-            page = doc[pn]
-            texts[pn] = extract_text_from_page(page, sort_by_position=True)
-            coverage.append(
-                {
-                    "page": pn + 1,
-                    "text_chars": len(page.get_text()),
-                    "raster_images": len({img[0] for img in page.get_images()}),
-                }
-            )
+        if mode == "text":
+            return warm_docs(paths, budget_seconds=10_000, cache=cache)
+        return warm_docs(
+            paths,
+            budget_seconds=10_000,
+            cache=cache,
+            embeddings=True,
+            model_name=model,
+            embed=embed_fn,
+        )
     finally:
-        doc.close()
-    return path, page_count, metadata, toc, texts, coverage
-
-
-def warm_concurrent_text(paths: list[str], cache: PDFCache, workers: int) -> None:
-    """Concurrent text warm: extract in workers, write in parent."""
-    with ProcessPoolExecutor(max_workers=workers) as ex:
-        for path, page_count, metadata, toc, texts, _cov in ex.map(
-            _extract_doc, paths
-        ):
-            cache.save_metadata(path, page_count, metadata, toc, text_coverage=_cov)
-            cache.save_pages_text(path, texts)
-
-
-def warm_concurrent_embeddings(
-    paths: list[str], cache: PDFCache, workers: int, model: str
-) -> None:
-    """Concurrent embeddings warm: extract in workers, ONE parent-side
-    batched encode, then write. Tests the parent-batched-embeddings design."""
-    extracted = []
-    with ProcessPoolExecutor(max_workers=workers) as ex:
-        for path, page_count, metadata, toc, texts, cov in ex.map(
-            _extract_doc, paths
-        ):
-            cache.save_metadata(path, page_count, metadata, toc, text_coverage=cov)
-            cache.save_pages_text(path, texts)
-            extracted.append((path, texts))
-    # Gather every non-empty page across all docs, encode in one batch.
-    flat_texts: list[str] = []
-    index: list[tuple[str, int]] = []
-    for path, texts in extracted:
-        for pn, t in sorted(texts.items()):
-            if t.strip():
-                index.append((path, pn))
-                flat_texts.append(t)
-    if not flat_texts:
-        return
-    vecs = embedder.encode(flat_texts, model)
-    per_doc: dict[str, dict[int, bytes]] = {}
-    for (path, pn), v in zip(index, vecs):
-        per_doc.setdefault(path, {})[pn] = v.tobytes()
-    for path, blobs in per_doc.items():
-        cache.save_page_embeddings(path, blobs, model)
+        os.environ.pop("PDF_MCP_MAX_WORKERS", None)
 
 
 def _cold_cache(root: Path, tag: str) -> PDFCache:
@@ -145,9 +92,7 @@ def _corruption_check(
         if len(got) != len(want):
             corrupt += 1
             continue
-        bad = any(
-            (want[pn].strip() and not got.get(pn, "").strip()) for pn in want
-        )
+        bad = any((want[pn].strip() and not got.get(pn, "").strip()) for pn in want)
         if bad:
             corrupt += 1
         if got != want:
@@ -163,9 +108,7 @@ def main() -> int:
 
     manifest = json.loads(MANIFEST.read_text())
     paths = [
-        str(REPO / d["path"])
-        for d in manifest["docs"]
-        if (REPO / d["path"]).exists()
+        str(REPO / d["path"]) for d in manifest["docs"] if (REPO / d["path"]).exists()
     ][: args.docs]
     if not paths:
         print("No corpus PDFs available locally; aborting.")
@@ -180,52 +123,50 @@ def main() -> int:
     def embed_fn(texts):
         return [v.tobytes() for v in embedder.encode(texts, model)]
 
+    worker_counts = (
+        TEXT_WORKER_COUNTS if args.mode == "text" else EMBEDDINGS_WORKER_COUNTS
+    )
+
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         seq_cache = _cold_cache(root, "seq")
         t0 = time.perf_counter()
-        if args.mode == "text":
-            warm = warm_docs(paths, budget_seconds=10_000, cache=seq_cache)
-        else:
-            warm = warm_docs(
-                paths, budget_seconds=10_000, cache=seq_cache,
-                embeddings=True, model_name=model, embed=embed_fn,
-            )
+        warm = run_warm(paths, seq_cache, args.mode, model, embed_fn, workers=1)
         seq_s = time.perf_counter() - t0
         pages = {d["path"]: d["pages"] for d in warm["docs"]}
         total_pages = sum(pages.values())
 
         rows = [("sequential (warm_docs)", seq_s, 0, 0)]
-        for k in WORKER_COUNTS:
+        for k in worker_counts:
             cache = _cold_cache(root, f"c{k}")
             t0 = time.perf_counter()
-            if args.mode == "text":
-                warm_concurrent_text(paths, cache, k)
-            else:
-                warm_concurrent_embeddings(paths, cache, k, model)
+            run_warm(paths, cache, args.mode, model, embed_fn, workers=k)
             secs = time.perf_counter() - t0
             corrupt, differ = _corruption_check(cache, seq_cache, paths, pages)
             rows.append((f"concurrent (workers={k})", secs, corrupt, differ))
 
-    print(f"\nMode: {args.mode} | Corpus: {len(paths)} docs, {total_pages} "
-          f"pages | cold cache each run\n")
-    print(f"{'config':26s} {'wall(s)':>9s} {'docs/s':>8s} {'vs seq':>8s} "
-          f"{'corrupt':>8s} {'txt-diff':>9s}")
+    print(
+        f"\nMode: {args.mode} | Corpus: {len(paths)} docs, {total_pages} "
+        f"pages | cold cache each run\n"
+    )
+    print(
+        f"{'config':26s} {'wall(s)':>9s} {'docs/s':>8s} {'vs seq':>8s} "
+        f"{'corrupt':>8s} {'txt-diff':>9s}"
+    )
     print("-" * 74)
-    w1 = None
     for name, secs, corrupt, differ in rows:
-        if "workers=1)" in name:
-            w1 = secs
         info = "" if name.startswith("seq") else f"{corrupt:>8d} {differ:>9d}"
-        print(f"{name:26s} {secs:9.1f} {len(paths)/secs:8.2f} "
-              f"{seq_s/secs:7.2f}x {info}")
+        print(
+            f"{name:26s} {secs:9.1f} {len(paths)/secs:8.2f} "
+            f"{seq_s/secs:7.2f}x {info}"
+        )
     best = min(r[1] for r in rows if "workers" in r[0])
     print(f"\nbest speedup vs sequential warm_docs: {seq_s/best:.2f}x")
-    if w1:
-        print(f"pure concurrency scaling (workers=1 -> best): {w1/best:.2f}x")
-    print("corrupt = wrong page count or empty-where-ref-had-text (real bug "
-          "signal). txt-diff = docs whose text differs (extractor "
-          "nondeterminism, expected, not corruption).")
+    print(
+        "corrupt = wrong page count or empty-where-ref-had-text (real bug "
+        "signal). txt-diff = docs whose text differs (extractor "
+        "nondeterminism, expected, not corruption)."
+    )
     return 0
 
 

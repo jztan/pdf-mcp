@@ -1,10 +1,13 @@
 """Tests for corpus resolution and warm orchestration (corpus.py)."""
 
+import pickle
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import pymupdf
 
 from pdf_mcp import corpus
+from pdf_mcp.extractor import _warm_extract_worker
 
 
 class TestResolveCorpus:
@@ -97,6 +100,242 @@ class SteppingClock:
 
 def _files(corpus_dir):
     return corpus.resolve_corpus(str(corpus_dir))["files"]
+
+
+class TestWarmWorkerCount:
+    def test_below_gate_is_sequential(self):
+        assert corpus._warm_worker_count(3, embeddings=False) == 1
+
+    def test_text_cap_is_8(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        assert corpus._warm_worker_count(100, embeddings=False) == 8
+
+    def test_embeddings_cap_is_4(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        assert corpus._warm_worker_count(100, embeddings=True) == 4
+
+    def test_env_forces_sequential(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        assert corpus._warm_worker_count(100, embeddings=False) == 1
+
+
+class TestConcurrentWarm:
+    def _force_pool(self, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+
+    def test_concurrent_matches_sequential(self, corpus_dir, tmp_path, monkeypatch):
+        """Corruption invariant + exact equality (single-column fixtures)."""
+        from pdf_mcp.cache import PDFCache
+
+        seq_cache = PDFCache(cache_dir=tmp_path / "seq", ttl_hours=1)
+        con_cache = PDFCache(cache_dir=tmp_path / "con", ttl_hours=1)
+        files = _files(corpus_dir)
+
+        corpus.warm_docs(files, 600, seq_cache, clock=SteppingClock(0))
+        self._force_pool(monkeypatch)
+
+        # Spy on pool creation so this test cannot silently degrade into
+        # sequential-vs-sequential (and stay green) if _force_pool's
+        # monkeypatching ever stops taking effect.
+        pool_calls = []
+        real_pool = corpus.ProcessPoolExecutor
+
+        def spy(*args, **kwargs):
+            pool_calls.append((args, kwargs))
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        out = corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
+
+        assert pool_calls, "expected _warm_concurrent to create a pool"
+        assert out["warmed_this_call"] == 3
+        assert out["skipped"] == []
+        for path in files:
+            want_meta = seq_cache.get_metadata(path)
+            got_meta = con_cache.get_metadata(path)
+            assert got_meta["page_count"] == want_meta["page_count"]
+            assert got_meta["text_coverage"] == want_meta["text_coverage"]
+            # TOC and PDF-native metadata are deterministic extraction
+            # output (independent of which process did the extracting),
+            # so they must match exactly between the sequential and
+            # concurrent caches. file_path/file_size/accessed_at are
+            # cache-bookkeeping fields, not asserted here.
+            assert got_meta["toc"] == want_meta["toc"]
+            assert got_meta["metadata"] == want_meta["metadata"]
+            pages = list(range(want_meta["page_count"]))
+            want = seq_cache.get_pages_text(path, pages)
+            got = con_cache.get_pages_text(path, pages)
+            # Fixtures are single-column: exact equality is valid here.
+            assert got == want
+
+    def test_pool_uses_spawn_context(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        captured = {}
+        real_pool = corpus.ProcessPoolExecutor
+
+        def spy(*args, **kwargs):
+            captured.update(kwargs)
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert captured["mp_context"].get_start_method() == "spawn"
+
+    def test_small_corpus_never_creates_pool(self, corpus_dir, cache, monkeypatch):
+        # 3 docs < WARM_DOC_GATE (4): must stay sequential.
+        def boom(*args, **kwargs):
+            raise AssertionError("pool created for a small corpus")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+
+    def test_env_1_forces_sequential(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+
+        def boom(*args, **kwargs):
+            raise AssertionError("pool created despite PDF_MCP_MAX_WORKERS=1")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+
+    def test_budget_trip_stops_submissions(self, corpus_dir, cache, monkeypatch):
+        # Clock steps 6s/call, budget 10s: submit-checks read 6 (charlie,
+        # 1p) then 12 (> 10, stop). Exactly the sequential expectations.
+        self._force_pool(monkeypatch)
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
+        assert out["warmed_this_call"] == 1
+        assert len(out["unprocessed"]) == 2
+        assert out["budget_exhausted"] is True
+        warmed = [d for d in out["docs"] if d["status"] == "warmed"]
+        assert Path(warmed[0]["path"]).name == "charlie.pdf"
+
+    def test_in_flight_docs_drain_after_trip(self, corpus_dir, cache, monkeypatch):
+        # Steps 4s, budget 10s: checks read 4 (submit charlie), 8 (submit
+        # alpha), 12 (trip). Both in-flight docs still finalize.
+        self._force_pool(monkeypatch)
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(4))
+        assert out["warmed_this_call"] == 2
+        assert [Path(p).name for p in out["unprocessed"]] == ["bravo.pdf"]
+        assert out["budget_exhausted"] is True
+
+    def test_resume_completes_after_trip(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 10, cache, clock=SteppingClock(6))
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["unprocessed"] == []
+        assert out["budget_exhausted"] is False
+        assert len(out["docs"]) == 3
+
+    def test_corrupt_doc_skipped_under_pool(self, corpus_dir, cache, monkeypatch):
+        # Caught by warm_docs's parent-side pymupdf.open() probe, before
+        # _warm_concurrent ever sees the doc -- this pins the probe-path
+        # contract, not the pool's own post-submission failure branch
+        # (see test_post_submission_failure_lands_in_skipped for that).
+        self._force_pool(monkeypatch)
+        bad = corpus_dir / "delta.pdf"
+        bad.write_bytes(b"%PDF-1.4 truncated garbage")
+        # corpus_dir already contains delta.pdf at this point, so
+        # resolve_corpus (via _files) picks it up on its own; appending
+        # it again would double-count the same path in `skipped`.
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert len(out["skipped"]) == 1
+        assert "delta.pdf" in out["skipped"][0]["path"]
+
+    def test_post_submission_failure_lands_in_skipped(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        # Pins the except-branch inside _warm_concurrent itself (a
+        # failure from fut.result()/_finalize_doc after a doc's
+        # extraction already succeeded in a real spawn worker), which
+        # the probe-path corrupt-doc test above cannot reach.
+        self._force_pool(monkeypatch)
+        files = _files(corpus_dir)
+        target = next(f for f in files if f.endswith("alpha.pdf"))
+        real_finalize = corpus._finalize_doc
+
+        def failing(path, *args, **kwargs):
+            if path == target:
+                raise ValueError("simulated finalize failure")
+            return real_finalize(path, *args, **kwargs)
+
+        monkeypatch.setattr(corpus, "_finalize_doc", failing)
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 2
+        assert len(out["skipped"]) == 1
+        assert "alpha.pdf" in out["skipped"][0]["path"]
+        assert "simulated finalize failure" in out["skipped"][0]["reason"]
+
+    def test_broken_pool_falls_back_sequential(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+
+        class BrokenPool:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def submit(self, fn, *args):
+                raise BrokenProcessPool("worker died")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", BrokenPool)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert out["skipped"] == []
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+
+    def test_ocr_text_preserved_under_pool(self, cache, tmp_path, monkeypatch):
+        # Mirror test_warm_preserves_cached_ocr_text, pool forced. Build
+        # 4 one-page docs so the pool actually engages; give one of them
+        # a cached OCR page, then warm and assert the OCR text survived.
+        self._force_pool(monkeypatch)
+        d = tmp_path / "ocr_corpus"
+        d.mkdir()
+        paths = []
+        for i in range(4):
+            doc = pymupdf.open()
+            doc.new_page()  # empty page: native extraction yields ""
+            p = str(d / f"scan{i}.pdf")
+            doc.save(p)
+            doc.close()
+            paths.append(p)
+        cache.save_page_text(paths[0], 0, "ocr recovered text", source="ocr")
+        out = corpus.warm_docs(paths, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 4
+        assert cache.get_pages_text(paths[0], [0])[0] == "ocr recovered text"
+
+    def test_embeddings_concurrent_matches_request(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        self._force_pool(monkeypatch)
+
+        def fake_embed(texts):
+            return [b"\x00\x00\x80?" for _ in texts]  # 1.0 float32 LE
+
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=fake_embed,
+            clock=SteppingClock(0),
+        )
+        assert out["warmed_this_call"] == 3
+        assert all(d["embeddings_cached"] for d in out["docs"])
 
 
 class TestWarmDocs:
@@ -514,3 +753,20 @@ class TestCorpusFusion:
         b = [("a.pdf", 9)]
         scored = corpus.rrf_fuse_two_rankings_scored(a, b)
         assert [item for item, _s in scored] == corpus.rrf_fuse_two_rankings(a, b)
+
+
+class TestWarmExtractWorker:
+    def test_payload_shape(self, corpus_dir):
+        path = str(corpus_dir / "alpha.pdf")
+        page_count, metadata, toc, texts, coverage = _warm_extract_worker(path)
+        assert page_count == 2
+        assert set(texts) == {0, 1}
+        assert all(t.strip() for t in texts.values())
+        assert [c["page"] for c in coverage] == [1, 2]
+        assert isinstance(metadata, dict)
+        assert isinstance(toc, list)
+
+    def test_picklable_for_spawn(self):
+        # Module-scope function: pickles by qualified name, spawn-safe.
+        clone = pickle.loads(pickle.dumps(_warm_extract_worker))
+        assert clone is _warm_extract_worker

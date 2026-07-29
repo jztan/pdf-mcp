@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every matched document on questions spanning several documents.
   Benchmarked: hybrid NDCG@10 0.674 / doc-hit@3 1.000 on a 100-doc
   corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial filings
-  (details in `benchmark_data/`).
+  (details in `benchmark_data/`). Warming extracts documents concurrently
+  on larger corpora (process pool, explicit spawn on every OS; up to 8
+  workers for text, 4 with embeddings), measured ~3.9x faster text warm
+  at the 100-document cap; small corpora stay sequential.
 
 ### Fixed
 - Paragraph-excerpt block scoring is now hyphen-insensitive: a query token

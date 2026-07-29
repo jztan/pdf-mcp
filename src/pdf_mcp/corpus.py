@@ -10,13 +10,17 @@ caller; this module owns no storage of its own.
 
 from __future__ import annotations
 
+import multiprocessing
 import time
+from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import Any, Callable
 
 import pymupdf
 
-from .extractor import extract_metadata, extract_text_from_page, extract_toc
+from .extractor import _warm_extract_worker
+from .parallel import resolve_workers
 
 __all__ = [
     "CORPUS_MAX_FILES",
@@ -39,6 +43,15 @@ CORPUS_MAX_FILES = 100
 # fusion and single-doc hybrid fusion share one k. Design decided by the
 # stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
 CORPUS_RRF_K = 60
+
+# Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
+# Below the gate, sequential is faster (spawn/IPC overhead outweighs the
+# win). Text warm scales to 8 workers (3.87x); embeddings warm is
+# encode-bound and plateaus at ~4 workers (1.62x; extra processes
+# oversubscribe the encode's own threads).
+WARM_DOC_GATE = 4
+WARM_TEXT_CAP = 8
+WARM_EMBED_CAP = 4
 
 
 def _validate_file(
@@ -176,40 +189,23 @@ def _cached_pages(
     return pages
 
 
-def _warm_one_doc(
+def _finalize_doc(
     path: str,
+    page_count: int,
+    metadata: dict[str, Any],
+    toc: list[Any],
+    texts: dict[int, str],
+    coverage: list[dict[str, int]],
     cache: Any,
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
 ) -> int:
-    """Extract everything for one doc, then write to cache.
+    """Parent-side tail of warming one doc: OCR preservation, per-doc
+    encode, then the three cache writes together (atomic per doc).
 
-    Extraction completes fully before any write, so a failure leaves
-    the cache untouched (atomic per doc). Coverage counts use raw
-    ``get_text()`` chars, matching pdf_info's coverage scan.
+    Always runs in the parent process — every SQLite touch is here.
     """
-    doc = pymupdf.open(path)
-    blobs: dict[int, bytes] = {}
-    try:
-        page_count = len(doc)
-        metadata = extract_metadata(doc)
-        toc = extract_toc(doc)
-        coverage: list[dict[str, int]] = []
-        texts: dict[int, str] = {}
-        for pn in range(page_count):
-            page = doc[pn]
-            texts[pn] = extract_text_from_page(page, sort_by_position=True)
-            coverage.append(
-                {
-                    "page": pn + 1,
-                    "text_chars": len(page.get_text()),
-                    "raster_images": len({img[0] for img in page.get_images()}),
-                }
-            )
-    finally:
-        doc.close()
-
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
     # this doc was never "fully warm" (e.g. missing metadata/text_coverage
@@ -230,6 +226,7 @@ def _warm_one_doc(
                 texts[pn] = cached_text
                 preserved.add(pn)
 
+    blobs: dict[int, bytes] = {}
     if embeddings:
         assert embed is not None and model_name is not None
         non_empty = {pn: t for pn, t in texts.items() if t.strip()}
@@ -247,6 +244,174 @@ def _warm_one_doc(
     return page_count
 
 
+def _warm_one_doc(
+    path: str,
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+) -> int:
+    """Extract everything for one doc, then write to cache.
+
+    Extraction completes fully before any write, so a failure leaves
+    the cache untouched (atomic per doc).
+    """
+    payload = _warm_extract_worker(path)
+    return _finalize_doc(path, *payload, cache, embeddings, model_name, embed)
+
+
+def _warm_worker_count(n_uncached: int, embeddings: bool) -> int:
+    """Pool size for warming, or 1 for sequential (gate/env via
+    parallel.resolve_workers, mode-dependent cap)."""
+    cap = WARM_EMBED_CAP if embeddings else WARM_TEXT_CAP
+    return resolve_workers(n_uncached, WARM_DOC_GATE, cap=cap)
+
+
+def _warm_sequential(
+    pending: list[tuple[str, int]],
+    budget_seconds: float,
+    start: float,
+    clock: Callable[[], float],
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+    docs: list[dict[str, Any]],
+    skipped: list[dict[str, str]],
+    emb_cached: Callable[[str], bool],
+) -> tuple[list[str], bool, int]:
+    """Sequential warm loop (today's semantics, verbatim): clock checked
+    before each doc; per-doc failure -> skipped; appends to docs/skipped
+    in place. Returns (unprocessed, budget_exhausted, warmed)."""
+    warmed = 0
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    for i, (path, _pages) in enumerate(pending):
+        if clock() - start > budget_seconds:
+            unprocessed = [p for p, _ in pending[i:]]
+            budget_exhausted = True
+            break
+        try:
+            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
+        except Exception as e:
+            skipped.append({"path": path, "reason": f"warm failed: {e}"})
+            continue
+        warmed += 1
+        docs.append(
+            {
+                "path": path,
+                "status": "warmed",
+                "pages": page_count,
+                "embeddings_cached": emb_cached(path),
+            }
+        )
+    return unprocessed, budget_exhausted, warmed
+
+
+def _warm_concurrent(
+    uncached: list[tuple[str, int]],
+    workers: int,
+    budget_seconds: float,
+    start: float,
+    clock: Callable[[], float],
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+    docs: list[dict[str, Any]],
+    skipped: list[dict[str, str]],
+    emb_cached: Callable[[str], bool],
+) -> tuple[list[str], bool, int]:
+    """Pool-scheduled warm: extraction in spawn workers, finalize in parent.
+
+    Spawn context explicitly, on every OS: uniform cross-platform
+    behavior, matches the benchmark, and avoids forking a parent whose
+    onnxruntime threads (embeddings model) are not fork-safe. Budget is
+    checked before each submission; on expiry in-flight docs drain and
+    finalize (overshoot bounded by the worker count). Workers never
+    touch SQLite. On BrokenProcessPool, or an OSError from pool
+    creation/submission or a worker dying on an OS-level failure
+    (fd/semaphore exhaustion -- EMFILE/EAGAIN surface here, not as
+    BrokenProcessPool, since workers spawn lazily inside submit()),
+    the un-handled remainder finishes sequentially in-parent rather
+    than escaping the tool.
+    """
+    warmed = 0
+    pending = list(uncached)
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    handled: set[str] = set()
+    try:
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+            in_flight: dict[Future[Any], str] = {}
+            while pending or in_flight:
+                while pending and len(in_flight) < workers:
+                    if clock() - start > budget_seconds:
+                        budget_exhausted = True
+                        unprocessed = [p for p, _ in pending]
+                        pending = []
+                        break
+                    path, _pages = pending.pop(0)
+                    fut = pool.submit(_warm_extract_worker, path)
+                    in_flight[fut] = path
+                if not in_flight:
+                    break
+                done, _ = wait(list(in_flight), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    path = in_flight.pop(fut)
+                    try:
+                        payload = fut.result()
+                        page_count = _finalize_doc(
+                            path, *payload, cache, embeddings, model_name, embed
+                        )
+                    except BrokenProcessPool:
+                        raise
+                    except OSError:
+                        # Worker died on an OS-level failure (not a pool
+                        # crash): treat like BrokenProcessPool -- re-raise
+                        # to trigger the sequential fallback below rather
+                        # than silently skipping just this doc, since the
+                        # same OS pressure likely affects the rest of the
+                        # pool too.
+                        raise
+                    except Exception as e:
+                        handled.add(path)
+                        skipped.append({"path": path, "reason": f"warm failed: {e}"})
+                        continue
+                    handled.add(path)
+                    warmed += 1
+                    docs.append(
+                        {
+                            "path": path,
+                            "status": "warmed",
+                            "pages": page_count,
+                            "embeddings_cached": emb_cached(path),
+                        }
+                    )
+    except (BrokenProcessPool, OSError):
+        # Leaving the `with` block joins in-flight workers (shutdown(wait=
+        # True)); their partial results are discarded and those docs are
+        # re-extracted sequentially below. Bounded by the worker count,
+        # rare path, accepted.
+        remaining = [item for item in uncached if item[0] not in handled]
+        unprocessed, budget_exhausted, seq_warmed = _warm_sequential(
+            remaining,
+            budget_seconds,
+            start,
+            clock,
+            cache,
+            embeddings,
+            model_name,
+            embed,
+            docs,
+            skipped,
+            emb_cached,
+        )
+        return unprocessed, budget_exhausted, warmed + seq_warmed
+    return unprocessed, budget_exhausted, warmed
+
+
 def warm_docs(
     files: list[str],
     budget_seconds: float,
@@ -259,10 +424,14 @@ def warm_docs(
     """Budgeted warm loop over a resolved corpus.
 
     Cached docs are free (never charged against the budget). Uncached
-    docs warm smallest-first, one at a time, atomically; the clock is
-    checked between docs only. Per-doc failures land in ``skipped``
-    and never abort the batch. The returned ``docs`` list is sorted by
-    path so successive envelopes (first warm vs resume) diff cleanly.
+    docs warm smallest-first, atomically per doc; the clock is
+    checked between docs (sequential) or before each submission
+    (concurrent). When the budget expires mid-pool, extractions already
+    in flight still complete and are written, so overshoot is bounded
+    by the worker count rather than a single doc. Per-doc failures land
+    in ``skipped`` and never abort the batch. The returned ``docs``
+    list is sorted by path so successive envelopes (first warm vs
+    resume) diff cleanly.
 
     Each doc row carries ``embeddings_cached``: actual embeddings cache
     state for ``model_name`` (not an echo of the ``embeddings`` request
@@ -300,28 +469,35 @@ def warm_docs(
             skipped.append({"path": path, "reason": f"unreadable: {e}"})
 
     uncached.sort(key=lambda item: item[1])
-
-    unprocessed: list[str] = []
-    budget_exhausted = False
-    warmed = 0
-    for i, (path, _pages) in enumerate(uncached):
-        if clock() - start > budget_seconds:
-            unprocessed = [p for p, _ in uncached[i:]]
-            budget_exhausted = True
-            break
-        try:
-            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
-        except Exception as e:
-            skipped.append({"path": path, "reason": f"warm failed: {e}"})
-            continue
-        warmed += 1
-        docs.append(
-            {
-                "path": path,
-                "status": "warmed",
-                "pages": page_count,
-                "embeddings_cached": _emb_cached(path),
-            }
+    workers = _warm_worker_count(len(uncached), embeddings)
+    if workers <= 1:
+        unprocessed, budget_exhausted, warmed = _warm_sequential(
+            uncached,
+            budget_seconds,
+            start,
+            clock,
+            cache,
+            embeddings,
+            model_name,
+            embed,
+            docs,
+            skipped,
+            _emb_cached,
+        )
+    else:
+        unprocessed, budget_exhausted, warmed = _warm_concurrent(
+            uncached,
+            workers,
+            budget_seconds,
+            start,
+            clock,
+            cache,
+            embeddings,
+            model_name,
+            embed,
+            docs,
+            skipped,
+            _emb_cached,
         )
 
     return {

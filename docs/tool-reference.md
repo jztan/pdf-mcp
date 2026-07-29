@@ -716,6 +716,7 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 **Limitations:**
 - The 100-file cap, budget clamp, and URL rejection described above apply.
 - Budget is checked between docs, not within one: one very large PDF can push the call past `budget_seconds` before the next check.
+- Warming runs extraction in a small process pool on larger corpora (sequential below 4 uncached documents). When the budget expires, documents already being extracted still complete and are written, so a call can overshoot `budget_seconds` by up to the worker count's worth of in-flight documents rather than a single document.
 - Repeat calls continue warming from where the previous call's budget stopped; already-warmed docs come back as `"cached"` and don't re-extract.
 
 **Example:**

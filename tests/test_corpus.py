@@ -136,8 +136,21 @@ class TestConcurrentWarm:
 
         corpus.warm_docs(files, 600, seq_cache, clock=SteppingClock(0))
         self._force_pool(monkeypatch)
+
+        # Spy on pool creation so this test cannot silently degrade into
+        # sequential-vs-sequential (and stay green) if _force_pool's
+        # monkeypatching ever stops taking effect.
+        pool_calls = []
+        real_pool = corpus.ProcessPoolExecutor
+
+        def spy(*args, **kwargs):
+            pool_calls.append((args, kwargs))
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
         out = corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
 
+        assert pool_calls, "expected _warm_concurrent to create a pool"
         assert out["warmed_this_call"] == 3
         assert out["skipped"] == []
         for path in files:

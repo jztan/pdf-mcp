@@ -329,8 +329,12 @@ def _warm_concurrent(
     onnxruntime threads (embeddings model) are not fork-safe. Budget is
     checked before each submission; on expiry in-flight docs drain and
     finalize (overshoot bounded by the worker count). Workers never
-    touch SQLite. On BrokenProcessPool the un-handled remainder
-    finishes sequentially in-parent.
+    touch SQLite. On BrokenProcessPool, or an OSError from pool
+    creation/submission or a worker dying on an OS-level failure
+    (fd/semaphore exhaustion -- EMFILE/EAGAIN surface here, not as
+    BrokenProcessPool, since workers spawn lazily inside submit()),
+    the un-handled remainder finishes sequentially in-parent rather
+    than escaping the tool.
     """
     warmed = 0
     pending = list(uncached)
@@ -363,6 +367,14 @@ def _warm_concurrent(
                         )
                     except BrokenProcessPool:
                         raise
+                    except OSError:
+                        # Worker died on an OS-level failure (not a pool
+                        # crash): treat like BrokenProcessPool -- re-raise
+                        # to trigger the sequential fallback below rather
+                        # than silently skipping just this doc, since the
+                        # same OS pressure likely affects the rest of the
+                        # pool too.
+                        raise
                     except Exception as e:
                         handled.add(path)
                         skipped.append({"path": path, "reason": f"warm failed: {e}"})
@@ -377,7 +389,7 @@ def _warm_concurrent(
                             "embeddings_cached": emb_cached(path),
                         }
                     )
-    except BrokenProcessPool:
+    except (BrokenProcessPool, OSError):
         remaining = [item for item in uncached if item[0] not in handled]
         unprocessed, budget_exhausted, seq_warmed = _warm_sequential(
             remaining,

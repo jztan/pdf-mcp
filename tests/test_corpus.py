@@ -1,6 +1,7 @@
 """Tests for corpus resolution and warm orchestration (corpus.py)."""
 
 import pickle
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import pymupdf
@@ -196,6 +197,110 @@ class TestConcurrentWarm:
         monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
         out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
         assert out["warmed_this_call"] == 3
+
+    def test_budget_trip_stops_submissions(self, corpus_dir, cache, monkeypatch):
+        # Clock steps 6s/call, budget 10s: submit-checks read 6 (charlie,
+        # 1p) then 12 (> 10, stop). Exactly the sequential expectations.
+        self._force_pool(monkeypatch)
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
+        assert out["warmed_this_call"] == 1
+        assert len(out["unprocessed"]) == 2
+        assert out["budget_exhausted"] is True
+        warmed = [d for d in out["docs"] if d["status"] == "warmed"]
+        assert Path(warmed[0]["path"]).name == "charlie.pdf"
+
+    def test_in_flight_docs_drain_after_trip(self, corpus_dir, cache, monkeypatch):
+        # Steps 4s, budget 10s: checks read 4 (submit charlie), 8 (submit
+        # alpha), 12 (trip). Both in-flight docs still finalize.
+        self._force_pool(monkeypatch)
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(4))
+        assert out["warmed_this_call"] == 2
+        assert [Path(p).name for p in out["unprocessed"]] == ["bravo.pdf"]
+        assert out["budget_exhausted"] is True
+
+    def test_resume_completes_after_trip(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 10, cache, clock=SteppingClock(6))
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["unprocessed"] == []
+        assert out["budget_exhausted"] is False
+        assert len(out["docs"]) == 3
+
+    def test_corrupt_doc_skipped_under_pool(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        bad = corpus_dir / "delta.pdf"
+        bad.write_bytes(b"%PDF-1.4 truncated garbage")
+        # corpus_dir already contains delta.pdf at this point, so
+        # resolve_corpus (via _files) picks it up on its own; appending
+        # it again would double-count the same path in `skipped`.
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert len(out["skipped"]) == 1
+        assert "delta.pdf" in out["skipped"][0]["path"]
+
+    def test_broken_pool_falls_back_sequential(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+
+        class BrokenPool:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def submit(self, fn, *args):
+                raise BrokenProcessPool("worker died")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", BrokenPool)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        assert out["skipped"] == []
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+
+    def test_ocr_text_preserved_under_pool(self, cache, tmp_path, monkeypatch):
+        # Mirror test_warm_preserves_cached_ocr_text, pool forced. Build
+        # 4 one-page docs so the pool actually engages; give one of them
+        # a cached OCR page, then warm and assert the OCR text survived.
+        self._force_pool(monkeypatch)
+        d = tmp_path / "ocr_corpus"
+        d.mkdir()
+        paths = []
+        for i in range(4):
+            doc = pymupdf.open()
+            doc.new_page()  # empty page: native extraction yields ""
+            p = str(d / f"scan{i}.pdf")
+            doc.save(p)
+            doc.close()
+            paths.append(p)
+        cache.save_page_text(paths[0], 0, "ocr recovered text", source="ocr")
+        out = corpus.warm_docs(paths, 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 4
+        assert cache.get_pages_text(paths[0], [0])[0] == "ocr recovered text"
+
+    def test_embeddings_concurrent_matches_request(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        self._force_pool(monkeypatch)
+
+        def fake_embed(texts):
+            return [b"\x00\x00\x80?" for _ in texts]  # 1.0 float32 LE
+
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=fake_embed,
+            clock=SteppingClock(0),
+        )
+        assert out["warmed_this_call"] == 3
+        assert all(d["embeddings_cached"] for d in out["docs"])
 
 
 class TestWarmDocs:

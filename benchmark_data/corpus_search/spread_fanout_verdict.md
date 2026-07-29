@@ -100,6 +100,38 @@ infrastructure (corpus-global FTS with global IDF, doc fingerprints,
 FAST feature models) remain unraced but face the same reachability
 wall: 16 of 19 hard parts are invisible to every existing signal.
 
+## The width curve (2026-07-29): spread is a thoroughness dial
+
+Ordering is at its ceiling, but fan-out WIDTH is a free knob the caller
+already controls. Part coverage under the shipped ordering, same-query
+hop-2 (each hop-2 search ~0.5s, local):
+
+| fan-out | searches | part coverage | complete answers |
+|---|---|---|---|
+| top 3 docs | 4 | 56% | 6/25 |
+| top 5 | 6 | 65% | 10/25 |
+| top 7 | 8 | 73% | 13/25 |
+| top 10 | 11 | 79% | 14/25 |
+| **everything named** | ~11-21 | **87%** | **17/25** |
+
+The 87% is the exact caller-reachable ceiling (cross-tab against the
+real tool's named set): the response names 58/62 parts and same-query
+hop-2 finds 58/62, but the failure sets are DISJOINT — 4 parts are
+never named, a different 4 are named but need a re-phrased per-document
+query to surface. So:
+
+- A caller who checks 5 documents experiences ~65%.
+- A caller who checks everything the response names reaches 87%.
+- The last 13% needs either naming the 4 invisible docs (no existing
+  signal reaches them; see the ordering race) or hop-conditioned
+  re-phrasing (IRCoT-class caller behavior) for the other 4.
+
+Practical consequence: the highest-leverage "fix" for spread is
+caller thoroughness over the already-shipped `doc_match_counts` list —
+documentation-grade guidance, not server code. Documented in
+`docs/tool-reference.md`'s `pdf_corpus_search` limitations when the
+corpus feature ships.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

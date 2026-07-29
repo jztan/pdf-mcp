@@ -1,0 +1,409 @@
+{
+ "model": "claude-opus-4-8",
+ "budget": "0.75",
+ "rows": [
+  {
+   "id": "spread-01",
+   "n_tool_calls": 3,
+   "k_followed": 0,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0706.0028",
+    "0706.2397",
+    "0709.2857"
+   ],
+   "covered": [
+    "0706.0028",
+    "0706.2397",
+    "0709.2857"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-02",
+   "n_tool_calls": 4,
+   "k_followed": 2,
+   "n_distinct_queries": 3,
+   "gold": [
+    "0707.4042",
+    "0710.2740",
+    "0802.0733"
+   ],
+   "covered": [
+    "0802.0733"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-03",
+   "n_tool_calls": 2,
+   "k_followed": 0,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0707.1301",
+    "0709.4466",
+    "0802.0733"
+   ],
+   "covered": [
+    "0709.4466"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-04",
+   "n_tool_calls": 5,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0706.0954",
+    "0709.2857"
+   ],
+   "covered": [
+    "0709.2857"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-05",
+   "n_tool_calls": 6,
+   "k_followed": 1,
+   "n_distinct_queries": 3,
+   "gold": [
+    "0707.3690",
+    "0802.0539"
+   ],
+   "covered": [
+    "0802.0539"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-06",
+   "n_tool_calls": 4,
+   "k_followed": 2,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0707.4042",
+    "0802.0539"
+   ],
+   "covered": [
+    "0802.0539"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-07",
+   "n_tool_calls": 4,
+   "k_followed": 2,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0709.2178",
+    "0811.0781"
+   ],
+   "covered": [],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-08",
+   "n_tool_calls": 6,
+   "k_followed": 4,
+   "n_distinct_queries": 5,
+   "gold": [
+    "0707.4042",
+    "0710.2265"
+   ],
+   "covered": [
+    "0710.2265"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-09",
+   "n_tool_calls": 7,
+   "k_followed": 4,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0707.1301",
+    "0802.0539",
+    "0811.0781"
+   ],
+   "covered": [
+    "0707.1301",
+    "0802.0539"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-10",
+   "n_tool_calls": 2,
+   "k_followed": 0,
+   "n_distinct_queries": 1,
+   "gold": [
+    "0707.1301",
+    "0710.2265",
+    "0802.0539"
+   ],
+   "covered": [
+    "0710.2265",
+    "0802.0539"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-11",
+   "n_tool_calls": 5,
+   "k_followed": 3,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2005.14165",
+    "2010.14701",
+    "2206.07682"
+   ],
+   "covered": [
+    "2005.14165",
+    "2010.14701"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-12",
+   "n_tool_calls": 3,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "1912.02292",
+    "2201.02177"
+   ],
+   "covered": [
+    "1912.02292",
+    "2201.02177"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-13",
+   "n_tool_calls": 4,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2010.14701",
+    "2203.15556",
+    "2206.07682"
+   ],
+   "covered": [
+    "2010.14701",
+    "2203.15556",
+    "2206.07682"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-14",
+   "n_tool_calls": 7,
+   "k_followed": 3,
+   "n_distinct_queries": 2,
+   "gold": [
+    "2607.09556",
+    "2607.09566",
+    "2607.10297"
+   ],
+   "covered": [
+    "2607.09556",
+    "2607.09566",
+    "2607.10297"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-15",
+   "n_tool_calls": 8,
+   "k_followed": 2,
+   "n_distinct_queries": 5,
+   "gold": [
+    "0905.2570",
+    "2607.06755",
+    "2607.08082"
+   ],
+   "covered": [
+    "0905.2570",
+    "2607.08082"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-16",
+   "n_tool_calls": 2,
+   "k_followed": 0,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2607.06346",
+    "2607.06744"
+   ],
+   "covered": [
+    "2607.06346"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-17",
+   "n_tool_calls": 6,
+   "k_followed": 3,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2607.08169",
+    "2607.09906",
+    "2607.10451"
+   ],
+   "covered": [
+    "2607.08169",
+    "2607.09906"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-18",
+   "n_tool_calls": 2,
+   "k_followed": 0,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2010.11929",
+    "2312.00752",
+    "2607.08175"
+   ],
+   "covered": [
+    "2010.11929",
+    "2312.00752"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-19",
+   "n_tool_calls": 4,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "1803.03635",
+    "1905.11946"
+   ],
+   "covered": [
+    "1803.03635",
+    "1905.11946"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-20",
+   "n_tool_calls": 3,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2312.00752",
+    "2607.02154"
+   ],
+   "covered": [
+    "2312.00752"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-21",
+   "n_tool_calls": 7,
+   "k_followed": 2,
+   "n_distinct_queries": 4,
+   "gold": [
+    "2607.09951",
+    "2607.09990"
+   ],
+   "covered": [
+    "2607.09951",
+    "2607.09990"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-22",
+   "n_tool_calls": 3,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "1502.03167",
+    "1608.03983"
+   ],
+   "covered": [
+    "1502.03167",
+    "1608.03983"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-23",
+   "n_tool_calls": 3,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2005.14165",
+    "2010.11929",
+    "2206.07682"
+   ],
+   "covered": [
+    "2005.14165",
+    "2010.11929",
+    "2206.07682"
+   ],
+   "complete": true,
+   "error": false
+  },
+  {
+   "id": "spread-24",
+   "n_tool_calls": 4,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "2206.07682",
+    "2607.10430"
+   ],
+   "covered": [
+    "2206.07682"
+   ],
+   "complete": false,
+   "error": false
+  },
+  {
+   "id": "spread-25",
+   "n_tool_calls": 4,
+   "k_followed": 1,
+   "n_distinct_queries": 1,
+   "gold": [
+    "1302.4245",
+    "1811.03679"
+   ],
+   "covered": [
+    "1302.4245"
+   ],
+   "complete": false,
+   "error": false
+  }
+ ]
+}

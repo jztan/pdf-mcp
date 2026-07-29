@@ -11,22 +11,18 @@
  "rows": [
   {
    "id": "needle-01",
-   "k": 3,
-   "chosen": [
-    "0706.0028",
-    "0707.0311",
-    "2607.02093"
-   ],
+   "k": 0,
+   "chosen": [],
    "rephrased": [],
    "gold": [
-    "0705.4297"
+    "googl-fy2024"
    ],
    "inhand_hop1": [
-    "0705.4297"
+    "googl-fy2024"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0705.4297"
+    "googl-fy2024"
    ],
    "reply_missing": false
   },
@@ -34,18 +30,20 @@
    "id": "needle-02",
    "k": 1,
    "chosen": [
-    "0707.3690"
+    "googl-fy2023"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "severance and related charges employee workforce reduction"
+   ],
    "gold": [
-    "0707.3690"
+    "googl-fy2023"
    ],
    "inhand_hop1": [
-    "0707.3690"
+    "googl-fy2023"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0707.3690"
+    "googl-fy2023"
    ],
    "reply_missing": false
   },
@@ -55,55 +53,52 @@
    "chosen": [],
    "rephrased": [],
    "gold": [
-    "0707.4042"
+    "googl-fy2025"
    ],
    "inhand_hop1": [
-    "0707.4042"
+    "googl-fy2025"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0707.4042"
+    "googl-fy2025"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-04",
-   "k": 3,
+   "k": 1,
    "chosen": [
-    "1501.05624",
-    "2607.10297",
-    "2607.10430"
+    "aapl-fy2024"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "Greater China net sales decreased 2024"
+   ],
    "gold": [
-    "0709.2178"
+    "aapl-fy2024"
    ],
    "inhand_hop1": [
-    "0709.2178"
+    "aapl-fy2024"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0709.2178"
+    "aapl-fy2024"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-05",
-   "k": 2,
-   "chosen": [
-    "0709.2857",
-    "2607.03471"
-   ],
+   "k": 0,
+   "chosen": [],
    "rephrased": [],
    "gold": [
-    "0709.2857"
+    "aapl-fy2025"
    ],
    "inhand_hop1": [
-    "0709.2857"
+    "aapl-fy2025"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0709.2857"
+    "aapl-fy2025"
    ],
    "reply_missing": false
   },
@@ -111,18 +106,20 @@
    "id": "needle-06",
    "k": 1,
    "chosen": [
-    "2607.06346"
+    "aapl-fy2023"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "reconciliation of segment operating income research and development"
+   ],
    "gold": [
-    "0710.2265"
+    "aapl-fy2023"
    ],
    "inhand_hop1": [
-    "0710.2265"
+    "aapl-fy2023"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0710.2265"
+    "aapl-fy2023"
    ],
    "reply_missing": false
   },
@@ -130,18 +127,20 @@
    "id": "needle-07",
    "k": 1,
    "chosen": [
-    "2607.09951"
+    "nvda-fy2025"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "Data Center revenue increase fiscal 2025 percentage"
+   ],
    "gold": [
-    "0802.0733"
+    "nvda-fy2025"
    ],
-   "inhand_hop1": [
-    "0802.0733"
+   "inhand_hop1": [],
+   "parts_found": [
+    "nvda-fy2025"
    ],
-   "parts_found": [],
    "parts_total_covered": [
-    "0802.0733"
+    "nvda-fy2025"
    ],
    "reply_missing": false
   },
@@ -149,128 +148,347 @@
    "id": "needle-08",
    "k": 1,
    "chosen": [
-    "0905.3502"
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "direct customer percentage of total revenue fiscal 2026"
+   ],
    "gold": [
-    "0811.0781"
+    "nvda-fy2026"
    ],
-   "inhand_hop1": [
-    "0811.0781"
+   "inhand_hop1": [],
+   "parts_found": [
+    "nvda-fy2026"
    ],
-   "parts_found": [],
    "parts_total_covered": [
-    "0811.0781"
+    "nvda-fy2026"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-09",
-   "k": 0,
-   "chosen": [],
-   "rephrased": [],
+   "k": 3,
+   "chosen": [
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "A100 H100 China export license"
+   ],
    "gold": [
-    "0711.0528"
+    "nvda-fy2024"
    ],
    "inhand_hop1": [
-    "0711.0528"
+    "nvda-fy2024"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "0711.0528"
+    "nvda-fy2024"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-10",
-   "k": 1,
+   "k": 3,
    "chosen": [
-    "ibk_72-102"
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "goodwill impairment charge domestic theatres"
+   ],
    "gold": [
-    "ibk_72-102"
+    "amc-fy2022"
    ],
    "inhand_hop1": [
-    "ibk_72-102"
+    "amc-fy2022"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "ibk_72-102"
+    "amc-fy2022"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-11",
-   "k": 1,
+   "k": 2,
    "chosen": [
-    "chukobungaku_104-52"
+    "amc-fy2023",
+    "amc-fy2024"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "reverse stock split effective date"
+   ],
    "gold": [
-    "ibk_72-102"
+    "amc-fy2023"
    ],
    "inhand_hop1": [
-    "ibk_72-102"
+    "amc-fy2023"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "ibk_72-102"
+    "amc-fy2023"
    ],
    "reply_missing": false
   },
   {
    "id": "needle-12",
-   "k": 1,
-   "chosen": [
-    "iwaki_koho_2025-12"
-   ],
+   "k": 0,
+   "chosen": [],
    "rephrased": [],
    "gold": [
-    "iwaki_koho_2025-12"
+    "amc-fy2024"
    ],
-   "inhand_hop1": [
-    "iwaki_koho_2025-12"
-   ],
+   "inhand_hop1": [],
    "parts_found": [],
-   "parts_total_covered": [
-    "iwaki_koho_2025-12"
-   ],
+   "parts_total_covered": [],
    "reply_missing": false
   },
   {
    "id": "needle-13",
    "k": 1,
    "chosen": [
-    "iwaki_koho_2025-12"
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "total revenue fiscal year 2026"
+   ],
    "gold": [
-    "iwaki_koho_2025-12"
+    "nvda-fy2026"
    ],
-   "inhand_hop1": [
-    "iwaki_koho_2025-12"
-   ],
+   "inhand_hop1": [],
    "parts_found": [],
-   "parts_total_covered": [
-    "iwaki_koho_2025-12"
-   ],
+   "parts_total_covered": [],
    "reply_missing": false
   },
   {
    "id": "needle-14",
+   "k": 3,
+   "chosen": [
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025"
+   ],
+   "rephrased": [
+    "repurchases of Class A and Class C shares"
+   ],
+   "gold": [
+    "googl-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "googl-fy2024"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-15",
+   "k": 1,
+   "chosen": [
+    "msft-fy2023"
+   ],
+   "rephrased": [
+    "Intelligent Cloud revenue growth driver"
+   ],
+   "gold": [
+    "msft-fy2023"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-16",
+   "k": 1,
+   "chosen": [
+    "msft-fy2025"
+   ],
+   "rephrased": [
+    "Azure and other cloud services revenue includes"
+   ],
+   "gold": [
+    "msft-fy2025"
+   ],
+   "inhand_hop1": [
+    "msft-fy2025"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "msft-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-17",
    "k": 0,
    "chosen": [],
    "rephrased": [],
    "gold": [
-    "iwaki_koho_2025-12"
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-18",
+   "k": 2,
+   "chosen": [
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "DAP MAP ARPP definition daily active people monthly active people average revenue per person"
+   ],
+   "gold": [
+    "meta-fy2023"
    ],
    "inhand_hop1": [
-    "iwaki_koho_2025-12"
+    "meta-fy2023"
    ],
    "parts_found": [],
    "parts_total_covered": [
-    "iwaki_koho_2025-12"
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-19",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "amzn-fy2023"
+   ],
+   "inhand_hop1": [
+    "amzn-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amzn-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-20",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "amzn-fy2024"
+   ],
+   "inhand_hop1": [
+    "amzn-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-21",
+   "k": 1,
+   "chosen": [
+    "jpm-fy2023"
+   ],
+   "rephrased": [
+    "net income full year 2023"
+   ],
+   "gold": [
+    "jpm-fy2023"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-22",
+   "k": 1,
+   "chosen": [
+    "jpm-fy2024"
+   ],
+   "rephrased": [
+    "net income"
+   ],
+   "gold": [
+    "jpm-fy2024"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2024"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-23",
+   "k": 0,
+   "chosen": [],
+   "rephrased": [],
+   "gold": [
+    "jpm-fy2022"
+   ],
+   "inhand_hop1": [
+    "jpm-fy2022"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "jpm-fy2022"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-24",
+   "k": 3,
+   "chosen": [
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "2022 restructuring charges and layoff size"
+   ],
+   "gold": [
+    "meta-fy2022"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [],
+   "parts_total_covered": [],
+   "reply_missing": false
+  },
+  {
+   "id": "needle-25",
+   "k": 1,
+   "chosen": [
+    "msft-fy2024"
+   ],
+   "rephrased": [
+    "Microsoft Cloud revenue fiscal 2024"
+   ],
+   "gold": [
+    "msft-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "msft-fy2024"
+   ],
+   "parts_total_covered": [
+    "msft-fy2024"
    ],
    "reply_missing": false
   }

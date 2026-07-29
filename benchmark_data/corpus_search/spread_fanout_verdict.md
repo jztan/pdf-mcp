@@ -246,6 +246,42 @@ time even on the right document — page-level retrieval depth, a known
 financial-corpus characteristic, independent of fan-out. The width
 dial's ceiling is corpus-dependent (73% vs 87%) but its slope is not.
 
+## Pre-ship testing of the v1 instruction (2026-07-29): complete grid
+
+Five checks run before the ship decision; v1 passed all gates.
+
+**The coverage grid** (part coverage / complete answers):
+
+| | old text | v1 text |
+|---|---|---|
+| single-turn, arXiv spread | 56% · 6/25 | 69% · 11/25 |
+| single-turn, 10-K spread | 59% · 5/16 | 70% · 6/16 |
+| live sessions, arXiv spread | 61% · 5/25 | **68% · 8/25** |
+| single-answer control (arXiv needle) | 100%, k 1.1 | 100%, k 2.7 |
+| single-answer control (10-K needle) | 80%, k 1.1 | **92%, k 1.6** |
+
+- **Cost quantified** (arXiv needles, the worst case): +1.6 follow-up
+  searches ≈ +2,900 response tokens and +0.06s per single-answer corpus
+  query. On 10-K needles the "cost" inverts: +0.5 searches and coverage
+  +12 points (deep filings benefit from the second look).
+- **No k-explosion on a boilerplate-heavy corpus** (the pre-registered
+  risk): 10-K fspread median k 6, mean 8.2, max 18 — inside the ≤10
+  gate despite doc_match_counts naming most of the 24 filings.
+- **The gain survives live deployment, attenuated**: +7 points and +3
+  complete answers in real sessions (vs +13 single-turn). At n=25 the
+  live delta (+4 parts, +3 complete) is at the suggestive-to-real
+  boundary; the cross-condition consistency (positive in all five
+  cells, negative in none) is the stronger evidence.
+- Bonus finding: financial callers re-phrase per-document naturally
+  (16/16 fspread, 24/25 needle) — the arXiv zero-re-phrasing is a
+  corpus-style effect (no obvious per-doc anchors), not universal
+  caller behavior.
+
+v1's exact text lives in `eval_spread_fanout_behavior.py`
+(NEW_INSTRUCTION). Ship mechanics if approved: replace the
+doc_match_counts sentence in the `pdf_corpus_search` docstring, lock via
+tests/test_tool_descriptions.py, note in CHANGELOG, cut with v1.23.0.
+
 ## Caveats
 
 - n=25 queries / 62 parts; aggregate claims only.

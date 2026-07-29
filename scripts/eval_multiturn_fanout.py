@@ -69,13 +69,13 @@ answer may draw on one or several documents; cite document and page for \
 every part of it."""
 
 
-def mcp_config() -> str:
+def mcp_config(project_dir: str) -> str:
     return json.dumps(
         {
             "mcpServers": {
                 "pdf-mcp": {
                     "command": "uv",
-                    "args": ["run", "--project", str(REPO), "pdf-mcp"],
+                    "args": ["run", "--project", project_dir, "pdf-mcp"],
                     "env": {"PDF_MCP_CACHE_DIR": str(SPIKE_CACHE)},
                 }
             }
@@ -83,7 +83,7 @@ def mcp_config() -> str:
     )
 
 
-def run_session(question: str, model: str) -> str | None:
+def run_session(question: str, model: str, project_dir: str) -> str | None:
     try:
         result = subprocess.run(
             [
@@ -95,7 +95,7 @@ def run_session(question: str, model: str) -> str | None:
                 "",
                 "--strict-mcp-config",
                 "--mcp-config",
-                mcp_config(),
+                mcp_config(project_dir),
                 "--allowedTools",
                 ALLOWED,
                 "--max-budget-usd",
@@ -145,6 +145,16 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--ids", help="comma-separated query ids (default: all)")
+    ap.add_argument(
+        "--project-dir",
+        default=str(REPO),
+        help="repo/worktree the MCP server runs from (description arm)",
+    )
+    ap.add_argument(
+        "--tag",
+        default="",
+        help="suffix for stream cache dir and results file (e.g. v1)",
+    )
     args = ap.parse_args(argv)
 
     import pdf_mcp.server as server_module
@@ -154,7 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
-    STREAM_DIR.mkdir(exist_ok=True)
+    stream_dir = STREAM_DIR if not args.tag else Path(str(STREAM_DIR) + "_" + args.tag)
+    stream_dir.mkdir(exist_ok=True)
 
     manifest = json.loads((DATA / "manifest.json").read_text())
     id_by_name = {Path(d["path"]).name: d["id"] for d in manifest["docs"]}
@@ -168,10 +179,10 @@ def main(argv: list[str] | None = None) -> int:
         queries = [q for q in queries if q["id"] in wanted]
 
     def get_stream(q: dict) -> tuple[str, str | None]:
-        path = STREAM_DIR / f"{q['id']}.jsonl"
+        path = stream_dir / f"{q['id']}.jsonl"
         if path.exists():
             return q["id"], path.read_text()
-        stream = run_session(q["query"], args.model)
+        stream = run_session(q["query"], args.model, args.project_dir)
         if stream is not None:
             path.write_text(stream)
         return q["id"], stream
@@ -255,7 +266,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     ok = [r for r in rows if not r.get("error")]
-    out = OUT_DIR / "multiturn_results.json"
+    name = "multiturn_results" + (f"_{args.tag}" if args.tag else "") + ".json"
+    out = OUT_DIR / name
     out.write_text(
         json.dumps(
             {"model": args.model, "budget": PER_SESSION_BUDGET_USD, "rows": rows},

@@ -10,653 +10,530 @@
  "per_call_budget_usd": "0.50",
  "rows": [
   {
-   "id": "spread-01",
-   "k": 0,
-   "chosen": [],
-   "rephrased": [],
-   "gold": [
-    "0706.0028",
-    "0706.2397",
-    "0709.2857"
-   ],
-   "inhand_hop1": [
-    "0706.0028",
-    "0709.2857"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "0706.0028",
-    "0709.2857"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-02",
-   "k": 8,
+   "id": "fspread-01",
+   "k": 18,
    "chosen": [
-    "1301.3570",
-    "1406.4582",
-    "2205.14135",
-    "2607.02171",
-    "2607.06755",
-    "2607.06844",
-    "2607.08291",
-    "2607.10297"
+    "amzn-fy2022",
+    "amzn-fy2023",
+    "amzn-fy2024",
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025",
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "quantum computing"
+   ],
    "gold": [
-    "0707.4042",
-    "0710.2740",
-    "0802.0733"
+    "googl-fy2025",
+    "jpm-fy2024",
+    "msft-fy2025"
    ],
    "inhand_hop1": [
-    "0802.0733"
+    "jpm-fy2024",
+    "msft-fy2025"
    ],
-   "parts_found": [],
+   "parts_found": [
+    "googl-fy2025"
+   ],
    "parts_total_covered": [
-    "0802.0733"
+    "googl-fy2025",
+    "jpm-fy2024",
+    "msft-fy2025"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-03",
+   "id": "fspread-02",
+   "k": 2,
+   "chosen": [
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "dividend first paid"
+   ],
+   "gold": [
+    "googl-fy2024",
+    "meta-fy2023"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [
+    "meta-fy2023"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024",
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-03",
+   "k": 3,
+   "chosen": [
+    "googl-fy2024",
+    "nvda-fy2024",
+    "nvda-fy2025"
+   ],
+   "rephrased": [
+    "additional share repurchase authorized Board"
+   ],
+   "gold": [
+    "googl-fy2024",
+    "nvda-fy2025"
+   ],
+   "inhand_hop1": [
+    "googl-fy2024"
+   ],
+   "parts_found": [
+    "nvda-fy2025"
+   ],
+   "parts_total_covered": [
+    "googl-fy2024",
+    "nvda-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-04",
+   "k": 10,
+   "chosen": [
+    "aapl-fy2023",
+    "aapl-fy2025",
+    "amzn-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "nvda-fy2024",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "Digital Markets Act investigation compliance obligations"
+   ],
+   "gold": [
+    "aapl-fy2025",
+    "googl-fy2025",
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [
+    "aapl-fy2025"
+   ],
+   "parts_found": [
+    "googl-fy2025"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2025",
+    "googl-fy2025"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-05",
+   "k": 5,
+   "chosen": [
+    "googl-fy2023",
+    "googl-fy2024",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "2022 restructuring pre-tax charges severance workforce reduction",
+    "2022 restructuring severance facilities charges workforce reduction",
+    "2023 reduction in workforce severance charges",
+    "2023 restructuring severance charges workforce reduction",
+    "January 2023 workforce reduction severance charges"
+   ],
+   "gold": [
+    "googl-fy2023",
+    "meta-fy2022",
+    "meta-fy2023"
+   ],
+   "inhand_hop1": [
+    "googl-fy2023",
+    "meta-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2023",
+    "meta-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-06",
+   "k": 14,
+   "chosen": [
+    "aapl-fy2023",
+    "aapl-fy2024",
+    "aapl-fy2025",
+    "amzn-fy2022",
+    "amzn-fy2023",
+    "amzn-fy2024",
+    "googl-fy2023",
+    "googl-fy2024",
+    "meta-fy2022",
+    "meta-fy2024",
+    "msft-fy2023",
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "single or limited supply sources foundries critical components"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "aapl-fy2024"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-07",
+   "k": 3,
+   "chosen": [
+    "aapl-fy2025",
+    "googl-fy2025",
+    "meta-fy2024"
+   ],
+   "rephrased": [
+    "DOJ antitrust lawsuit Search advertising",
+    "DOJ antitrust lawsuit legal proceedings",
+    "FTC antitrust lawsuit legal proceedings"
+   ],
+   "gold": [
+    "aapl-fy2024",
+    "googl-fy2023",
+    "meta-fy2024"
+   ],
+   "inhand_hop1": [
+    "googl-fy2023"
+   ],
+   "parts_found": [],
+   "parts_total_covered": [
+    "googl-fy2023"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-08",
+   "k": 3,
+   "chosen": [
+    "amzn-fy2024",
+    "googl-fy2025",
+    "msft-fy2025"
+   ],
+   "rephrased": [
+    "AWS cloud revenue growth",
+    "Google Cloud revenue growth",
+    "Microsoft Cloud revenue growth Azure"
+   ],
+   "gold": [
+    "amzn-fy2024",
+    "googl-fy2024",
+    "msft-fy2024"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "amzn-fy2024"
+   ],
+   "parts_total_covered": [
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-09",
+   "k": 3,
+   "chosen": [
+    "aapl-fy2025",
+    "amzn-fy2024",
+    "nvda-fy2026"
+   ],
+   "rephrased": [
+    "full-time and part-time employees",
+    "full-time employees",
+    "full-time equivalent employees"
+   ],
+   "gold": [
+    "aapl-fy2025",
+    "amzn-fy2024",
+    "nvda-fy2026"
+   ],
+   "inhand_hop1": [],
+   "parts_found": [
+    "aapl-fy2025",
+    "amzn-fy2024"
+   ],
+   "parts_total_covered": [
+    "aapl-fy2025",
+    "amzn-fy2024"
+   ],
+   "reply_missing": false
+  },
+  {
+   "id": "fspread-10",
    "k": 13,
    "chosen": [
-    "0905.3502",
-    "1501.05624",
-    "1712.00409",
-    "2607.02157",
-    "2607.06373",
-    "2607.06755",
-    "2607.06844",
-    "2607.06908",
-    "2607.08082",
-    "2607.08169",
-    "2607.09566",
-    "2607.09906",
-    "2607.10297"
+    "amzn-fy2023",
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "meta-fy2024",
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025",
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "net-zero carbon-negative zero-emissions operations target"
+   ],
    "gold": [
-    "0707.1301",
-    "0709.4466",
-    "0802.0733"
+    "googl-fy2024",
+    "jpm-fy2024",
+    "msft-fy2024"
    ],
    "inhand_hop1": [
-    "0707.1301",
-    "0709.4466",
-    "0802.0733"
+    "googl-fy2024"
    ],
-   "parts_found": [],
+   "parts_found": [
+    "msft-fy2024"
+   ],
    "parts_total_covered": [
-    "0707.1301",
-    "0709.4466",
-    "0802.0733"
+    "googl-fy2024",
+    "msft-fy2024"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-04",
-   "k": 1,
+   "id": "fspread-11",
+   "k": 17,
    "chosen": [
-    "0706.0028"
+    "amc-fy2024",
+    "amzn-fy2022",
+    "amzn-fy2023",
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025",
+    "nvda-fy2024",
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "generative AI transformative business competitive threat"
+   ],
    "gold": [
-    "0706.0954",
-    "0709.2857"
-   ],
-   "inhand_hop1": [
-    "0709.2857"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "0709.2857"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-05",
-   "k": 12,
-   "chosen": [
-    "0707.1301",
-    "0707.3690",
-    "0802.0539",
-    "0811.0781",
-    "0904.1520",
-    "2607.02093",
-    "2607.03474",
-    "2607.06422",
-    "2607.06744",
-    "2607.08040",
-    "2607.08082",
-    "2607.08175"
-   ],
-   "rephrased": [],
-   "gold": [
-    "0707.3690",
-    "0802.0539"
+    "amc-fy2024",
+    "amzn-fy2024",
+    "jpm-fy2024"
    ],
    "inhand_hop1": [],
    "parts_found": [
-    "0707.3690",
-    "0802.0539"
+    "amc-fy2024",
+    "jpm-fy2024"
    ],
    "parts_total_covered": [
-    "0707.3690",
-    "0802.0539"
+    "amc-fy2024",
+    "jpm-fy2024"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-06",
-   "k": 5,
+   "id": "fspread-12",
+   "k": 15,
    "chosen": [
-    "0707.4042",
-    "2607.03471",
-    "2607.06373",
-    "2607.06908",
-    "2607.10297"
+    "aapl-fy2024",
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024",
+    "meta-fy2022",
+    "meta-fy2023",
+    "meta-fy2024",
+    "nvda-fy2024",
+    "nvda-fy2025",
+    "nvda-fy2026"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "climate change increasing frequency of natural disasters or severe weather"
+   ],
    "gold": [
-    "0707.4042",
-    "0802.0539"
-   ],
-   "inhand_hop1": [],
-   "parts_found": [],
-   "parts_total_covered": [],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-07",
-   "k": 5,
-   "chosen": [
-    "0709.2178",
-    "2010.14701",
-    "2607.02154",
-    "2607.02157",
-    "2607.03437"
-   ],
-   "rephrased": [],
-   "gold": [
-    "0709.2178",
-    "0811.0781"
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
    ],
    "inhand_hop1": [],
    "parts_found": [
-    "0709.2178"
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
    ],
    "parts_total_covered": [
-    "0709.2178"
+    "aapl-fy2024",
+    "amc-fy2024",
+    "meta-fy2024"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-08",
-   "k": 0,
-   "chosen": [],
-   "rephrased": [],
-   "gold": [
-    "0707.4042",
-    "0710.2265"
-   ],
-   "inhand_hop1": [
-    "0710.2265"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "0710.2265"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-09",
-   "k": 8,
+   "id": "fspread-13",
+   "k": 3,
    "chosen": [
-    "0706.0028",
-    "0707.1301",
-    "0802.0539",
-    "0811.0781",
-    "2607.02093",
-    "2607.02157",
-    "2607.02171",
-    "2607.08040"
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "Tensor Processing Unit custom chip"
+   ],
    "gold": [
-    "0707.1301",
-    "0802.0539",
-    "0811.0781"
-   ],
-   "inhand_hop1": [
-    "0802.0539",
-    "0811.0781"
-   ],
-   "parts_found": [
-    "0707.1301"
-   ],
-   "parts_total_covered": [
-    "0707.1301",
-    "0802.0539",
-    "0811.0781"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-10",
-   "k": 7,
-   "chosen": [
-    "0707.3690",
-    "1807.03386",
-    "2607.06346",
-    "2607.06373",
-    "2607.06744",
-    "2607.08291",
-    "2607.09906"
-   ],
-   "rephrased": [],
-   "gold": [
-    "0707.1301",
-    "0710.2265",
-    "0802.0539"
-   ],
-   "inhand_hop1": [],
-   "parts_found": [],
-   "parts_total_covered": [],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-11",
-   "k": 7,
-   "chosen": [
-    "1712.00409",
-    "2005.14165",
-    "2010.14701",
-    "2203.15556",
-    "2206.07682",
-    "2312.00752",
-    "2605.06546"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2005.14165",
-    "2010.14701",
-    "2206.07682"
-   ],
-   "inhand_hop1": [
-    "2005.14165"
-   ],
-   "parts_found": [
-    "2206.07682"
-   ],
-   "parts_total_covered": [
-    "2005.14165",
-    "2206.07682"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-12",
-   "k": 7,
-   "chosen": [
-    "1611.03530",
-    "1712.00409",
-    "1803.03635",
-    "1811.03679",
-    "1912.02292",
-    "2201.02177",
-    "2607.10430"
-   ],
-   "rephrased": [],
-   "gold": [
-    "1912.02292",
-    "2201.02177"
-   ],
-   "inhand_hop1": [
-    "1912.02292",
-    "2201.02177"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "1912.02292",
-    "2201.02177"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-13",
-   "k": 5,
-   "chosen": [
-    "2005.14165",
-    "2010.14701",
-    "2203.15556",
-    "2206.07682",
-    "2605.06546"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2010.14701",
-    "2203.15556",
-    "2206.07682"
-   ],
-   "inhand_hop1": [
-    "2010.14701"
-   ],
-   "parts_found": [
-    "2203.15556",
-    "2206.07682"
-   ],
-   "parts_total_covered": [
-    "2010.14701",
-    "2203.15556",
-    "2206.07682"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-14",
-   "k": 7,
-   "chosen": [
-    "1811.03679",
-    "2607.06373",
-    "2607.08291",
-    "2607.09556",
-    "2607.09566",
-    "2607.09906",
-    "2607.10297"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2607.09556",
-    "2607.09566",
-    "2607.10297"
-   ],
-   "inhand_hop1": [
-    "2607.09566"
-   ],
-   "parts_found": [
-    "2607.09556",
-    "2607.10297"
-   ],
-   "parts_total_covered": [
-    "2607.09556",
-    "2607.09566",
-    "2607.10297"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-15",
-   "k": 9,
-   "chosen": [
-    "0905.2570",
-    "2607.06338",
-    "2607.06346",
-    "2607.06360",
-    "2607.06744",
-    "2607.06755",
-    "2607.06844",
-    "2607.08082",
-    "2607.08175"
-   ],
-   "rephrased": [],
-   "gold": [
-    "0905.2570",
-    "2607.06755",
-    "2607.08082"
-   ],
-   "inhand_hop1": [
-    "0905.2570"
-   ],
-   "parts_found": [
-    "2607.06755",
-    "2607.08082"
-   ],
-   "parts_total_covered": [
-    "0905.2570",
-    "2607.06755",
-    "2607.08082"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-16",
-   "k": 1,
-   "chosen": [
-    "2607.06346"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2607.06346",
-    "2607.06744"
+    "amzn-fy2023",
+    "amzn-fy2024",
+    "googl-fy2025"
    ],
    "inhand_hop1": [],
    "parts_found": [
-    "2607.06346"
+    "googl-fy2025"
    ],
    "parts_total_covered": [
-    "2607.06346"
+    "googl-fy2025"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-17",
-   "k": 1,
-   "chosen": [
-    "2607.10451"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2607.08169",
-    "2607.09906",
-    "2607.10451"
-   ],
-   "inhand_hop1": [
-    "2607.08169"
-   ],
-   "parts_found": [
-    "2607.10451"
-   ],
-   "parts_total_covered": [
-    "2607.08169",
-    "2607.10451"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-18",
+   "id": "fspread-14",
    "k": 4,
    "chosen": [
-    "1608.03983",
-    "1803.03635",
-    "2010.14701",
-    "2607.10460"
+    "amc-fy2022",
+    "amzn-fy2022",
+    "jpm-fy2022",
+    "meta-fy2022"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "lingering COVID-19 pandemic effects on business"
+   ],
    "gold": [
-    "2010.11929",
-    "2312.00752",
-    "2607.08175"
+    "amc-fy2022",
+    "amzn-fy2022",
+    "meta-fy2022"
    ],
    "inhand_hop1": [
-    "2010.11929"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "2010.11929"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-19",
-   "k": 12,
-   "chosen": [
-    "1502.03167",
-    "1608.03983",
-    "1611.03530",
-    "1803.03635",
-    "1811.03679",
-    "1905.11946",
-    "2010.11929",
-    "2010.14701",
-    "2201.02177",
-    "2205.14135",
-    "2607.08175",
-    "2607.10430"
-   ],
-   "rephrased": [],
-   "gold": [
-    "1803.03635",
-    "1905.11946"
-   ],
-   "inhand_hop1": [
-    "1905.11946"
+    "amc-fy2022"
    ],
    "parts_found": [
-    "1803.03635"
+    "amzn-fy2022",
+    "meta-fy2022"
    ],
    "parts_total_covered": [
-    "1803.03635",
-    "1905.11946"
+    "amc-fy2022",
+    "amzn-fy2022",
+    "meta-fy2022"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-20",
-   "k": 1,
+   "id": "fspread-15",
+   "k": 6,
    "chosen": [
-    "2312.00752"
+    "amc-fy2022",
+    "amc-fy2023",
+    "amc-fy2024",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "rising interest rate exposure"
+   ],
    "gold": [
-    "2312.00752",
-    "2607.02154"
+    "amc-fy2024",
+    "jpm-fy2023"
    ],
-   "inhand_hop1": [
-    "2312.00752"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "2312.00752"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-21",
-   "k": 2,
-   "chosen": [
-    "2607.09951",
-    "2607.09990"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2607.09951",
-    "2607.09990"
-   ],
-   "inhand_hop1": [
-    "2607.09951",
-    "2607.09990"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "2607.09951",
-    "2607.09990"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-22",
-   "k": 0,
-   "chosen": [],
-   "rephrased": [],
-   "gold": [
-    "1502.03167",
-    "1608.03983"
-   ],
-   "inhand_hop1": [
-    "1608.03983"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "1608.03983"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-23",
-   "k": 2,
-   "chosen": [
-    "2005.14165",
-    "2206.07682"
-   ],
-   "rephrased": [],
-   "gold": [
-    "2005.14165",
-    "2010.11929",
-    "2206.07682"
-   ],
-   "inhand_hop1": [
-    "2005.14165",
-    "2010.11929"
-   ],
+   "inhand_hop1": [],
    "parts_found": [
-    "2206.07682"
+    "amc-fy2024",
+    "jpm-fy2023"
    ],
    "parts_total_covered": [
-    "2005.14165",
-    "2010.11929",
-    "2206.07682"
+    "amc-fy2024",
+    "jpm-fy2023"
    ],
    "reply_missing": false
   },
   {
-   "id": "spread-24",
-   "k": 8,
+   "id": "fspread-16",
+   "k": 13,
    "chosen": [
-    "1712.00409",
-    "2005.14165",
-    "2010.14701",
-    "2206.07682",
-    "2312.00752",
-    "2607.02171",
-    "2607.03471",
-    "2607.10430"
+    "aapl-fy2023",
+    "aapl-fy2024",
+    "aapl-fy2025",
+    "googl-fy2023",
+    "googl-fy2024",
+    "googl-fy2025",
+    "jpm-fy2022",
+    "jpm-fy2023",
+    "jpm-fy2024",
+    "msft-fy2023",
+    "msft-fy2024",
+    "msft-fy2025",
+    "nvda-fy2024"
    ],
-   "rephrased": [],
+   "rephrased": [
+    "foreign currency forward contracts hedge",
+    "foreign exchange forward contracts hedge",
+    "foreign exchange forward derivative contracts hedge"
+   ],
    "gold": [
-    "2206.07682",
-    "2607.10430"
+    "aapl-fy2024",
+    "googl-fy2024",
+    "nvda-fy2025"
    ],
-   "inhand_hop1": [
-    "2206.07682"
-   ],
+   "inhand_hop1": [],
    "parts_found": [
-    "2607.10430"
+    "aapl-fy2024",
+    "googl-fy2024"
    ],
    "parts_total_covered": [
-    "2206.07682",
-    "2607.10430"
-   ],
-   "reply_missing": false
-  },
-  {
-   "id": "spread-25",
-   "k": 1,
-   "chosen": [
-    "1302.4245"
-   ],
-   "rephrased": [],
-   "gold": [
-    "1302.4245",
-    "1811.03679"
-   ],
-   "inhand_hop1": [
-    "1302.4245"
-   ],
-   "parts_found": [],
-   "parts_total_covered": [
-    "1302.4245"
+    "aapl-fy2024",
+    "googl-fy2024"
    ],
    "reply_missing": false
   }

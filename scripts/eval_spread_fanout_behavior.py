@@ -99,8 +99,10 @@ NEW_INSTRUCTION_V2 = (
 )
 
 
-def _cache_key(qid: str, model: str, arm: str) -> str:
+def _cache_key(qid: str, model: str, arm: str, ds: str = "") -> str:
     tag = "fanout" if arm == "old" else f"fanout|{arm}"
+    if ds:
+        tag = f"{tag}|{ds}"
     return hashlib.sha256(f"{tag}|{qid}|{model}".encode()).hexdigest()[:24]
 
 
@@ -154,6 +156,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--arm", default="old", choices=["old", "new", "new2"])
     ap.add_argument("--classes", default="spread")
+    ap.add_argument(
+        "--data-dir",
+        default="benchmark_data/corpus_search",
+        help="dataset dir with manifest.json (+ queries file)",
+    )
+    ap.add_argument(
+        "--queries-file",
+        default="queries.json",
+        help="queries filename inside data-dir",
+    )
+    ap.add_argument(
+        "--raw",
+        action="store_true",
+        help="use raw query strings (no cached caller emissions)",
+    )
     args = ap.parse_args(argv)
     wanted = tuple(c.strip() for c in args.classes.split(",") if c.strip())
 
@@ -170,19 +187,28 @@ def main(argv: list[str] | None = None) -> int:
         assert n_subs == 1, f"docstring target sentence not found ({n_subs})"
         corpus_doc = patched
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    data_dir = Path(args.data_dir)
+    data_dir = data_dir if data_dir.is_absolute() else REPO / data_dir
+    ds_tag = "" if data_dir == DATA else data_dir.name
+    manifest = json.loads((data_dir / "manifest.json").read_text())
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text())["queries"]
+        for q in json.loads((data_dir / args.queries_file).read_text())["queries"]
         if q["class"] in wanted
     ]
-    emitted = {}
-    for name in ("caller_eval_spread_results.json", "caller_eval_results.json"):
-        for r in json.loads((OUT_DIR / name).read_text())["rows"]:
-            if r.get("old_query"):
-                emitted.setdefault(r["id"], r["old_query"])
+    if args.raw:
+        emitted = {q["id"]: q["query"] for q in queries}
+    else:
+        emitted = {}
+        for name in (
+            "caller_eval_spread_results.json",
+            "caller_eval_results.json",
+        ):
+            for r in json.loads((OUT_DIR / name).read_text())["rows"]:
+                if r.get("old_query"):
+                    emitted.setdefault(r["id"], r["old_query"])
 
     cache = _load_cache()
 
@@ -202,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             "total_matches": r["total_matches"],
             "search_mode": r["search_mode"],
         }
-        key = _cache_key(q["id"], args.model, args.arm)
+        key = _cache_key(q["id"], args.model, args.arm, ds_tag)
         if key in cache:
             return q["id"], cache[key], compact
         prompt = CALLER_PROMPT.format(

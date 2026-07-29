@@ -17,6 +17,7 @@ from typing import Any, Callable
 import pymupdf
 
 from .extractor import _warm_extract_worker
+from .parallel import resolve_workers
 
 __all__ = [
     "CORPUS_MAX_FILES",
@@ -39,6 +40,15 @@ CORPUS_MAX_FILES = 100
 # fusion and single-doc hybrid fusion share one k. Design decided by the
 # stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
 CORPUS_RRF_K = 60
+
+# Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
+# Below the gate, sequential is faster (spawn/IPC overhead, workers=1
+# measured 0.98x). Text warm scales to 8 workers (4.1x); embeddings warm
+# is encode-bound and plateaus at ~4 (extra processes oversubscribe the
+# encode's own threads).
+WARM_DOC_GATE = 4
+WARM_TEXT_CAP = 8
+WARM_EMBED_CAP = 4
 
 
 def _validate_file(
@@ -247,6 +257,54 @@ def _warm_one_doc(
     return _finalize_doc(path, *payload, cache, embeddings, model_name, embed)
 
 
+def _warm_worker_count(n_uncached: int, embeddings: bool) -> int:
+    """Pool size for warming, or 1 for sequential (gate/env via
+    parallel.resolve_workers, mode-dependent cap)."""
+    cap = WARM_EMBED_CAP if embeddings else WARM_TEXT_CAP
+    return resolve_workers(n_uncached, WARM_DOC_GATE, cap=cap)
+
+
+def _warm_sequential(
+    pending: list[tuple[str, int]],
+    budget_seconds: float,
+    start: float,
+    clock: Callable[[], float],
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+    docs: list[dict[str, Any]],
+    skipped: list[dict[str, str]],
+    emb_cached: Callable[[str], bool],
+) -> tuple[list[str], bool, int]:
+    """Sequential warm loop (today's semantics, verbatim): clock checked
+    before each doc; per-doc failure -> skipped; appends to docs/skipped
+    in place. Returns (unprocessed, budget_exhausted, warmed)."""
+    warmed = 0
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    for i, (path, _pages) in enumerate(pending):
+        if clock() - start > budget_seconds:
+            unprocessed = [p for p, _ in pending[i:]]
+            budget_exhausted = True
+            break
+        try:
+            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
+        except Exception as e:
+            skipped.append({"path": path, "reason": f"warm failed: {e}"})
+            continue
+        warmed += 1
+        docs.append(
+            {
+                "path": path,
+                "status": "warmed",
+                "pages": page_count,
+                "embeddings_cached": emb_cached(path),
+            }
+        )
+    return unprocessed, budget_exhausted, warmed
+
+
 def warm_docs(
     files: list[str],
     budget_seconds: float,
@@ -300,29 +358,19 @@ def warm_docs(
             skipped.append({"path": path, "reason": f"unreadable: {e}"})
 
     uncached.sort(key=lambda item: item[1])
-
-    unprocessed: list[str] = []
-    budget_exhausted = False
-    warmed = 0
-    for i, (path, _pages) in enumerate(uncached):
-        if clock() - start > budget_seconds:
-            unprocessed = [p for p, _ in uncached[i:]]
-            budget_exhausted = True
-            break
-        try:
-            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
-        except Exception as e:
-            skipped.append({"path": path, "reason": f"warm failed: {e}"})
-            continue
-        warmed += 1
-        docs.append(
-            {
-                "path": path,
-                "status": "warmed",
-                "pages": page_count,
-                "embeddings_cached": _emb_cached(path),
-            }
-        )
+    unprocessed, budget_exhausted, warmed = _warm_sequential(
+        uncached,
+        budget_seconds,
+        start,
+        clock,
+        cache,
+        embeddings,
+        model_name,
+        embed,
+        docs,
+        skipped,
+        _emb_cached,
+    )
 
     return {
         "docs": sorted(docs, key=lambda d: str(d["path"])),

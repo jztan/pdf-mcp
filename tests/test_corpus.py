@@ -101,6 +101,26 @@ def _files(corpus_dir):
     return corpus.resolve_corpus(str(corpus_dir))["files"]
 
 
+class TestWarmWorkerCount:
+    def test_below_gate_is_sequential(self):
+        assert corpus._warm_worker_count(3, embeddings=False) == 1
+
+    def test_text_cap_is_8(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        assert corpus._warm_worker_count(100, embeddings=False) == 8
+
+    def test_embeddings_cap_is_4(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        assert corpus._warm_worker_count(100, embeddings=True) == 4
+
+    def test_env_forces_sequential(self, monkeypatch):
+        monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        assert corpus._warm_worker_count(100, embeddings=False) == 1
+
+
 class TestWarmDocs:
     def test_warms_all_within_budget(self, corpus_dir, cache):
         out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))

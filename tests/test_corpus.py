@@ -121,6 +121,70 @@ class TestWarmWorkerCount:
         assert corpus._warm_worker_count(100, embeddings=False) == 1
 
 
+class TestConcurrentWarm:
+    def _force_pool(self, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+
+    def test_concurrent_matches_sequential(self, corpus_dir, tmp_path, monkeypatch):
+        """Corruption invariant + exact equality (single-column fixtures)."""
+        from pdf_mcp.cache import PDFCache
+
+        seq_cache = PDFCache(cache_dir=tmp_path / "seq", ttl_hours=1)
+        con_cache = PDFCache(cache_dir=tmp_path / "con", ttl_hours=1)
+        files = _files(corpus_dir)
+
+        corpus.warm_docs(files, 600, seq_cache, clock=SteppingClock(0))
+        self._force_pool(monkeypatch)
+        out = corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
+
+        assert out["warmed_this_call"] == 3
+        assert out["skipped"] == []
+        for path in files:
+            want_meta = seq_cache.get_metadata(path)
+            got_meta = con_cache.get_metadata(path)
+            assert got_meta["page_count"] == want_meta["page_count"]
+            assert got_meta["text_coverage"] == want_meta["text_coverage"]
+            pages = list(range(want_meta["page_count"]))
+            want = seq_cache.get_pages_text(path, pages)
+            got = con_cache.get_pages_text(path, pages)
+            # Fixtures are single-column: exact equality is valid here.
+            assert got == want
+
+    def test_pool_uses_spawn_context(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        captured = {}
+        real_pool = corpus.ProcessPoolExecutor
+
+        def spy(*args, **kwargs):
+            captured.update(kwargs)
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert captured["mp_context"].get_start_method() == "spawn"
+
+    def test_small_corpus_never_creates_pool(self, corpus_dir, cache, monkeypatch):
+        # 3 docs < WARM_DOC_GATE (4): must stay sequential.
+        def boom(*args, **kwargs):
+            raise AssertionError("pool created for a small corpus")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+
+    def test_env_1_forces_sequential(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+
+        def boom(*args, **kwargs):
+            raise AssertionError("pool created despite PDF_MCP_MAX_WORKERS=1")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+
+
 class TestWarmDocs:
     def test_warms_all_within_budget(self, corpus_dir, cache):
         out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))

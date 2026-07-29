@@ -159,6 +159,13 @@ class TestConcurrentWarm:
             got_meta = con_cache.get_metadata(path)
             assert got_meta["page_count"] == want_meta["page_count"]
             assert got_meta["text_coverage"] == want_meta["text_coverage"]
+            # TOC and PDF-native metadata are deterministic extraction
+            # output (independent of which process did the extracting),
+            # so they must match exactly between the sequential and
+            # concurrent caches. file_path/file_size/accessed_at are
+            # cache-bookkeeping fields, not asserted here.
+            assert got_meta["toc"] == want_meta["toc"]
+            assert got_meta["metadata"] == want_meta["metadata"]
             pages = list(range(want_meta["page_count"]))
             want = seq_cache.get_pages_text(path, pages)
             got = con_cache.get_pages_text(path, pages)

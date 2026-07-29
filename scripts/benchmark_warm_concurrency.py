@@ -10,9 +10,10 @@ forced via the shipped controls (`corpus.WARM_DOC_GATE` +
 
 Two modes:
   --mode text        text-only warm (default)
-  --mode embeddings  text + embeddings warm (requires the [semantic] extra;
-                     concurrent variant extracts in workers, then does ONE
-                     parent-side batched encode)
+  --mode embeddings  text + embeddings warm via the real warm_docs
+                     (requires the [semantic] extra); extraction runs in
+                     spawn workers, per-doc encode and all SQLite writes
+                     happen in the parent (_finalize_doc)
 
 Correctness note: pdf-mcp's column-aware `extract_text_from_page` is itself
 nondeterministic on some multi-column pages (an intermittent PyMuPDF

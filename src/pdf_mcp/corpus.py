@@ -45,10 +45,10 @@ CORPUS_MAX_FILES = 100
 CORPUS_RRF_K = 60
 
 # Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
-# Below the gate, sequential is faster (spawn/IPC overhead, workers=1
-# measured 0.98x). Text warm scales to 8 workers (4.1x); embeddings warm
-# is encode-bound and plateaus at ~4 (extra processes oversubscribe the
-# encode's own threads).
+# Below the gate, sequential is faster (spawn/IPC overhead outweighs the
+# win). Text warm scales to 8 workers (3.87x); embeddings warm is
+# encode-bound and plateaus at ~4 workers (1.62x; extra processes
+# oversubscribe the encode's own threads).
 WARM_DOC_GATE = 4
 WARM_TEXT_CAP = 8
 WARM_EMBED_CAP = 4
@@ -390,6 +390,10 @@ def _warm_concurrent(
                         }
                     )
     except (BrokenProcessPool, OSError):
+        # Leaving the `with` block joins in-flight workers (shutdown(wait=
+        # True)); their partial results are discarded and those docs are
+        # re-extracted sequentially below. Bounded by the worker count,
+        # rare path, accepted.
         remaining = [item for item in uncached if item[0] not in handled]
         unprocessed, budget_exhausted, seq_warmed = _warm_sequential(
             remaining,

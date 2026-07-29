@@ -1683,9 +1683,10 @@ def pdf_search(
               has hidden text. Always present in page mode (False when no
               matches). Treat flagged excerpts as especially untrusted; the
               text is not removed. Not emitted in section mode.
-            - semantic_unavailable (only set in auto mode when the
-              embedding model could not be loaded; the response then
-              degrades to search_mode='keyword' and carries a
+            - semantic_unavailable (only set in auto mode when fastembed
+              is not installed or the embedding model could not be
+              loaded; the response then degrades to
+              search_mode='keyword' and carries a
               `semantic_unavailable_reason` string).
             - excerpt_style: 'paragraph' (default) or 'snippet' if
               explicitly requested.
@@ -2024,8 +2025,11 @@ def pdf_search(
             _embedder.check_available(_model_name)
         except ValueError as exc:
             return {"error": str(exc)}
-        except ImportError:
-            return _auto_keyword_fallback()
+        except ImportError as exc:
+            # Signal the degradation instead of silently running keyword-only:
+            # the embedder's message carries the pdf-mcp[semantic] install
+            # hint, and pdf_corpus_search already reports ImportError this way.
+            return _auto_keyword_fallback(reason=str(exc))
 
         # ── Hybrid: semantic search + RRF fusion ──────────────────────────
         import numpy as np

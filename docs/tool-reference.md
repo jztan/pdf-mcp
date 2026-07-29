@@ -616,7 +616,7 @@ hits measurably lowers result quality.
 - `excerpt_style` (string) — `"paragraph"` (default) or `"snippet"` if explicitly requested. Reflects which excerpt mode produced the results.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).
-- `semantic_unavailable` (bool, conditional) — set in `auto` mode when the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason`.
+- `semantic_unavailable` (bool, conditional) — set in `auto` mode when fastembed is not installed or the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason` (with an install hint when fastembed is missing).
 
 **Returns (section mode, `granularity="section"`):**
 - `sections` (array) — Each entry has `{section_id, title, title_source, start_page, end_page, score}`, sorted by descending BM25 relevance.

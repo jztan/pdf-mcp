@@ -68,14 +68,19 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 
 ## Installation
 
-```bash
-pip install pdf-mcp
-```
-
-For semantic search (adds `fastembed` and `numpy`, ~67 MB model download on first use):
+Recommended — includes semantic search, which hybrid (`auto`) search and the
+retrieval quality numbers below are built on (adds `fastembed`, ~67 MB model
+download on first use):
 
 ```bash
 pip install 'pdf-mcp[semantic]'
+```
+
+Minimal install (keyword search and extraction only; `auto` search degrades
+to keyword and responses flag `semantic_unavailable`):
+
+```bash
+pip install pdf-mcp
 ```
 
 For correct reading order on multi-column PDFs (adds `pymupdf4llm`, which pulls `pymupdf_layout`/`onnxruntime`):
@@ -246,14 +251,14 @@ Most MCP clients use a standard configuration format:
 }
 ```
 
-With `uvx` (for isolated environments):
+With `uvx` (for isolated environments; `--from` carries the semantic extra):
 
 ```json
 {
   "mcpServers": {
     "pdf-mcp": {
       "command": "uvx",
-      "args": ["pdf-mcp"]
+      "args": ["--from", "pdf-mcp[semantic]", "pdf-mcp"]
     }
   }
 }

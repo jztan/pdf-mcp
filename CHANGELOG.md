@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workers for text, 4 with embeddings), measured ~3.9x faster text warm
   at the 100-document cap; small corpora stay sequential.
 
+### Changed
+- `pdf_search(mode="auto")` without fastembed no longer degrades to
+  keyword-only silently: the response now carries
+  `semantic_unavailable: true` and a `semantic_unavailable_reason` with
+  the `pdf-mcp[semantic]` install hint, matching `pdf_corpus_search`'s
+  existing behavior. The README now recommends installing with the
+  `[semantic]` extra by default, since hybrid search is the validated
+  core of the tool.
+
 ### Fixed
 - Paragraph-excerpt block scoring is now hyphen-insensitive: a query token
   like `pretraining` matches page text spelled `pre-training` (including

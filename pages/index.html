@@ -838,6 +838,7 @@
       </div>
       <div class="suggested-chips" id="corpusChips"></div>
       <div id="corpusGrids"></div>
+      <div class="inline-reader" id="corpusAdHocReader"></div>
       <div class="search-results" id="corpusResults"></div>
       <div class="callout info" id="corpusCallout" style="display:none"></div>
       <div class="json-wrap hidden" id="cjson3"><pre class="json-box" id="cjson3-content"></pre></div>
@@ -1405,6 +1406,9 @@
         cell.title = `p. ${p}`;
         cell.dataset.path = d.path;
         cell.dataset.page = String(p);
+        cell.setAttribute("role", "button");
+        cell.setAttribute("tabindex", "0");
+        cell.setAttribute("aria-label", `Read page ${p} of ${d.path}`);
         if (readSet && readSet.has(p)) {
           cell.classList.add("read");
         } else if (hitMap) {
@@ -1414,7 +1418,7 @@
           const card = document.querySelector(
             `.result-card[data-page="${p}"][data-doc-idx="${corpusState.docs.indexOf(d)}"]`
           );
-          if (card) corpusReadInline(d.path, p, card);
+          corpusReadInline(d.path, p, card);
         });
         grid.appendChild(cell);
       }
@@ -1438,14 +1442,27 @@
     if (!doc) return;
     const text = doc.pageTexts[page - 1] ?? "";
     const tokens = Math.round(text.length / 4);
+    const already = corpusReadPages.has(path) && corpusReadPages.get(path).has(page);
+    const body = escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)";
     const reader = cardEl ? cardEl.querySelector(".inline-reader") : null;
-    if (reader && !reader.classList.contains("open")) {
+    if (reader) {
+      // A result card is on screen for this page — expand its own reader,
+      // same as the single-doc pattern. Idempotent: a second click on an
+      // already-open reader is a no-op.
+      if (reader.classList.contains("open")) return;
       cardEl.classList.add("reading");
-      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)"}`;
+      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${body}`;
       reader.classList.add("open");
-      ledgerAdd(tokens);
-      markCorpusRead(path, page);
+    } else {
+      // No result card for this page (a dim cell, or no search run yet) —
+      // still let the visitor read it, via the shared ad-hoc reader under
+      // the grid, mirroring readInline's no-card fallback for single docs.
+      const adHoc = $("corpusAdHocReader");
+      adHoc.innerHTML = `<b>${escapeHtml(path)} · pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${body}`;
+      adHoc.classList.add("open");
     }
+    if (!already) ledgerAdd(tokens);
+    markCorpusRead(path, page);
   }
 
   function buildCorpusSearchJson(query, matches, docMatchCounts) {

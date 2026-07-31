@@ -171,7 +171,7 @@ def main() -> None:
         / "demo_fusion_fixtures.json"
     )
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(fixtures, indent=2, ensure_ascii=False))
+    out.write_text(json.dumps(fixtures, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {out}")
 
 

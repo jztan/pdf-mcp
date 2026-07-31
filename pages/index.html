@@ -979,9 +979,8 @@
   <p class="other-tools">
     The demo shows 6 of pdf-mcp's 13 tools. The server also includes
     <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
-    <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>,
-    <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>,
-    <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and
+    <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>,
+    <code>pdf_cache_clear</code>, and
     <code>server_info</code>, plus OCR, SQLite caching, and RRF hybrid search.
   </p>
   <div class="links">
@@ -1131,6 +1130,18 @@
     return s;
   }
 
+  // Mirrors corpus.py's has_toc: a non-blank title at ANY outline depth
+  // counts, not just top-level entries (tocTop stays top-level-only, matching
+  // the server's toc_top).
+  function outlineHasNonBlankTitle(items) {
+    if (!items) return false;
+    for (const o of items) {
+      if ((o.title || "").trim()) return true;
+      if (o.items && outlineHasNonBlankTitle(o.items)) return true;
+    }
+    return false;
+  }
+
   // Actual rendered column count of a grid (robust to CSS/breakpoint changes).
   function gridCols(el) {
     return getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length || 24;
@@ -1217,8 +1228,8 @@
   function handleFiles(files) {
     const list = Array.from(files);
     if (list.length === 0) return;
-    if (list.length === 1) { handleFile(list[0]); return; }
     if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
+    if (list.length === 1) { handleFile(list[0]); return; }
 
     const pdfs = [], skipped = [];
     for (const f of list) {
@@ -1239,9 +1250,47 @@
     if (pdfs.length === 1) { handleFile(pdfs[0]); return; }
     startCorpus(pdfs, skipped).catch(() => {
       hideLoader();
+      teardownCorpus();
       uploadSection.classList.remove("hidden");
       showToast("Couldn't warm this corpus");
     });
+  }
+
+  // Tears down all corpus-mode state and DOM so either a direct switch to
+  // single-doc mode (runWorkflow) or "Try another PDF" leaves nothing
+  // stranded: corpusState/corpusReadPages, every corpus panel and JSON box,
+  // the ad-hoc reader, and the shared scoreboard node (which lives inside
+  // #corpusCard while in corpus mode and must move back into #docCard with
+  // its single-doc wording restored).
+  function teardownCorpus() {
+    document.getElementById("corpusWorkflow").classList.add("hidden");
+    corpusState = null;
+    corpusReadPages.clear();
+
+    document.getElementById("corpusWarmPanel").innerHTML = "";
+    document.getElementById("corpusOverviewPanel").classList.add("hidden");
+    document.getElementById("corpusOverviewPanel").innerHTML = "";
+    document.getElementById("corpusSearchPanel").classList.add("hidden");
+    $("corpusSearchInput").value = "";
+    $("corpusChips").innerHTML = "";
+    $("corpusGrids").innerHTML = "";
+    $("corpusAdHocReader").innerHTML = "";
+    $("corpusAdHocReader").classList.remove("open");
+    $("corpusResults").innerHTML = "";
+    $("corpusCallout").style.display = "none";
+    $("corpusCallout").innerHTML = "";
+    $("cjson1-content").innerHTML = "";
+    $("cjson2").classList.add("hidden"); $("cjson2-content").innerHTML = "";
+    $("cjson3").classList.add("hidden"); $("cjson3-content").innerHTML = "";
+    $("corpusName").textContent = "";
+    $("corpusCost").textContent = "";
+
+    // Restore the shared scoreboard to the single-doc card and its wording.
+    $("sbMaxLabel").textContent = "pasting the whole document";
+    const devRow = document.querySelector("#docCard .dev-row");
+    if (devRow) document.getElementById("docCard").insertBefore($("scoreboardBlock"), devRow);
+
+    docTokensTotal = 0;
   }
 
   async function startCorpus(pdfs, skipped) {
@@ -1249,6 +1298,9 @@
     corpusBusy = true;
     try {
       corpusState = { docs: [], skipped, warmElapsedMs: 0, warmedCount: 0 };
+      corpusReadPages.clear();
+      $("receipt").classList.add("hidden");
+      receiptShown = false;
       uploadSection.classList.add("hidden");
       document.getElementById("corpusWorkflow").classList.remove("hidden");
       document.getElementById("corpusName").textContent = `${pdfs.length} documents`;
@@ -1293,7 +1345,7 @@
             path: file.name, file, pages, pageTexts, sizeBytes: file.size,
             title: cleanTitle(meta && meta.info && meta.info.Title),
             tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
-            hasToc: !!(outline && outline.some((o) => (o.title || "").trim())),
+            hasToc: outlineHasNonBlankTitle(outline),
             tokens: Math.round(chars / 4),
           });
           corpusState.warmedCount++;
@@ -1500,7 +1552,7 @@
     const text = doc.pageTexts[page - 1] ?? "";
     const tokens = Math.round(text.length / 4);
     const already = corpusReadPages.has(path) && corpusReadPages.get(path).has(page);
-    const body = escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)";
+    const body = escapeHtml(text) || "(no extractable text: scanned page; OCR runs server-side)";
     const reader = cardEl ? cardEl.querySelector(".inline-reader") : null;
     if (reader) {
       // A result card is on screen for this page — expand its own reader,
@@ -1647,6 +1699,7 @@
   }
 
   async function handleUrl(url) {
+    if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
     showLoader("Fetching PDF...");
     try {
       const res = await fetch(url);
@@ -1658,6 +1711,7 @@
   }
 
   async function runWorkflow(data, filename, sizeBytes) {
+    if (corpusState) teardownCorpus();
     const loadingTask = pdfjs.getDocument({ data, cMapUrl: CMAP_URL, cMapPacked: true });
     loadingTask.onProgress = p => {
       if (p.total) loaderText.textContent = `Loading... ${Math.round(p.loaded / p.total * 100)}%`;
@@ -1997,7 +2051,7 @@
     const reader = card ? $(`reader-${page}`) : null;
     if (reader && !reader.classList.contains("open")) {
       card.classList.add("reading");
-      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${escapeHtml(text) || "(no extractable text — scanned page; OCR runs server-side)"}`;
+      reader.innerHTML = `<b>pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${escapeHtml(text) || "(no extractable text: scanned page; OCR runs server-side)"}`;
       reader.classList.add("open");
       markPageRead(page, tokens);
     } else if (!reader) {
@@ -2288,37 +2342,9 @@
   });
 
   $("corpusResetBtn").addEventListener("click", () => {
-    document.getElementById("corpusWorkflow").classList.add("hidden");
+    teardownCorpus();
     uploadSection.classList.remove("hidden");
     fileInput.value = ""; urlInput.value = "";
-
-    corpusState = null;
-    corpusReadPages.clear();
-
-    document.getElementById("corpusWarmPanel").innerHTML = "";
-    document.getElementById("corpusOverviewPanel").classList.add("hidden");
-    document.getElementById("corpusOverviewPanel").innerHTML = "";
-    document.getElementById("corpusSearchPanel").classList.add("hidden");
-    $("corpusSearchInput").value = "";
-    $("corpusChips").innerHTML = "";
-    $("corpusGrids").innerHTML = "";
-    $("corpusAdHocReader").innerHTML = "";
-    $("corpusAdHocReader").classList.remove("open");
-    $("corpusResults").innerHTML = "";
-    $("corpusCallout").style.display = "none";
-    $("corpusCallout").innerHTML = "";
-    $("cjson1-content").innerHTML = "";
-    $("cjson2").classList.add("hidden"); $("cjson2-content").innerHTML = "";
-    $("cjson3").classList.add("hidden"); $("cjson3-content").innerHTML = "";
-    $("corpusName").textContent = "";
-    $("corpusCost").textContent = "";
-
-    // Restore the shared scoreboard to the single-doc card and its wording.
-    $("sbMaxLabel").textContent = "pasting the whole document";
-    const devRow = document.querySelector("#docCard .dev-row");
-    if (devRow) document.getElementById("docCard").insertBefore($("scoreboardBlock"), devRow);
-
-    docTokensTotal = 0;
     ledgerReset();
     resetSteps();
     window.scrollTo({ top: 0, behavior: "smooth" });

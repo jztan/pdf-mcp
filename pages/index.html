@@ -241,6 +241,9 @@
   .hero-stat span { color: var(--accent); }
   .hero-ctas { margin-top: 36px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   .hero-ctas .btn-ghost { padding: 12px 22px; font-size: 15px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); }
+  .btn.btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn.btn-outline:hover { background: rgba(0, 113, 227, 0.08); }
+  @media (prefers-color-scheme: dark) { .btn.btn-outline:hover { background: rgba(41, 151, 255, 0.12); } }
   .hero-privacy { margin-top: 26px; }
   @media (prefers-reduced-motion: reduce) {
     .pgcell { transition: none; }
@@ -717,13 +720,13 @@
 <section class="hero">
   <div class="inner">
     <p class="hero-title">Your agent doesn’t need<br />the whole document.</p>
-    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents the tools to skim, search, and read only the pages that matter.</p>
+    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents the tools to skim, search, and read only the pages that matter, from one PDF or a whole folder of them.</p>
     <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
     <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
     <div class="hero-ctas">
       <button class="btn" id="ctaOwn">Try it on your PDF</button>
+      <button class="btn btn-outline" id="ctaCorpus">Search a folder, 5-PDF sample corpus</button>
       <button class="btn btn-ghost" id="ctaSample">Use the sample — a 216-page contract</button>
-      <button class="btn btn-ghost" id="ctaCorpus">Search a folder, 5-PDF sample corpus</button>
     </div>
     <div class="hero-privacy">
       <div class="privacy-pill">

@@ -1204,7 +1204,11 @@
     }
     if (pdfs.length === 0) { showToast("No PDFs in that drop."); return; }
     if (pdfs.length === 1) { handleFile(pdfs[0]); return; }
-    startCorpus(pdfs, skipped); // Task 4
+    startCorpus(pdfs, skipped).catch(() => {
+      hideLoader();
+      uploadSection.classList.remove("hidden");
+      showToast("Couldn't warm this corpus");
+    });
   }
 
   async function startCorpus(pdfs, skipped) {
@@ -1236,28 +1240,37 @@
     for (const { file, doc, pages } of probed) {
       const row = rows.get(file.name);
       row.state.textContent = "extracting…"; row.state.className = "warm-state active";
-      const pageTexts = [];
-      for (let p = 1; p <= pages; p++) {
-        const page = await doc.getPage(p);
-        const tc = await page.getTextContent();
-        pageTexts.push(tc.items.map((i) => i.str).join(" "));
-        row.bar.style.width = `${Math.round((p / pages) * 100)}%`;
-        row.state.textContent = `extracting p.${p}`;
-        if (p % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+      try {
+        const pageTexts = [];
+        for (let p = 1; p <= pages; p++) {
+          const page = await doc.getPage(p);
+          const tc = await page.getTextContent();
+          pageTexts.push(tc.items.map((i) => i.str).join(" "));
+          row.bar.style.width = `${Math.round((p / pages) * 100)}%`;
+          row.state.textContent = `extracting p.${p}`;
+          if (p % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+        }
+        const meta = await doc.getMetadata().catch(() => null);
+        const outline = await doc.getOutline().catch(() => null);
+        const chars = pageTexts.reduce((a, t) => a + t.length, 0);
+        corpusState.docs.push({
+          path: file.name, file, pages, pageTexts, sizeBytes: file.size,
+          title: cleanTitle(meta && meta.info && meta.info.Title),
+          tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
+          hasToc: !!(outline && outline.some((o) => (o.title || "").trim())),
+          tokens: Math.round(chars / 4),
+        });
+        corpusState.warmedCount++;
+        row.state.textContent = "warmed"; row.state.className = "warm-state done";
+        row.bar.style.width = "100%";
+      } catch (e) {
+        // Mirror the server's per-doc failure handling (warm_docs never aborts
+        // the batch on one bad doc): skip this doc, keep warming the rest.
+        corpusState.skipped.push({ path: file.name, reason: `unreadable: ${e.message || e}` });
+        row.state.textContent = `skipped · unreadable: ${e.message || e}`;
+        row.state.className = "warm-state skip";
+        row.row.querySelector(".warm-mini").style.visibility = "hidden";
       }
-      const meta = await doc.getMetadata().catch(() => null);
-      const outline = await doc.getOutline().catch(() => null);
-      const chars = pageTexts.reduce((a, t) => a + t.length, 0);
-      corpusState.docs.push({
-        path: file.name, file, pages, pageTexts, sizeBytes: file.size,
-        title: cleanTitle(meta && meta.info && meta.info.Title),
-        tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
-        hasToc: !!(outline && outline.some((o) => (o.title || "").trim())),
-        tokens: Math.round(chars / 4),
-      });
-      corpusState.warmedCount++;
-      row.state.textContent = "warmed"; row.state.className = "warm-state done";
-      row.bar.style.width = "100%";
     }
     corpusState.warmElapsedMs = performance.now() - t0;
     corpusState.docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));

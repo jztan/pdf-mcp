@@ -276,7 +276,11 @@
   .warm-state.queued { color: var(--text-tertiary); }
   .warm-state.skip { color: var(--warning); }
   .warm-mini { position: relative; width: 90px; height: 6px; border-radius: 4px; background: var(--bg-subtle); border: 1px solid var(--border); overflow: hidden; }
-  .warm-mini i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+  .warm-mini i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width 0.35s ease; }
+  .ov-card { opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .ov-card.on { opacity: 1; transform: none; }
+  .doc-card.enter { animation: cardIn 0.5s ease both; }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } }
   .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
   .ov-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elev); padding: 16px; }
   .ov-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
@@ -490,7 +494,7 @@
   .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
   details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
   details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } }
 
   .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
@@ -1314,6 +1318,8 @@
       receiptShown = false;
       uploadSection.classList.add("hidden");
       document.getElementById("corpusWorkflow").classList.remove("hidden");
+      const corpusCard = document.getElementById("corpusCard");
+      corpusCard.classList.remove("enter"); void corpusCard.offsetWidth; corpusCard.classList.add("enter");
       document.getElementById("corpusName").textContent = `${pdfs.length} documents`;
       const panel = document.getElementById("corpusWarmPanel");
       panel.innerHTML = "";
@@ -1338,6 +1344,7 @@
 
       for (const { file, doc, pages } of probed) {
         const row = rows.get(file.name);
+        const docShownAt = performance.now();
         row.state.textContent = "extracting…"; row.state.className = "warm-state active";
         try {
           const pageTexts = [];
@@ -1360,6 +1367,14 @@
             tokens: Math.round(chars / 4),
           });
           corpusState.warmedCount++;
+          // Presentation pacing only: small docs extract in tens of ms, which
+          // makes the warm stage unreadable. Hold each row visibly "extracting"
+          // for a beat. The JSON envelope carries no timing field, so nothing
+          // reported is inflated.
+          if (!REDUCED_MOTION) {
+            const dwell = 650 - (performance.now() - docShownAt);
+            if (dwell > 0) await new Promise((r) => setTimeout(r, dwell));
+          }
           row.state.textContent = "warmed"; row.state.className = "warm-state done";
           row.bar.style.width = "100%";
         } catch (e) {
@@ -1389,6 +1404,9 @@
       document.getElementById("cjson1-content").innerHTML = syntaxHighlight(JSON.stringify(warmJson, null, 2));
       ledgerAdd(Math.round(JSON.stringify(warmJson).length / 4));
       track("corpus_warm", { docs: corpusState.docs.length });
+      // A beat between "everything warmed" and the overview appearing, so the
+      // completed warm list registers before the cards arrive.
+      if (!REDUCED_MOTION) await new Promise((r) => setTimeout(r, 400));
       showCorpusOverview();
     } finally {
       corpusBusy = false;
@@ -1470,6 +1488,10 @@
     }
     panel.innerHTML = "";
     panel.appendChild(grid);
+    grid.querySelectorAll(".ov-card").forEach((c, i) => {
+      if (REDUCED_MOTION) c.classList.add("on");
+      else setTimeout(() => c.classList.add("on"), 120 + i * 110);
+    });
     const json = buildCorpusOverviewJson();
     document.getElementById("cjson2").classList.remove("hidden");
     document.getElementById("cjson2-content").innerHTML = syntaxHighlight(JSON.stringify(json, null, 2));
@@ -1839,6 +1861,8 @@
     hideLoader();
     uploadSection.classList.add("hidden");
     workflow.classList.remove("hidden");
+    const dc = document.getElementById("docCard");
+    dc.classList.remove("enter"); void dc.offsetWidth; dc.classList.add("enter");
     setTimeout(() => workflow.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 

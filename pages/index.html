@@ -281,6 +281,8 @@
   .ov-card.on { opacity: 1; transform: none; }
   .doc-card.enter { animation: cardIn 0.5s ease both; }
   @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } }
+  .lgrid.cascade .pgcell { opacity: 0; animation: cellIn 0.35s ease forwards; }
+  @keyframes cellIn { to { opacity: 1; } }
   .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
   .ov-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elev); padding: 16px; }
   .ov-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
@@ -494,7 +496,7 @@
   .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
   details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
   details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } .lgrid.cascade .pgcell { animation: none; opacity: 1; } }
 
   .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
@@ -729,7 +731,7 @@
     <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
     <div class="hero-ctas">
       <button class="btn" id="ctaOwn">Try it on your PDF</button>
-      <button class="btn btn-outline" id="ctaCorpus">Search a folder, 5-PDF sample corpus</button>
+      <button class="btn btn-outline" id="ctaCorpus">Search a folder, 6-PDF sample corpus</button>
       <button class="btn btn-ghost" id="ctaSample">Use the sample — a 216-page contract</button>
     </div>
     <div class="hero-privacy">
@@ -1205,7 +1207,7 @@
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
   $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
-  const SAMPLE_CORPUS = ["corpus/nist-ai-rmf.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/cfpb-credit-trends.pdf", "corpus/usda-organic.pdf"];
+  const SAMPLE_CORPUS = ["corpus/nist-ai-rmf.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/cfpb-credit-trends.pdf", "corpus/usda-organic.pdf", "corpus/arxiv-llama.pdf"];
 
   async function loadSampleCorpus() {
     if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
@@ -1522,7 +1524,7 @@
 
   function renderCorpusChips() {
     const chips = [
-      "requirements",
+      "standard",
       "cloud security requirements",
       "organic labeling",
     ];
@@ -1943,10 +1945,17 @@
       gridEl.classList.remove("hidden");
       gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}"></div>`;
+        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}" style="animation-delay:${Math.min(i * 5, 1100)}ms"></div>`;
       }).join("");
       gridEl.querySelectorAll(".pgcell").forEach(cell =>
         onActivate(cell, () => readInline(parseInt(cell.dataset.page, 10))));
+      // Paint the page map in a left-to-right wave so the document's shape
+      // registers before the first tool call. Class removed after the wave so
+      // later dim/hit sweeps are unaffected.
+      if (!REDUCED_MOTION) {
+        gridEl.classList.add("cascade");
+        setTimeout(() => gridEl.classList.remove("cascade"), 2200);
+      }
     } else {
       $("liveGrid").classList.add("hidden");
       svgEl.classList.remove("hidden");

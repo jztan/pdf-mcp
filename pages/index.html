@@ -786,7 +786,7 @@
     <div class="search-results" id="searchResults"></div>
     <div class="callout" id="kwCallout" style="display:none">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>. Images, tables, and hidden-text detection are server-side only (PyMuPDF), so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
+      <span><strong>Keyword mode</strong> shown here. The installed server also runs a semantic arm (on by default in v2) and fuses both with RRF. Images, tables, and hidden-text detection are server-side only (PyMuPDF), so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
     </div>
     <div class="scoreboard" id="scoreboardBlock">
       <div class="sb-head"><span class="sb-title">what your agent has cost so far</span><span class="sb-pct" id="sbPct">0%</span></div>
@@ -863,7 +863,7 @@
 <section class="features">
   <div class="inner">
     <h2 class="features-title">Far more than the demo shows.</h2>
-    <p class="features-sub">The demo runs 3 tools client-side. The installed server does all of this.</p>
+    <p class="features-sub">The demo runs 6 tools client-side. The installed server does all of this.</p>
     <div class="feature-grid">
 
       <div class="feature-card">
@@ -977,7 +977,7 @@
     </button>
   </div>
   <p class="other-tools">
-    The demo shows 3 of pdf-mcp's 13 tools. The server also includes
+    The demo shows 6 of pdf-mcp's 13 tools. The server also includes
     <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
     <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>,
     <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>,
@@ -1006,12 +1006,12 @@
 
     <h2>How agents use pdf-mcp</h2>
     <p>
-      The server exposes thirteen tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs keyword search (or hybrid semantic + BM25 if <code>fastembed</code> is installed) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other ten tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>, <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, chart-data extraction, whole-folder triage and cross-document search, cache management, and discovery of which optional features are installed.
+      The server exposes thirteen tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs hybrid semantic + BM25 search by default (keyword-only and semantic-only modes are one argument away) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other ten tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>, <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, chart-data extraction, whole-folder triage and cross-document search, cache management, and discovery of which optional features are installed.
     </p>
 
     <h2>What the browser demo shows</h2>
     <p>
-      This page is a faithful in-browser simulation of pdf-mcp's three main tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
+      This page is a faithful in-browser simulation of six of pdf-mcp's tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
     </p>
 
     <h2>Install</h2>
@@ -1025,7 +1025,7 @@
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v0.10.0</p>
+  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v1.0.0</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>

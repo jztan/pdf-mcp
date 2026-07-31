@@ -1044,6 +1044,14 @@
   let docTokensTotal = 0;
   let pdfInfo = null, pdfSearch = null, pdfReadPages = null;
   let corpusState = null;
+  // In-flight guard: startCorpus's async warm loop reads/mutates the module-
+  // level corpusState across many awaits. Two concurrent invocations (a
+  // double-click on the corpus CTA, or a second multi-file drop while a warm
+  // is running) would interleave — the second call's fresh corpusState
+  // reassignment makes the first call's in-flight corpusState.docs.push(...)
+  // land on the second call's object. This flag rejects a second start while
+  // one is already running.
+  let corpusBusy = false;
 
   const $ = (id) => document.getElementById(id);
   function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
@@ -1175,6 +1183,7 @@
   const SAMPLE_CORPUS = ["corpus/nist-ai-rmf.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/cfpb-credit-trends.pdf", "corpus/usda-organic.pdf"];
 
   async function loadSampleCorpus() {
+    if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
     track("corpus_sample_loaded");
     showLoader("Fetching sample corpus…");
     try {
@@ -1209,6 +1218,7 @@
     const list = Array.from(files);
     if (list.length === 0) return;
     if (list.length === 1) { handleFile(list[0]); return; }
+    if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
 
     const pdfs = [], skipped = [];
     for (const f of list) {
@@ -1235,85 +1245,91 @@
   }
 
   async function startCorpus(pdfs, skipped) {
-    corpusState = { docs: [], skipped, warmElapsedMs: 0, warmedCount: 0 };
-    uploadSection.classList.add("hidden");
-    document.getElementById("corpusWorkflow").classList.remove("hidden");
-    document.getElementById("corpusName").textContent = `${pdfs.length} documents`;
-    const panel = document.getElementById("corpusWarmPanel");
-    panel.innerHTML = "";
-    const t0 = performance.now();
+    if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
+    corpusBusy = true;
+    try {
+      corpusState = { docs: [], skipped, warmElapsedMs: 0, warmedCount: 0 };
+      uploadSection.classList.add("hidden");
+      document.getElementById("corpusWorkflow").classList.remove("hidden");
+      document.getElementById("corpusName").textContent = `${pdfs.length} documents`;
+      const panel = document.getElementById("corpusWarmPanel");
+      panel.innerHTML = "";
+      const t0 = performance.now();
 
-    // Probe page counts first, then warm smallest-first like the server.
-    const probed = [];
-    for (const file of pdfs) {
-      try {
-        const buf = await file.arrayBuffer();
-        const doc = await pdfjs.getDocument({ data: buf, cMapUrl: CMAP_URL, cMapPacked: true }).promise;
-        probed.push({ file, doc, pages: doc.numPages });
-      } catch (e) {
-        skipped.push({ path: file.name, reason: `unreadable: ${e.message || e}` });
-      }
-    }
-    probed.sort((a, b) => a.pages - b.pages);
-
-    const rows = new Map();
-    for (const { file, pages } of probed) rows.set(file.name, addWarmRow(panel, file.name, pages));
-    for (const s of skipped) addWarmRow(panel, s.path, null, s.reason);
-
-    for (const { file, doc, pages } of probed) {
-      const row = rows.get(file.name);
-      row.state.textContent = "extracting…"; row.state.className = "warm-state active";
-      try {
-        const pageTexts = [];
-        for (let p = 1; p <= pages; p++) {
-          const page = await doc.getPage(p);
-          const tc = await page.getTextContent();
-          pageTexts.push(tc.items.map((i) => i.str).join(" "));
-          row.bar.style.width = `${Math.round((p / pages) * 100)}%`;
-          row.state.textContent = `extracting p.${p}`;
-          if (p % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+      // Probe page counts first, then warm smallest-first like the server.
+      const probed = [];
+      for (const file of pdfs) {
+        try {
+          const buf = await file.arrayBuffer();
+          const doc = await pdfjs.getDocument({ data: buf, cMapUrl: CMAP_URL, cMapPacked: true }).promise;
+          probed.push({ file, doc, pages: doc.numPages });
+        } catch (e) {
+          skipped.push({ path: file.name, reason: `unreadable: ${e.message || e}` });
         }
-        const meta = await doc.getMetadata().catch(() => null);
-        const outline = await doc.getOutline().catch(() => null);
-        const chars = pageTexts.reduce((a, t) => a + t.length, 0);
-        corpusState.docs.push({
-          path: file.name, file, pages, pageTexts, sizeBytes: file.size,
-          title: cleanTitle(meta && meta.info && meta.info.Title),
-          tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
-          hasToc: !!(outline && outline.some((o) => (o.title || "").trim())),
-          tokens: Math.round(chars / 4),
-        });
-        corpusState.warmedCount++;
-        row.state.textContent = "warmed"; row.state.className = "warm-state done";
-        row.bar.style.width = "100%";
-      } catch (e) {
-        // Mirror the server's per-doc failure handling (warm_docs never aborts
-        // the batch on one bad doc): skip this doc, keep warming the rest.
-        corpusState.skipped.push({ path: file.name, reason: `unreadable: ${e.message || e}` });
-        row.state.textContent = `skipped · unreadable: ${e.message || e}`;
-        row.state.className = "warm-state skip";
-        row.row.querySelector(".warm-mini").style.visibility = "hidden";
       }
+      probed.sort((a, b) => a.pages - b.pages);
+
+      const rows = new Map();
+      for (const { file, pages } of probed) rows.set(file.name, addWarmRow(panel, file.name, pages));
+      for (const s of skipped) addWarmRow(panel, s.path, null, s.reason);
+
+      for (const { file, doc, pages } of probed) {
+        const row = rows.get(file.name);
+        row.state.textContent = "extracting…"; row.state.className = "warm-state active";
+        try {
+          const pageTexts = [];
+          for (let p = 1; p <= pages; p++) {
+            const page = await doc.getPage(p);
+            const tc = await page.getTextContent();
+            pageTexts.push(tc.items.map((i) => i.str).join(" "));
+            row.bar.style.width = `${Math.round((p / pages) * 100)}%`;
+            row.state.textContent = `extracting p.${p}`;
+            if (p % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+          }
+          const meta = await doc.getMetadata().catch(() => null);
+          const outline = await doc.getOutline().catch(() => null);
+          const chars = pageTexts.reduce((a, t) => a + t.length, 0);
+          corpusState.docs.push({
+            path: file.name, file, pages, pageTexts, sizeBytes: file.size,
+            title: cleanTitle(meta && meta.info && meta.info.Title),
+            tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
+            hasToc: !!(outline && outline.some((o) => (o.title || "").trim())),
+            tokens: Math.round(chars / 4),
+          });
+          corpusState.warmedCount++;
+          row.state.textContent = "warmed"; row.state.className = "warm-state done";
+          row.bar.style.width = "100%";
+        } catch (e) {
+          // Mirror the server's per-doc failure handling (warm_docs never aborts
+          // the batch on one bad doc): skip this doc, keep warming the rest.
+          corpusState.skipped.push({ path: file.name, reason: `unreadable: ${e.message || e}` });
+          row.state.textContent = `skipped · unreadable: ${e.message || e}`;
+          row.state.className = "warm-state skip";
+          row.row.querySelector(".warm-mini").style.visibility = "hidden";
+        }
+      }
+      corpusState.warmElapsedMs = performance.now() - t0;
+      corpusState.docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
+      // Corpus-sized denominator: the single-doc `docTokensTotal` ("pasted whole")
+      // is otherwise never populated in this flow, which clamps every ledgerAdd
+      // to 0 (ledgerAdd's Math.min(docTokensTotal, ...) floor). Set it — and move
+      // the shared scoreboard block into the corpus card — before the first
+      // ledgerAdd call below, so no early charge is lost to the stale denominator.
+      docTokensTotal = Math.max(1, corpusState.docs.reduce((a, d) => a + d.tokens, 0));
+      $("corpusCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
+      $("sbMaxLabel").textContent = `pasting all ${corpusState.docs.length} documents`;
+      document.getElementById("corpusCard").insertBefore($("scoreboardBlock"), panel);
+      ledgerReset();
+
+      const warmJson = buildCorpusWarmJson();
+      document.getElementById("cjson1-content").innerHTML = syntaxHighlight(JSON.stringify(warmJson, null, 2));
+      ledgerAdd(Math.round(JSON.stringify(warmJson).length / 4));
+      track("corpus_warm", { docs: corpusState.docs.length });
+      showCorpusOverview();
+    } finally {
+      corpusBusy = false;
     }
-    corpusState.warmElapsedMs = performance.now() - t0;
-    corpusState.docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-
-    // Corpus-sized denominator: the single-doc `docTokensTotal` ("pasted whole")
-    // is otherwise never populated in this flow, which clamps every ledgerAdd
-    // to 0 (ledgerAdd's Math.min(docTokensTotal, ...) floor). Set it — and move
-    // the shared scoreboard block into the corpus card — before the first
-    // ledgerAdd call below, so no early charge is lost to the stale denominator.
-    docTokensTotal = Math.max(1, corpusState.docs.reduce((a, d) => a + d.tokens, 0));
-    $("corpusCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
-    $("sbMaxLabel").textContent = `pasting all ${corpusState.docs.length} documents`;
-    document.getElementById("corpusCard").insertBefore($("scoreboardBlock"), panel);
-    ledgerReset();
-
-    const warmJson = buildCorpusWarmJson();
-    document.getElementById("cjson1-content").innerHTML = syntaxHighlight(JSON.stringify(warmJson, null, 2));
-    ledgerAdd(Math.round(JSON.stringify(warmJson).length / 4));
-    track("corpus_warm", { docs: corpusState.docs.length });
-    showCorpusOverview();
   }
 
   function addWarmRow(panel, name, pages, skipReason) {

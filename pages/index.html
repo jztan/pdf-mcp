@@ -1341,7 +1341,11 @@
       probed.sort((a, b) => a.pages - b.pages);
 
       const rows = new Map();
-      for (const { file, pages } of probed) rows.set(file.name, addWarmRow(panel, file.name, pages));
+      // Rows render path-sorted so the warm list, overview cards, grids, and
+      // JSON envelopes all share one order; extraction submission below stays
+      // smallest-first (the server's pool submission order).
+      for (const { file, pages } of [...probed].sort((a, b) => (a.file.name < b.file.name ? -1 : 1)))
+        rows.set(file.name, addWarmRow(panel, file.name, pages));
       for (const s of skipped) addWarmRow(panel, s.path, null, s.reason);
 
       // Concurrent warm, like the server: pdf_corpus_warm extracts in a

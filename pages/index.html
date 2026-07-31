@@ -1310,8 +1310,62 @@
     };
   }
 
-  // Task 5 replaces this with the real overview render.
-  function showCorpusOverview() {}
+  function textCoverageLabel(pageTexts) {
+    const withText = pageTexts.filter((t) => t.trim().length > 0).length;
+    if (pageTexts.length && withText === pageTexts.length) return "full";
+    if (withText === 0) return "none";
+    return "partial";
+  }
+
+  function buildCorpusOverviewJson() {
+    return {
+      docs: corpusState.docs.map((d) => ({
+        path: d.path,
+        title: d.title,
+        pages: d.pages,
+        toc_top: d.tocTop,
+        has_toc: d.hasToc,
+        text_coverage: textCoverageLabel(d.pageTexts),
+        size_bytes: d.sizeBytes,
+        from_cache: false,
+      })),
+      unprocessed: [],
+      skipped: corpusState.skipped,
+      corpus_size: corpusState.docs.length,
+      warmed_this_call: corpusState.warmedCount,
+      budget_exhausted: false,
+    };
+  }
+
+  function showCorpusOverview() {
+    const panel = document.getElementById("corpusOverviewPanel");
+    panel.classList.remove("hidden");
+    const grid = document.createElement("div");
+    grid.className = "ov-grid";
+    for (const d of corpusState.docs) {
+      const cov = textCoverageLabel(d.pageTexts);
+      const card = document.createElement("div");
+      card.className = "ov-card";
+      card.innerHTML =
+        `<p class="ov-title">${escapeHtml(d.title || d.path)}</p>` +
+        `<div class="ov-file">${escapeHtml(d.path)}</div>` +
+        `<div class="ov-meta"><span class="ov-pill">${d.pages} pages</span>` +
+        `<span class="ov-pill${cov === "full" ? " full" : ""}">${cov === "full" ? "full text" : cov + " text"}</span></div>` +
+        (d.tocTop.length ? `<ul class="ov-toc">${d.tocTop.slice(0, 3).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "");
+      grid.appendChild(card);
+    }
+    panel.innerHTML = "";
+    panel.appendChild(grid);
+    const json = buildCorpusOverviewJson();
+    document.getElementById("cjson2").classList.remove("hidden");
+    document.getElementById("cjson2-content").innerHTML = syntaxHighlight(JSON.stringify(json, null, 2));
+    ledgerAdd(Math.round(JSON.stringify(json).length / 4));
+    document.getElementById("corpusSearchPanel").classList.remove("hidden");
+    renderCorpusChips(); // Task 6; stub as no-op for this task's check
+  }
+
+  // Task 6 replaces this with the real corpus-search chip UI.
+  function renderCorpusChips() {}
 
   async function handleFile(file) {
     if (file.size > 20 * 1024 * 1024) return showToast("Please use a PDF under 20 MB");

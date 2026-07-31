@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at the 100-document cap; small corpora stay sequential.
 
 ### Changed
-- Demo page v2.0.0 (versioned in step with the server from this release): interactive corpus flow (warm progress, overview triage cards, cross-document keyword search with the server's RRF fusion and term-coverage tie-break, per-document page grids, corpus-sized token scoreboard), bundled 6-PDF sample corpus (five public-domain US federal documents plus one CC-BY arXiv paper), multi-file drop, and updated copy for semantic-by-default.
+- Demo page v2.0.0 (versioned in step with the server from this release): interactive corpus flow (warm progress, overview triage cards, cross-document keyword search with the server's RRF fusion and term-coverage tie-break, per-document page grids, corpus-sized token scoreboard), bundled 6-PDF public-domain sample corpus (US federal publications), multi-file drop, and updated copy for semantic-by-default.
 - Semantic search is now part of the default install: `fastembed` moved
   from the `[semantic]` extra into core dependencies, so hybrid `auto`
   search and CJK semantic search work on every install channel (PyPI,

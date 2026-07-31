@@ -987,6 +987,72 @@
 
   const $ = (id) => document.getElementById(id);
   function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
+
+  /* __PDF_MCP_CORPUS_FUSION_BEGIN__ */
+  // Faithful port of the server's keyword-mode corpus fusion:
+  // corpus.rrf_fuse_doc_rankings plus the term-coverage×IDF tie-break
+  // (server._corpus_query_terms / _doc_covered_terms /
+  // _corpus_coverage_scores). Without the tie-break, every document's
+  // rank-1 page ties at 1/(k+0) and the ranking degrades to filename
+  // order. Verified against Python-generated fixtures by
+  // scripts/check_demo_fusion_parity.mjs.
+  const CORPUS_RRF_K = 60;
+
+  function corpusQueryTerms(query) {
+    const out = new Set();
+    for (const t of (query.toLowerCase().match(/[a-z0-9]+/g) || [])) {
+      if (t.length > 3) out.add(t);
+    }
+    return out;
+  }
+
+  function docCoveredTerms(pageTexts, terms) {
+    const found = new Set();
+    for (const text of pageTexts) {
+      const toks = new Set(text.toLowerCase().match(/[a-z0-9]+/g) || []);
+      for (const t of terms) if (toks.has(t)) found.add(t);
+      if (found.size === terms.size) break;
+    }
+    return found;
+  }
+
+  function corpusCoverageScores(covered) {
+    const scores = new Map();
+    const nDocs = covered.size;
+    if (!nDocs) return scores;
+    const df = new Map();
+    for (const terms of covered.values())
+      for (const t of terms) df.set(t, (df.get(t) || 0) + 1);
+    for (const [path, terms] of covered) {
+      let s = 0;
+      for (const t of terms) s += Math.log(1 + nDocs / df.get(t));
+      scores.set(path, s);
+    }
+    return scores;
+  }
+
+  function rrfFuseDocRankings(rankLists, k = CORPUS_RRF_K, topK = null, scores = null) {
+    const scored = [];
+    for (const hits of rankLists) {
+      hits.forEach(([doc, page], rank) => {
+        const key = doc + "\n" + page;
+        const rel = scores && scores.has(key) ? scores.get(key) : -Infinity;
+        scored.push([1 / (k + rank), rel, doc, page]);
+      });
+    }
+    scored.sort((a, b) => {
+      if (a[0] !== b[0]) return b[0] - a[0];
+      if (a[1] !== b[1]) return a[1] === -Infinity ? 1 : b[1] === -Infinity ? -1 : b[1] - a[1];
+      if (a[2] !== b[2]) return a[2] < b[2] ? -1 : 1;
+      return a[3] - b[3];
+    });
+    const fused = scored.map((t) => [t[2], t[3]]);
+    return topK !== null ? fused.slice(0, topK) : fused;
+  }
+
+  const corpusFusion = { CORPUS_RRF_K, corpusQueryTerms, docCoveredTerms, corpusCoverageScores, rrfFuseDocRankings };
+  /* __PDF_MCP_CORPUS_FUSION_END__ */
+
   // Actual rendered column count of a grid (robust to CSS/breakpoint changes).
   function gridCols(el) {
     return getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length || 24;

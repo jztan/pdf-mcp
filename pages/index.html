@@ -830,8 +830,10 @@
       <div class="doc-name" id="corpusName"></div>
       <div class="doc-cost">pasted whole: <b id="corpusCost"></b></div>
     </div>
+    <div style="margin-top:10px"><span class="tool-tag">pdf_corpus_warm · <button class="step-json-toggle" data-target="cjson1" style="padding:0">{ JSON }</button></span></div>
     <div id="corpusWarmPanel"></div>
     <div class="json-wrap" id="cjson1"><pre class="json-box" id="cjson1-content"></pre></div>
+    <div class="hidden" id="corpusOverviewTag" style="margin-top:14px"><span class="tool-tag">pdf_corpus_overview · <button class="step-json-toggle" data-target="cjson2" style="padding:0">{ JSON }</button></span></div>
     <div id="corpusOverviewPanel" class="hidden"></div>
     <div class="json-wrap hidden" id="cjson2"><pre class="json-box" id="cjson2-content"></pre></div>
     <div id="corpusSearchPanel" class="hidden">
@@ -840,6 +842,7 @@
         <button class="btn" id="corpusSearchBtn">Search</button>
       </div>
       <div class="suggested-chips" id="corpusChips"></div>
+      <div style="margin-bottom:10px"><span class="tool-tag" style="margin-left:0">pdf_corpus_search · <button class="step-json-toggle" data-target="cjson3" style="padding:0">{ JSON }</button></span></div>
       <div id="corpusGrids"></div>
       <div class="inline-reader" id="corpusAdHocReader"></div>
       <div class="search-results" id="corpusResults"></div>
@@ -1282,9 +1285,10 @@
     $("corpusResults").innerHTML = "";
     $("corpusCallout").style.display = "none";
     $("corpusCallout").innerHTML = "";
-    $("cjson1-content").innerHTML = "";
-    $("cjson2").classList.add("hidden"); $("cjson2-content").innerHTML = "";
-    $("cjson3").classList.add("hidden"); $("cjson3-content").innerHTML = "";
+    $("corpusOverviewTag").classList.add("hidden");
+    $("cjson1").classList.remove("open"); $("cjson1-content").innerHTML = "";
+    $("cjson2").classList.add("hidden"); $("cjson2").classList.remove("open"); $("cjson2-content").innerHTML = "";
+    $("cjson3").classList.add("hidden"); $("cjson3").classList.remove("open"); $("cjson3-content").innerHTML = "";
     $("corpusName").textContent = "";
     $("corpusCost").textContent = "";
 
@@ -1445,6 +1449,7 @@
   function showCorpusOverview() {
     const panel = document.getElementById("corpusOverviewPanel");
     panel.classList.remove("hidden");
+    document.getElementById("corpusOverviewTag").classList.remove("hidden");
     const grid = document.createElement("div");
     grid.className = "ov-grid";
     for (const d of corpusState.docs) {
@@ -1621,7 +1626,9 @@
           <div class="inline-reader" id="creader-${docIdx}-${m.page}"></div>
         </div>`;
       }).join("");
-      el.querySelectorAll(".result-card").forEach((card) => {
+      el.querySelectorAll(".result-card").forEach((card, i) => {
+        if (REDUCED_MOTION) card.classList.add("on");
+        else setTimeout(() => card.classList.add("on"), 150 + i * 120);
         const docIdx = parseInt(card.dataset.docIdx, 10);
         const page = parseInt(card.dataset.page, 10);
         const path = corpusState.docs[docIdx].path;

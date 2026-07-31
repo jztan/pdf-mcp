@@ -722,6 +722,7 @@
     <div class="hero-ctas">
       <button class="btn" id="ctaOwn">Try it on your PDF</button>
       <button class="btn btn-ghost" id="ctaSample">Use the sample — a 216-page contract</button>
+      <button class="btn btn-ghost" id="ctaCorpus">Search a folder, 5-PDF sample corpus</button>
     </div>
     <div class="hero-privacy">
       <div class="privacy-pill">
@@ -787,11 +788,11 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       <span><strong>Keyword mode</strong> shown here. For RRF hybrid and semantic, run <code>pip install 'pdf-mcp[semantic]'</code>. Images, tables, and hidden-text detection are server-side only (PyMuPDF), so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
     </div>
-    <div class="scoreboard">
+    <div class="scoreboard" id="scoreboardBlock">
       <div class="sb-head"><span class="sb-title">what your agent has cost so far</span><span class="sb-pct" id="sbPct">0%</span></div>
       <div class="sb-row agent"><span id="sbAgentLabel">your agent</span><b><span id="sbVal">0</span> tokens</b></div>
       <div class="sb-bar"><i id="sbBarFill"></i></div>
-      <div class="sb-row"><span>pasting the whole document</span><b id="sbMax"></b></div>
+      <div class="sb-row"><span id="sbMaxLabel">pasting the whole document</span><b id="sbMax"></b></div>
     </div>
     <details class="dev-row">
       <summary>For developers: read arbitrary pages · raw JSON</summary>
@@ -1171,6 +1172,27 @@
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
   $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
+  const SAMPLE_CORPUS = ["corpus/nist-ai-rmf.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/cfpb-credit-trends.pdf", "corpus/usda-organic.pdf"];
+
+  async function loadSampleCorpus() {
+    track("corpus_sample_loaded");
+    showLoader("Fetching sample corpus…");
+    try {
+      const files = await Promise.all(SAMPLE_CORPUS.map(async (u) => {
+        const r = await fetch(u);
+        if (!r.ok) throw new Error(`${u}: HTTP ${r.status}`);
+        const blob = await r.blob();
+        return new File([blob], u.split("/").pop(), { type: "application/pdf" });
+      }));
+      hideLoader();
+      handleFiles(files);
+    } catch (e) {
+      hideLoader();
+      showToast("Could not fetch the sample corpus. If you opened this page as a local file, run a local server or drop your own PDFs.");
+    }
+  }
+  onActivate($("ctaCorpus"), loadSampleCorpus);
+
   ["dragenter", "dragover"].forEach(ev =>
     dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("dragover"); }));
   ["dragleave", "drop"].forEach(ev =>
@@ -1276,6 +1298,17 @@
     corpusState.warmElapsedMs = performance.now() - t0;
     corpusState.docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
+    // Corpus-sized denominator: the single-doc `docTokensTotal` ("pasted whole")
+    // is otherwise never populated in this flow, which clamps every ledgerAdd
+    // to 0 (ledgerAdd's Math.min(docTokensTotal, ...) floor). Set it — and move
+    // the shared scoreboard block into the corpus card — before the first
+    // ledgerAdd call below, so no early charge is lost to the stale denominator.
+    docTokensTotal = Math.max(1, corpusState.docs.reduce((a, d) => a + d.tokens, 0));
+    $("corpusCost").textContent = `~${docTokensTotal.toLocaleString()} tokens`;
+    $("sbMaxLabel").textContent = `pasting all ${corpusState.docs.length} documents`;
+    document.getElementById("corpusCard").insertBefore($("scoreboardBlock"), panel);
+    ledgerReset();
+
     const warmJson = buildCorpusWarmJson();
     document.getElementById("cjson1-content").innerHTML = syntaxHighlight(JSON.stringify(warmJson, null, 2));
     ledgerAdd(Math.round(JSON.stringify(warmJson).length / 4));
@@ -1370,6 +1403,14 @@
   // path -> Set(page) of pages the visitor has already "read" in this session.
   const corpusReadPages = new Map();
 
+  // Total pages read across every doc in the corpus (shared scoreboard/receipt
+  // reuse this instead of the single-doc pagesRead Set).
+  function corpusPagesReadCount() {
+    let n = 0;
+    for (const s of corpusReadPages.values()) n += s.size;
+    return n;
+  }
+
   function renderCorpusChips() {
     const chips = [
       "which document covers AI risk?",
@@ -1461,8 +1502,12 @@
       adHoc.innerHTML = `<b>${escapeHtml(path)} · pdf_read_pages([${page}]) · ${tokens.toLocaleString()} tokens</b><br/>${body}`;
       adHoc.classList.add("open");
     }
-    if (!already) ledgerAdd(tokens);
+    // Mark read before charging tokens: ledgerAdd's updateScoreboard() reads
+    // the pages-read count synchronously, so the read must be recorded first
+    // (mirrors markPageRead's pagesRead.add()-before-ledgerAdd ordering).
     markCorpusRead(path, page);
+    if (!already) ledgerAdd(tokens);
+    updateReceipt();
   }
 
   function buildCorpusSearchJson(query, matches, docMatchCounts) {
@@ -1878,8 +1923,9 @@
   function updateScoreboard() {
     const pct = docTokensTotal ? (100 * ledgerTokens / docTokensTotal) : 0;
     $("sbPct").textContent = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
-    $("sbAgentLabel").textContent = pagesRead.size
-      ? `your agent · ${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""} read`
+    const nRead = corpusState ? corpusPagesReadCount() : pagesRead.size;
+    $("sbAgentLabel").textContent = nRead
+      ? `your agent · ${nRead} page${nRead !== 1 ? "s" : ""} read`
       : "your agent";
     $("sbBarFill").style.width = Math.min(100, Math.max(0.6, pct)) + "%";
   }
@@ -1907,12 +1953,23 @@
 
   let receiptShown = false;
   function updateReceipt() {
-    if (pagesRead.size === 0) return;
-    $("receiptHead").innerHTML = `You read <span>${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""}</span> of ${pageTexts.length}.`;
+    if (corpusState) {
+      if (corpusPagesReadCount() === 0) return;
+    } else if (pagesRead.size === 0) {
+      return;
+    }
+    const pct = docTokensTotal ? (100 * ledgerTokens / docTokensTotal) : 0;
+    const pctStr = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
+    if (corpusState) {
+      const totalPages = corpusState.docs.reduce((a, d) => a + d.pages, 0);
+      $("receiptHead").innerHTML =
+        `${totalPages} pages across ${corpusState.docs.length} documents.<br/><span>${pctStr} never entered the context window.</span>`;
+    } else {
+      $("receiptHead").innerHTML = `You read <span>${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""}</span> of ${pageTexts.length}.`;
+    }
     $("rTotal").textContent = docTokensTotal.toLocaleString();
     $("rUsed").textContent = ledgerTokens.toLocaleString();
-    const pct = docTokensTotal ? (100 * ledgerTokens / docTokensTotal) : 0;
-    $("rRatio").textContent = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
+    $("rRatio").textContent = pctStr;
     $("receipt").classList.remove("hidden");
     if (!receiptShown) { receiptShown = true; track("receipt_shown"); }
   }
@@ -2210,6 +2267,43 @@
     uploadSection.classList.remove("hidden");
     fileInput.value = ""; urlInput.value = "";
     pageTexts = []; pageRects = []; pdfInfo = null;
+    resetSteps();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  $("corpusResetBtn").addEventListener("click", () => {
+    document.getElementById("corpusWorkflow").classList.add("hidden");
+    uploadSection.classList.remove("hidden");
+    fileInput.value = ""; urlInput.value = "";
+
+    corpusState = null;
+    corpusReadPages.clear();
+
+    document.getElementById("corpusWarmPanel").innerHTML = "";
+    document.getElementById("corpusOverviewPanel").classList.add("hidden");
+    document.getElementById("corpusOverviewPanel").innerHTML = "";
+    document.getElementById("corpusSearchPanel").classList.add("hidden");
+    $("corpusSearchInput").value = "";
+    $("corpusChips").innerHTML = "";
+    $("corpusGrids").innerHTML = "";
+    $("corpusAdHocReader").innerHTML = "";
+    $("corpusAdHocReader").classList.remove("open");
+    $("corpusResults").innerHTML = "";
+    $("corpusCallout").style.display = "none";
+    $("corpusCallout").innerHTML = "";
+    $("cjson1-content").innerHTML = "";
+    $("cjson2").classList.add("hidden"); $("cjson2-content").innerHTML = "";
+    $("cjson3").classList.add("hidden"); $("cjson3-content").innerHTML = "";
+    $("corpusName").textContent = "";
+    $("corpusCost").textContent = "";
+
+    // Restore the shared scoreboard to the single-doc card and its wording.
+    $("sbMaxLabel").textContent = "pasting the whole document";
+    const devRow = document.querySelector("#docCard .dev-row");
+    if (devRow) document.getElementById("docCard").insertBefore($("scoreboardBlock"), devRow);
+
+    docTokensTotal = 0;
+    ledgerReset();
     resetSteps();
     window.scrollTo({ top: 0, behavior: "smooth" });
   });

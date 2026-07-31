@@ -1342,8 +1342,17 @@
       for (const { file, pages } of probed) rows.set(file.name, addWarmRow(panel, file.name, pages));
       for (const s of skipped) addWarmRow(panel, s.path, null, s.reason);
 
-      for (const { file, doc, pages } of probed) {
+      // Concurrent warm, like the server: pdf_corpus_warm extracts in a
+      // process pool (spawn, up to 8 workers) once >= 4 docs are uncached,
+      // and PDF.js gives each document its own worker, so the parallel rows
+      // below are real concurrency, not theater. Docs are submitted
+      // smallest-first (same as the server's pool submission order); a short
+      // start stagger and a minimum visible dwell per row keep the stage
+      // readable when small docs extract in tens of ms. The JSON envelope
+      // carries no timing field, so nothing reported is inflated.
+      await Promise.all(probed.map(async ({ file, doc, pages }, idx) => {
         const row = rows.get(file.name);
+        if (!REDUCED_MOTION && idx) await new Promise((r) => setTimeout(r, idx * 140));
         const docShownAt = performance.now();
         row.state.textContent = "extracting…"; row.state.className = "warm-state active";
         try {
@@ -1354,7 +1363,13 @@
             pageTexts.push(tc.items.map((i) => i.str).join(" "));
             row.bar.style.width = `${Math.round((p / pages) * 100)}%`;
             row.state.textContent = `extracting p.${p}`;
-            if (p % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+            // Presentation pacing: spread each doc's bar over its minimum
+            // visible duration instead of dwelling at 100%.
+            if (!REDUCED_MOTION) {
+              const target = docShownAt + (p / pages) * 650;
+              const wait = target - performance.now();
+              if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 200)));
+            }
           }
           const meta = await doc.getMetadata().catch(() => null);
           const outline = await doc.getOutline().catch(() => null);
@@ -1367,14 +1382,6 @@
             tokens: Math.round(chars / 4),
           });
           corpusState.warmedCount++;
-          // Presentation pacing only: small docs extract in tens of ms, which
-          // makes the warm stage unreadable. Hold each row visibly "extracting"
-          // for a beat. The JSON envelope carries no timing field, so nothing
-          // reported is inflated.
-          if (!REDUCED_MOTION) {
-            const dwell = 650 - (performance.now() - docShownAt);
-            if (dwell > 0) await new Promise((r) => setTimeout(r, dwell));
-          }
           row.state.textContent = "warmed"; row.state.className = "warm-state done";
           row.bar.style.width = "100%";
         } catch (e) {
@@ -1385,7 +1392,7 @@
           row.state.className = "warm-state skip";
           row.row.querySelector(".warm-mini").style.visibility = "hidden";
         }
-      }
+      }));
       corpusState.warmElapsedMs = performance.now() - t0;
       corpusState.docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 

@@ -2238,7 +2238,10 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
         "Warm a folder (or list) of local PDFs into the cache: text"
         " extraction, and optionally embeddings, up to a time budget."
         " Warmed docs are free cache hits afterwards; call again to"
-        " continue where the budget stopped."
+        " continue where the budget stopped. Keep budget_seconds below"
+        " your client's per-call timeout: a client-side timeout does"
+        " not undo progress (each finished doc is already committed),"
+        " so treat it as a partial run and re-issue the same call."
     )
 )
 def pdf_corpus_warm(
@@ -2257,7 +2260,10 @@ def pdf_corpus_warm(
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300). Cached docs are free. Docs that do not
             fit the budget are listed in `unprocessed`; call again to
-            continue (warmed docs then hit cache).
+            continue (warmed docs then hit cache). Keep this below the
+            MCP client's per-call timeout (some clients cap calls at
+            ~60s): a client-side timeout aborts only the response, not
+            docs already committed — re-issue the call to continue.
         embeddings: Also compute and cache page embeddings (requires
             the embedding extra; needed before semantic corpus search).
         recursive: Directory mode only, recurse into subdirectories.

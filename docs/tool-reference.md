@@ -718,6 +718,8 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 - Budget is checked between docs, not within one: one very large PDF can push the call past `budget_seconds` before the next check.
 - Warming runs extraction in a small process pool on larger corpora (sequential below 4 uncached documents). When the budget expires, documents already being extracted still complete and are written, so a call can overshoot `budget_seconds` by up to the worker count's worth of in-flight documents rather than a single document.
 - Repeat calls continue warming from where the previous call's budget stopped; already-warmed docs come back as `"cached"` and don't re-extract.
+- Some MCP clients (and proxies/bridges) enforce their own per-call timeout, commonly ~60s, independent of `budget_seconds`. A budget at or above that ceiling guarantees a client-visible timeout error even while warming succeeds: docs finished before the cutoff are already committed to the cache, so treat the timeout as a partial run and re-issue the call rather than as a failure. Keep `budget_seconds` under the client's timeout to get a graceful partial return (`unprocessed` + `budget_exhausted`) instead of an error.
+- Warming is atomic per doc, so a single doc too large to finish inside the client's timeout window (e.g. embedding a several-hundred-page PDF through a ~60s bridge) may never complete through that client — its in-flight work can be lost each attempt and it stays in `unprocessed`. Warm such corpora from a client without a per-call ceiling, or run text-only warms first and accept the doc being skipped by semantic search (it is reported honestly in `coverage`/`unprocessed`).
 
 **Example:**
 
@@ -759,6 +761,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - Cards carry no per-page arrays and no content excerpts; follow up with `pdf_info(path, detail=True)` for per-page detail on a single document of interest.
 - `title` is untrusted PDF metadata and may be absent.
 - A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated during call"` (pdf_corpus_overview only).
+- The client per-call timeout interaction described under `pdf_corpus_warm` applies to the auto-warm here too; on a large cold corpus behind a timeout-bounded client, warm first with repeated budgeted `pdf_corpus_warm` calls, then call this tool.
 
 **Example:**
 

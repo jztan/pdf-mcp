@@ -205,7 +205,7 @@
      Percentage padding is width-relative and reflows reliably everywhere. */
   .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
             background: var(--text-tertiary); opacity: 0.5;
-            transition: opacity 0.5s ease, background 0.5s ease, box-shadow 0.5s ease; }
+            transition: opacity 0.3s ease, background 0.3s ease, box-shadow 0.3s ease; }
   /* Crisper hero tiles: a hairline edge gives each page definition so the field
      reads as intentional pages rather than a flat skeleton. */
   .hero-grid .pgcell { border-radius: 2px;
@@ -301,8 +301,8 @@
   .cg-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
   .cg-cell { width: 16px; height: 16px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, var(--bg-subtle)); border: 1px solid var(--border-strong); cursor: pointer; transition: background 0.3s ease, opacity 0.3s ease, border-color 0.3s ease; }
   .cg-cell.dim { opacity: 0.55; }
-  .cg-cell.hit { background: color-mix(in srgb, var(--accent) 22%, var(--bg-subtle)); border-color: var(--accent); }
-  .cg-cell.read { background: var(--accent); border-color: var(--accent); }
+  .cg-cell.hit { background: var(--accent); border-color: var(--accent); }
+  .cg-cell.read { background: radial-gradient(circle at center, rgba(255,255,255,0.95) 0 2.5px, var(--accent) 3.5px); border-color: var(--accent); }
   .res-doc { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); background: rgba(0,113,227,0.08); border: 1px solid rgba(0,113,227,0.2); border-radius: 980px; padding: 2px 9px; margin-right: 8px; }
   @media (max-width: 640px) { .cg-name { flex-basis: 120px; } .warm-state { min-width: 92px; } }
 
@@ -1574,15 +1574,12 @@
           cell.classList.add("read");
         } else if (hitMap) {
           // Sweep left-to-right across every doc's row at once (the corpus
-          // search hits all documents concurrently), mirroring the single-doc
-          // grid's staged sweep. Applied from a single rAF loop below —
-          // one timeout per cell bunches unpredictably and reads as jank.
+          // search hits all documents concurrently). Normalised per row:
+          // every doc sweeps its full width in the same shared window, so
+          // the six fronts advance and finish together.
           const cls = hits && hits.has(p) ? "hit" : "dim";
           if (REDUCED_MOTION) cell.classList.add(cls);
-          // Normalised per row: every doc sweeps its full width in the same
-          // 900ms window, so the six fronts advance and finish together
-          // (a hard per-page cap bunched long docs' tails into one slam).
-          else sweepQueue.push({ cell, cls, at: 300 + (d.pages > 1 ? ((p - 1) / (d.pages - 1)) * 900 : 0) });
+          else sweepQueue.push({ cell, cls, at: SWEEP_LEAD_MS + (d.pages > 1 ? ((p - 1) / (d.pages - 1)) * SWEEP_WINDOW_MS : 0) });
         }
         onActivate(cell, () => {
           const card = document.querySelector(
@@ -1596,20 +1593,7 @@
       row.appendChild(grid);
       el.appendChild(row);
     }
-    if (sweepQueue.length) {
-      sweepQueue.sort((a, b) => a.at - b.at);
-      let idx = 0;
-      const t0 = performance.now();
-      const step = (now) => {
-        const elapsed = now - t0;
-        while (idx < sweepQueue.length && sweepQueue[idx].at <= elapsed) {
-          sweepQueue[idx].cell.classList.add(sweepQueue[idx].cls);
-          idx++;
-        }
-        corpusSweepRaf = idx < sweepQueue.length ? requestAnimationFrame(step) : 0;
-      };
-      corpusSweepRaf = requestAnimationFrame(step);
-    }
+    if (sweepQueue.length) runSweep(sweepQueue, (id) => (corpusSweepRaf = id));
   }
 
   function markCorpusRead(path, page) {
@@ -2264,18 +2248,44 @@
     sweepTimers = [];
   }
 
+  // Shared sweep timing for BOTH grids: start after SWEEP_LEAD_MS, and the
+  // whole surface classifies within SWEEP_WINDOW_MS, driven by one rAF loop
+  // (per-cell timeouts bunch unpredictably and read as jank).
+  let docSweepRaf = 0;
+  function runSweep(queue, setRaf) {
+    queue.sort((a, b) => a.at - b.at);
+    let idx = 0;
+    const t0 = performance.now();
+    const step = (now) => {
+      const elapsed = now - t0;
+      while (idx < queue.length && queue[idx].at <= elapsed) {
+        const item = queue[idx];
+        item.cell.classList.add(item.cls);
+        idx++;
+      }
+      setRaf(idx < queue.length ? requestAnimationFrame(step) : 0);
+    };
+    setRaf(requestAnimationFrame(step));
+  }
+  const SWEEP_LEAD_MS = 300, SWEEP_WINDOW_MS = 900;
+
   function sweepGrid(matchPages) {
     clearSweepTimers();
-    const cols = gridCols($("liveGrid"));
-    [...$("liveGrid").children].forEach((c, i) => {
+    if (docSweepRaf) { cancelAnimationFrame(docSweepRaf); docSweepRaf = 0; }
+    const cells = [...$("liveGrid").children];
+    const n = cells.length;
+    const queue = [];
+    cells.forEach((c, i) => {
       c.classList.remove("dim", "hit");
-      const apply = () => { if (matchPages.has(i + 1)) c.classList.add("hit"); else c.classList.add("dim"); };
-      if (REDUCED_MOTION) apply();
-      else sweepTimers.push(setTimeout(apply, 300 + (i % cols) * 60));
+      const cls = matchPages.has(i + 1) ? "hit" : "dim";
+      if (REDUCED_MOTION) c.classList.add(cls);
+      else queue.push({ cell: c, cls, at: SWEEP_LEAD_MS + (n > 1 ? (i / (n - 1)) * SWEEP_WINDOW_MS : 0) });
     });
+    if (queue.length) runSweep(queue, (id) => (docSweepRaf = id));
   }
   function clearSweep() {
     clearSweepTimers();
+    if (docSweepRaf) { cancelAnimationFrame(docSweepRaf); docSweepRaf = 0; }
     [...$("liveGrid").children].forEach(c => c.classList.remove("dim", "hit"));
   }
 
@@ -2295,7 +2305,7 @@
         </div>`).join("");
       el.querySelectorAll(".result-card").forEach((card, i) => {
         if (REDUCED_MOTION) card.classList.add("on");
-        else sweepTimers.push(setTimeout(() => card.classList.add("on"), 1800 + i * 200));
+        else sweepTimers.push(setTimeout(() => card.classList.add("on"), 900 + i * 120));
         onActivate(card, () => readInline(parseInt(card.dataset.page, 10)));
       });
       ledgerAdd(Math.round(res.matches.reduce((a, m) => a + m.excerpt.length, 0) / 4));

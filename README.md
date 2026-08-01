@@ -352,6 +352,29 @@ Four things to know before deploying it:
 - **Terminate TLS in a proxy.** The default bind is loopback on purpose; put
   Caddy or nginx in front of it. See [`deploy/Caddyfile.example`](deploy/Caddyfile.example).
 
+### Docker
+
+```bash
+./deploy/bootstrap.sh          # generates .env.docker with a token, creates ./documents
+cp your.pdf documents/
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8802/health
+```
+
+The image bakes tesseract, the column-aware extraction extra, and the
+embedding model, so every tool works on the first request with no
+cold-start download. It runs as a non-root user.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PDF_MCP_AUTH_TOKEN` | *(none, required)* | Bearer token; the server refuses to start without it |
+| `PDF_MCP_HOST_PORT` | `8802` | Host port, published to loopback only |
+| `PDF_MCP_ALLOW_ANY_PATH` | *(unset)* | Escape hatch to start with no `[paths]` allow list |
+
+`deploy/config.docker.toml` supplies the `[paths]` allow list and is mounted
+read-only. See [docs/configuration.md](docs/configuration.md) for details on
+both guards and the full variable reference.
+
 ## Configuration
 
 pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.

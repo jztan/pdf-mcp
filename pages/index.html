@@ -1742,7 +1742,8 @@
       const doc = corpusState.docs.find((d) => d.path === path);
       return {
         path,
-        doc_title: doc.title,
+        // Mirrors the server: cleaned metadata title, else filename stem.
+        doc_title: doc.title || path.split("/").pop().replace(/\.[^.]+$/, ""),
         page,
         excerpt: m.excerpt,
         score: 0.0,

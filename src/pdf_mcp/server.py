@@ -2902,15 +2902,15 @@ def pdf_corpus_search(
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
 
-    titles: dict[str, str | None] = {}
+    titles: dict[str, str] = {}
 
-    def _title_for(path: str) -> str | None:
+    def _title_for(path: str) -> str:
         if path not in titles:
             meta = cache.get_metadata(path)
             title = None
             if meta is not None:
-                title = (meta.get("metadata") or {}).get("title") or None
-            titles[path] = title
+                title = corpus._clean_title((meta.get("metadata") or {}).get("title"))
+            titles[path] = title or Path(path).stem
         return titles[path]
 
     content_warning = (

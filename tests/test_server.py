@@ -4,6 +4,7 @@
 import base64
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -3984,6 +3985,49 @@ class TestPdfCorpusSearchKeyword:
         assert result["matches"]
         geo = [m for m in result["matches"] if "bbox" in m]
         assert geo and all("clip" in m and "page_rect" in m for m in geo)
+
+
+class TestPdfCorpusSearchDocTitle:
+    """doc_title falls back to the filename stem when PDF metadata has
+    no usable title, so hits stay readable for clients rendering them."""
+
+    def test_missing_metadata_title_falls_back_to_stem(
+        self, corpus_dir, isolated_server
+    ):
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert result["matches"]
+        for m in result["matches"]:
+            assert m["doc_title"] == Path(m["path"]).stem
+
+    def test_real_metadata_title_wins_over_stem(self, tmp_path, isolated_server):
+        d = tmp_path / "titled_corpus"
+        d.mkdir()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Report section 1. The quarterly budget grew.")
+        page.insert_text((50, 300), "Second block. Budget details and notes.")
+        doc.set_metadata({"title": "Quarterly Report FY2026"})
+        doc.save(str(d / "q4.pdf"))
+        doc.close()
+        result = pdf_corpus_search(str(d), "budget", mode="keyword")
+        assert result["matches"]
+        assert result["matches"][0]["doc_title"] == "Quarterly Report FY2026"
+
+    def test_placeholder_metadata_title_falls_back_to_stem(
+        self, tmp_path, isolated_server
+    ):
+        d = tmp_path / "placeholder_corpus"
+        d.mkdir()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Report section 1. The quarterly budget grew.")
+        page.insert_text((50, 300), "Second block. Budget details and notes.")
+        doc.set_metadata({"title": "Untitled 3"})
+        doc.save(str(d / "annual-report.pdf"))
+        doc.close()
+        result = pdf_corpus_search(str(d), "budget", mode="keyword")
+        assert result["matches"]
+        assert result["matches"][0]["doc_title"] == "annual-report"
 
 
 class TestPdfCorpusSearchSemanticAuto:

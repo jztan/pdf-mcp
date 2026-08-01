@@ -802,6 +802,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 
 **Returns:**
 - `matches` (array): cross-document hits in fused order, each `{path, doc_title, page, excerpt, position, source, hidden_text}`, plus `bbox`/`page_rect`/`clip` when `excerpt_style` is `"paragraph"`.
+  - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
   - Keyword-mode hits also carry `score` (per-doc BM25; comparable only within that hit's own document, since RRF governs cross-document order, not the raw score).
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.
@@ -833,10 +834,10 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 pdf_corpus_search("/path/to/papers/", "lottery ticket hypothesis", mode="keyword", top_k=5)
 # {
 #   "matches": [
-#     {"path": "/path/to/papers/1803.03635.pdf", "doc_title": null,
+#     {"path": "/path/to/papers/1803.03635.pdf", "doc_title": "1803.03635",
 #      "page": 3, "excerpt": "...When randomly reinitialized, winning tickets perform far...",
 #      "score": 6.2, "position": 0, "source": "extracted", "hidden_text": false},
-#     {"path": "/path/to/papers/2205.14135.pdf", "doc_title": null,
+#     {"path": "/path/to/papers/2205.14135.pdf", "doc_title": "2205.14135",
 #      "page": 12, "excerpt": "...The lottery ticket hypothesis: Finding sparse, trainable...",
 #      "score": 5.1, "position": 0, "source": "extracted", "hidden_text": false}
 #   ],

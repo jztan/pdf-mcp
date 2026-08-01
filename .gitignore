@@ -115,7 +115,9 @@ scripts/demo-recorder/node_modules/
 scripts/demo-recorder/package-lock.json
 .playwright-mcp
 
-# Docker deployment: holds a live PDF_MCP_AUTH_TOKEN
+# Docker deployment: holds a live PDF_MCP_AUTH_TOKEN (.env, matched above).
+# Legacy name kept as a harmless guard against stale files from before the
+# .env.docker -> .env rename.
 .env.docker
 # Operator PDFs mounted into the container
 documents/

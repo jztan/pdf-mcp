@@ -7,7 +7,7 @@ services:
     image: pdf-mcp:latest
     container_name: pdf-mcp
     env_file:
-      - .env.docker
+      - .env
     # Published to loopback ONLY. TLS and public exposure belong to a
     # reverse proxy on the host (see deploy/Caddyfile.example). The
     # container itself binds 0.0.0.0:8000, which is correct: a container

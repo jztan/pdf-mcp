@@ -4561,6 +4561,45 @@ class TestHTTPTransportEntryPoint:
         assert "s3cret" in server.mcp.auth.tokens
         assert server.mcp.auth.tokens["s3cret"]["client_id"] == "pdf-mcp"
 
+    def test_mcp_route_rejects_missing_or_wrong_token(self, tmp_path, monkeypatch):
+        """Proves enforcement over HTTP, not just that `mcp.auth` got set.
+
+        `test_token_is_wired_into_a_static_verifier` only proves the
+        assignment happened; it would still pass if a future fastmcp
+        stopped consuming `self.auth`. This hits the real ASGI app so a
+        broken wiring shows up as a non-401 response instead.
+        """
+        from starlette.testclient import TestClient
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        server.main_http()
+
+        app = server.mcp.http_app(path="/mcp")
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        }
+        headers = {"Accept": "application/json, text/event-stream"}
+        with TestClient(app) as client:
+            no_auth = client.post("/mcp", json=body, headers=headers)
+            wrong_auth = client.post(
+                "/mcp",
+                json=body,
+                headers={**headers, "Authorization": "Bearer wrong-token"},
+            )
+
+        assert no_auth.status_code == 401
+        assert wrong_auth.status_code == 401
+
     def test_defaults_bind_loopback(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
         monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")

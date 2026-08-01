@@ -76,7 +76,9 @@ The `PDF_MCP_HTTP_*` and `PDF_MCP_ALLOW_ANY_PATH` variables affect
 The Compose stack maps `PDF_MCP_HOST_PORT` (default `8802`) on the host to a
 fixed container port `8000`, so multiple pdf-mcp containers can each publish a
 different host port without colliding. `deploy/bootstrap.sh` generates the
-auth token with `openssl rand -hex 32` and writes it to `.env.docker`, and
+auth token with `openssl rand -hex 32` and writes it to `.env` (Compose loads
+this file automatically, both for `${VAR}` interpolation in
+`docker-compose.yml` and via `env_file:` into the container), and
 creates the `./documents` directory that the container mounts. The container
 runs as a non-root user with `documents/` and the cache volume owned by that
 user. Build the image on the same CPU architecture you deploy it to; it is

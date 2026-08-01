@@ -8,8 +8,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ENV_FILE=".env.docker"
-EXAMPLE_FILE=".env.docker.example"
+ENV_FILE=".env"
+EXAMPLE_FILE=".env.example"
 
 if [ -f "$ENV_FILE" ]; then
     echo "==> $ENV_FILE already exists, leaving it untouched."

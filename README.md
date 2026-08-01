@@ -355,7 +355,7 @@ Four things to know before deploying it:
 ### Docker
 
 ```bash
-./deploy/bootstrap.sh          # generates .env.docker with a token, creates ./documents
+./deploy/bootstrap.sh          # generates .env with a token, creates ./documents
 cp your.pdf documents/
 docker compose up -d --build
 curl -fsS http://127.0.0.1:8802/health

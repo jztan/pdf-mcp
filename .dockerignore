@@ -19,10 +19,10 @@ coverage.xml
 docs/superpowers/
 docs_internal/
 
-# Not needed at build time, and .env.docker holds a live auth token.
+# Not needed at build time, and .env holds a live auth token.
 .env
 .env.*
-!.env.docker.example
+!.env.example
 documents/
 pages/
 demo/

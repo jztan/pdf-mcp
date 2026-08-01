@@ -1073,6 +1073,21 @@
   const $ = (id) => document.getElementById(id);
   function track(name, params) { try { gtag("event", name, params || {}); } catch (e) {} }
 
+  // Conversion proxies: outbound clicks to the repo/package/docs. Delegated so
+  // it covers the nav, install section, SEO body, and footer links alike.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]");
+    if (!a) return;
+    let url;
+    try { url = new URL(a.href, location.href); } catch { return; }
+    if (!/^https?:$/.test(url.protocol) || url.hostname === location.hostname) return;
+    const destination =
+      url.hostname === "github.com" ? "github" :
+      url.hostname === "pypi.org" ? "pypi" :
+      url.hostname;
+    track("outbound_click", { destination, link_url: url.href });
+  });
+
   /* __PDF_MCP_CORPUS_FUSION_BEGIN__ */
   // Faithful port of the server's keyword-mode corpus fusion:
   // corpus.rrf_fuse_doc_rankings plus the term-coverage×IDF tie-break
@@ -2461,6 +2476,7 @@
   $("installCopyBtn").addEventListener("click", () => {
     navigator.clipboard.writeText($("installCmd").textContent);
     showToast("Copied");
+    track("install_copy");
   });
 
   $("copyLinkBtn").addEventListener("click", () => {

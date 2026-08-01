@@ -773,7 +773,7 @@ pdf_corpus_overview("/path/to/reports/")
 #      "pages": 12, "toc_top": ["Summary", "Results", "Outlook"],
 #      "has_toc": true, "text_coverage": "full",
 #      "size_bytes": 184320, "from_cache": true},
-#     {"path": "/path/to/reports/q2.pdf", "title": null,
+#     {"path": "/path/to/reports/q2.pdf", "title": "q2",
 #      "pages": 18, "toc_top": [], "has_toc": false,
 #      "text_coverage": "partial", "size_bytes": 265120,
 #      "from_cache": false}

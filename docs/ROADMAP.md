@@ -2,31 +2,38 @@
 
 ## Project Status
 
-- **Current version:** v1.21.0 (released 2026-07-17)
+- **Current version:** v1.22.0 (released 2026-07-25)
 - **MCP Registry:** Published
-- **Test suite:** 1103 tests across unit, integration, and retrieval-quality benchmarks (1099 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
-- **Tools:** `pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`
+- **Test suite:** 1351 tests across unit, integration, and retrieval-quality benchmarks (1347 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Tools:** 10 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`); 13 on `develop`, adding the corpus trio (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`) queued for v2.0.0
 
 ---
 
 ## Next Release
 
-No release branch open, and `develop` carries no unreleased work — it is even with the last tag (v1.21.0) and the CHANGELOG has no `[Unreleased]` block. Cut the next release from `develop` via `python scripts/release.py {patch,minor,major}` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md) once a `[Unreleased]` block is filled with real bullets.
+**v2.0.0, queued on `develop`** (CHANGELOG `[Unreleased]` populated; no release branch open yet). The headline is multi-document work:
+
+- **Corpus tools**: `pdf_corpus_warm` / `pdf_corpus_overview` / `pdf_corpus_search` over a folder of local PDFs (cap 100): budgeted warming with resume, per-doc triage cards, and cross-document search fusing per-document rankings via RRF with a term-coverage-weighted tie-break. Benchmarked: hybrid NDCG@10 0.674 and doc-hit@3 1.000 on a 100-doc corpus, sub-0.5s/query warmed.
+- **Concurrent warming**: process-pool extraction on larger corpora, ~3.9x faster text warm at the 100-doc cap.
+- **Semantic-by-default**: `fastembed` promoted to a core dependency, so hybrid `auto` search works on every install channel without an extra.
+- Plus: OR-fallback for zero-result keyword queries, excerpt-picker fixes (hyphen folding, numeric tie-break), demo v2 with the interactive corpus flow, and the 2026-08-01 field-testing hardening (client-timeout guidance for warms, never-null title contract unified across overview and search, full cache clear now reclaims disk).
+
+Cut from `develop` via `python scripts/release.py major` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
 
 ---
 
 ## Tracking MCP 2026-07-28
 
-The MCP spec [release candidate locked on 2026-05-21](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/), with GA targeted for 2026-07-28. Protocol-level work is gated on fastmcp shipping support for the new spec; the goal is a single coordinated v2.0 release rather than dribbling breaking changes across patches.
+The MCP spec [release candidate locked on 2026-05-21](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/), with GA targeted for 2026-07-28. Protocol-level work is gated on fastmcp shipping support for the new spec; the goal is a single coordinated protocol release rather than dribbling breaking changes across patches. (Version note: v2.0.0 ships the corpus/semantic feature set above, not this protocol work; the protocol bump will land as its own major, v3.0.)
 
-**v2.0 scope (target: Q3 2026, gated on fastmcp v4):**
+**v3.0 scope (protocol major, gated on fastmcp v4):**
 
 - [ ] **Stateless transport.** Adopt the new request model once fastmcp supports it. The `initialize` handshake and `Mcp-Session-Id` header are removed by the spec; per-request `_meta` replaces them. STDIO is the only transport pdf-mcp ships, so HTTP-routing additions (`Mcp-Method` / `Mcp-Name` headers, header-based load balancing) are no-ops to verify.
 - [ ] **Error-code update.** Confirm fastmcp surfaces missing-resource errors as JSON-RPC `-32602` (was MCP-custom `-32002`). pdf-mcp's inline error contract (`{"error": ...}` with `status=OK`) sidesteps this for tool-level validation; only the framework "resource not found" path is affected.
 - [ ] **Cacheable read-side responses.** Add `ttlMs` + `cacheScope` hints to slow-changing read tools (`pdf_info`, `pdf_get_toc`, `pdf_read_pages`). pdf-mcp already has authoritative mtime-based invalidation in SQLite — surfacing the metadata lets MCP clients skip redundant calls within a session. `cacheScope` = per-session (matches single-user STDIO model).
 - [ ] **JSON Schema 2020-12.** Use composition operators (`oneOf`, `anyOf`, conditionals) to express `pdf_search`'s `mode × granularity` constraints and `pdf_info`'s `detail` flag. Land alongside the fastmcp v4 bump.
 
-**v2.1+ (post-spec GA, gated on host adoption):**
+**v3.1+ (post-spec GA, gated on host adoption):**
 
 - [ ] **Tasks Extension** for long-running operations: OCR on large scans and first-time embedding indexing. The redesigned API is stateless (server returns a handle; client drives `tasks/get` / `tasks/update` / `tasks/cancel`) and maps cleanly onto SQLite-backed job state. Gate on whether Claude Desktop ships task-extension UI — without host support there's no user-visible win.
 - [ ] **MCP Apps** (server-rendered HTML in sandboxed iframe) for `pdf_render_pages`. Today the tool returns PNG file paths; an iframe UI could embed thumbnails / a page navigator inline with audit/consent parity. Experiment only once adoption is clear.
@@ -74,4 +81,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-07-17 (Synced to shipped state. **v1.21.0** released 2026-07-17 — **`pdf_extract_chart`**: exact `(x, y)` data extraction from born-digital vector charts with a per-chart `verification_card` and confirm-before-report trust contract, plus `pdf_read_pages(detect_charts=True)` ([#23](https://github.com/jztan/pdf-mcp/issues/23), requested by @DerDennisOP). **v1.20.0** released 2026-07-11 — bbox/clip source geometry on search hits and `pdf_read_pages` images/tables, image xref dedup, document-local keyword ranking ([#17](https://github.com/jztan/pdf-mcp/issues/17), @ebbsanchez), and the Windows OCR fixes ([#18](https://github.com/jztan/pdf-mcp/pull/18)). Test count 952→1103.)
+**Last Updated:** 2026-08-01 (Synced: **v1.22.0** released 2026-07-25 with Python 3.14 support, deterministic dedup'd multi-column extraction, and the multi-term CJK keyword fix. `develop` now carries the v2.0.0 queue described under Next Release. Protocol track renumbered from v2.0 to v3.0, freeing v2.0.0 for the corpus/semantic release. Test count 1103 to 1351.)

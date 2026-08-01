@@ -1544,9 +1544,12 @@
     });
   }
 
+  let corpusSweepRaf = 0;
   function renderCorpusGrids(hitMap) {
     const el = $("corpusGrids");
     el.innerHTML = "";
+    if (corpusSweepRaf) { cancelAnimationFrame(corpusSweepRaf); corpusSweepRaf = 0; }
+    const sweepQueue = []; // {cell, cls, at} sorted by insertion (page asc per row)
     for (const d of corpusState.docs) {
       const row = document.createElement("div");
       row.className = "cg-row";
@@ -1572,10 +1575,14 @@
         } else if (hitMap) {
           // Sweep left-to-right across every doc's row at once (the corpus
           // search hits all documents concurrently), mirroring the single-doc
-          // grid's staged sweep.
+          // grid's staged sweep. Applied from a single rAF loop below —
+          // one timeout per cell bunches unpredictably and reads as jank.
           const cls = hits && hits.has(p) ? "hit" : "dim";
           if (REDUCED_MOTION) cell.classList.add(cls);
-          else setTimeout(() => cell.classList.add(cls), 300 + Math.min((p - 1) * 25, 900));
+          // Normalised per row: every doc sweeps its full width in the same
+          // 900ms window, so the six fronts advance and finish together
+          // (a hard per-page cap bunched long docs' tails into one slam).
+          else sweepQueue.push({ cell, cls, at: 300 + (d.pages > 1 ? ((p - 1) / (d.pages - 1)) * 900 : 0) });
         }
         onActivate(cell, () => {
           const card = document.querySelector(
@@ -1588,6 +1595,20 @@
       row.appendChild(name);
       row.appendChild(grid);
       el.appendChild(row);
+    }
+    if (sweepQueue.length) {
+      sweepQueue.sort((a, b) => a.at - b.at);
+      let idx = 0;
+      const t0 = performance.now();
+      const step = (now) => {
+        const elapsed = now - t0;
+        while (idx < sweepQueue.length && sweepQueue[idx].at <= elapsed) {
+          sweepQueue[idx].cell.classList.add(sweepQueue[idx].cls);
+          idx++;
+        }
+        corpusSweepRaf = idx < sweepQueue.length ? requestAnimationFrame(step) : 0;
+      };
+      corpusSweepRaf = requestAnimationFrame(step);
     }
   }
 

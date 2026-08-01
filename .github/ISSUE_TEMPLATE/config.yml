@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jztan/pdf-mcp/security/policy
+    about: Please report vulnerabilities privately, not as public issues.
+  - name: Usage questions
+    url: https://github.com/jztan/pdf-mcp/blob/develop/docs/tool-reference.md
+    about: The per-tool reference covers parameters, returns, and known limitations.

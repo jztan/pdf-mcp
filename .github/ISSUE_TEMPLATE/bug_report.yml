@@ -1,0 +1,82 @@
+name: Bug report
+description: Something returned wrong results, errored, or crashed
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and what did you expect instead?
+      placeholder: >
+        pdf_search with mode="auto" returned no matches for a term that is
+        clearly on page 3; expected at least one match.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        The tool call (name + arguments) that triggers it, plus any earlier
+        calls needed to get there. If the response contained an inline
+        {"error": ...} payload, include it here.
+      placeholder: |
+        1. pdf_corpus_warm(["/papers"], embeddings=true)
+        2. pdf_corpus_search(["/papers"], "厚木基地", mode="keyword")
+        -> {"matches": [], ...}
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: pdf-mcp version
+      description: The `server_info` tool returns it, or `pip show pdf-mcp`.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install channel
+      options:
+        - PyPI (pip / uv / pipx)
+        - MCP Registry
+        - From source
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Other (say which in the reproduction)
+    validations:
+      required: false
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: "macOS 15 (arm64), Python 3.12"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or full tool response
+      description: Server stderr or the full JSON response, if you have it.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: sample
+    attributes:
+      label: Sample PDF
+      description: >
+        Most extraction and search bugs cannot be reproduced without the
+        document. Never attach confidential documents; a public URL or a
+        minimal PDF showing the problem is ideal.
+      options:
+        - label: I attached a sample PDF or included a public URL above
+        - label: I cannot share the document (describe its layout in the reproduction)

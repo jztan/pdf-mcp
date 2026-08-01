@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a new tool, parameter, or behavior
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: >
+        What are you trying to do that pdf-mcp cannot do today? Concrete
+        agent workflows help more than abstract capabilities.
+      placeholder: >
+        My agent needs to compare revisions of the same contract, but there
+        is no way to diff two PDFs' extracted text.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working (tool name, parameters, response shape). Optional.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >
+        Workarounds you tried, or why existing tools do not cover it. Note:
+        some plausible features have been evaluated and closed with data,
+        see docs/investigated-rejected.md before proposing retrieval or
+        ranking changes.
+    validations:
+      required: false

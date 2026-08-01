@@ -9,11 +9,17 @@ is bound.
 
 import fnmatch
 import re
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
 
 yaml = pytest.importorskip("yaml")
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from pdf_mcp.config import _DEFAULT_CONFIG_PATH  # noqa: E402
 
@@ -23,6 +29,12 @@ DOCKERFILE = REPO / "Dockerfile"
 DOCKER_CONFIG = REPO / "deploy" / "config.docker.toml"
 
 CONTAINER_PDF_DIR = "/data/pdfs"
+
+
+def _allow_patterns():
+    """Read [paths] allow structurally, not by comment-sensitive parsing."""
+    with open(DOCKER_CONFIG, "rb") as f:
+        return tomllib.load(f)["paths"]["allow"]
 
 
 @pytest.fixture(scope="module")
@@ -62,8 +74,7 @@ class TestConfigMountLandsWherePDFConfigLooks:
 
 class TestAllowListActuallyMatches:
     def test_allow_glob_matches_a_file_under_the_pdf_mount(self):
-        text = DOCKER_CONFIG.read_text()
-        patterns = re.findall(r'"([^"]+)"', text.split("allow")[1])
+        patterns = _allow_patterns()
         candidate = f"{CONTAINER_PDF_DIR}/report.pdf"
         assert any(fnmatch.fnmatch(candidate, p) for p in patterns), (
             f"[paths] allow {patterns} matches nothing under "
@@ -71,8 +82,7 @@ class TestAllowListActuallyMatches:
         )
 
     def test_allow_glob_rejects_paths_outside_the_mount(self):
-        text = DOCKER_CONFIG.read_text()
-        patterns = re.findall(r'"([^"]+)"', text.split("allow")[1])
+        patterns = _allow_patterns()
         assert not any(fnmatch.fnmatch("/etc/passwd", p) for p in patterns)
 
     def test_documents_volume_targets_the_allowed_dir(self, service):

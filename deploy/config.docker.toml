@@ -1,10 +1,10 @@
 # Config baked into the Docker deployment. Mounted read-only at
 # ~/.config/pdf-mcp/config.toml inside the container.
 #
-# This list is REQUIRED for a remote deployment. PDFConfig.check_path
-# enforces only when [paths] entries are configured, so without them every
-# tool can read any path the container process can reach. main_http()
-# refuses to start when it is missing.
+# The allow list is REQUIRED for a remote deployment. PDFConfig.check_path
+# enforces only when [paths] allow is non-empty, so without it every tool
+# can read any path the container process can reach. main_http() refuses to
+# start when it is missing.
 #
 # The glob must be "/data/pdfs/**", not "/data/pdfs": check_path fnmatches
 # the resolved FILE path, so a bare directory string matches nothing.

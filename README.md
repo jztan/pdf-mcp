@@ -8,9 +8,9 @@
 [![codecov](https://codecov.io/gh/jztan/pdf-mcp/graph/badge.svg)](https://codecov.io/gh/jztan/pdf-mcp)
 [![Downloads](https://pepy.tech/badge/pdf-mcp)](https://pepy.tech/project/pdf-mcp)
 
-**Surgical PDF access for AI agents — search, read, and extract without flooding context.**
+**Surgical PDF access for AI agents: search, read, and extract without flooding context.**
 
-An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search a PDF by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text — even from multi-column and Japanese layouts.
+An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search a PDF by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text, even from multi-column and Japanese layouts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 
@@ -18,9 +18,9 @@ An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and othe
 
 **[See what your AI agent sees →](https://pdf-mcp.jztan.com/)**
 
-Drop in any PDF and watch an agent skim it, search it, and read only the pages that matter — using a fraction of the tokens. 100% client-side, no install required.
+Drop in any PDF and watch an agent skim it, search it, and read only the pages that matter, using a fraction of the tokens. 100% client-side, no install required.
 
-[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages — using a fraction of the tokens" width="760">](https://pdf-mcp.jztan.com/)
+[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages, using a fraction of the tokens" width="760">](https://pdf-mcp.jztan.com/)
 
 ## Why pdf-mcp?
 
@@ -37,22 +37,22 @@ Drop in any PDF and watch an agent skim it, search it, and read only the pages t
 | Repeated access | Re-parse every time | SQLite cache |
 | Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
 | Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
-| Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted — hidden-text detection (`content_trust=True`) |
+| Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted: hidden-text detection (`content_trust=True`) |
 | Folders of PDFs | One document at a time | Corpus tools: warm, triage, and search across a whole folder |
 | Tool design | Single monolithic tool | 13 specialized tools |
 
 ## Features
 
-- **Hybrid search** — find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
-- **Corpus search** — point the server at a folder of PDFs: warm them into the cache, get per-document triage cards, and search across all documents at once with ranked, document-attributed hits
-- **Paginated reading** — fetch only the pages your agent needs; large documents don't blow your context window
-- **OCR** — scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
-- **Structured extraction** — tables, embedded images, and table of contents returned as structured data, not text soup
-- **Chart data extraction** — pull exact `(x, y)` tables from vector charts, read from the plot geometry rather than guessed from the image; declines with a rendered image when a chart can't be read reliably
-- **Vertical-script reading order** — Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
-- **Persistent cache** — SQLite-backed; re-reads are instant and survive server restarts
-- **Secure URL fetching** — HTTPS-only with SSRF protection; local network ranges are blocked
-- **Content-trust / hidden-text detection** — flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. Flag-only — nothing is stripped
+- **Hybrid search**: find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
+- **Corpus search**: point the server at a folder of PDFs: warm them into the cache, get per-document triage cards, and search across all documents at once with ranked, document-attributed hits
+- **Paginated reading**: fetch only the pages your agent needs; large documents don't blow your context window
+- **OCR**: scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
+- **Structured extraction**: tables, embedded images, and table of contents returned as structured data, not text soup
+- **Chart data extraction**: pull exact `(x, y)` tables from vector charts, read from the plot geometry rather than guessed from the image; declines with a rendered image when a chart can't be read reliably
+- **Vertical-script reading order**: Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
+- **Persistent cache**: SQLite-backed; re-reads are instant and survive server restarts
+- **Secure URL fetching**: HTTPS-only with SSRF protection; local network ranges are blocked
+- **Content-trust / hidden-text detection**: flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. Flag-only: nothing is stripped
 
 ## Contents
 
@@ -99,7 +99,7 @@ brew install tesseract
 # Ubuntu/Debian
 apt install tesseract-ocr
 
-# Windows — download the installer from:
+# On Windows, download the installer from:
 # https://github.com/UB-Mannheim/tesseract/wiki
 # Then add the install directory to your PATH.
 ```
@@ -265,7 +265,7 @@ pdf-mcp --help
 
 ## Tools
 
-The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate — its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context. For a folder of PDFs, start with `pdf_corpus_overview` to triage, then `pdf_corpus_search` to search across documents.
+The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate; its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context. For a folder of PDFs, start with `pdf_corpus_overview` to triage, then `pdf_corpus_search` to search across documents.
 
 | Tool | What it does |
 |------|--------------|
@@ -276,7 +276,7 @@ The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate 
 | `pdf_corpus_search` | Search across a folder of PDFs (keyword, semantic, or hybrid), returning ranked hits with document and page provenance, excerpts, and coverage. |
 | `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables, each with source `bbox` + `clip` coordinates. Always returns `hidden_text_detected` (response level) and per-page `hidden_text`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
-| `pdf_render_pages` | Render pages as PNG for vision models — diagrams, handwriting, scans |
+| `pdf_render_pages` | Render pages as PNG for vision models: diagrams, handwriting, scans |
 | `pdf_extract_chart` | Extract chart data as exact `(x, y)` tables from vector charts; declines with a rendered image when not reliably extractable |
 | `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts (paragraph hits also carry `bbox` + `clip` coordinates) |
 | `pdf_cache_stats` | Per-document cache breakdown + total size |
@@ -293,7 +293,7 @@ Example prompts:
 "OCR pages 3-5 of the scanned PDF"
 ```
 
-See **[docs/tool-reference.md](docs/tool-reference.md)** for the complete reference — every parameter, response shape, security contract, and example. For semantic-search model selection, see **[docs/embedding-models.md](docs/embedding-models.md)**.
+See **[docs/tool-reference.md](docs/tool-reference.md)** for the complete reference: every parameter, response shape, security contract, and example. For semantic-search model selection, see **[docs/embedding-models.md](docs/embedding-models.md)**.
 
 ## Example Workflow
 
@@ -307,7 +307,7 @@ Agent workflow:
    → 200 pages, TOC shows "Risk Factors" on page 89
 
 2. pdf_search("report.pdf", "risk factors")
-   → Matches with structural paragraph excerpts — each excerpt
+   → Matches with structural paragraph excerpts: each excerpt
      is the bullet, paragraph, or heading that matched, not a
      fixed-width window. Often enough to answer directly.
 
@@ -322,10 +322,10 @@ Agent workflow:
 
 pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.
 
-- **Access control** — `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
-- **Content-trust phrases** — extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
-- **Environment variables** — cache directory, TTL, and parallel OCR/render worker count
-- **Caching** — SQLite-backed persistence, what's cached, and invalidation
+- **Access control**: `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
+- **Content-trust phrases**: extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
+- **Environment variables**: cache directory, TTL, and parallel OCR/render worker count
+- **Caching**: SQLite-backed persistence, what's cached, and invalidation
 
 ## Roadmap
 
@@ -341,7 +341,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) for the threat model, repo
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Links
 
@@ -354,20 +354,20 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 **Getting started**
 
-- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — The problem with large PDFs in AI agents and a working solution
-- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — How AI agents use pdf-mcp tools to read and navigate PDF documents
-- [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Five production-tested patterns for how agents should navigate PDFs at scale
+- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): The problem with large PDFs in AI agents and a working solution
+- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): How AI agents use pdf-mcp tools to read and navigate PDF documents
+- [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Five production-tested patterns for how agents should navigate PDFs at scale
 
 **Search & retrieval**
 
-- [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
-- [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
-- [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
-- [Section-Level RAG: Why BM25 Beat Hybrid Search in My Benchmark](https://blog.jztan.com/bm25-vs-hybrid-search-section-rag/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Why pdf-mcp's section-grain search is BM25-only: hybrid RRF caused a 33% lexical regression at section grain, so granularity decides the search technique
-- [How One Search Change Eliminated an Entire Agent Step](https://blog.jztan.com/how-paragraph-excerpts-changed-agent-behavior/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Switching pdf_search from fixed-width snippets to paragraph excerpts turned it from a pivot tool into a terminal tool: 97% vs 80% answer containment across a 30-query benchmark
+- [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
+- [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
+- [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
+- [Section-Level RAG: Why BM25 Beat Hybrid Search in My Benchmark](https://blog.jztan.com/bm25-vs-hybrid-search-section-rag/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Why pdf-mcp's section-grain search is BM25-only: hybrid RRF caused a 33% lexical regression at section grain, so granularity decides the search technique
+- [How One Search Change Eliminated an Entire Agent Step](https://blog.jztan.com/how-paragraph-excerpts-changed-agent-behavior/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Switching pdf_search from fixed-width snippets to paragraph excerpts turned it from a pivot tool into a terminal tool: 97% vs 80% answer containment across a 30-query benchmark
 
 **Engineering & security**
 
-- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — What we found when we audited an MCP server for security holes
-- [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
-- [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp) — Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both
+- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): What we found when we audited an MCP server for security holes
+- [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
+- [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both

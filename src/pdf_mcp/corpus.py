@@ -539,6 +539,9 @@ def _clean_title(title: Any) -> str | None:
     low = stripped.lower()
     if low in _PLACEHOLDER_TITLES or low.startswith("untitled"):
         return None
+    # Underscore-wrapped scanner/exporter artifacts (e.g. ___CLEANLPDF___).
+    if stripped.startswith("_") and stripped.endswith("_"):
+        return None
     return stripped
 
 

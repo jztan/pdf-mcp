@@ -9,7 +9,6 @@ curve crest, and border-banding ate a curve's own apex. The invariants below
 pin all of them. Regenerate PDFs with legend_attacks/gen_attacks.py.
 """
 
-import json
 from pathlib import Path
 
 import pymupdf

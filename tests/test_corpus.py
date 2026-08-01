@@ -642,6 +642,13 @@ class TestOverviewCards:
             card = self._card_for_pdf(cache, tmp_path, title=junk)
             assert card["title"] is None, junk
 
+    def test_underscore_wrapped_scanner_titles_nulled(self, cache, tmp_path):
+        """Underscore-wrapped scanner/exporter artifacts read as no-title
+        (field feedback: '___CLEANLPDF___' leaking into doc_title)."""
+        for junk in ("___CLEANLPDF___", "_WATERMARKED_"):
+            card = self._card_for_pdf(cache, tmp_path, title=junk)
+            assert card["title"] is None, junk
+
     def test_real_title_passes_through(self, cache, tmp_path):
         card = self._card_for_pdf(cache, tmp_path, title="Annual Report 2026")
         assert card["title"] == "Annual Report 2026"

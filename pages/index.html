@@ -1160,6 +1160,8 @@
     if (!s) return null;
     const low = s.toLowerCase();
     if (low === "pdf document" || low.startsWith("untitled")) return null;
+    // Underscore-wrapped scanner/exporter artifacts (e.g. ___CLEANLPDF___).
+    if (s.startsWith("_") && s.endsWith("_")) return null;
     return s;
   }
 

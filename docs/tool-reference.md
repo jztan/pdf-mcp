@@ -750,7 +750,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...") read as `null`, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
+- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...", underscore-wrapped scanner artifacts like "___CLEANLPDF___") read as `null`, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
   - `title`: PDF metadata title, or `null` if absent. **Untrusted content from the PDF.**
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.

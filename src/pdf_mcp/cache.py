@@ -1571,6 +1571,15 @@ class PDFCache:
             conn.execute("DELETE FROM page_charts")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
+                conn.execute("DELETE FROM pdf_search_fts_cjk")
+                conn.execute("DELETE FROM pdf_section_fts")
+                conn.execute("DELETE FROM pdf_section_fts_cjk")
+            # Return freed pages to the filesystem, or the DB file keeps
+            # its high-water size and cache_size_bytes reports megabytes
+            # of residual after a full clear. VACUUM cannot run inside a
+            # transaction, so commit the deletes first.
+            conn.commit()
+            conn.execute("VACUUM")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:

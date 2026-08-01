@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an install hint, matching `pdf_corpus_search`'s existing behavior.
 
 ### Fixed
+- `pdf_cache_clear(expired_only=False)` now clears all four FTS5 index
+  tables (previously three kept stale rows) and runs `VACUUM`, so the
+  database file shrinks and `cache_size_bytes` no longer reports tens of
+  megabytes of residual after a full clear.
 - Paragraph-excerpt block scoring is now hyphen-insensitive: a query token
   like `pretraining` matches page text spelled `pre-training` (including
   hyphenated line breaks) in both the block picker and its coverage

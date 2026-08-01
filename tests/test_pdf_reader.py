@@ -14,6 +14,7 @@ import pytest
 from pdf_mcp import extractor
 from pdf_mcp.cache import PDFCache, _contains_cjk
 from pdf_mcp.config import PDFConfig
+from pdf_mcp.section_detector import Section
 from pdf_mcp.extractor import (
     count_query_tokens,
     estimate_tokens,
@@ -165,6 +166,50 @@ class TestPDFCache:
         stats = cache.get_stats()
         assert stats["total_files"] == 0
         assert stats["total_pages"] == 0
+
+    def test_clear_all_empties_every_fts_table(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 unavailable on this SQLite build")
+        cache.save_page_text(sample_pdf, 0, "quarterly budget report")
+        cache.save_page_text(sample_pdf, 1, "厚木基地に関する報告書")
+        cache.index_sections(
+            sample_pdf,
+            [
+                Section(
+                    title="Overview 概要",
+                    start_page=1,
+                    end_page=2,
+                    text="budget 基地 details",
+                    title_source="toc",
+                )
+            ],
+        )
+
+        cache.clear_all()
+
+        with sqlite3.connect(cache.db_path) as conn:
+            for table in (
+                "pdf_search_fts",
+                "pdf_search_fts_cjk",
+                "pdf_section_fts",
+                "pdf_section_fts_cjk",
+            ):
+                count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                assert count == 0, f"{table} still holds rows after clear_all"
+
+    def test_clear_all_shrinks_db_file(self, cache, sample_pdf):
+        """clear_all must return freed pages to the filesystem (VACUUM),
+        so cache_size_bytes doesn't report megabytes of residual after a
+        full clear."""
+        filler = "corpus filler text for vacuum sizing " * 200
+        for i in range(200):
+            cache.save_page_text(sample_pdf, i, f"page {i} {filler}")
+        pre = os.path.getsize(cache.db_path)
+
+        cache.clear_all()
+
+        post = os.path.getsize(cache.db_path)
+        assert post < pre
 
 
 # ============================================================================

@@ -4,10 +4,11 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.x     | ✅        |
+| 2.x     | ✅        |
+| 1.x     | ❌        |
 | < 1.0   | ❌        |
 
-Only the latest minor release on the 1.x line receives security updates. Older patches may be cherry-picked into a back-port at the maintainer's discretion if the issue is severe and the gap is small.
+Only the latest minor release on the 2.x line receives security updates. Fixes may be back-ported to the final 1.x release at the maintainer's discretion if the issue is severe and the gap is small.
 
 ## Reporting a Vulnerability
 
@@ -51,4 +52,4 @@ pdf-mcp routinely processes attacker-controllable input — PDF byte streams (lo
 
 ## Current Hardening Posture
 
-See `docs/tool-reference.md` § *Security & Hardening* for the runtime contracts users can rely on. The CHANGELOG `### Security` blocks document each release's specific changes. The most recent batch of security work (v1.13.0) covers URL-fetcher hardening (early content-type rejection, expanded IPv6 deny list, IPv4-mapped unwrap, per-hop IP pinning to defeat DNS rebinding) and tool-description prompt-injection hardening. The cache-directory `chmod 0o700` shipped in the same release is defense-in-depth only — it does not address an in-scope threat under the single-user deployment model.
+See `docs/tool-reference.md` § *Security & Hardening* for the runtime contracts users can rely on. The CHANGELOG `### Security` blocks document each release's specific changes. The most recent substantive hardening batch (v1.13.0) covers URL-fetcher hardening (early content-type rejection, expanded IPv6 deny list, IPv4-mapped unwrap, per-hop IP pinning to defeat DNS rebinding) and tool-description prompt-injection hardening. The cache-directory `chmod 0o700` shipped in the same release is defense-in-depth only — it does not address an in-scope threat under the single-user deployment model.

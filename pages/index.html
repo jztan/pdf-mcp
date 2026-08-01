@@ -1209,7 +1209,7 @@
   $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
   $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
-  const SAMPLE_CORPUS = ["corpus/nist-zero-trust.pdf", "corpus/nist-router-security.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/cfpb-credit-trends.pdf", "corpus/usda-organic.pdf"];
+  const SAMPLE_CORPUS = ["corpus/nist-zero-trust.pdf", "corpus/nist-router-security.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/fed-consumer-context.pdf", "corpus/usda-organic.pdf"];
 
   async function loadSampleCorpus() {
     if (corpusBusy) { showToast("Still warming the current corpus. One moment."); return; }
@@ -1530,7 +1530,7 @@
 
   function renderCorpusChips() {
     const chips = [
-      "requirements",
+      "policy",
       "cloud security requirements",
       "organic labeling",
     ];

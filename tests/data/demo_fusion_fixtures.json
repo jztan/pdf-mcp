@@ -1,0 +1,282 @@
+{
+  "query_terms": [
+    {
+      "query": "cloud security requirements",
+      "expected": [
+        "cloud",
+        "requirements",
+        "security"
+      ]
+    },
+    {
+      "query": "AI and the fog",
+      "expected": []
+    },
+    {
+      "query": "厚木基地 report",
+      "expected": [
+        "report"
+      ]
+    }
+  ],
+  "rrf_no_scores": {
+    "rank_lists": [
+      [
+        [
+          "b.pdf",
+          3
+        ],
+        [
+          "b.pdf",
+          1
+        ]
+      ],
+      [
+        [
+          "a.pdf",
+          2
+        ]
+      ],
+      [
+        [
+          "c.pdf",
+          7
+        ],
+        [
+          "c.pdf",
+          4
+        ],
+        [
+          "c.pdf",
+          9
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        "a.pdf",
+        2
+      ],
+      [
+        "b.pdf",
+        3
+      ],
+      [
+        "c.pdf",
+        7
+      ],
+      [
+        "b.pdf",
+        1
+      ],
+      [
+        "c.pdf",
+        4
+      ],
+      [
+        "c.pdf",
+        9
+      ]
+    ]
+  },
+  "rrf_scores_tiebreak": {
+    "rank_lists": [
+      [
+        [
+          "b.pdf",
+          3
+        ],
+        [
+          "b.pdf",
+          1
+        ]
+      ],
+      [
+        [
+          "a.pdf",
+          2
+        ]
+      ],
+      [
+        [
+          "c.pdf",
+          7
+        ],
+        [
+          "c.pdf",
+          4
+        ],
+        [
+          "c.pdf",
+          9
+        ]
+      ]
+    ],
+    "scores": {
+      "a.pdf\n2": 2.5,
+      "b.pdf\n3": 1.1,
+      "b.pdf\n1": 1.1,
+      "c.pdf\n7": 3.0,
+      "c.pdf\n4": 3.0,
+      "c.pdf\n9": 3.0
+    },
+    "expected": [
+      [
+        "c.pdf",
+        7
+      ],
+      [
+        "a.pdf",
+        2
+      ],
+      [
+        "b.pdf",
+        3
+      ],
+      [
+        "c.pdf",
+        4
+      ],
+      [
+        "b.pdf",
+        1
+      ],
+      [
+        "c.pdf",
+        9
+      ]
+    ]
+  },
+  "rrf_topk": {
+    "rank_lists": [
+      [
+        [
+          "b.pdf",
+          3
+        ],
+        [
+          "b.pdf",
+          1
+        ]
+      ],
+      [
+        [
+          "a.pdf",
+          2
+        ]
+      ],
+      [
+        [
+          "c.pdf",
+          7
+        ],
+        [
+          "c.pdf",
+          4
+        ],
+        [
+          "c.pdf",
+          9
+        ]
+      ]
+    ],
+    "top_k": 3,
+    "scores": {
+      "a.pdf\n2": 2.5,
+      "b.pdf\n3": 1.1,
+      "b.pdf\n1": 1.1,
+      "c.pdf\n7": 3.0,
+      "c.pdf\n4": 3.0,
+      "c.pdf\n9": 3.0
+    },
+    "expected": [
+      [
+        "c.pdf",
+        7
+      ],
+      [
+        "a.pdf",
+        2
+      ],
+      [
+        "b.pdf",
+        3
+      ]
+    ]
+  },
+  "coverage_scores": {
+    "covered": {
+      "x.pdf": [
+        "cloud",
+        "security"
+      ],
+      "y.pdf": [
+        "cloud"
+      ],
+      "z.pdf": [
+        "cloud",
+        "requirements",
+        "security"
+      ]
+    },
+    "expected": {
+      "x.pdf": 1.6094379124341005,
+      "y.pdf": 0.6931471805599453,
+      "z.pdf": 2.9957322735539913
+    }
+  },
+  "end_to_end": {
+    "docs": {
+      "alpha.pdf": {
+        "1": "Annual budget figures and travel notes.",
+        "2": "Cloud migration security requirements for federal agencies. Security controls.",
+        "3": "Cloud cloud cloud. Appendix on security requirements and cloud audits."
+      },
+      "beta.pdf": {
+        "1": "Consumer credit trends. Nothing about infrastructure.",
+        "2": "A single mention of cloud security requirements in passing."
+      },
+      "gamma.pdf": {
+        "1": "Organic labeling rules for producers."
+      }
+    },
+    "query": "cloud security requirements",
+    "rank_lists": [
+      [
+        [
+          "alpha.pdf",
+          3
+        ],
+        [
+          "alpha.pdf",
+          2
+        ]
+      ],
+      [
+        [
+          "beta.pdf",
+          2
+        ]
+      ]
+    ],
+    "scores": {
+      "alpha.pdf\n3": 2.0794415416798357,
+      "alpha.pdf\n2": 2.0794415416798357,
+      "beta.pdf\n2": 2.0794415416798357
+    },
+    "expected_fused": [
+      [
+        "alpha.pdf",
+        3
+      ],
+      [
+        "beta.pdf",
+        2
+      ],
+      [
+        "alpha.pdf",
+        2
+      ]
+    ]
+  }
+}

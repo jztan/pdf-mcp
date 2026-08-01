@@ -285,8 +285,6 @@
   /* Land on the cells' resting opacity (0.5) — overshooting to 1 made the
      whole grid darken, then visibly lighten when the cascade class lifted. */
   @keyframes cellIn { to { opacity: 0.5; } }
-  .lgrid.cascade .pgcell.scanned { animation-name: cellInScanned; }
-  @keyframes cellInScanned { to { opacity: 0.45; } }
   .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
   .ov-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elev); padding: 16px; }
   .ov-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
@@ -500,7 +498,7 @@
   .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
   details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
   details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } .lgrid.cascade .pgcell { animation: none; opacity: 0.5; } .lgrid.cascade .pgcell.scanned { opacity: 0.45; } }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } .lgrid.cascade .pgcell { animation: none; opacity: 0.5; } }
 
   .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
@@ -1951,21 +1949,28 @@
       svgEl.classList.add("hidden");
       const gridEl = $("liveGrid");
       gridEl.classList.remove("hidden");
-      // Two-phase paint: the text layer sweeps in first, then scanned pages
-      // (no text layer; OCR runs server-side) surface as their own second
-      // wave, so the document's readable shape and its OCR-needing gaps read
-      // as two distinct facts.
-      let scanIdx = 0;
+      // Two-phase paint: the whole grid sweeps in first as plain pages (no
+      // holes), then the scanned pages (no text layer; OCR runs server-side)
+      // turn their highlight colour one by one — the map appears, then the
+      // tool's classification lands on it.
       gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        const delay = scanned ? 1450 + Math.min(scanIdx++ * 80, 600) : Math.min(i * 5, 1100);
-        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}" style="animation-delay:${delay}ms"></div>`;
+        return `<div class="pgcell" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}" style="animation-delay:${Math.min(i * 5, 1100)}ms"></div>`;
       }).join("");
       gridEl.querySelectorAll(".pgcell").forEach(cell =>
         onActivate(cell, () => readInline(parseInt(cell.dataset.page, 10))));
-      if (!REDUCED_MOTION) {
+      const scannedIdx = textChars.map((chars, i) => (chars < 40 && raster[i] > 0 ? i : -1)).filter((i) => i >= 0);
+      if (REDUCED_MOTION) {
+        scannedIdx.forEach((i) => gridEl.children[i].classList.add("scanned"));
+      } else {
         gridEl.classList.add("cascade");
-        setTimeout(() => gridEl.classList.remove("cascade"), 2900);
+        setTimeout(() => gridEl.classList.remove("cascade"), 1500);
+        // The base .pgcell transition (background/opacity 0.5s) morphs each
+        // cell grey -> scanned highlight; class lands after the wave settles.
+        scannedIdx.forEach((i, si) => setTimeout(() => {
+          const c = gridEl.children[i];
+          if (c) c.classList.add("scanned");
+        }, 1700 + si * 120));
       }
     } else {
       $("liveGrid").classList.add("hidden");

@@ -4676,3 +4676,23 @@ class TestHTTPTransportEntryPoint:
         server.main()
 
         assert captured == {"transport": "stdio"}
+
+    def test_health_route_is_registered_and_unauthenticated(
+        self, tmp_path, monkeypatch
+    ):
+        from starlette.testclient import TestClient
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        server.main_http()
+
+        app = server.mcp.http_app(path="/mcp")
+        with TestClient(app) as client:
+            response = client.get("/health")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["version"] == server.__version__

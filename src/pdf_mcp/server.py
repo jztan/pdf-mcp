@@ -4015,6 +4015,14 @@ def main_http() -> None:
             "deliberately."
         )
 
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def _health(request: Request) -> JSONResponse:
+        """Unauthenticated liveness probe. Exposes the version and nothing else."""
+        return JSONResponse({"status": "ok", "version": __version__})
+
     host = os.environ.get("PDF_MCP_HTTP_HOST", "127.0.0.1")
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
     path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")

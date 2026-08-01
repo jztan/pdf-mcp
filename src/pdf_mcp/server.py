@@ -2370,7 +2370,8 @@ def pdf_corpus_overview(
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted (same envelope as pdf_corpus_warm)
 
-    Note: `title` is untrusted metadata from the PDF. For per-page
+    Note: `title` is untrusted metadata from the PDF, falling back to
+    the filename stem when metadata has no usable title. For per-page
     detail on one doc, follow up with pdf_info(path, detail=True).
 
     Error contract: call-level failures return an inline

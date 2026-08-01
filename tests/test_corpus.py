@@ -587,7 +587,8 @@ class TestOverviewCards:
         alpha = [f for f in files if f.endswith("alpha.pdf")][0]
         card = corpus.build_overview_card(alpha, cache, from_cache=False)
         assert card["path"] == alpha
-        assert card["title"] is None  # fixture sets no metadata title
+        # Fixture sets no metadata title: falls back to the filename stem.
+        assert card["title"] == "alpha"
         assert card["pages"] == 2
         assert card["toc_top"] == []
         assert card["has_toc"] is False
@@ -635,19 +636,24 @@ class TestOverviewCards:
         )
         assert card["toc_top"] == ["Real Chapter"]
 
-    def test_placeholder_titles_nulled(self, cache, tmp_path):
-        """Known exporter placeholders read as no-title (field
-        feedback: 'Pdf Document', 'Untitled 3.pages')."""
-        for junk in ("Pdf Document", "Untitled 3.pages", "   "):
+    def test_placeholder_titles_fall_back_to_stem(self, cache, tmp_path):
+        """Known exporter placeholders read as junk and fall back to the
+        filename stem (field feedback: 'Pdf Document', 'Untitled 3.pages';
+        never-null unified with search doc_title)."""
+        for junk in ("Pdf Document", "Untitled 3.pages", "   ", "_WATERMARKED_"):
             card = self._card_for_pdf(cache, tmp_path, title=junk)
-            assert card["title"] is None, junk
+            assert card["title"] == Path(card["path"]).stem, junk
 
-    def test_underscore_wrapped_scanner_titles_nulled(self, cache, tmp_path):
-        """Underscore-wrapped scanner/exporter artifacts read as no-title
-        (field feedback: '___CLEANLPDF___' leaking into doc_title)."""
-        for junk in ("___CLEANLPDF___", "_WATERMARKED_"):
-            card = self._card_for_pdf(cache, tmp_path, title=junk)
-            assert card["title"] is None, junk
+    def test_embedded_scanner_marker_title_junked(self, cache, tmp_path):
+        """A scanner artifact embedded in a longer filename-style title is
+        junk too (real field sample: the marker sits mid-string, so a
+        wrapped-only check misses it)."""
+        card = self._card_for_pdf(
+            cache,
+            tmp_path,
+            title="506673___CLEANLPDF_LAN_16Oct202315580658_002.PDF",
+        )
+        assert card["title"] == Path(card["path"]).stem
 
     def test_real_title_passes_through(self, cache, tmp_path):
         card = self._card_for_pdf(cache, tmp_path, title="Annual Report 2026")

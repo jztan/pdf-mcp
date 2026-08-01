@@ -750,8 +750,8 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...", underscore-wrapped scanner artifacts like "___CLEANLPDF___") read as `null`, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
-  - `title`: PDF metadata title, or `null` if absent. **Untrusted content from the PDF.**
+- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...", scanner artifacts carrying a `___` marker) fall back to the filename stem, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
+  - `title`: PDF metadata title, falling back to the filename stem when absent or a known placeholder — never `null` (same contract as `pdf_corpus_search`'s `doc_title`). **Untrusted content from the PDF** when it comes from metadata.
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
@@ -759,7 +759,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 **Limitations:**
 - The 100-file cap, budget clamp, and URL rejection described above apply.
 - Cards carry no per-page arrays and no content excerpts; follow up with `pdf_info(path, detail=True)` for per-page detail on a single document of interest.
-- `title` is untrusted PDF metadata and may be absent.
+- `title` is untrusted PDF metadata when present; junk detection is heuristic, so unrecognized junk titles (e.g. EDGAR accession numbers) pass through as-is.
 - A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated during call"` (pdf_corpus_overview only).
 - The client per-call timeout interaction described under `pdf_corpus_warm` applies to the auto-warm here too; on a large cold corpus behind a timeout-bounded client, warm first with repeated budgeted `pdf_corpus_warm` calls, then call this tool.
 
@@ -802,7 +802,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 
 **Returns:**
 - `matches` (array): cross-document hits in fused order, each `{path, doc_title, page, excerpt, position, source, hidden_text}`, plus `bbox`/`page_rect`/`clip` when `excerpt_style` is `"paragraph"`.
-  - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
+  - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." and scanner artifacts carrying a `___` marker filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
   - Keyword-mode hits also carry `score` (per-doc BM25; comparable only within that hit's own document, since RRF governs cross-document order, not the raw score).
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.

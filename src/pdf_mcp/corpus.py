@@ -539,8 +539,13 @@ def _clean_title(title: Any) -> str | None:
     low = stripped.lower()
     if low in _PLACEHOLDER_TITLES or low.startswith("untitled"):
         return None
-    # Underscore-wrapped scanner/exporter artifacts (e.g. ___CLEANLPDF___).
+    # Scanner/exporter artifacts: underscore-wrapped (e.g. _WATERMARKED_)
+    # or an embedded triple-underscore marker (real field sample:
+    # "506673___CLEANLPDF_LAN_...PDF"). Three underscores, not two, so
+    # legitimate titles mentioning dunder names (__init__) survive.
     if stripped.startswith("_") and stripped.endswith("_"):
+        return None
+    if "___" in stripped:
         return None
     return stripped
 
@@ -549,11 +554,12 @@ def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, An
     """Build one triage card from cached data only (doc must be warm).
 
     Junk metadata is filtered rather than passed through: whitespace-only
-    TOC entries are dropped and placeholder titles read as null, since
+    TOC entries are dropped and placeholder titles fall back to the
+    filename stem (never null, unified with search's doc_title), since
     the cards exist for orientation."""
     meta = cache.get_metadata(path)
     toc = meta.get("toc") or []
-    title = _clean_title((meta.get("metadata") or {}).get("title"))
+    title = _clean_title((meta.get("metadata") or {}).get("title")) or Path(path).stem
     toc_top = [
         (e.get("title") or "").strip()
         for e in toc

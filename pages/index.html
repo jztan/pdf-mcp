@@ -1160,8 +1160,10 @@
     if (!s) return null;
     const low = s.toLowerCase();
     if (low === "pdf document" || low.startsWith("untitled")) return null;
-    // Underscore-wrapped scanner/exporter artifacts (e.g. ___CLEANLPDF___).
+    // Scanner/exporter artifacts: underscore-wrapped or an embedded
+    // triple-underscore marker (e.g. "506673___CLEANLPDF_...PDF").
     if (s.startsWith("_") && s.endsWith("_")) return null;
+    if (s.includes("___")) return null;
     return s;
   }
 
@@ -1401,7 +1403,8 @@
           const chars = pageTexts.reduce((a, t) => a + t.length, 0);
           corpusState.docs.push({
             path: file.name, file, pages, pageTexts, sizeBytes: file.size,
-            title: cleanTitle(meta && meta.info && meta.info.Title),
+            // Mirrors the server: cleaned metadata title, else filename stem.
+            title: cleanTitle(meta && meta.info && meta.info.Title) || file.name.replace(/\.[^.]+$/, ""),
             tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
             hasToc: outlineHasNonBlankTitle(outline),
             tokens: Math.round(chars / 4),

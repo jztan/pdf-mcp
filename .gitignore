@@ -114,3 +114,8 @@ release_notes_v*.md
 scripts/demo-recorder/node_modules/
 scripts/demo-recorder/package-lock.json
 .playwright-mcp
+
+# Docker deployment: holds a live PDF_MCP_AUTH_TOKEN
+.env.docker
+# Operator PDFs mounted into the container
+documents/

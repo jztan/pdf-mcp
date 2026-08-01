@@ -2128,8 +2128,10 @@
     const pctStr = pct < 10 ? pct.toFixed(1) + "%" : Math.round(pct) + "%";
     if (corpusState) {
       const totalPages = corpusState.docs.reduce((a, d) => a + d.pages, 0);
+      // Headline is the SAVED share (inverse of pct, which is tokens used).
+      const savedStr = Math.max(0, 100 - pct).toFixed(1) + "%";
       $("receiptHead").innerHTML =
-        `${totalPages} pages across ${corpusState.docs.length} documents.<br/><span>${pctStr} never entered the context window.</span>`;
+        `${totalPages} pages across ${corpusState.docs.length} documents.<br/><span>${savedStr} never entered the context window.</span>`;
     } else {
       $("receiptHead").innerHTML = `You read <span>${pagesRead.size} page${pagesRead.size !== 1 ? "s" : ""}</span> of ${pageTexts.length}.`;
     }

@@ -270,13 +270,13 @@
   .warm-row:last-child { border-bottom: none; }
   .warm-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .warm-pages { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
-  .warm-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+  .warm-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; min-width: 120px; text-align: right; }
   .warm-state.done { color: #34c759; }
   .warm-state.active { color: var(--accent); }
   .warm-state.queued { color: var(--text-tertiary); }
   .warm-state.skip { color: var(--warning); }
   .warm-mini { position: relative; width: 90px; height: 6px; border-radius: 4px; background: var(--bg-subtle); border: 1px solid var(--border); overflow: hidden; }
-  .warm-mini i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width 0.35s ease; }
+  .warm-mini i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width 0.2s linear; }
   .ov-card { opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease, transform 0.45s ease; }
   .ov-card.on { opacity: 1; transform: none; }
   .doc-card.enter { animation: cardIn 0.5s ease both; }
@@ -304,7 +304,7 @@
   .cg-cell.hit { background: color-mix(in srgb, var(--accent) 22%, var(--bg-subtle)); border-color: var(--accent); }
   .cg-cell.read { background: var(--accent); border-color: var(--accent); }
   .res-doc { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); background: rgba(0,113,227,0.08); border: 1px solid rgba(0,113,227,0.2); border-radius: 980px; padding: 2px 9px; margin-right: 8px; }
-  @media (max-width: 640px) { .cg-name { flex-basis: 120px; } }
+  @media (max-width: 640px) { .cg-name { flex-basis: 120px; } .warm-state { min-width: 92px; } }
 
   section.upload { background: var(--bg); padding: 8px 22px 48px; }
   section.upload .inner { max-width: 820px; margin: 0 auto; }

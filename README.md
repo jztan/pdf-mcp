@@ -20,7 +20,9 @@ An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and othe
 
 Drop in any PDF and watch an agent skim it, search it, and read only the pages that matter, using a fraction of the tokens. 100% client-side, no install required.
 
-[<img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages, using a fraction of the tokens" width="760">](https://pdf-mcp.jztan.com/)
+<p align="center">
+  <a href="https://pdf-mcp.jztan.com/"><img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages, using a fraction of the tokens" width="760"></a>
+</p>
 
 ## Why pdf-mcp?
 

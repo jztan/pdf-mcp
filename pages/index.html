@@ -1951,18 +1951,21 @@
       svgEl.classList.add("hidden");
       const gridEl = $("liveGrid");
       gridEl.classList.remove("hidden");
+      // Two-phase paint: the text layer sweeps in first, then scanned pages
+      // (no text layer; OCR runs server-side) surface as their own second
+      // wave, so the document's readable shape and its OCR-needing gaps read
+      // as two distinct facts.
+      let scanIdx = 0;
       gridEl.innerHTML = textChars.map((chars, i) => {
         const scanned = chars < 40 && raster[i] > 0;
-        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}" style="animation-delay:${Math.min(i * 5, 1100)}ms"></div>`;
+        const delay = scanned ? 1450 + Math.min(scanIdx++ * 80, 600) : Math.min(i * 5, 1100);
+        return `<div class="pgcell${scanned ? ' scanned' : ''}" data-page="${i + 1}" role="button" tabindex="0" aria-label="Read page ${i + 1}" title="page ${i + 1} · ${chars} chars${scanned ? ' · scanned' : ''}" style="animation-delay:${delay}ms"></div>`;
       }).join("");
       gridEl.querySelectorAll(".pgcell").forEach(cell =>
         onActivate(cell, () => readInline(parseInt(cell.dataset.page, 10))));
-      // Paint the page map in a left-to-right wave so the document's shape
-      // registers before the first tool call. Class removed after the wave so
-      // later dim/hit sweeps are unaffected.
       if (!REDUCED_MOTION) {
         gridEl.classList.add("cascade");
-        setTimeout(() => gridEl.classList.remove("cascade"), 2200);
+        setTimeout(() => gridEl.classList.remove("cascade"), 2900);
       }
     } else {
       $("liveGrid").classList.add("hidden");

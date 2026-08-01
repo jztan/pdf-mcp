@@ -126,6 +126,7 @@ Changelog = "https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md"
 
 [project.scripts]
 pdf-mcp = "pdf_mcp.server:main"
+pdf-mcp-http = "pdf_mcp.server:main_http"
 
 [build-system]
 requires = ["hatchling"]

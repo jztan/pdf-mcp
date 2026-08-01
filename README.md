@@ -62,6 +62,7 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 - [Quick Start](#quick-start)
 - [Tools](#tools)
 - [Example Workflow](#example-workflow)
+- [Remote / HTTP transport](#remote--http-transport)
 - [Configuration](#configuration)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -319,6 +320,37 @@ Agent workflow:
    pdf_read_pages("report.pdf", "89-95")
    → Full page text for deeper reading
 ```
+
+## Remote / HTTP transport
+
+STDIO remains the default and is what every example above uses. If you need to
+reach pdf-mcp remotely (for example from the Anthropic API MCP connector), a
+second entry point serves the same tools over HTTP:
+
+```bash
+export PDF_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
+pdf-mcp-http
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PDF_MCP_AUTH_TOKEN` | *(none, required)* | Bearer token clients must send as `Authorization: Bearer <token>` |
+| `PDF_MCP_HTTP_HOST` | `127.0.0.1` | Bind address |
+| `PDF_MCP_HTTP_PORT` | `8000` | Bind port |
+| `PDF_MCP_HTTP_PATH` | `/mcp` | Endpoint path |
+
+Four things to know before deploying it:
+
+- **Single-tenant.** Run one instance per user, each with its own cache volume
+  and filesystem. The SQLite cache and any warmed corpus are shared by every
+  caller of a single process; there is no per-user partitioning.
+- **Fails closed.** Without `PDF_MCP_AUTH_TOKEN` the process exits instead of
+  starting an unauthenticated public endpoint.
+- **Set the `[paths]` allow list.** Path rules only take effect when `allow` is
+  non-empty, so a remote deployment without one lets the tools read any file the
+  server process can reach. See [`deploy/config.toml.example`](deploy/config.toml.example).
+- **Terminate TLS in a proxy.** The default bind is loopback on purpose; put
+  Caddy or nginx in front of it. See [`deploy/Caddyfile.example`](deploy/Caddyfile.example).
 
 ## Configuration
 

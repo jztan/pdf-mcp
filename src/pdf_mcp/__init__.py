@@ -22,7 +22,7 @@ Usage with Claude Desktop:
 # Defined before the .server import so server.py can reach it without
 # triggering a circular import during package initialisation. FastMCP
 # uses this value as serverInfo.version in the MCP initialize handshake.
-__version__ = "1.22.0"
+__version__ = "2.0.0"
 
 from .cache import PDFCache  # noqa: E402
 

@@ -18,10 +18,10 @@ An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and othe
 
 **[See what your AI agent sees →](https://pdf-mcp.jztan.com/)**
 
-Drop in any PDF and watch an agent skim it, search it, and read only the pages that matter, using a fraction of the tokens. 100% client-side, no install required.
+Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus, search across every document at once, and read only the pages that matter, using a fraction of the tokens. 100% client-side, no install required.
 
 <p align="center">
-  <a href="https://pdf-mcp.jztan.com/"><img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent maps a 216-page PDF, searches it, and reads only the matching pages, using a fraction of the tokens" width="760"></a>
+  <a href="https://pdf-mcp.jztan.com/"><img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent warms a 6-PDF corpus, triages it, searches across all six documents, and reads only the matching page, with 97.5% of the corpus never entering the context window" width="760"></a>
 </p>
 
 ## Why pdf-mcp?

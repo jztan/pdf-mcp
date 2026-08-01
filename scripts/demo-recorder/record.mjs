@@ -28,7 +28,7 @@ const OUT = process.env.OUT_GIF || resolve(HERE, "../../docs/images/demo.gif");
 const PORT = Number(process.env.PORT || 8011);
 const FPS = Number(process.env.FPS || 16);
 const MAXCOLORS = Number(process.env.MAXCOLORS || 144);
-const LOSSY = Number(process.env.LOSSY || 120);
+const LOSSY = Number(process.env.LOSSY || 80);
 const OUT_W = 760;                                 // README display width
 // Capture the full desktop layout at a larger viewport, then downscale to
 // OUT_W — so each frame shows the whole scene (doc card, grid, search, legend)
@@ -99,45 +99,61 @@ const smoothTo = async (selector, ratio = 0.16, dur = 750) => {
 await page.waitForTimeout(2600);
 mark("hero shown");
 
-// Pan down to the "2 pages read" line + CTAs first, so clicking the sample
+// Pan down to the "2 pages read" line + CTAs first, so clicking a sample
 // button doesn't trigger an instant auto-scroll jump.
-await smoothTo("#ctaSample", 0.62);
+await smoothTo("#ctaCorpus", 0.62);
 await page.waitForTimeout(550);
 
-// 2. Load the sample contract; wait for the live page-grid to build.
-await page.click("#ctaSample");
-await page.waitForSelector("#workflow", { state: "visible", timeout: 60000 });
-await page.waitForFunction(() => document.querySelectorAll("#liveGrid .pgcell").length > 0, null, { timeout: 60000 });
-mark("sample loaded + grid built");
-// Pan down from the hero to the document card so the mapped 216-page grid shows.
-await smoothTo("#docCard", 0.05);
-await page.waitForTimeout(700);
+// 2. Corpus first (the headline): load the 6-PDF sample corpus.
+await page.click("#ctaCorpus");
+await page.waitForSelector("#corpusWorkflow", { state: "visible", timeout: 60000 });
+// Hold at the hero until the warm rows exist, so the camera arrives on a
+// populated card instead of panning to an empty one while PDFs fetch.
+await page.waitForFunction(
+  () => document.querySelectorAll("#corpusWarmPanel .warm-state").length >= 6,
+  null, { timeout: 60000 }
+);
+mark("corpus loading");
+await smoothTo("#corpusCard", 0.05);
 
-// 3. Type the first suggested query (derived from the doc -> guaranteed match).
-const query = await page.$eval("#suggestedChips .chip", (el) => el.dataset.q);
-mark(`query = "${query}"`);
-await page.waitForTimeout(300);
-await page.locator("#searchInput").pressSequentially(query, { delay: 80 });
+// 3. Warm sweep: six docs extract client-side; rows flip queued -> warmed.
+await page.waitForFunction(
+  () => document.querySelectorAll("#corpusWarmPanel .warm-state.done").length >= 6,
+  null, { timeout: 120000 }
+);
+mark("corpus warmed");
+await page.waitForTimeout(900);
+
+// 4. Overview triage cards (unhidden automatically after the warm).
+await page.waitForSelector("#corpusOverviewPanel:not(.hidden)", { timeout: 15000 });
+await smoothTo("#corpusOverviewPanel", 0.14);
+await page.waitForTimeout(1500);
+
+// 5. Cross-document search with a suggested query (prefer the multi-doc one).
+await page.waitForSelector("#corpusSearchPanel:not(.hidden)", { timeout: 15000 });
+await smoothTo("#corpusSearchPanel", 0.16);
+const chips = await page.$$eval("#corpusChips .chip", (els) => els.map((e) => e.dataset.q));
+const cq = chips[1] || chips[0];
+mark(`corpus query = "${cq}"`);
+await page.locator("#corpusSearchInput").pressSequentially(cq, { delay: 80 });
 await page.waitForTimeout(350);
+await page.click("#corpusSearchBtn");
+await page.waitForSelector("#corpusResults .result-card.on", { timeout: 20000 });
+mark("corpus results shown");
+await page.waitForTimeout(1600);
 
-// 4. Search -> matches sweep the grid, result cards fade in.
-await page.click("#searchBtn");
-await page.waitForSelector("#searchResults .result-card.on", { timeout: 15000 });
-mark("results shown");
-await page.waitForTimeout(1200);
-
-// 5. Open a matched page inline (the agent reads only that page).
-await smoothTo("#searchResults", 0.22);
-await page.locator("#searchResults .result-card").first().click();
-await page.waitForSelector(".inline-reader.open", { timeout: 10000 });
-mark("inline read open");
+// 6. Open the top hit: the agent reads one page out of the whole corpus.
+await smoothTo("#corpusResults", 0.22);
+await page.locator("#corpusResults .result-card").first().click();
+mark("corpus hit opened");
 await page.waitForTimeout(1800);
 
-// 6. The payoff: reading a page reveals the receipt — "You read 1 page of 216".
+// 7. The payoff: reading a hit reveals the "what just happened" receipt —
+// pages across six documents, and the share that never entered the context.
 await page.waitForSelector("#receipt:not(.hidden)", { timeout: 5000 });
 await smoothTo("#receipt", 0.12);
 mark("receipt shown");
-await page.waitForTimeout(2300);
+await page.waitForTimeout(2800);
 
 await context.close();
 await browser.close();

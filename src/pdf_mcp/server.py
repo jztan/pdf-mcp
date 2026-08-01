@@ -3986,8 +3986,9 @@ def main_http() -> None:
     proxy in front of this process, not to the app. Set a ``[paths]`` allow
     list in the config or the tools can read any path the process can.
 
-    Env: PDF_MCP_AUTH_TOKEN (required), PDF_MCP_HTTP_HOST (127.0.0.1),
-    PDF_MCP_HTTP_PORT (8000), PDF_MCP_HTTP_PATH (/mcp).
+    Env: PDF_MCP_AUTH_TOKEN (required), PDF_MCP_ALLOW_ANY_PATH (unset),
+    PDF_MCP_HTTP_HOST (127.0.0.1), PDF_MCP_HTTP_PORT (8000),
+    PDF_MCP_HTTP_PATH (/mcp).
     """
     from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
@@ -4002,6 +4003,17 @@ def main_http() -> None:
     mcp.auth = StaticTokenVerifier(
         tokens={token: {"client_id": "pdf-mcp", "scopes": []}}
     )
+
+    allow_any = os.environ.get("PDF_MCP_ALLOW_ANY_PATH", "").strip() == "1"
+    if not allow_any and not pdf_config.has_path_allowlist:
+        raise SystemExit(
+            "No [paths] allow list is configured "
+            f"({pdf_config.config_path}). The HTTP transport refuses to "
+            "start unrestricted: with no allow list, every tool can read "
+            "any path this process can reach. Add a [paths] allow list to "
+            "that file, or set PDF_MCP_ALLOW_ANY_PATH=1 to override this "
+            "deliberately."
+        )
 
     host = os.environ.get("PDF_MCP_HTTP_HOST", "127.0.0.1")
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))

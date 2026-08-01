@@ -4551,6 +4551,7 @@ class TestHTTPTransportEntryPoint:
         from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
         monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
         monkeypatch.setattr(server.mcp, "auth", None, raising=False)
 
@@ -4562,6 +4563,7 @@ class TestHTTPTransportEntryPoint:
 
     def test_defaults_bind_loopback(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
         for var in ("PDF_MCP_HTTP_HOST", "PDF_MCP_HTTP_PORT", "PDF_MCP_HTTP_PATH"):
             monkeypatch.delenv(var, raising=False)
         captured = {}
@@ -4578,6 +4580,7 @@ class TestHTTPTransportEntryPoint:
 
     def test_host_port_path_come_from_env(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
         monkeypatch.setenv("PDF_MCP_HTTP_HOST", "0.0.0.0")
         monkeypatch.setenv("PDF_MCP_HTTP_PORT", "9123")
         monkeypatch.setenv("PDF_MCP_HTTP_PATH", "/pdf")
@@ -4594,4 +4597,82 @@ class TestHTTPTransportEntryPoint:
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
         server.main()
+        assert captured == {"transport": "stdio"}
+
+    def _allowlisted_config(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        from pdf_mcp.config import PDFConfig
+
+        return PDFConfig(config_path=cfg)
+
+    def test_missing_allowlist_refuses_to_start(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        called = []
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: called.append(kw))
+
+        with pytest.raises(SystemExit) as exc:
+            server.main_http()
+
+        assert "allow" in str(exc.value).lower()
+        assert str(tmp_path / "none.toml") in str(exc.value)
+        assert called == []
+
+    def test_allowlist_present_starts(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured["transport"] == "http"
+
+    def test_override_env_allows_start_without_allowlist(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured["transport"] == "http"
+
+    def test_token_check_runs_before_allowlist_check(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.delenv("PDF_MCP_AUTH_TOKEN", raising=False)
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        with pytest.raises(SystemExit) as exc:
+            server.main_http()
+
+        assert "PDF_MCP_AUTH_TOKEN" in str(exc.value)
+
+    def test_stdio_main_ignores_the_allowlist_guard(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main()
+
         assert captured == {"transport": "stdio"}

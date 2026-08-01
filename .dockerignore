@@ -3,6 +3,8 @@
 .git/
 .venv/
 benchmark_data/
+dist/
+scripts/demo-recorder/node_modules/
 htmlcov/
 .pytest_cache/
 .mypy_cache/
@@ -13,6 +15,7 @@ __pycache__/
 coverage.xml
 
 # Private working documents, must never enter an image layer.
+.superpowers/
 docs/superpowers/
 docs_internal/
 

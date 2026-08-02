@@ -294,3 +294,36 @@ class TestSmokeGate:
         assert "401" in run_text
         assert "initialize" in run_text
         assert "mcp-session-id" in run_text.lower()
+
+
+class TestPromotionGate:
+    """No version tag may exist unless BOTH architectures passed smoke
+    AND the PyPI upload succeeded. Every edge into promote-image is a
+    gate; removing one silently ships an untested or orphaned image."""
+
+    def test_publish_pypi_waits_for_the_image_build(self, workflow):
+        # A broken Dockerfile must stop the release BEFORE PyPI, which is
+        # the one step that cannot be unwound.
+        assert "build-image" in workflow["jobs"]["publish"]["needs"]
+
+    def test_promote_gates_on_smoke_and_pypi(self, workflow):
+        needs = set(workflow["jobs"]["promote-image"]["needs"])
+        assert {"assemble", "smoke", "publish"} <= needs
+
+    def test_promote_creates_semver_tags_from_the_staging_tag(self, workflow):
+        steps = workflow["jobs"]["promote-image"]["steps"]
+        meta = [s for s in steps if "metadata-action" in str(s.get("uses"))]
+        assert meta, "promote-image must compute tags with metadata-action"
+        tags = meta[0]["with"]["tags"]
+        assert "type=semver,pattern={{version}}" in tags
+        assert "type=semver,pattern={{major}}.{{minor}}" in tags
+        assert "type=semver,pattern={{major}}" in tags
+        assert meta[0]["with"]["flavor"] == "latest=auto"
+        run_text = " ".join(s.get("run", "") for s in steps)
+        assert "imagetools create" in run_text
+        assert "sha-" in run_text, "promotion must reuse the staging manifest"
+
+    def test_pypi_upload_is_idempotent(self, workflow):
+        steps = workflow["jobs"]["publish"]["steps"]
+        run_text = " ".join(s.get("run", "") for s in steps)
+        assert "--skip-existing" in run_text

@@ -266,7 +266,8 @@ jobs:
         run: docker rm -f smoke || true
 
   publish:
-    needs: test-before-publish
+    needs: [test-before-publish, build-image]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -292,4 +293,50 @@ jobs:
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload dist/*
+      # --skip-existing makes a re-run after a partial upload safe instead
+      # of fatal.
+      run: twine upload --skip-existing dist/*
+
+  promote-image:
+    # `assemble` is listed explicitly, not just transitively, so the
+    # "staging manifest must already exist" contract survives future edits
+    # to any other job's needs.
+    needs: [assemble, smoke, publish]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute release tags
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=auto
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      - name: Promote staging manifest to release tags
+        # No rebuild: imagetools create repackages the existing multi-arch
+        # manifest under the version tags. Read the explicit `json` output
+        # rather than DOCKER_METADATA_OUTPUT_JSON, whose presence depends
+        # on DOCKER_METADATA_SET_OUTPUT_ENV, and pass it via env so the
+        # JSON is never interpolated into the shell.
+        env:
+          METADATA_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          tags=$(jq -cr '.tags | map("--tag " + .) | join(" ")' <<< "$METADATA_JSON")
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tags "${IMAGE}:sha-${GITHUB_SHA}"
+      - name: Report published tags
+        env:
+          METADATA_JSON: ${{ steps.meta.outputs.json }}
+        run: jq -r '.tags[]' <<< "$METADATA_JSON"

@@ -258,3 +258,37 @@ class TestMultiArchBuildJobs:
         run_text = " ".join(s.get("run", "") for s in steps)
         assert "imagetools create" in run_text
         assert "sha-" in run_text
+
+
+class TestSmokeGate:
+    """Smoke runs on BOTH native runners and exercises the parts a
+    /health probe cannot reach.
+
+    Check 1 is the reason multi-arch publishing is safe at all: it loads
+    the arch-specific onnxruntime wheel and the baked model with the
+    network off. /health touches neither.
+    """
+
+    def test_smoke_runs_on_both_architectures(self, workflow):
+        include = workflow["jobs"]["smoke"]["strategy"]["matrix"]["include"]
+        runners = {e["runner"] for e in include}
+        assert any(r.endswith("-arm") for r in runners)
+        assert any(not r.endswith("-arm") for r in runners)
+
+    def test_smoke_waits_for_the_staging_manifest(self, workflow):
+        assert workflow["jobs"]["smoke"]["needs"] == "assemble"
+
+    def test_smoke_checks_the_embedding_backend_offline(self, workflow):
+        run_text = " ".join(
+            s.get("run", "") for s in workflow["jobs"]["smoke"]["steps"]
+        )
+        assert "--network none" in run_text
+        assert "TextEmbedding" in run_text
+
+    def test_smoke_checks_auth_and_tools(self, workflow):
+        run_text = " ".join(
+            s.get("run", "") for s in workflow["jobs"]["smoke"]["steps"]
+        )
+        assert "tools/list" in run_text
+        assert "pdf_search" in run_text
+        assert "401" in run_text

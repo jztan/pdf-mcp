@@ -132,25 +132,52 @@ def main() -> None:
         ours.initialize()
         # full text, cold (fresh path each call)
         mn, md, sz = time_call(
-            ours, "pdf_read_all",
-            lambda i: {"path": cold[i + 1], "max_pages": 100000}, args.runs,
+            ours,
+            "pdf_read_all",
+            lambda i: {"path": cold[i + 1], "max_pages": 100000},
+            args.runs,
         )
-        ft_rows.append(dict(server="pdf-mcp", mode="cold", min_ms=mn * 1e3,
-                            median_ms=md * 1e3, size=sz))
+        ft_rows.append(
+            dict(
+                server="pdf-mcp",
+                mode="cold",
+                min_ms=mn * 1e3,
+                median_ms=md * 1e3,
+                size=sz,
+            )
+        )
         # full text, warm (same path -> SQLite cache hit)
         mn, md, sz = time_call(
-            ours, "pdf_read_all",
-            lambda i: {"path": same, "max_pages": 100000}, args.runs,
+            ours,
+            "pdf_read_all",
+            lambda i: {"path": same, "max_pages": 100000},
+            args.runs,
         )
-        ft_rows.append(dict(server="pdf-mcp", mode="warm(cache)", min_ms=mn * 1e3,
-                            median_ms=md * 1e3, size=sz))
+        ft_rows.append(
+            dict(
+                server="pdf-mcp",
+                mode="warm(cache)",
+                min_ms=mn * 1e3,
+                median_ms=md * 1e3,
+                size=sz,
+            )
+        )
         # info
         mn, md, sz = time_call(
-            ours, "pdf_info",
-            lambda i: {"path": cold[i + 1]}, args.runs,
+            ours,
+            "pdf_info",
+            lambda i: {"path": cold[i + 1]},
+            args.runs,
         )
-        info_rows.append(dict(server="pdf-mcp", mode="cold", min_ms=mn * 1e3,
-                              median_ms=md * 1e3, size=sz))
+        info_rows.append(
+            dict(
+                server="pdf-mcp",
+                mode="cold",
+                min_ms=mn * 1e3,
+                median_ms=md * 1e3,
+                size=sz,
+            )
+        )
     finally:
         ours.close()
 
@@ -159,26 +186,46 @@ def main() -> None:
     try:
         theirs.initialize()
         mn, md, sz = time_call(
-            theirs, "read_pdf",
-            lambda i: {"sources": [{"path": cold[i + 1]}],
-                       "include_full_text": True}, args.runs,
+            theirs,
+            "read_pdf",
+            lambda i: {"sources": [{"path": cold[i + 1]}], "include_full_text": True},
+            args.runs,
         )
-        ft_rows.append(dict(server="pdf-reader-mcp", mode="cold", min_ms=mn * 1e3,
-                            median_ms=md * 1e3, size=sz))
+        ft_rows.append(
+            dict(
+                server="pdf-reader-mcp",
+                mode="cold",
+                min_ms=mn * 1e3,
+                median_ms=md * 1e3,
+                size=sz,
+            )
+        )
         mn, md, sz = time_call(
-            theirs, "read_pdf",
-            lambda i: {"sources": [{"path": cold[i + 1]}],
-                       "include_metadata": True,
-                       "include_page_count": True}, args.runs,
+            theirs,
+            "read_pdf",
+            lambda i: {
+                "sources": [{"path": cold[i + 1]}],
+                "include_metadata": True,
+                "include_page_count": True,
+            },
+            args.runs,
         )
-        info_rows.append(dict(server="pdf-reader-mcp", mode="cold", min_ms=mn * 1e3,
-                              median_ms=md * 1e3, size=sz))
+        info_rows.append(
+            dict(
+                server="pdf-reader-mcp",
+                mode="cold",
+                min_ms=mn * 1e3,
+                median_ms=md * 1e3,
+                size=sz,
+            )
+        )
     finally:
         theirs.close()
 
     pages = "?"
     try:
         import pymupdf
+
         d = pymupdf.open(str(args.pdf))
         pages = str(len(d))
         d.close()

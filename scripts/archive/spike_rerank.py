@@ -86,9 +86,7 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    corpus = json.loads(
-        Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8")
-    )
+    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
     gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
 
     print(f"Loading cross-encoder: {args.model} ...", flush=True)
@@ -159,8 +157,10 @@ def main() -> None:
     print(f"  auto (baseline) NDCG@{args.k}:  {mean_base:.4f}")
     print(f"  auto + rerank   NDCG@{args.k}:  {mean_rr:.4f}")
     print(f"  lift:                    {lift:+.4f}")
-    print(f"  improved / regressed / flat:  {improved} / {regressed}"
-          f" / {n - improved - regressed}")
+    print(
+        f"  improved / regressed / flat:  {improved} / {regressed}"
+        f" / {n - improved - regressed}"
+    )
     print(f"  rerank latency (ms/query):  median {med_lat:.1f}  max {max_lat:.1f}")
 
     print("\n  Per query class:")
@@ -179,13 +179,16 @@ def main() -> None:
     if regr:
         print("\n  Largest regressions:")
         for r in regr[:5]:
-            print(f"    {r['id']:<12} {r['class']:<16}"
-                  f" {r['base']:.3f} -> {r['rerank']:.3f}  ({r['delta']:+.3f})")
+            print(
+                f"    {r['id']:<12} {r['class']:<16}"
+                f" {r['base']:.3f} -> {r['rerank']:.3f}  ({r['delta']:+.3f})"
+            )
 
     print("\n  " + "-" * 60)
     gate_lift = lift >= 0.05
-    print(f"  GATE  lift >= +0.05 : {'PASS' if gate_lift else 'FAIL'}"
-          f"  ({lift:+.4f})")
+    print(
+        f"  GATE  lift >= +0.05 : {'PASS' if gate_lift else 'FAIL'}" f"  ({lift:+.4f})"
+    )
     print(f"  Reference: median +{med_lat:.0f}ms/query added latency")
     print()
 

@@ -228,9 +228,7 @@ def run_stemming(tmpdir: Path) -> bool:
         return False
 
     print()
-    print(
-        f"  {'Case':<44} {'FTS5':>6} {'Python':>8}"
-    )
+    print(f"  {'Case':<44} {'FTS5':>6} {'Python':>8}")
     print(f"  {'-'*44} {'-'*6} {'-'*8}")
 
     all_ok = True
@@ -239,9 +237,7 @@ def run_stemming(tmpdir: Path) -> bool:
         pdf_path = _build_pdf(page_texts)
         _populate(cache, pdf_path, page_texts)
 
-        fts_results = cache.search_fts(
-            pdf_path, query, max_results=5, context_chars=60
-        )
+        fts_results = cache.search_fts(pdf_path, query, max_results=5, context_chars=60)
         py_matches, _ = _python_search(
             page_texts, query, max_results=5, context_chars=60
         )
@@ -333,9 +329,7 @@ def run_performance(tmpdir: Path) -> bool:
     ]
 
     print()
-    print(
-        f"  {'Scenario':<46} {'FTS5':>8} {'Python':>10} {'Speedup':>8}"
-    )
+    print(f"  {'Scenario':<46} {'FTS5':>8} {'Python':>10} {'Speedup':>8}")
     print(f"  {'-'*46} {'-'*8} {'-'*10} {'-'*8}")
 
     all_ok = True

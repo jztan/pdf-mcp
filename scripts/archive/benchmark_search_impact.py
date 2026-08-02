@@ -158,14 +158,16 @@ def run_realistic() -> list[dict[str, Any]]:
         for sid, sc in gt["pdfs"][pid]["scenarios"].items():
             base = search_pages(pdf, sc["query"], None)
             strip = search_pages(pdf, sc["query"], removal)
-            rows.append({
-                "pdf": pid,
-                "query": sc["query"],
-                "relevant": sc["relevant_pages"],
-                "rr_base": reciprocal_rank(base, sc["relevant_pages"]),
-                "rr_strip": reciprocal_rank(strip, sc["relevant_pages"]),
-                "changed": base != strip,
-            })
+            rows.append(
+                {
+                    "pdf": pid,
+                    "query": sc["query"],
+                    "relevant": sc["relevant_pages"],
+                    "rr_base": reciprocal_rank(base, sc["relevant_pages"]),
+                    "rr_strip": reciprocal_rank(strip, sc["relevant_pages"]),
+                    "changed": base != strip,
+                }
+            )
     return rows
 
 
@@ -183,14 +185,16 @@ def run_distortion() -> list[dict[str, Any]]:
                 base = search_pages(pdf, query, None)
                 strip = search_pages(pdf, query, removal)
                 dropped = [p for p in base if p not in strip]
-                rows.append({
-                    "pdf": pid,
-                    "kind": kind,
-                    "query": query,
-                    "jaccard": jaccard(base, strip),
-                    "dropped": len(dropped),
-                    "base_n": len(base),
-                })
+                rows.append(
+                    {
+                        "pdf": pid,
+                        "kind": kind,
+                        "query": query,
+                        "jaccard": jaccard(base, strip),
+                        "dropped": len(dropped),
+                        "base_n": len(base),
+                    }
+                )
     return rows
 
 

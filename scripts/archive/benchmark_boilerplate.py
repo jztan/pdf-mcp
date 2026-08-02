@@ -63,10 +63,10 @@ FOOTER_RECT = pymupdf.Rect(50, 788, 545, 822)
 # Detector tuning. MIN_FRAC is intentionally > 0.5 so that odd/even headers
 # (each on ~half the pages) fail the document-wide test and must be caught by
 # the parity refinement — this keeps the variants cleanly separable.
-TOP_BAND = 0.15   # fraction of page height treated as the header zone
-BOT_BAND = 0.85   # blocks below this fraction are in the footer zone
-MIN_FRAC = 0.6    # share of pages a signature must repeat on to be boilerplate
-MIN_RUN = 3       # consecutive pages in the same band that flag a run
+TOP_BAND = 0.15  # fraction of page height treated as the header zone
+BOT_BAND = 0.85  # blocks below this fraction are in the footer zone
+MIN_FRAC = 0.6  # share of pages a signature must repeat on to be boilerplate
+MIN_RUN = 3  # consecutive pages in the same band that flag a run
 
 _WS = re.compile(r"\s+")
 _DIGITS = re.compile(r"\d+")
@@ -229,7 +229,7 @@ def _freq_keys(
             key = (signature(text, digit_norm), band_part)
             pages_with.setdefault(key, set()).add(pi)
 
-    odd = [pi for pi in range(n) if pi % 2 == 0]   # 0-indexed page0 == "page 1"
+    odd = [pi for pi in range(n) if pi % 2 == 0]  # 0-indexed page0 == "page 1"
     even = [pi for pi in range(n) if pi % 2 == 1]
     keys: set[tuple[str, str]] = set()
     for key, present in pages_with.items():
@@ -257,16 +257,36 @@ def _freq_keys(
 
 VARIANTS: list[tuple[str, dict[str, bool]]] = [
     ("naive_regex", {"naive": True}),
-    ("freq_v0", {"use_bands": False, "digit_norm": False,
-                 "use_parity": False, "use_runs": False}),
-    ("freq_bands", {"use_bands": True, "digit_norm": False,
-                    "use_parity": False, "use_runs": False}),
-    ("freq_digits", {"use_bands": True, "digit_norm": True,
-                     "use_parity": False, "use_runs": False}),
-    ("freq_parity", {"use_bands": True, "digit_norm": True,
-                     "use_parity": True, "use_runs": False}),
-    ("freq_runs", {"use_bands": True, "digit_norm": True,
-                   "use_parity": True, "use_runs": True}),
+    (
+        "freq_v0",
+        {
+            "use_bands": False,
+            "digit_norm": False,
+            "use_parity": False,
+            "use_runs": False,
+        },
+    ),
+    (
+        "freq_bands",
+        {
+            "use_bands": True,
+            "digit_norm": False,
+            "use_parity": False,
+            "use_runs": False,
+        },
+    ),
+    (
+        "freq_digits",
+        {"use_bands": True, "digit_norm": True, "use_parity": False, "use_runs": False},
+    ),
+    (
+        "freq_parity",
+        {"use_bands": True, "digit_norm": True, "use_parity": True, "use_runs": False},
+    ),
+    (
+        "freq_runs",
+        {"use_bands": True, "digit_norm": True, "use_parity": True, "use_runs": True},
+    ),
 ]
 
 
@@ -338,9 +358,7 @@ def run() -> dict[str, Any]:
             cells[vname][sc["name"]] = prf(tp, fp, fn)
 
     names = [sc["name"] for sc in scenarios]
-    macro = {
-        v: sum(cells[v][n][2] for n in names) / len(names) for v, _ in VARIANTS
-    }
+    macro = {v: sum(cells[v][n][2] for n in names) / len(names) for v, _ in VARIANTS}
     return {"names": names, "cells": cells, "macro": macro}
 
 
@@ -372,9 +390,13 @@ def format_markdown(result: dict[str, Any], details: bool) -> str:
             ("freq_runs", "full proposed method"),
             ("naive_regex", "RAG-on-PDF-style baseline"),
         ):
-            lines += ["", f"## Precision / recall — {variant} ({caption})", "",
-                      "| scenario | precision | recall | f1 |",
-                      "| --- | --- | --- | --- |"]
+            lines += [
+                "",
+                f"## Precision / recall — {variant} ({caption})",
+                "",
+                "| scenario | precision | recall | f1 |",
+                "| --- | --- | --- | --- |",
+            ]
             for n in names:
                 p, r, f = cells[variant][n]
                 lines.append(f"| {n} | {p:.2f} | {r:.2f} | {f:.2f} |")

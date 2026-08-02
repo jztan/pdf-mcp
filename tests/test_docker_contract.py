@@ -302,9 +302,11 @@ class TestPromotionGate:
     gate; removing one silently ships an untested or orphaned image."""
 
     def test_publish_pypi_waits_for_the_image_build(self, workflow):
-        # A broken Dockerfile must stop the release BEFORE PyPI, which is
-        # the one step that cannot be unwound.
-        assert "build-image" in workflow["jobs"]["publish"]["needs"]
+        # A broken Dockerfile, or an image that builds but does not run,
+        # must stop the release BEFORE PyPI, which is the one step that
+        # cannot be unwound.
+        needs = set(workflow["jobs"]["publish"]["needs"])
+        assert {"build-image", "smoke"} <= needs
 
     def test_promote_gates_on_smoke_and_pypi(self, workflow):
         needs = set(workflow["jobs"]["promote-image"]["needs"])
@@ -327,3 +329,36 @@ class TestPromotionGate:
         steps = workflow["jobs"]["publish"]["steps"]
         run_text = " ".join(s.get("run", "") for s in steps)
         assert "--skip-existing" in run_text
+
+    def test_publishing_jobs_only_run_on_a_tag_push(self, workflow):
+        # workflow_dispatch is build-only validation. Without these
+        # guards a manual run would twine-upload to real PyPI and move
+        # the version tags.
+        for job in ("publish", "promote-image", "assemble", "smoke"):
+            assert "github.event_name == 'push'" in workflow["jobs"][job]["if"]
+
+    def test_promotion_fails_loudly_when_no_tags_were_computed(self, workflow):
+        steps = workflow["jobs"]["promote-image"]["steps"]
+        run_text = " ".join(s.get("run", "") for s in steps)
+        assert '[ -n "$tags" ]' in run_text
+
+
+class TestImageNameIsSingleSourced:
+    """`ghcr.io` may appear only in the env declaration and in login
+    `registry:` inputs. A literal image reference anywhere else, such as
+    inside a run: block, would silently bypass env.IMAGE."""
+
+    def test_no_literal_image_reference_outside_the_env_declaration(self):
+        offenders = []
+        for num, line in enumerate(WORKFLOW.read_text().splitlines(), 1):
+            if "ghcr.io" not in line:
+                continue
+            stripped = line.strip()
+            if stripped.startswith("IMAGE:") or stripped == "registry: ghcr.io":
+                continue
+            offenders.append(f"{num}: {stripped}")
+        assert (
+            not offenders
+        ), "reference the image via env.IMAGE or $IMAGE, not a literal: " + "; ".join(
+            offenders
+        )

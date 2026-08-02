@@ -50,8 +50,10 @@ jobs:
           verbose: true
 
   build-image:
-    # No `needs:`, so this starts immediately and runs in parallel with the
-    # test matrix, which keeps image build time off the release wall clock.
+    # No `needs:`, so this still starts immediately without waiting for the
+    # test matrix. But `publish` now waits on `smoke`, so the PyPI upload
+    # does not go out until the image has built AND passed smoke on both
+    # architectures: image time is on the release wall clock by design.
     # It does NOT decouple the release signal: release.py gates on the
     # run-level conclusion, so a later failure in smoke or promote-image
     # aborts the release even after publish succeeded. That is intended.
@@ -266,7 +268,7 @@ jobs:
         run: docker rm -f smoke || true
 
   publish:
-    needs: [test-before-publish, build-image]
+    needs: [test-before-publish, build-image, smoke]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
@@ -314,6 +316,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: Compute release tags
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
@@ -334,6 +338,8 @@ jobs:
           METADATA_JSON: ${{ steps.meta.outputs.json }}
         run: |
           tags=$(jq -cr '.tags | map("--tag " + .) | join(" ")' <<< "$METADATA_JSON")
+          [ -n "$tags" ] \
+            || { echo "::error::metadata-action produced no tags for ${GITHUB_REF}; is the tag valid semver?"; exit 1; }
           # shellcheck disable=SC2086
           docker buildx imagetools create $tags "${IMAGE}:sha-${GITHUB_SHA}"
       - name: Report published tags

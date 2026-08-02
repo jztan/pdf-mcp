@@ -80,9 +80,11 @@ class PDFConfig:
         """
         True when [paths] allow is a non-empty list.
 
-        An absent or empty allow list means check_path enforces nothing,
-        which is the correct default for a local install and unsafe for a
-        remote one. main_http() refuses to start when this is False.
+        An absent or empty allow list disables only the allow gate in
+        check_path; [paths] deny rules still apply unconditionally. A
+        deny-only posture is the correct default for a local install and
+        insufficient for a remote one, so main_http() refuses to start
+        when this is False.
         """
         allow = self._data.get("paths", {}).get("allow", [])
         return isinstance(allow, list) and len(allow) > 0

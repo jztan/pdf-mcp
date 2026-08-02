@@ -50,9 +50,13 @@ jobs:
           verbose: true
 
   build-image:
-    # No `needs:`, so this runs in parallel with the test matrix and stays
-    # off the release critical path. Atomicity is preserved because
-    # promote-image gates on smoke AND publish-pypi below.
+    # No `needs:`, so this starts immediately and runs in parallel with the
+    # test matrix, which keeps image build time off the release wall clock.
+    # It does NOT decouple the release signal: release.py gates on the
+    # run-level conclusion, so a later failure in smoke or promote-image
+    # aborts the release even after publish succeeded. That is intended.
+    # The release is genuinely incomplete in that state, and re-running the
+    # run is safe (twine uses --skip-existing and promotion is idempotent).
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -116,6 +120,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      EXPECTED_ARCHES: amd64 arm64
     steps:
       - name: Download digests
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -141,8 +147,10 @@ jobs:
         run: |
           docker buildx imagetools inspect "${IMAGE}:sha-${GITHUB_SHA}" \
             --format '{{json .Manifest}}' | tee /tmp/manifest.json
-          for arch in amd64 arm64; do
-            grep -q "\"architecture\":\"$arch\"" /tmp/manifest.json \
+          for arch in $EXPECTED_ARCHES; do
+            jq -e --arg a "$arch" \
+              '[.manifests[].platform.architecture] | index($a)' \
+              /tmp/manifest.json >/dev/null \
               || { echo "::error::$arch missing from manifest list"; exit 1; }
           done
 

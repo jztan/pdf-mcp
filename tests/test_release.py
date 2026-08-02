@@ -1,6 +1,7 @@
 # tests/test_release.py
 """Tests for scripts/release.py pre-flight behavior."""
 
+import inspect
 import subprocess
 import sys
 from pathlib import Path
@@ -42,3 +43,31 @@ def test_slow_marker_deselects_coherence_eval():
         text=True,
     )
     assert "test_coherence_no_regression_vs_baseline" not in result.stdout
+
+
+def test_publish_workflow_wait_covers_the_image_builds():
+    """The release run now carries two native image builds, an assemble,
+    two smoke jobs, and a promote on top of the test matrix. The old
+    15-minute budget would time out on a cold cache and print recovery
+    instructions for a perfectly healthy release."""
+    default = (
+        inspect.signature(release.wait_for_publish_workflow)
+        .parameters["max_wait"]
+        .default
+    )
+    assert default >= 1800
+
+
+def test_ghcr_manifest_url_is_the_anonymous_registry_endpoint():
+    """Deliberately NOT `gh api /users/.../packages/container/...`: that
+    endpoint needs the read:packages scope, which the maintainer's gh
+    token does not carry, so it answers 403 rather than a visibility and
+    would warn on every release regardless of the true state."""
+    assert (
+        release.ghcr_manifest_url()
+        == "https://ghcr.io/v2/jztan/pdf-mcp/manifests/latest"
+    )
+
+
+def test_ghcr_manifest_url_handles_an_explicit_tag():
+    assert release.ghcr_manifest_url(tag="2.0.0").endswith("/manifests/2.0.0")

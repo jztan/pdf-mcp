@@ -36,6 +36,21 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+# Single source of truth is the workflow's `env: IMAGE`; a contract test in
+# tests/test_docker_contract.py asserts these two agree.
+GHCR_IMAGE = "ghcr.io/jztan/pdf-mcp"
+
+
+def ghcr_manifest_url(image: str = GHCR_IMAGE, tag: str = "latest") -> str:
+    """Anonymous GHCR manifest URL for ``image:tag``.
+
+    Hitting this without credentials answers the only question that
+    matters: can a stranger following the README pull the image? 200 means
+    yes; 401 means the package is unpublished or still private.
+    """
+    registry, _, repository = image.partition("/")
+    return f"https://{registry}/v2/{repository}/manifests/{tag}"
+
 
 @dataclass
 class ReleaseConfig:
@@ -109,7 +124,36 @@ def preflight_pytest_cmd() -> list[str]:
     return ["pytest", "tests/", "-v", "-m", "not slow", "--tb=short"]
 
 
-def preflight_checks() -> None:
+def check_ghcr_public() -> None:
+    """Warn if the published image is not anonymously pullable.
+
+    Never blocks. Before the first publish a 401 is expected and correct.
+    After it, a 401 means the GHCR package is still private, which breaks
+    every `docker pull` the README documents. Flipping it to Public is a
+    one-time manual step in the package settings that no CI step can do
+    with GITHUB_TOKEN, and it is irreversible.
+    """
+    print("Checking GHCR image visibility...")
+    url = ghcr_manifest_url()
+    result = run_command(
+        ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+        check=False,
+    )
+    code = result.stdout.strip()
+    if code == "200":
+        print(f"  ✓ {GHCR_IMAGE}:latest is anonymously pullable")
+    elif code == "401":
+        print(f"  ⚠ {GHCR_IMAGE}:latest is not anonymously pullable.")
+        print("    Expected before the first image release. After it, make")
+        print("    the package Public in its GHCR settings (irreversible):")
+        print(
+            "    https://github.com/users/jztan/packages/container/" "pdf-mcp/settings"
+        )
+    else:
+        print(f"  ⚠ Unexpected status {code or '(none)'} from {url}")
+
+
+def preflight_checks(config: ReleaseConfig) -> None:
     """Verify prerequisites for release."""
     print("\n=== Pre-flight Checks ===\n")
 
@@ -157,8 +201,7 @@ def preflight_checks() -> None:
     # green publish-pypi job. Catches the failure mode where pip-audit blocks
     # the release after the tag has already been pushed.
     print("Auditing dependencies...")
-    project_root = Path(__file__).parent.parent.resolve()
-    audit_script = project_root / "scripts" / "audit.sh"
+    audit_script = config.project_root / "scripts" / "audit.sh"
     result = run_command(
         ["bash", str(audit_script)],
         check=False,
@@ -203,6 +246,8 @@ def preflight_checks() -> None:
         print("         Install with: brew install mcp-publisher")
     else:
         print("  ✓ mcp-publisher available (auth happens at publish time)")
+
+    check_ghcr_public()
 
 
 def create_release_branch(new_version: str, dry_run: bool) -> str:
@@ -727,12 +772,16 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
         print(f"  ✓ Created GitHub release: {title}")
 
 
-def wait_for_publish_workflow(new_version: str, max_wait: int = 900) -> bool:
+def wait_for_publish_workflow(new_version: str, max_wait: int = 1800) -> bool:
     """Poll the publish-pypi.yml run triggered by the tag push.
 
     Returns True only if the workflow run on the tag's SHA completes with
     conclusion=success. Returns False on any other terminal conclusion or
     on timeout. Prints the run URL so a failure is easy to investigate.
+
+    The 30-minute budget covers two native image builds, the staging
+    assemble, two smoke jobs, and the tag promotion on top of the Python
+    test matrix. A cold layer cache is the slow case.
     """
     tag = f"v{new_version}"
     print("\n=== Publish Workflow ===\n")
@@ -818,6 +867,8 @@ def print_recovery_instructions(
     print(f"    - master has the version-bump commit for {tag}")
     print("    - GitHub release was NOT created")
     print("    - MCP Registry was NOT updated")
+    print(f"    - GHCR may hold a staging tag {GHCR_IMAGE}:sha-<commit>;")
+    print("      it is harmless and referenced by nothing")
     print(f"    - develop is unchanged; {release_branch} still exists locally")
     print()
     print("  Investigate:")
@@ -1015,7 +1066,7 @@ Gitflow:
         print("\n  ⚠️  DRY-RUN MODE - No changes will be made\n")
 
     # Step 1: Pre-flight checks (must be on develop, tests pass, tools available)
-    preflight_checks()
+    preflight_checks(config)
 
     # Step 2: Calculate new version
     current_version = get_current_version(config.project_root)

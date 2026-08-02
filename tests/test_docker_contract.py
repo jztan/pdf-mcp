@@ -208,7 +208,10 @@ class TestDeployScriptPullsByDefault:
         return (REPO / "deploy.sh").read_text()
 
     def test_build_flag_is_documented(self):
-        assert "--build" in self.script
+        # `"--build" in script` would be satisfied by the pre-existing
+        # `--build-only`, so assert the standalone case arm itself.
+        assert "--build)" in self.script
+        assert "--build         Build the image locally" in self.script
 
     def test_default_path_pulls(self):
         assert "docker compose pull" in self.script
@@ -362,3 +365,15 @@ class TestImageNameIsSingleSourced:
         ), "reference the image via env.IMAGE or $IMAGE, not a literal: " + "; ".join(
             offenders
         )
+
+
+class TestReleaseScriptImageName:
+    def test_release_py_image_matches_the_workflow(self, workflow):
+        """One image name, two consumers. A rename in either file that
+        does not update the other fails here rather than at release time."""
+        import sys
+
+        sys.path.insert(0, str(REPO / "scripts"))
+        import release
+
+        assert release.GHCR_IMAGE == workflow["env"]["IMAGE"]

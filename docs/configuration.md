@@ -84,11 +84,20 @@ this file automatically, both for `${VAR}` interpolation in
 `docker-compose.yml` and via `env_file:` into the container), and
 creates the `./documents` directory that the container mounts. The container
 runs as a non-root user with `documents/` and the cache volume owned by that
-user. Build the image on the same CPU architecture you deploy it to; it is
-not published as a multi-arch image, so an arm64 build will not run on an
-x86_64 host and vice versa. The built image is around 900 MB, since it bakes
-in tesseract, the column-aware extraction extra, and the embedding model so
-there is no cold-start download on first use.
+user. `docker compose` pulls `ghcr.io/jztan/pdf-mcp`, published for both
+amd64 and arm64, so `./deploy.sh` needs no local build; `./deploy.sh --build`
+builds locally instead, on whichever architecture you run it on. The built
+image is around 900 MB, since it bakes in tesseract, the column-aware
+extraction extra, and the embedding model so there is no cold-start download
+on first use.
+
+`PDF_MCP_IMAGE_TAG` (default `latest`) selects which published tag `docker
+compose` pulls. Set it to an exact version, for example `2.0.0`, to keep a
+deployment on a known release; `latest` moves with every release. Published
+tags are the full version, the major.minor line, the major line, and
+`latest`. Only `docker-compose.yml` reads this variable, and the server
+itself ignores it; building locally with `./deploy.sh --build` ignores it
+entirely.
 
 Two startup guards apply to `pdf-mcp-http` (including in the Docker image):
 the process exits without `PDF_MCP_AUTH_TOKEN` set, and it exits without a

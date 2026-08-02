@@ -4,6 +4,11 @@
 # The alternative, pinning linux/amd64 and building on an arm64 Mac, runs
 # under QEMU emulation, which is slow and unreliable for native wheels
 # like onnxruntime.
+#
+# CI does not violate that rule. The release workflow builds each
+# architecture on its own native GitHub runner (ubuntu-24.04 and
+# ubuntu-24.04-arm) and merges the two into one manifest list, so the
+# published multi-arch image never touches emulation either.
 FROM python:3.13-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

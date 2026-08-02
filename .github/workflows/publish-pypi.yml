@@ -1,12 +1,26 @@
-name: Publish to PyPI
+# The FILENAME of this workflow must stay `publish-pypi.yml`.
+# scripts/release.py polls the release run with
+# `gh run list --workflow=publish-pypi.yml`, which selects by filename.
+# Renaming the file (for example to release.yml) breaks every release:
+# the poll finds no run and times out after 30 minutes. The display name
+# below is free to change; the filename is not.
+name: Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+      - 'v*.*.*'
+  workflow_dispatch:  # build-only validation of both arches; nothing is pushed
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false  # never abort a half-pushed release
 
 permissions:
   contents: read
+
+env:
+  IMAGE: ghcr.io/jztan/pdf-mcp
 
 jobs:
   test-before-publish:
@@ -41,8 +55,238 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  build-image:
+    # No `needs:`, so this still starts immediately without waiting for the
+    # test matrix. But `publish` now waits on `smoke`, so the PyPI upload
+    # does not go out until the image has built AND passed smoke on both
+    # architectures: image time is on the release wall clock by design.
+    # It does NOT decouple the release signal: release.py gates on the
+    # run-level conclusion, so a later failure in smoke or promote-image
+    # aborts the release even after publish succeeded. That is intended.
+    # The release is genuinely incomplete in that state, and re-running the
+    # run is safe (twine uses --skip-existing and promotion is idempotent).
+    runs-on: ${{ matrix.runner }}
+    # This cap must cover a COLD build. The cache below is cold on every
+    # release: this workflow runs only on tag refs, and Actions cache is
+    # scoped to the writing ref with fallback only to the default branch
+    # (develop), so cache written under refs/tags/v2.0.0 is unreadable
+    # from refs/tags/v2.0.1. It is warm only when re-running the SAME tag
+    # (`gh run rerun`), which is the documented recovery path and the
+    # reason cache-from/cache-to stay. So size this for a cold native
+    # build plus the push of a roughly 900 MB image, not for a cache hit.
+    # release.py's own wait must in turn exceed the sum of these caps.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Native runner per arch: no QEMU. The Dockerfile bakes onnxruntime
+      # and an ONNX model, which its header calls out as unreliable under
+      # emulation.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+      - name: Export digest
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - name: Upload digest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  assemble:
+    # Combines the two per-arch digests into ONE manifest list under a
+    # deterministic staging tag. Not a version tag: nothing a user follows
+    # points here, so a later failure leaves no partial release behind.
+    needs: build-image
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      EXPECTED_ARCHES: amd64 arm64
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Create staging manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            --tag "${IMAGE}:sha-${GITHUB_SHA}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+      - name: Verify both architectures are present
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:sha-${GITHUB_SHA}" \
+            --format '{{json .Manifest}}' | tee /tmp/manifest.json
+          for arch in $EXPECTED_ARCHES; do
+            jq -e --arg a "$arch" \
+              '[.manifests[].platform.architecture] | index($a)' \
+              /tmp/manifest.json >/dev/null \
+              || { echo "::error::$arch missing from manifest list"; exit 1; }
+          done
+
+  smoke:
+    # One job per native runner. Manifest resolution hands each runner its
+    # own architecture, so pulling the staging tag is enough.
+    needs: assemble
+    if: github.event_name == 'push'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull staging image
+        run: docker pull "${IMAGE}:sha-${GITHUB_SHA}"
+
+      # 1. The arch-specific onnxruntime wheel loads AND the baked model is
+      #    present offline. /health exercises neither.
+      - name: Embedding backend works air-gapped
+        run: |
+          docker run --rm --network none --entrypoint python \
+            "${IMAGE}:sha-${GITHUB_SHA}" -c \
+            "from fastembed import TextEmbedding; \
+             v = next(TextEmbedding('BAAI/bge-small-en-v1.5').embed(['x'])); \
+             assert len(v) == 384, len(v); print('embedding ok', len(v))"
+
+      # 2. The service starts and reports healthy.
+      - name: Service starts and is healthy
+        run: |
+          TOKEN="$(openssl rand -hex 32)"
+          echo "SMOKE_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          docker run -d --name smoke \
+            -e PDF_MCP_AUTH_TOKEN="$TOKEN" \
+            -e PDF_MCP_ALLOW_ANY_PATH=1 \
+            -p 127.0.0.1:8802:8000 \
+            "${IMAGE}:sha-${GITHUB_SHA}"
+          for _ in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8802/health >/dev/null 2>&1; then
+              echo "health ok"; exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::health check never passed"
+          docker logs smoke
+          exit 1
+
+      # 3. The MCP endpoint answers an authenticated call, and rejects an
+      #    unauthenticated one. Asserts ONE known tool is present rather
+      #    than a tool count, so adding a tool cannot break a release.
+      #    FastMCP's streamable HTTP is stateful, so a bare tools/list is
+      #    rejected before dispatch: the session has to be established via
+      #    initialize + notifications/initialized first.
+      - name: MCP endpoint answers and auth holds
+        run: |
+          MCP=http://127.0.0.1:8802/mcp
+          AUTH="Authorization: Bearer ${SMOKE_TOKEN}"
+          ACCEPT='Accept: application/json, text/event-stream'
+          CT='Content-Type: application/json'
+
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "protocolVersion":"2025-06-18",
+            "capabilities":{},
+            "clientInfo":{"name":"smoke","version":"1"}}}'
+          sid="$(curl -sS -D - -o /dev/null -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -d "$init" \
+            | tr -d '\r' | awk -F': ' '/^[Mm]cp-[Ss]ession-[Ii]d:/ {print $2}')"
+          [ -n "$sid" ] \
+            || { echo "::error::no mcp-session-id from initialize"; \
+                 docker logs smoke; exit 1; }
+
+          curl -sS -o /dev/null -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -H "mcp-session-id: $sid" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+
+          out="$(curl -sS -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -H "mcp-session-id: $sid" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
+          echo "$out" | grep -q 'pdf_search' \
+            || { echo "::error::pdf_search missing from tools/list"; \
+                 echo "$out"; docker logs smoke; exit 1; }
+
+          body='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+          code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8802/mcp \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d "$body")"
+          [ "$code" = "401" ] \
+            || { echo "::error::unauthenticated call returned $code, want 401"; \
+                 exit 1; }
+          echo "mcp ok"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs smoke || true
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
+
   publish:
-    needs: test-before-publish
+    needs: [test-before-publish, build-image, smoke]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -68,4 +312,54 @@ jobs:
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload dist/*
+      # --skip-existing makes a re-run after a partial upload safe instead
+      # of fatal.
+      run: twine upload --skip-existing dist/*
+
+  promote-image:
+    # `assemble` is listed explicitly, not just transitively, so the
+    # "staging manifest must already exist" contract survives future edits
+    # to any other job's needs.
+    needs: [assemble, smoke, publish]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Compute release tags
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=auto
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      - name: Promote staging manifest to release tags
+        # No rebuild: imagetools create repackages the existing multi-arch
+        # manifest under the version tags. Read the explicit `json` output
+        # rather than DOCKER_METADATA_OUTPUT_JSON, whose presence depends
+        # on DOCKER_METADATA_SET_OUTPUT_ENV, and pass it via env so the
+        # JSON is never interpolated into the shell.
+        env:
+          METADATA_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          tags=$(jq -cr '.tags | map("--tag " + .) | join(" ")' <<< "$METADATA_JSON")
+          [ -n "$tags" ] \
+            || { echo "::error::metadata-action produced no tags for ${GITHUB_REF}; is the tag valid semver?"; exit 1; }
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tags "${IMAGE}:sha-${GITHUB_SHA}"
+      - name: Report published tags
+        env:
+          METADATA_JSON: ${{ steps.meta.outputs.json }}
+        run: jq -r '.tags[]' <<< "$METADATA_JSON"

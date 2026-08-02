@@ -220,3 +220,41 @@ class TestDeployScriptPullsByDefault:
 
     def test_image_name_is_not_restated(self):
         assert "ghcr.io" not in self.script
+
+
+class TestMultiArchBuildJobs:
+    """Both architectures build on NATIVE runners.
+
+    The Dockerfile bakes onnxruntime and an ONNX model; QEMU emulation is
+    exactly what its header comment warns against, so an emulated build
+    must not creep back in.
+    """
+
+    def _include(self, workflow):
+        return workflow["jobs"]["build-image"]["strategy"]["matrix"]["include"]
+
+    def test_both_architectures_are_built(self, workflow):
+        platforms = {e["platform"] for e in self._include(workflow)}
+        assert platforms == {"linux/amd64", "linux/arm64"}
+
+    def test_arm64_uses_a_native_arm_runner(self, workflow):
+        runners = {e["platform"]: e["runner"] for e in self._include(workflow)}
+        assert runners["linux/arm64"].endswith("-arm"), (
+            "arm64 must build on a native runner; QEMU is unreliable for "
+            "onnxruntime, per the Dockerfile header"
+        )
+        assert not runners["linux/amd64"].endswith("-arm")
+
+    def test_no_qemu_setup(self, workflow):
+        text = WORKFLOW.read_text()
+        assert "setup-qemu-action" not in text
+
+    def test_build_does_not_wait_for_tests(self, workflow):
+        # No `needs:` keeps the image off the release critical path.
+        assert "needs" not in workflow["jobs"]["build-image"]
+
+    def test_assemble_publishes_a_staging_tag_not_a_version_tag(self, workflow):
+        steps = workflow["jobs"]["assemble"]["steps"]
+        run_text = " ".join(s.get("run", "") for s in steps)
+        assert "imagetools create" in run_text
+        assert "sha-" in run_text

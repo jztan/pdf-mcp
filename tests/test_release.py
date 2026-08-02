@@ -68,6 +68,16 @@ def test_ghcr_pull_token_url_is_the_discriminating_endpoint():
     )
 
 
+def test_ghcr_visibility_check_distinguishes_preflight_from_post_release():
+    """A 403 means two different things depending on when it is seen.
+
+    In pre-flight the image does not exist yet, so 403 is expected. After
+    the release it means the just-published package is private and every
+    documented `docker pull` fails, which has to be shouted about."""
+    param = inspect.signature(release.check_ghcr_public).parameters["post_release"]
+    assert param.default is False
+
+
 def test_ghcr_pull_token_url_derives_the_repository_from_the_image():
     url = release.ghcr_pull_token_url("ghcr.io/someone/other-image")
     assert "repository:someone/other-image:pull" in url

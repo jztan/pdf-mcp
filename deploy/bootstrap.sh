@@ -42,7 +42,9 @@ fi
 echo
 echo "Next steps:"
 echo "  1. Put PDFs in ./documents"
-echo "  2. docker compose up -d --build"
+echo "  2. ./deploy.sh   (pulls the published image and starts the stack;"
+echo "     equivalent to: docker compose pull && docker compose up -d)"
+echo "     Add --build to build the image locally instead."
 echo "  3. curl -fsS http://127.0.0.1:\${PDF_MCP_HOST_PORT:-8802}/health"
 echo
 echo "Your auth token (clients send it as 'Authorization: Bearer <token>'):"

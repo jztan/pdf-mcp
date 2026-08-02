@@ -136,18 +136,30 @@ def preflight_pytest_cmd() -> list[str]:
     return ["pytest", "tests/", "-v", "-m", "not slow", "--tb=short"]
 
 
-def check_ghcr_public() -> None:
+def check_ghcr_public(post_release: bool = False) -> None:
     """Warn if the published image is not anonymously pullable.
 
-    Never blocks. Requests an anonymous pull token rather than GETting the
-    manifest directly: GHCR requires a bearer token on the manifest
-    endpoint even for public packages, so that endpoint answers 401 for
-    everything and cannot distinguish public from private. The token
-    endpoint can: 200 means anonymous pull is granted (public); 403 means
-    the package is private or does not exist yet, which is expected and
-    correct before the first publish. Flipping it to Public afterward is a
-    one-time manual step in the package settings that no CI step can do
-    with GITHUB_TOKEN, and it is irreversible.
+    Never blocks, in either context. Requests an anonymous pull token
+    rather than GETting the manifest directly: GHCR requires a bearer
+    token on the manifest endpoint even for public packages, so that
+    endpoint answers 401 for everything and cannot distinguish public from
+    private. The token endpoint can: 200 means anonymous pull is granted
+    (public); 403 means the package is private or does not exist yet.
+
+    The meaning of a 403 depends on when the check runs, which is what
+    ``post_release`` selects:
+
+    * Pre-flight (``post_release=False``): the image for this release does
+      not exist yet, so a 403 is expected and correct before the first
+      image publish.
+    * Post-release (``post_release=True``): the image HAS just been
+      published, so a 403 means the package is private and every
+      documented ``docker pull`` fails for anonymous users until it is
+      fixed.
+
+    Flipping the package to Public is a one-time manual step in the
+    package settings that no CI step can do with GITHUB_TOKEN, and it is
+    irreversible.
     """
     print("Checking GHCR image visibility...")
     url = ghcr_pull_token_url()
@@ -163,10 +175,17 @@ def check_ghcr_public() -> None:
     if code == "200":
         print(f"  ✓ {GHCR_IMAGE}:latest is anonymously pullable")
     elif code == "403":
-        print(f"  ⚠ {GHCR_IMAGE}:latest is not anonymously pullable.")
-        print("    Expected before the first image release. After it, make")
-        print("    the package Public in its GHCR settings (irreversible):")
-        print(f"    {GHCR_PACKAGE_SETTINGS_URL}")
+        if post_release:
+            print(f"  !!! {GHCR_IMAGE} was just published but is NOT publicly")
+            print("      pullable. Every documented `docker pull` and")
+            print("      `docker compose pull` will FAIL for anyone but you")
+            print("      until the package is made Public (irreversible):")
+            print(f"      {GHCR_PACKAGE_SETTINGS_URL}")
+        else:
+            print(f"  ⚠ {GHCR_IMAGE}:latest is not anonymously pullable.")
+            print("    Expected before the first image release. After it, make")
+            print("    the package Public in its GHCR settings (irreversible):")
+            print(f"    {GHCR_PACKAGE_SETTINGS_URL}")
     else:
         print(f"  ⚠ Unexpected status {code or '(none)'} from {url}")
 
@@ -821,6 +840,11 @@ def wait_for_publish_workflow(new_version: str, max_wait: int = 1800) -> bool:
                 "gh",
                 "run",
                 "list",
+                # Selects the workflow by FILENAME, not by its `name:`
+                # (which is "Release"). Renaming
+                # .github/workflows/publish-pypi.yml breaks this poll and
+                # every release times out after max_wait; the workflow
+                # file carries the matching warning.
                 "--workflow=publish-pypi.yml",
                 "--limit",
                 "10",
@@ -1153,6 +1177,12 @@ Gitflow:
     # Step 10: Merge back to develop and cleanup
     merge_back_to_develop(config, release_branch)
 
+    # Step 11: the image now exists, so a private package is no longer an
+    # expected state: it means the documented pull path is broken.
+    if not config.dry_run:
+        print()
+        check_ghcr_public(post_release=True)
+
     # Release fully succeeded; the persisted notes drafts (including any
     # orphans from previously burned versions) are no longer needed.
     if not config.dry_run:
@@ -1172,6 +1202,8 @@ Gitflow:
         print(f"    - GitHub: {gh_url}")
         mcp_url = "https://registry.modelcontextprotocol.io/v0/servers?search=pdf-mcp"
         print(f"    - MCP Registry: {mcp_url}")
+        ghcr_url = "https://github.com/users/jztan/packages/container/pdf-mcp"
+        print(f"    - GHCR: {ghcr_url}")
     print("=" * 60)
 
 

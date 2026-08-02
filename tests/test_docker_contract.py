@@ -132,11 +132,13 @@ class TestPortPublishing:
 
 class TestContainerPortAgreesEverywhere:
     """
-    The container-internal port appears in four places: the compose
+    The container-internal port appears in six places: the compose
     environment pin, the compose publish target, the compose healthcheck
-    URL, and the Dockerfile (EXPOSE and HEALTHCHECK). If they disagree,
-    the deployment is a running container that answers nothing, so any
-    edit that moves one site must fail here.
+    URL, the Dockerfile (EXPOSE and HEALTHCHECK), and the release
+    workflow's smoke job (its `docker run -p` publish and the
+    127.0.0.1 URLs it probes). If they disagree, the deployment is a
+    running container that answers nothing, so any edit that moves one
+    site must fail here.
     """
 
     def test_compose_pins_the_container_port(self, service):
@@ -162,6 +164,24 @@ class TestContainerPortAgreesEverywhere:
             r"^HEALTHCHECK.*?CMD (.+)$", dockerfile, re.M | re.S
         ).group(1)
         assert f"localhost:{pinned}/" in docker_probe
+
+    def test_smoke_job_publishes_the_exposed_port(self, workflow, dockerfile):
+        # The smoke job runs the image with an explicit `-p host:container`
+        # and polls 127.0.0.1:<host>. Moving EXPOSE without moving these
+        # passes every other test and then hangs the release's health poll
+        # after the tag has already been pushed.
+        exposed = re.search(r"^EXPOSE (\d+)", dockerfile, re.M).group(1)
+        run_text = " ".join(
+            s.get("run", "") for s in workflow["jobs"]["smoke"]["steps"]
+        )
+        publishes = re.findall(r"-p 127\.0\.0\.1:(\d+):(\d+)", run_text)
+        assert publishes, "smoke must publish the container port explicitly"
+        for host, container in publishes:
+            assert container == exposed, (
+                f"smoke publishes container port {container} but the "
+                f"Dockerfile EXPOSEs {exposed}"
+            )
+            assert f"http://127.0.0.1:{host}/" in run_text
 
 
 class TestPullFirstImageContract:
@@ -224,6 +244,18 @@ class TestDeployScriptPullsByDefault:
     def test_image_name_is_not_restated(self):
         assert "ghcr.io" not in self.script
 
+    def test_pull_failure_points_at_the_build_escape_hatch(self):
+        # A private package, an unreleased tag, or a bad PDF_MCP_IMAGE_TAG
+        # otherwise kills the script with a bare Docker `denied` under
+        # `set -e`, on the path the README calls one-command.
+        assert "if ! docker compose pull; then" in self.script
+        failure_block = self.script.split("if ! docker compose pull; then", 1)[1]
+        failure_block = failure_block.split("fi", 1)[0]
+        assert "./deploy.sh --build" in failure_block, (
+            "a failed pull must name --build as the escape hatch; without "
+            "it the user only sees Docker's raw error"
+        )
+
 
 class TestMultiArchBuildJobs:
     """Both architectures build on NATIVE runners.
@@ -253,7 +285,9 @@ class TestMultiArchBuildJobs:
         assert "setup-qemu-action" not in text
 
     def test_build_does_not_wait_for_tests(self, workflow):
-        # No `needs:` keeps the image off the release critical path.
+        # No `needs:` lets build-image start in parallel with the test
+        # matrix instead of queueing behind it, which is what the job's
+        # own comment says.
         assert "needs" not in workflow["jobs"]["build-image"]
 
     def test_assemble_publishes_a_staging_tag_not_a_version_tag(self, workflow):
@@ -279,7 +313,9 @@ class TestSmokeGate:
         assert any(not r.endswith("-arm") for r in runners)
 
     def test_smoke_waits_for_the_staging_manifest(self, workflow):
-        assert workflow["jobs"]["smoke"]["needs"] == "assemble"
+        needs = workflow["jobs"]["smoke"]["needs"]
+        needs = {needs} if isinstance(needs, str) else set(needs)
+        assert "assemble" in needs
 
     def test_smoke_checks_the_embedding_backend_offline(self, workflow):
         run_text = " ".join(
@@ -339,6 +375,21 @@ class TestPromotionGate:
         # the version tags.
         for job in ("publish", "promote-image", "assemble", "smoke"):
             assert "github.event_name == 'push'" in workflow["jobs"][job]["if"]
+
+    def test_build_image_pushes_only_on_a_tag_push(self, workflow):
+        # build-image carries no `if:`, so the test above cannot cover it.
+        # Its guard lives inside the build-push-action `outputs:` string.
+        # Simplifying that to `push=true` would keep the whole suite green
+        # while every manual workflow_dispatch pushed untagged digests
+        # into GHCR, where nothing cleans them up.
+        steps = workflow["jobs"]["build-image"]["steps"]
+        build = [s for s in steps if "build-push-action" in str(s.get("uses"))]
+        assert build, "build-image must build with docker/build-push-action"
+        outputs = build[0]["with"]["outputs"]
+        assert "push=${{ github.event_name == 'push' }}" in outputs, (
+            "build-image must push only on a tag push; a literal push=true "
+            f"would publish digests on every workflow_dispatch. Got: {outputs!r}"
+        )
 
     def test_promotion_fails_loudly_when_no_tags_were_computed(self, workflow):
         steps = workflow["jobs"]["promote-image"]["steps"]

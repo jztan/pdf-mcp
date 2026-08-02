@@ -1,3 +1,9 @@
+# The FILENAME of this workflow must stay `publish-pypi.yml`.
+# scripts/release.py polls the release run with
+# `gh run list --workflow=publish-pypi.yml`, which selects by filename.
+# Renaming the file (for example to release.yml) breaks every release:
+# the poll finds no run and times out after 30 minutes. The display name
+# below is free to change; the filename is not.
 name: Release
 
 on:
@@ -60,6 +66,11 @@ jobs:
     # The release is genuinely incomplete in that state, and re-running the
     # run is safe (twine uses --skip-existing and promotion is idempotent).
     runs-on: ${{ matrix.runner }}
+    # release.py waits 30 minutes for this run. The two longest jobs are
+    # capped below that (25 here, 15 in smoke) so a stalled build fails
+    # inside the client's budget instead of running on for the GitHub
+    # default of 6 hours while the operator reads "RELEASE INCOMPLETE".
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
@@ -162,6 +173,7 @@ jobs:
     needs: assemble
     if: github.event_name == 'push'
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read

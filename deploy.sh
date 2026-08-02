@@ -104,7 +104,13 @@ else
     # `docker compose pull` pulls buildable services by default; it skips
     # them only with --ignore-buildable. So keeping the build block in
     # docker-compose.yml does not defeat the pull.
-    docker compose pull
+    if ! docker compose pull; then
+        echo "!!! Could not pull the published image." >&2
+        echo "    The package may not be published yet or may be private," >&2
+        echo "    or PDF_MCP_IMAGE_TAG may name a tag that does not exist." >&2
+        echo "    To build locally instead: ./deploy.sh --build" >&2
+        exit 1
+    fi
     docker compose up -d
 fi
 

@@ -354,29 +354,18 @@ Four things to know before deploying it:
 
 ### Docker
 
-Or run everything with one command: `./deploy.sh` (wraps the bootstrap
-script, docker compose, and a health check; see `./deploy.sh --help`).
-
 ```bash
-./deploy/bootstrap.sh          # generates .env with a token, creates ./documents
-cp your.pdf documents/
-docker compose up -d --build
-curl -fsS http://127.0.0.1:8802/health
+./deploy.sh              # generates .env with a token, builds, starts, health-checks
+cp your.pdf documents/   # PDFs in this folder are visible to the server as /data/pdfs
 ```
 
-The image bakes tesseract, the column-aware extraction extra, and the
-embedding model, so every tool works on the first request with no
-cold-start download. It runs as a non-root user.
+Everything is baked in (OCR, column-aware extraction, embedding model), so all
+tools work on the first request. The container runs as a non-root user and
+publishes to host loopback only; put a TLS proxy in front for public access.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PDF_MCP_AUTH_TOKEN` | *(none, required)* | Bearer token; the server refuses to start without it |
-| `PDF_MCP_HOST_PORT` | `8802` | Host port, published to loopback only |
-| `PDF_MCP_ALLOW_ANY_PATH` | *(unset)* | Escape hatch to start with no `[paths]` allow list |
-
-`deploy/config.docker.toml` supplies the `[paths]` allow list and is mounted
-read-only. See [docs/configuration.md](docs/configuration.md) for details on
-both guards and the full variable reference.
+`./deploy.sh --help` lists the lifecycle commands. For the environment
+variables (host port, auth token) and the deployment guards, see
+[docs/configuration.md](docs/configuration.md).
 
 ## Configuration
 

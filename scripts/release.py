@@ -40,16 +40,28 @@ from pathlib import Path
 # tests/test_docker_contract.py asserts these two agree.
 GHCR_IMAGE = "ghcr.io/jztan/pdf-mcp"
 
+GHCR_PACKAGE_SETTINGS_URL = (
+    "https://github.com/users/jztan/packages/container/pdf-mcp/settings"
+)
 
-def ghcr_manifest_url(image: str = GHCR_IMAGE, tag: str = "latest") -> str:
-    """Anonymous GHCR manifest URL for ``image:tag``.
 
-    Hitting this without credentials answers the only question that
-    matters: can a stranger following the README pull the image? 200 means
-    yes; 401 means the package is unpublished or still private.
+def ghcr_pull_token_url(image: str = GHCR_IMAGE) -> str:
+    """Anonymous GHCR pull-token URL for ``image``.
+
+    Asking for a pull token without credentials answers the only question
+    that matters: can a stranger following the README pull this image? 200
+    means the registry grants anonymous pull, so the package is public. 403
+    means it is private or does not exist yet.
+
+    Deliberately not a plain GET of the manifest: GHCR requires a bearer
+    token on that endpoint even for public packages, so it answers 401 for
+    everything and cannot tell public from private.
     """
     registry, _, repository = image.partition("/")
-    return f"https://{registry}/v2/{repository}/manifests/{tag}"
+    return (
+        f"https://{registry}/token"
+        f"?scope=repository:{repository}:pull&service={registry}"
+    )
 
 
 @dataclass
@@ -127,28 +139,34 @@ def preflight_pytest_cmd() -> list[str]:
 def check_ghcr_public() -> None:
     """Warn if the published image is not anonymously pullable.
 
-    Never blocks. Before the first publish a 401 is expected and correct.
-    After it, a 401 means the GHCR package is still private, which breaks
-    every `docker pull` the README documents. Flipping it to Public is a
+    Never blocks. Requests an anonymous pull token rather than GETting the
+    manifest directly: GHCR requires a bearer token on the manifest
+    endpoint even for public packages, so that endpoint answers 401 for
+    everything and cannot distinguish public from private. The token
+    endpoint can: 200 means anonymous pull is granted (public); 403 means
+    the package is private or does not exist yet, which is expected and
+    correct before the first publish. Flipping it to Public afterward is a
     one-time manual step in the package settings that no CI step can do
     with GITHUB_TOKEN, and it is irreversible.
     """
     print("Checking GHCR image visibility...")
-    url = ghcr_manifest_url()
-    result = run_command(
-        ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
-        check=False,
-    )
+    url = ghcr_pull_token_url()
+    try:
+        result = run_command(
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+            check=False,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        print(f"  ⚠ Could not run the GHCR visibility check: {exc}")
+        return
     code = result.stdout.strip()
     if code == "200":
         print(f"  ✓ {GHCR_IMAGE}:latest is anonymously pullable")
-    elif code == "401":
+    elif code == "403":
         print(f"  ⚠ {GHCR_IMAGE}:latest is not anonymously pullable.")
         print("    Expected before the first image release. After it, make")
         print("    the package Public in its GHCR settings (irreversible):")
-        print(
-            "    https://github.com/users/jztan/packages/container/" "pdf-mcp/settings"
-        )
+        print(f"    {GHCR_PACKAGE_SETTINGS_URL}")
     else:
         print(f"  ⚠ Unexpected status {code or '(none)'} from {url}")
 

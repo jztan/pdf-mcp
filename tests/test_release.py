@@ -58,16 +58,17 @@ def test_publish_workflow_wait_covers_the_image_builds():
     assert default >= 1800
 
 
-def test_ghcr_manifest_url_is_the_anonymous_registry_endpoint():
-    """Deliberately NOT `gh api /users/.../packages/container/...`: that
-    endpoint needs the read:packages scope, which the maintainer's gh
-    token does not carry, so it answers 403 rather than a visibility and
-    would warn on every release regardless of the true state."""
-    assert (
-        release.ghcr_manifest_url()
-        == "https://ghcr.io/v2/jztan/pdf-mcp/manifests/latest"
+def test_ghcr_pull_token_url_is_the_discriminating_endpoint():
+    """A plain manifest GET answers 401 for public and private packages
+    alike, so it cannot tell them apart. The anonymous pull-token endpoint
+    answers 200 for a public package and 403 for a private or absent one,
+    which is the question preflight actually needs answered."""
+    assert release.ghcr_pull_token_url() == (
+        "https://ghcr.io/token" "?scope=repository:jztan/pdf-mcp:pull&service=ghcr.io"
     )
 
 
-def test_ghcr_manifest_url_handles_an_explicit_tag():
-    assert release.ghcr_manifest_url(tag="2.0.0").endswith("/manifests/2.0.0")
+def test_ghcr_pull_token_url_derives_the_repository_from_the_image():
+    url = release.ghcr_pull_token_url("ghcr.io/someone/other-image")
+    assert "repository:someone/other-image:pull" in url
+    assert url.startswith("https://ghcr.io/token?")

@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker deployment: multi-stage image with tesseract, column-aware
   extraction, and the embedding model baked in; a Compose stack publishing
   to host loopback only; `deploy/bootstrap.sh` for first-run token
-  generation; and `deploy/config.docker.toml`, `deploy/Caddyfile.example`
+  generation; `deploy.sh`, a one-command deploy wrapper delegating to
+  Compose; and `deploy/config.docker.toml`, `deploy/Caddyfile.example`
   as deployment templates.
 
 ### Security

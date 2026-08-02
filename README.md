@@ -354,6 +354,9 @@ Four things to know before deploying it:
 
 ### Docker
 
+Or run everything with one command: `./deploy.sh` (wraps the bootstrap
+script, docker compose, and a health check; see `./deploy.sh --help`).
+
 ```bash
 ./deploy/bootstrap.sh          # generates .env with a token, creates ./documents
 cp your.pdf documents/

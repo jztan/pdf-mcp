@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generation; `deploy.sh`, a one-command deploy wrapper delegating to
   Compose; and `deploy/config.docker.toml`, `deploy/Caddyfile.example`
   as deployment templates.
+- Published Docker images at `ghcr.io/jztan/pdf-mcp` for linux/amd64 and
+  linux/arm64, built on native runners and tagged per release (`X.Y.Z`,
+  `X.Y`, `X`, `latest`). `PDF_MCP_IMAGE_TAG` pins a deployment to a version.
+
+### Changed
+
+- `./deploy.sh` now pulls the published image instead of building locally.
+  Use `./deploy.sh --build` for the previous behavior.
+- The PyPI upload is now gated on the published Docker image passing smoke
+  tests on both architectures, which changes release timing: a release no
+  longer reaches PyPI until the image build and smoke tests finish.
 
 ### Security
 - The HTTP transport refuses to start without a `[paths]` allow list. An

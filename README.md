@@ -355,16 +355,19 @@ Four things to know before deploying it:
 ### Docker
 
 ```bash
-./deploy.sh              # generates .env with a token, builds, starts, health-checks
+./deploy.sh              # generates .env with a token, pulls the image, starts, health-checks
 cp your.pdf documents/   # PDFs in this folder are visible to the server as /data/pdfs
 ```
 
-Everything is baked in (OCR, column-aware extraction, embedding model), so all
-tools work on the first request. The container runs as a non-root user and
-publishes to host loopback only; put a TLS proxy in front for public access.
+The image is published to GHCR for amd64 and arm64, so nothing is compiled
+locally. Everything is baked in (OCR, column-aware extraction, embedding
+model), so all tools work on the first request. The container runs as a
+non-root user and publishes to host loopback only; put a TLS proxy in front
+for public access.
 
-`./deploy.sh --help` lists the lifecycle commands. For the environment
-variables (host port, auth token) and the deployment guards, see
+`./deploy.sh --help` lists the lifecycle commands, including `--build` to
+build locally instead of pulling. For the environment variables (host port,
+image tag, auth token) and the deployment guards, see
 [docs/configuration.md](docs/configuration.md).
 
 ## Configuration

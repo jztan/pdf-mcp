@@ -63,7 +63,10 @@ PDF_MCP_MAX_WORKERS=8
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
 PDF_MCP_HTTP_HOST=127.0.0.1       # bind address
-PDF_MCP_HTTP_PORT=8000            # bind port
+PDF_MCP_HTTP_PORT=8000            # bind port (under the shipped compose
+                                  # file this is pinned to 8000 and a value
+                                  # in .env has no effect; change
+                                  # PDF_MCP_HOST_PORT to move the host port)
 PDF_MCP_HTTP_PATH=/mcp            # endpoint path
 PDF_MCP_ALLOW_ANY_PATH=1          # start with no [paths] allow list
 ```

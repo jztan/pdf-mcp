@@ -8,6 +8,13 @@ services:
     container_name: pdf-mcp
     env_file:
       - .env
+    environment:
+      # Pin the container-internal port. It is namespaced, nothing competes
+      # with it, and the publish target plus both healthchecks assume 8000.
+      # This overrides any PDF_MCP_HTTP_PORT set in .env, which would
+      # otherwise move the app off the port the publish targets and produce
+      # a running container that answers nothing.
+      PDF_MCP_HTTP_PORT: "8000"
     # Published to loopback ONLY. TLS and public exposure belong to a
     # reverse proxy on the host (see deploy/Caddyfile.example). The
     # container itself binds 0.0.0.0:8000, which is correct: a container

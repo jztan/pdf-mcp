@@ -117,3 +117,37 @@ class TestPortPublishing:
 
     def test_compose_has_no_obsolete_version_key(self):
         assert "version" not in yaml.safe_load(COMPOSE.read_text())
+
+
+class TestContainerPortAgreesEverywhere:
+    """
+    The container-internal port appears in four places: the compose
+    environment pin, the compose publish target, the compose healthcheck
+    URL, and the Dockerfile (EXPOSE and HEALTHCHECK). If they disagree,
+    the deployment is a running container that answers nothing, so any
+    edit that moves one site must fail here.
+    """
+
+    def test_compose_pins_the_container_port(self, service):
+        env = service.get("environment", {})
+        assert str(env.get("PDF_MCP_HTTP_PORT")) == "8000", (
+            "compose must pin PDF_MCP_HTTP_PORT so a value in .env cannot "
+            "move the app off the port the publish target assumes"
+        )
+
+    def test_all_port_sites_agree(self, service, dockerfile):
+        pinned = str(service["environment"]["PDF_MCP_HTTP_PORT"])
+
+        publish_target = service["ports"][0].rsplit(":", 1)[1]
+        assert publish_target == pinned
+
+        compose_probe = " ".join(service["healthcheck"]["test"])
+        assert f"localhost:{pinned}/" in compose_probe
+
+        exposed = re.search(r"^EXPOSE (\d+)", dockerfile, re.M).group(1)
+        assert exposed == pinned
+
+        docker_probe = re.search(
+            r"^HEALTHCHECK.*?CMD (.+)$", dockerfile, re.M | re.S
+        ).group(1)
+        assert f"localhost:{pinned}/" in docker_probe

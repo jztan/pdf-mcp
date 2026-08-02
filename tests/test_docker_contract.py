@@ -428,3 +428,48 @@ class TestReleaseScriptImageName:
         import release
 
         assert release.GHCR_IMAGE == workflow["env"]["IMAGE"]
+
+
+class TestClientWaitOutlivesTheWorkflow:
+    """release.py must wait longer than the workflow can legally run.
+
+    The critical path is build-image, assemble, smoke, publish,
+    promote-image. If the client's budget is smaller than the sum of those
+    jobs' own caps, release.py can give up first and report "RELEASE
+    INCOMPLETE" for a release that is still running and about to publish
+    to PyPI and move the `latest` tag. That is a false failure reported at
+    the moment the operator is most likely to act on it, so raising a
+    timeout-minutes in the workflow must fail here until max_wait follows.
+    """
+
+    # Jobs on the critical path that carry no timeout-minutes of their
+    # own. GitHub's default is 6 hours, so these are budgeted by judgment,
+    # not read from the file.
+    UNTIMED_ALLOWANCE_MINUTES = {"assemble": 5, "publish": 10, "promote-image": 5}
+
+    def test_max_wait_exceeds_the_sum_of_job_timeouts(self, workflow):
+        import inspect
+        import sys
+
+        sys.path.insert(0, str(REPO / "scripts"))
+        import release
+
+        critical_path = ["build-image", "assemble", "smoke", "publish", "promote-image"]
+        total_minutes = 0
+        for job in critical_path:
+            capped = workflow["jobs"][job].get("timeout-minutes")
+            if capped is None:
+                capped = self.UNTIMED_ALLOWANCE_MINUTES[job]
+            total_minutes += int(capped)
+
+        max_wait = (
+            inspect.signature(release.wait_for_publish_workflow)
+            .parameters["max_wait"]
+            .default
+        )
+        assert max_wait > total_minutes * 60, (
+            f"release.py wait_for_publish_workflow max_wait={max_wait}s is not "
+            f"greater than the workflow's critical path of "
+            f"{total_minutes * 60}s ({total_minutes} minutes); the client "
+            "would give up while the workflow is still publishing"
+        )

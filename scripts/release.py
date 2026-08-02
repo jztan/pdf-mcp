@@ -165,7 +165,23 @@ def check_ghcr_public(post_release: bool = False) -> None:
     url = ghcr_pull_token_url()
     try:
         result = run_command(
-            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", url],
+            # --max-time bounds a stall. curl defaults to a 300s connect
+            # timeout and NO transfer timeout, and run_command passes no
+            # subprocess timeout, so a half-open connection would hang
+            # forever. The post-release call site runs after every
+            # mutating step, where a hang would strand a release that has
+            # already fully succeeded: no summary, no stale-notes cleanup.
+            [
+                "curl",
+                "-s",
+                "--max-time",
+                "10",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                url,
+            ],
             check=False,
         )
     except (FileNotFoundError, OSError) as exc:
@@ -809,16 +825,22 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
         print(f"  ✓ Created GitHub release: {title}")
 
 
-def wait_for_publish_workflow(new_version: str, max_wait: int = 1800) -> bool:
+def wait_for_publish_workflow(new_version: str, max_wait: int = 5400) -> bool:
     """Poll the publish-pypi.yml run triggered by the tag push.
 
     Returns True only if the workflow run on the tag's SHA completes with
     conclusion=success. Returns False on any other terminal conclusion or
     on timeout. Prints the run URL so a failure is easy to investigate.
 
-    The 30-minute budget covers two native image builds, the staging
-    assemble, two smoke jobs, and the tag promotion on top of the Python
-    test matrix. A cold layer cache is the slow case.
+    The budget must EXCEED the sum of the workflow's own job timeouts
+    along the critical path, or this client can declare a healthy release
+    incomplete while the workflow is still running and about to publish.
+    That path is build-image (45m), then assemble, then smoke (20m), then
+    publish, then promote-image; allowing roughly 5m, 10m and 5m for the
+    three untimed jobs gives a worst case near 85 minutes. 90 minutes here
+    keeps the client outliving the server. Raising any timeout-minutes in
+    .github/workflows/publish-pypi.yml means raising this too; a test in
+    tests/test_docker_contract.py asserts the inequality.
     """
     tag = f"v{new_version}"
     print("\n=== Publish Workflow ===\n")

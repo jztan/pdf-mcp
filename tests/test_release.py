@@ -58,6 +58,29 @@ def test_publish_workflow_wait_covers_the_image_builds():
     assert default >= 1800
 
 
+def test_ghcr_visibility_check_bounds_the_curl_call():
+    """curl must carry --max-time so a stalled request cannot hang forever.
+
+    curl defaults to a 300s connect timeout and no transfer timeout, and
+    run_command sets no subprocess timeout, so a half-open connection would
+    block indefinitely. The post-release call site runs after every mutating
+    step, so a hang there strands a release that has already fully
+    succeeded: the completion summary never prints and the stale-notes
+    cleanup never runs.
+    """
+    source = inspect.getsource(release.check_ghcr_public)
+    # Comments are stripped: the comment explaining the flag also contains
+    # the string, so an unfiltered match would stay green after the flag
+    # itself was deleted.
+    code = "\n".join(
+        line for line in source.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "--max-time" in code, (
+        "check_ghcr_public must pass curl --max-time; without it a "
+        "half-open connection hangs the post-release check forever"
+    )
+
+
 def test_ghcr_pull_token_url_is_the_discriminating_endpoint():
     """A plain manifest GET answers 401 for public and private packages
     alike, so it cannot tell them apart. The anonymous pull-token endpoint

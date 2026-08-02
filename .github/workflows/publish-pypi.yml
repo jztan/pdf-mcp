@@ -66,11 +66,16 @@ jobs:
     # The release is genuinely incomplete in that state, and re-running the
     # run is safe (twine uses --skip-existing and promotion is idempotent).
     runs-on: ${{ matrix.runner }}
-    # release.py waits 30 minutes for this run. The two longest jobs are
-    # capped below that (25 here, 15 in smoke) so a stalled build fails
-    # inside the client's budget instead of running on for the GitHub
-    # default of 6 hours while the operator reads "RELEASE INCOMPLETE".
-    timeout-minutes: 25
+    # This cap must cover a COLD build. The cache below is cold on every
+    # release: this workflow runs only on tag refs, and Actions cache is
+    # scoped to the writing ref with fallback only to the default branch
+    # (develop), so cache written under refs/tags/v2.0.0 is unreadable
+    # from refs/tags/v2.0.1. It is warm only when re-running the SAME tag
+    # (`gh run rerun`), which is the documented recovery path and the
+    # reason cache-from/cache-to stay. So size this for a cold native
+    # build plus the push of a roughly 900 MB image, not for a cache hit.
+    # release.py's own wait must in turn exceed the sum of these caps.
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -173,7 +178,7 @@ jobs:
     needs: assemble
     if: github.event_name == 'push'
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read

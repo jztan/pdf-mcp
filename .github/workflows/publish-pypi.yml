@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE: ghcr.io/jztan/pdf-mcp
+
 jobs:
   test-before-publish:
     runs-on: ubuntu-latest

@@ -26,6 +26,7 @@ from pdf_mcp.config import _DEFAULT_CONFIG_PATH  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 COMPOSE = REPO / "docker-compose.yml"
 DOCKERFILE = REPO / "Dockerfile"
+WORKFLOW = REPO / ".github" / "workflows" / "publish-pypi.yml"
 DOCKER_CONFIG = REPO / "deploy" / "config.docker.toml"
 
 CONTAINER_PDF_DIR = "/data/pdfs"
@@ -46,6 +47,16 @@ def service():
 @pytest.fixture(scope="module")
 def dockerfile():
     return DOCKERFILE.read_text()
+
+
+@pytest.fixture(scope="module")
+def workflow():
+    """Parsed release workflow.
+
+    PyYAML turns the bare `on:` key into the boolean True (the Norway
+    problem); nothing here reads it, so that is harmless.
+    """
+    return yaml.safe_load(WORKFLOW.read_text())
 
 
 def _container_home(dockerfile_text):
@@ -151,3 +162,38 @@ class TestContainerPortAgreesEverywhere:
             r"^HEALTHCHECK.*?CMD (.+)$", dockerfile, re.M | re.S
         ).group(1)
         assert f"localhost:{pinned}/" in docker_probe
+
+
+class TestPullFirstImageContract:
+    """`./deploy.sh` pulls a published image; `--build` still builds.
+
+    The image name lives in exactly one place (the workflow's env.IMAGE).
+    Compose must point at that same name with an INTERPOLATED tag: a
+    hardcoded version here would become a fourth site release.py has to
+    bump, which is precisely what this design avoids.
+    """
+
+    def test_workflow_declares_the_image_name(self, workflow):
+        assert workflow["env"]["IMAGE"] == "ghcr.io/jztan/pdf-mcp"
+
+    def test_compose_image_matches_the_workflow_image_name(self, service, workflow):
+        # ghcr.io carries no port, so the first colon separates name from
+        # tag even though the tag itself contains ":-".
+        match = re.match(r"^(?P<name>[^:]+):(?P<tag>.+)$", service["image"])
+        assert match, f"compose image {service['image']!r} has no tag"
+        assert match.group("name") == workflow["env"]["IMAGE"]
+        assert match.group("tag").startswith("${"), (
+            "image tag must be interpolated (e.g. "
+            "${PDF_MCP_IMAGE_TAG:-latest}) so a release never has to edit "
+            "docker-compose.yml"
+        )
+
+    def test_compose_keeps_a_build_block_for_the_build_flag(self, service):
+        # `docker compose pull` pulls buildable services by default (it
+        # skips them only with --ignore-buildable), so image: and build:
+        # coexist. Removing this block would orphan ./deploy.sh --build.
+        assert service["build"]["context"] == "."
+        assert service["build"]["dockerfile"] == "Dockerfile"
+
+    def test_env_example_documents_the_image_tag(self):
+        assert "PDF_MCP_IMAGE_TAG" in (REPO / ".env.example").read_text()

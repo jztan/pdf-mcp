@@ -1,10 +1,13 @@
 # No `version:` key: obsolete in Compose v5, which warns if present.
 services:
   pdf-mcp:
+    # Pull-first: ./deploy.sh pulls this tag, ./deploy.sh --build rebuilds
+    # locally from the build block below. Pin PDF_MCP_IMAGE_TAG in .env to
+    # an exact version if you do not want the stack to move across releases.
+    image: ghcr.io/jztan/pdf-mcp:${PDF_MCP_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    image: pdf-mcp:latest
     container_name: pdf-mcp
     env_file:
       - .env

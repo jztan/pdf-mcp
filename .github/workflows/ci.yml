@@ -40,10 +40,12 @@ jobs:
         # Ignore list lives in scripts/audit.sh so local preflight and CI stay in sync.
         run: uv run bash scripts/audit.sh
       - name: Run linter
-        run: uv run flake8 src/
+        run: uv run flake8 src/ scripts/ tests/
       - name: Check formatting
-        run: uv run black --check src/
+        run: uv run black --check src/ scripts/ tests/
       - name: Run type checker
+        # Intentionally src/-only: test and script bodies are untyped and
+        # would need per-module relaxations. Tracked in docs_internal/backlog.md.
         run: uv run mypy src/
       - name: Run tests
         run: uv run pytest tests/ -v

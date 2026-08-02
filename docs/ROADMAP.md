@@ -2,33 +2,35 @@
 
 ## Project Status
 
-- **Current version:** v1.22.0 (released 2026-07-25)
+- **Current version:** v2.0.0 (released 2026-08-01)
 - **MCP Registry:** Published
-- **Test suite:** 1351 tests across unit, integration, and retrieval-quality benchmarks (1347 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
-- **Tools:** 10 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`); 13 on `develop`, adding the corpus trio (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`) queued for v2.0.0
+- **Test suite:** 1429 tests across unit, integration, and retrieval-quality benchmarks (1425 fast + 4 `slow`). OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
+- **Transports:** STDIO (`pdf-mcp`) released; a single-tenant HTTP transport (`pdf-mcp-http`) plus published Docker images are queued on `develop`
 
 ---
 
 ## Next Release
 
-**v2.0.0, queued on `develop`** (CHANGELOG `[Unreleased]` populated; no release branch open yet). The headline is multi-document work:
+**v2.1.0, queued on `develop`** (CHANGELOG `[Unreleased]` populated; no release branch open yet). The headline is remote access:
 
-- **Corpus tools**: `pdf_corpus_warm` / `pdf_corpus_overview` / `pdf_corpus_search` over a folder of local PDFs (cap 100): budgeted warming with resume, per-doc triage cards, and cross-document search fusing per-document rankings via RRF with a term-coverage-weighted tie-break. Benchmarked: hybrid NDCG@10 0.674 and doc-hit@3 1.000 on a 100-doc corpus, sub-0.5s/query warmed.
-- **Concurrent warming**: process-pool extraction on larger corpora, ~3.9x faster text warm at the 100-doc cap.
-- **Semantic-by-default**: `fastembed` promoted to a core dependency, so hybrid `auto` search works on every install channel without an extra.
-- Plus: OR-fallback for zero-result keyword queries, excerpt-picker fixes (hyphen folding, numeric tie-break), demo v2 with the interactive corpus flow, and the 2026-08-01 field-testing hardening (client-timeout guidance for warms, never-null title contract unified across overview and search, full cache clear now reclaims disk).
+- **HTTP transport**: `pdf-mcp-http`, for any client that cannot spawn a local process (the Anthropic API MCP connector, claude.ai custom connectors, web and mobile hosts) or that wants a warm corpus shared by several clients. Single-tenant by contract (one instance per user; cache and corpus are shared across every caller of a process), fails closed without `PDF_MCP_AUTH_TOKEN`, binds `127.0.0.1` by default, TLS left to a reverse proxy. An unauthenticated `GET /health` serves container and load-balancer probes.
+- **Docker deployment**: multi-stage image with tesseract, column-aware extraction, and the embedding model baked in; a Compose stack publishing to host loopback only; `deploy/bootstrap.sh` for first-run token generation; and multi-arch images published at `ghcr.io/jztan/pdf-mcp` (linux/amd64 + linux/arm64), tagged per release. `./deploy.sh` now pulls the published image (`--build` for the old behavior).
+- **Document discoverability**: `server_info` reports a `documents` block (`access_mode`, `roots`, `allow_patterns`, `deny_patterns`), so an HTTP caller can pass a root straight to `pdf_corpus_overview` / `pdf_corpus_warm` instead of being told a path out of band.
+- **Security**: the HTTP transport refuses to start without a `[paths]` allow list (override deliberately with `PDF_MCP_ALLOW_ANY_PATH=1`). STDIO behaviour is unchanged.
+- Plus: a [remote-access guide](remote-access.md) documenting the trust boundary and how documents actually reach the server, and a PyPI upload now gated on the published image passing smoke tests on both architectures (which delays PyPI relative to previous releases).
 
-Cut from `develop` via `python scripts/release.py major` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
+Cut from `develop` via `python scripts/release.py minor` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
 
 ---
 
 ## Tracking MCP 2026-07-28
 
-The MCP spec [release candidate locked on 2026-05-21](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/), with GA targeted for 2026-07-28. Protocol-level work is gated on fastmcp shipping support for the new spec; the goal is a single coordinated protocol release rather than dribbling breaking changes across patches. (Version note: v2.0.0 ships the corpus/semantic feature set above, not this protocol work; the protocol bump will land as its own major, v3.0.)
+The MCP spec **shipped GA on 2026-07-28** ([announcement](https://blog.modelcontextprotocol.io/posts/2026-07-28/)). Protocol-level work is now gated only on fastmcp shipping support for it; the goal is a single coordinated protocol release rather than dribbling breaking changes across patches. (Version note: v2.0.0 shipped the corpus/semantic feature set and v2.1.0 ships remote access, neither of which is this protocol work; the protocol bump will land as its own major, v3.0.)
 
 **v3.0 scope (protocol major, gated on fastmcp v4):**
 
-- [ ] **Stateless transport.** Adopt the new request model once fastmcp supports it. The `initialize` handshake and `Mcp-Session-Id` header are removed by the spec; per-request `_meta` replaces them. STDIO is the only transport pdf-mcp ships, so HTTP-routing additions (`Mcp-Method` / `Mcp-Name` headers, header-based load balancing) are no-ops to verify.
+- [ ] **Stateless transport.** Adopt the new request model once fastmcp supports it. The `initialize` handshake and `Mcp-Session-Id` header are removed by the spec; per-request `_meta` replaces them. Now that `pdf-mcp-http` ships, the HTTP-routing additions (`Mcp-Method` / `Mcp-Name` headers, header-based load balancing) are real surface to verify rather than no-ops — though single-tenant-by-contract means header-based load balancing across instances is not a deployment pdf-mcp supports.
 - [ ] **Error-code update.** Confirm fastmcp surfaces missing-resource errors as JSON-RPC `-32602` (was MCP-custom `-32002`). pdf-mcp's inline error contract (`{"error": ...}` with `status=OK`) sidesteps this for tool-level validation; only the framework "resource not found" path is affected.
 - [ ] **Cacheable read-side responses.** Add `ttlMs` + `cacheScope` hints to slow-changing read tools (`pdf_info`, `pdf_get_toc`, `pdf_read_pages`). pdf-mcp already has authoritative mtime-based invalidation in SQLite — surfacing the metadata lets MCP clients skip redundant calls within a session. `cacheScope` = per-session (matches single-user STDIO model).
 - [ ] **JSON Schema 2020-12.** Use composition operators (`oneOf`, `anyOf`, conditionals) to express `pdf_search`'s `mode × granularity` constraints and `pdf_info`'s `detail` flag. Land alongside the fastmcp v4 bump.
@@ -53,10 +55,14 @@ _Nothing queued._
 
 ### P1 — high-value, well-scoped
 
+- [ ] **Commit `pdf_corpus_warm` embedding progress in page batches, not per document.** The one remaining hard-failure mode behind timeout-bounded MCP clients: warming is atomic per document, so a single very large document (a 370-page 10-K with embeddings) cannot finish inside a ~60s per-call window and loses its in-flight work on every attempt. Field-validated 2026-08-01 — small and medium documents already return graceful partials and resume converges a cold corpus in a few re-issued calls, so the failure is isolated to the giant-document path. Fix shape: when a document's text is already cached, commit embeddings in page batches (partial embeddings are already a legal cache state), keeping text extraction atomic. Re-opens the concurrent-warm correctness gate, which was validated against per-document finalize. v2.0.0 ships the documented mitigation only (tool description and [`tool-reference.md`](tool-reference.md) teach budget-under-timeout and re-issue-to-continue).
+- [ ] **Teach keyword-mode query shape in the tool descriptions.** `mode="keyword"` whitespace-splits and AND-joins terms, so a full-question query over-constrains and silently returns nothing — measured on the corpus ranking spike, where 7 of 36 queries scored 0 on both arms because one absent term zeroed the AND. Nothing in the `pdf_search` / `pdf_corpus_search` descriptions says so. Add short-specific-terms guidance plus mode-choice guidance (`semantic` for conceptual questions, `keyword` for rare exact tokens), since `auto` is the default and nothing signals when an explicit mode does better. No code-path change; validate with a behavioral check rather than paraphrasing, as parts of the corpus description are locked verbatim by `tests/test_tool_descriptions.py`.
 - [ ] **Calibrate the semantic confidence threshold.** The current `_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5` is a guess; re-eval found gibberish queries scoring 0.54 against unrelated papers under `BAAI/bge-small-en-v1.5`. Needs an empirical pass over (corpus, gibberish-query, real-query) tuples to pick a defensible floor (likely 0.6–0.65, possibly per-model), documented in [`docs/embedding-models.md`](embedding-models.md). Optional follow-up: per-corpus self-calibration mode.
 
 ### P2 — investigate before committing
 
+- [ ] **Markdown output mode.** RAG pipelines consume markdown and chunks directly, and `pymupdf4llm.to_markdown()` already ships via the `[multicolumn]` extra — expose it as an output format (likely `pdf_read_pages(format="markdown")`; a heading-aware chunk mode could follow, not lead). Constraint: the extra is capped `pymupdf4llm<1.28` because 1.28 auto-activates `pymupdf.layout` and breaks `find_tables()` process-wide, so the markdown path must work under the cap. Settle first whether a later release fixed that regression, the cache shape (a `page_markdown` table vs on-the-fly), and how it degrades when the extra is absent.
+- [ ] **Rank quality on repetitive corpora: bibliography pages and near-duplicate documents.** Two independently observed precision defects with the same shape — document-level ranking stays correct, but the page list is crowded out. BM25 favours reference-list pages because query terms repeat densely in citation titles (reproduced on both the arXiv corpus and a 113-page thesis), and on a corpus holding several fiscal years of one filer a needle that ranks #1 *inside* its own document misses the corpus-wide top 10 because sibling-year filings occupy the list. Candidate fixes are a citation-density rank penalty and an optional per-document cap or best-page-per-document mode. Each must run its own fix → benchmark → corpus expand → re-benchmark loop; the reranker rejection is a standing warning against shipping an "obvious" ranking tweak unbenchmarked.
 - [ ] **Layout-aware section-detector escalation.** _Not started. Distinct from the shipped `pdf-mcp[multicolumn]` extra: that fixed column **reading order** (v1.15.0); this is about section **boundary** detection._ The 7-signal heuristic in `section_detector.py` underperforms on OCR'd scans and layout-irregular preprints. If revisited, spike a layout-aware model (GROBID / Marker / Surya) on accuracy lift, install size, and licensing before budgeting.
 
 ### P3 — methodology, fold into a P1/P2 item
@@ -82,4 +88,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-08-01 (Synced: **v1.22.0** released 2026-07-25 with Python 3.14 support, deterministic dedup'd multi-column extraction, and the multi-term CJK keyword fix. `develop` now carries the v2.0.0 queue described under Next Release. Protocol track renumbered from v2.0 to v3.0, freeing v2.0.0 for the corpus/semantic release. Test count 1103 to 1351.)
+**Last Updated:** 2026-08-02 (Synced: **v2.0.0** released 2026-08-01 with the corpus trio, concurrent warming, and semantic-by-default — tool count 10 to 13. Next Release rewritten for the **v2.1.0** queue on `develop`: HTTP transport, published Docker images, document discoverability in `server_info`. The MCP 2026-07-28 spec reached GA on schedule, so the v3.0 track is gated on fastmcp alone, and its stateless-transport item now has a real HTTP surface to verify. Three field-validated or benchmark-corroborated items promoted into Under Consideration: warm embedding batch-commit and keyword-mode description guidance at P1, markdown output and repetitive-corpus rank quality at P2. Test count 1351 to 1429.)

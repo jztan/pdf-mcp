@@ -1,0 +1,63 @@
+<svg width="100%" viewBox="0 0 780 430" role="img" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <title>Request path and trust boundary for pdf-mcp over HTTP</title>
+  <desc>An MCP client sends an HTTPS request carrying a shared bearer token. A reverse proxy on the host terminates TLS and forwards over loopback to the published host port 8802, which the container maps to pdf-mcp-http on port 8000. A request with no valid token is rejected with 401 before reaching any tool. Inside the container, one tenant boundary encloses the SQLite cache, the warmed corpus, and the paths allow list, all shared by every caller of that process. A second person holding the same token is the same tenant, not a second one.</desc>
+
+  <rect x="0" y="0" width="780" height="430" fill="#fbfbfa"/>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+    </marker>
+    <marker id="arrow-reject" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a4404b"/>
+    </marker>
+  </defs>
+
+  <!-- MCP client -->
+  <rect x="20" y="70" width="150" height="66" rx="8" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="95" y="97" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">MCP client</text>
+  <text x="95" y="117" text-anchor="middle" font-size="11" fill="#57606a">Authorization: Bearer</text>
+
+  <!-- second, ghost client -->
+  <rect x="20" y="176" width="150" height="60" rx="8" fill="#ffffff" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="95" y="201" text-anchor="middle" font-size="13" font-weight="600" fill="#57606a">second person</text>
+  <text x="95" y="219" text-anchor="middle" font-size="11" fill="#8c959f">same token</text>
+
+  <!-- unauthenticated caller -->
+  <rect x="20" y="290" width="150" height="60" rx="8" fill="#ffffff" stroke="#a4404b" stroke-width="1.5"/>
+  <text x="95" y="315" text-anchor="middle" font-size="13" font-weight="600" fill="#a4404b">no valid token</text>
+  <text x="95" y="333" text-anchor="middle" font-size="11" fill="#a4404b">rejected 401</text>
+
+  <!-- TLS proxy -->
+  <rect x="228" y="70" width="140" height="66" rx="8" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <text x="298" y="97" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">TLS proxy</text>
+  <text x="298" y="117" text-anchor="middle" font-size="11" fill="#57606a">terminates HTTPS</text>
+
+  <!-- container / tenant -->
+  <rect x="430" y="44" width="330" height="286" rx="10" fill="#ffffff" stroke="#1f2328" stroke-width="2"/>
+  <text x="450" y="68" font-size="12" font-weight="600" fill="#1f2328">container: ONE tenant</text>
+
+  <rect x="452" y="84" width="286" height="56" rx="8" fill="#f2f4f6" stroke="#57606a" stroke-width="1.5"/>
+  <text x="595" y="106" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">pdf-mcp-http</text>
+  <text x="595" y="125" text-anchor="middle" font-size="11" fill="#57606a">binds :8000, one shared token</text>
+
+  <rect x="452" y="160" width="286" height="150" rx="8" fill="#f2f4f6" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="595" y="184" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">shared by every caller</text>
+  <text x="470" y="212" font-size="12" fill="#1f2328">SQLite cache</text>
+  <text x="470" y="238" font-size="12" fill="#1f2328">warmed corpus</text>
+  <text x="470" y="264" font-size="12" fill="#1f2328">[paths] allow list</text>
+  <text x="470" y="292" font-size="11" fill="#57606a">no per-user partitioning</text>
+
+  <!-- arrows -->
+  <line x1="174" y1="103" x2="222" y2="103" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="372" y1="103" x2="426" y2="112" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="399" y="33" text-anchor="middle" font-size="10" fill="#57606a">loopback</text>
+  <text x="399" y="21" text-anchor="middle" font-size="10" fill="#57606a">127.0.0.1:8802</text>
+
+  <path d="M 174 206 C 300 206, 330 150, 426 130" fill="none" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <path d="M 174 320 C 240 320, 250 220, 292 148" fill="none" stroke="#a4404b" stroke-width="1.5" marker-end="url(#arrow-reject)"/>
+
+  <!-- captions -->
+  <text x="20" y="386" font-size="12" fill="#1f2328">The token decides whether a caller gets in. The [paths] allow list decides what they can reach.</text>
+  <text x="20" y="406" font-size="12" fill="#57606a">There is exactly one of each per process, so a second token holder is the same tenant, not a second one.</text>
+</svg>

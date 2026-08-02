@@ -1,12 +1,12 @@
 # Remote access over HTTP
 
-`pdf-mcp-http` authenticates with a single shared bearer token, `PDF_MCP_AUTH_TOKEN`, verified by FastMCP's `StaticTokenVerifier`. One token, one tenant, no per-user identity. That is the whole model. This page covers what it protects, what it does not, and how to run it safely.
+`pdf-mcp-http` authenticates with a single shared bearer token, `PDF_MCP_AUTH_TOKEN`, verified by FastMCP's `StaticTokenVerifier`. One token, one tenant, no per-user identity. That is the whole model.
 
 ![Request path and trust boundary for pdf-mcp over HTTP: an MCP client sends a bearer token over HTTPS, a proxy terminates TLS and forwards over loopback to the container, and one tenant boundary encloses the shared cache, warmed corpus, and paths allow list](images/remote-access-architecture.svg)
 
 ## What it is
 
-`pdf-mcp-http` runs the same tools as the stdio entry point, served over HTTP at `/mcp` by default. Every request to that endpoint carries an `Authorization: Bearer` header, and the token in it is compared against the one value in `PDF_MCP_AUTH_TOKEN`. Anything else is rejected. One route is deliberately outside auth: `GET /health`, which returns `status` and `version` and nothing else, so an uptime probe can confirm liveness without holding a credential. It is written for a probe on the same box; publishing it through a proxy is a choice, and the Configuration section below covers what that choice costs. There are no sessions, no per-user identity, and no scopes; the verifier holds a single `client_id` of `pdf-mcp` and an empty scope list.
+`pdf-mcp-http` runs the same tools as the stdio entry point, served over HTTP at `/mcp` by default. Every request to that endpoint carries an `Authorization: Bearer` header, and the token in it is compared against the one value in `PDF_MCP_AUTH_TOKEN`. Anything else is rejected. One route is deliberately outside auth: `GET /health`, which returns `status` and `version` and nothing else, so an uptime probe can confirm liveness without holding a credential. It is written for a probe on the same box; publishing it through a proxy has a cost, covered under Configuration. There are no sessions, no per-user identity, and no scopes; the verifier holds a single `client_id` of `pdf-mcp` and an empty scope list.
 
 ## When to use it, and when not
 
@@ -27,11 +27,11 @@ For the in-scope and out-of-scope lists that govern security reports, see [`SECU
 
 ## The single-tenant contract
 
-Single tenancy here is a contract, not a gap waiting to be filled. Worth stating why, since a reader may arrive from a project that does have per-user tokens.
+Single tenancy here is a contract, not a gap waiting to be filled. It is worth saying why, since a reader may arrive from a project that does have per-user tokens.
 
 Issuing a token per user would change nothing about what those users can reach. pdf-mcp has no per-token path scoping, so per-user tokens would authenticate callers while authorizing them identically. That is worse than one honest shared token: a list of named credentials implies an isolation boundary that does not exist, and operators act on what the credential model implies.
 
-Real isolation comes from separate processes with separate cache volumes, exactly as stdio gets it from process-per-conversation. Someone who needs two users runs two containers, each with its own token, cache volume, and allow list. The shipped `docker-compose.yml` is written for one instance: it hardcodes `container_name: pdf-mcp` and declares a single named volume, `pdf-mcp-cache`, and `COMPOSE_PROJECT_NAME` does not override `container_name`. A second instance means changing both, plus the published host port.
+Isolation comes from separate processes with separate cache volumes, exactly as stdio gets it from process-per-conversation. Someone who needs two users runs two containers, each with its own token, cache volume, and allow list. The shipped `docker-compose.yml` is written for one instance: it hardcodes `container_name: pdf-mcp` and declares a single named volume, `pdf-mcp-cache`, and `COMPOSE_PROJECT_NAME` does not override `container_name`. A second instance means changing both, plus the published host port.
 
 ## Configuration
 
@@ -90,7 +90,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 Step 3 uses `--force-recreate` on purpose. A plain `up -d` usually recreates the container when a value in `.env` changes, but that depends on how your Compose version hashes the service config, and the failure is silent: the container keeps running with the old token loaded while you believe it is dead.
 
-Step 5 proves it did not. A healthy rotation reads `200` from `/health` and `401` from the old token. Read the two results together, because they fail in different directions:
+Step 5 is what catches that. A healthy rotation reads `200` from `/health` and `401` from the old token. Read the two results together, because they fail in different directions:
 
 - `200` then `401`: done.
 - `200` then anything else, `200` included: the old credential still validates, so the restart did not pick up the new value. Go back to step 3.
@@ -98,7 +98,7 @@ Step 5 proves it did not. A healthy rotation reads `200` from `/health` and `401
 
 Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802 default.
 
-Revocation stops future requests and does nothing about past ones. It does not invalidate anything already read, and the cache retains whatever was extracted while the old token was valid. Treat a leak as disclosure of every PDF reachable under `[paths]`.
+Revocation stops future requests and does nothing about past ones. It does not invalidate anything already read, and the cache retains whatever was extracted while the old token was valid. Treat a leak as disclosure of every PDF reachable under `[paths]`, and as outbound HTTPS fetching from your server for as long as the token was valid.
 
 ## Startup guards
 

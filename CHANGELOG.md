@@ -25,8 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linux/arm64, built on native runners and tagged per release (`X.Y.Z`,
   `X.Y`, `X`, `latest`). `PDF_MCP_IMAGE_TAG` pins a deployment to a version.
 
+- `server_info` now reports a `documents` block (`access_mode`, `roots`,
+  `allow_patterns`, `deny_patterns`) naming the roots the server will open.
+  A value in `roots` can be passed straight to `pdf_corpus_overview` or
+  `pdf_corpus_warm`, so an agent connecting over HTTP can find a corpus
+  without being told a path out of band. `access_mode: "unrestricted"`
+  means any readable path, not an empty corpus.
+
 ### Changed
 
+- Documented what each transport is for, rather than presenting HTTP as
+  stdio's equivalent. Paths resolve on the server, so an HTTP caller reads
+  files already under an allow-listed root or `https://` URLs the server
+  fetches, and cannot hand over a file from its own machine. MCP has no
+  client-to-server file transfer primitive; a new
+  ["Getting documents to the server"](docs/remote-access.md#getting-documents-to-the-server)
+  section covers both supported paths (including presigned object-storage
+  URLs) and tracks [SEP-2631](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2631).
 - `./deploy.sh` now pulls the published image instead of building locally.
   Use `./deploy.sh --build` for the previous behavior.
 - The PyPI upload is now gated on the published Docker image passing smoke

@@ -12,16 +12,53 @@
 
 Use it when one person, or one agent acting for one person, needs pdf-mcp over the network: a home server you reach from a laptop, a VPS you own, a container behind your own proxy. The transport exists because process-per-conversation stdio cannot span machines.
 
+Three situations make it worth the operational cost, and in none of them does an agent hand the server a file.
+
+| situation | what HTTP gives you | on stdio |
+|---|---|---|
+| **The client cannot spawn a subprocess.** The Anthropic API MCP connector, claude.ai custom connectors, web and mobile hosts. | The only way these clients can reach pdf-mcp. The URL path below suits them well, since a linked paper or filing needs no upload at all. | Not possible: the client has to launch and hold a local process. |
+| **A warm corpus is shared by several clients.** A laptop, a phone, and a scheduled agent querying one collection. | One long-lived process, so all of them hit the same warmed SQLite. | Each spawned server has its own cache, so the minutes of extraction and embedding are paid again per client. |
+| **You would rather not install the dependencies.** | The Docker image bakes in Tesseract, the embedding model, and the column-aware extractor, so every tool works on the first request. | Tesseract and the embedding model have to be installed on the machine running the server. |
+
+It is not for ad hoc work on documents that live on your own machine. That is stdio's job, it is the default, and it stays simpler for that case: you configure no token, run no proxy, and copy nothing to a server first.
+
 Do not use it to serve a team from one endpoint. The reason is structural, not a policy preference. Every caller of a process shares one SQLite cache, one warmed corpus, and one global `[paths]` allow list, and nothing in the request is scoped to the caller because nothing in it identifies the caller. A second person on the same endpoint is not a second tenant; they are the same tenant with a second keyboard.
+
+## Getting documents to the server
+
+Under stdio, the agent and the server share a filesystem, so any path the agent can name, the server can open. Over HTTP they do not, and every path argument resolves on the server. Two things make a PDF readable, and an agent cannot arrange either one itself.
+
+The first is a file under an allow-listed root. Put it there with whatever you already use: `cp` into the Compose stack's `./documents` folder, which the container sees as `/data/pdfs`, or `rsync`, `scp`, a sync client, or a scheduled job that writes into that directory. Use this for a corpus you curate and keep. It is what the corpus tools want, since they take a directory and reject URLs, and it is what benefits from staying warm between sessions.
+
+The second is an `https://` URL the server fetches. Pass the URL as the `path` argument and the server downloads and caches it. This is the right answer for an application that receives documents from its users: put the bytes in object storage and pass a presigned link. Presigned S3 and GCS URLs work even though they usually serve `application/octet-stream`, because the fetcher accepts that content type and validates the payload by its `%PDF` magic bytes. The constraints are HTTPS only, and SSRF protection rejects loopback, private, link-local, and IMDS addresses, so a link to the agent's own machine or your LAN will not work. The threat model below describes the same capability from the risk side, in the "what the caller can fetch" row; set `[urls].allow` to bound it.
+
+What an agent cannot do is upload a local file, and that is not a gap we can close. MCP has no client-to-server file transfer: Resources and `BlobResourceContents` flow server to client, `roots` names paths without moving bytes, and the only channel into a tool call is its arguments, which the model generates token by token. A tool taking base64 would therefore require the model to emit the whole file. A 5 MB PDF is roughly 1.7 M tokens, past the output limit of a single response and more expensive than reading the document, which defeats the purpose of running this server. The model would also have to transcribe several million characters of binary without one error. The MCP project reached the same conclusion. [SEP-2356](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2356), which passed file content inline as data URIs, was closed in favor of [SEP-2631](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2631), which keeps bytes out of JSON-RPC by negotiating an out-of-band HTTPS transfer instead. Once that is accepted and the SDK supports it, pdf-mcp can implement it. Even then the client application performs the upload, not the model.
+
+A connecting agent does not have to be told a path. `server_info` returns a `documents` block naming the roots this server will open:
+
+```json
+"documents": {
+  "access_mode": "allowlist",
+  "roots": ["/data/pdfs"],
+  "allow_patterns": ["/data/pdfs/**"],
+  "deny_patterns": []
+}
+```
+
+A value in `roots` can be passed straight to `pdf_corpus_overview` or `pdf_corpus_warm`. When `access_mode` is `unrestricted` (no `[paths]` allow list, which a remote deployment refuses to start without) `roots` is empty, and that means "any path the process can read", not "no documents".
 
 ## Threat model versus stdio
 
 Four differences matter when moving from stdio to HTTP.
 
-1. The boundary becomes a bearer token in a header, only as strong as the client config file that holds it. Stdio inherits the operating system's user boundary instead: if you can spawn the process, you were already that user.
-2. The process is long-lived, so a warmed corpus and its cache outlive any single session. Both transports write the same SQLite cache, but `PDFCache._init_db` ends by calling `clear_expired()`, so stdio sweeps the TTL every time a conversation spawns it, while an HTTP process sweeps at startup and may then run for weeks without another.
-3. The `[paths]` allow list becomes the only thing standing between a caller and the local filesystem. That is why its absence is a startup failure rather than a warning. It bounds local reads and nothing else; outbound fetching is a separate decision, below.
-4. The token also buys outbound HTTPS fetching, not just local reads. A tool's `path` argument goes through `_resolve_path`, which treats an `https://` value as a download: the server fetches the URL and caches the bytes. That branch is governed by `[urls]`, not `[paths]`, and `[urls]` is empty by default, which means unrestricted. SSRF hardening still applies, so the fetch cannot reach loopback, RFC 1918, link-local, or IMDS addresses, and only `https://` is accepted. What is left is ordinary public-internet egress originating from your server, and disk filling with whatever the caller fetched. Set `[urls].allow` if either matters to you. For the full URL-fetching surface, see [`tool-reference.md`](tool-reference.md#url-fetching-ssrf).
+| | stdio | HTTP |
+|---|---|---|
+| **What the boundary is** | The operating system's user boundary. If you can spawn the process, you were already that user. | A bearer token in a header, only as strong as the client config file that holds it. |
+| **How long state lives** | `PDFCache._init_db` ends by calling `clear_expired()`, so every conversation that spawns the server sweeps the TTL. | The process is long-lived, so a warmed corpus and its cache outlive any single session. The sweep runs at startup, and the process may then run for weeks without another. |
+| **What bounds local reads** | The user's own filesystem permissions. | The `[paths]` allow list, and nothing else. That is why its absence is a startup failure rather than a warning. |
+| **What the caller can fetch** | Same URL-fetching branch, but reachable only by someone who is already that user. | The token buys outbound HTTPS fetching too. `_resolve_path` treats an `https://` value as a download, governed by `[urls]`, which is empty (unrestricted) by default. |
+
+Outbound fetching needs more detail than a table cell holds. SSRF hardening still applies to the fetch: it cannot reach loopback, RFC 1918, link-local, or IMDS addresses, and only `https://` is accepted. What is left is ordinary public-internet egress originating from your server, and disk filling with whatever the caller fetched. Set `[urls].allow` if either matters to you. For the full URL-fetching surface, see [`tool-reference.md`](tool-reference.md#url-fetching-ssrf).
 
 For the in-scope and out-of-scope lists that govern security reports, see [`SECURITY.md`](../SECURITY.md).
 
@@ -37,7 +74,7 @@ Isolation comes from separate processes with separate cache volumes, exactly as 
 
 Generate the token with `openssl rand -hex 32`. `deploy/bootstrap.sh` does this, writes it into `.env`, and sets that file to mode 600, readable by its owner and root and nobody else. That `chmod` runs only when the script creates the file, and an existing `.env` is left untouched, so after hand-editing the file to rotate the token, re-check the mode: some editors rewrite a file with fresh default permissions. The Compose stack publishes to loopback only, mapping `127.0.0.1:${PDF_MCP_HOST_PORT:-8802}` onto the container's internal port 8000, so nothing is reachable off the box until you put a TLS proxy in front of it. TLS belongs to that proxy, not to the app. See `deploy/Caddyfile.example` for a starting point.
 
-Decide on `[urls]` while you are writing the config. It is the second half of what the token grants (see point 4 of the threat model above) and, unlike `[paths]`, no startup guard asks you about it: left empty it permits fetching from any public HTTPS host. `deploy/config.toml.example` ships a commented `[urls]` block next to the `[paths]` one.
+Decide on `[urls]` while you are writing the config. It is the second half of what the token grants (see the "what the caller can fetch" row of the threat model above) and, unlike `[paths]`, no startup guard asks you about it: left empty it permits fetching from any public HTTPS host. `deploy/config.toml.example` ships a commented `[urls]` block next to the `[paths]` one.
 
 Decide on `/health` too. `deploy/Caddyfile.example` proxies the whole host to the backend, so following it publishes the one credential-free route, and with it the exact running version, to anyone who asks. That is the precondition for matching a published CVE against your deployment. [`SECURITY.md`](../SECURITY.md) accepts version disclosure on `/health` as in bounds, so this is a deliberate default rather than an oversight, but it is being chosen for you. If you would rather it stayed internal, block the path at the proxy and probe over loopback instead. In Caddy that is a path matcher placed above `reverse_proxy`:
 

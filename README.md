@@ -323,14 +323,25 @@ Agent workflow:
 
 ## Remote / HTTP transport
 
-STDIO remains the default and is what every example above uses. If you need to
-reach pdf-mcp remotely (for example from the Anthropic API MCP connector), a
-second entry point serves the same tools over HTTP:
+STDIO remains the default and is what every example above uses. A second entry
+point serves the same tools over HTTP, but the two transports suit different
+jobs:
+
+| transport | what it serves | use it for |
+|---|---|---|
+| **STDIO** (default) | any local file the agent can name, since agent and server share a filesystem | ad hoc documents on your own machine |
+| **HTTP** (`pdf-mcp-http`) | a curated corpus on the server, plus `https://` URLs it can fetch | clients that cannot spawn a process (Anthropic API MCP connector, claude.ai custom connectors), and a warm corpus shared by several clients |
 
 ```bash
 export PDF_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
 pdf-mcp-http
 ```
+
+Because paths resolve on the server, an agent connected over HTTP reads what is
+already there: files under an allow-listed root, or a URL the server fetches. It
+cannot hand over a file from its own machine. Call `server_info` to discover the
+roots a server will open. See
+**[Getting documents to the server](docs/remote-access.md#getting-documents-to-the-server)**.
 
 It is single-tenant and fails closed: without an auth token and a `[paths]`
 allow list, the process exits rather than starting an open endpoint. Before
@@ -342,7 +353,7 @@ runbook.
 
 ```bash
 ./deploy.sh              # generates .env with a token, pulls the image, starts, health-checks
-cp your.pdf documents/   # PDFs in this folder are visible to the server as /data/pdfs
+cp your.pdf documents/   # the intake path: this folder is the server's /data/pdfs
 ```
 
 The image is published to GHCR for amd64 and arm64, so nothing is compiled

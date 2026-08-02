@@ -87,7 +87,18 @@ this file automatically, both for `${VAR}` interpolation in
 `docker-compose.yml` and via `env_file:` into the container), and
 creates the `./documents` directory that the container mounts. The container
 runs as a non-root user with `documents/` and the cache volume owned by that
-user. `docker compose` pulls `ghcr.io/jztan/pdf-mcp`, published for both
+user.
+
+`./documents` is where documents come in. It is mounted read-only at
+`/data/pdfs`, and `deploy/config.docker.toml` allow-lists that one directory,
+so the contents of the folder are exactly what the server can open. The mount
+is read-only because the container never writes there: adding a document is
+always something you do on the host, with `cp`, `rsync`, a sync client, or a
+scheduled job. An agent connected over HTTP cannot put a file here. It reads
+what is already present, or an `https://` URL the server fetches for it. See
+[Getting documents to the server](remote-access.md#getting-documents-to-the-server).
+
+`docker compose` pulls `ghcr.io/jztan/pdf-mcp`, published for both
 amd64 and arm64, so `./deploy.sh` needs no local build; `./deploy.sh --build`
 builds locally instead, on whichever architecture you run it on. The built
 image is around 900 MB, since it bakes in tesseract, the column-aware
@@ -108,7 +119,8 @@ non-empty `[paths]` allow list, since an absent allow list otherwise makes
 `PDFConfig` permissive, which is correct for a local stdio install but unsafe
 for a remote endpoint. `deploy/config.docker.toml` supplies that allow list
 in the Docker image and is mounted read-only; set `PDF_MCP_ALLOW_ANY_PATH=1`
-to override deliberately.
+to override deliberately. That override widens which existing paths the server
+may read; it does not create a way for a caller to deliver a new file.
 
 ## Caching
 

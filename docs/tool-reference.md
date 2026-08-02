@@ -13,6 +13,8 @@ Complete documentation for the `pdf-mcp` MCP tools.
 
 All paths accept absolute paths, paths relative to the server's working directory, or `https://` URLs. URL fetches are subject to SSRF protections — see [Security & Hardening](#security--hardening).
 
+Paths always resolve on the server. Under the stdio transport that is the caller's own machine, so any local file works. Over HTTP it is the remote host: a caller reads files already present under an allow-listed root, or URLs the server fetches, and cannot pass a file from its own filesystem. `server_info` reports the roots available; see [Getting documents to the server](remote-access.md#getting-documents-to-the-server).
+
 ---
 
 ## Security & Hardening
@@ -696,7 +698,7 @@ Shared envelope (both tools):
 
 **Limitations (both tools):**
 - Corpora are capped at 100 files; a larger corpus returns an inline error rather than truncating silently.
-- URLs are not accepted; fetch a remote PDF via a single-doc tool first, then point a corpus tool at its local path.
+- URLs are not accepted; fetch a remote PDF via a single-doc tool first, then point a corpus tool at its local path. Note that the fetched copy lands in the URL cache, not in a corpus directory, so this assembles a corpus only where you can also write to that directory. Over the HTTP transport a caller cannot, which is why a remote corpus is pre-placed under an allow-listed root by the operator.
 - `budget_seconds` is clamped to 1-300 regardless of what's passed in.
 
 ### `pdf_corpus_warm`
@@ -935,6 +937,11 @@ Reports which optional features are installed and which configuration values are
   - `corpus.max_files` (int) — corpus size cap (100).
   - `corpus.budget_seconds_range` (array) — clamp range for `budget_seconds` on the corpus tools (`[1, 300]`).
   - `corpus.modes_available` (array) — corpus search modes; mirrors `search.modes_available` (same embedding availability).
+- `documents` (object): which PDFs this server is willing to open. Use it to find a starting path when you were not given one, which is the normal situation over the HTTP transport.
+  - `access_mode` (string): `"allowlist"` when `[paths] allow` is configured, else `"unrestricted"`.
+  - `roots` (array): existing directories, ready to pass straight to `pdf_corpus_overview` or `pdf_corpus_warm`. Derived from `allow_patterns` by reducing each glob to its literal directory prefix. Empty under `"unrestricted"`, which means *any path the server process can read*, not *no documents available*.
+  - `allow_patterns` (array): the configured `[paths] allow` globs, verbatim.
+  - `deny_patterns` (array): the configured `[paths] deny` globs, verbatim. Reported in both access modes, because deny applies unconditionally.
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 8)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.
@@ -967,6 +974,12 @@ server_info()
 #       "modes_available": ["keyword", "semantic", "auto"]
 #     }
 #   },
+#   "documents": {
+#     "access_mode": "allowlist",
+#     "roots": ["/data/pdfs"],
+#     "allow_patterns": ["/data/pdfs/**"],
+#     "deny_patterns": []
+#   },
 #   "config": {
 #     "max_workers": 8,
 #     "max_response_bytes": 200000,
@@ -977,6 +990,10 @@ server_info()
 ```
 
 When semantic search is unavailable (no `fastembed`), `modes_available` is `["keyword"]` and the `embedding_model` field is absent.
+
+**Limitations:**
+- `documents.roots` is a floor, not a mirror of the config. A pattern whose literal prefix does not exist on disk is dropped rather than reported, so a stale allow rule never sends you to a path that will fail. Read `allow_patterns` if you need what was actually configured.
+- A root is a directory the allow list covers, not a guarantee every file beneath it is readable: `deny` rules and filesystem permissions still apply per file, and `check_path` remains the authority.
 
 ---
 

@@ -28,6 +28,7 @@ COMPOSE = REPO / "docker-compose.yml"
 DOCKERFILE = REPO / "Dockerfile"
 WORKFLOW = REPO / ".github" / "workflows" / "publish-pypi.yml"
 DOCKER_CONFIG = REPO / "deploy" / "config.docker.toml"
+CADDYFILE = REPO / "deploy" / "Caddyfile.example"
 
 CONTAINER_PDF_DIR = "/data/pdfs"
 
@@ -139,6 +140,11 @@ class TestContainerPortAgreesEverywhere:
     127.0.0.1 URLs it probes). If they disagree, the deployment is a
     running container that answers nothing, so any edit that moves one
     site must fail here.
+
+    A seventh site, the example Caddyfile, must agree with the *host*
+    side of the compose publish target instead: Caddy runs on the host,
+    in front of the container, so it must proxy to the port the host
+    exposes, not the container-internal port.
     """
 
     def test_compose_pins_the_container_port(self, service):
@@ -182,6 +188,34 @@ class TestContainerPortAgreesEverywhere:
                 f"Dockerfile EXPOSEs {exposed}"
             )
             assert f"http://127.0.0.1:{host}/" in run_text
+
+    def test_caddyfile_targets_the_host_port_not_the_container_port(self, service):
+        # The compose publish string is
+        # "127.0.0.1:${PDF_MCP_HOST_PORT:-8802}:8000": host side first,
+        # container side last. Caddy runs on the host, so it must proxy
+        # to the host side's default, not the container-internal port
+        # that follows it.
+        host_field = service["ports"][0].split(":", 1)[1].rsplit(":", 1)[0]
+        match = re.match(r"^\$\{PDF_MCP_HOST_PORT:-(\d+)\}$", host_field)
+        assert match, (
+            f"compose host publish field {host_field!r} is not the "
+            "expected ${PDF_MCP_HOST_PORT:-<default>} shape; update this "
+            "test if the compose interpolation syntax changed"
+        )
+        host_default = match.group(1)
+
+        caddyfile_text = CADDYFILE.read_text()
+        proxied = re.search(r"reverse_proxy 127\.0\.0\.1:(\d+)", caddyfile_text)
+        assert proxied, "Caddyfile.example has no reverse_proxy target to check"
+        assert proxied.group(1) == host_default, (
+            f"Caddyfile.example proxies to port {proxied.group(1)} but the "
+            f"compose stack publishes the service on the host at "
+            f"127.0.0.1:{host_default}. Caddy runs on the host, so it can "
+            f"only reach the host-published port, not the "
+            f"container-internal port ({service['ports'][0].rsplit(':', 1)[1]}); "
+            "pointing it there means nothing listens and every request "
+            "gets a 502"
+        )
 
 
 class TestPullFirstImageContract:

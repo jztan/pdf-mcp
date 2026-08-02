@@ -74,6 +74,9 @@ PDF_MCP_ALLOW_ANY_PATH=1          # start with no [paths] allow list
 The `PDF_MCP_HTTP_*` and `PDF_MCP_ALLOW_ANY_PATH` variables affect
 `pdf-mcp-http` only; the stdio entry point ignores them.
 
+For what the auth token protects, the trust boundary it creates, and how to
+rotate it, see [remote-access.md](remote-access.md).
+
 ### Docker deployment notes
 
 The Compose stack maps `PDF_MCP_HOST_PORT` (default `8802`) on the host to a

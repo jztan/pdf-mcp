@@ -1,12 +1,16 @@
 # Example Caddyfile for exposing pdf-mcp's HTTP transport.
 # Caddy terminates TLS (automatic certificates) and proxies to the loopback
-# port pdf-mcp-http binds. pdf-mcp itself never listens on a public address.
+# port the Docker Compose stack publishes on the host (docker-compose.yml's
+# `ports:` entry, default 8802, overridable via PDF_MCP_HOST_PORT). That is
+# not the container-internal port (8000): Caddy runs on the host, so it can
+# only reach the port the container publishes there. If you change
+# PDF_MCP_HOST_PORT, update this target to match.
 
 pdf.example.com {
 	# Caddy provisions and renews the certificate automatically.
 	# tls you@example.com
 
-	reverse_proxy 127.0.0.1:8000 {
+	reverse_proxy 127.0.0.1:8802 {
 		# The MCP HTTP transport streams responses; do not buffer them.
 		flush_interval -1
 	}

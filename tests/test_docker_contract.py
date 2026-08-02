@@ -292,3 +292,5 @@ class TestSmokeGate:
         assert "tools/list" in run_text
         assert "pdf_search" in run_text
         assert "401" in run_text
+        assert "initialize" in run_text
+        assert "mcp-session-id" in run_text.lower()

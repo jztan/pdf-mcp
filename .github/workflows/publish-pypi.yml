@@ -214,17 +214,39 @@ jobs:
       # 3. The MCP endpoint answers an authenticated call, and rejects an
       #    unauthenticated one. Asserts ONE known tool is present rather
       #    than a tool count, so adding a tool cannot break a release.
+      #    FastMCP's streamable HTTP is stateful, so a bare tools/list is
+      #    rejected before dispatch: the session has to be established via
+      #    initialize + notifications/initialized first.
       - name: MCP endpoint answers and auth holds
         run: |
-          body='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-          out="$(curl -sS -X POST http://127.0.0.1:8802/mcp \
-            -H "Authorization: Bearer ${SMOKE_TOKEN}" \
-            -H 'Content-Type: application/json' \
-            -H 'Accept: application/json, text/event-stream' \
-            -d "$body")"
+          MCP=http://127.0.0.1:8802/mcp
+          AUTH="Authorization: Bearer ${SMOKE_TOKEN}"
+          ACCEPT='Accept: application/json, text/event-stream'
+          CT='Content-Type: application/json'
+
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "protocolVersion":"2025-06-18",
+            "capabilities":{},
+            "clientInfo":{"name":"smoke","version":"1"}}}'
+          sid="$(curl -sS -D - -o /dev/null -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -d "$init" \
+            | tr -d '\r' | awk -F': ' '/^[Mm]cp-[Ss]ession-[Ii]d:/ {print $2}')"
+          [ -n "$sid" ] \
+            || { echo "::error::no mcp-session-id from initialize"; \
+                 docker logs smoke; exit 1; }
+
+          curl -sS -o /dev/null -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -H "mcp-session-id: $sid" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+
+          out="$(curl -sS -X POST "$MCP" \
+            -H "$AUTH" -H "$ACCEPT" -H "$CT" -H "mcp-session-id: $sid" \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
           echo "$out" | grep -q 'pdf_search' \
             || { echo "::error::pdf_search missing from tools/list"; \
                  echo "$out"; docker logs smoke; exit 1; }
+
+          body='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
           code="$(curl -s -o /dev/null -w '%{http_code}' -X POST \
             http://127.0.0.1:8802/mcp \
             -H 'Content-Type: application/json' \
@@ -238,6 +260,10 @@ jobs:
       - name: Container logs on failure
         if: failure()
         run: docker logs smoke || true
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f smoke || true
 
   publish:
     needs: test-before-publish

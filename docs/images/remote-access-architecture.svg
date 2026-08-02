@@ -1,6 +1,6 @@
 <svg width="100%" viewBox="0 0 780 430" role="img" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
   <title>Request path and trust boundary for pdf-mcp over HTTP</title>
-  <desc>An MCP client sends an HTTPS request carrying a shared bearer token. A reverse proxy on the host terminates TLS and forwards over loopback to the published host port 8802, which the container maps to pdf-mcp-http on port 8000. A second person using the same token enters through that same proxy and lands in the same tenant, not a second one. A request with no valid token travels toward pdf-mcp-http and is stopped with 401 before it enters the container; the proxy only terminates TLS and forwards, it does not check the token. Inside the container, one tenant boundary encloses the SQLite cache, the warmed corpus, and the paths allow list, all shared by every caller of that process.</desc>
+  <desc>An MCP client sends an HTTPS request carrying a shared bearer token. A reverse proxy on the host terminates TLS and forwards over loopback to the published host port 8802, which the container maps to pdf-mcp-http on port 8000. A second person using the same token enters through that same proxy and lands in the same tenant, not a second one. A request with no valid token takes that same route, through the proxy and into the container, and is rejected with 401 by pdf-mcp-http itself; the proxy only terminates TLS and forwards, it does not check the token. Inside the container, one tenant boundary encloses the SQLite cache, the warmed corpus, and the paths allow list, all shared by every caller of that process.</desc>
 
   <rect x="0" y="0" width="780" height="430" fill="#fbfbfa"/>
 
@@ -26,7 +26,7 @@
   <text x="95" y="333" text-anchor="middle" font-size="11" fill="#a4404b">rejected 401</text>
 
   <!-- TLS proxy -->
-  <rect x="228" y="70" width="140" height="66" rx="8" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
+  <rect x="228" y="70" width="140" height="90" rx="8" fill="#ffffff" stroke="#57606a" stroke-width="1.5"/>
   <text x="298" y="97" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">TLS proxy</text>
   <text x="298" y="117" text-anchor="middle" font-size="11" fill="#57606a">terminates HTTPS</text>
 
@@ -34,16 +34,16 @@
   <rect x="460" y="44" width="300" height="286" rx="10" fill="#ffffff" stroke="#1f2328" stroke-width="2"/>
   <text x="480" y="68" font-size="12" font-weight="600" fill="#1f2328">container: ONE tenant</text>
 
-  <rect x="482" y="84" width="256" height="56" rx="8" fill="#f2f4f6" stroke="#57606a" stroke-width="1.5"/>
+  <rect x="482" y="84" width="256" height="76" rx="8" fill="#f2f4f6" stroke="#57606a" stroke-width="1.5"/>
   <text x="610" y="106" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">pdf-mcp-http</text>
   <text x="610" y="125" text-anchor="middle" font-size="11" fill="#57606a">binds :8000, one shared token</text>
 
-  <rect x="482" y="160" width="256" height="150" rx="8" fill="#f2f4f6" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text x="610" y="184" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">shared by every caller</text>
-  <text x="500" y="212" font-size="12" fill="#1f2328">SQLite cache</text>
-  <text x="500" y="238" font-size="12" fill="#1f2328">warmed corpus</text>
-  <text x="500" y="264" font-size="12" fill="#1f2328">[paths] allow list</text>
-  <text x="500" y="292" font-size="11" fill="#57606a">no per-user partitioning</text>
+  <rect x="482" y="178" width="256" height="140" rx="8" fill="#f2f4f6" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="610" y="200" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2328">shared by every caller</text>
+  <text x="500" y="228" font-size="12" fill="#1f2328">SQLite cache</text>
+  <text x="500" y="252" font-size="12" fill="#1f2328">warmed corpus</text>
+  <text x="500" y="276" font-size="12" fill="#1f2328">[paths] allow list</text>
+  <text x="500" y="302" font-size="11" fill="#57606a">no per-user partitioning</text>
 
   <!-- client to proxy -->
   <line x1="174" y1="103" x2="222" y2="103" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -56,10 +56,11 @@
   <text x="414" y="80" text-anchor="middle" font-size="9" fill="#57606a">127.0.0.1:8802</text>
   <text x="414" y="93" text-anchor="middle" font-size="9" fill="#57606a">loopback</text>
 
-  <!-- rejected request: travels toward pdf-mcp-http, stops before the container, never enters the proxy -->
-  <path d="M 174 320 C 260 320, 300 220, 358 200 C 405 180, 435 160, 447 150" fill="none" stroke="#a4404b" stroke-width="1.5"/>
-  <line x1="447" y1="138" x2="447" y2="162" stroke="#a4404b" stroke-width="3"/>
-  <text x="452" y="178" text-anchor="end" font-size="10" font-weight="600" fill="#a4404b">401</text>
+  <!-- rejected request: takes the same route through the proxy and into the
+       container, and is stopped by pdf-mcp-http itself, which returns the 401 -->
+  <path d="M 174 320 C 226 320, 252 304, 257 256 C 261 216, 253 182, 258 164 C 263 145, 276 138, 294 138 L 512 138" fill="none" stroke="#a4404b" stroke-width="1.5"/>
+  <line x1="512" y1="121" x2="512" y2="155" stroke="#a4404b" stroke-width="3"/>
+  <text x="522" y="143" font-size="11" font-weight="600" fill="#a4404b">401</text>
 
   <!-- captions -->
   <text x="20" y="386" font-size="12" fill="#1f2328">The token decides whether a caller gets in. The [paths] allow list decides what they can reach.</text>

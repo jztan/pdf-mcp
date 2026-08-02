@@ -6,7 +6,7 @@
 
 ## What it is
 
-`pdf-mcp-http` runs the same tools as the stdio entry point, served over HTTP at `/mcp` by default. Every request to that endpoint carries an `Authorization: Bearer` header, and the token in it is compared against the one value in `PDF_MCP_AUTH_TOKEN`. Anything else is rejected. One route is deliberately outside auth: `GET /health`, which returns `status` and `version` and nothing else, so an uptime probe can confirm liveness without holding a credential. There are no sessions, no per-user identity, and no scopes; the verifier holds a single `client_id` of `pdf-mcp` and an empty scope list.
+`pdf-mcp-http` runs the same tools as the stdio entry point, served over HTTP at `/mcp` by default. Every request to that endpoint carries an `Authorization: Bearer` header, and the token in it is compared against the one value in `PDF_MCP_AUTH_TOKEN`. Anything else is rejected. One route is deliberately outside auth: `GET /health`, which returns `status` and `version` and nothing else, so an uptime probe can confirm liveness without holding a credential. It is written for a probe on the same box; publishing it through a proxy is a choice, and the Configuration section below covers what that choice costs. There are no sessions, no per-user identity, and no scopes; the verifier holds a single `client_id` of `pdf-mcp` and an empty scope list.
 
 ## When to use it, and when not
 
@@ -16,11 +16,12 @@ Do not use it to serve a team from one endpoint. The reason is structural, not a
 
 ## Threat model versus stdio
 
-Three differences matter when moving from stdio to HTTP.
+Four differences matter when moving from stdio to HTTP.
 
 1. The boundary becomes a bearer token in a header, only as strong as the client config file that holds it. Stdio inherits the operating system's user boundary instead: if you can spawn the process, you were already that user.
-2. The process is long-lived, so a warmed corpus and its cache outlive any single session. Both transports write the same SQLite cache, but `PDFCache.__init__` calls `clear_expired()`, so stdio sweeps the TTL every time a conversation spawns it, while an HTTP process sweeps at startup and may then run for weeks without another.
-3. The `[paths]` allow list becomes the only thing standing between a caller and the filesystem. That is why its absence is a startup failure rather than a warning.
+2. The process is long-lived, so a warmed corpus and its cache outlive any single session. Both transports write the same SQLite cache, but `PDFCache._init_db` ends by calling `clear_expired()`, so stdio sweeps the TTL every time a conversation spawns it, while an HTTP process sweeps at startup and may then run for weeks without another.
+3. The `[paths]` allow list becomes the only thing standing between a caller and the local filesystem. That is why its absence is a startup failure rather than a warning. It bounds local reads and nothing else; outbound fetching is a separate decision, below.
+4. The token also buys outbound HTTPS fetching, not just local reads. A tool's `path` argument goes through `_resolve_path`, which treats an `https://` value as a download: the server fetches the URL and caches the bytes. That branch is governed by `[urls]`, not `[paths]`, and `[urls]` is empty by default, which means unrestricted. SSRF hardening still applies, so the fetch cannot reach loopback, RFC 1918, link-local, or IMDS addresses, and only `https://` is accepted. What is left is ordinary public-internet egress originating from your server, and disk filling with whatever the caller fetched. Set `[urls].allow` if either matters to you. For the full URL-fetching surface, see [`tool-reference.md`](tool-reference.md#url-fetching-ssrf).
 
 For the in-scope and out-of-scope lists that govern security reports, see [`SECURITY.md`](../SECURITY.md).
 
@@ -35,6 +36,15 @@ Real isolation comes from separate processes with separate cache volumes, exactl
 ## Configuration
 
 Generate the token with `openssl rand -hex 32`. `deploy/bootstrap.sh` does this, writes it into `.env`, and sets that file to mode 600, readable by its owner and root and nobody else. That `chmod` runs only when the script creates the file, and an existing `.env` is left untouched, so after hand-editing the file to rotate the token, re-check the mode: some editors rewrite a file with fresh default permissions. The Compose stack publishes to loopback only, mapping `127.0.0.1:${PDF_MCP_HOST_PORT:-8802}` onto the container's internal port 8000, so nothing is reachable off the box until you put a TLS proxy in front of it. TLS belongs to that proxy, not to the app. See `deploy/Caddyfile.example` for a starting point.
+
+Decide on `[urls]` while you are writing the config. It is the second half of what the token grants (see point 4 of the threat model above) and, unlike `[paths]`, no startup guard asks you about it: left empty it permits fetching from any public HTTPS host. `deploy/config.toml.example` ships a commented `[urls]` block next to the `[paths]` one.
+
+Decide on `/health` too. `deploy/Caddyfile.example` proxies the whole host to the backend, so following it publishes the one credential-free route, and with it the exact running version, to anyone who asks. That is the precondition for matching a published CVE against your deployment. [`SECURITY.md`](../SECURITY.md) accepts version disclosure on `/health` as in bounds, so this is a deliberate default rather than an oversight, but it is being chosen for you. If you would rather it stayed internal, block the path at the proxy and probe over loopback instead. In Caddy that is a path matcher placed above `reverse_proxy`:
+
+```caddyfile
+@health path /health
+respond @health 404
+```
 
 For the environment-variable table, the volume layout, and the Docker mechanics, see [`configuration.md`](configuration.md).
 
@@ -64,7 +74,13 @@ The token then lives in that client's config file in plaintext and inherits exac
 2. Rewrite `PDF_MCP_AUTH_TOKEN` in `.env`.
 3. Restart the stack: `docker compose up -d --force-recreate`.
 4. Update every client that held the old token.
-5. Verify the rotation took, by sending the *old* token and expecting a rejection:
+5. Verify the rotation took. Two checks, and you need both. First, confirm the service actually came back, using the credential-free probe:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8802/health
+```
+
+Then send the *old* token and expect a rejection:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' \
@@ -74,7 +90,13 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 Step 3 uses `--force-recreate` on purpose. A plain `up -d` usually recreates the container when a value in `.env` changes, but that depends on how your Compose version hashes the service config, and the failure is silent: the container keeps running with the old token loaded while you believe it is dead.
 
-Step 5 proves it did not. Expect `401`. Any other status, including `200`, means the old credential still validates and the rotation did not take effect, so go back to step 3. Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802 default.
+Step 5 proves it did not. A healthy rotation reads `200` from `/health` and `401` from the old token. Read the two results together, because they fail in different directions:
+
+- `200` then `401`: done.
+- `200` then anything else, `200` included: the old credential still validates, so the restart did not pick up the new value. Go back to step 3.
+- `000` from either call: that is what `%{http_code}` prints when the connection was refused, so nothing is listening and the service did not come back at all. Repeating step 3 will not help. Run `docker compose logs pdf-mcp` and read the last lines. The usual cause is an `.env` edit that left `PDF_MCP_AUTH_TOKEN` empty, which trips the fail-closed startup guard and exits before the port is bound.
+
+Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802 default.
 
 Revocation stops future requests and does nothing about past ones. It does not invalidate anything already read, and the cache retains whatever was extracted while the old token was valid. Treat a leak as disclosure of every PDF reachable under `[paths]`.
 

@@ -3160,6 +3160,58 @@ def pdf_cache_stats() -> dict[str, Any]:
 # Tool: server_info - Setup-time server introspection
 # ============================================================================
 
+_GLOB_METACHARACTERS = ("*", "?", "[")
+
+
+def _document_roots(patterns: tuple[str, ...]) -> list[str]:
+    """
+    Reduce [paths] allow globs to directories a caller can pass through.
+
+    A glob is not an argument: `pdf_corpus_overview("/data/pdfs/**")`
+    resolves nothing, so reporting the raw patterns alone would leave the
+    caller to parse them. For each pattern, keep the longest leading run of
+    segments that contains no glob metacharacter, and resolve that to a
+    directory:
+
+    - it is a directory (`/data/pdfs/**` -> `/data/pdfs`, and
+      `~/Documents/*.pdf` -> `~/Documents`, since the globbed segment ends
+      the literal run): report it;
+    - it is an existing FILE (an exact-file allow rule): report its parent,
+      so the caller still learns where to look;
+    - it does not exist: drop it.
+
+    The parent fallback is deliberately limited to the file case. Applying it
+    to a missing path would turn `/data/pdfs/gone/**` into `/data/pdfs`,
+    advertising a root wider than the rule that produced it. Under-reporting
+    is safe here (the caller can still pass any path it already knows, and
+    check_path remains the authority); over-reporting points an agent at
+    files the allow list will refuse.
+
+    Dropping stale entries makes the result a floor rather than a mirror of
+    the config, which is why server_info reports allow_patterns alongside it.
+    """
+    roots: set[str] = set()
+    for pattern in patterns:
+        expanded = Path(pattern).expanduser()
+        literal_parts: list[str] = []
+        for part in expanded.parts:
+            if any(meta in part for meta in _GLOB_METACHARACTERS):
+                break
+            literal_parts.append(part)
+        if not literal_parts:
+            continue
+        candidate = Path(*literal_parts)
+        try:
+            if candidate.is_dir():
+                roots.add(str(candidate.resolve()))
+            elif candidate.is_file() and candidate.parent.is_dir():
+                roots.add(str(candidate.parent.resolve()))
+        except OSError:
+            # Unreadable or malformed path: treat as absent, same as a stale
+            # entry. Introspection must never raise.
+            continue
+    return sorted(roots)
+
 
 @mcp.tool(
     description=(
@@ -3168,10 +3220,15 @@ def pdf_cache_stats() -> dict[str, Any]:
         "when about to use semantic search, OCR, or column-aware "
         "extraction — if the feature isn't available, downstream calls "
         "will either fall back silently (column-aware → positional sort) "
-        "or fail (semantic mode → error). Returns version, per-feature "
-        "availability with descriptions, search mode list, and active "
-        "config values. Cheap to call (no I/O beyond reading process "
-        "state). Results are stable for the server's lifetime."
+        "or fail (semantic mode → error). Also reports `documents`: the "
+        "roots this server can open, which is how to find what is "
+        "available when connected over HTTP and given no path to start "
+        "from — pass a root straight to pdf_corpus_overview. Returns "
+        "version, per-feature availability with descriptions, search mode "
+        "list, document roots, and active config values. Cheap to call "
+        "(no I/O beyond reading process state and stat-ing the configured "
+        "roots). Results are stable for the server's lifetime, except that "
+        "a root appears once its directory exists on disk."
     )
 )
 def server_info() -> dict[str, Any]:
@@ -3194,6 +3251,17 @@ def server_info() -> dict[str, Any]:
                 modes_available} — multi-document tool limits; corpus
                 mode availability mirrors single-doc search.
           }
+        - documents: {access_mode, roots, allow_patterns, deny_patterns}
+            — which PDFs this server is willing to open.
+            access_mode is "allowlist" when [paths] allow is configured,
+            else "unrestricted". roots holds existing directories ready to
+            pass straight to pdf_corpus_overview / pdf_corpus_warm; it is
+            derived from allow_patterns and is empty under "unrestricted",
+            which means "any path the server process can read", NOT "no
+            documents available". allow_patterns / deny_patterns are the
+            configured globs verbatim. Paths resolve on the server, so over
+            the HTTP transport these are the server's files, not the
+            caller's.
         - config: {max_workers, max_response_bytes, cache_ttl_hours,
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
@@ -3204,9 +3272,16 @@ def server_info() -> dict[str, Any]:
     # rather than re-deriving the logic. A large page count and gate=0 keep
     # those two from binding, leaving only the cpu/cap/env clamp.
     max_workers = resolve_workers(10**6, gate=0, cap=_MAX_PARALLEL_WORKERS)
+    allow_patterns = pdf_config.path_allow_patterns
     return {
         "version": __version__,
         "features": _SERVER_FEATURES,
+        "documents": {
+            "access_mode": ("allowlist" if allow_patterns else "unrestricted"),
+            "roots": _document_roots(allow_patterns),
+            "allow_patterns": list(allow_patterns),
+            "deny_patterns": list(pdf_config.path_deny_patterns),
+        },
         "config": {
             "max_workers": max_workers,
             "max_response_bytes": pdf_config.max_response_bytes,
@@ -3985,6 +4060,13 @@ def main_http() -> None:
     Binds 127.0.0.1 by default; TLS and public exposure belong to a reverse
     proxy in front of this process, not to the app. Set a ``[paths]`` allow
     list in the config or the tools can read any path the process can.
+
+    That allow list is also the document surface. Paths resolve here, not on
+    the caller's machine, so a connected client reads files already under an
+    allowed root or ``https://`` URLs this server fetches; MCP gives it no
+    way to send one. Operators put documents under an allowed root out of
+    band, and ``server_info`` reports those roots under ``documents.roots``
+    so a caller can find them. See docs/remote-access.md.
 
     Env: PDF_MCP_AUTH_TOKEN (required), PDF_MCP_ALLOW_ANY_PATH (unset),
     PDF_MCP_HTTP_HOST (127.0.0.1), PDF_MCP_HTTP_PORT (8000),

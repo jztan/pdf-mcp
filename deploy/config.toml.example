@@ -5,15 +5,22 @@
 # REQUIRED for remote deployments. PDFConfig.check_path only enforces the
 # allow list when it is non-empty: leave this out and every pdf-mcp tool can
 # read any file the server process can reach (/etc, other users' data, the
-# cache DB itself). Scope it to the upload directory for this instance.
+# cache DB itself). Scope it to this instance's document directory.
+#
+# That directory is also how documents reach the server. Paths resolve here,
+# not on the caller's machine, so a connected agent reads what is already
+# present or an https:// URL the server fetches; it cannot send you a file.
+# You put documents in this directory yourself (cp, rsync, a scheduled job).
+# server_info reports it under `documents.roots` so a caller can find it.
+# See docs/remote-access.md, "Getting documents to the server".
 #
 # pdf-mcp over HTTP is single-tenant: one process per user, one allow list.
 # Do not point this at a shared multi-user directory.
-allow = ["/srv/pdf-mcp/uploads/**"]
+allow = ["/srv/pdf-mcp/documents/**"]
 
 # Optional: subtrees under an allowed path that stay off limits. deny wins
 # when both match.
-# deny = ["/srv/pdf-mcp/uploads/private/**"]
+# deny = ["/srv/pdf-mcp/documents/private/**"]
 
 # [urls]
 # Remote fetching is separate from local paths. Uncomment to restrict which

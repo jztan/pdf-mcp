@@ -90,6 +90,35 @@ class PDFConfig:
         return isinstance(allow, list) and len(allow) > 0
 
     @property
+    def path_allow_patterns(self) -> tuple[str, ...]:
+        """
+        Configured [paths] allow globs, verbatim and unexpanded.
+
+        Reported by server_info so a caller can see which corpus the
+        server is willing to open. Returned as-is (no ~ expansion, no
+        glob resolution): check_path is the authority on what these
+        mean, and a presentation layer that reinterpreted them could
+        drift from it.
+        """
+        allow = self._data.get("paths", {}).get("allow", [])
+        if not isinstance(allow, list):
+            return ()
+        return tuple(str(p) for p in allow)
+
+    @property
+    def path_deny_patterns(self) -> tuple[str, ...]:
+        """
+        Configured [paths] deny globs, verbatim and unexpanded.
+
+        Deny applies unconditionally, including when there is no allow
+        list, so this is meaningful in both access modes.
+        """
+        deny = self._data.get("paths", {}).get("deny", [])
+        if not isinstance(deny, list):
+            return ()
+        return tuple(str(p) for p in deny)
+
+    @property
     def max_response_bytes(self) -> int:
         """
         Maximum UTF-8 byte size of the **text content** returned by

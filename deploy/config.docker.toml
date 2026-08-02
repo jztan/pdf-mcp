@@ -8,6 +8,12 @@
 #
 # The glob must be "/data/pdfs/**", not "/data/pdfs": check_path fnmatches
 # the resolved FILE path, so a bare directory string matches nothing.
+#
+# /data/pdfs is also where documents come in: it is the host's ./documents
+# folder, mounted read-only. Anything the server can open either was placed
+# there on the host, or is an https:// URL it fetches. A connected agent
+# cannot deliver a file. server_info reports this directory under
+# `documents.roots` so a caller can find it without being told.
 
 [paths]
 allow = ["/data/pdfs/**"]

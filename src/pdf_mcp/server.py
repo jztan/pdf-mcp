@@ -3970,5 +3970,65 @@ def main() -> None:
     mcp.run(transport="stdio")
 
 
+def main_http() -> None:
+    """
+    Run the MCP server over HTTP transport (remote access).
+
+    Single-tenant by contract: run one instance per user, each with its own
+    cache volume and filesystem. The SQLite cache and any warmed corpus are
+    shared by every caller of a single process - there is no per-user
+    partitioning, session scoping, or tenant key. Isolation comes from
+    running separate processes, exactly as the STDIO path gets it from
+    process-per-conversation.
+
+    Fails closed: without ``PDF_MCP_AUTH_TOKEN`` the server does not start.
+    Binds 127.0.0.1 by default; TLS and public exposure belong to a reverse
+    proxy in front of this process, not to the app. Set a ``[paths]`` allow
+    list in the config or the tools can read any path the process can.
+
+    Env: PDF_MCP_AUTH_TOKEN (required), PDF_MCP_ALLOW_ANY_PATH (unset),
+    PDF_MCP_HTTP_HOST (127.0.0.1), PDF_MCP_HTTP_PORT (8000),
+    PDF_MCP_HTTP_PATH (/mcp).
+    """
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+    token = os.environ.get("PDF_MCP_AUTH_TOKEN", "").strip()
+    if not token:
+        raise SystemExit(
+            "PDF_MCP_AUTH_TOKEN is not set. The HTTP transport refuses to "
+            "start unauthenticated - set it to a long random secret and "
+            "pass it as 'Authorization: Bearer <token>'."
+        )
+
+    mcp.auth = StaticTokenVerifier(
+        tokens={token: {"client_id": "pdf-mcp", "scopes": []}}
+    )
+
+    allow_any = os.environ.get("PDF_MCP_ALLOW_ANY_PATH", "").strip() == "1"
+    if not allow_any and not pdf_config.has_path_allowlist:
+        raise SystemExit(
+            "No [paths] allow list is configured "
+            f"({pdf_config.config_path}). The HTTP transport refuses to "
+            "start unrestricted: with no allow list, every tool can read "
+            "any path this process can reach. Add a [paths] allow list to "
+            "that file, or set PDF_MCP_ALLOW_ANY_PATH=1 to override this "
+            "deliberately."
+        )
+
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def _health(request: Request) -> JSONResponse:
+        """Unauthenticated liveness probe. Exposes the version and nothing else."""
+        return JSONResponse({"status": "ok", "version": __version__})
+
+    host = os.environ.get("PDF_MCP_HTTP_HOST", "127.0.0.1")
+    port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
+    path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")
+
+    mcp.run(transport="http", host=host, port=port, path=path)
+
+
 if __name__ == "__main__":
     main()

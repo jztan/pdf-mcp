@@ -1,0 +1,24 @@
+# Example pdf-mcp config for a remote (HTTP transport) deployment.
+# Copy to ~/.config/pdf-mcp/config.toml on the server.
+
+[paths]
+# REQUIRED for remote deployments. PDFConfig.check_path only enforces the
+# allow list when it is non-empty: leave this out and every pdf-mcp tool can
+# read any file the server process can reach (/etc, other users' data, the
+# cache DB itself). Scope it to the upload directory for this instance.
+#
+# pdf-mcp over HTTP is single-tenant: one process per user, one allow list.
+# Do not point this at a shared multi-user directory.
+allow = ["/srv/pdf-mcp/uploads/**"]
+
+# Optional: subtrees under an allowed path that stay off limits. deny wins
+# when both match.
+# deny = ["/srv/pdf-mcp/uploads/private/**"]
+
+# [urls]
+# Remote fetching is separate from local paths. Uncomment to restrict which
+# hosts pdf-mcp may download PDFs from.
+# allow = ["arxiv.org"]
+
+# [embedding]
+# model = "BAAI/bge-small-en-v1.5"

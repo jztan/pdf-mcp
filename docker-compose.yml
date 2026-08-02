@@ -1,0 +1,42 @@
+# No `version:` key: obsolete in Compose v5, which warns if present.
+services:
+  pdf-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pdf-mcp:latest
+    container_name: pdf-mcp
+    env_file:
+      - .env
+    environment:
+      # Pin the container-internal port. It is namespaced, nothing competes
+      # with it, and the publish target plus both healthchecks assume 8000.
+      # This overrides any PDF_MCP_HTTP_PORT set in .env, which would
+      # otherwise move the app off the port the publish targets and produce
+      # a running container that answers nothing.
+      PDF_MCP_HTTP_PORT: "8000"
+    # Published to loopback ONLY. TLS and public exposure belong to a
+    # reverse proxy on the host (see deploy/Caddyfile.example). The
+    # container itself binds 0.0.0.0:8000, which is correct: a container
+    # has its own network namespace.
+    ports:
+      - "127.0.0.1:${PDF_MCP_HOST_PORT:-8802}:8000"
+    volumes:
+      # Drop PDFs here on the host. Read-only: the container never writes.
+      - ./documents:/data/pdfs:ro
+      # Named volume, NOT a bind mount. On a Linux host a bind mount is
+      # owned by the host uid, and PDFCache.__init__ calls os.chmod on the
+      # cache dir, which requires ownership (chmod 777 does not help). A
+      # named volume inherits uid-1000 ownership from the image.
+      - pdf-mcp-cache:/data/cache
+      - ./deploy/config.docker.toml:/home/appuser/.config/pdf-mcp/config.toml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  pdf-mcp-cache:

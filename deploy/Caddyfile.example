@@ -1,0 +1,18 @@
+# Example Caddyfile for exposing pdf-mcp's HTTP transport.
+# Caddy terminates TLS (automatic certificates) and proxies to the loopback
+# port pdf-mcp-http binds. pdf-mcp itself never listens on a public address.
+
+pdf.example.com {
+	# Caddy provisions and renews the certificate automatically.
+	# tls you@example.com
+
+	reverse_proxy 127.0.0.1:8000 {
+		# The MCP HTTP transport streams responses; do not buffer them.
+		flush_interval -1
+	}
+
+	encode gzip
+	log {
+		output file /var/log/caddy/pdf-mcp.log
+	}
+}

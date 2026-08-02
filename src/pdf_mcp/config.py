@@ -71,6 +71,23 @@ class PDFConfig:
         return model
 
     @property
+    def config_path(self) -> Path:
+        """Path this config was loaded from (may not exist)."""
+        return self._config_path
+
+    @property
+    def has_path_allowlist(self) -> bool:
+        """
+        True when [paths] allow is a non-empty list.
+
+        An absent or empty allow list means check_path enforces nothing,
+        which is the correct default for a local install and unsafe for a
+        remote one. main_http() refuses to start when this is False.
+        """
+        allow = self._data.get("paths", {}).get("allow", [])
+        return isinstance(allow, list) and len(allow) > 0
+
+    @property
     def max_response_bytes(self) -> int:
         """
         Maximum UTF-8 byte size of the **text content** returned by

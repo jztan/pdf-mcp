@@ -1,0 +1,32 @@
+# The repo is ~1.5 GB on disk. Without these the whole thing is uploaded
+# to the Docker daemon on every build.
+.git/
+.venv/
+benchmark_data/
+dist/
+scripts/demo-recorder/node_modules/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.coverage
+coverage.xml
+
+# Private working documents, must never enter an image layer.
+.superpowers/
+docs/superpowers/
+docs_internal/
+
+# Not needed at build time, and .env holds a live auth token.
+.env
+.env.*
+!.env.example
+documents/
+pages/
+demo/
+tests/
+.github/
+*.md
+!README.md

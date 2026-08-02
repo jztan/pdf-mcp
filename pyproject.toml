@@ -97,6 +97,10 @@ dev = [
     # Column-aware extraction tests need the real detector; reference the
     # extra so its version floor lives in one place (see `multicolumn`).
     "pdf-mcp[multicolumn]",
+    # Parses docker-compose.yml in tests/test_docker_contract.py. Present
+    # transitively today via pre-commit; declared so the contract test
+    # cannot silently skip when that changes.
+    "pyyaml>=6.0",
 ]
 
 # No-op compatibility alias: fastembed is a core dependency now.
@@ -126,6 +130,7 @@ Changelog = "https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md"
 
 [project.scripts]
 pdf-mcp = "pdf_mcp.server:main"
+pdf-mcp-http = "pdf_mcp.server:main_http"
 
 [build-system]
 requires = ["hatchling"]

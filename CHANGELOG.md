@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- HTTP transport entry point `pdf-mcp-http` for remote access, reachable by
+  the Anthropic API MCP connector. Single-tenant by contract: one instance
+  per user, with the cache and corpus shared across every caller of a
+  process. Fails closed without `PDF_MCP_AUTH_TOKEN` and binds `127.0.0.1`
+  by default, with TLS left to a reverse proxy.
+- Unauthenticated `GET /health` endpoint on the HTTP transport, returning
+  the server version for container and load-balancer probes. Not registered
+  on the stdio path.
+- Docker deployment: multi-stage image with tesseract, column-aware
+  extraction, and the embedding model baked in; a Compose stack publishing
+  to host loopback only; `deploy/bootstrap.sh` for first-run token
+  generation; `deploy.sh`, a one-command deploy wrapper delegating to
+  Compose; and `deploy/config.docker.toml`, `deploy/Caddyfile.example`
+  as deployment templates.
+
+### Security
+- The HTTP transport refuses to start without a `[paths]` allow list. An
+  absent config file makes `PDFConfig` permissive, which is correct for a
+  local stdio install and unsafe for a remote endpoint. Override
+  deliberately with `PDF_MCP_ALLOW_ANY_PATH=1`. Stdio behaviour is
+  unchanged.
+
 ## [2.0.0] - 2026-08-01
 ### Added
 - Corpus tools: `pdf_corpus_warm`, `pdf_corpus_overview`, and

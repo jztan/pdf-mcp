@@ -4521,3 +4521,217 @@ class TestCorpusCoverageScoring:
 
         monkeypatch.setattr(server, "cache", Boom())
         assert server._doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
+
+
+class TestHTTPTransportEntryPoint:
+    """`main_http()` is the remote entry point; it must fail closed."""
+
+    def test_missing_token_refuses_to_start(self, monkeypatch):
+        monkeypatch.delenv("PDF_MCP_AUTH_TOKEN", raising=False)
+        called = []
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: called.append(kw))
+
+        with pytest.raises(SystemExit) as exc:
+            server.main_http()
+
+        assert "PDF_MCP_AUTH_TOKEN" in str(exc.value)
+        assert called == []
+
+    def test_empty_token_refuses_to_start(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "   ")
+        called = []
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: called.append(kw))
+
+        with pytest.raises(SystemExit):
+            server.main_http()
+
+        assert called == []
+
+    def test_token_is_wired_into_a_static_verifier(self, monkeypatch):
+        from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+        monkeypatch.setattr(server.mcp, "auth", None, raising=False)
+
+        server.main_http()
+
+        assert isinstance(server.mcp.auth, StaticTokenVerifier)
+        assert "s3cret" in server.mcp.auth.tokens
+        assert server.mcp.auth.tokens["s3cret"]["client_id"] == "pdf-mcp"
+
+    def test_mcp_route_rejects_missing_or_wrong_token(self, tmp_path, monkeypatch):
+        """Proves enforcement over HTTP, not just that `mcp.auth` got set.
+
+        `test_token_is_wired_into_a_static_verifier` only proves the
+        assignment happened; it would still pass if a future fastmcp
+        stopped consuming `self.auth`. This hits the real ASGI app so a
+        broken wiring shows up as a non-401 response instead.
+        """
+        from starlette.testclient import TestClient
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        server.main_http()
+
+        app = server.mcp.http_app(path="/mcp")
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        }
+        headers = {"Accept": "application/json, text/event-stream"}
+        with TestClient(app) as client:
+            no_auth = client.post("/mcp", json=body, headers=headers)
+            wrong_auth = client.post(
+                "/mcp",
+                json=body,
+                headers={**headers, "Authorization": "Bearer wrong-token"},
+            )
+
+        assert no_auth.status_code == 401
+        assert wrong_auth.status_code == 401
+
+    def test_defaults_bind_loopback(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
+        for var in ("PDF_MCP_HTTP_HOST", "PDF_MCP_HTTP_PORT", "PDF_MCP_HTTP_PATH"):
+            monkeypatch.delenv(var, raising=False)
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured == {
+            "transport": "http",
+            "host": "127.0.0.1",
+            "port": 8000,
+            "path": "/mcp",
+        }
+
+    def test_host_port_path_come_from_env(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
+        monkeypatch.setenv("PDF_MCP_HTTP_HOST", "0.0.0.0")
+        monkeypatch.setenv("PDF_MCP_HTTP_PORT", "9123")
+        monkeypatch.setenv("PDF_MCP_HTTP_PATH", "/pdf")
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured["host"] == "0.0.0.0"
+        assert captured["port"] == 9123
+        assert captured["path"] == "/pdf"
+
+    def test_stdio_main_is_untouched(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+        server.main()
+        assert captured == {"transport": "stdio"}
+
+    def _allowlisted_config(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        from pdf_mcp.config import PDFConfig
+
+        return PDFConfig(config_path=cfg)
+
+    def test_missing_allowlist_refuses_to_start(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        called = []
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: called.append(kw))
+
+        with pytest.raises(SystemExit) as exc:
+            server.main_http()
+
+        assert "allow" in str(exc.value).lower()
+        assert str(tmp_path / "none.toml") in str(exc.value)
+        assert called == []
+
+    def test_allowlist_present_starts(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured["transport"] == "http"
+
+    def test_override_env_allows_start_without_allowlist(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main_http()
+
+        assert captured["transport"] == "http"
+
+    def test_token_check_runs_before_allowlist_check(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.delenv("PDF_MCP_AUTH_TOKEN", raising=False)
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        with pytest.raises(SystemExit) as exc:
+            server.main_http()
+
+        assert "PDF_MCP_AUTH_TOKEN" in str(exc.value)
+
+    def test_stdio_main_ignores_the_allowlist_guard(self, tmp_path, monkeypatch):
+        from pdf_mcp.config import PDFConfig
+
+        monkeypatch.setattr(
+            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+        )
+        captured = {}
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
+
+        server.main()
+
+        assert captured == {"transport": "stdio"}
+
+    def test_health_route_is_registered_and_unauthenticated(
+        self, tmp_path, monkeypatch
+    ):
+        from starlette.testclient import TestClient
+
+        monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
+        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+
+        server.main_http()
+
+        app = server.mcp.http_app(path="/mcp")
+        with TestClient(app) as client:
+            response = client.get("/health")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert body["version"] == server.__version__

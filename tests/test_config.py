@@ -202,3 +202,28 @@ def test_injection_phrases_rejects_non_string_element(tmp_path):
     cfg = PDFConfig(config_path=cfg_path)
     with pytest.raises(ValueError, match="must be a list of strings"):
         cfg.injection_phrases
+
+
+class TestPathAllowlistIntrospection:
+    def test_missing_file_has_no_allowlist(self, tmp_path):
+        config = PDFConfig(config_path=tmp_path / "nonexistent.toml")
+        assert config.has_path_allowlist is False
+
+    def test_empty_allow_list_does_not_count(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text("[paths]\nallow = []\n")
+        assert PDFConfig(config_path=cfg).has_path_allowlist is False
+
+    def test_deny_only_does_not_count(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\ndeny = ["/secret/**"]\n')
+        assert PDFConfig(config_path=cfg).has_path_allowlist is False
+
+    def test_non_empty_allow_list_counts(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        assert PDFConfig(config_path=cfg).has_path_allowlist is True
+
+    def test_config_path_is_exposed(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        assert PDFConfig(config_path=cfg).config_path == cfg

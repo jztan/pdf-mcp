@@ -16,7 +16,8 @@ pdf-mcp Docker deployment
 Usage: ./deploy.sh [OPTION]
 
 Options:
-    (none)          Full deployment: env setup, build, start, health test
+    (none)          Full deployment: env setup, pull, start, health test
+    --build         Build the image locally instead of pulling
     --build-only    Build the image and exit
     --no-test       Deploy but skip the health test
     --cleanup       Stop and remove the stack (docker compose down)
@@ -25,8 +26,9 @@ Options:
     --help          Show this help
 
 The stack publishes to 127.0.0.1 on the port set by PDF_MCP_HOST_PORT
-in .env (default 8802). Lifecycle equivalents, usable directly:
-    docker compose up -d --build | down | logs -f | ps
+in .env (default 8802), running the image tag set by PDF_MCP_IMAGE_TAG
+(default latest). Lifecycle equivalents, usable directly:
+    docker compose pull && docker compose up -d | down | logs -f | ps
 EOF
 }
 
@@ -61,26 +63,34 @@ health_test() {
     exit 1
 }
 
-case "${1:-}" in
-    --help)
-        usage; exit 0 ;;
-    --logs)
-        check_docker; docker compose logs --tail 50; exit 0 ;;
-    --status)
-        check_docker; docker compose ps; exit 0 ;;
-    --cleanup)
-        check_docker; docker compose down
-        echo "==> Stack removed. Cache volume and .env are preserved."
-        exit 0 ;;
-    --build-only)
-        check_docker; docker compose build
-        echo "==> Image built."
-        exit 0 ;;
-    ""|--no-test)
-        ;;
-    *)
-        echo "!!! Unknown option: $1" >&2; usage >&2; exit 1 ;;
-esac
+do_build=0
+run_test=1
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            usage; exit 0 ;;
+        --logs)
+            check_docker; docker compose logs --tail 50; exit 0 ;;
+        --status)
+            check_docker; docker compose ps; exit 0 ;;
+        --cleanup)
+            check_docker; docker compose down
+            echo "==> Stack removed. Cache volume and .env are preserved."
+            exit 0 ;;
+        --build-only)
+            check_docker; docker compose build
+            echo "==> Image built."
+            exit 0 ;;
+        --build)
+            do_build=1 ;;
+        --no-test)
+            run_test=0 ;;
+        *)
+            echo "!!! Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+    shift
+done
 
 check_docker
 
@@ -88,9 +98,17 @@ if [ ! -f .env ]; then
     ./deploy/bootstrap.sh
 fi
 
-docker compose up -d --build
+if [ "$do_build" -eq 1 ]; then
+    docker compose up -d --build
+else
+    # `docker compose pull` pulls buildable services by default; it skips
+    # them only with --ignore-buildable. So keeping the build block in
+    # docker-compose.yml does not defeat the pull.
+    docker compose pull
+    docker compose up -d
+fi
 
-if [ "${1:-}" != "--no-test" ]; then
+if [ "$run_test" -eq 1 ]; then
     health_test
 fi
 

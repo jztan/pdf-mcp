@@ -197,3 +197,26 @@ class TestPullFirstImageContract:
 
     def test_env_example_documents_the_image_tag(self):
         assert "PDF_MCP_IMAGE_TAG" in (REPO / ".env.example").read_text()
+
+
+class TestDeployScriptPullsByDefault:
+    """deploy.sh must pull unless --build is passed, and must still
+    restate no port, no mount, and no image name."""
+
+    @property
+    def script(self):
+        return (REPO / "deploy.sh").read_text()
+
+    def test_build_flag_is_documented(self):
+        assert "--build" in self.script
+
+    def test_default_path_pulls(self):
+        assert "docker compose pull" in self.script
+
+    def test_no_raw_docker_run(self):
+        # Every lifecycle verb delegates to compose; a raw `docker run`
+        # would have to restate the port and mounts.
+        assert "docker run" not in self.script
+
+    def test_image_name_is_not_restated(self):
+        assert "ghcr.io" not in self.script

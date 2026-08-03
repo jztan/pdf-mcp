@@ -1371,6 +1371,23 @@ class TestPageTextSource:
         cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr", ocr_lang="eng")
         assert cache.get_pages_ocr_lang(sample_pdf, [0, 1]) == {0: "eng"}
 
+    def test_bulk_extract_clears_ocr_lang(self, cache, sample_pdf):
+        """Re-extracting a page drops the OCR language along with the 'ocr'
+        source: the row is no longer OCR output, so no language describes it.
+
+        The bulk writer relies on INSERT OR REPLACE defaults for this rather
+        than clearing the column explicitly, so pin it.
+        """
+        cache.save_page_text(
+            sample_pdf, 0, "khmer ocr text", source="ocr", ocr_lang="khm"
+        )
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: "khm"}
+
+        cache.save_pages_text(sample_pdf, {0: "native text layer"})
+
+        assert cache.get_page_source(sample_pdf, 0) == "extracted"
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: None}
+
     def test_get_page_text_return_type_unchanged(self, cache, sample_pdf):
         """get_page_text still returns str, not a tuple."""
         cache.save_page_text(sample_pdf, 0, "hello", source="ocr")

@@ -35,14 +35,15 @@ Page-level NDCG is floored by label sparsity on this corpus: one labeled page pe
 warmed 24-doc / 3,545-page corpus.** Warm (text + embeddings) takes 173s.
 
 Compared with the arXiv-style `corpus_search` dataset (hybrid doc-NDCG
-0.913, page-NDCG 0.674, doc-hit@3 1.000 over 100 docs / 2,238 pages), this
-corpus is harder on every axis, which is the point of adding it: three
+0.838, page-NDCG 0.541, doc-hit@3 0.899 over 100 docs / 2,238 pages, the
+89-query run), this corpus is harder on every axis, which is the point of
+adding it: three
 fiscal years of the same filer are near-duplicates of one another, so
 "which document" is a real question rather than a given.
 
 **Fusion holds on a new distribution.** Hybrid beats both single-mode arms
-overall (doc-NDCG 0.776 vs keyword 0.595 and semantic 0.759; page-NDCG
-0.298 vs 0.195 and 0.172). The margin over semantic is thin at doc level
+overall (doc-NDCG 0.776 vs keyword 0.633 and semantic 0.759; page-NDCG
+0.298 vs 0.209 and 0.172). The margin over semantic is thin at doc level
 (+0.017) but wide at page level (+0.126), and hybrid is the only arm that
 survives both query styles: keyword scores exactly 0.000 on the concept
 class, where a paraphrase shares no vocabulary with the target text.

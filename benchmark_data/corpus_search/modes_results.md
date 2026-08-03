@@ -37,19 +37,58 @@ The common agent flow: a question asked of a single known document, not the whol
 | auto | 0.757 | 64 |
 
 Sanity cross-check: keyword overall should land near the stage-2 arm-B result (~0.547). Interpretation is appended by hand after the run.
-## Interpretation (final run, with the CJK multi-token excerpt fix)
+## Interpretation (89-query run; cite the tables above, not this prose)
 
-Hybrid is the strongest mode by a wide margin: overall NDCG@10 0.674,
-needle 0.996, and doc-hit@3 = 1.000 (a gold document in the top three
-for every one of the 64 queries). The arms complement as designed:
-semantic is near-immune to lexical traps (0.785 vs keyword's 0.476) and
-keyword anchors literal precision (needle 0.968). Every mode runs in
-under half a second per query on a warmed 100-doc corpus.
+Hybrid is the strongest mode on every cut: page NDCG@10 0.541,
+doc-NDCG@10 0.838, doc-hit@3 0.899, needle 0.996. The arms complement as
+designed: semantic is near-immune to lexical traps (0.785 vs keyword's
+0.596) and keyword anchors literal precision (needle 0.968). Every mode
+runs in under half a second per query on a warmed 100-doc corpus.
 
-Sanity cross-check CLOSED: keyword overall (0.547) and needle (0.968)
-now reproduce the stage-2 spike's arm-B reference exactly. The earlier
-pre-fix run of this benchmark (keyword 0.486, CJK subset 0.2) caught the
-shipped multi-term CJK excerpt bug; with the per-token contiguity fix
-merged, the CJK keyword needles recover fully and hybrid rises from
-0.661 to 0.674. History: the pre-fix record and the bug narrative are in
-this file's git history (commit 07cbff2).
+`described` is the binding constraint, not corpus size. Every mode scores
+0.24 or below on it (hybrid 0.241, keyword 0.134) and it is a quarter of
+the query set, so it sets the page-level overall almost by itself.
+Doc-level holds at 0.838, which is the label-sparsity gap the doc-level
+table exists to separate: the right document is being found, the graded
+page inside it often is not.
+
+### Do not cite 0.674 / doc-hit@3 1.000
+
+Those are the superseded 64-query run (commit `040df8b`), not comparable
+to the tables above. The 25 `described` queries were added afterwards and
+are the weakest class for every mode, so the overall mean drops on query
+mix alone. Two keyword-arm fixes also landed in between: the OR-joined
+retry (`2820061`) and term-coverage ranking (`086c84e`).
+
+Held to the same 64 non-`described` queries, this run against that one:
+
+| mode | overall NDCG@10 | doc-hit@3 |
+|---|---|---|
+| keyword | 0.547 -> 0.586 (+0.039) | 0.859 -> 0.953 |
+| semantic | 0.579 -> 0.579 (unchanged) | 0.875 -> 0.875 |
+| auto | 0.674 -> 0.658 (-0.016) | 1.000 -> 0.969 |
+
+Two cells carry all of it. Keyword `trap` 0.476 -> 0.596 with doc-hit@3
+0.72 -> 0.96: term-coverage ranking working as designed, traps were being
+won on file order. Hybrid `spread` 0.392 -> 0.350 with doc-hit@3
+1.000 -> 0.92: two of 25 spread queries lost their gold document from the
+top three, and that is the whole of the lost 1.000. Semantic is identical
+across every class, the expected control for two keyword-arm changes.
+
+Working hypothesis, unverified: rarity-weighted coverage concentrates
+rank mass on fewer documents, which is right for `trap` and wrong for
+`spread`, where gold is deliberately scattered. Two queries is inside
+noise, so this is recorded rather than acted on; revisit if a second
+corpus reproduces it.
+
+### Sanity cross-check
+
+The stage-2 arm-B reference (~0.547) was matched by the 64-query run's
+keyword overall. It is not comparable to the 89-query keyword overall
+(0.459), which includes `described` at 0.134. On the 64-query subset this
+run's keyword overall is 0.586, above the reference, as expected after
+the two keyword fixes.
+
+History: the pre-fix CJK record and that bug's narrative are in this
+file's git history (commit `07cbff2`); the 64-query numbers are in
+`040df8b`.

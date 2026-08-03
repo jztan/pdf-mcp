@@ -67,12 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `source` provenance, FTS5 fallback), reports `doc_match_counts` from
   both arms in hybrid mode, and its description directs callers to re-ask
   every matched document on questions spanning several documents.
-  Benchmarked: hybrid NDCG@10 0.674 / doc-hit@3 1.000 on a 100-doc
-  corpus; doc-NDCG@10 0.776 / doc-hit@3 0.818 on 24 financial filings
-  (details in `benchmark_data/`). Warming extracts documents concurrently
-  on larger corpora (process pool, explicit spawn on every OS; up to 8
-  workers for text, 4 with embeddings), measured ~3.9x faster text warm
-  at the 100-document cap; small corpora stay sequential.
+  Benchmarked: hybrid doc-NDCG@10 0.838 / doc-hit@3 0.899 / page
+  NDCG@10 0.541 on a 100-doc corpus (21 labeled documents among 79
+  distractors, 89 graded queries); doc-NDCG@10 0.776 / doc-hit@3 0.818
+  on 24 financial filings (details in `benchmark_data/`). Warming
+  extracts documents concurrently on larger corpora (process pool,
+  explicit spawn on every OS; up to 8 workers for text, 4 with
+  embeddings), measured ~3.9x faster text warm at the 100-document cap;
+  small corpora stay sequential.
 
 ### Changed
 - Demo page v2.0.0 (versioned in step with the server from this release): interactive corpus flow (warm progress, overview triage cards, cross-document keyword search with the server's RRF fusion and term-coverage tie-break, per-document page grids, corpus-sized token scoreboard), bundled 6-PDF public-domain sample corpus (US federal publications), multi-file drop, and updated copy for semantic-by-default.

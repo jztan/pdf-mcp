@@ -833,7 +833,11 @@ def pdf_read_pages(
         ocr: If True, run Tesseract OCR on pages that don't have native text.
             Requires Tesseract to be installed. Results are stored in the cache
             with source='ocr' and become searchable via pdf_search.
-        ocr_lang: Tesseract language code (default 'eng'). Only used when ocr=True.
+        ocr_lang: Tesseract language code (default 'eng'), e.g. 'khm' or
+            'khm+eng'. Only used when ocr=True. Cached OCR text is keyed on
+            this value, so requesting a different language re-runs OCR
+            instead of returning the earlier language's text. Pages that
+            have a real text layer are never OCR'd, whatever is requested.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
             Each page dict carries an opaque `render_id` (basename only,
             never an absolute path). To obtain the rendered PNG bytes,

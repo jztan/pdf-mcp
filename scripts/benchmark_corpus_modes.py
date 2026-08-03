@@ -532,11 +532,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     dataset_note = manifest.get("results_note", "graded ground truth, stage-2")
+    # Dataset-neutral by design: any expected-value cross-check belongs in the
+    # dataset's manifest `sanity_note`, not here. A hardcoded reference
+    # silently outlives the run it came from and then contradicts the
+    # hand-written Interpretation spliced in below it (2026-08-03: the default
+    # still asserted ~0.547 for keyword overall after the query set grew to 89
+    # and moved it to 0.459).
     sanity_note = manifest.get(
         "sanity_note",
-        "Sanity cross-check: keyword overall should land near the stage-2"
-        " arm-B result (~0.547). Interpretation is appended by hand after"
-        " the run.",
+        "Interpretation is appended by hand after the run.",
     )
     class_header = " | ".join(classes)
     lines = [

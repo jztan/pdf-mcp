@@ -36,7 +36,8 @@ The common agent flow: a question asked of a single known document, not the whol
 | semantic | 0.684 | 64 |
 | auto | 0.757 | 64 |
 
-Sanity cross-check: keyword overall should land near the stage-2 arm-B result (~0.547). Interpretation is appended by hand after the run.
+Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.
+
 ## Interpretation (89-query run; cite the tables above, not this prose)
 
 Hybrid is the strongest mode on every cut: page NDCG@10 0.541,

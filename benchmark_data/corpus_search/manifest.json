@@ -1,5 +1,6 @@
 {
   "description": "Corpus for the cross-doc keyword ranking spike. PDFs are local-only (not committed); missing files are skipped loudly at run time.",
+  "sanity_note": "Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.",
   "docs": [
     {
       "id": "0705.4297",

@@ -2440,6 +2440,60 @@ class TestPdfReadPagesOcr:
                 call_count_second = mock_worker.call_count
         assert call_count_second == call_count_first  # not called again
 
+    def test_ocr_different_lang_is_cache_miss(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        """A different ocr_lang re-runs OCR instead of serving the first
+        language's text (issue #25)."""
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        mock_worker = MagicMock(
+            side_effect=lambda args: (args[1], f"text-in-{args[2]}")
+        )
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+                pdf_read_pages(sample_pdf, "1", ocr=True)  # eng
+                result = pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
+
+        langs = [call.args[0][2] for call in mock_worker.call_args_list]
+        assert langs == ["eng", "khm"]
+        assert result["pages"][0]["text"] == "text-in-khm"
+
+    def test_ocr_same_lang_still_cache_hit(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        """Re-requesting the language already cached does not re-run OCR."""
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        mock_worker = MagicMock(side_effect=lambda args: (args[1], "khmer text"))
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+                pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
+                first = mock_worker.call_count
+                pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
+                second = mock_worker.call_count
+        assert second == first
+
+    def test_ocr_lang_not_leaked_into_source_field(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        """The user-facing 'source' label stays the coarse 'ocr', with the
+        language kept out of it."""
+        from unittest.mock import patch
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.server._ocr_page_worker",
+                side_effect=lambda args: (args[1], "khmer text"),
+            ):
+                fresh = pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
+                cached = pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
+        assert fresh["pages"][0]["source"] == "ocr"
+        assert cached["pages"][0]["source"] == "ocr"
+
     def test_ocr_empty_result_not_cached_and_retriggered(
         self, sample_pdf, isolated_server, monkeypatch
     ):

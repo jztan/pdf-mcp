@@ -449,10 +449,24 @@ _SERVER_FEATURES = _detect_features()
 
 
 def _is_ocr_cache_hit(
-    cached_src: str | None, cached_texts: dict[int, str], page_num: int
+    cached_src: str | None,
+    cached_texts: dict[int, str],
+    page_num: int,
+    requested_lang: str | None = None,
+    cached_lang: str | None = None,
 ) -> bool:
     """True when page_num already has usable cached text in OCR mode: non-empty
-    cached OCR text, or non-empty cached 'extracted' text.
+    cached OCR text in the requested language, or non-empty cached 'extracted'
+    text.
+
+    Cached OCR text only counts when it came from the language being asked for.
+    Otherwise the first language ever used would win permanently and later
+    requests would silently get the wrong script back (issue #25). Rows written
+    before the language was recorded have cached_lang None, so they miss once
+    and are re-OCR'd.
+
+    The 'extracted' branch stays language-independent: a page with a real text
+    layer should not be OCR'd at all, whatever language is requested.
 
     Single source of truth for the OCR hit/miss decision, used by both the
     parallel dispatch (to skip already-cached pages) and the per-page assembly
@@ -460,6 +474,8 @@ def _is_ocr_cache_hit(
     """
     return (
         cached_src == "ocr"
+        and cached_lang is not None
+        and cached_lang == requested_lang
         and page_num in cached_texts
         and len(cached_texts.get(page_num, "")) > 0
     ) or (
@@ -899,6 +915,7 @@ def pdf_read_pages(
         # Try to get cached text for all pages at once
         cached_texts = cache.get_pages_text(local_path, page_nums)
         cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
+        cached_langs = cache.get_pages_ocr_lang(local_path, page_nums) if ocr else {}
 
         # --- Parallel dispatch: OCR cache-misses ---
         # A page is an OCR-miss unless _is_ocr_cache_hit() is true. The same
@@ -908,7 +925,13 @@ def pdf_read_pages(
             ocr_miss_pages = [
                 n
                 for n in page_nums
-                if not _is_ocr_cache_hit(cached_sources.get(n), cached_texts, n)
+                if not _is_ocr_cache_hit(
+                    cached_sources.get(n),
+                    cached_texts,
+                    n,
+                    ocr_lang,
+                    cached_langs.get(n),
+                )
             ]
             if ocr_miss_pages:
                 try:
@@ -997,7 +1020,13 @@ def pdf_read_pages(
 
             if ocr:
                 cached_src = cached_sources.get(page_num)
-                if _is_ocr_cache_hit(cached_src, cached_texts, page_num):
+                if _is_ocr_cache_hit(
+                    cached_src,
+                    cached_texts,
+                    page_num,
+                    ocr_lang,
+                    cached_langs.get(page_num),
+                ):
                     # Cache hit — use existing text
                     text = cached_texts.get(page_num, "")
                     if page_num in cached_texts:
@@ -1020,7 +1049,13 @@ def pdf_read_pages(
                         page_source = "ocr_failed"
                     else:
                         text = res
-                        cache.save_page_text(local_path, page_num, text, source="ocr")
+                        cache.save_page_text(
+                            local_path,
+                            page_num,
+                            text,
+                            source="ocr",
+                            ocr_lang=ocr_lang,
+                        )
                         page_source = "ocr"
             elif page_num in cached_texts:
                 text = cached_texts[page_num]

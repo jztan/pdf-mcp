@@ -48,12 +48,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests on both architectures, which changes release timing: a release no
   longer reaches PyPI until the image build and smoke tests finish.
 
+### Fixed
+- `ocr_lang` is now part of the page-text cache key, so OCR'ing a page in one
+  language no longer pins that page to that language forever. Previously the
+  first language used won permanently: a later `pdf_read_pages(..., ocr=True,
+  ocr_lang="khm")` returned the earlier language's text instantly, labeled
+  `source: "ocr"`, with no error to distinguish it from a bad OCR result.
+  The language is recorded in a new `page_text.ocr_lang` column rather than
+  folded into `source`, which stays the coarse `extracted`/`ocr` label that
+  `pdf_search` and `pdf_read_pages` return. Pages OCR'd before this release
+  have no recorded language and are re-OCR'd once on the next OCR request.
+  Pages with a real text layer are still never OCR'd, whatever language is
+  asked for ([#25](https://github.com/jztan/pdf-mcp/issues/25)).
+
 ### Security
 - The HTTP transport refuses to start without a `[paths]` allow list. An
   absent config file makes `PDFConfig` permissive, which is correct for a
   local stdio install and unsafe for a remote endpoint. Override
   deliberately with `PDF_MCP_ALLOW_ANY_PATH=1`. Stdio behaviour is
   unchanged.
+
+### Contributors
+- @deepdmk — reported the `ocr_lang` cache-key bug with a full diagnosis and
+  reproduction ([#25](https://github.com/jztan/pdf-mcp/issues/25))
 
 ## [2.0.0] - 2026-08-01
 ### Added

@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asked for ([#25](https://github.com/jztan/pdf-mcp/issues/25)).
 
 ### Security
+- Bumped `cryptography` 49.0.0 → 50.0.0 to clear CVE-2026-69247. Transitive
+  (via `fastmcp` → `authlib`, `joserfc`, and `mcp[crypto]` → `pyjwt`), so the
+  bump is lockfile-only with no change to `pyproject.toml` constraints.
 - The HTTP transport refuses to start without a `[paths]` allow list. An
   absent config file makes `PDFConfig` permissive, which is correct for a
   local stdio install and unsafe for a remote endpoint. Override

@@ -330,6 +330,7 @@ class PDFCache:
                     text_length INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     has_hidden_text INTEGER DEFAULT NULL,
+                    ocr_lang TEXT DEFAULT NULL,
                     PRIMARY KEY (file_path, page_num)
                 );
 
@@ -447,6 +448,15 @@ class PDFCache:
             if cols and "source" not in cols:
                 conn.execute(
                     "ALTER TABLE page_text ADD COLUMN source TEXT DEFAULT 'extracted'"
+                )
+
+            # page_text: record which language produced an OCR row, so a
+            # request for a different language is a miss rather than a silent
+            # hit on the first language ever used (issue #25). Rows written
+            # before this column exist with NULL: unknown language, re-OCR once.
+            if cols and "ocr_lang" not in cols:
+                conn.execute(
+                    "ALTER TABLE page_text ADD COLUMN ocr_lang TEXT DEFAULT NULL"
                 )
 
             # pdf_metadata: add text_coverage_json column to existing tables
@@ -798,18 +808,29 @@ class PDFCache:
             return result
 
     def save_page_text(
-        self, path: str, page_num: int, text: str, source: str = "extracted"
+        self,
+        path: str,
+        page_num: int,
+        text: str,
+        source: str = "extracted",
+        ocr_lang: str | None = None,
     ) -> None:
-        """Save page text to cache with optional source label ('extracted' or 'ocr')."""
+        """Save page text to cache with optional source label ('extracted' or
+        'ocr') and, for OCR text, the Tesseract language that produced it.
+
+        `source` stays coarse because it is a user-facing response field; the
+        language lives in its own column so it can key the cache without
+        leaking into responses.
+        """
         mtime, _ = self._get_file_info(path)
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
-                    text, text_length, source)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (path, page_num, mtime, text, len(text), source),
+                    text, text_length, source, ocr_lang)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (path, page_num, mtime, text, len(text), source, ocr_lang),
             )
 
             if self.fts_available:
@@ -864,6 +885,27 @@ class PDFCache:
         return {
             int(page_num): (str(source) if source else "extracted")
             for page_num, source, mtime in rows
+            if self._is_cache_valid(path, mtime)
+        }
+
+    def get_pages_ocr_lang(
+        self, path: str, page_nums: list[int]
+    ) -> dict[int, str | None]:
+        """Bulk lookup of the OCR language per page. Missing/stale pages are
+        omitted; a cached page with no recorded language maps to None (either
+        it was extracted, or it predates the ocr_lang column)."""
+        if not page_nums:
+            return {}
+        placeholders = ",".join("?" * len(page_nums))
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT page_num, ocr_lang, file_mtime FROM page_text"
+                f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                (path, *page_nums),
+            ).fetchall()
+        return {
+            int(page_num): (str(lang) if lang else None)
+            for page_num, lang, mtime in rows
             if self._is_cache_valid(path, mtime)
         }
 

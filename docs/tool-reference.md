@@ -192,7 +192,7 @@ Reading order depends on page layout:
   - `"1,5,10"` — pages 1, 5, and 10
   - `"1-5,10,15-20"` — ranges and individual pages combined
 - `ocr` (bool, optional, default `false`) — Run Tesseract OCR on pages with no extractable text. Requires system Tesseract. Capped at 20 pages per call. Results are cached with `source='ocr'` and become searchable via `pdf_search`.
-- `ocr_lang` (string, optional, default `"eng"`) — Tesseract language code. Only used when `ocr=true`.
+- `ocr_lang` (string, optional, default `"eng"`) — Tesseract language code (e.g. `"khm"`, or `"khm+eng"` for two). Only used when `ocr=true`. The cached OCR text is keyed on this value, so asking for a different language re-runs OCR rather than returning the earlier language's text. Cache entries written by a version that did not record the language are re-OCR'd once. A page with a real text layer is never OCR'd, whatever language is requested, so `ocr_lang` has no effect there.
 - `render_dpi` (int, optional) — When set, render each page as a PNG at this DPI (clamped to 72–400). The render path is attached to each page dict as `render_path`. Shares the cache with `pdf_render_pages`.
 - `detect_charts` (bool, optional, default `false`) — When `true`, each page dict gains `charts_detected`: the number of extractable-chart panels found by a cheap signature check (median ~10ms/page). `null` means detection **timed out and the page is unknown** — not chart-free; fall back to caption heuristics or just call `pdf_extract_chart` directly. Detection is a signal only; use `pdf_extract_chart` to actually extract data.
 

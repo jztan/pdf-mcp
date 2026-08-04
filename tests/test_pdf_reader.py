@@ -1351,6 +1351,43 @@ class TestPageTextSource:
         assert sources[1] == "ocr"
         assert 2 not in sources  # page 2 not cached
 
+    def test_save_page_text_persists_ocr_lang(self, cache, sample_pdf):
+        """The OCR language is recorded alongside the text (issue #25)."""
+        cache.save_page_text(sample_pdf, 0, "khmer text", source="ocr", ocr_lang="khm")
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: "khm"}
+
+    def test_ocr_lang_none_for_extracted_text(self, cache, sample_pdf):
+        """Text with a real layer carries no language."""
+        cache.save_page_text(sample_pdf, 0, "native text")
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: None}
+
+    def test_ocr_lang_none_for_legacy_ocr_row(self, cache, sample_pdf):
+        """A pre-migration 'ocr' row has an unknown language, not a wrong one."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr")
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: None}
+
+    def test_get_pages_ocr_lang_omits_uncached(self, cache, sample_pdf):
+        """Uncached pages are omitted rather than reported as unknown."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr", ocr_lang="eng")
+        assert cache.get_pages_ocr_lang(sample_pdf, [0, 1]) == {0: "eng"}
+
+    def test_bulk_extract_clears_ocr_lang(self, cache, sample_pdf):
+        """Re-extracting a page drops the OCR language along with the 'ocr'
+        source: the row is no longer OCR output, so no language describes it.
+
+        The bulk writer relies on INSERT OR REPLACE defaults for this rather
+        than clearing the column explicitly, so pin it.
+        """
+        cache.save_page_text(
+            sample_pdf, 0, "khmer ocr text", source="ocr", ocr_lang="khm"
+        )
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: "khm"}
+
+        cache.save_pages_text(sample_pdf, {0: "native text layer"})
+
+        assert cache.get_page_source(sample_pdf, 0) == "extracted"
+        assert cache.get_pages_ocr_lang(sample_pdf, [0]) == {0: None}
+
     def test_get_page_text_return_type_unchanged(self, cache, sample_pdf):
         """get_page_text still returns str, not a tuple."""
         cache.save_page_text(sample_pdf, 0, "hello", source="ocr")
@@ -2860,6 +2897,38 @@ def test_migration_adds_content_trust_columns(tmp_path):
     assert "has_hidden_text" in _cols(cache.db_path, "page_text")
     # Global version table must exist (replaces per-row trust_version).
     assert _cols(cache.db_path, "content_trust_meta") != set()
+
+
+def test_migration_adds_ocr_lang_to_pre_existing_db(tmp_path):
+    """A database whose page_text predates ocr_lang gains the column on open,
+    and its existing OCR rows report an unknown language (issue #25)."""
+    cache = PDFCache(cache_dir=tmp_path)
+    db = cache.db_path
+
+    # Rebuild page_text as it looked before the column existed, carrying one
+    # legacy OCR row.
+    with sqlite3.connect(db) as conn:
+        conn.execute("DROP TABLE page_text")
+        conn.execute(
+            "CREATE TABLE page_text (file_path TEXT NOT NULL,"
+            " page_num INTEGER NOT NULL, file_mtime REAL NOT NULL,"
+            " text TEXT NOT NULL, text_length INTEGER NOT NULL,"
+            " source TEXT DEFAULT 'extracted',"
+            " PRIMARY KEY (file_path, page_num))"
+        )
+        conn.execute(
+            "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
+            " text_length, source) VALUES ('p.pdf', 0, 1.0, 'old ocr', 7, 'ocr')"
+        )
+
+    PDFCache(cache_dir=tmp_path)  # re-open triggers the migration
+
+    assert "ocr_lang" in _cols(db, "page_text")
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            "SELECT text, source, ocr_lang FROM page_text WHERE file_path = 'p.pdf'"
+        ).fetchone()
+    assert row == ("old ocr", "ocr", None)  # text preserved, language unknown
 
 
 def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):

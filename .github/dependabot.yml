@@ -1,0 +1,28 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit SHAs, which is what makes a compromised or
+  # retagged release unable to reach the publish credentials in
+  # publish-pypi.yml. The cost of that pin is that a SHA never moves on its
+  # own, so a patched action would go unnoticed indefinitely: nothing else in
+  # this repo audits .github/. pip-audit (scripts/audit.sh) reads the exported
+  # Python lockfile only and never looks at a workflow file.
+  #
+  # Dependabot closes that gap by proposing the SHA bumps, comment included.
+  # Pin plus this is strictly safer than either alone.
+  #
+  # Python dependencies are deliberately absent: scripts/audit.sh already
+  # gates them on every push, PR, publish, and release preflight, and adding
+  # version-bump PRs on top would be noise rather than coverage.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    groups:
+      # One PR per week for the routine bumps rather than one per action.
+      actions:
+        patterns:
+          - "*"

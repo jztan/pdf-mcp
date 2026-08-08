@@ -21,6 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the package supports 3.10, and such an import fails at collection, so
   it takes the whole suite down instead of one test.
 
+### Security
+
+- `scripts/audit.sh` now queries osv.dev instead of pip-audit's default
+  `pypi` advisory service. The PyPI Advisory Database mirrored two authlib
+  records with only their 1.6.x affected range, omitting the second range
+  (introduced 1.7.0, fixed 1.7.1), so the locked 1.7.0 was affected by both
+  and every audit gate still reported clean. All four callers (CI,
+  dependency review, PyPI publish, release preflight) share the script and
+  pick up the change together.
+- Upgraded transitive `authlib` 1.7.0 to 1.7.2, clearing CVE-2026-44681
+  and CVE-2026-41479 (both fixed in 1.7.1). Reached via `fastmcp`, which
+  constrains it only as `>=1.6.5`.
+- Dependency review now also runs weekly on a schedule, plus on demand via
+  `workflow_dispatch`. Every other audit gate is change-triggered, so a
+  lockfile that stops changing stopped being audited even as new advisories
+  landed against the versions it pins.
+- Dropped the stale `PYSEC-2025-183` ignore from `scripts/audit.sh`. It
+  covered a pyjwt advisory with no fix at the time; the locked 2.13.0 no
+  longer matches any advisory, so the entry only risked suppressing a
+  future finding.
+
 ## [2.1.0] - 2026-08-08
 ### Added
 - HTTP transport entry point `pdf-mcp-http` for remote access, reachable by

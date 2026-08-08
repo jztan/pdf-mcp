@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `tests/test_docs_consistency.py`: five checks pinning the enumerable
+  facts the docs restate about the code. The `tool-reference.md` category
+  index must match both its own tool sections and the tools the server
+  registers; ROADMAP's "Current version" must equal `pyproject.toml`;
+  the hardcoded tool counts in README and ROADMAP must match the
+  registry; and every internal `](file.md#anchor)` link must resolve to
+  a real heading.
+
 ## [2.1.0] - 2026-08-08
 ### Added
 - HTTP transport entry point `pdf-mcp-http` for remote access, reachable by

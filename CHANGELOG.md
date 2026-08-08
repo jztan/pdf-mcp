@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the hardcoded tool counts in README and ROADMAP must match the
   registry; and every internal `](file.md#anchor)` link must resolve to
   a real heading.
+- `tests/test_python_compat.py`: rejects an unguarded import of a
+  stdlib module newer than `requires-python`. `tomllib` is 3.11+ while
+  the package supports 3.10, and such an import fails at collection, so
+  it takes the whole suite down instead of one test.
 
 ## [2.1.0] - 2026-08-08
 ### Added

@@ -4,7 +4,7 @@
 
 - **Current version:** v2.1.0 (released 2026-08-08)
 - **MCP Registry:** Published (v2.1.0)
-- **Test suite:** 1446 tests in `tests/` across unit, integration, and retrieval-quality benchmarks (1442 fast + 4 `slow`); archived spikes under `scripts/archive/` are not counted and no gate runs them. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
+- **Test suite:** 1449 tests in `tests/` across unit, integration, and retrieval-quality benchmarks (1445 fast + 4 `slow`); archived spikes under `scripts/archive/` are not counted and no gate runs them. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`) both released; multi-arch Docker images published at `ghcr.io/jztan/pdf-mcp` (linux/amd64 + linux/arm64), tagged per release
 
@@ -12,9 +12,7 @@
 
 ## Next Release
 
-_Nothing queued._ `CHANGELOG.md` has no `[Unreleased]` section yet, and `release.py` aborts on an empty one, so filling it with real bullets is the first step of the next cut.
-
-The P1 items below are the candidates for v2.2.0. Cut from `develop` via `python scripts/release.py minor` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
+**v2.2.0, unqueued.** `CHANGELOG.md`'s `[Unreleased]` holds the docs-consistency and Python-compat test guards so far. Nothing user-facing has landed for it yet, and the P1 items below are the candidates. Cut from `develop` via `python scripts/release.py minor` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
 
 ---
 

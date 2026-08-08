@@ -12,8 +12,12 @@ Prose drift is out of scope; only mechanically checkable claims belong here.
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
+
+try:  # Python 3.11+
+    import tomllib
+except ImportError:  # 3.10, via the declared tomli backport
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from pdf_mcp.server import mcp
 

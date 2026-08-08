@@ -74,8 +74,9 @@ PDF_MCP_ALLOW_ANY_PATH=1          # start with no [paths] allow list
 The `PDF_MCP_HTTP_*` and `PDF_MCP_ALLOW_ANY_PATH` variables affect
 `pdf-mcp-http` only; the stdio entry point ignores them.
 
-For what the auth token protects, the trust boundary it creates, and how to
-rotate it, see [remote-access.md](remote-access.md).
+For what the auth token protects and the trust boundary it creates, see
+[remote-access.md](remote-access.md). To set the transport up and rotate the
+token, see [HTTP transport setup](#http-transport-setup) below.
 
 ### Docker deployment notes
 
@@ -106,7 +107,7 @@ extraction extra, and the embedding model so there is no cold-start download
 on first use.
 
 `PDF_MCP_IMAGE_TAG` (default `latest`) selects which published tag `docker
-compose` pulls. Set it to an exact version, for example `2.0.0`, to keep a
+compose` pulls. Set it to an exact version, for example `2.1.0`, to keep a
 deployment on a known release; `latest` moves with every release. Published
 tags are the full version, the major.minor line, the major line, and
 `latest`. Only `docker-compose.yml` reads this variable, and the server
@@ -121,6 +122,97 @@ for a remote endpoint. `deploy/config.docker.toml` supplies that allow list
 in the Docker image and is mounted read-only; set `PDF_MCP_ALLOW_ANY_PATH=1`
 to override deliberately. That override widens which existing paths the server
 may read; it does not create a way for a caller to deliver a new file.
+
+## HTTP transport setup
+
+Applies to `pdf-mcp-http` only. For what the token protects and what a leak
+costs you, see [remote-access.md](remote-access.md).
+
+`deploy/bootstrap.sh` generates the token with `openssl rand -hex 32`, writes it
+into `.env`, and sets that file to mode 600. That `chmod` runs only when the
+script creates the file, so after hand-editing `.env` to rotate the token,
+re-check the mode: some editors rewrite a file with fresh default permissions.
+The Compose stack publishes to loopback only, so nothing is reachable off the
+box until you put a TLS proxy in front of it. TLS belongs to that proxy, not to
+the app; `deploy/Caddyfile.example` is a starting point.
+
+Decide on `[urls]` while you are writing the config. It is the second half of
+what the token grants, and unlike `[paths]` no startup guard asks you about it:
+left empty it permits fetching from any public HTTPS host.
+`deploy/config.toml.example` ships a commented `[urls]` block next to the
+`[paths]` one.
+
+Decide on `/health` too. It is the one route outside auth, returning `status`
+and `version` so an uptime probe needs no credential.
+`deploy/Caddyfile.example` proxies the whole host to the backend, so following
+it publishes that route, and with it the exact running version, to anyone who
+asks. That is the precondition for matching a published CVE against your
+deployment. [SECURITY.md](../SECURITY.md) accepts version disclosure on
+`/health` as in bounds, so this is a deliberate default rather than an
+oversight, but it is being chosen for you. To keep it internal, block the path
+at the proxy and probe over loopback instead:
+
+```caddyfile
+@health path /health
+respond @health 404
+```
+
+### Client configuration
+
+A client points at the endpoint URL and sends the token as a bearer header on
+every request. The block below is the Claude-family client config format
+(Claude Desktop, Claude Code); other MCP clients spell the same two things, the
+URL and the header, differently:
+
+```json
+{
+  "mcpServers": {
+    "pdf-mcp": {
+      "type": "http",
+      "url": "https://pdf.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+  }
+}
+```
+
+The token then lives in that client's config file in plaintext and inherits
+exactly that file's protection, no more. Treat it as you would an SSH private
+key.
+
+### Rotating the token
+
+1. Generate a replacement token: `openssl rand -hex 32`.
+2. Rewrite `PDF_MCP_AUTH_TOKEN` in `.env`.
+3. Restart the stack: `docker compose up -d --force-recreate`.
+4. Update every client that held the old token.
+5. Run both checks below, and read them together.
+
+`--force-recreate` is deliberate. A plain `up -d` usually recreates the
+container when a value in `.env` changes, but that depends on how your Compose
+version hashes the service config, and the failure is silent: the container
+keeps running with the old token loaded while you believe it is dead.
+
+```bash
+# 1. did the service come back? (credential-free probe)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8802/health
+
+# 2. is the OLD token rejected?
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer <OLD-token>" \
+  http://127.0.0.1:8802/mcp
+```
+
+| what you see | what it means |
+|---|---|
+| `200` then `401` | Done. |
+| `200` then anything else, `200` included | The old credential still validates, so the restart did not pick up the new value. Go back to step 3. |
+| `000` from either check | Connection refused, so nothing is listening and the service did not come back at all. Repeating step 3 will not help. Run `docker compose logs pdf-mcp` and read the last lines. The usual cause is an `.env` edit that left `PDF_MCP_AUTH_TOKEN` empty, which trips the fail-closed startup guard and exits before the port is bound. |
+
+Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802
+default.
 
 ## Caching
 

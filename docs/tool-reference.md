@@ -5,7 +5,7 @@ Complete documentation for the `pdf-mcp` MCP tools.
 | Category | Tools |
 |----------|-------|
 | [Document Introspection](#document-introspection) | `pdf_info`, `pdf_get_toc` |
-| [Content Reading](#content-reading) | `pdf_read_pages`, `pdf_read_all`, `pdf_render_pages` |
+| [Content Reading](#content-reading) | `pdf_read_pages`, `pdf_read_all`, `pdf_render_pages`, `pdf_extract_chart` |
 | [Search](#search) | `pdf_search` |
 | [Corpus](#corpus) | `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search` |
 | [Cache Management](#cache-management) | `pdf_cache_stats`, `pdf_cache_clear` |

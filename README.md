@@ -346,8 +346,9 @@ roots a server will open. See
 It is single-tenant and fails closed: without an auth token and a `[paths]`
 allow list, the process exits rather than starting an open endpoint. Before
 you deploy it, read **[docs/remote-access.md](docs/remote-access.md)** for the
-trust boundary, the threat model versus stdio, and the token revocation
-runbook.
+trust boundary and the threat model versus stdio, and
+**[docs/configuration.md](docs/configuration.md#http-transport-setup)** for
+setup, client config, and token rotation.
 
 ### Docker
 
@@ -374,6 +375,7 @@ pdf-mcp works out of the box with no configuration. To restrict which paths and 
 - **Access control**: `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
 - **Content-trust phrases**: extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
 - **Environment variables**: cache directory, TTL, and parallel OCR/render worker count
+- **HTTP transport setup**: token generation, TLS, client config, and token rotation for `pdf-mcp-http`
 - **Caching**: SQLite-backed persistence, what's cached, and invalidation
 
 ## Roadmap

@@ -33,7 +33,7 @@ When reporting, please include:
 pdf-mcp supports two deployment shapes, and the threat model below is scoped to both.
 
 1. **Stdio, single user.** The typical install: an MCP stdio server spawned by an MCP client (Claude Desktop, Claude Code, VS Code) on the user's own machine, one process per conversation. Isolation comes from the operating system's user boundary.
-2. **HTTP, single tenant.** One `pdf-mcp-http` process per tenant, with its own cache directory or volume, published to loopback with TLS terminated by a reverse proxy in front of it, and both startup guards armed (an auth token and a `[paths]` allow list are required, or the process refuses to start). See [docs/remote-access.md](docs/remote-access.md) for the trust boundary and the operator runbook.
+2. **HTTP, single tenant.** One `pdf-mcp-http` process per tenant, with its own cache directory or volume, published to loopback with TLS terminated by a reverse proxy in front of it, and both startup guards armed (an auth token and a `[paths]` allow list are required, or the process refuses to start). See [docs/remote-access.md](docs/remote-access.md) for the trust boundary and [docs/configuration.md](docs/configuration.md#http-transport-setup) for the operator runbook.
 
 The following remain **unsupported** configurations: multi-tenant deployments, one token shared among several people, shared-host installs where another local user can read the cache, and binding the HTTP transport directly to a public interface with no proxy in front of it.
 

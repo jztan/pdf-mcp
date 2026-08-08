@@ -9,6 +9,14 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - 'requirements*.txt'
+  # Every other gate is change-triggered, so a lockfile that stops changing
+  # stops being audited. Advisories are published against versions already
+  # shipped: the code does not change, the advisory data does. Re-run weekly
+  # so a newly disclosed vulnerability surfaces without waiting for the next
+  # dependency edit or release.
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read

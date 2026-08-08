@@ -370,6 +370,39 @@ def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
         print("  ✓ Updated __init__.py")
 
 
+def update_roadmap_version(project_root: Path, new_version: str, dry_run: bool) -> None:
+    """Update ROADMAP's Project Status line to the version being released.
+
+    tests/test_docs_consistency.py asserts this line equals pyproject.toml.
+    Without this step the release branch would carry a bumped pyproject and a
+    stale ROADMAP, failing CI on `release/*` and again on the tag workflow
+    that gates the PyPI publish.
+    """
+    roadmap = project_root / "docs" / "ROADMAP.md"
+    content = roadmap.read_text()
+    today = date.today().isoformat()
+    new_content, count = re.subn(
+        r"^(- \*\*Current version:\*\* )v[0-9]+\.[0-9]+\.[0-9]+ \(released [^)]*\)",
+        f"\\1v{new_version} (released {today})",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+    if count == 0:
+        raise RuntimeError(
+            "Could not find ROADMAP.md's '- **Current version:** vX.Y.Z "
+            "(released ...)' line. Fix the line or update this function; "
+            "leaving it stale fails test_docs_consistency in release CI."
+        )
+
+    if dry_run:
+        print(f"  [DRY-RUN] Would update ROADMAP.md version to {new_version}")
+    else:
+        roadmap.write_text(new_content)
+        print("  ✓ Updated ROADMAP.md")
+
+
 def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update CHANGELOG.md: add new version header with today's date."""
     changelog = project_root / "CHANGELOG.md"
@@ -721,6 +754,7 @@ def commit_version_bump(config: ReleaseConfig, new_version: str) -> None:
         "pyproject.toml",
         "server.json",
         "src/pdf_mcp/__init__.py",
+        "docs/ROADMAP.md",
         "CHANGELOG.md",
         "uv.lock",
     ]
@@ -1146,6 +1180,7 @@ Gitflow:
     update_pyproject_toml(config.project_root, new_version, config.dry_run)
     update_server_json(config.project_root, new_version, config.dry_run)
     update_init_py(config.project_root, new_version, config.dry_run)
+    update_roadmap_version(config.project_root, new_version, config.dry_run)
     update_changelog(config.project_root, new_version, config.dry_run)
 
     # Step 5: Commit version bump on release branch

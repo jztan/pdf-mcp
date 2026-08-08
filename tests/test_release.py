@@ -105,3 +105,45 @@ def test_ghcr_pull_token_url_derives_the_repository_from_the_image():
     url = release.ghcr_pull_token_url("ghcr.io/someone/other-image")
     assert "repository:someone/other-image:pull" in url
     assert url.startswith("https://ghcr.io/token?")
+
+
+def test_version_bump_keeps_roadmap_in_sync(tmp_path):
+    """The bump must update ROADMAP alongside pyproject.
+
+    test_docs_consistency asserts the two agree. If the release bumped only
+    pyproject, the release branch would fail CI on `release/*` and again on
+    the tag workflow that gates the PyPI publish.
+    """
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "ROADMAP.md").write_text(
+        "# Roadmap\n\n- **Current version:** v1.0.0 (released 2020-01-01)\n"
+    )
+    (tmp_path / "pyproject.toml").write_text('[project]\nversion = "1.0.0"\n')
+
+    release.update_roadmap_version(tmp_path, "1.1.0", dry_run=False)
+    release.update_pyproject_toml(tmp_path, "1.1.0", dry_run=False)
+
+    roadmap = (tmp_path / "docs" / "ROADMAP.md").read_text()
+    assert "v1.1.0" in roadmap
+    assert "v1.0.0" not in roadmap
+    assert '"1.1.0"' in (tmp_path / "pyproject.toml").read_text()
+
+
+def test_version_bump_stages_the_roadmap():
+    """ROADMAP must be in the staged file list, or the edit above never
+    reaches the release commit."""
+    source = inspect.getsource(release.commit_version_bump)
+    assert '"docs/ROADMAP.md"' in source
+
+
+def test_roadmap_bump_fails_loudly_when_the_status_line_moves(tmp_path):
+    """If someone reformats the Project Status line, the bump must raise
+    rather than silently no-op. A no-op would surface much later, as a red
+    release CI run mid-release."""
+    import pytest
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "ROADMAP.md").write_text("# Roadmap\n\nCurrent: 1.0.0\n")
+
+    with pytest.raises(RuntimeError, match="Current version"):
+        release.update_roadmap_version(tmp_path, "9.9.9", dry_run=False)

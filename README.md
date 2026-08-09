@@ -66,6 +66,7 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 - [Configuration](#configuration)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
+- [Contributors](#contributors)
 - [Security](#security)
 - [License](#license)
 
@@ -385,6 +386,20 @@ See [ROADMAP.md](docs/ROADMAP.md) for planned features and release history.
 ## Contributing
 
 Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** for setup, checks, the coherence eval harness, and quality-loop guidelines.
+
+## Contributors
+
+Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
+
+<!-- contributors:start -->
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk)
+<!-- contributors:end -->
+
+<a href="https://github.com/jztan/pdf-mcp/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=jztan/pdf-mcp" alt="Contributors" />
+</a>
+
+Per-release contributor credits are listed in the [Changelog](./CHANGELOG.md).
 
 ## Security
 

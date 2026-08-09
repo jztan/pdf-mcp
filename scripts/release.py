@@ -403,6 +403,71 @@ def update_roadmap_version(project_root: Path, new_version: str, dry_run: bool) 
         print("  ✓ Updated ROADMAP.md")
 
 
+CONTRIBUTORS_START = "<!-- contributors:start -->"
+CONTRIBUTORS_END = "<!-- contributors:end -->"
+
+
+def collect_changelog_contributors(changelog: str) -> list[str]:
+    """Every handle credited in a `### Contributors` block, oldest credit first.
+
+    The CHANGELOG is newest-release-first, so the blocks are walked in reverse:
+    a contributor keeps the position of their earliest credit and appending a
+    new name never reshuffles the rendered line.
+    """
+    blocks = re.findall(
+        r"^### Contributors\s*$\n(.*?)(?=^#{2,3} |\Z)",
+        changelog,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    handles: list[str] = []
+    for block in reversed(blocks):
+        for handle in re.findall(r"^-\s+@([A-Za-z0-9](?:[A-Za-z0-9-]*))", block, re.M):
+            if handle not in handles:
+                handles.append(handle)
+    return handles
+
+
+def render_contributors_line(handles: list[str]) -> str:
+    return " · ".join(f"[@{h}](https://github.com/{h})" for h in handles)
+
+
+def update_readme_contributors(project_root: Path, dry_run: bool) -> None:
+    """Regenerate the README Contributors list from the CHANGELOG credits.
+
+    The contrib.rocks strip below the list only shows commit authors, so the
+    handle line is what credits reporters and testers. Hand-maintaining it
+    drifts (redmine-mcp-server's equivalent list is missing three merged-PR
+    authors), hence this runs on every release.
+    """
+    readme = project_root / "README.md"
+    content = readme.read_text()
+    line = render_contributors_line(
+        collect_changelog_contributors((project_root / "CHANGELOG.md").read_text())
+    )
+
+    new_content, count = re.subn(
+        rf"{re.escape(CONTRIBUTORS_START)}\n.*?\n{re.escape(CONTRIBUTORS_END)}",
+        f"{CONTRIBUTORS_START}\n{line}\n{CONTRIBUTORS_END}",
+        content,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if count == 0:
+        raise RuntimeError(
+            f"Could not find the {CONTRIBUTORS_START} / {CONTRIBUTORS_END} "
+            "markers in README.md. Restore them or update this function; "
+            "without them the release silently stops crediting contributors."
+        )
+
+    if dry_run:
+        print("  [DRY-RUN] Would sync README.md Contributors list")
+    elif new_content == content:
+        print("  ✓ README.md Contributors list already current")
+    else:
+        readme.write_text(new_content)
+        print("  ✓ Updated README.md Contributors list")
+
+
 def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update CHANGELOG.md: add new version header with today's date."""
     changelog = project_root / "CHANGELOG.md"
@@ -756,6 +821,7 @@ def commit_version_bump(config: ReleaseConfig, new_version: str) -> None:
         "src/pdf_mcp/__init__.py",
         "docs/ROADMAP.md",
         "CHANGELOG.md",
+        "README.md",
         "uv.lock",
     ]
     for f in files:
@@ -1182,6 +1248,7 @@ Gitflow:
     update_init_py(config.project_root, new_version, config.dry_run)
     update_roadmap_version(config.project_root, new_version, config.dry_run)
     update_changelog(config.project_root, new_version, config.dry_run)
+    update_readme_contributors(config.project_root, config.dry_run)
 
     # Step 5: Commit version bump on release branch
     commit_version_bump(config, new_version)

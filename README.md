@@ -401,6 +401,8 @@ MIT. See [LICENSE](LICENSE).
 
 ## Blog posts
 
+**The story behind the releases.** Building pdf-mcp keeps surprising me: benchmarks that go the wrong way, formats that break everything, features I had to remove. I write about that thinking in [The Dispatch](https://blog.jztan.com/newsletter/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp). Come along if that's your kind of thing.
+
 Background, benchmarks, and design notes from building pdf-mcp:
 
 **Getting started**

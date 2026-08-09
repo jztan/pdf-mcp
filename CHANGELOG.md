@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pdf_render_pages` now returns legible scanned pages. A page whose PNG
+  exceeds the transport byte budget is re-encoded as JPEG at the full
+  requested DPI before any resolution is sacrificed, and lossy pages are
+  listed in a new `render_recompressed` field carrying a pointer to the
+  lossless PNG on disk. Photographic scans compress about 10x better as JPEG,
+  so a phone-scanned page that previously came back at the 72 DPI floor
+  (480x720 px, handwriting unreadable) now returns at full resolution for the
+  same transport bytes. JPEG is attempted only where PNG already missed the
+  budget and kept only if it fits, so born-digital text and line art are
+  untouched and stay lossless. Render DPI is additionally capped at a scanned
+  page's own raster resolution, reported as `native_dpi_cap`: rendering a
+  257 DPI scan at 400 DPI upsampled without adding information. See
+  [`docs/tool-reference.md`](docs/tool-reference.md) for the field shapes and
+  the interaction between `render_recompressed` and `render_downsampled`.
 - `tests/test_docs_consistency.py`: five checks pinning the enumerable
   facts the docs restate about the code. The `tool-reference.md` category
   index must match both its own tool sections and the tools the server
@@ -20,6 +34,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stdlib module newer than `requires-python`. `tomllib` is 3.11+ while
   the package supports 3.10, and such an import fails at collection, so
   it takes the whole suite down instead of one test.
+
+### Fixed
+
+- `pdf_render_pages` downsampled pages now say whether the render is actually
+  usable. Each `render_downsampled` entry carries `pixels` (DPI alone is
+  uninterpretable: 72 DPI is 480 px wide on a phone-scan page and 612 px on a
+  letter page), a `likely_illegible_for_fine_detail` flag, `suggested_clips`
+  ready to pass straight back as `clip`, and three suggestions led by the crop
+  advice. Previously the entry taught neither `clip` nor the single-page retry,
+  so an agent whose large scans fit at the 72 DPI floor got a blurry image with
+  no pointer to the sharper options and reasonably concluded the tool had no
+  crop support.
+- `pdf_render_pages` no longer collapses to the 72 DPI floor after a single
+  missed resolution estimate. One fit-by-DPI guess that overshot the per-page
+  budget dropped straight to the floor: on a 5-page call over a phone scan the
+  estimate landed on 187 DPI and missed by 1.3%, returning 480x720 where
+  180 DPI (1200x1800) fit with room to spare. Each attempt now re-anchors on
+  the size the previous render measured, capped at three attempts, and that
+  call returns 183 DPI.
+- `pdf_render_pages(clip=...)` crops go through the same JPEG fallback as
+  whole-page renders. Quality may drop on a crop; resolution never does, and a
+  crop that fits as PNG stays PNG. Without this a high-DPI crop of a
+  photographic page could itself exceed the transport budget and dead-end,
+  which is the remedy `suggested_clips` now recommends.
 
 ### Security
 

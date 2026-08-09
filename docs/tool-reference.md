@@ -331,7 +331,36 @@ Conditional fields:
 - `render_failed_pages` (array of int) — Present when one or more pages could not be rendered.
 - `render_downsampled` (list, optional) — Present when pages were re-rendered at
   a lower DPI to fit the transport byte budget. Each entry: `{page, dpi_used,
-  dpi_requested}`.
+  dpi_requested, pixels, likely_illegible_for_fine_detail, file_path_on_disk,
+  suggested_clips, suggestions}`. `pixels` is the actual rendered size, which is
+  what determines whether content survived: `dpi_used: 72` is 480 px on a
+  460pt-wide page and 612 px on a letter page. `likely_illegible_for_fine_detail`
+  is set when the render falls below half the page's native raster width. That
+  comparison only applies to a pure full-page scan (no text, no vector
+  drawings, exactly one image covering at least 98% of the page); every other
+  page, including a page that has an embedded raster alongside text (an
+  OCR'd scan, or a photo inside a text document), uses an absolute 1000 px
+  wide floor instead. Either way it means handwriting and small print should
+  not be reported from this image. `suggested_clips` holds three overlapping
+  bands ready to pass back as `clip`.
+- `render_recompressed` (list, optional): present when pages were re-encoded to
+  a lossy codec to fit the budget. Each whole-page entry: `{page, codec,
+  quality, lossy, file_path_on_disk}`, where `file_path_on_disk` is the
+  lossless PNG rendered at the same DPI the JPEG used. Quality is spent before
+  resolution, because pixel count matters more than ringing for reading fine
+  detail: a recompressed page is inlined at the **full requested DPI** unless
+  the same page also appears in `render_downsampled`, in which case its
+  actual DPI is lower and is reported there, not here. Photographic scans
+  compress about 10x better as JPEG than as PNG, so a page that would have
+  come back at the 72 DPI floor now typically returns at full resolution.
+  Born-digital text pages compress no better as JPEG, fail the same size
+  check, and stay PNG. Clipped renders (`clip=...`) go through the same JPEG
+  ladder and can appear here too (entry: `{page, codec, quality, lossy}`, no
+  `file_path_on_disk` since clip bypasses the cache): quality may drop on a
+  clip, but resolution never does.
+- `native_dpi_cap` (int, optional): present when the requested DPI exceeded the
+  native raster resolution of a scanned page and was capped to it. Rendering a
+  257 DPI scan at 400 DPI is a pure upsample.
 - `render_oversized_pages` (list, optional) — Present when a page can't fit even
   at the 72-DPI floor. Each entry: `{page, file_path_on_disk, size_bytes, reason,
   suggestions}`. The page is not inlined; `file_path_on_disk` is the full-res PNG.
@@ -351,6 +380,22 @@ pdf_render_pages("/path/to/paper.pdf", "5", dpi=300)
 pdf_render_pages("/path/to/magazine.pdf", "10", dpi=300, clip=[0.5, 0.0, 1.0, 0.5])
 #    -> high-DPI crop of the top-right quarter of page 10
 ```
+
+**Limitations:**
+- A recompressed page is lossy. Do not use it as evidence for pixel-level
+  claims; `file_path_on_disk` always points at the lossless PNG at the DPI
+  actually rendered, not necessarily `dpi_requested`: when `native_dpi_cap`
+  is present, that is the DPI the PNG was rendered at.
+- The native-DPI cap applies only to pages that are a single full-page raster
+  with no text and no vector drawings. A scan with a text layer over it is not
+  capped.
+- A clip can itself exceed the transport budget on a photographic page (a
+  high-DPI crop of a dense scan). When it does, the clip goes through the same
+  JPEG fallback as a whole-page render and is reported in
+  `render_recompressed`; it is never silently downsampled.
+- Clipped renders are not written to the render cache, so their files on disk
+  are orphaned once the response is returned; they are removed only by a full
+  cache clear (`pdf_cache_clear(expired_only=False)`).
 
 ---
 

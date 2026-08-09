@@ -40,8 +40,10 @@ from .extractor import (
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
+    native_render_dpi_cap,
     ocr_page,
     parse_page_range,
+    render_page_as_image,
     render_page_as_png,
 )
 from .extractor import _ocr_page_worker, _render_page_worker
@@ -3363,19 +3365,31 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
 # ============================================================================
 # Tool 8: pdf_render_pages - Render pages as images for visual inspection
 def _render_page_at(
-    local_path: str, doc: Any, page_num: int, dpi: int
+    local_path: str,
+    doc: Any,
+    page_num: int,
+    dpi: int,
+    codec: str = "png",
+    quality: int = 0,
 ) -> tuple[dict[str, Any], bytes | None]:
-    """Cache-aware whole-page render at `dpi`.
+    """Cache-aware whole-page render at `dpi` in `codec`.
 
-    Returns (render_info, png_bytes); png_bytes is None if the on-disk PNG
-    could not be read (OSError) — caller routes that to render_failed_pages.
+    Returns (render_info, image_bytes); image_bytes is None if the on-disk
+    file could not be read (OSError), which the caller routes to
+    render_failed_pages.
     """
-    cached = cache.get_page_render(local_path, page_num, dpi)
+    cached = cache.get_page_render(local_path, page_num, dpi, codec, quality)
     if cached:
         render_info = cached
     else:
-        render_info = render_page_as_png(
-            doc, page_num, cache.renders_dir, _pdf_hash(local_path), dpi
+        render_info = render_page_as_image(
+            doc,
+            page_num,
+            cache.renders_dir,
+            _pdf_hash(local_path),
+            dpi,
+            codec=codec,
+            quality=quality,
         )
         cache.save_page_render(
             local_path,
@@ -3385,10 +3399,10 @@ def _render_page_at(
             render_info,
         )
     try:
-        png_bytes: bytes | None = Path(render_info["file_path_on_disk"]).read_bytes()
+        image_bytes: bytes | None = Path(render_info["file_path_on_disk"]).read_bytes()
     except OSError:
-        png_bytes = None
-    return render_info, png_bytes
+        image_bytes = None
+    return render_info, image_bytes
 
 
 # ============================================================================
@@ -3481,7 +3495,8 @@ def _render_clip(
     """Render one clipped region at the requested DPI. Bypasses the render cache.
 
     Clips are never downsampled (the caller asked for a specific region at a
-    specific DPI): the crop either fits the budget and is inlined, or it goes
+    specific DPI). Quality may still be reduced: the crop either fits
+    losslessly as PNG, fits as JPEG at a lower quality (same DPI), or goes
     straight to the oversized fallback.
     """
     page = doc[page_num]
@@ -3505,8 +3520,13 @@ def _render_clip(
         "dpi_requested": requested_dpi,
         "clip": [x0, y0, x1, y1],
     }
+    own_native_cap = native_render_dpi_cap(doc, page_num)
+    if own_native_cap is not None and own_native_cap < _clamp(
+        requested_dpi, RENDER_DPI_MIN, RENDER_DPI_MAX
+    ):
+        summary["native_dpi_cap"] = own_native_cap
 
-    render_info = render_page_as_png(
+    render_info = render_page_as_image(
         doc, page_num, cache.renders_dir, _pdf_hash(local_path), clamped_dpi, clip=rect
     )  # bypass cache: no get_page_render / save_page_render
 
@@ -3529,6 +3549,43 @@ def _render_clip(
             "clip": [x0, y0, x1, y1],
         }
         return [summary, block]
+
+    for quality in _JPEG_QUALITY_LADDER:
+        jpeg_info = render_page_as_image(
+            doc,
+            page_num,
+            cache.renders_dir,
+            _pdf_hash(local_path),
+            clamped_dpi,
+            clip=rect,
+            codec="jpeg",
+            quality=quality,
+        )  # bypass cache: no get_page_render / save_page_render
+        try:
+            jpeg_bytes = Path(jpeg_info["file_path_on_disk"]).read_bytes()
+        except OSError:
+            continue
+        if _encoded_len(jpeg_bytes) <= RENDER_RESULT_BYTE_BUDGET:
+            summary["pages_rendered"] = [page_num + 1]
+            summary["render_recompressed"] = [
+                {
+                    "page": page_num + 1,
+                    "codec": "jpeg",
+                    "quality": quality,
+                    "lossy": True,
+                }
+            ]
+            block = ImageContent(
+                type="image",
+                data=base64.b64encode(jpeg_bytes).decode("ascii"),
+                mimeType="image/jpeg",
+            )
+            block.meta = {
+                "page": page_num + 1,
+                "dpi": clamped_dpi,
+                "clip": [x0, y0, x1, y1],
+            }
+            return [summary, block]
 
     summary["render_oversized_pages"] = [
         {
@@ -3568,6 +3625,205 @@ def _coerce_json_array(value: Any) -> Any:
 _ClipArg = Annotated[list[float] | None, BeforeValidator(_coerce_json_array)]
 
 
+# Three overlapping horizontal bands. Overlap matters: a line of text sitting
+# exactly on a boundary would otherwise be cut in half by every suggestion.
+_SUGGESTED_CLIP_THIRDS = (
+    [0.0, 0.0, 1.0, 0.36],
+    [0.0, 0.32, 1.0, 0.68],
+    [0.0, 0.64, 1.0, 1.0],
+)
+
+# Below half the page's native raster width, fine detail (handwriting, small
+# print) stops surviving the render. On a page with no embedded raster there
+# is no native width to compare against, so an absolute pixel floor applies.
+_ILLEGIBLE_NATIVE_FRACTION = 0.5
+_ILLEGIBLE_PIXEL_FLOOR = 1000
+
+
+def _downsampled_entry(
+    page_1idx: int,
+    used_dpi: int,
+    dpi_requested: int,
+    full_info: dict[str, Any],
+    doc: Any,
+    page_num: int,
+) -> dict[str, Any]:
+    """One render_downsampled entry.
+
+    Reports pixels rather than DPI alone: `dpi_used: 72` means 480 px on a
+    460pt-wide page and 612 px on a letter page, so DPI by itself tells a
+    caller nothing about whether the content survived.
+    """
+    page = doc[page_num]
+    scale = used_dpi / 72.0
+    width_px = int(round(page.rect.width * scale))
+    height_px = int(round(page.rect.height * scale))
+
+    native_dpi = native_render_dpi_cap(doc, page_num)
+    if native_dpi is not None:
+        native_width_px = int(round(page.rect.width * native_dpi / 72.0))
+        illegible = width_px < native_width_px * _ILLEGIBLE_NATIVE_FRACTION
+    else:
+        illegible = width_px < _ILLEGIBLE_PIXEL_FLOOR
+
+    return {
+        "page": page_1idx,
+        "dpi_used": used_dpi,
+        "dpi_requested": dpi_requested,
+        "pixels": [width_px, height_px],
+        "likely_illegible_for_fine_detail": illegible,
+        "file_path_on_disk": full_info["file_path_on_disk"],
+        "suggested_clips": [list(c) for c in _SUGGESTED_CLIP_THIRDS],
+        "suggestions": [
+            "Render a specific region at high DPI: pass one of "
+            "suggested_clips (or your own clip=[x0,y0,x1,y1] as fractions of "
+            "the page, 0..1, top-left origin); clipped renders are never "
+            "downsampled",
+            "Re-request this single page alone (a one-page call gets the "
+            "full per-page budget)",
+            "Read the full-resolution PNG at file_path_on_disk for full "
+            "fidelity (only if this host can read local files)",
+        ],
+    }
+
+
+# JPEG quality ladder, tried in order at the REQUESTED dpi before any
+# resolution is sacrificed. Reading handwriting and small print depends on
+# pixel count far more than on ringing, so quality is spent first.
+_JPEG_QUALITY_LADDER = (80, 60)
+
+# Once the requested-dpi JPEG misses budget, re-estimate the fit dpi from a
+# real measurement instead of collapsing straight to RENDER_DPI_MIN. Capped
+# to bound the extra renders this costs per page.
+_FIT_DPI_MAX_ATTEMPTS = 3
+# Bias each re-estimate slightly low: landing a hair over target is the
+# exact failure this loop exists to fix, so undershoot on purpose and let
+# the next iteration close the gap from a real measurement.
+_FIT_DPI_MARGIN = 0.98
+
+
+def _fit_page_inline(
+    local_path: str,
+    doc: Any,
+    page_num: int,
+    dpi: int,
+    page_target: int,
+) -> dict[str, Any]:
+    """Encode one page to fit `page_target` base64 bytes, losing as little as
+    possible.
+
+    Order: PNG at `dpi`, then JPEG at `dpi` (q80, q60), then the DPI ladder in
+    JPEG, then the 72 DPI floor. JPEG is only ever reached when the PNG has
+    already failed the budget, so a page that fits losslessly stays lossless
+    and no page classifier is needed: the compression ratio decides.
+
+    Returns a dict with outcome in {"inline", "failed", "oversized"}. For
+    "inline": bytes, dpi_used, codec, quality, encoded_len. `full_info` is
+    always the PNG render_info at the requested dpi (the full-fidelity artifact
+    that file_path_on_disk points at), or None when even that render failed.
+    """
+    full_info, png = _render_page_at(local_path, doc, page_num, dpi)
+    if png is None:
+        return {"outcome": "failed", "full_info": None}
+
+    size = _encoded_len(png)
+    if size <= page_target:
+        return {
+            "outcome": "inline",
+            "bytes": png,
+            "dpi_used": dpi,
+            "codec": "png",
+            "quality": 0,
+            "encoded_len": size,
+            "full_info": full_info,
+        }
+
+    # Lossy, full resolution.
+    for quality in _JPEG_QUALITY_LADDER:
+        _info, jpg = _render_page_at(
+            local_path, doc, page_num, dpi, codec="jpeg", quality=quality
+        )
+        if jpg is None:
+            continue
+        size = _encoded_len(jpg)
+        if size <= page_target:
+            return {
+                "outcome": "inline",
+                "bytes": jpg,
+                "dpi_used": dpi,
+                "codec": "jpeg",
+                "quality": quality,
+                "encoded_len": size,
+                "full_info": full_info,
+            }
+
+    # Lossy and lower resolution. `size` currently holds the last successful
+    # encode's length: the q60 render at the requested dpi if that succeeded,
+    # otherwise q80, otherwise the PNG. Whichever it is, it's the right basis
+    # for the first estimate below. Each further iteration re-anchors on the
+    # dpi/size it actually just measured, instead of trusting one estimate
+    # all the way down: a near-miss estimate should cost one more render, not
+    # 6x the pixels.
+    lowest_quality = _JPEG_QUALITY_LADDER[-1]
+    attempt_dpi = dpi
+    attempt_size = size
+    for _attempt in range(_FIT_DPI_MAX_ATTEMPTS):
+        next_dpi = max(
+            RENDER_DPI_MIN,
+            math.floor(
+                attempt_dpi * math.sqrt(page_target / attempt_size) * _FIT_DPI_MARGIN
+            ),
+        )
+        if next_dpi >= attempt_dpi:
+            break
+
+        _info, jpg = _render_page_at(
+            local_path, doc, page_num, next_dpi, codec="jpeg", quality=lowest_quality
+        )
+        if jpg is None:
+            break
+
+        measured = _encoded_len(jpg)
+        if measured <= page_target:
+            return {
+                "outcome": "inline",
+                "bytes": jpg,
+                "dpi_used": next_dpi,
+                "codec": "jpeg",
+                "quality": lowest_quality,
+                "encoded_len": measured,
+                "full_info": full_info,
+            }
+
+        attempt_dpi, attempt_size = next_dpi, measured
+        if next_dpi <= RENDER_DPI_MIN:
+            break
+
+    # Final fallback at the floor, if the loop above didn't already land
+    # there.
+    if attempt_dpi > RENDER_DPI_MIN:
+        _info, floor_jpg = _render_page_at(
+            local_path,
+            doc,
+            page_num,
+            RENDER_DPI_MIN,
+            codec="jpeg",
+            quality=lowest_quality,
+        )
+        if floor_jpg is not None and _encoded_len(floor_jpg) <= page_target:
+            return {
+                "outcome": "inline",
+                "bytes": floor_jpg,
+                "dpi_used": RENDER_DPI_MIN,
+                "codec": "jpeg",
+                "quality": lowest_quality,
+                "encoded_len": _encoded_len(floor_jpg),
+                "full_info": full_info,
+            }
+
+    return {"outcome": "oversized", "full_info": full_info}
+
+
 @mcp.tool(
     output_schema=None,
     description=_tool_description(
@@ -3599,8 +3855,9 @@ def pdf_render_pages(
             (top-left origin), estimated by eye from a whole-page overview.
             Renders a high-DPI crop of just that region — the way to read dense
             pages that exceed the transport cap whole. Single page only; values
-            are clamped into [0,1]. Clipped renders are never downsampled and
-            bypass the render cache.
+            are clamped into [0,1]. Clipped renders are never downsampled;
+            quality may be reduced (PNG, then JPEG at a lower quality) to fit
+            the transport budget. Bypasses the render cache.
 
     Returns:
         List where the first element is a JSON summary dict and subsequent
@@ -3616,8 +3873,12 @@ def pdf_render_pages(
         transport size cap:
           - inline at the requested DPI (fits the per-page byte budget);
           - inline downsampled — reported in summary["render_downsampled"]
-            as [{page, dpi_used, dpi_requested}]; the block's _meta.dpi is
-            the actual render DPI;
+            as [{page, dpi_used, dpi_requested, pixels,
+            likely_illegible_for_fine_detail, file_path_on_disk,
+            suggested_clips, suggestions}]. Check
+            likely_illegible_for_fine_detail before reporting on handwriting
+            or small print: when it is true, pass one of suggested_clips back
+            to this tool rather than answering from the downsampled image.
           - oversized fallback — reported in summary["render_oversized_pages"]
             as [{page, file_path_on_disk, size_bytes, reason, suggestions}]
             when the page can't fit even at the 72-DPI floor. The page does
@@ -3625,6 +3886,13 @@ def pdf_render_pages(
             file_path_on_disk, or render a high-DPI region with `clip`.
         summary["dpi_used"] remains the clamped requested DPI; per-page
         actual DPI is in render_downsampled and each block's _meta.dpi.
+
+        Pages re-encoded to fit are listed in summary["render_recompressed"]
+        as [{page, codec, quality, lossy, file_path_on_disk}]. A lossy page is
+        inlined at the full requested DPI, unless the same page also appears
+        in render_downsampled, in which case resolution was sacrificed too.
+        summary["native_dpi_cap"] appears when the requested DPI exceeded a
+        scanned page's own raster resolution.
 
     Error contract: path/URL validation failures (file not found,
     invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
@@ -3637,7 +3905,6 @@ def pdf_render_pages(
     if _res[1] is not None:
         return [_res[1]]
     local_path = _res[0]
-    clamped_dpi = _clamp(dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
 
     doc = pymupdf.open(local_path)
     try:
@@ -3655,6 +3922,29 @@ def pdf_render_pages(
         if len(page_nums) > MAX_PAGES_LIMIT:
             page_nums = page_nums[:MAX_PAGES_LIMIT]
 
+        # Truncate to the pages that can actually be inlined BEFORE spending
+        # any per-page work on them: native_render_dpi_cap costs a get_text +
+        # get_drawings + get_images + extract_image pass per page, so running
+        # it over the full (up to 500-page) request just to render 5 pages
+        # would spend minutes computing caps for pages that are never
+        # rendered. `clip` requires a single page (validated below), so it is
+        # always inside this slice.
+        truncated = len(page_nums) > MAX_RENDER_INLINE_PAGES
+        inline_nums = page_nums[:MAX_RENDER_INLINE_PAGES]
+
+        clamped_dpi = _clamp(dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
+        # A scan rendered above its own raster resolution is a pure upsample:
+        # it costs bytes and carries no additional information. Cap to the
+        # smallest native resolution across the pages that will be rendered,
+        # and only when every one of them is a pure scan (native_render_dpi_cap
+        # returns None for anything with text or vector content).
+        caps = [native_render_dpi_cap(doc, n) for n in inline_nums]
+        page_native_caps = dict(zip(inline_nums, caps))
+        native_cap: int | None = None
+        if caps and all(c is not None for c in caps):
+            native_cap = max(RENDER_DPI_MIN, min(c for c in caps if c is not None))
+            clamped_dpi = min(clamped_dpi, native_cap)
+
         if clip is not None:
             err, frac = _prepare_clip(clip, page_nums)
             if err is not None:
@@ -3662,14 +3952,13 @@ def pdf_render_pages(
             assert frac is not None
             return _render_clip(local_path, doc, page_nums[0], clamped_dpi, dpi, frac)
 
-        truncated = len(page_nums) > MAX_RENDER_INLINE_PAGES
-        inline_nums = page_nums[:MAX_RENDER_INLINE_PAGES]
-
         pages_rendered: list[int] = []
         render_failed: list[int] = []
-        images: list[tuple[int, bytes, int]] = []  # (page_1idx, png, dpi_used)
+        # (page_1idx, image_bytes, dpi_used, codec)
+        images: list[tuple[int, bytes, int, str]] = []
         downsampled: list[dict[str, Any]] = []
         oversized: list[dict[str, Any]] = []
+        recompressed: list[dict[str, Any]] = []
 
         remaining = RENDER_RESULT_BYTE_BUDGET
         pages_left = len(inline_nums)
@@ -3678,91 +3967,76 @@ def pdf_render_pages(
             page_target = remaining // pages_left
             pages_left -= 1
 
-            _info, png = _render_page_at(local_path, doc, page_num, clamped_dpi)
-            if png is None:
+            fit = _fit_page_inline(local_path, doc, page_num, clamped_dpi, page_target)
+
+            if fit["outcome"] == "failed":
                 render_failed.append(page_num + 1)
                 continue
-            size = _encoded_len(png)
 
-            # Fits at requested DPI.
-            if size <= page_target:
-                images.append((page_num + 1, png, clamped_dpi))
-                pages_rendered.append(page_num + 1)
-                remaining -= size
-                continue
+            full_info = fit["full_info"]
 
-            # Fit-by-DPI estimate, never below the 72 floor.
-            fit_dpi = max(
-                RENDER_DPI_MIN,
-                math.floor(clamped_dpi * math.sqrt(page_target / size)),
-            )
-            used_dpi = clamped_dpi
-            if fit_dpi < clamped_dpi:
-                _info, png = _render_page_at(local_path, doc, page_num, fit_dpi)
-                if png is None:
-                    render_failed.append(page_num + 1)
-                    continue
-                size = _encoded_len(png)
-                used_dpi = fit_dpi
-
-            if size <= page_target:
-                images.append((page_num + 1, png, used_dpi))
-                pages_rendered.append(page_num + 1)
-                downsampled.append(
+            if fit["outcome"] == "oversized":
+                oversized.append(
                     {
                         "page": page_num + 1,
-                        "dpi_used": used_dpi,
-                        "dpi_requested": dpi,
+                        "file_path_on_disk": full_info["file_path_on_disk"],
+                        "size_bytes": full_info["size_bytes"],
+                        "reason": (
+                            "exceeds transport budget even at minimum "
+                            f"{RENDER_DPI_MIN} DPI"
+                        ),
+                        "suggestions": [
+                            "Render a specific region at high DPI: pass "
+                            "clip=[x0,y0,x1,y1] as fractions of the page (0..1, "
+                            "top-left origin) to crop just the area you need",
+                            "Re-request this single page alone (a one-page call "
+                            "gets the full per-page budget)",
+                            "Read the full-resolution PNG at file_path_on_disk "
+                            "for full fidelity",
+                        ],
                     }
                 )
-                remaining -= size
                 continue
 
-            # Still over. One corrective re-render at the 72 floor if not there.
-            if used_dpi > RENDER_DPI_MIN:
-                _info72, png72 = _render_page_at(
-                    local_path, doc, page_num, RENDER_DPI_MIN
-                )
-                if png72 is None:
-                    render_failed.append(page_num + 1)
-                    continue
-                if _encoded_len(png72) <= page_target:
-                    images.append((page_num + 1, png72, RENDER_DPI_MIN))
-                    pages_rendered.append(page_num + 1)
-                    downsampled.append(
-                        {
-                            "page": page_num + 1,
-                            "dpi_used": RENDER_DPI_MIN,
-                            "dpi_requested": dpi,
-                        }
-                    )
-                    remaining -= _encoded_len(png72)
-                    continue
+            images.append((page_num + 1, fit["bytes"], fit["dpi_used"], fit["codec"]))
+            pages_rendered.append(page_num + 1)
+            remaining -= fit["encoded_len"]
 
-            # Cannot fit at the floor -> graceful oversized fallback. Hand back
-            # the full-res (requested-DPI) PNG. Nothing inlined; remaining rolls
-            # forward to later pages.
-            full_info, _ = _render_page_at(local_path, doc, page_num, clamped_dpi)
-            oversized.append(
-                {
-                    "page": page_num + 1,
-                    "file_path_on_disk": full_info["file_path_on_disk"],
-                    "size_bytes": full_info["size_bytes"],
-                    "reason": (
-                        "exceeds transport budget even at minimum "
-                        f"{RENDER_DPI_MIN} DPI"
-                    ),
-                    "suggestions": [
-                        "Read the full-resolution PNG at file_path_on_disk for "
-                        "full fidelity",
-                        "Render a specific region at high DPI: pass "
-                        "clip=[x0,y0,x1,y1] as fractions of the page (0..1, "
-                        "top-left origin) to crop just the area you need",
-                        "Re-request this single page alone (a one-page call gets "
-                        "the full per-page budget)",
-                    ],
-                }
-            )
+            if fit["codec"] == "jpeg":
+                recompressed.append(
+                    {
+                        "page": page_num + 1,
+                        "codec": "jpeg",
+                        "quality": fit["quality"],
+                        "lossy": True,
+                        "file_path_on_disk": full_info["file_path_on_disk"],
+                    }
+                )
+            own_native_cap = page_native_caps.get(page_num)
+            # A page is downsampled when it received less than it could have
+            # received on its own: less than the smaller of what the caller
+            # asked for and what this page's own raster can supply. The two
+            # can differ when another page in the same request has a lower
+            # native cap: the `min()` above then pulls clamped_dpi down for
+            # every page, so a page rendered at exactly its own native
+            # resolution (not a degradation) must not be flagged, but a page
+            # rendered below its own native resolution because of a sibling
+            # page must be.
+            page_ceiling = _clamp(dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
+            if own_native_cap is not None:
+                page_ceiling = min(page_ceiling, own_native_cap)
+            page_downsampled = fit["dpi_used"] < page_ceiling
+            if page_downsampled:
+                downsampled.append(
+                    _downsampled_entry(
+                        page_num + 1,
+                        fit["dpi_used"],
+                        dpi,
+                        full_info,
+                        doc,
+                        page_num,
+                    )
+                )
 
         summary: dict[str, Any] = {
             "content_warning": (
@@ -3773,6 +4047,10 @@ def pdf_render_pages(
             "dpi_used": clamped_dpi,
             "dpi_requested": dpi,
         }
+        if native_cap is not None and native_cap < _clamp(
+            dpi, RENDER_DPI_MIN, RENDER_DPI_MAX
+        ):
+            summary["native_dpi_cap"] = native_cap
         if truncated:
             summary["truncated_render"] = True
             summary["truncated_at"] = MAX_RENDER_INLINE_PAGES
@@ -3782,15 +4060,17 @@ def pdf_render_pages(
             summary["render_downsampled"] = downsampled
         if oversized:
             summary["render_oversized_pages"] = oversized
+        if recompressed:
+            summary["render_recompressed"] = recompressed
 
         result: list[Any] = [summary]
-        for page_1idx, png_bytes, used_dpi in images:
+        for page_1idx, image_bytes, used_dpi, used_codec in images:
             block = ImageContent(
                 type="image",
-                data=base64.b64encode(png_bytes).decode("ascii"),
-                mimeType="image/png",
+                data=base64.b64encode(image_bytes).decode("ascii"),
+                mimeType=f"image/{'jpeg' if used_codec == 'jpeg' else 'png'}",
             )
-            block.meta = {"page": page_1idx, "dpi": used_dpi}
+            block.meta = {"page": page_1idx, "dpi": used_dpi, "codec": used_codec}
             result.append(block)
 
         return result

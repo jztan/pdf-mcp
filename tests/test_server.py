@@ -1052,6 +1052,24 @@ class TestPdfCacheStats:
         for key in expected_keys:
             assert key in result
 
+    def test_cache_stats_counts_jpeg_renders(self, isolated_server, big_scan_pdf):
+        """F5: cache_size_bytes must count cached .jpg render files, not
+        just .png. big_scan_pdf at dpi=200 recompresses to JPEG (see
+        TestRenderEncodeCascade), so a renders_dir glob restricted to
+        "*.png" would silently miss it."""
+        cache_instance, _ = isolated_server
+        before = pdf_cache_stats()["cache_size_bytes"]
+
+        result = pdf_render_pages(big_scan_pdf, "1", dpi=200)
+        assert result[0]["render_recompressed"][0]["codec"] == "jpeg"
+
+        jpg_files = list(cache_instance.renders_dir.glob("*.jpg"))
+        assert jpg_files, "expected a cached .jpg render file"
+        jpg_bytes = sum(f.stat().st_size for f in jpg_files)
+
+        after = pdf_cache_stats()["cache_size_bytes"]
+        assert after >= before + jpg_bytes
+
     def test_cache_stats_includes_fts_indexed_pages(self, isolated_server):
         """pdf_cache_stats response includes fts_indexed_pages."""
         result = pdf_cache_stats()
@@ -2269,8 +2287,8 @@ class TestPdfRenderPages:
         result = pdf_render_pages(sample_pdf, "1-2", dpi=72)
         blocks = result[1:]
         assert len(blocks) == 2
-        assert blocks[0].meta == {"page": 1, "dpi": 72}
-        assert blocks[1].meta == {"page": 2, "dpi": 72}
+        assert blocks[0].meta == {"page": 1, "dpi": 72, "codec": "png"}
+        assert blocks[1].meta == {"page": 2, "dpi": 72, "codec": "png"}
 
     def test_pages_rendered_aligns_with_image_blocks(self, sample_pdf, isolated_server):
         """Lockstep invariant: pages_rendered[i] == _meta['page'] of result[i+1]."""
@@ -2345,6 +2363,29 @@ class TestRenderBudget:
         assert ds["dpi_used"] < ds["dpi_requested"]
         # the inline image block reports the actual (downsampled) render DPI
         assert result[1].meta["dpi"] == ds["dpi_used"]
+
+    def test_downsample_entry_teaches_clip_and_full_res_path(
+        self, sample_pdf, isolated_server, monkeypatch
+    ):
+        """A downsampled page must route the caller to the escape hatches.
+
+        Real-world failure this guards (agent feedback, 2026-08-09): phone
+        scans blew the transport budget, every page came back at the 72-DPI
+        floor, and the agent concluded the tool had no crop option, because
+        only the oversized fallback taught clip. The downsampled entry must
+        carry the same file_path_on_disk + suggestions contract, plus (task
+        6) the single-page-alone remedy and clip-first ordering.
+        """
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        ds = result[0]["render_downsampled"][0]
+        assert os.path.exists(ds["file_path_on_disk"])
+        assert isinstance(ds["suggestions"], list)
+        assert len(ds["suggestions"]) == 3
+        assert ds["suggestions"][0].startswith("Render a specific region")
+        assert "clip=" in ds["suggestions"][0]
+        assert "single page alone" in ds["suggestions"][1]
+        assert "file_path_on_disk" in ds["suggestions"][2]
 
     def test_oversized_fallback(self, sample_pdf, isolated_server, monkeypatch):
         """Tiny budget: page can't fit at 72 -> oversized entry, no image block."""
@@ -3544,6 +3585,352 @@ class TestRenderClip:
         after = srv.cache.get_stats()["total_renders"]
         # no page_renders row written for the clip
         assert after == before
+
+
+class TestClipEncodeCascade:
+    def test_oversized_clip_falls_back_to_jpeg(self, isolated_server, big_scan_pdf):
+        """A crop whose PNG misses the budget comes back as JPEG at the
+        requested DPI instead of an oversized error. This is the escape hatch
+        render_downsampled teaches, so it must not dead-end."""
+        from pdf_mcp import server
+
+        result = server.pdf_render_pages(
+            big_scan_pdf, "1", dpi=200, clip=[0.0, 0.0, 1.0, 0.36]
+        )
+        summary = result[0]
+
+        assert "render_oversized_pages" not in summary
+        assert summary["pages_rendered"] == [1]
+        assert summary["render_recompressed"] == [
+            {"page": 1, "codec": "jpeg", "quality": 80, "lossy": True}
+        ]
+        assert result[1].mimeType == "image/jpeg"
+
+    def test_small_clip_stays_png(self, isolated_server, big_scan_pdf):
+        """A crop that fits losslessly must stay PNG."""
+        from pdf_mcp import server
+
+        result = server.pdf_render_pages(
+            big_scan_pdf, "1", dpi=72, clip=[0.0, 0.0, 0.5, 0.2]
+        )
+        summary = result[0]
+
+        assert "render_recompressed" not in summary
+        assert result[1].mimeType == "image/png"
+
+    def test_clip_dpi_is_never_reduced(self, isolated_server, big_scan_pdf):
+        """Quality may drop; resolution may not. The caller asked for a
+        specific region at a specific DPI."""
+        from pdf_mcp import server
+
+        result = server.pdf_render_pages(
+            big_scan_pdf, "1", dpi=200, clip=[0.0, 0.0, 1.0, 0.36]
+        )
+        assert result[1].meta["dpi"] == 200
+        assert "render_downsampled" not in result[0]
+
+
+class TestRenderNativeDpiCap:
+    def test_scan_page_is_not_rendered_above_native_dpi(
+        self, isolated_server, scanned_page_pdf
+    ):
+        """A 144 DPI scan requested at 400 DPI renders at 144, not 400."""
+        result = pdf_render_pages(scanned_page_pdf, "1", dpi=400)
+        summary = result[0]
+
+        assert summary["dpi_requested"] == 400
+        assert summary["dpi_used"] == 144
+        assert summary["native_dpi_cap"] == 144
+
+    def test_text_page_is_not_capped(self, isolated_server, sample_pdf):
+        result = pdf_render_pages(sample_pdf, "1", dpi=300)
+        summary = result[0]
+
+        assert summary["dpi_used"] == 300
+        assert "native_dpi_cap" not in summary
+
+    def test_clip_reports_native_dpi_cap(self, isolated_server, native_cap_257_pdf):
+        """F8: a clip on a 257 DPI native page requested at 400 DPI must
+        report native_dpi_cap in its summary, same as the whole-page path,
+        rather than leaving dpi_used < dpi_requested unexplained."""
+        result = pdf_render_pages(
+            native_cap_257_pdf, "1", dpi=400, clip=[0.0, 0.0, 1.0, 0.36]
+        )
+        summary = result[0]
+
+        assert summary["dpi_used"] == 257
+        assert summary["dpi_requested"] == 400
+        assert summary["native_dpi_cap"] == 257
+
+
+class TestRenderEncodeCascade:
+    def test_scan_inlines_jpeg_at_requested_dpi(self, isolated_server, big_scan_pdf):
+        """A page whose PNG blows the budget comes back as JPEG at the
+        REQUESTED dpi, not downsampled."""
+        result = pdf_render_pages(big_scan_pdf, "1", dpi=200)
+        summary, block = result[0], result[1]
+
+        assert summary["pages_rendered"] == [1]
+        assert "render_downsampled" not in summary
+        assert len(summary["render_recompressed"]) == 1
+        entry = summary["render_recompressed"][0]
+        assert entry["page"] == 1
+        assert entry["codec"] == "jpeg"
+        assert entry["quality"] == 80
+        assert entry["lossy"] is True
+        assert entry["file_path_on_disk"].endswith(".png")
+        assert Path(entry["file_path_on_disk"]).exists()
+        assert block.mimeType == "image/jpeg"
+        assert block.meta["dpi"] == 200
+        assert block.meta["codec"] == "jpeg"
+
+    def test_born_digital_page_stays_png(self, isolated_server, sample_pdf):
+        """JPEG must never displace PNG on a page that fits as PNG."""
+        result = pdf_render_pages(sample_pdf, "1", dpi=200)
+        summary, block = result[0], result[1]
+
+        assert "render_recompressed" not in summary
+        assert block.mimeType == "image/png"
+        assert block.meta["codec"] == "png"
+
+    def test_budget_is_measured_in_base64_bytes(self, isolated_server, big_scan_pdf):
+        """Guards the 1.33x unit trap: the inlined payload must fit the
+        budget AFTER base64 expansion, not before."""
+        import base64
+
+        result = pdf_render_pages(big_scan_pdf, "1", dpi=200)
+        block = result[1]
+        assert len(base64.b64decode(block.data)) * 4 / 3 <= 900_000
+
+    def test_multipage_call_downsamples_but_stays_jpeg(
+        self, isolated_server, big_scan_pdf
+    ):
+        """Budget division still forces a DPI drop; the codec stays JPEG and
+        the page is reported in BOTH lists."""
+        result = pdf_render_pages(big_scan_pdf, "1-3", dpi=200)
+        summary = result[0]
+
+        downsampled_pages = [e["page"] for e in summary["render_downsampled"]]
+        recompressed_pages = [e["page"] for e in summary["render_recompressed"]]
+        assert 1 in downsampled_pages
+        assert 1 in recompressed_pages
+        entry = summary["render_downsampled"][0]
+        assert entry["dpi_used"] < entry["dpi_requested"]
+
+
+class TestFitDpiLadder:
+    """`_fit_page_inline`'s DPI ladder must re-estimate from a real measured
+    render each time it misses budget, not collapse straight to
+    RENDER_DPI_MIN on the first near-miss.
+
+    The fake `_render_page_at` below models a real measurement (a scanned
+    page, `benchmark_data/.render_legibility_pdfs/scan-tutorial-1.pdf` at a
+    180,000-byte per-page target, 5-page request, dpi=200): the single-shot
+    sqrt estimate (187 DPI, JPEG q60) still misses budget by 1.3%
+    (182,388 > 180,000 base64 bytes), while 180 DPI fits (169,268). The
+    JPEG-vs-dpi curve is a power law fit through the two measured endpoints
+    (200 DPI -> 205,696 bytes, 72 DPI -> 35,380 bytes), which is close
+    enough to real JPEG behavior to reproduce the near-miss deterministically
+    without depending on libjpeg's exact bytes.
+    """
+
+    _CURVE_K = 205696 / (200**1.723)
+    _CURVE_P = 1.723
+
+    @classmethod
+    def _jpeg_q60_size(cls, dpi: int) -> int:
+        raw = round(cls._CURVE_K * dpi**cls._CURVE_P)
+        return (raw // 4) * 4  # keep it a clean base64-length multiple of 4
+
+    @classmethod
+    def _fake_render_page_at(cls, oversized_always: bool = False):
+        def fake(local_path, doc, page_num, dpi, codec="png", quality=0):
+            info = {"file_path_on_disk": "/fake/does-not-exist.png"}
+            if codec == "png" or oversized_always:
+                # A scan's PNG (or, for the floor-fallback test, everything)
+                # always blows the budget: raw bytes, not base64.
+                return info, b"\x00" * 5_000_000
+            if quality == 80:
+                # q80 misses too, at roughly the q60 curve times a constant
+                # ringing overhead.
+                size = round(cls._jpeg_q60_size(dpi) * 1.15)
+                return info, b"\x00" * size
+            # quality == 60 (lowest rung): the modeled curve.
+            return info, b"\x00" * cls._jpeg_q60_size(dpi)
+
+        return fake
+
+    def test_near_miss_reestimates_instead_of_collapsing(self, monkeypatch):
+        """The estimate landing a hair over target must cost one more
+        render, not 6x the pixels. Regression for the 187-DPI-misses ->
+        straight-to-72 collapse."""
+        monkeypatch.setattr(
+            "pdf_mcp.server._render_page_at", self._fake_render_page_at()
+        )
+        result = server._fit_page_inline(
+            "unused.pdf", None, 0, dpi=200, page_target=180_000
+        )
+
+        assert result["outcome"] == "inline"
+        assert result["dpi_used"] > server.RENDER_DPI_MIN * 1.5
+        assert result["codec"] == "jpeg"
+
+    def test_returned_page_always_fits_the_per_page_target(self, monkeypatch):
+        """No matter how many ladder iterations it takes, the loop must
+        never return a page over its byte budget."""
+        monkeypatch.setattr(
+            "pdf_mcp.server._render_page_at", self._fake_render_page_at()
+        )
+        page_target = 180_000
+        result = server._fit_page_inline(
+            "unused.pdf", None, 0, dpi=200, page_target=page_target
+        )
+
+        assert result["outcome"] == "inline"
+        assert result["encoded_len"] <= page_target
+
+    def test_floor_fallback_still_works_when_nothing_above_fits(
+        self, isolated_server, big_scan_pdf, monkeypatch
+    ):
+        """When even the ladder's re-estimates can't fit, the existing
+        RENDER_DPI_MIN floor fallback must still produce a page (not
+        oversized), constructed via a very small real byte budget rather
+        than a synthetic huge fixture."""
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 58_000)
+        result = pdf_render_pages(big_scan_pdf, "1", dpi=300)
+        summary = result[0]
+
+        assert summary["pages_rendered"] == [1]
+        ds = summary["render_downsampled"][0]
+        assert ds["dpi_used"] == server.RENDER_DPI_MIN
+
+
+class TestNativeCapDownsampleSignal:
+    """F3: a page is downsampled when it renders below the smaller of what
+    was requested and what its OWN native raster can supply, never when it
+    lands exactly on either ceiling."""
+
+    def test_render_at_own_native_cap_is_not_downsampled(
+        self, isolated_server, native_cap_257_pdf
+    ):
+        """Requesting below a page's own 257 DPI native cap, alone, renders
+        at exactly the requested DPI and must not be flagged."""
+        result = pdf_render_pages(native_cap_257_pdf, "1", dpi=200)
+        summary = result[0]
+
+        assert summary["pages_rendered"] == [1]
+        assert summary["dpi_used"] == 200
+        assert "render_downsampled" not in summary
+
+    def test_sibling_page_native_cap_still_flags_the_higher_res_page(
+        self, isolated_server, mixed_native_cap_pdf
+    ):
+        """Page 1 (400 DPI native) and page 2 (100 DPI native) requested
+        together at 300 DPI: the cross-page min() pulls both down to 100.
+        Page 1 had headroom of its own (up to 400) that the sibling ate
+        into, so it must be flagged with a full render_downsampled entry.
+        Page 2 rendered at exactly its own native cap and must not be."""
+        result = pdf_render_pages(mixed_native_cap_pdf, "1-2", dpi=300)
+        summary = result[0]
+
+        assert summary["pages_rendered"] == [1, 2]
+        assert summary["dpi_used"] == 100
+
+        downsampled_pages = {e["page"]: e for e in summary["render_downsampled"]}
+        assert 1 in downsampled_pages
+        assert 2 not in downsampled_pages
+
+        entry = downsampled_pages[1]
+        assert entry["dpi_used"] == 100
+        assert entry["dpi_requested"] == 300
+        w, h = entry["pixels"]
+        assert w > 0 and h > 0
+        assert isinstance(entry["likely_illegible_for_fine_detail"], bool)
+
+    def test_native_cap_alone_is_not_downsampled_but_explains_the_gap(
+        self, isolated_server, native_cap_257_pdf
+    ):
+        """Requesting 400 DPI on a lone 257 DPI native page renders at 257
+        because of the native cap, not the byte budget. That is not a
+        degradation (nothing higher-resolution was available), so it must
+        not appear in render_downsampled; native_dpi_cap in the summary
+        explains the gap between requested and used DPI instead."""
+        result = pdf_render_pages(native_cap_257_pdf, "1", dpi=400)
+        summary = result[0]
+
+        assert summary["dpi_used"] == 257
+        assert summary["dpi_requested"] == 400
+        assert summary["native_dpi_cap"] == 257
+        assert "render_downsampled" not in summary
+
+
+class TestDownsampledEntryContract:
+    def _entry(self, path):
+        from pdf_mcp import server
+
+        summary = server.pdf_render_pages(path, "1-3", dpi=200)[0]
+        return summary["render_downsampled"][0]
+
+    def test_has_three_suggestions_with_clip_first(self, isolated_server, big_scan_pdf):
+        entry = self._entry(big_scan_pdf)
+        assert len(entry["suggestions"]) == 3
+        assert entry["suggestions"][0].startswith("Render a specific region")
+        assert "single page alone" in entry["suggestions"][1]
+        assert "file_path_on_disk" in entry["suggestions"][2]
+
+    def test_reports_pixels_not_just_dpi(self, isolated_server, big_scan_pdf):
+        entry = self._entry(big_scan_pdf)
+        w, h = entry["pixels"]
+        assert w > 0 and h > 0
+        assert isinstance(entry["likely_illegible_for_fine_detail"], bool)
+
+    def test_suggested_clips_are_valid_fractions(self, isolated_server, big_scan_pdf):
+        entry = self._entry(big_scan_pdf)
+        assert len(entry["suggested_clips"]) == 3
+        for x0, y0, x1, y1 in entry["suggested_clips"]:
+            assert 0.0 <= x0 < x1 <= 1.0
+            assert 0.0 <= y0 < y1 <= 1.0
+
+    def test_suggested_clip_is_accepted_by_the_tool(
+        self, isolated_server, big_scan_pdf
+    ):
+        """The suggested arguments must actually work when pasted back, at
+        the original DPI. big_scan_pdf's raster is deliberately
+        incompressible noise (to force the full-page downsample this class
+        exercises), so a full-width band clip at 200 DPI still blows the PNG
+        transport budget; the clip JPEG fallback (task 9) is what makes this
+        inline instead of dead-ending in render_oversized_pages."""
+        from pdf_mcp import server
+
+        entry = self._entry(big_scan_pdf)
+        result = server.pdf_render_pages(
+            big_scan_pdf, "1", dpi=200, clip=entry["suggested_clips"][0]
+        )
+        assert "error" not in result[0]
+        assert result[0]["pages_rendered"] == [1]
+        assert len(result) == 2
+        assert result[1].mimeType in ("image/png", "image/jpeg")
+
+    def test_flag_set_when_far_below_native_resolution(
+        self, isolated_server, big_scan_pdf, monkeypatch
+    ):
+        from pdf_mcp import server
+
+        # A tight budget forces a much harder downsample than the plain
+        # 3-page/900_000 split; the render lands well under half the
+        # 1200 px native raster width (measured: 468px at this budget).
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 200_000)
+        result = server.pdf_render_pages(big_scan_pdf, "1-3", dpi=200)
+        entry = result[0]["render_downsampled"][0]
+        assert entry["pixels"][0] < 600
+        assert entry["likely_illegible_for_fine_detail"] is True
+
+    def test_file_path_on_disk_points_at_the_lossless_png(
+        self, isolated_server, big_scan_pdf
+    ):
+        entry = self._entry(big_scan_pdf)
+        assert entry["file_path_on_disk"].endswith(".png")
+        assert Path(entry["file_path_on_disk"]).exists()
 
 
 # ---------------------------------------------------------------------------

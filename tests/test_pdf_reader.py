@@ -2665,6 +2665,90 @@ class TestRenderPageClip:
         doc.close()
 
 
+class TestRenderPageAsImage:
+    """Codec-aware rendering (render_page_as_image)."""
+
+    def test_png_path_unchanged(self, sample_pdf, tmp_path):
+        import pymupdf
+        from pdf_mcp.extractor import render_page_as_image
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            info = render_page_as_image(doc, 0, tmp_path, "abc", dpi=72)
+        finally:
+            doc.close()
+
+        assert info["file_path_on_disk"].endswith("abc_p0_render_72dpi.png")
+        assert info["codec"] == "png"
+        assert info["quality"] == 0
+        assert Path(info["file_path_on_disk"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_jpeg_codec_writes_jpeg_with_quality_in_name(self, sample_pdf, tmp_path):
+        import pymupdf
+        from pdf_mcp.extractor import render_page_as_image
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            info = render_page_as_image(
+                doc, 0, tmp_path, "abc", dpi=72, codec="jpeg", quality=60
+            )
+        finally:
+            doc.close()
+
+        assert info["file_path_on_disk"].endswith("abc_p0_render_72dpi_q60.jpg")
+        assert info["codec"] == "jpeg"
+        assert info["quality"] == 60
+        # JPEG SOI marker
+        assert Path(info["file_path_on_disk"]).read_bytes()[:2] == b"\xff\xd8"
+
+    def test_png_and_jpeg_never_collide_on_disk(self, sample_pdf, tmp_path):
+        import pymupdf
+        from pdf_mcp.extractor import render_page_as_image
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            png = render_page_as_image(doc, 0, tmp_path, "abc", dpi=72)
+            jpg = render_page_as_image(
+                doc, 0, tmp_path, "abc", dpi=72, codec="jpeg", quality=80
+            )
+            q60 = render_page_as_image(
+                doc, 0, tmp_path, "abc", dpi=72, codec="jpeg", quality=60
+            )
+        finally:
+            doc.close()
+
+        paths = {
+            png["file_path_on_disk"],
+            jpg["file_path_on_disk"],
+            q60["file_path_on_disk"],
+        }
+        assert len(paths) == 3
+
+    def test_render_page_as_png_wrapper_still_works(self, sample_pdf, tmp_path):
+        import pymupdf
+        from pdf_mcp.extractor import render_page_as_png
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            info = render_page_as_png(doc, 0, tmp_path, "abc", dpi=72)
+        finally:
+            doc.close()
+
+        assert info["codec"] == "png"
+        assert info["file_path_on_disk"].endswith(".png")
+
+    def test_unknown_codec_raises(self, sample_pdf, tmp_path):
+        import pymupdf
+        from pdf_mcp.extractor import render_page_as_image
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            with pytest.raises(ValueError, match="codec"):
+                render_page_as_image(doc, 0, tmp_path, "abc", dpi=72, codec="webp")
+        finally:
+            doc.close()
+
+
 class TestCJKHelpers:
     def test_contains_cjk_true_for_kanji_kana_hangul(self):
         from pdf_mcp.cache import _contains_cjk
@@ -3413,3 +3497,192 @@ class TestFTS5OrFallbackIsOptional:
             )
             == []
         ), "with the fallback disabled, strict AND semantics apply"
+
+
+class TestNativeRenderDpiCap:
+    def test_image_only_page_reports_native_dpi(self, scanned_page_pdf):
+        import pymupdf
+        from pdf_mcp.extractor import native_render_dpi_cap
+
+        doc = pymupdf.open(scanned_page_pdf)
+        try:
+            assert native_render_dpi_cap(doc, 0) == 144
+        finally:
+            doc.close()
+
+    def test_text_page_has_no_cap(self, sample_pdf):
+        import pymupdf
+        from pdf_mcp.extractor import native_render_dpi_cap
+
+        doc = pymupdf.open(sample_pdf)
+        try:
+            assert native_render_dpi_cap(doc, 0) is None
+        finally:
+            doc.close()
+
+    def test_text_over_raster_has_no_cap(self, scanned_page_pdf, tmp_path):
+        """A raster with text on top must NOT be capped: the text renders
+        sharper above the image's native resolution."""
+        import pymupdf
+        from pdf_mcp.extractor import native_render_dpi_cap
+
+        doc = pymupdf.open(scanned_page_pdf)
+        try:
+            doc[0].insert_text((50, 50), "caption text")
+            annotated = tmp_path / "annotated.pdf"
+            doc.save(annotated)
+        finally:
+            doc.close()
+
+        doc2 = pymupdf.open(annotated)
+        try:
+            assert native_render_dpi_cap(doc2, 0) is None
+        finally:
+            doc2.close()
+
+    def test_partial_coverage_has_no_cap(self, tmp_path):
+        """An image covering half the page is a figure, not a scan."""
+        import pymupdf
+        from pdf_mcp.extractor import native_render_dpi_cap
+
+        src = pymupdf.Document()
+        page = src.new_page(width=450, height=600)
+        pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 900, 600))
+        pix.set_rect(pix.irect, (200, 200, 200))
+        page.insert_image(pymupdf.Rect(0, 0, 450, 300), pixmap=pix)
+        out = tmp_path / "figure.pdf"
+        src.save(out)
+        src.close()
+
+        doc = pymupdf.open(out)
+        try:
+            assert native_render_dpi_cap(doc, 0) is None
+        finally:
+            doc.close()
+
+
+class TestRenderCacheCodecKey:
+    def test_jpeg_render_is_not_served_for_a_png_request(self, tmp_path):
+        from pdf_mcp.cache import PDFCache
+
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        jpg = tmp_path / "r.jpg"
+        jpg.write_bytes(b"\xff\xd8jpegbytes")
+        cache = PDFCache(cache_dir=tmp_path)
+        mtime = pdf.stat().st_mtime
+
+        cache.save_page_render(
+            str(pdf),
+            0,
+            mtime,
+            200,
+            {
+                "file_path_on_disk": str(jpg),
+                "size_bytes": jpg.stat().st_size,
+                "width": 100,
+                "height": 200,
+                "codec": "jpeg",
+                "quality": 60,
+            },
+        )
+
+        assert cache.get_page_render(str(pdf), 0, 200) is None
+        hit = cache.get_page_render(str(pdf), 0, 200, codec="jpeg", quality=60)
+        assert hit is not None
+        assert hit["codec"] == "jpeg"
+        assert hit["quality"] == 60
+
+    def test_two_jpeg_qualities_coexist(self, tmp_path):
+        from pdf_mcp.cache import PDFCache
+
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        cache = PDFCache(cache_dir=tmp_path)
+        mtime = pdf.stat().st_mtime
+
+        for q in (80, 60):
+            f = tmp_path / f"r{q}.jpg"
+            f.write_bytes(b"\xff\xd8" + bytes([q]) * 10)
+            cache.save_page_render(
+                str(pdf),
+                0,
+                mtime,
+                200,
+                {
+                    "file_path_on_disk": str(f),
+                    "size_bytes": f.stat().st_size,
+                    "width": 100,
+                    "height": 200,
+                    "codec": "jpeg",
+                    "quality": q,
+                },
+            )
+
+        q80 = cache.get_page_render(str(pdf), 0, 200, codec="jpeg", quality=80)
+        q60 = cache.get_page_render(str(pdf), 0, 200, codec="jpeg", quality=60)
+        assert q80 is not None and q60 is not None
+        assert q80["file_path_on_disk"] != q60["file_path_on_disk"]
+
+    def test_png_defaults_are_backward_compatible(self, tmp_path):
+        """A save without codec/quality keys stores a PNG row readable by a
+        default get_page_render call."""
+        from pdf_mcp.cache import PDFCache
+
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        png = tmp_path / "r.png"
+        png.write_bytes(b"\x89PNG\r\n\x1a\n")
+        cache = PDFCache(cache_dir=tmp_path)
+
+        cache.save_page_render(
+            str(pdf),
+            0,
+            pdf.stat().st_mtime,
+            200,
+            {
+                "file_path_on_disk": str(png),
+                "size_bytes": png.stat().st_size,
+                "width": 10,
+                "height": 20,
+            },
+        )
+
+        hit = cache.get_page_render(str(pdf), 0, 200)
+        assert hit is not None
+        assert hit["codec"] == "png"
+        assert hit["quality"] == 0
+
+    def test_legacy_table_is_dropped_and_its_files_unlinked(self, tmp_path):
+        """A pre-existing page_renders table without codec/quality cannot be
+        ALTERed into the new primary key, so it is dropped. Its PNGs must be
+        unlinked first or they leak in the renders dir forever."""
+        import sqlite3
+
+        from pdf_mcp.cache import PDFCache
+
+        db = tmp_path / "cache.db"
+        orphan = tmp_path / "old.png"
+        orphan.write_bytes(b"\x89PNG\r\n\x1a\n")
+        with sqlite3.connect(db) as conn:
+            conn.execute("""CREATE TABLE page_renders (
+                       file_path TEXT NOT NULL,
+                       page_num INTEGER NOT NULL,
+                       file_mtime REAL NOT NULL,
+                       dpi INTEGER NOT NULL,
+                       file_path_on_disk TEXT NOT NULL,
+                       size_bytes INTEGER NOT NULL,
+                       width INTEGER NOT NULL,
+                       height INTEGER NOT NULL,
+                       PRIMARY KEY (file_path, page_num, dpi))""")
+            conn.execute(
+                "INSERT INTO page_renders VALUES (?,?,?,?,?,?,?,?)",
+                ("/x.pdf", 0, 1.0, 200, str(orphan), 8, 10, 20),
+            )
+
+        PDFCache(cache_dir=tmp_path)
+
+        assert not orphan.exists()
+        with sqlite3.connect(db) as conn:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(page_renders)")}
+        assert {"codec", "quality"}.issubset(cols)

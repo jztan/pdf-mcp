@@ -388,3 +388,135 @@ def corpus_dir(tmp_path):
         doc.save(str(d / name))
         doc.close()
     return d
+
+
+@pytest.fixture
+def big_scan_pdf(tmp_path):
+    """A 3-page PDF of noisy full-page rasters. PNG blows the 900_000 base64
+    budget at 200 DPI; JPEG q80 fits comfortably. Deterministic seed so the
+    sizes do not drift between runs.
+
+    Pure per-pixel white noise is nearly incompressible under BOTH PNG and
+    JPEG (JPEG only got ~2.4x on it in a spike measurement), so the raster
+    is built as a photo-like texture instead: a smooth low-frequency base
+    (upsampled from a small random grid, which JPEG's DCT quantizes away to
+    almost nothing) plus per-pixel grain (which defeats PNG's row-predictor
+    filters, since neighboring pixels are not smoothly related).
+    """
+    import numpy as np
+    import pymupdf
+    from PIL import Image
+
+    rng = np.random.default_rng(20260809)
+    w, h, block, grain_amp = 1200, 1600, 40, 20
+    base_small = rng.integers(0, 256, size=(h // block, w // block, 3), dtype=np.uint8)
+    base_img = Image.fromarray(base_small, "RGB").resize((w, h), Image.BICUBIC)
+    base = np.asarray(base_img).astype(np.int16)
+    grain = rng.integers(-grain_amp, grain_amp + 1, size=(h, w, 3), dtype=np.int16)
+    noise = np.clip(base + grain, 0, 255).astype(np.uint8).tobytes()
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, w, h, noise, 0)
+
+    doc = pymupdf.Document()
+    for _ in range(3):
+        page = doc.new_page(width=432, height=576)
+        page.insert_image(page.rect, pixmap=pix)
+    out = tmp_path / "big_scan.pdf"
+    doc.save(out)
+
+    # F9 guard: this fixture only exercises the PNG-blows-budget /
+    # JPEG-fits cascade as long as it stays on the right side of the
+    # 900_000-base64-byte budget at 200 DPI. The PNG at 825_512 base64
+    # bytes measured a razor-thin 8.3% margin under budget; a libjpeg or
+    # Pillow version bump nudging encoded sizes by that much would
+    # silently turn the whole TestRenderEncodeCascade class into a
+    # downsample test that still passes green. Fail loudly here instead,
+    # as "fixture no longer exercises the cascade", rather than as a
+    # confusing assertion failure deep in the render tests.
+    from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET, _encoded_len
+
+    render_page = doc[0]
+    render_pix = render_page.get_pixmap(dpi=200)
+    png_len = _encoded_len(render_pix.tobytes("png"))
+    jpeg_len = _encoded_len(render_pix.tobytes("jpeg", jpg_quality=80))
+    doc.close()
+
+    assert png_len > RENDER_RESULT_BYTE_BUDGET, (
+        f"big_scan_pdf PNG at 200 DPI is {png_len} base64 bytes, no longer "
+        f"over the {RENDER_RESULT_BYTE_BUDGET} budget; regenerate the "
+        "fixture so the cascade test class still exercises JPEG fallback"
+    )
+    assert jpeg_len <= RENDER_RESULT_BYTE_BUDGET, (
+        f"big_scan_pdf JPEG q80 at 200 DPI is {jpeg_len} base64 bytes, over "
+        f"the {RENDER_RESULT_BYTE_BUDGET} budget; regenerate the fixture so "
+        "the cascade test class still exercises the JPEG success path"
+    )
+
+    return str(out)
+
+
+@pytest.fixture
+def scanned_page_pdf(tmp_path):
+    """A one-page PDF whose entire page is a single embedded raster, with no
+    text and no vector drawings. Mimics a phone scan."""
+    import pymupdf
+
+    # 900x1200 px raster placed on a 450x600 pt page -> native 144 DPI.
+    src = pymupdf.Document()
+    src_page = src.new_page(width=450, height=600)
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 900, 1200))
+    pix.set_rect(pix.irect, (240, 240, 240))
+    src_page.insert_image(src_page.rect, pixmap=pix)
+    out = tmp_path / "scan.pdf"
+    src.save(out)
+    src.close()
+    return str(out)
+
+
+@pytest.fixture
+def mixed_native_cap_pdf(tmp_path):
+    """Two full-page-scan pages with different native raster resolutions:
+    page 1 at 400 DPI, page 2 at 100 DPI. A request whose DPI is clamped
+    down by page 2's low cap must still flag page 1 as downsampled, since
+    page 1 had headroom of its own that the sibling page's cap ate into.
+    """
+    import pymupdf
+
+    doc = pymupdf.Document()
+
+    # 2400x3200 px on a 432x576 pt page -> native 400 DPI.
+    page1 = doc.new_page(width=432, height=576)
+    pix1 = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 2400, 3200))
+    pix1.set_rect(pix1.irect, (200, 200, 200))
+    page1.insert_image(page1.rect, pixmap=pix1)
+
+    # 600x800 px on the same 432x576 pt page -> native 100 DPI.
+    page2 = doc.new_page(width=432, height=576)
+    pix2 = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 600, 800))
+    pix2.set_rect(pix2.irect, (200, 200, 200))
+    page2.insert_image(page2.rect, pixmap=pix2)
+
+    out = tmp_path / "mixed_native_cap.pdf"
+    doc.save(out)
+    doc.close()
+    return str(out)
+
+
+@pytest.fixture
+def native_cap_257_pdf(tmp_path):
+    """A single full-page-scan page at 257 native DPI: the same effective
+    resolution as benchmark_data/.render_legibility_pdfs/scan-tutorial-1.pdf,
+    reproduced synthetically so the test doesn't depend on a benchmark
+    corpus file."""
+    import pymupdf
+
+    # 1542x2056 px on a 432x576 pt page -> native 257 DPI.
+    doc = pymupdf.Document()
+    page = doc.new_page(width=432, height=576)
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 1542, 2056))
+    pix.set_rect(pix.irect, (200, 200, 200))
+    page.insert_image(page.rect, pixmap=pix)
+    out = tmp_path / "native_cap_257.pdf"
+    doc.save(out)
+    doc.close()
+    return str(out)

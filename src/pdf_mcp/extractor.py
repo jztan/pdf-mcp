@@ -1274,30 +1274,49 @@ def extract_images_from_page(
     return images
 
 
-def render_page_as_png(
+_RENDER_CODECS = {"png": ".png", "jpeg": ".jpg"}
+
+
+def render_page_as_image(
     doc: pymupdf.Document,
     page_num: int,
     output_dir: Path,
     pdf_hash: str,
     dpi: int = 200,
     clip: "pymupdf.Rect | None" = None,
+    codec: str = "png",
+    quality: int = 0,
 ) -> dict[str, Any]:
     """
-    Render a PDF page (or a clipped region of it) as a PNG file.
+    Render a PDF page (or a clipped region of it) as an image file.
 
     Args:
         doc: PyMuPDF document object
         page_num: Page number (0-indexed)
-        output_dir: Directory to save the PNG
+        output_dir: Directory to save the image
         pdf_hash: Hash prefix for deterministic filenames
         dpi: Render resolution (default 200)
         clip: Optional region rectangle (page points). When set, only that
             region is rendered at `dpi`, and the filename carries a clip token
             so clipped and full renders never collide on disk.
+        codec: "png" (lossless, default) or "jpeg" (lossy). JPEG is used only
+            where a PNG has already failed the transport byte budget, so a
+            page never silently loses fidelity that it did not need to lose.
+        quality: JPEG quality 1-100. Ignored for PNG, which stores 0 as the
+            not-applicable sentinel so its cache key stays stable.
 
     Returns:
-        Dict with file_path_on_disk, size_bytes, width, height
+        Dict with file_path_on_disk, size_bytes, width, height, codec, quality
+
+    Raises:
+        ValueError: If codec is not "png" or "jpeg".
     """
+    if codec not in _RENDER_CODECS:
+        raise ValueError(
+            f"Unsupported render codec {codec!r};"
+            f" expected one of {sorted(_RENDER_CODECS)}"
+        )
+
     page = doc[page_num]
     if clip is not None:
         pix = page.get_pixmap(dpi=dpi, clip=clip)
@@ -1306,13 +1325,21 @@ def render_page_as_png(
         pix = page.get_pixmap(dpi=dpi)
         token = ""
 
-    file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi{token}.png"
+    # Quality participates in the filename so q80 and q60 renders of the same
+    # page coexist; PNG keeps its historical name so existing cache rows and
+    # on-disk files stay valid.
+    qual_token = f"_q{quality}" if codec == "jpeg" else ""
+    ext = _RENDER_CODECS[codec]
+    file_name = f"{pdf_hash}_p{page_num}_render_{dpi}dpi{token}{qual_token}{ext}"
     file_path = output_dir / file_name
     tmp_path = file_path.with_name(f"{file_name}.{os.getpid()}.tmp")
     try:
-        # Explicit output="png": pix.save() otherwise infers format from the
-        # file extension, and ".tmp" isn't a recognized image format.
-        pix.save(str(tmp_path), output="png")
+        # Explicit output=: pix.save() otherwise infers format from the file
+        # extension, and ".tmp" isn't a recognized image format.
+        if codec == "jpeg":
+            pix.save(str(tmp_path), output="jpeg", jpg_quality=quality)
+        else:
+            pix.save(str(tmp_path), output="png")
         os.chmod(str(tmp_path), 0o600)
         # Atomic on POSIX and Windows: a concurrent writer (e.g. an orphaned
         # pool worker rendering the same deterministic path) can no longer
@@ -1331,7 +1358,76 @@ def render_page_as_png(
         "size_bytes": file_path.stat().st_size,
         "width": pix.width,
         "height": pix.height,
+        "codec": codec,
+        "quality": quality,
     }
+
+
+def render_page_as_png(
+    doc: pymupdf.Document,
+    page_num: int,
+    output_dir: Path,
+    pdf_hash: str,
+    dpi: int = 200,
+    clip: "pymupdf.Rect | None" = None,
+) -> dict[str, Any]:
+    """Render a page as PNG. Thin wrapper over render_page_as_image kept so
+    the five existing call sites (including the picklable spawn-pool worker)
+    are untouched."""
+    return render_page_as_image(
+        doc, page_num, output_dir, pdf_hash, dpi, clip, codec="png", quality=0
+    )
+
+
+# A page qualifies as a pure scan only when a raster covers essentially all of
+# it and nothing else is drawn. Both thresholds are deliberately strict: a
+# false positive here caps resolution on a page that would genuinely get
+# sharper, which is a silent quality regression.
+_SCAN_COVERAGE_MIN = 0.98
+
+
+def native_render_dpi_cap(doc: pymupdf.Document, page_num: int) -> "int | None":
+    """
+    Native raster resolution of a page that is a single full-page image.
+
+    Returns the effective DPI of the embedded raster across the page width, or
+    None when the page is not a pure scan (has text, has vector drawings, has
+    no image, has several images, or the image does not cover the page).
+    Rendering such a page above its native DPI upsamples: it costs bytes and
+    carries no additional information.
+
+    Fail-safe: any PyMuPDF error returns None, i.e. no cap.
+    """
+    try:
+        page = doc[page_num]
+        if page.get_text().strip():
+            return None
+        if page.get_drawings():
+            return None
+
+        images = page.get_images(full=True)
+        if len(images) != 1:
+            return None
+
+        xref = images[0][0]
+        rects = page.get_image_rects(xref)
+        if not rects:
+            return None
+
+        page_area = page.rect.width * page.rect.height
+        if page_area <= 0:
+            return None
+        covered = sum(r.width * r.height for r in rects)
+        if covered / page_area < _SCAN_COVERAGE_MIN:
+            return None
+
+        info = doc.extract_image(xref)
+        width_pt = page.rect.width
+        if width_pt <= 0:
+            return None
+        return int(round(info["width"] / (width_pt / 72.0)))
+    except Exception:  # noqa: BLE001 - fail-safe: no cap rather than a crash
+        return None
 
 
 def check_tesseract_available() -> None:

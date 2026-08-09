@@ -290,14 +290,28 @@ class PDFCache:
             if cols and "embedding" not in cols:
                 conn.execute("DROP TABLE IF EXISTS page_embeddings")
 
-            # page_renders: drop if missing required columns
+            # page_renders: drop if missing required columns. codec/quality
+            # joined the PRIMARY KEY (a JPEG must not be served to a caller who
+            # asked for the same page and DPI as PNG), and SQLite cannot ALTER
+            # a primary key, so an old table is dropped. Unlink its images
+            # first: dropping the rows alone would strand the files in the
+            # renders dir with nothing left pointing at them.
             cols = _get_columns(conn, "page_renders")
             if cols and not {
                 "file_path",
                 "page_num",
                 "dpi",
+                "codec",
+                "quality",
                 "file_path_on_disk",
             }.issubset(cols):
+                for (stale,) in conn.execute(
+                    "SELECT file_path_on_disk FROM page_renders"
+                ).fetchall():
+                    try:
+                        Path(stale).unlink()
+                    except OSError:
+                        pass
                 conn.execute("DROP TABLE IF EXISTS page_renders")
 
             conn.executescript("""
@@ -406,12 +420,14 @@ class PDFCache:
                     page_num           INTEGER NOT NULL,
                     file_mtime         REAL    NOT NULL,
                     dpi                INTEGER NOT NULL,
+                    codec              TEXT    NOT NULL DEFAULT 'png',
+                    quality            INTEGER NOT NULL DEFAULT 0,
                     file_path_on_disk  TEXT    NOT NULL,
                     size_bytes         INTEGER NOT NULL,
                     width              INTEGER NOT NULL,
                     height             INTEGER NOT NULL,
                     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (file_path, page_num, dpi)
+                    PRIMARY KEY (file_path, page_num, dpi, codec, quality)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_page_renders_path
@@ -1306,18 +1322,28 @@ class PDFCache:
     # ==================== Render Operations ====================
 
     def get_page_render(
-        self, path: str, page_num: int, dpi: int
+        self,
+        path: str,
+        page_num: int,
+        dpi: int,
+        codec: str = "png",
+        quality: int = 0,
     ) -> dict[str, Any] | None:
-        """Get cached render for a page at a specific DPI.
+        """Get cached render for a page at a specific DPI, codec and quality.
+
+        codec/quality are part of the key: a lossy JPEG must never satisfy a
+        request for the lossless PNG at the same DPI.
 
         Returns None if not cached."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                """SELECT file_path_on_disk, size_bytes, width, height, file_mtime
+                """SELECT file_path_on_disk, size_bytes, width, height,
+                          file_mtime, codec, quality
                    FROM page_renders
-                   WHERE file_path = ? AND page_num = ? AND dpi = ?""",
-                (path, page_num, dpi),
+                   WHERE file_path = ? AND page_num = ? AND dpi = ?
+                     AND codec = ? AND quality = ?""",
+                (path, page_num, dpi, codec, quality),
             ).fetchone()
             if row is None:
                 return None
@@ -1330,6 +1356,8 @@ class PDFCache:
                 "size_bytes": row["size_bytes"],
                 "width": row["width"],
                 "height": row["height"],
+                "codec": row["codec"],
+                "quality": row["quality"],
             }
 
     def save_page_render(
@@ -1342,12 +1370,15 @@ class PDFCache:
     ) -> None:
         """Save a render to cache.
 
-        Unlinks the old PNG if the path changed (orphan guard)."""
+        Unlinks the old image if the path changed (orphan guard)."""
+        codec = render_dict.get("codec", "png")
+        quality = render_dict.get("quality", 0)
         with sqlite3.connect(self.db_path) as conn:
             existing = conn.execute(
                 "SELECT file_path_on_disk FROM page_renders"
-                " WHERE file_path = ? AND page_num = ? AND dpi = ?",
-                (path, page_num, dpi),
+                " WHERE file_path = ? AND page_num = ? AND dpi = ?"
+                " AND codec = ? AND quality = ?",
+                (path, page_num, dpi, codec, quality),
             ).fetchone()
             if existing and existing[0] != render_dict["file_path_on_disk"]:
                 try:
@@ -1356,14 +1387,16 @@ class PDFCache:
                     pass
             conn.execute(
                 """INSERT OR REPLACE INTO page_renders
-                   (file_path, page_num, file_mtime, dpi,
+                   (file_path, page_num, file_mtime, dpi, codec, quality,
                     file_path_on_disk, size_bytes, width, height)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     path,
                     page_num,
                     file_mtime,
                     dpi,
+                    codec,
+                    quality,
                     render_dict["file_path_on_disk"],
                     render_dict["size_bytes"],
                     render_dict["width"],
@@ -1680,8 +1713,10 @@ class PDFCache:
             except FileNotFoundError:
                 images_size = 0
             try:
+                # "*" not "*.png": render_pages also writes ".jpg" files
+                # (the JPEG fallback ladder), which "*.png" silently missed.
                 renders_size = sum(
-                    f.stat().st_size for f in self.renders_dir.glob("*.png")
+                    f.stat().st_size for f in self.renders_dir.glob("*") if f.is_file()
                 )
             except FileNotFoundError:
                 renders_size = 0

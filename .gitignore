@@ -84,6 +84,7 @@ benchmark_data/.financial_pdfs/
 benchmark_data/.answerability_cache/
 benchmark_data/.spike_confidence_cache/
 benchmark_data/.tiebreak_probe_cache/
+benchmark_data/.render_legibility_pdfs/
 
 # Content-trust corpus PDFs (synthetic ones are regenerable via
 # content_trust_corpus/generate.py; real/ holds third-party samples — never

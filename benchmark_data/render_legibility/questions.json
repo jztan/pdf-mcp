@@ -1,0 +1,117 @@
+{
+  "corpus_dir": "benchmark_data/.render_legibility_pdfs",
+  "items": [
+    {
+      "id": "t1p1-vertexp",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "1",
+      "klass": "single",
+      "question": "On page 1, inside the diagram, the student wrote a handwritten angle value next to vertex P, below the printed 20 degree label at Q. What number did they write? Reply with digits only.",
+      "answer": "104"
+    },
+    {
+      "id": "t1p1-vertexp-multi",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "1-3",
+      "klass": "multi",
+      "question": "Looking at page 1, inside the diagram, the student wrote a handwritten angle value next to vertex P, below the printed 20 degree label at Q. What number did they write? Reply with digits only.",
+      "answer": "104"
+    },
+    {
+      "id": "t1p2-strips",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "2",
+      "klass": "single",
+      "question": "On page 2, on the 'Ans: (a)' line, what is the student's handwritten final answer for the greatest number of rectangular strips Suresh can cut from the cardboard? Reply with digits only.",
+      "answer": "13"
+    },
+    {
+      "id": "t1p2-strips-multi",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "1-3",
+      "klass": "multi",
+      "question": "Looking at page 2, on the 'Ans: (a)' line, what is the student's handwritten final answer for the greatest number of rectangular strips Suresh can cut from the cardboard? Reply with digits only.",
+      "answer": "13"
+    },
+    {
+      "id": "t1p4-beads",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "4",
+      "klass": "single",
+      "question": "On page 4, on the 'Ans:' line, what is the student's handwritten final answer for how many beads Janelle used for the bracelet and necklace altogether? Reply with digits only.",
+      "answer": "90"
+    },
+    {
+      "id": "t1p4-beads-multi",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "3-5",
+      "klass": "multi",
+      "question": "Looking at page 4, on the 'Ans:' line, what is the student's handwritten final answer for how many beads Janelle used for the bracelet and necklace altogether? Reply with digits only.",
+      "answer": "90"
+    },
+    {
+      "id": "t1p6-chocolate",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "6",
+      "klass": "single",
+      "question": "On page 6, on the 'Ans:' line, what is the student's handwritten final answer for how many chocolate bars there were in the end? Reply with digits only.",
+      "answer": "56"
+    },
+    {
+      "id": "t1p6-chocolate-multi",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "5-7",
+      "klass": "multi",
+      "question": "Looking at page 6, on the 'Ans:' line, what is the student's handwritten final answer for how many chocolate bars there were in the end? Reply with digits only.",
+      "answer": "56"
+    },
+    {
+      "id": "t1p8-shirt",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "8",
+      "klass": "single",
+      "question": "On page 8, on the 'Ans: (a)' line, what is the student's handwritten final answer for how much each shirt cost, in dollars? Reply with digits only, no dollar sign.",
+      "answer": "65"
+    },
+    {
+      "id": "t1p8-shirt-multi",
+      "doc": "scan-tutorial-1.pdf",
+      "pages": "6-8",
+      "klass": "multi",
+      "question": "Looking at page 8, on the 'Ans: (a)' line, what is the student's handwritten final answer for how much each shirt cost, in dollars? Reply with digits only, no dollar sign.",
+      "answer": "65"
+    },
+    {
+      "id": "t2p1-anglew",
+      "doc": "scan-tutorial-2.pdf",
+      "pages": "1",
+      "klass": "single",
+      "question": "On page 1, question 2, on the 'Answer :' line, what is the student's handwritten value for angle w, in degrees? Reply with digits only.",
+      "answer": "126"
+    },
+    {
+      "id": "t2p1-anglew-multi",
+      "doc": "scan-tutorial-2.pdf",
+      "pages": "1-3",
+      "klass": "multi",
+      "question": "Looking at page 1, question 2, on the 'Answer :' line, what is the student's handwritten value for angle w, in degrees? Reply with digits only.",
+      "answer": "126"
+    },
+    {
+      "id": "t2p2-anglebce",
+      "doc": "scan-tutorial-2.pdf",
+      "pages": "2",
+      "klass": "single",
+      "question": "On page 2, question 4 part (b), on the 'Answer : (b)' line, what is the student's handwritten value for angle BCE, in degrees? Reply with digits only.",
+      "answer": "46"
+    },
+    {
+      "id": "t2p2-anglebce-multi",
+      "doc": "scan-tutorial-2.pdf",
+      "pages": "1-4",
+      "klass": "multi",
+      "question": "Looking at page 2, question 4 part (b), on the 'Answer : (b)' line, what is the student's handwritten value for angle BCE, in degrees? Reply with digits only.",
+      "answer": "46"
+    }
+  ]
+}

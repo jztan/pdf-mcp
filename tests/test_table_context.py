@@ -57,3 +57,17 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
 def test_table_extraction_version_is_3():
     """Row geometry changes the cached page_tables shape."""
     assert TABLE_EXTRACTION_VERSION == 3
+
+
+def test_ambiguity_trigger():
+    """Only excerpts a caller cannot resolve are worth a subprocess."""
+    from pdf_mcp.server import _excerpt_is_ambiguous
+
+    # Several numbers, nothing saying which is which.
+    assert _excerpt_is_ambiguous("Reset Voltage | 0.4 | 0.5 | 1 | V") is True
+    # A column word resolves it, so no context is needed.
+    assert _excerpt_is_ambiguous("Maximum forward voltage 1.1 V") is False
+    # One number cannot be confused with anything.
+    assert _excerpt_is_ambiguous("Total Capacitance CT 2.0 pF") is False
+    # Prose with no numbers must never trigger a subprocess.
+    assert _excerpt_is_ambiguous("we vary the number of attention heads") is False

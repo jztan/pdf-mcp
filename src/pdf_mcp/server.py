@@ -1501,6 +1501,29 @@ def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
     return raw[:cut].decode("utf-8", errors="ignore"), True
 
 
+#: Words that give a number its column identity. Kept separate from the
+#: benchmark's own copy on purpose: this decides when to spend a
+#: subprocess, the benchmark decides whether an answer is resolvable.
+#: Sharing them would move the fix and its ruler together.
+_COLUMN_IDENTITY_WORDS = re.compile(
+    r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
+)
+_NUMBER_TOKEN = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _excerpt_is_ambiguous(excerpt: str) -> bool:
+    """True when a caller cannot tell which quantity a number is.
+
+    Two or more numbers with nothing naming the columns: the header lives
+    in a different text block, and position is no substitute because empty
+    cells are elided. Anything else needs no table context, so a prose or
+    single-value search spawns no subprocess.
+    """
+    if _COLUMN_IDENTITY_WORDS.search(excerpt):
+        return False
+    return len(_NUMBER_TOKEN.findall(excerpt)) >= 2
+
+
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: pymupdf.Document,

@@ -251,3 +251,70 @@ def test_header_promotion_leaves_a_fully_populated_header_alone():
     got, body = _resolve_header(real, rows)
     assert got == real
     assert body == rows
+
+
+def test_header_promotion_refuses_a_row_carrying_money():
+    """A sparse but genuine header must survive a money-carrying row 0.
+
+    Berkshire 2024 p55 has a real year header spread across 12 columns
+    (3 filled), and row 0 is data: '$', '9,020'. The sparse-caption
+    allowance alone promoted that data row over a correct header. A header
+    names columns; it does not carry currency or thousands-grouped amounts.
+    """
+    from pdf_mcp.server import _resolve_header
+
+    header = ["", "2024", "", "", "", "2023", "", "", "", "2022", "", ""]
+    rows = [
+        [
+            "Insurance – underwriting",
+            "$",
+            "9,020",
+            "",
+            "",
+            "$",
+            "5,428",
+            "",
+            "",
+            "$",
+            "(30",
+            ")",
+        ],
+        [
+            "Insurance – investment income",
+            "",
+            "13,670",
+            "",
+            "",
+            "",
+            "9,567",
+            "",
+            "",
+            "",
+            "6,484",
+            "",
+        ],
+    ]
+    got, body = _resolve_header(header, rows)
+    assert got == header
+    assert body == rows
+
+
+def test_header_promotion_still_fires_on_a_year_row_without_money():
+    """Berkshire p61: caption header, row 0 is bare years, so promote."""
+    from pdf_mcp.server import _resolve_header
+
+    header = [""] * 18
+    header[0] = "Percentage change"
+    row0 = [""] * 18
+    for i, v in (
+        (1, "2024"),
+        (4, "2023"),
+        (7, "2022"),
+        (11, "2024 vs 2023"),
+        (14, "2023 vs 2022"),
+    ):
+        row0[i] = v
+    rows = [row0, ["Interest and other income", "$", "11,550"] + [""] * 15]
+    got, body = _resolve_header(header, rows)
+    assert got == row0
+    assert body == rows[1:]

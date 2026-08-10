@@ -1509,6 +1509,10 @@ _COLUMN_IDENTITY_WORDS = re.compile(
     r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
 )
 _NUMBER_TOKEN = re.compile(r"\d+(?:\.\d+)?")
+#: A currency symbol or a thousands-grouped amount. Marks a cell as data
+#: rather than a column label, which is what keeps a sparse-but-real header
+#: from being displaced by the row beneath it.
+_MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
 
 
 def _excerpt_is_ambiguous(excerpt: str) -> bool:
@@ -1559,6 +1563,13 @@ def _resolve_header(
 
     def filled(cells: list[str]) -> int:
         return sum(1 for c in cells if c and c.strip())
+
+    # A header names columns; it does not carry money. Berkshire p55 has a
+    # real year header spread thinly across 12 columns, and without this
+    # the sparse-caption allowance below promoted its data row ('$',
+    # '9,020') over a correct header.
+    if any(_MONEY_CELL.search(c) for c in rows[0] if c):
+        return header, rows
 
     by_vocabulary = col_words(header) < 2 and col_words(rows[0]) >= 2
     # Sparse caption band, denser row beneath it. The quarter-of-columns

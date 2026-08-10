@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
 
-VALID_CATEGORIES = {"prose", "structured"}
+VALID_CATEGORIES = {"prose", "structured", "table"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
 
 
@@ -260,7 +260,7 @@ def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
     print("=" * 78)
 
     # Per-cell summary
-    cats = ("prose", "structured", "all")
+    cats = ("prose", "structured", "table", "all")
     print(f"\n{'cell':<14}" + "".join(f"{c:>14}" for c in cats))
     for cell, scores in cells.items():
         row_str = f"{cell:<14}" + "".join(f"{scores.get(c, 0):>13.0%} " for c in cats)

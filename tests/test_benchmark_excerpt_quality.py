@@ -6,7 +6,9 @@ import pymupdf
 import pytest
 
 from scripts.benchmark_excerpt_quality import (
+    VALID_CATEGORIES,
     bbox_contains_answer,
+    load_queries,
     main,
     run_all_cells,
 )
@@ -64,3 +66,39 @@ def test_bbox_contains_answer_normalizes_hyphens_and_case():
     bbox = list(blocks[0][:4])
     assert bbox_contains_answer(page, bbox, "in context learning") is True
     doc.close()
+
+
+def _query_file(tmp_path, query: dict):
+    """Write a one-query corpus file and return its path."""
+    qfile = tmp_path / "q.json"
+    qfile.write_text(
+        json.dumps(
+            {
+                "pdfs": {
+                    "doc": {
+                        "url": "https://example.invalid/x.pdf",
+                        "title": "Doc",
+                        "queries": [query],
+                    }
+                }
+            }
+        )
+    )
+    return str(qfile)
+
+
+def test_table_category_is_valid(tmp_path):
+    """A query in the table class loads without a schema error."""
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d01",
+            "category": "table",
+            "query": "supply voltage",
+            "page": 5,
+            "answer": "4.5",
+        },
+    )
+    loaded = load_queries(path)
+    assert loaded["doc"]["queries"][0]["category"] == "table"
+    assert "table" in VALID_CATEGORIES

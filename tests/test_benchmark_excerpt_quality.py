@@ -489,3 +489,50 @@ def test_context_resolution_still_rejects_ti_packed_cell_after_widening():
         }
     }
     assert _resolves_via_context(ti, "0.4") is False
+
+
+def test_context_resolution_looks_left_past_spacer_columns():
+    """The label may sit left of its value when a spacer column intervenes.
+
+    Berkshire p55: header ['', '2024', '', ...] over row
+    ['BNSF', '', '5,031', ...]. Header and row are the same length; the
+    currency column shifts the value one right of its own label. A reader
+    resolves this instantly by looking left past the blank.
+    """
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    brk = {
+        "table_context": {
+            "header": ["", "2024", "", "", "", "2023", "", "", "", "2022", "", ""],
+            "rows": [
+                ["BNSF", "", "5,031", "", "", "", "5,087", "", "", "", "5,946", ""]
+            ],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(brk, "5,031") is True
+
+
+def test_context_resolution_does_not_look_left_to_a_caption():
+    """Looking left must not manufacture a label out of a section row."""
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    sbux_bad = {
+        "table_context": {
+            "header": ["Net revenues:", "", "", "", "", "", "", ""],
+            "rows": [
+                [
+                    "Store operating expenses",
+                    "13,973.3",
+                    "",
+                    "12,467.1",
+                    "",
+                    "51.0",
+                    "",
+                    "46.2",
+                ]
+            ],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(sbux_bad, "13,973.3") is False

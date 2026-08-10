@@ -109,9 +109,11 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         inside "VR = 25V")
       - that cell holds exactly one number token (TI's MIN cell is
         "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
-      - the header cell at that index names a quantity: a measurement
-        qualifier (MAX) or a reporting period (Sep 28, 2025). A
-        mis-detected section title must not count as resolution.
+      - the header governing that column names a quantity: a measurement
+        qualifier (MAX) or a reporting period (Sep 28, 2025). Blank
+        spacer columns are skipped leftward, since a currency column
+        shifts a value right of its own label. A mis-detected section
+        title must not count as resolution.
 
     Deliberately ignores `columns_reliable`: that flag is a table-level
     caution, while resolution is decided per value.
@@ -137,7 +139,17 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         return False
     if idx >= len(header):
         return False
-    return _names_a_quantity(header[idx])
+    # Look left past spacer columns. A currency or symbol column shifts a
+    # value one place right of its own label: Berkshire p55 is header
+    # ['', '2024', '', ...] over row ['BNSF', '', '5,031', ...], same
+    # length, label at 1 and value at 2. A reader resolves that by
+    # glancing left past the blank, so the metric must too. Only BLANK
+    # cells are skipped, so a populated but unhelpful header still fails.
+    for i in range(idx, -1, -1):
+        cell = header[i] or ""
+        if cell.strip():
+            return _names_a_quantity(cell)
+    return False
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:

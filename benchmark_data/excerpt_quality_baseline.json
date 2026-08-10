@@ -29,6 +29,12 @@
       "structured": null,
       "table": 0.16666666666666666,
       "all": 0.16666666666666666
+    },
+    "interpretable_with_context": {
+      "prose": null,
+      "structured": null,
+      "table": 0.3888888888888889,
+      "all": 0.3888888888888889
     }
   },
   "rows": [
@@ -46,7 +52,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t02",
@@ -62,7 +69,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t03",
@@ -78,7 +86,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t04",
@@ -94,7 +103,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "t05",
@@ -110,7 +120,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t06",
@@ -126,7 +137,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "t07",
@@ -142,7 +154,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "t08",
@@ -158,7 +171,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t09",
@@ -174,7 +188,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "t10",
@@ -190,7 +205,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t11",
@@ -209,7 +225,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t12",
@@ -225,7 +242,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "t13",
@@ -241,7 +259,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "g01",
@@ -257,7 +276,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "g02",
@@ -273,7 +293,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "g03",
@@ -289,7 +310,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "g04",
@@ -305,7 +327,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "g05",
@@ -321,7 +344,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "n01",
@@ -337,7 +361,8 @@
       "bbox_contains": 0,
       "bbox_present": 0,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "n02",
@@ -353,7 +378,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "n03",
@@ -369,7 +395,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "n04",
@@ -385,7 +412,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "n05",
@@ -401,7 +429,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "l01",
@@ -417,7 +446,8 @@
       "bbox_contains": 0,
       "bbox_present": 0,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "l02",
@@ -433,7 +463,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "l03",
@@ -449,7 +480,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "l04",
@@ -465,7 +497,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "l05",
@@ -481,7 +514,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "a01",
@@ -497,7 +531,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "a02",
@@ -513,7 +548,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "a03",
@@ -529,7 +565,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "a04",
@@ -545,7 +582,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "a05",
@@ -561,7 +599,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "m01",
@@ -577,7 +616,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "m02",
@@ -593,7 +633,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "m03",
@@ -609,7 +650,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d01",
@@ -628,7 +670,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d02",
@@ -647,7 +690,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d03",
@@ -666,7 +710,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d04",
@@ -682,7 +727,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d05",
@@ -698,7 +744,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "d06",
@@ -714,7 +761,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "v01",
@@ -730,7 +778,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "v02",
@@ -746,7 +795,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "v03",
@@ -762,7 +812,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 1
+      "paragraph_interpretable": 1,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "x01",
@@ -781,7 +832,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "x02",
@@ -797,7 +849,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "x03",
@@ -813,7 +866,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "e01",
@@ -829,7 +883,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 1
     },
     {
       "id": "e02",
@@ -845,7 +900,8 @@
       "bbox_contains": 0,
       "bbox_present": 1,
       "paragraph_qualified": 0,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 0
     },
     {
       "id": "e03",
@@ -861,7 +917,8 @@
       "bbox_contains": 1,
       "bbox_present": 1,
       "paragraph_qualified": 1,
-      "paragraph_interpretable": 0
+      "paragraph_interpretable": 0,
+      "paragraph_interpretable_with_context": 1
     }
   ]
 }

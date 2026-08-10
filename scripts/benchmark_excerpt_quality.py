@@ -70,6 +70,40 @@ def _is_interpretable(excerpt: str) -> bool:
     return len(_NUMBER.findall(excerpt)) <= 1
 
 
+def _resolves_via_context(match: dict, answer: str) -> bool:
+    """True if the attached table context identifies WHICH quantity the answer is.
+
+    All four must hold, and each rejects a real failure seen in the corpus:
+      - the answer is a number token in exactly one cell (substring
+        matching produced a false pass: "25" inside "VR = 25V")
+      - that cell holds exactly one number token (TI's MIN cell is
+        "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
+      - the header cell at that index names a quantity (a mis-detected
+        section title must not count as resolution)
+
+    Deliberately ignores `columns_reliable`: that flag is a table-level
+    caution, while resolution is decided per value.
+    """
+    ctx = match.get("table_context")
+    if not ctx:
+        return False
+    header, row = ctx.get("header") or [], ctx.get("row") or []
+    want = _norm(answer)
+    hits = [
+        i
+        for i, cell in enumerate(row)
+        if want in [_norm(t) for t in _NUMBER.findall(cell or "")]
+    ]
+    if len(hits) != 1:
+        return False
+    idx = hits[0]
+    if len(_NUMBER.findall(row[idx] or "")) != 1:
+        return False
+    if idx >= len(header):
+        return False
+    return bool(_COLUMN_WORDS.search(header[idx] or ""))
+
+
 def bbox_contains_answer(page, bbox, answer: str) -> bool:
     """True if re-extracting the bbox region contains the gold answer.
 
@@ -238,7 +272,9 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     CELLS = ("snippet", "paragraph")
 
     accum: dict[str, dict[str, list[int]]] = {
-        c: defaultdict(list) for c in CELLS + ("bbox", "qualified", "interpretable")
+        c: defaultdict(list)
+        for c in CELLS
+        + ("bbox", "qualified", "interpretable", "interpretable_with_context")
     }
     rows: list[dict] = []
 
@@ -331,13 +367,31 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                         accum["interpretable"][q["category"]].append(interpretable)
                     row["paragraph_interpretable"] = interpretable
 
+                    with_context = int(
+                        contains == 1
+                        and (
+                            _is_interpretable(excerpt_text)
+                            or _resolves_via_context(target or {}, q["answer"])
+                        )
+                    )
+                    if q["category"] == "table":
+                        accum["interpretable_with_context"][q["category"]].append(
+                            with_context
+                        )
+                    row["paragraph_interpretable_with_context"] = with_context
+
             rows.append(row)
 
         if doc is not None:
             doc.close()
 
     cells: dict[str, dict[str, float]] = {}
-    for cell in CELLS + ("bbox", "qualified", "interpretable"):
+    for cell in CELLS + (
+        "bbox",
+        "qualified",
+        "interpretable",
+        "interpretable_with_context",
+    ):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []
         for cat in sorted(VALID_CATEGORIES):

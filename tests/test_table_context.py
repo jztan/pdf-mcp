@@ -156,3 +156,30 @@ def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
         match = {"page": 1, "excerpt": "Supply Voltage 4.5 16 V"}
         out = _attach_table_context([match], ruled_table_pdf, cache)
     assert "table_context" not in out[0]
+
+
+def test_no_context_when_the_block_spans_the_whole_table(ruled_table_pdf):
+    """A text block covering every row identifies no row at all.
+
+    PyMuPDF returns some tables as ONE text block (Berkshire 2024 p134: a
+    202pt block over 16 rows of ~12pt). The centre-point test then lands on
+    whichever row sits in the vertical middle and returns it confidently.
+    Wrong-and-confident is worse than absent, so this must yield nothing.
+    """
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.server import _attach_table_context
+    import pathlib
+    import tempfile as _tf
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        # The full ruled table, not one of its rows.
+        # No column-identity word, or the ambiguity trigger would reject it
+        # before geometry is ever consulted and the test would pass vacuously.
+        match = {
+            "page": 1,
+            "excerpt": "Supply Voltage 4.5 16 V Reset Voltage 0.4 1.0 V",
+            "bbox": [50.0, 50.0, 300.0, 150.0],
+        }
+        out = _attach_table_context([match], ruled_table_pdf, cache)
+    assert "table_context" not in out[0]

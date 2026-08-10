@@ -1612,14 +1612,20 @@ def _attach_table_context(
 def _context_for_match(
     match: dict[str, Any], tables: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """Header and the row whose vertical span contains the match bbox.
+    """Header and the single row the match bbox identifies.
 
     Geometric, not token overlap: token overlap was measured selecting the
-    wrong row (5 vs 3 on the right one). Returns None when no row contains
-    the bbox centre, so a wrong row is never invented.
+    wrong row (5 vs 3 on the right one).
+
+    Requires the bbox to overlap EXACTLY ONE row, rather than testing which
+    row contains its centre. PyMuPDF returns some tables as one text block
+    (Berkshire 2024 p134: a 202pt block over 16 rows of ~12pt), and a centre
+    test on that bbox returns whichever row sits in the vertical middle,
+    confidently and wrongly. A bbox spanning many rows identifies no row, so
+    it yields nothing. Absent beats wrong-and-confident, the same call the
+    chart extractor makes when it declines.
     """
     bbox = match["bbox"]
-    cy = (float(bbox[1]) + float(bbox[3])) / 2
     for table in tables:
         row_bboxes = table.get("row_bboxes") or []
         rows = table.get("rows") or []
@@ -1627,14 +1633,36 @@ def _context_for_match(
             continue
         header, body = _resolve_header(table.get("header") or [], rows)
         offset = len(rows) - len(body)  # 1 when row 0 was promoted
-        for i, rb in enumerate(row_bboxes[offset:]):
-            if float(rb[1]) <= cy <= float(rb[3]):
-                return {
-                    "header": header,
-                    "row": body[i],
-                    "columns_reliable": _columns_reliable(body),
-                }
+        hits = _rows_overlapping(bbox, row_bboxes[offset:])
+        if len(hits) == 1:
+            return {
+                "header": header,
+                "row": body[hits[0]],
+                "columns_reliable": _columns_reliable(body),
+            }
     return None
+
+
+def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[int]:
+    """Indices of rows the bbox overlaps by more than half the smaller height.
+
+    Scaled by ``min(bbox height, row height)`` so it works in both
+    directions: a short cell bbox sitting inside a tall row still counts as
+    one hit, while a tall whole-table bbox counts every row it covers and so
+    resolves to no single row.
+    """
+    y0, y1 = float(bbox[1]), float(bbox[3])
+    box_h = y1 - y0
+    hits: list[int] = []
+    for i, rb in enumerate(row_bboxes):
+        r0, r1 = float(rb[1]), float(rb[3])
+        row_h = r1 - r0
+        if row_h <= 0:
+            continue
+        overlap = min(y1, r1) - max(y0, r0)
+        if overlap > 0.5 * min(box_h, row_h):
+            hits.append(i)
+    return hits
 
 
 def _upgrade_excerpts_to_paragraphs(

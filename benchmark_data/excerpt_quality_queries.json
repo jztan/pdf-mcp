@@ -293,7 +293,9 @@
       ]
     },
     "lm555": {
-      "url": "https://www.ti.com/lit/ds/symlink/lm555.pdf",
+      "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+      "source_url": "https://www.ti.com/lit/ds/symlink/lm555.pdf",
+      "sha256": "3729a8740c28a7a06cf747a5fa350a9d2310329f100b20092fd2a7a6e2372153",
       "title": "TI LM555 Timer Datasheet (SNAS548D)",
       "queries": [
         {
@@ -353,7 +355,9 @@
       ]
     },
     "vishay_1n4001": {
-      "url": "https://www.vishay.com/docs/88503/1n4001.pdf",
+      "path": "docs_internal/sample_pdfs/datasheets/vishay_1n4001.pdf",
+      "source_url": "https://www.vishay.com/docs/88503/1n4001.pdf",
+      "sha256": "56a77c6615c90c11993d37d94e67f335cf3a2d1fe00f25d2a1a4833834356d07",
       "title": "Vishay 1N4001-1N4007 Rectifier Datasheet",
       "queries": [
         {
@@ -380,7 +384,9 @@
       ]
     },
     "diodes_1n4148w": {
-      "url": "https://www.diodes.com/assets/Datasheets/ds30086.pdf",
+      "path": "docs_internal/sample_pdfs/datasheets/diodes_1n4148w.pdf",
+      "source_url": "https://www.diodes.com/assets/Datasheets/ds30086.pdf",
+      "sha256": "39c16a6888bdab22418e93e17182174aad763a66957a4632e70c944194e3fc08",
       "title": "Diodes Inc BAV16W/1N4148W Datasheet (DS30086)",
       "queries": [
         {
@@ -411,7 +417,9 @@
       ]
     },
     "espressif_esp32": {
-      "url": "https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf",
+      "path": "docs_internal/sample_pdfs/datasheets/espressif_esp32.pdf",
+      "source_url": "https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf",
+      "sha256": "a7917e6b47528c9dcab06837a49d452e582751335797db879f1cf2d17cd29adf",
       "title": "Espressif ESP32 Series Datasheet",
       "queries": [
         {

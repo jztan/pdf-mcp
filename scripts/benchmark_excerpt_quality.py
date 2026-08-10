@@ -25,6 +25,7 @@ Exit codes: 0 = PASS / calibrate, 1 = FAIL, 2 = setup error.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -110,6 +111,29 @@ def _resolve_pdf_path(pdf_data: dict) -> str:
     return path
 
 
+def _assert_sha256(local_path: str, pdf_key: str, expected: str) -> None:
+    """Fail loudly if a corpus file's bytes are not the graded ones.
+
+    Baselines are only comparable against fixed inputs. A vendor that
+    re-issues a datasheet, or a re-download that silently returns
+    something else, would otherwise show up as a quality change.
+    """
+    h = hashlib.sha256()
+    with open(local_path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    actual = h.hexdigest()
+    if actual != expected:
+        raise ValueError(
+            f"Corpus PDF '{pdf_key}' failed its sha256 check.\n"
+            f"  expected {expected}\n  actual   {actual}\n"
+            f"  path     {local_path}\n"
+            "The graded bytes changed, so its recorded pages and answers"
+            " may no longer hold. Re-verify the corpus and update the"
+            " digest deliberately; do not just paste the new value."
+        )
+
+
 def _assert_answer_on_page(doc, pdf_key: str, q: dict) -> None:
     """Fail loudly if the graded page cannot contain the answer.
 
@@ -176,6 +200,9 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                 " on every one of its queries, which is indistinguishable"
                 " from a total quality collapse."
             )
+        expected_sha = pdf_data.get("sha256")
+        if expected_sha:
+            _assert_sha256(local_path, pdf_key, expected_sha)
         doc = pymupdf.open(local_path)
 
         for q in pdf_data["queries"]:

@@ -278,3 +278,28 @@ def test_main_returns_2_on_a_drifted_ground_truth_page(tmp_path):
     qfile = tmp_path / "queries.json"
     qfile.write_text(json.dumps({"pdfs": _corpus(pdf, 1, "9.9")}))
     assert main(["--queries", str(qfile)]) == 2
+
+
+def test_run_all_cells_raises_on_sha256_mismatch(tmp_path):
+    """A swapped corpus file must abort, not silently re-score.
+
+    Pinned bytes are what make baselines comparable over time; a file that
+    changed underneath the gate reports as a quality change.
+    """
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    corpus = _corpus(pdf, 1, "4.5")
+    corpus["doc"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="sha256"):
+        run_all_cells(corpus)
+
+
+def test_run_all_cells_accepts_a_matching_sha256(tmp_path):
+    """The correct digest passes and scoring proceeds."""
+    import hashlib
+
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    corpus = _corpus(pdf, 1, "4.5")
+    with open(pdf, "rb") as fh:
+        corpus["doc"]["sha256"] = hashlib.sha256(fh.read()).hexdigest()
+    _cells_out, rows = run_all_cells(corpus)
+    assert len(rows) == 1

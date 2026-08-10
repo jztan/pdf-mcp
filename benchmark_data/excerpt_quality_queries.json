@@ -462,6 +462,261 @@
           "answer_label": "Allowed input voltage"
         }
       ]
+    },
+    "berkshire_2024ar": {
+      "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+      "source_url": "https://www.berkshirehathaway.com/2024ar/2024ar.pdf",
+      "sha256": "6aa0a501680c50a57e0a1a2e841b46800e1fed828a8a7889d83d8eae7953e4bb",
+      "title": "Berkshire Hathaway 2024 Annual Report",
+      "queries": [
+        {
+          "id": "b01",
+          "category": "table",
+          "query": "BNSF earnings attributable to shareholders",
+          "page": 55,
+          "answer": "5,031",
+          "answer_label": "BNSF"
+        },
+        {
+          "id": "b02",
+          "category": "table",
+          "query": "insurance underwriting earnings",
+          "page": 55,
+          "answer": "9,020",
+          "answer_label": "Insurance – underwriting"
+        },
+        {
+          "id": "b03",
+          "category": "table",
+          "query": "dividend income prior year",
+          "page": 61,
+          "answer": "5,500",
+          "answer_label": "Dividend income"
+        },
+        {
+          "id": "b04",
+          "category": "table",
+          "query": "energy operating revenue",
+          "page": 65,
+          "answer": "21,566",
+          "answer_label": "Energy operating revenue"
+        },
+        {
+          "id": "b05",
+          "category": "table",
+          "query": "manufacturing revenues",
+          "page": 67,
+          "answer": "77,231",
+          "answer_label": "Manufacturing"
+        },
+        {
+          "id": "b06",
+          "category": "table",
+          "query": "Pilot revenues",
+          "page": 72,
+          "answer": "46,891",
+          "answer_label": "Pilot"
+        }
+      ]
+    },
+    "fed_consumer_context": {
+      "path": "pages/corpus/fed-consumer-context.pdf",
+      "sha256": "667469a749457d45f39e68fb2751a8a69d7b4143d6aa1045199caae5a2beb680",
+      "title": "Federal Reserve: Consumer Context in Small Business Lending",
+      "queries": [
+        {
+          "id": "g01",
+          "category": "table",
+          "query": "factor rate estimated APR equivalent",
+          "page": 7,
+          "answer": "70% APR",
+          "answer_label": "1.15 factor rate"
+        },
+        {
+          "id": "g02",
+          "category": "table",
+          "query": "fee rate estimated APR equivalent",
+          "page": 7,
+          "answer": "45% APR",
+          "answer_label": "4% fee rate"
+        },
+        {
+          "id": "g03",
+          "category": "table",
+          "query": "Company A origination fee range",
+          "page": 6,
+          "answer": "1.99% to 8.99%",
+          "answer_label": "Company A"
+        }
+      ]
+    },
+    "microchip_mcp1700": {
+      "path": "docs_internal/sample_pdfs/datasheets/microchip_mcp1700.pdf",
+      "source_url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP1700-Low-Quiescent-Current-LDO-20001826E.pdf",
+      "sha256": "808bac85cf4d3fea97938d2d4ea5f3384d26e1f0dd8e3191ad2d5dae3ed18ee4",
+      "title": "Microchip MCP1700 LDO Datasheet (DS20001826E)",
+      "queries": [
+        {
+          "id": "p01",
+          "category": "table",
+          "query": "power supply ripple rejection ratio",
+          "page": 4,
+          "answer": "44",
+          "answer_label": "PSRR"
+        },
+        {
+          "id": "p02",
+          "category": "table",
+          "query": "thermal shutdown protection",
+          "page": 4,
+          "answer": "140",
+          "answer_label": "Thermal Shutdown Protection"
+        },
+        {
+          "id": "p03",
+          "category": "table",
+          "query": "thermal resistance junction to case top",
+          "page": 5,
+          "answer": "74",
+          "answer_label": "JC(Top)"
+        }
+      ]
+    },
+    "sgdr_warm_restarts": {
+      "path": "benchmark_data/.reading_order_pdfs/1608.03983.pdf",
+      "source_url": "https://arxiv.org/abs/1608.03983",
+      "sha256": "f14bcfe4dc713782b6b1df90e73f691a8a4d1fa625a08c490c7270fd283a9caa",
+      "title": "SGDR: Stochastic Gradient Descent with Warm Restarts",
+      "queries": [
+        {
+          "id": "x11",
+          "category": "table",
+          "query": "original ResNet CIFAR-10 error rate",
+          "page": 6,
+          "answer": "6.43",
+          "answer_label": "original-ResNet"
+        },
+        {
+          "id": "x12",
+          "category": "table",
+          "query": "stochastic depth CIFAR-10 error",
+          "page": 6,
+          "answer": "5.23",
+          "answer_label": "stoc-depth"
+        },
+        {
+          "id": "x13",
+          "category": "table",
+          "query": "wide residual network CIFAR-100 error",
+          "page": 6,
+          "answer": "22.07",
+          "answer_label": "WRN"
+        }
+      ]
+    },
+    "flashattention": {
+      "path": "benchmark_data/.reading_order_pdfs/2205.14135.pdf",
+      "source_url": "https://arxiv.org/abs/2205.14135",
+      "sha256": "ca7f9fda10b90fc05dd291a3accc85e9c1a4a860b99b31928dab03ed3fcb14e4",
+      "title": "FlashAttention: Fast and Memory-Efficient Exact Attention",
+      "queries": [
+        {
+          "id": "x14",
+          "category": "table",
+          "query": "Apex FMHA forward pass runtime",
+          "page": 28,
+          "answer": "0.10",
+          "answer_label": "Apex FMHA forward"
+        },
+        {
+          "id": "x15",
+          "category": "table",
+          "query": "Apex FMHA backward pass runtime",
+          "page": 28,
+          "answer": "0.17",
+          "answer_label": "Apex FMHA backward"
+        }
+      ]
+    },
+    "speech_corpus_1807": {
+      "path": "benchmark_data/.reading_order_pdfs/1807.11632.pdf",
+      "source_url": "https://arxiv.org/abs/1807.11632",
+      "sha256": "cb8511fd56f2478bf3c002941f7571357415ede0bb2ff632c4e22622943baae5",
+      "title": "arXiv 1807.11632 (multi-level table header)",
+      "queries": [
+        {
+          "id": "x16",
+          "category": "table",
+          "query": "English base set total training utterances",
+          "page": 4,
+          "answer": "26785",
+          "answer_label": "en.base"
+        },
+        {
+          "id": "x17",
+          "category": "table",
+          "query": "Japanese base set total training utterances",
+          "page": 4,
+          "answer": "34713",
+          "answer_label": "jp.base"
+        }
+      ]
+    },
+    "unfolding_0811": {
+      "path": "benchmark_data/.reading_order_pdfs/0811.0781.pdf",
+      "source_url": "https://arxiv.org/abs/0811.0781",
+      "sha256": "cf3eb579a103b3da3cd221930c335b2c40fcf8f28f1eeb853f3d22cbf10890bb",
+      "title": "arXiv 0811.0781 (physics preprint, clean numeric table)",
+      "queries": [
+        {
+          "id": "x18",
+          "category": "table",
+          "query": "unfolding order C then B then A observed frequency",
+          "page": 21,
+          "answer": "0.44",
+          "answer_label": "C → B → A"
+        },
+        {
+          "id": "x19",
+          "category": "table",
+          "query": "unfolding order B then C then A observed frequency",
+          "page": 21,
+          "answer": "0.25",
+          "answer_label": "B → C → A"
+        }
+      ]
+    },
+    "starbucks_2025ar": {
+      "path": "docs_internal/sample_pdfs/financial/starbucks_2025ar.pdf",
+      "source_url": "https://s203.q4cdn.com/326826266/files/doc_financials/2025/ar/Starbucks-Corporation_2025-Annual-Report-Web-Ready.pdf",
+      "sha256": "dfab526cdc0e886f59f02899ad9523c32588357f3f94c27d382670cedcdc3cde",
+      "title": "Starbucks Corporation 2025 Annual Report",
+      "queries": [
+        {
+          "id": "s01",
+          "category": "table",
+          "query": "consolidated licensed stores net revenues",
+          "page": 34,
+          "answer": "4,350.4",
+          "answer_label": "Licensed stores"
+        },
+        {
+          "id": "s02",
+          "category": "table",
+          "query": "North America store operating expenses",
+          "page": 36,
+          "answer": "13,973.3",
+          "answer_label": "Store operating expenses"
+        },
+        {
+          "id": "s03",
+          "category": "table",
+          "query": "International product and distribution costs",
+          "page": 37,
+          "answer": "2,749.8",
+          "answer_label": "Product and distribution costs"
+        }
+      ]
     }
   }
 }

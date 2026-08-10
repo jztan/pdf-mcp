@@ -49,7 +49,37 @@ GATED_CELLS = ("snippet", "paragraph")
 _COLUMN_WORDS = re.compile(
     r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
 )
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+#: Thousands separators included: without them "4,350.4" tokenises as
+#: ['4', '350.4'] and no comma-grouped financial figure can ever match a
+#: cell. Same inexpressibility defect as the period-header vocabulary.
+_NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+
+#: A column header naming a reporting PERIOD rather than a measurement
+#: qualifier. 'Sep 28, 2025' identifies which quantity a number is exactly
+#: as completely as 'MAX' does, and financial and government tables label
+#: their columns this way almost exclusively.
+#:
+#: Widened 2026-08-11, deliberately and before re-running. The prior
+#: vocabulary was datasheet-only, so NO financial document could score
+#: above zero on `interpretable_with_context` however well the code
+#: performed -- the metric could not represent a correct answer for the
+#: class. That is a defect in the definition, not strictness. This is not
+#: licence to widen the ruler whenever documents score badly: the test is
+#: whether a correct result is INEXPRESSIBLE, not whether it is rare.
+_PERIOD_WORDS = re.compile(
+    r"\b(19|20)\d{2}\b"
+    r"|\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\b"
+    r"|\bfiscal\b|\bquarter\b|\bq[1-4]\b|\bfy\s?\d{2,4}\b"
+    r"|\byears?\s+ended\b"
+    r"|%\s*change",
+    re.I,
+)
+
+
+def _names_a_quantity(header_cell: str) -> bool:
+    """True when a header cell identifies which quantity a value is."""
+    cell = header_cell or ""
+    return bool(_COLUMN_WORDS.search(cell) or _PERIOD_WORDS.search(cell))
 
 
 def _is_interpretable(excerpt: str) -> bool:
@@ -78,8 +108,9 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         matching produced a false pass: "25" inside "VR = 25V")
       - that cell holds exactly one number token (TI's MIN cell is
         "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
-      - the header cell at that index names a quantity (a mis-detected
-        section title must not count as resolution)
+      - the header cell at that index names a quantity: a measurement
+        qualifier (MAX) or a reporting period (Sep 28, 2025). A
+        mis-detected section title must not count as resolution.
 
     Deliberately ignores `columns_reliable`: that flag is a table-level
     caution, while resolution is decided per value.
@@ -101,7 +132,7 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         return False
     if idx >= len(header):
         return False
-    return bool(_COLUMN_WORDS.search(header[idx] or ""))
+    return _names_a_quantity(header[idx])
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:

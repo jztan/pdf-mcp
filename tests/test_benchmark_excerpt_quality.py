@@ -372,3 +372,59 @@ def test_interpretable_requires_column_identity_or_a_lone_number():
     assert _is_interpretable("Maximum instantaneous forward voltage 1.1 V") is True
     # A single number cannot be confused with anything.
     assert _is_interpretable("Total Capacitance CT pF") is True
+
+
+def test_context_resolution_requires_a_single_number_in_the_cell():
+    """TI's packed MIN cell must NOT count as resolved."""
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    ti = {
+        "table_context": {
+            "header": ["PARAMETER", "TEST CONDITIONS", "MIN", "TYP", "MAX", "UNIT"],
+            "row": ["Reset Voltage", "", "0.4 0.5 1", "", "", "V"],
+            "columns_reliable": False,
+        }
+    }
+    assert _resolves_via_context(ti, "0.4") is False
+
+
+def test_context_resolution_accepts_a_clean_cell_under_a_named_column():
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    esp = {
+        "table_context": {
+            "header": ["Parameter", "Description", "Min", "Max", "Unit"],
+            "row": ["Ioutput1", "Cumulative IO output current", "-", "1200", "mA"],
+            "columns_reliable": False,
+        }
+    }
+    # columns_reliable is False and must NOT block resolution: the flag is
+    # table-level, resolution is per value.
+    assert _resolves_via_context(esp, "1200") is True
+
+
+def test_context_resolution_rejects_an_unnamed_column():
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    junk = {
+        "table_context": {
+            "header": ["Electrical Characteristics (@ TA = +25C)", "", "", ""],
+            "row": ["Reverse Recovery Time", "tRR", "4.0", "ns"],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(junk, "4.0") is False
+
+
+def test_context_resolution_uses_number_tokens_not_substrings():
+    """ "100" must not match inside "1000"."""
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    m = {
+        "table_context": {
+            "header": ["Parameter", "Max", "Unit"],
+            "row": ["Leakage", "1000", "nA"],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(m, "100") is False

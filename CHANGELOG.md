@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pdf_search` now attaches `table_context` to matches a caller cannot
+  resolve on their own. An excerpt like `Reset Voltage | 0.4 | 0.5 | 1 | V`
+  contains the answer but nothing says which number is the minimum, because
+  the header is a separate text block and position is no guide (empty cells
+  are elided). Ambiguous matches now carry the table `header`, their own
+  `row`, and `columns_reliable`. On the excerpt benchmark's table class the
+  share of answers a caller can actually resolve goes from 17% to 39%.
+  Context is attached only when the excerpt holds two or more numbers and
+  no column label, so prose searches are unaffected; extraction is cached
+  per page. `columns_reliable` is false when a table's cells hold merged
+  values, which happens on datasheets drawn without vertical rules; it is a
+  table-level caution, not a judgement on the individual row.
+  `pdf_corpus_search` does not attach this field, to protect its latency
+  budget.
 - `pdf_render_pages` now returns legible scanned pages. A page whose PNG
   exceeds the transport byte budget is re-encoded as JPEG at the full
   requested DPI before any resolution is sacrificed, and lossy pages are
@@ -130,6 +144,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `pdf_read_pages` table entries gain `row_bboxes`, one bounding box per
+  row, which `pdf_search` uses to pick the row matching a hit. Cached
+  tables re-extract once on first access after upgrade.
 - Documented what each transport is for, rather than presenting HTTP as
   stdio's equivalent. Paths resolve on the server, so an HTTP caller reads
   files already under an allow-listed root or `https://` URLs the server

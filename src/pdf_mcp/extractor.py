@@ -1611,7 +1611,8 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
 #: ``pymupdf.layout`` and corrupts ``find_tables`` cell text -- decimal points
 #: detach from their numbers ("4.5" -> "45\n."), so every cached numeric cell
 #: from that era is untrustworthy and must be discarded.
-TABLE_EXTRACTION_VERSION = 2
+#: 3: per-row bboxes added for geometric row selection in pdf_search.
+TABLE_EXTRACTION_VERSION = 3
 
 
 def _extract_tables_worker(
@@ -1671,6 +1672,8 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
         - col_count: number of columns
         - header: list of header cell strings (first row)
         - rows: list of data rows (excludes header); each row is a list of cell strings
+        - row_bboxes: [x0, y0, x1, y1] per entry in `rows`, same order.
+          Empty list if geometry could not be aligned with the rows.
     """
     tables: list[dict[str, Any]] = []
     try:
@@ -1690,6 +1693,14 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
                 [str(cell) if cell is not None else "" for cell in row]
                 for row in extracted[1:]
             ]
+            # Per-row geometry, index-aligned with `rows` (header excluded).
+            # `table.rows` includes the header at index 0, so skip it. A
+            # caller selects the row containing a match bbox; token overlap
+            # was measured picking the wrong row, so geometry is the input.
+            row_bboxes = [[round(v, 1) for v in tr.bbox] for tr in table.rows[1:]]
+            # Never let the two drift: a caller indexes one by the other.
+            if len(row_bboxes) != len(rows):
+                row_bboxes = []
             tables.append(
                 {
                     "index": len(tables),
@@ -1698,6 +1709,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
                     "col_count": len(extracted[0]),
                     "header": header,
                     "rows": rows,
+                    "row_bboxes": row_bboxes,
                 }
             )
     except Exception as e:

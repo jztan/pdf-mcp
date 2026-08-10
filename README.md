@@ -282,7 +282,7 @@ The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate;
 | `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
 | `pdf_render_pages` | Render pages as PNG for vision models: diagrams, handwriting, scans |
 | `pdf_extract_chart` | Extract chart data as exact `(x, y)` tables from vector charts; declines with a rendered image when not reliably extractable |
-| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts (paragraph hits also carry `bbox` + `clip` coordinates) |
+| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts (paragraph hits also carry `bbox` + `clip` coordinates, and `table_context` when the excerpt's numbers need column labels) |
 | `pdf_cache_stats` | Per-document cache breakdown + total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
 | `server_info` | Which optional features (column-aware, OCR, semantic) and config are active. **Call before feature-dependent calls.** |

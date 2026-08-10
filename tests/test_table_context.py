@@ -183,3 +183,71 @@ def test_no_context_when_the_block_spans_the_whole_table(ruled_table_pdf):
         }
         out = _attach_table_context([match], ruled_table_pdf, cache)
     assert "table_context" not in out[0]
+
+
+def test_header_promotion_is_not_bound_to_datasheet_vocabulary():
+    """Real column labels are arbitrary noun phrases, not min/typ/max.
+
+    Verified across three document families: the Federal Reserve consumer
+    report keeps 'Table 2. Estimated APRs ...' as its header while the real
+    labels sit in row 0, and Berkshire 2024 p134 keeps 'Interest expense'
+    while the fiscal years sit in row 0. Only Vishay promoted, and only
+    because its labels happen to read Min/Max.
+    """
+    from pdf_mcp.server import _resolve_header
+
+    fed_header = ["Table 2. Estimated APRs for select online products", "", ""]
+    fed_rows = [
+        ["Rate advertised on website", "Product details", "Estimated APR equivalent"],
+        ["1.15 factor rate", "Total repayment", "Approximately 70% APR"],
+    ]
+    header, body = _resolve_header(fed_header, fed_rows)
+    assert header == fed_rows[0]
+    assert body == fed_rows[1:]
+
+    # Verbatim from Berkshire 2024 p134: two sub-tables side by side, so
+    # the caption band holds TWO filled cells across 20 columns. Taken from
+    # the extractor, not from truncated console output.
+    brk_header = [""] * 20
+    brk_header[1] = "Interest expense"
+    brk_header[11] = "Income tax expense (benefit)"
+    brk_row0 = [""] * 20
+    for i, y in (
+        (1, "2024"),
+        (4, "2023"),
+        (7, "2022"),
+        (11, "2024"),
+        (14, "2023"),
+        (17, "2022"),
+    ):
+        brk_row0[i] = y
+    brk_rows = [brk_row0, ["McLane"] + [""] * 19]
+    header, body = _resolve_header(brk_header, brk_rows)
+    assert header == brk_rows[0]
+    assert body == brk_rows[1:]
+
+
+def test_header_promotion_needs_three_columns():
+    """A 2-column table's first data cell must not become a header.
+
+    With only two columns, 'one filled header cell, two filled row cells'
+    is the shape of ordinary data, so the structural signal cannot
+    distinguish it from a caption and must not fire.
+    """
+    from pdf_mcp.server import _resolve_header
+
+    header = ["Name", ""]
+    rows = [["Alice", "30"], ["Bob", "41"]]
+    got, body = _resolve_header(header, rows)
+    assert got == header
+    assert body == rows
+
+
+def test_header_promotion_leaves_a_fully_populated_header_alone():
+    from pdf_mcp.server import _resolve_header
+
+    real = ["Parameter", "Description", "Min", "Max", "Unit"]
+    rows = [["Ioutput1", "Cumulative IO", "-", "1200", "mA"]]
+    got, body = _resolve_header(real, rows)
+    assert got == real
+    assert body == rows

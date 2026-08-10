@@ -123,8 +123,15 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
         pdf_path = _resolve_pdf_path(pdf_data)
         print(f"  {pdf_data.get('title', pdf_key)} ...", flush=True)
 
-        local_path, _err = _resolve_path(pdf_path)
-        doc = pymupdf.open(local_path) if local_path else None
+        local_path, resolve_err = _resolve_path(pdf_path)
+        if local_path is None:
+            raise FileNotFoundError(
+                f"Corpus PDF '{pdf_key}' could not be resolved: {pdf_path}"
+                f" ({resolve_err}). Aborting: an unresolvable PDF scores 0"
+                " on every one of its queries, which is indistinguishable"
+                " from a total quality collapse."
+            )
+        doc = pymupdf.open(local_path)
 
         for q in pdf_data["queries"]:
             row: dict = {
@@ -403,7 +410,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(f"Running excerpt quality benchmark ({total_q} queries)...\n")
-    cells, rows = run_all_cells(all_pdfs)
+    try:
+        cells, rows = run_all_cells(all_pdfs)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
     print_report(cells, rows, all_pdfs)
 
     if args.output_json:

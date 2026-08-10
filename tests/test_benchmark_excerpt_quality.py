@@ -1,8 +1,44 @@
 """Tests for scripts/benchmark_excerpt_quality.py helpers."""
 
-import pymupdf
+import json
 
-from scripts.benchmark_excerpt_quality import bbox_contains_answer
+import pymupdf
+import pytest
+
+from scripts.benchmark_excerpt_quality import (
+    bbox_contains_answer,
+    main,
+    run_all_cells,
+)
+
+GHOST_CORPUS = {
+    "ghost": {
+        "path": "/nonexistent/definitely_not_here.pdf",
+        "title": "Ghost Document",
+        "queries": [
+            {
+                "id": "x01",
+                "category": "prose",
+                "query": "anything",
+                "page": 1,
+                "answer": "anything",
+            }
+        ],
+    }
+}
+
+
+def test_run_all_cells_raises_on_unresolvable_pdf():
+    """A missing corpus PDF must abort, not silently score 0."""
+    with pytest.raises(FileNotFoundError, match="definitely_not_here.pdf"):
+        run_all_cells(GHOST_CORPUS)
+
+
+def test_main_returns_2_on_unresolvable_pdf(tmp_path):
+    """The abort surfaces as exit code 2 (setup error), not 0 or 1."""
+    qfile = tmp_path / "queries.json"
+    qfile.write_text(json.dumps({"pdfs": GHOST_CORPUS}))
+    assert main(["--queries", str(qfile)]) == 2
 
 
 def test_bbox_contains_answer_true_and_false():

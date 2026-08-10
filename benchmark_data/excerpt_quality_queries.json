@@ -1,7 +1,7 @@
 {
   "pdfs": {
     "transformer": {
-      "path": "docs_internal/1706.03762v7.pdf",
+      "path": "docs_internal/sample_pdfs/academic/1706.03762v7.pdf",
       "title": "Attention Is All You Need",
       "queries": [
         {
@@ -200,7 +200,7 @@
       ]
     },
     "aws_exam": {
-      "path": "docs_internal/AWS AIP-C01 107.pdf",
+      "path": "docs_internal/sample_pdfs/misc/AWS AIP-C01 107.pdf",
       "title": "AWS AI Practitioner Exam Guide",
       "queries": [
         {

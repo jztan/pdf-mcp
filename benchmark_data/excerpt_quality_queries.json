@@ -73,6 +73,31 @@
           "query": "training data sentence pairs",
           "page": 7,
           "answer": "training"
+        },
+        {
+          "id": "t11",
+          "category": "table",
+          "query": "base model BLEU dev score",
+          "page": 9,
+          "answer": "25.8",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "long-block win: the 324-char Table 3 caption beats the 50-char base row"
+          }
+        },
+        {
+          "id": "t12",
+          "category": "table",
+          "query": "positional embedding instead of sinusoids result",
+          "page": 9,
+          "answer": "4.92"
+        },
+        {
+          "id": "t13",
+          "category": "table",
+          "query": "varying the number of attention heads BLEU",
+          "page": 9,
+          "answer": "24.9"
         }
       ]
     },
@@ -264,6 +289,151 @@
           "query": "Thompson sampling exploration exploitation dilemma",
           "page": 4,
           "answer": "Thompson sampling"
+        }
+      ]
+    },
+    "lm555": {
+      "url": "https://www.ti.com/lit/ds/symlink/lm555.pdf",
+      "title": "TI LM555 Timer Datasheet (SNAS548D)",
+      "queries": [
+        {
+          "id": "d01",
+          "category": "table",
+          "query": "supply voltage range minimum maximum volts",
+          "page": 5,
+          "answer": "4.5",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "long-block win: the 1027-char footnote (1)-(6) beats the 24-char Supply Voltage row"
+          }
+        },
+        {
+          "id": "d02",
+          "category": "table",
+          "query": "output voltage drop low ISINK = 200 mA",
+          "page": 5,
+          "answer": "2.5",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "wrong sibling row: picks a 45-char ISINK row for a different current"
+          }
+        },
+        {
+          "id": "d03",
+          "category": "table",
+          "query": "initial accuracy monostable timing error",
+          "page": 5,
+          "answer": "1 %",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "wrong sibling row: picks a 24-char row from the astable block"
+          }
+        },
+        {
+          "id": "d04",
+          "category": "table",
+          "query": "reset voltage",
+          "page": 5,
+          "answer": "0.4"
+        },
+        {
+          "id": "d05",
+          "category": "table",
+          "query": "threshold current microamps",
+          "page": 5,
+          "answer": "0.25"
+        },
+        {
+          "id": "d06",
+          "category": "table",
+          "query": "pin 7 leakage output high nA",
+          "page": 5,
+          "answer": "100"
+        }
+      ]
+    },
+    "vishay_1n4001": {
+      "url": "https://www.vishay.com/docs/88503/1n4001.pdf",
+      "title": "Vishay 1N4001-1N4007 Rectifier Datasheet",
+      "queries": [
+        {
+          "id": "v01",
+          "category": "table",
+          "query": "maximum instantaneous forward voltage",
+          "page": 2,
+          "answer": "1.1"
+        },
+        {
+          "id": "v02",
+          "category": "table",
+          "query": "typical junction capacitance 4.0 V 1 MHz",
+          "page": 2,
+          "answer": "15"
+        },
+        {
+          "id": "v03",
+          "category": "table",
+          "query": "maximum DC reverse current at rated DC blocking voltage",
+          "page": 2,
+          "answer": "5.0"
+        }
+      ]
+    },
+    "diodes_1n4148w": {
+      "url": "https://www.diodes.com/assets/Datasheets/ds30086.pdf",
+      "title": "Diodes Inc BAV16W/1N4148W Datasheet (DS30086)",
+      "queries": [
+        {
+          "id": "x01",
+          "category": "table",
+          "query": "forward voltage at IF = 150mA",
+          "page": 2,
+          "answer": "1.25",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "label/value split: query terms sit in the Forward Voltage label block while the answer sits in a bare value block, so a Maximum Ratings block outscores it"
+          }
+        },
+        {
+          "id": "x02",
+          "category": "table",
+          "query": "peak reverse current at VR = 25V TJ = +150 C",
+          "page": 2,
+          "answer": "25"
+        },
+        {
+          "id": "x03",
+          "category": "table",
+          "query": "total capacitance",
+          "page": 2,
+          "answer": "2.0"
+        }
+      ]
+    },
+    "espressif_esp32": {
+      "url": "https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf",
+      "title": "Espressif ESP32 Series Datasheet",
+      "queries": [
+        {
+          "id": "e01",
+          "category": "table",
+          "query": "cumulative IO output current maximum",
+          "page": 51,
+          "answer": "1200"
+        },
+        {
+          "id": "e02",
+          "category": "table",
+          "query": "storage temperature range",
+          "page": 51,
+          "answer": "150"
+        },
+        {
+          "id": "e03",
+          "category": "table",
+          "query": "allowed input voltage",
+          "page": 51,
+          "answer": "3.6"
         }
       ]
     }

@@ -187,3 +187,30 @@ def test_load_queries_rejects_known_fail_without_reason(tmp_path):
     )
     with pytest.raises(ValueError, match="known_fail"):
         load_queries(path)
+
+
+def test_clause_1_ignores_frozen_rows():
+    """Clause 1 measures the live corpus, matching clause 2's scope.
+
+    Frozen rows score 0 on paragraph by definition and cannot get worse,
+    so averaging them in only holds the gate red at a fixed offset.
+    """
+    rows = [
+        _row("d01", 1, 0, known_fail=FROZEN),
+        _row("d02", 1, 0, known_fail=FROZEN),
+        _row("ok1", 0, 1),
+        _row("ok2", 0, 1),
+    ]
+    verdict = evaluate_gate(_cells(paragraph=0.5, snippet=0.5), rows)
+    c1 = verdict["clause_1_containment"]
+    assert c1["pass"] is True
+    assert c1["n_live"] == 2
+    assert c1["paragraph"] == 1.0
+    assert c1["snippet"] == 0.0
+
+
+def test_clause_1_still_fails_on_a_live_regression():
+    """Scoping to live rows must not make clause 1 unfailable."""
+    rows = [_row("d01", 1, 0, known_fail=FROZEN), _row("ok1", 1, 0)]
+    verdict = evaluate_gate(_cells(), rows)
+    assert verdict["clause_1_containment"]["pass"] is False

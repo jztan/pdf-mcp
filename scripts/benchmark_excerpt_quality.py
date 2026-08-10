@@ -236,7 +236,18 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
               exactly that flaw, which is why it stays a reported
               transparency metric only, not the gate.
     """
-    clause_1_pass = cells["paragraph"]["all"] >= cells["snippet"]["all"]
+    # Clause 1 is scoped to live (unfrozen) rows, matching clause 2. A
+    # frozen row scores 0 on paragraph by definition and cannot regress
+    # further, so averaging it in cannot detect anything -- it only holds
+    # the gate red at a fixed offset. The report still prints the honest
+    # all-rows `excerpt_containment`, and that is the published baseline.
+    live = [r for r in rows if not _frozen_for(r, "paragraph")]
+    n_live = len(live)
+    live_paragraph = (
+        sum(r["paragraph_contains"] for r in live) / n_live if n_live else 0.0
+    )
+    live_snippet = sum(r["snippet_contains"] for r in live) / n_live if n_live else 0.0
+    clause_1_pass = live_paragraph >= live_snippet
 
     regressions = [
         r
@@ -266,8 +277,11 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
         "pass": clause_1_pass and clause_2_pass and clause_3_pass and clause_4_pass,
         "clause_1_containment": {
             "pass": clause_1_pass,
-            "snippet": cells["snippet"]["all"],
-            "paragraph": cells["paragraph"]["all"],
+            "snippet": live_snippet,
+            "paragraph": live_paragraph,
+            "n_live": n_live,
+            "all_rows_paragraph": cells["paragraph"]["all"],
+            "all_rows_snippet": cells["snippet"]["all"],
         },
         "clause_2_regressions": {
             "pass": clause_2_pass,

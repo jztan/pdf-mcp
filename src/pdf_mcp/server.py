@@ -1509,6 +1509,10 @@ _COLUMN_IDENTITY_WORDS = re.compile(
     r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
 )
 _NUMBER_TOKEN = re.compile(r"\d+(?:\.\d+)?")
+#: A currency symbol or a thousands-grouped amount. Marks a cell as data
+#: rather than a column label, which is what keeps a sparse-but-real header
+#: from being displaced by the row beneath it.
+_MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
 
 
 def _excerpt_is_ambiguous(excerpt: str) -> bool:
@@ -1529,16 +1533,55 @@ def _resolve_header(
 ) -> tuple[list[str], list[list[str]]]:
     """Return the real column header and the remaining body rows.
 
-    PyMuPDF sometimes reports a section title as the header (Diodes p2
-    yields the 'Electrical Characteristics (@ TA = ...)' banner) while the
-    real column labels sit in row 0. Promote row 0 only when it is clearly
-    more header-like, so a genuine header is never discarded.
+    PyMuPDF sometimes reports a caption or section title as the header
+    (Diodes p2 yields the 'Electrical Characteristics (@ TA = ...)' banner)
+    while the real column labels sit in row 0. Promote row 0 only when it is
+    clearly more header-like, so a genuine header is never discarded.
+
+    Two independent signals, because either alone misses real tables:
+
+    - vocabulary: row 0 names min/typ/max and the header does not. Catches
+      datasheets, and is what shipped first.
+    - structure: a caption occupies ONE cell and leaves the rest empty,
+      whereas a header row fills several. This is vocabulary-free, which
+      matters because real column labels are arbitrary noun phrases.
+      Measured on three document families, only one of which the
+      vocabulary rule caught: the Federal Reserve consumer report's
+      'Rate advertised on website | Product details | Estimated APR
+      equivalent', Berkshire 2024 p134's fiscal-year row, and Vishay's
+      'Characteristic | Min | Max'.
+
+    The structural rule needs 3+ columns. At two columns, "one filled
+    header cell, two filled row cells" is the shape of ordinary data and
+    cannot be told from a caption.
     """
+    if not rows:
+        return header, rows
 
     def col_words(cells: list[str]) -> int:
         return sum(1 for c in cells if c and _COLUMN_IDENTITY_WORDS.search(c))
 
-    if rows and col_words(header) < 2 and col_words(rows[0]) >= 2:
+    def filled(cells: list[str]) -> int:
+        return sum(1 for c in cells if c and c.strip())
+
+    # A header names columns; it does not carry money. Berkshire p55 has a
+    # real year header spread thinly across 12 columns, and without this
+    # the sparse-caption allowance below promoted its data row ('$',
+    # '9,020') over a correct header.
+    if any(_MONEY_CELL.search(c) for c in rows[0] if c):
+        return header, rows
+
+    by_vocabulary = col_words(header) < 2 and col_words(rows[0]) >= 2
+    # Sparse caption band, denser row beneath it. The quarter-of-columns
+    # allowance covers side-by-side sub-tables merged into one detection
+    # (Berkshire p134 is 20 columns with two captions), while `max(1, ...)`
+    # keeps narrow tables at the single-cell reading.
+    by_structure = (
+        len(header) >= 3
+        and filled(header) <= max(1, len(header) // 4)
+        and filled(rows[0]) >= 2 * filled(header)
+    )
+    if by_vocabulary or by_structure:
         return rows[0], rows[1:]
     return header, rows
 

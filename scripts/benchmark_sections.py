@@ -42,11 +42,41 @@ import pdf_mcp.server as server_module  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.section_detector import (  # noqa: E402
     Section,
-    _filter_to_leaves,
     detect_boundaries as _detect_boundaries,
 )
+
+
 from pdf_mcp.server import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search as _PDF_SEARCH_FN  # noqa: E402
+
+
+def _filter_to_leaves(sections: list[Section]) -> list[Section]:
+    """
+    Filter to leaf sections: those whose page range contains no other
+    section's start_page. Removes parent containers in nested TOC
+    hierarchies, yielding a non-overlapping partition.
+
+    A section is a leaf iff no other section starts strictly within its
+    (start_page, end_page] range. Heuristic-mode output (already flat)
+    passes through unchanged.
+
+    Benchmark-only. The shipped section path does NOT flatten: TOC-derived
+    sections retain parents with overlapping ranges. This exists so
+    `--toc-flatten leaves` can normalise gold and detected sections to the
+    same grain before scoring boundary F1. It used to live in
+    section_detector.py, where it read as production behaviour it never had.
+    """
+    starts = [s.start_page for s in sections]
+    out = []
+    for s in sections:
+        has_child = any(
+            other_start > s.start_page and other_start <= s.end_page
+            for other_start in starts
+        )
+        if not has_child:
+            out.append(s)
+    return out
+
 
 # ---- Threshold constants (placeholders — calibrate before relying on them) ----
 THRESHOLD_BOUNDARY_F1 = 0.80  # Group 1, per PDF

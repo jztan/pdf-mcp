@@ -356,28 +356,6 @@ def _toc_entries_to_sections(
     return sections
 
 
-def _filter_to_leaves(sections: list[Section]) -> list[Section]:
-    """
-    Filter to leaf sections: those whose page range contains no other
-    section's start_page. Removes parent containers in nested TOC
-    hierarchies, yielding a non-overlapping partition.
-
-    A section is a leaf iff no other section starts strictly within its
-    (start_page, end_page] range. Heuristic-mode output (already flat)
-    passes through unchanged.
-    """
-    starts = [s.start_page for s in sections]
-    out = []
-    for s in sections:
-        has_child = any(
-            other_start > s.start_page and other_start <= s.end_page
-            for other_start in starts
-        )
-        if not has_child:
-            out.append(s)
-    return out
-
-
 def extract_toc_sections(doc: pymupdf.Document) -> list[Section]:
     """
     Derive sections from the PDF's TOC, filling section.text from page text.

@@ -18,46 +18,28 @@ class TestSectionDataclass:
         assert a == b
 
 
-class TestFilterToLeaves:
-    """Tests _filter_to_leaves — drops parent containers in nested TOC."""
+class TestTocSectionsRetainParents:
+    """TOC-derived sections keep parent containers, with overlapping page
+    ranges. A leaf-only partition was written (_filter_to_leaves) but never
+    wired in, and was removed; this pins the behaviour that actually ships
+    so a future reader does not assume a partition that isn't happening."""
 
-    def test_drops_parent_with_children(self):
-        # 'Intro' (p1-4) contains '1.1' (p2-2) and '1.2' (p3-4) — drop Intro
-        sections = [
-            sd.Section("Intro", 1, 4, ""),
-            sd.Section("1.1 Bg", 2, 2, ""),
-            sd.Section("1.2 Mot", 3, 4, ""),
-            sd.Section("Body", 5, 10, ""),
+    def test_parent_and_children_are_all_emitted(self):
+        # 1 (p1-10) > 1.1 (p1-5) > 1.1.1 (p1-3): every entry survives
+        toc = [
+            [1, "1", 1],
+            [2, "1.1", 1],
+            [3, "1.1.1", 1],
+            [3, "1.1.2", 4],
+            [2, "1.2", 6],
         ]
-        leaves = sd._filter_to_leaves(sections)
-        titles = [s.title for s in leaves]
-        assert titles == ["1.1 Bg", "1.2 Mot", "Body"]
-
-    def test_flat_partition_passes_through(self):
-        # Already-flat sections — no parents to remove
-        sections = [
-            sd.Section("A", 1, 5, ""),
-            sd.Section("B", 6, 10, ""),
-            sd.Section("C", 11, 15, ""),
-        ]
-        leaves = sd._filter_to_leaves(sections)
-        assert leaves == sections
-
-    def test_deeply_nested_keeps_only_innermost(self):
-        # 1 (p1-10) > 1.1 (p1-5) > 1.1.1 (p1-3) — only 1.1.1 is a leaf
-        sections = [
-            sd.Section("1", 1, 10, ""),
-            sd.Section("1.1", 1, 5, ""),
-            sd.Section("1.1.1", 1, 3, ""),
-            sd.Section("1.1.2", 4, 5, ""),
-            sd.Section("1.2", 6, 10, ""),
-        ]
-        leaves = sd._filter_to_leaves(sections)
-        titles = [s.title for s in leaves]
-        assert titles == ["1.1.1", "1.1.2", "1.2"]
-
-    def test_empty_input(self):
-        assert sd._filter_to_leaves([]) == []
+        sections = sd._toc_entries_to_sections(toc, total_pages=10)
+        assert [s.title for s in sections] == ["1", "1.1", "1.1.1", "1.1.2", "1.2"]
+        # Parent ranges overlap their children rather than being dropped.
+        by_title = {s.title: (s.start_page, s.end_page) for s in sections}
+        assert by_title["1"] == (1, 10)
+        assert by_title["1.1"] == (1, 5)
+        assert by_title["1.1.1"] == (1, 3)
 
 
 class TestDetectBoundariesPure:

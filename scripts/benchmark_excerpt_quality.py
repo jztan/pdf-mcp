@@ -38,6 +38,7 @@ from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
 
 VALID_CATEGORIES = {"prose", "structured", "table"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
+GATED_CELLS = ("snippet", "paragraph")
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:
@@ -81,6 +82,20 @@ def load_queries(path: str) -> dict:
                 raise ValueError(
                     f"Query {q['id']} has invalid category: {q['category']}"
                 )
+            kf = q.get("known_fail")
+            if kf is not None:
+                if not isinstance(kf, dict):
+                    raise ValueError(f"Query {q['id']} known_fail must be an object")
+                if kf.get("cell") not in GATED_CELLS:
+                    raise ValueError(
+                        f"Query {q['id']} known_fail.cell must be one of"
+                        f" {GATED_CELLS}, got {kf.get('cell')!r}"
+                    )
+                if not str(kf.get("reason", "")).strip():
+                    raise ValueError(
+                        f"Query {q['id']} known_fail.reason must be a"
+                        " non-empty string explaining the frozen failure"
+                    )
 
     return data["pdfs"]
 
@@ -140,6 +155,7 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                 "query": q["query"],
                 "page": q["page"],
                 "category": q["category"],
+                "known_fail": q.get("known_fail"),
             }
 
             for style in CELLS:
@@ -197,6 +213,12 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     return cells, rows
 
 
+def _frozen_for(row: dict, cell: str) -> bool:
+    """True if this row's failure in `cell` is a recorded known failure."""
+    kf = row.get("known_fail")
+    return bool(kf) and kf.get("cell") == cell
+
+
 def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     """Evaluate the three-clause gate.
 
@@ -217,9 +239,20 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     clause_1_pass = cells["paragraph"]["all"] >= cells["snippet"]["all"]
 
     regressions = [
-        r for r in rows if r["snippet_contains"] == 1 and r["paragraph_contains"] == 0
+        r
+        for r in rows
+        if r["snippet_contains"] == 1
+        and r["paragraph_contains"] == 0
+        and not _frozen_for(r, "paragraph")
     ]
     clause_2_pass = len(regressions) == 0
+
+    # The ratchet only tightens: a frozen row that now passes must be
+    # un-frozen, or the next real regression there would be invisible.
+    stale = [
+        r for r in rows if _frozen_for(r, "paragraph") and r["paragraph_contains"] == 1
+    ]
+    clause_4_pass = len(stale) == 0
 
     bbox_rows = [r for r in rows if r.get("bbox_present") == 1]
     scoped_bbox = sum(r["bbox_contains"] for r in bbox_rows)
@@ -230,7 +263,7 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     clause_3_pass = len(bbox_rows) > 0 and scoped_bbox >= scoped_excerpt
 
     return {
-        "pass": clause_1_pass and clause_2_pass and clause_3_pass,
+        "pass": clause_1_pass and clause_2_pass and clause_3_pass and clause_4_pass,
         "clause_1_containment": {
             "pass": clause_1_pass,
             "snippet": cells["snippet"]["all"],
@@ -246,6 +279,12 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
             "scoped_bbox": scoped_bbox,
             "scoped_excerpt": scoped_excerpt,
             "n_bbox_present": len(bbox_rows),
+        },
+        "clause_4_stale_known_fail": {
+            "pass": clause_4_pass,
+            "count": len(stale),
+            "ids": [r["id"] for r in stale],
+            "action": "un-freeze these rows: delete their known_fail block",
         },
     }
 
@@ -343,6 +382,7 @@ def print_gate_verdict(verdict: dict) -> None:
         "clause_1_containment",
         "clause_2_regressions",
         "clause_3_bbox_fidelity",
+        "clause_4_stale_known_fail",
     ):
         c = verdict[clause_key]
         marker = "✓" if c["pass"] else "✗"

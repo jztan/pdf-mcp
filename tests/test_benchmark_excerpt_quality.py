@@ -8,6 +8,7 @@ import pytest
 from scripts.benchmark_excerpt_quality import (
     VALID_CATEGORIES,
     bbox_contains_answer,
+    evaluate_gate,
     load_queries,
     main,
     run_all_cells,
@@ -102,3 +103,87 @@ def test_table_category_is_valid(tmp_path):
     loaded = load_queries(path)
     assert loaded["doc"]["queries"][0]["category"] == "table"
     assert "table" in VALID_CATEGORIES
+
+
+def _cells(paragraph=1.0, snippet=1.0, bbox=1.0):
+    return {
+        "snippet": {"all": snippet},
+        "paragraph": {"all": paragraph},
+        "bbox": {"all": bbox},
+    }
+
+
+def _row(rid, snip, para, known_fail=None, bbox_present=1, bbox_contains=1):
+    return {
+        "id": rid,
+        "snippet_contains": snip,
+        "paragraph_contains": para,
+        "bbox_present": bbox_present,
+        "bbox_contains": bbox_contains,
+        "known_fail": known_fail,
+    }
+
+
+FROZEN = {"cell": "paragraph", "reason": "long-block win"}
+
+
+def test_known_fail_row_does_not_trip_clause_2():
+    """A frozen paragraph failure is documented, not a gate failure."""
+    verdict = evaluate_gate(_cells(), [_row("d01", 1, 0, known_fail=FROZEN)])
+    assert verdict["clause_2_regressions"]["pass"] is True
+    assert verdict["clause_2_regressions"]["count"] == 0
+
+
+def test_unfrozen_regression_still_trips_clause_2():
+    """A new regression fails even when other rows are frozen."""
+    rows = [_row("d01", 1, 0, known_fail=FROZEN), _row("d02", 1, 0)]
+    verdict = evaluate_gate(_cells(), rows)
+    assert verdict["clause_2_regressions"]["pass"] is False
+    assert verdict["clause_2_regressions"]["ids"] == ["d02"]
+
+
+def test_known_fail_that_now_passes_fails_the_gate():
+    """The ratchet only tightens: a fixed row must be un-frozen."""
+    verdict = evaluate_gate(_cells(), [_row("d01", 1, 1, known_fail=FROZEN)])
+    assert verdict["clause_4_stale_known_fail"]["pass"] is False
+    assert verdict["clause_4_stale_known_fail"]["ids"] == ["d01"]
+    assert verdict["pass"] is False
+
+
+def test_clean_corpus_passes_all_four_clauses():
+    verdict = evaluate_gate(_cells(), [_row("d01", 1, 1), _row("d02", 0, 1)])
+    assert verdict["pass"] is True
+
+
+def test_load_queries_rejects_malformed_known_fail(tmp_path):
+    """A frozen failure must name a real cell and carry a reason."""
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d01",
+            "category": "table",
+            "query": "q",
+            "page": 1,
+            "answer": "a",
+            "known_fail": {"cell": "bogus", "reason": "x"},
+        },
+    )
+    with pytest.raises(ValueError, match="known_fail"):
+        load_queries(path)
+
+
+def test_load_queries_rejects_known_fail_without_reason(tmp_path):
+    """An unexplained frozen failure is indistinguishable from hiding one."""
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d01",
+            "category": "table",
+            "query": "q",
+            "page": 1,
+            "answer": "a",
+            "known_fail": {"cell": "paragraph", "reason": "  "},
+        },
+    )
+    with pytest.raises(ValueError, match="known_fail"):
+        load_queries(path)

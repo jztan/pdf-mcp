@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -40,6 +41,33 @@ from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
 VALID_CATEGORIES = {"prose", "structured", "table"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
 GATED_CELLS = ("snippet", "paragraph")
+
+#: Words that give a number its column identity (which of min/typ/max it is).
+#: Matched anywhere in the excerpt: on datasheets with a single value column
+#: the qualifier lives in the parameter name itself ("Maximum instantaneous
+#: forward voltage"), which is genuinely interpretable.
+_COLUMN_WORDS = re.compile(
+    r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
+)
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _is_interpretable(excerpt: str) -> bool:
+    """True if a reader can tell WHICH quantity the answer is.
+
+    Containment says the number is present; it cannot say the number is
+    identifiable. `Reset Voltage | 0.4 | 0.5 | 1 | V` contains the answer
+    and is still unusable: the header lives in a different block, so
+    nothing says which of the three is the minimum. Position is not a
+    substitute -- empty cells are elided, so `Threshold Current | (5) |
+    0.1 | 0.25` drops MIN and shifts everything left.
+
+    Interpretable means either a column-identity word is present, or the
+    excerpt carries exactly one number so there is nothing to confuse.
+    """
+    if _COLUMN_WORDS.search(excerpt):
+        return True
+    return len(_NUMBER.findall(excerpt)) <= 1
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:
@@ -55,6 +83,11 @@ def bbox_contains_answer(page, bbox, answer: str) -> bool:
         return " ".join(s.lower().replace("-", " ").split())
 
     return norm(answer) in norm(clip_text)
+
+
+def _norm(s: str) -> str:
+    """Lowercase, hyphens to spaces, whitespace collapsed."""
+    return " ".join(str(s).lower().replace("-", " ").split())
 
 
 def load_queries(path: str) -> dict:
@@ -83,6 +116,27 @@ def load_queries(path: str) -> dict:
                 raise ValueError(
                     f"Query {q['id']} has invalid category: {q['category']}"
                 )
+            # Table answers are measured VALUES, not topic anchors, so an
+            # answer that also appears in the query can be "found" in a block
+            # that carries only the query's own condition text. x02 passed
+            # that way for a while: answer "25" matched inside "VR = 25V" in
+            # a test-conditions block holding no current value at all.
+            # Prose/structured answers are deliberately exempt -- there the
+            # answer IS the topic term, so overlap is expected.
+            if q["category"] == "table":
+                if _norm(q["answer"]) in _norm(q["query"]):
+                    raise ValueError(
+                        f"Query {q['id']}: table answer {q['answer']!r} also"
+                        f" appears in the query {q['query']!r}. A block"
+                        " carrying only the query's conditions would score a"
+                        " false pass. Choose a value that cannot collide."
+                    )
+                if not str(q.get("answer_label", "")).strip():
+                    raise ValueError(
+                        f"Query {q['id']}: table queries need answer_label,"
+                        " the row/parameter name that must accompany the"
+                        " value for the excerpt to be interpretable."
+                    )
             kf = q.get("known_fail")
             if kf is not None:
                 if not isinstance(kf, dict):
@@ -184,7 +238,7 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     CELLS = ("snippet", "paragraph")
 
     accum: dict[str, dict[str, list[int]]] = {
-        c: defaultdict(list) for c in CELLS + ("bbox",)
+        c: defaultdict(list) for c in CELLS + ("bbox", "qualified", "interpretable")
     }
     rows: list[dict] = []
 
@@ -252,20 +306,48 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                     row["bbox_contains"] = bbox_contains
                     row["bbox_present"] = bbox_present
 
+                    # Interpretability, not just presence. Containment asks
+                    # only whether the answer substring appears; it cannot
+                    # tell "returned the value with its meaning" from
+                    # "returned a bare number". `Reset Voltage | 0.4 | 0.5 |
+                    # 1 | V` scores a containment pass, yet nothing says
+                    # which of the three is the reset voltage's minimum.
+                    # A qualified hit carries the answer AND its row label.
+                    label = q.get("answer_label")
+                    excerpt_text = target["excerpt"] if target else ""
+                    qualified = int(
+                        contains == 1
+                        and bool(label)
+                        and _norm(label) in _norm(excerpt_text)
+                    )
+                    if q["category"] == "table":
+                        accum["qualified"][q["category"]].append(qualified)
+                    row["paragraph_qualified"] = qualified
+
+                    interpretable = int(
+                        contains == 1 and _is_interpretable(excerpt_text)
+                    )
+                    if q["category"] == "table":
+                        accum["interpretable"][q["category"]].append(interpretable)
+                    row["paragraph_interpretable"] = interpretable
+
             rows.append(row)
 
         if doc is not None:
             doc.close()
 
     cells: dict[str, dict[str, float]] = {}
-    for cell in CELLS + ("bbox",):
+    for cell in CELLS + ("bbox", "qualified", "interpretable"):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []
         for cat in sorted(VALID_CATEGORIES):
             vals = accum[cell][cat]
-            cell_out[cat] = sum(vals) / len(vals) if vals else 0.0
+            # None, not 0.0: `qualified`/`interpretable` are defined only
+            # for the table class, and printing 0% for prose would read as a
+            # defect rather than "not applicable".
+            cell_out[cat] = (sum(vals) / len(vals)) if vals else None
             all_vals.extend(vals)
-        cell_out["all"] = sum(all_vals) / len(all_vals) if all_vals else 0.0
+        cell_out["all"] = (sum(all_vals) / len(all_vals)) if all_vals else None
         cells[cell] = cell_out
 
     return cells, rows
@@ -374,7 +456,10 @@ def print_report(cells: dict, rows: list[dict], all_pdfs: dict) -> None:
     cats = ("prose", "structured", "table", "all")
     print(f"\n{'cell':<14}" + "".join(f"{c:>14}" for c in cats))
     for cell, scores in cells.items():
-        row_str = f"{cell:<14}" + "".join(f"{scores.get(c, 0):>13.0%} " for c in cats)
+        row_str = f"{cell:<14}" + "".join(
+            (f"{scores[c]:>13.0%} " if scores.get(c) is not None else f"{'-':>13} ")
+            for c in cats
+        )
         print(row_str)
 
     # Per-query detail

@@ -98,6 +98,7 @@ def test_table_category_is_valid(tmp_path):
             "query": "supply voltage",
             "page": 5,
             "answer": "4.5",
+            "answer_label": "Supply Voltage",
         },
     )
     loaded = load_queries(path)
@@ -165,6 +166,7 @@ def test_load_queries_rejects_malformed_known_fail(tmp_path):
             "query": "q",
             "page": 1,
             "answer": "a",
+            "answer_label": "Param",
             "known_fail": {"cell": "bogus", "reason": "x"},
         },
     )
@@ -182,6 +184,7 @@ def test_load_queries_rejects_known_fail_without_reason(tmp_path):
             "query": "q",
             "page": 1,
             "answer": "a",
+            "answer_label": "Param",
             "known_fail": {"cell": "paragraph", "reason": "  "},
         },
     )
@@ -303,3 +306,69 @@ def test_run_all_cells_accepts_a_matching_sha256(tmp_path):
         corpus["doc"]["sha256"] = hashlib.sha256(fh.read()).hexdigest()
     _cells_out, rows = run_all_cells(corpus)
     assert len(rows) == 1
+
+
+def test_table_answer_colliding_with_query_is_rejected(tmp_path):
+    """A table answer inside its own query permits a false pass.
+
+    x02 scored PASS for a while on 'VR = 25V, TJ = +150C' because answer
+    "25" matched inside "VR = 25V" in a test-conditions block that carried
+    no current value at all.
+    """
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d01",
+            "category": "table",
+            "query": "peak reverse current at VR = 25V",
+            "page": 1,
+            "answer": "25",
+            "answer_label": "Peak Reverse Current",
+        },
+    )
+    with pytest.raises(ValueError, match="appears in the query"):
+        load_queries(path)
+
+
+def test_prose_answer_may_appear_in_its_query(tmp_path):
+    """Prose answers are topic anchors, so overlap is expected, not a bug."""
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "n05",
+            "category": "prose",
+            "query": "graph attention network",
+            "page": 1,
+            "answer": "attention",
+        },
+    )
+    assert load_queries(path)["doc"]["queries"][0]["id"] == "n05"
+
+
+def test_table_query_requires_answer_label(tmp_path):
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d01",
+            "category": "table",
+            "query": "supply voltage minimum",
+            "page": 1,
+            "answer": "4.5",
+        },
+    )
+    with pytest.raises(ValueError, match="answer_label"):
+        load_queries(path)
+
+
+def test_interpretable_requires_column_identity_or_a_lone_number():
+    """Containment cannot tell a usable answer from a bare number."""
+    from scripts.benchmark_excerpt_quality import _is_interpretable
+
+    # Three numbers, no column identity: which one is the minimum?
+    assert _is_interpretable("Reset Voltage | 0.4 | 0.5 | 1 | V") is False
+    # Position is not a substitute: the empty MIN cell is elided here.
+    assert _is_interpretable("Threshold Current | (5) | 0.1 | 0.25") is False
+    # A qualifier in the parameter name genuinely resolves it.
+    assert _is_interpretable("Maximum instantaneous forward voltage 1.1 V") is True
+    # A single number cannot be confused with anything.
+    assert _is_interpretable("Total Capacitance CT pF") is True

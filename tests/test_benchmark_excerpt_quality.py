@@ -214,3 +214,67 @@ def test_clause_1_still_fails_on_a_live_regression():
     rows = [_row("d01", 1, 0, known_fail=FROZEN), _row("ok1", 1, 0)]
     verdict = evaluate_gate(_cells(), rows)
     assert verdict["clause_1_containment"]["pass"] is False
+
+
+def _one_page_pdf(tmp_path, text: str):
+    """Write a real single-page PDF containing `text`."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    page.insert_text((72, 200), text, fontsize=11)
+    path = tmp_path / "doc.pdf"
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+def _corpus(path, page, answer):
+    return {
+        "doc": {
+            "path": path,
+            "title": "Doc",
+            "queries": [
+                {
+                    "id": "q01",
+                    "category": "table",
+                    "query": "supply voltage",
+                    "page": page,
+                    "answer": answer,
+                }
+            ],
+        }
+    }
+
+
+def test_run_all_cells_raises_when_answer_is_not_on_the_graded_page(tmp_path):
+    """A drifted or wrong ground-truth page is a corpus error, not a 0.
+
+    Without this the row scores 0 and reads as a quality regression, which
+    is the same trap as a silently missing PDF one level up.
+    """
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    corpus = _corpus(pdf, 1, "9.9")
+    with pytest.raises(ValueError, match="q01"):
+        run_all_cells(corpus)
+
+
+def test_run_all_cells_raises_when_graded_page_is_out_of_range(tmp_path):
+    """A page number past the end of a revised document must abort."""
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    corpus = _corpus(pdf, 7, "4.5")
+    with pytest.raises(ValueError, match="q01"):
+        run_all_cells(corpus)
+
+
+def test_run_all_cells_accepts_an_answer_present_on_the_page(tmp_path):
+    """The guard must not fire on a correctly graded query."""
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    cells, rows = run_all_cells(_corpus(pdf, 1, "4.5"))
+    assert len(rows) == 1
+
+
+def test_main_returns_2_on_a_drifted_ground_truth_page(tmp_path):
+    """A corpus error exits 2 (setup), never 1 (quality regression)."""
+    pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
+    qfile = tmp_path / "queries.json"
+    qfile.write_text(json.dumps({"pdfs": _corpus(pdf, 1, "9.9")}))
+    assert main(["--queries", str(qfile)]) == 2

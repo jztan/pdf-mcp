@@ -110,6 +110,36 @@ def _resolve_pdf_path(pdf_data: dict) -> str:
     return path
 
 
+def _assert_answer_on_page(doc, pdf_key: str, q: dict) -> None:
+    """Fail loudly if the graded page cannot contain the answer.
+
+    Without this a wrong or drifted ground-truth page scores 0 and reads
+    as a quality regression -- the same trap as a silently missing PDF,
+    one level up. It is live risk for URL-fetched vendor datasheets,
+    which are re-issued with content on different pages and carry no
+    pinned revision.
+    """
+    page_no = q["page"]
+    if not 1 <= page_no <= doc.page_count:
+        raise ValueError(
+            f"Query {q['id']} ({pdf_key}) grades page {page_no}, but the"
+            f" document has {doc.page_count} pages. The document was"
+            " probably revised; re-verify the corpus rather than reading"
+            " the score."
+        )
+
+    def norm(s: str) -> str:
+        return " ".join(s.lower().replace("-", " ").split())
+
+    if norm(q["answer"]) not in norm(doc[page_no - 1].get_text()):
+        raise ValueError(
+            f"Query {q['id']} ({pdf_key}) grades page {page_no}, but the"
+            f" answer {q['answer']!r} does not appear anywhere on it. That"
+            " is a corpus error, not a retrieval failure; scoring it 0"
+            " would misreport it as a quality regression."
+        )
+
+
 def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     """Run snippet vs paragraph over every (pdf, query) pair.
 
@@ -149,6 +179,7 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
         doc = pymupdf.open(local_path)
 
         for q in pdf_data["queries"]:
+            _assert_answer_on_page(doc, pdf_key, q)
             row: dict = {
                 "id": q["id"],
                 "pdf": pdf_key,
@@ -466,7 +497,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Running excerpt quality benchmark ({total_q} queries)...\n")
     try:
         cells, rows = run_all_cells(all_pdfs)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     print_report(cells, rows, all_pdfs)

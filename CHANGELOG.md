@@ -14,8 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contains the answer but nothing says which number is the minimum, because
   the header is a separate text block and position is no guide (empty cells
   are elided). Ambiguous matches now carry the table `header`, their own
-  `row`, and `columns_reliable`. On the excerpt benchmark's table class the
-  share of answers a caller can actually resolve goes from 17% to 39%.
+  `row`, and `columns_reliable`.
   Context is attached only when the excerpt holds two or more numbers and
   no column label, so prose searches are unaffected; extraction is cached
   per page. `columns_reliable` is false when a table's cells hold merged

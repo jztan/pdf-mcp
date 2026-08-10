@@ -37,6 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `pdf_read_pages` returned corrupted table cells, silently changing numbers.
+  Decimal points detached from their values, so a datasheet's `4.5` came back
+  as `45`, along with lost spaces inside labels (`TESTCONDITIONS`) and some
+  scrambled cells. An agent reading the `tables` field got confidently wrong
+  values with nothing to indicate a problem. The cause was import-order, not
+  extraction logic: `pymupdf4llm` runs `use_layout(True)` at module level, and
+  the resulting `import pymupdf.layout` swaps PyMuPDF's text engine for the
+  whole process. The import alone triggers it, and it cannot be undone once
+  done, so every `find_tables` call in the server was affected. Table
+  extraction now runs in a separate, clean interpreter
+  (`python -m pdf_mcp._table_worker`), batched so one subprocess serves a whole
+  `pdf_read_pages` call. Extraction that fails is left uncached and retried
+  rather than stored as an empty result.
+  - **Cached tables from before this fix are discarded.** Those rows hold
+    wrong values, not merely stale ones, so `page_tables` entries lacking the
+    new extraction version are dropped and re-extracted on next access. Cached
+    text, embeddings, and search indexes are untouched, so no re-embedding is
+    triggered.
+  - Note that the existing `pymupdf4llm<1.28` pin does not protect against
+    this. It addresses a different failure, and 1.27.x exhibits this one.
+
 - `pdf_render_pages` downsampled pages now say whether the render is actually
   usable. Each `render_downsampled` entry carries `pixels` (DPI alone is
   uninterpretable: 72 DPI is 480 px wide on a phone-scan page and 612 px on a

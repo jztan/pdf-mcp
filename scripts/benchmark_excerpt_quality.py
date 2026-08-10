@@ -76,10 +76,36 @@ _PERIOD_WORDS = re.compile(
 )
 
 
+#: Longest header cell still readable as a column label rather than a
+#: caption, and the most words in one. Measured against the corpus: real
+#: labels top out at 'Train (Speech & Text)'; captions start at 'Table 2.
+#: Estimated APRs for select online products'.
+_MAX_LABEL_CHARS = 28
+_MAX_LABEL_WORDS = 4
+
+
 def _names_a_quantity(header_cell: str) -> bool:
-    """True when a header cell identifies which quantity a value is."""
-    cell = header_cell or ""
-    return bool(_COLUMN_WORDS.search(cell) or _PERIOD_WORDS.search(cell))
+    """True when a header cell identifies which quantity a value is.
+
+    Structural, not a word list. Enumerating vocabularies does not
+    converge: measurement qualifiers, then reporting periods, then
+    dataset names ('CIFAR-10', 'Train (Speech & Text)') -- each widening
+    invited the next, and each risked being fitted to whichever corpus
+    was in front of us. A column label is SHORT; a caption is a sentence;
+    a section heading ends in a colon.
+
+    The trailing-colon guard is load-bearing. Without it Starbucks p36
+    credits a value from 'Store operating expenses' to the section row
+    'Net revenues:' -- a measured false pass, and exactly what the
+    original word list existed to prevent. Verified on the 42-query
+    corpus: +1 true resolution, 0 false passes, 0 losses.
+    """
+    cell = (header_cell or "").strip()
+    if not cell or cell.endswith(":"):
+        return False
+    if len(cell) > _MAX_LABEL_CHARS or cell.count(" ") >= _MAX_LABEL_WORDS:
+        return False
+    return True
 
 
 def _is_interpretable(excerpt: str) -> bool:

@@ -536,3 +536,29 @@ def test_context_resolution_does_not_look_left_to_a_caption():
         }
     }
     assert _resolves_via_context(sbux_bad, "13,973.3") is False
+
+
+def test_header_naming_is_structural_not_a_vocabulary():
+    """Column labels are short; captions are sentences; headings end in ':'.
+
+    Enumerating vocabularies does not converge: measurement qualifiers,
+    then reporting periods, then dataset names ('Train (Speech & Text)').
+    The structural rule ends the treadmill. The trailing-colon guard is
+    load-bearing, not decoration: without it Starbucks p36's section row
+    'Net revenues:' credits a value from 'Store operating expenses', a
+    measured false pass.
+    """
+    from scripts.benchmark_excerpt_quality import _names_a_quantity
+
+    assert _names_a_quantity("MAX") is True
+    assert _names_a_quantity("Sep 28,\n2025") is True
+    assert _names_a_quantity("2024") is True
+    assert _names_a_quantity("CIFAR-10") is True
+    assert _names_a_quantity("Train (Speech & Text)") is True
+    # Rejections, each a real corpus case.
+    assert _names_a_quantity("") is False
+    assert _names_a_quantity("Net revenues:") is False
+    assert (
+        _names_a_quantity("Table 2. Estimated APRs for select online products") is False
+    )
+    assert _names_a_quantity("Electrical Characteristics (@ TA = +25C)") is False

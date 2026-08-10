@@ -318,3 +318,45 @@ def test_header_promotion_still_fires_on_a_year_row_without_money():
     got, body = _resolve_header(header, rows)
     assert got == row0
     assert body == rows[1:]
+
+
+def test_thousands_grouped_numbers_are_one_token():
+    """ "4,350.4" is one value, not two.
+
+    The tokeniser was \\d+(?:\\.\\d+)? so a comma-grouped figure read as
+    ['4', '350.4']. That made a clean financial cell look merged and a
+    single-value excerpt look ambiguous, on every financial or government
+    table that groups thousands.
+    """
+    from pdf_mcp.server import _columns_reliable, _excerpt_is_ambiguous
+
+    # One clean value per cell: the columns are fine.
+    assert _columns_reliable([["Licensed stores", "4,350.4", "4,505.1"]]) is True
+    # One value, so nothing to disambiguate.
+    assert _excerpt_is_ambiguous("Licensed stores 4,350.4") is False
+    # The datasheet contract must survive unchanged.
+    assert _columns_reliable([["Reset Voltage", "0.4 0.5 1", "V"]]) is False
+    assert _excerpt_is_ambiguous("Reset Voltage | 0.4 | 0.5 | 1 | V") is True
+
+
+def test_row_must_be_comparable_in_scale_to_the_match():
+    """A bbox many times taller than a row does not identify that row.
+
+    Starbucks 2025 p34: find_tables fragmented the table into a ONE-row
+    table holding only the section heading 'Net revenues:'. The overlap
+    test found exactly one row and attached it, so the caller got a
+    heading instead of the data row. Measured across every attaching
+    query in the corpus, correct attaches sit at ratio <= 0.8 and that
+    one wrong attach at 6.5.
+    """
+    from pdf_mcp.server import _rows_overlapping
+
+    # Starbucks shape: 84.8pt match over a 13pt row.
+    assert (
+        _rows_overlapping([46.0, 99.0, 551.0, 183.8], [[43.0, 119.6, 551.0, 132.6]])
+        == []
+    )
+    # Ordinary shape: a match roughly the size of its row still resolves.
+    assert _rows_overlapping(
+        [46.0, 120.0, 551.0, 130.0], [[43.0, 119.0, 551.0, 133.0]]
+    ) == [0]

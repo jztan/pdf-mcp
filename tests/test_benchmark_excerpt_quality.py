@@ -428,3 +428,64 @@ def test_context_resolution_uses_number_tokens_not_substrings():
         }
     }
     assert _resolves_via_context(m, "100") is False
+
+
+def test_context_resolution_accepts_a_fiscal_period_column_header():
+    """A date header identifies a column as completely as MAX does.
+
+    Starbucks 2025 p34 hands the caller 'Licensed stores | 4,350.4' under
+    the header 'Sep 28, 2025'. The original vocabulary could not represent
+    that as resolved, so no financial document could score above zero
+    regardless of how well the code worked.
+    """
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    sbux = {
+        "table_context": {
+            "header": ["", "Sep 28,\n2025", "Sep 29,\n2024", "%\nChange"],
+            "row": ["Licensed stores", "4,350.4", "4,505.1", "(3.4"],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(sbux, "4,350.4") is True
+
+
+def test_context_resolution_accepts_a_bare_year_column_header():
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    brk = {
+        "table_context": {
+            "header": ["", "2024", "2023", "2022"],
+            "row": ["BNSF", "5,031", "5,087", "5,946"],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(brk, "5,031") is True
+
+
+def test_context_resolution_still_rejects_an_unnamed_column_after_widening():
+    """Widening to periods must not turn a blank header into a pass."""
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    blank = {
+        "table_context": {
+            "header": ["", "", "", ""],
+            "row": ["Licensed stores", "4,350.4", "4,505.1", "(3.4"],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(blank, "4,350.4") is False
+
+
+def test_context_resolution_still_rejects_ti_packed_cell_after_widening():
+    """The TI rejection must survive the vocabulary change."""
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    ti = {
+        "table_context": {
+            "header": ["PARAMETER", "TEST CONDITIONS", "MIN", "TYP", "MAX", "UNIT"],
+            "row": ["Reset Voltage", "", "0.4 0.5 1", "", "", "V"],
+            "columns_reliable": False,
+        }
+    }
+    assert _resolves_via_context(ti, "0.4") is False

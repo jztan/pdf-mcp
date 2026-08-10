@@ -1508,11 +1508,19 @@ def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
 _COLUMN_IDENTITY_WORDS = re.compile(
     r"\b(min|max|typ|typical|minimum|maximum|value|rating)\b", re.I
 )
-_NUMBER_TOKEN = re.compile(r"\d+(?:\.\d+)?")
+#: Thousands separators are part of the number. Without them "4,350.4"
+#: reads as two tokens, which made a clean financial cell look merged to
+#: `_columns_reliable` and a single-value excerpt look ambiguous to
+#: `_excerpt_is_ambiguous`, on every table that groups thousands.
+_NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 #: A currency symbol or a thousands-grouped amount. Marks a cell as data
 #: rather than a column label, which is what keeps a sparse-but-real header
 #: from being displaced by the row beneath it.
 _MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
+#: How much taller than its row a match bbox may be and still be taken to
+#: identify that row. 2.0 sits well clear of the 0.8 ceiling measured on
+#: correct attaches and well below the 6.5 of the wrong one.
+_MAX_MATCH_TO_ROW_HEIGHT = 2.0
 
 
 def _excerpt_is_ambiguous(excerpt: str) -> bool:
@@ -1701,6 +1709,16 @@ def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[in
         r0, r1 = float(rb[1]), float(rb[3])
         row_h = r1 - r0
         if row_h <= 0:
+            continue
+        # Scale check. `min(...)` below lets a short cell inside a tall
+        # row count, but it also lets a very tall bbox "overlap" a short
+        # row it merely contains. Starbucks p34 is the case: find_tables
+        # fragmented the table into a ONE-row table holding only the
+        # heading 'Net revenues:', so the count test could not reject it
+        # and the caller got a heading instead of the data row. Measured
+        # across every attaching query, correct attaches sit at ratio
+        # <= 0.8 and that wrong attach at 6.5.
+        if box_h > _MAX_MATCH_TO_ROW_HEIGHT * row_h:
             continue
         overlap = min(y1, r1) - max(y0, r0)
         if overlap > 0.5 * min(box_h, row_h):

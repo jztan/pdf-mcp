@@ -421,3 +421,48 @@ def test_unfragmented_tables_are_left_alone():
         }
     ]
     assert _merge_single_row_detections(raw) == raw
+
+
+def test_packed_table_context_carries_a_render_clip():
+    """When the columns are unreadable in text, point at the picture.
+
+    TI LM555 renders MIN and MAX in visibly separate columns while both
+    collapse into one cell as "4.5 16". The page has the answer; the text
+    layer does not. Same call the chart extractor makes when it declines
+    and returns a render instead of guessing.
+    """
+    from pdf_mcp.server import _context_for_match
+
+    packed = [
+        {
+            "bbox": [54.1, 101.1, 557.9, 300.0],
+            "header": ["PARAMETER", "MIN", "TYP", "MAX", "UNIT"],
+            "rows": [["Supply Voltage", "4.5 16", "", "", "V"]],
+            "row_bboxes": [[54.1, 114.0, 557.9, 127.0]],
+        }
+    ]
+    match = {"bbox": [54.1, 115.0, 300.0, 126.0]}
+    ctx = _context_for_match(match, packed, page_rect=[0.0, 0.0, 612.0, 792.0])
+    assert ctx["columns_reliable"] is False
+    # The caller is handed the region to render, not left guessing.
+    assert ctx["bbox"] == [54.1, 101.1, 557.9, 300.0]
+    assert len(ctx["clip"]) == 4
+    assert all(0.0 <= v <= 1.0 for v in ctx["clip"])
+
+
+def test_clean_table_context_carries_no_clip():
+    """A readable table needs no picture, so the field stays absent."""
+    from pdf_mcp.server import _context_for_match
+
+    clean = [
+        {
+            "bbox": [54.1, 101.1, 557.9, 300.0],
+            "header": ["PARAMETER", "MIN", "MAX", "UNIT"],
+            "rows": [["Supply Voltage", "4.5", "16", "V"]],
+            "row_bboxes": [[54.1, 114.0, 557.9, 127.0]],
+        }
+    ]
+    match = {"bbox": [54.1, 115.0, 300.0, 126.0]}
+    ctx = _context_for_match(match, clean, page_rect=[0.0, 0.0, 612.0, 792.0])
+    assert ctx["columns_reliable"] is True
+    assert "clip" not in ctx and "bbox" not in ctx

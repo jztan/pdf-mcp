@@ -14,7 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contains the answer but nothing says which number is the minimum, because
   the header is a separate text block and position is no guide (empty cells
   are elided). Ambiguous matches now carry the table `header`, their own
-  `rows` (every table row the hit covers), and `columns_reliable`.
+  `rows` (every table row the hit covers), and `columns_reliable`. When
+  `columns_reliable` is false the entry also carries `bbox` and `clip` for
+  the table, because columns that cannot be separated in the text layer are
+  still legible on the page: the clip goes straight into
+  `pdf_render_pages(clip=...)` so a caller can read the table instead of
+  trusting a merged cell such as TI's `0.4 0.5 1`.
   Context is attached only when the excerpt holds two or more numbers and
   no column label, so prose searches are unaffected; extraction is cached
   per page. `columns_reliable` is false when a table's cells hold merged

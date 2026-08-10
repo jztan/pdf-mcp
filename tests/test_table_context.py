@@ -71,3 +71,88 @@ def test_ambiguity_trigger():
     assert _excerpt_is_ambiguous("Total Capacitance CT 2.0 pF") is False
     # Prose with no numbers must never trigger a subprocess.
     assert _excerpt_is_ambiguous("we vary the number of attention heads") is False
+
+
+def test_header_fallback_promotes_row_zero():
+    """PyMuPDF sometimes reports a section title as the header."""
+    from pdf_mcp.server import _resolve_header
+
+    title_header = ["Electrical Characteristics (@ TA = +25C)", "", ""]
+    rows = [["Characteristic", "Min", "Max"], ["Vf", "0.7", "1.1"]]
+    header, body = _resolve_header(title_header, rows)
+    assert header == ["Characteristic", "Min", "Max"]
+    assert body == [["Vf", "0.7", "1.1"]]
+
+
+def test_header_fallback_does_not_fire_on_a_real_header():
+    from pdf_mcp.server import _resolve_header
+
+    real = ["PARAMETER", "MIN", "MAX"]
+    rows = [["Vf", "0.7", "1.1"]]
+    header, body = _resolve_header(real, rows)
+    assert header == real
+    assert body == rows
+
+
+def test_columns_reliable_false_when_a_cell_holds_two_numbers():
+    from pdf_mcp.server import _columns_reliable
+
+    assert _columns_reliable([["Reset Voltage", "0.4 0.5 1", "V"]]) is False
+    assert _columns_reliable([["Reset Voltage", "0.4", "V"]]) is True
+
+
+def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
+    """End to end: an ambiguous excerpt gains a header and its row."""
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.server import _attach_table_context
+    import tempfile as _tf
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=__import__("pathlib").Path(tmp))
+        doc = pymupdf.open(ruled_table_pdf)
+        rows = doc[0].get_text("blocks")
+        doc.close()
+        # Use the Supply Voltage row's own geometry as the match bbox.
+        target = next(b for b in rows if "Supply Voltage" in b[4])
+        match = {
+            "page": 1,
+            "excerpt": "Supply Voltage 4.5 16 V",
+            "bbox": list(target[:4]),
+        }
+        out = _attach_table_context([match], ruled_table_pdf, cache)
+        ctx = out[0]["table_context"]
+        assert "Min" in ctx["header"]
+        assert any("4.5" in c for c in ctx["row"])
+        assert ctx["columns_reliable"] is True
+
+
+def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
+    """A prose search must cost nothing."""
+    from pdf_mcp import server as srv
+    from pdf_mcp.cache import PDFCache
+    import pathlib
+    import tempfile as _tf
+
+    called = []
+    monkeypatch.setattr(
+        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+    )
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        match = {"page": 1, "excerpt": "no numbers here at all", "bbox": [0, 0, 9, 9]}
+        srv._attach_table_context([match], ruled_table_pdf, cache)
+    assert called == []
+
+
+def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
+    """49 of 51 gate matches carry a bbox; without one there is no row."""
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.server import _attach_table_context
+    import pathlib
+    import tempfile as _tf
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        match = {"page": 1, "excerpt": "Supply Voltage 4.5 16 V"}
+        out = _attach_table_context([match], ruled_table_pdf, cache)
+    assert "table_context" not in out[0]

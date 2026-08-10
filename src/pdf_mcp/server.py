@@ -1524,6 +1524,119 @@ def _excerpt_is_ambiguous(excerpt: str) -> bool:
     return len(_NUMBER_TOKEN.findall(excerpt)) >= 2
 
 
+def _resolve_header(
+    header: list[str], rows: list[list[str]]
+) -> tuple[list[str], list[list[str]]]:
+    """Return the real column header and the remaining body rows.
+
+    PyMuPDF sometimes reports a section title as the header (Diodes p2
+    yields the 'Electrical Characteristics (@ TA = ...)' banner) while the
+    real column labels sit in row 0. Promote row 0 only when it is clearly
+    more header-like, so a genuine header is never discarded.
+    """
+
+    def col_words(cells: list[str]) -> int:
+        return sum(1 for c in cells if c and _COLUMN_IDENTITY_WORDS.search(c))
+
+    if rows and col_words(header) < 2 and col_words(rows[0]) >= 2:
+        return rows[0], rows[1:]
+    return header, rows
+
+
+def _columns_reliable(rows: list[list[str]]) -> bool:
+    """False when any cell holds 2+ numbers, i.e. columns are merged.
+
+    Table-level caution, not a per-value verdict: a table can be flagged
+    while an individual row still resolves cleanly. Callers must not treat
+    False as "this row is wrong".
+    """
+    for row in rows:
+        for cell in row:
+            if cell and len(_NUMBER_TOKEN.findall(cell)) >= 2:
+                return False
+    return True
+
+
+def _attach_table_context(
+    matches: list[dict[str, Any]], local_path: str, cache: PDFCache
+) -> list[dict[str, Any]]:
+    """Attach header + matched row to ambiguous matches, in place of nothing.
+
+    Only ambiguous matches carrying a bbox are candidates, so prose
+    searches spawn nothing. All candidate pages for this document are
+    served by ONE isolated worker call and persisted in page_tables, so a
+    page costs extraction once.
+
+    Extraction must stay out of process: this interpreter has imported
+    pymupdf4llm, which corrupts find_tables irreversibly.
+    """
+    candidates = [
+        m
+        for m in matches
+        if m.get("bbox") and _excerpt_is_ambiguous(m.get("excerpt", ""))
+    ]
+    if not candidates:
+        return matches
+
+    wanted = sorted({m["page"] - 1 for m in candidates})
+    tables_by_page: dict[int, list[dict[str, Any]]] = {}
+    missing: list[int] = []
+    for page_num in wanted:
+        cached = cache.get_page_tables(local_path, page_num)
+        if cached is None:
+            missing.append(page_num)
+        else:
+            tables_by_page[page_num] = cached
+
+    if missing:
+        try:
+            out = run_module_json(
+                "pdf_mcp._table_worker", {"path": local_path, "pages": missing}
+            ).get("tables", {})
+        except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            logger.warning("Table context extraction failed: %s", exc)
+            out = {}
+        for page_num in missing:
+            extracted = out.get(str(page_num))
+            if isinstance(extracted, list):
+                tables_by_page[page_num] = extracted
+                cache.save_page_tables(local_path, page_num, extracted)
+
+    for m in candidates:
+        ctx = _context_for_match(m, tables_by_page.get(m["page"] - 1, []))
+        if ctx is not None:
+            m["table_context"] = ctx
+    return matches
+
+
+def _context_for_match(
+    match: dict[str, Any], tables: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Header and the row whose vertical span contains the match bbox.
+
+    Geometric, not token overlap: token overlap was measured selecting the
+    wrong row (5 vs 3 on the right one). Returns None when no row contains
+    the bbox centre, so a wrong row is never invented.
+    """
+    bbox = match["bbox"]
+    cy = (float(bbox[1]) + float(bbox[3])) / 2
+    for table in tables:
+        row_bboxes = table.get("row_bboxes") or []
+        rows = table.get("rows") or []
+        if len(row_bboxes) != len(rows):
+            continue
+        header, body = _resolve_header(table.get("header") or [], rows)
+        offset = len(rows) - len(body)  # 1 when row 0 was promoted
+        for i, rb in enumerate(row_bboxes[offset:]):
+            if float(rb[1]) <= cy <= float(rb[3]):
+                return {
+                    "header": header,
+                    "row": body[i],
+                    "columns_reliable": _columns_reliable(body),
+                }
+    return None
+
+
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: pymupdf.Document,
@@ -1981,6 +2094,7 @@ def pdf_search(
 
             if excerpt_style == "paragraph":
                 matches = _upgrade_excerpts_to_paragraphs(matches, doc, query)
+                matches = _attach_table_context(matches, local_path, cache)
 
             hidden_detected = _attach_hidden(matches)
             sem_page_counts = {str(m["page"]): 1 for m in matches}
@@ -2057,6 +2171,7 @@ def pdf_search(
 
             if excerpt_style == "paragraph":
                 kw_matches = _upgrade_excerpts_to_paragraphs(kw_matches, doc, query)
+                kw_matches = _attach_table_context(kw_matches, local_path, cache)
 
             hidden_detected = _attach_hidden(kw_matches)
 
@@ -2092,6 +2207,7 @@ def pdf_search(
                 m["source"] = auto_sources.get(m["page"] - 1, "extracted")
             if excerpt_style == "paragraph":
                 auto_kw = _upgrade_excerpts_to_paragraphs(auto_kw, doc, query)
+                auto_kw = _attach_table_context(auto_kw, local_path, cache)
             hidden_detected = _attach_hidden(auto_kw)
             response: dict[str, Any] = {
                 "content_warning": (
@@ -2226,6 +2342,7 @@ def pdf_search(
             hybrid_matches = _upgrade_excerpts_to_paragraphs(
                 hybrid_matches, doc, query, keyword_excerpts=keyword_excerpts
             )
+            hybrid_matches = _attach_table_context(hybrid_matches, local_path, cache)
 
         hidden_detected = _attach_hidden(hybrid_matches)
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}

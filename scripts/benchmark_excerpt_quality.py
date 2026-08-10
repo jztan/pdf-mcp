@@ -104,13 +104,16 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     """True if the attached table context identifies WHICH quantity the answer is.
 
     All four must hold, and each rejects a real failure seen in the corpus:
-      - the answer is a number token in exactly one cell (substring
-        matching produced a false pass: "25" inside "VR = 25V")
+      - the answer is a number token in exactly one cell across all
+        returned rows (substring matching produced a false pass: "25"
+        inside "VR = 25V")
       - that cell holds exactly one number token (TI's MIN cell is
         "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
-      - the header cell at that index names a quantity: a measurement
-        qualifier (MAX) or a reporting period (Sep 28, 2025). A
-        mis-detected section title must not count as resolution.
+      - the header governing that column names a quantity: a measurement
+        qualifier (MAX) or a reporting period (Sep 28, 2025). Blank
+        spacer columns are skipped leftward, since a currency column
+        shifts a value right of its own label. A mis-detected section
+        title must not count as resolution.
 
     Deliberately ignores `columns_reliable`: that flag is a table-level
     caution, while resolution is decided per value.
@@ -118,21 +121,35 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     ctx = match.get("table_context")
     if not ctx:
         return False
-    header, row = ctx.get("header") or [], ctx.get("row") or []
+    header = ctx.get("header") or []
+    rows = ctx.get("rows") or []
     want = _norm(answer)
+    # Search every returned row: the answer must land in exactly ONE cell
+    # across all of them, so a value repeated down a column still fails.
     hits = [
-        i
+        (r, i)
+        for r, row in enumerate(rows)
         for i, cell in enumerate(row)
         if want in [_norm(t) for t in _NUMBER.findall(cell or "")]
     ]
     if len(hits) != 1:
         return False
-    idx = hits[0]
-    if len(_NUMBER.findall(row[idx] or "")) != 1:
+    r, idx = hits[0]
+    if len(_NUMBER.findall(rows[r][idx] or "")) != 1:
         return False
     if idx >= len(header):
         return False
-    return _names_a_quantity(header[idx])
+    # Look left past spacer columns. A currency or symbol column shifts a
+    # value one place right of its own label: Berkshire p55 is header
+    # ['', '2024', '', ...] over row ['BNSF', '', '5,031', ...], same
+    # length, label at 1 and value at 2. A reader resolves that by
+    # glancing left past the blank, so the metric must too. Only BLANK
+    # cells are skipped, so a populated but unhelpful header still fails.
+    for i in range(idx, -1, -1):
+        cell = header[i] or ""
+        if cell.strip():
+            return _names_a_quantity(cell)
+    return False
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:

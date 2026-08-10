@@ -17,6 +17,18 @@
       "structured": 1.0,
       "table": 0.6111111111111112,
       "all": 0.803921568627451
+    },
+    "qualified": {
+      "prose": null,
+      "structured": null,
+      "table": 0.6111111111111112,
+      "all": 0.6111111111111112
+    },
+    "interpretable": {
+      "prose": null,
+      "structured": null,
+      "table": 0.16666666666666666,
+      "all": 0.16666666666666666
     }
   },
   "rows": [
@@ -32,7 +44,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 308,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t02",
@@ -46,7 +60,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 729,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t03",
@@ -60,7 +76,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 394,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t04",
@@ -74,7 +92,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 520,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "t05",
@@ -88,7 +108,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 257,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t06",
@@ -102,7 +124,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 185,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "t07",
@@ -116,7 +140,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 30,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "t08",
@@ -130,7 +156,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 192,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t09",
@@ -144,7 +172,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 133,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "t10",
@@ -158,7 +188,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 591,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t11",
@@ -175,7 +207,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 323,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t12",
@@ -189,7 +223,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 153,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "t13",
@@ -203,7 +239,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 290,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "g01",
@@ -217,7 +255,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 223,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "g02",
@@ -231,7 +271,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 458,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "g03",
@@ -245,7 +287,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 812,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "g04",
@@ -259,7 +303,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 857,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "g05",
@@ -273,7 +319,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 675,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "n01",
@@ -287,7 +335,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 0,
       "bbox_contains": 0,
-      "bbox_present": 0
+      "bbox_present": 0,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "n02",
@@ -301,7 +351,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 488,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "n03",
@@ -315,7 +367,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 134,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "n04",
@@ -329,7 +383,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 784,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "n05",
@@ -343,7 +399,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 784,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "l01",
@@ -357,7 +415,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 259,
       "bbox_contains": 0,
-      "bbox_present": 0
+      "bbox_present": 0,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "l02",
@@ -371,7 +431,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 222,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "l03",
@@ -385,7 +447,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 102,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "l04",
@@ -399,7 +463,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 150,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "l05",
@@ -413,7 +479,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 390,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "a01",
@@ -427,7 +495,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 546,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "a02",
@@ -441,7 +511,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 420,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "a03",
@@ -455,7 +527,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 310,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "a04",
@@ -469,7 +543,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 241,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "a05",
@@ -483,7 +559,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 422,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "m01",
@@ -497,7 +575,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 681,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "m02",
@@ -511,7 +591,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 533,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 1
     },
     {
       "id": "m03",
@@ -525,7 +607,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 1142,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d01",
@@ -542,7 +626,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 1026,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d02",
@@ -559,7 +645,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 45,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d03",
@@ -576,7 +664,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 24,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d04",
@@ -590,7 +680,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 25,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d05",
@@ -604,7 +696,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 33,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "d06",
@@ -618,7 +712,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 34,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "v01",
@@ -632,7 +728,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 53,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 1
     },
     {
       "id": "v02",
@@ -646,7 +744,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 50,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 1
     },
     {
       "id": "v03",
@@ -660,7 +760,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 92,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 1
     },
     {
       "id": "x01",
@@ -677,21 +779,25 @@
       "paragraph_contains": 0,
       "paragraph_len": 173,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "x02",
       "pdf": "diodes_1n4148w",
-      "query": "peak reverse current at VR = 25V TJ = +150 C",
+      "query": "reverse recovery time",
       "page": 2,
       "category": "table",
       "known_fail": null,
       "snippet_contains": 1,
-      "snippet_len": 191,
+      "snippet_len": 208,
       "paragraph_contains": 1,
-      "paragraph_len": 64,
+      "paragraph_len": 83,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "x03",
@@ -705,7 +811,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 53,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "e01",
@@ -719,7 +827,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 47,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     },
     {
       "id": "e02",
@@ -733,7 +843,9 @@
       "paragraph_contains": 0,
       "paragraph_len": 104,
       "bbox_contains": 0,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 0,
+      "paragraph_interpretable": 0
     },
     {
       "id": "e03",
@@ -747,7 +859,9 @@
       "paragraph_contains": 1,
       "paragraph_len": 53,
       "bbox_contains": 1,
-      "bbox_present": 1
+      "bbox_present": 1,
+      "paragraph_qualified": 1,
+      "paragraph_interpretable": 0
     }
   ]
 }

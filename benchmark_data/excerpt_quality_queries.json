@@ -83,21 +83,24 @@
           "known_fail": {
             "cell": "paragraph",
             "reason": "long-block win: the 324-char Table 3 caption beats the 50-char base row"
-          }
+          },
+          "answer_label": "base"
         },
         {
           "id": "t12",
           "category": "table",
           "query": "positional embedding instead of sinusoids result",
           "page": 9,
-          "answer": "4.92"
+          "answer": "4.92",
+          "answer_label": "positional"
         },
         {
           "id": "t13",
           "category": "table",
           "query": "varying the number of attention heads BLEU",
           "page": 9,
-          "answer": "24.9"
+          "answer": "24.9",
+          "answer_label": "attention heads"
         }
       ]
     },
@@ -307,7 +310,8 @@
           "known_fail": {
             "cell": "paragraph",
             "reason": "long-block win: the 1027-char footnote (1)-(6) beats the 24-char Supply Voltage row"
-          }
+          },
+          "answer_label": "Supply Voltage"
         },
         {
           "id": "d02",
@@ -318,7 +322,8 @@
           "known_fail": {
             "cell": "paragraph",
             "reason": "wrong sibling row: picks a 45-char ISINK row for a different current"
-          }
+          },
+          "answer_label": "Output Voltage Drop"
         },
         {
           "id": "d03",
@@ -329,28 +334,32 @@
           "known_fail": {
             "cell": "paragraph",
             "reason": "wrong sibling row: picks a 24-char row from the astable block"
-          }
+          },
+          "answer_label": "Initial Accuracy"
         },
         {
           "id": "d04",
           "category": "table",
           "query": "reset voltage",
           "page": 5,
-          "answer": "0.4"
+          "answer": "0.4",
+          "answer_label": "Reset Voltage"
         },
         {
           "id": "d05",
           "category": "table",
           "query": "threshold current microamps",
           "page": 5,
-          "answer": "0.25"
+          "answer": "0.25",
+          "answer_label": "Threshold Current"
         },
         {
           "id": "d06",
           "category": "table",
           "query": "pin 7 leakage output high nA",
           "page": 5,
-          "answer": "100"
+          "answer": "100",
+          "answer_label": "Pin 7 Leakage"
         }
       ]
     },
@@ -365,21 +374,24 @@
           "category": "table",
           "query": "maximum instantaneous forward voltage",
           "page": 2,
-          "answer": "1.1"
+          "answer": "1.1",
+          "answer_label": "forward voltage"
         },
         {
           "id": "v02",
           "category": "table",
           "query": "typical junction capacitance 4.0 V 1 MHz",
           "page": 2,
-          "answer": "15"
+          "answer": "15",
+          "answer_label": "junction capacitance"
         },
         {
           "id": "v03",
           "category": "table",
           "query": "maximum DC reverse current at rated DC blocking voltage",
           "page": 2,
-          "answer": "5.0"
+          "answer": "5.0",
+          "answer_label": "reverse current"
         }
       ]
     },
@@ -398,21 +410,24 @@
           "known_fail": {
             "cell": "paragraph",
             "reason": "label/value split: query terms sit in the Forward Voltage label block while the answer sits in a bare value block, so a Maximum Ratings block outscores it"
-          }
+          },
+          "answer_label": "Forward Voltage"
         },
         {
           "id": "x02",
           "category": "table",
-          "query": "peak reverse current at VR = 25V TJ = +150 C",
+          "query": "reverse recovery time",
           "page": 2,
-          "answer": "25"
+          "answer": "4.0",
+          "answer_label": "Reverse Recovery Time"
         },
         {
           "id": "x03",
           "category": "table",
           "query": "total capacitance",
           "page": 2,
-          "answer": "2.0"
+          "answer": "2.0",
+          "answer_label": "Total Capacitance"
         }
       ]
     },
@@ -427,21 +442,24 @@
           "category": "table",
           "query": "cumulative IO output current maximum",
           "page": 51,
-          "answer": "1200"
+          "answer": "1200",
+          "answer_label": "Cumulative IO output current"
         },
         {
           "id": "e02",
           "category": "table",
           "query": "storage temperature range",
           "page": 51,
-          "answer": "150"
+          "answer": "150",
+          "answer_label": "Storage temperature"
         },
         {
           "id": "e03",
           "category": "table",
           "query": "allowed input voltage",
           "page": 51,
-          "answer": "3.6"
+          "answer": "3.6",
+          "answer_label": "Allowed input voltage"
         }
       ]
     }

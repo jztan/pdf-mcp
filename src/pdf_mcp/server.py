@@ -36,7 +36,6 @@ from .extractor import (
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
-    extract_tables_from_page,
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
@@ -46,8 +45,12 @@ from .extractor import (
     render_page_as_image,
     render_page_as_png,
 )
-from .extractor import _ocr_page_worker, _render_page_worker
-from .parallel import PageError, resolve_workers, run_pages
+from .extractor import (
+    _extract_tables_worker,
+    _ocr_page_worker,
+    _render_page_worker,
+)
+from .parallel import PageError, resolve_workers, run_isolated, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -1015,6 +1018,37 @@ def pdf_read_pages(
                 ):
                     render_results[n] = res[1] if isinstance(res, tuple) else res
 
+        # --- Isolated dispatch: table cache-misses ---
+        # Tables MUST be extracted out-of-process. This process has imported
+        # pymupdf4llm (at startup, and again on any column-aware extraction),
+        # which activates pymupdf.layout and irreversibly corrupts
+        # find_tables cell text -- "4.5" comes back as "45\n.". One spawn
+        # serves every uncached page in this call.
+        table_results: dict[int, list[dict[str, Any]]] = {}
+        table_miss_pages: list[int] = []
+        for n in page_nums:
+            cached_tables = cache.get_page_tables(local_path, n)
+            if cached_tables is None:
+                table_miss_pages.append(n)
+            else:
+                table_results[n] = cached_tables
+        if table_miss_pages:
+            try:
+                worker_out = run_isolated(
+                    _extract_tables_worker, (local_path, table_miss_pages)
+                )
+            except (TimeoutError, RuntimeError) as exc:
+                logger.warning("Isolated table extraction failed: %s", exc)
+                worker_out = {}
+            for n in table_miss_pages:
+                extracted = worker_out.get(n)
+                # A PageError or a missing entry means extraction failed, not
+                # that the page has no tables. Leave it uncached and absent so
+                # the next call retries instead of persisting a false empty.
+                if isinstance(extracted, list):
+                    table_results[n] = extracted
+                    cache.save_page_tables(local_path, n, extracted)
+
         results = []
         cache_hits = 0
         total_chars = 0
@@ -1088,13 +1122,9 @@ def pdf_read_pages(
             for img in page_images:
                 img.pop("page", None)
 
-            # Extract tables per-page (bundled like images)
-            cached_tables = cache.get_page_tables(local_path, page_num)
-            if cached_tables is not None:
-                page_tables = cached_tables
-            else:
-                page_tables = extract_tables_from_page(doc[page_num])
-                cache.save_page_tables(local_path, page_num, page_tables)
+            # Tables were resolved before the loop (cache hits plus one
+            # isolated extraction pass); see the dispatch block above.
+            page_tables = table_results.get(page_num, [])
 
             total_chars += len(text)
             total_images += len(page_images)

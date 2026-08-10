@@ -115,9 +115,14 @@ cjk = []
 # pymupdf_layout/onnxruntime; without it, extraction gracefully falls back to
 # the positional-sort path (which interleaves columns on multi-column pages).
 multicolumn = [
-    # <1.28: importing pymupdf4llm 1.28.0 auto-activates pymupdf.layout, which
-    # breaks find_tables() process-wide (tables come back with empty cells and
-    # Table.bbox raises ValueError). Lift the cap once fixed upstream.
+    # <1.28 caps a SEPARATE failure (empty cells, Table.bbox raising
+    # ValueError). It does NOT protect find_tables generally: 1.27.2.2 also
+    # runs use_layout(True) at import, and the resulting `import
+    # pymupdf.layout` swaps PyMuPDF's text engine process-wide and
+    # irreversibly, detaching decimal points in table cells ("4.5" ->
+    # "45\n."). That is handled by extracting tables in an isolated spawn
+    # process (see extractor.TABLE_EXTRACTION_VERSION); do not assume this
+    # cap makes in-process find_tables safe.
     "pymupdf4llm>=1.24.0,<1.28",
 ]
 

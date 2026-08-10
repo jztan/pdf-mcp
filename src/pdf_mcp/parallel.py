@@ -149,3 +149,38 @@ def run_pages(
             results[idx] = _run_page_bounded(worker, arg_list[idx], page_timeout)
 
     return results
+
+
+def run_isolated(worker: Callable[[Any], Any], arg: Any, timeout: float = 120.0) -> Any:
+    """Run `worker(arg)` once in a freshly SPAWNED process and return its result.
+
+    Unlike `run_pages`, this never falls back to running the worker in the
+    parent. It exists for work whose correctness *depends* on a clean
+    interpreter, where an in-parent retry would silently return wrong data
+    rather than fail. Table extraction is the case: the parent has imported
+    `pymupdf4llm`, which irreversibly swaps PyMuPDF's text engine.
+
+    `spawn` is explicit and load-bearing. The default start method is `fork`
+    on Linux, and a forked child inherits the parent's poisoned interpreter
+    state, which would defeat the isolation entirely.
+
+    Raises:
+        TimeoutError: the child did not finish within `timeout`.
+        RuntimeError: the child died without producing a result.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    q = ctx.Queue()
+    proc = ctx.Process(target=_worker_into_queue, args=(worker, arg, q))
+    proc.start()
+    try:
+        try:
+            result = q.get(timeout=timeout)
+        except queue.Empty:
+            raise TimeoutError(f"isolated worker exceeded {timeout}s") from None
+        if isinstance(result, PageError):
+            raise RuntimeError(f"isolated worker failed: {result.detail}")
+        return result
+    finally:
+        if proc.is_alive():
+            proc.terminate()
+        proc.join(timeout=5)

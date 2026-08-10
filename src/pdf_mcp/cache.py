@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from pdf_mcp import content_trust
 from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
+from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -269,9 +270,16 @@ class PDFCache:
             ):
                 conn.execute("DROP TABLE IF EXISTS page_images")
 
-            # page_tables: introduced in v1.5.0 — older caches may lack 'data' column
+            # page_tables: introduced in v1.5.0 — older caches may lack 'data'.
+            # A cache without 'extraction_version' was written before tables
+            # were extracted out-of-process, so every numeric cell in it may
+            # have a detached decimal point ("4.5" stored as "45\n."). Those
+            # rows are not merely stale, they are wrong, so drop rather than
+            # migrate. Deliberately NOT an _EXTRACTION_VERSION bump, which
+            # would also wipe page_text/page_embeddings/FTS and force a
+            # re-embed of every warmed corpus.
             cols = _get_columns(conn, "page_tables")
-            if cols and "data" not in cols:
+            if cols and ("data" not in cols or "extraction_version" not in cols):
                 conn.execute("DROP TABLE IF EXISTS page_tables")
 
             # pdf_metadata: drop if missing any required column
@@ -378,6 +386,7 @@ class PDFCache:
                     page_num   INTEGER NOT NULL,
                     file_mtime REAL    NOT NULL,
                     data       TEXT    NOT NULL,
+                    extraction_version INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY (file_path, page_num)
                 );
 
@@ -1129,8 +1138,9 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT data, file_mtime FROM page_tables"
-                " WHERE file_path = ? AND page_num = ?",
-                (path, page_num),
+                " WHERE file_path = ? AND page_num = ?"
+                " AND extraction_version = ?",
+                (path, page_num, TABLE_EXTRACTION_VERSION),
             ).fetchone()
             if row is None:
                 return None
@@ -1146,8 +1156,9 @@ class PDFCache:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO page_tables"
-                " (file_path, page_num, file_mtime, data) VALUES (?, ?, ?, ?)",
-                (path, page_num, mtime, json.dumps(tables)),
+                " (file_path, page_num, file_mtime, data, extraction_version)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (path, page_num, mtime, json.dumps(tables), TABLE_EXTRACTION_VERSION),
             )
 
     # ==================== Embedding Operations ====================

@@ -55,8 +55,8 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
 
 
 def test_table_extraction_version_is_3():
-    """Row geometry changes the cached page_tables shape."""
-    assert TABLE_EXTRACTION_VERSION == 3
+    """Row geometry and fragment merging change the cached shape."""
+    assert TABLE_EXTRACTION_VERSION == 4
 
 
 def test_ambiguity_trigger():
@@ -122,7 +122,7 @@ def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
         out = _attach_table_context([match], ruled_table_pdf, cache)
         ctx = out[0]["table_context"]
         assert "Min" in ctx["header"]
-        assert any("4.5" in c for c in ctx["row"])
+        assert any("4.5" in c for row in ctx["rows"] for c in row)
         assert ctx["columns_reliable"] is True
 
 
@@ -158,13 +158,15 @@ def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
     assert "table_context" not in out[0]
 
 
-def test_no_context_when_the_block_spans_the_whole_table(ruled_table_pdf):
-    """A text block covering every row identifies no row at all.
+def test_whole_table_block_returns_every_row_not_one_guess(ruled_table_pdf):
+    """A block covering the table yields the header and ALL its rows.
 
     PyMuPDF returns some tables as ONE text block (Berkshire 2024 p134: a
-    202pt block over 16 rows of ~12pt). The centre-point test then lands on
-    whichever row sits in the vertical middle and returns it confidently.
-    Wrong-and-confident is worse than absent, so this must yield nothing.
+    202pt block over 16 rows). Picking the row at the bbox centre returned
+    an arbitrary wrong row; demanding exactly one row returned nothing on
+    any document whose blocks are not per-row. The rows are already in the
+    excerpt, so the header plus every covered row resolves the ambiguity
+    without guessing which row was meant.
     """
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import _attach_table_context
@@ -173,7 +175,6 @@ def test_no_context_when_the_block_spans_the_whole_table(ruled_table_pdf):
 
     with _tf.TemporaryDirectory() as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
-        # The full ruled table, not one of its rows.
         # No column-identity word, or the ambiguity trigger would reject it
         # before geometry is ever consulted and the test would pass vacuously.
         match = {
@@ -182,7 +183,18 @@ def test_no_context_when_the_block_spans_the_whole_table(ruled_table_pdf):
             "bbox": [50.0, 50.0, 300.0, 150.0],
         }
         out = _attach_table_context([match], ruled_table_pdf, cache)
-    assert "table_context" not in out[0]
+    ctx = out[0]["table_context"]
+    # Both rows come back: no single row is presented as THE answer.
+    assert len(ctx["rows"]) == 2
+    flat = [c for row in ctx["rows"] for c in row]
+    assert "4.5" in flat and "0.4" in flat
+
+
+def test_context_rows_are_capped(ruled_table_pdf):
+    """A match covering a huge table must not bloat the response."""
+    from pdf_mcp.server import _MAX_CONTEXT_ROWS
+
+    assert _MAX_CONTEXT_ROWS == 20
 
 
 def test_header_promotion_is_not_bound_to_datasheet_vocabulary():
@@ -339,24 +351,73 @@ def test_thousands_grouped_numbers_are_one_token():
     assert _excerpt_is_ambiguous("Reset Voltage | 0.4 | 0.5 | 1 | V") is True
 
 
-def test_row_must_be_comparable_in_scale_to_the_match():
-    """A bbox many times taller than a row does not identify that row.
-
-    Starbucks 2025 p34: find_tables fragmented the table into a ONE-row
-    table holding only the section heading 'Net revenues:'. The overlap
-    test found exactly one row and attached it, so the caller got a
-    heading instead of the data row. Measured across every attaching
-    query in the corpus, correct attaches sit at ratio <= 0.8 and that
-    one wrong attach at 6.5.
-    """
+def test_overlapping_rows_reports_every_covered_row():
+    """Row selection reports all covered rows, not a single choice."""
     from pdf_mcp.server import _rows_overlapping
 
-    # Starbucks shape: 84.8pt match over a 13pt row.
-    assert (
-        _rows_overlapping([46.0, 99.0, 551.0, 183.8], [[43.0, 119.6, 551.0, 132.6]])
-        == []
-    )
-    # Ordinary shape: a match roughly the size of its row still resolves.
-    assert _rows_overlapping(
-        [46.0, 120.0, 551.0, 130.0], [[43.0, 119.0, 551.0, 133.0]]
-    ) == [0]
+    rows = [
+        [43.0, 100.0, 551.0, 113.0],
+        [43.0, 113.0, 551.0, 126.0],
+        [43.0, 126.0, 551.0, 139.0],
+    ]
+    # A tall match covering all three reports all three.
+    assert _rows_overlapping([46.0, 99.0, 551.0, 140.0], rows) == [0, 1, 2]
+    # A match the size of one row reports just that row.
+    assert _rows_overlapping([46.0, 114.0, 551.0, 125.0], rows) == [1]
+
+
+def test_single_row_detections_merge_back_into_one_table():
+    """find_tables splits some tables into one detection per row.
+
+    Starbucks 2025 p34: eight detections, one carrying the real header
+    plus a section row, the rest a single data row each. Because
+    row_count is 1, extracted[0] was filed as `header` and `rows` came
+    back empty, so a caller saw 8 tables whose data was in the wrong
+    field. They belong to one table and must be reassembled.
+    """
+    from pdf_mcp.extractor import _merge_single_row_detections
+
+    raw = [
+        {
+            "bbox": [43.0, 99.0, 551.0, 132.6],
+            "extracted": [
+                ["", "Sep 28,\n2025", "", "Sep 29,\n2024", "", "%\nChange"],
+                ["Net revenues:", "", "", "", "", ""],
+            ],
+            "row_bboxes": [[43.0, 99.0, 551.0, 119.6], [43.0, 119.6, 551.0, 132.6]],
+        },
+        {
+            "bbox": [43.0, 145.6, 551.0, 158.6],
+            "extracted": [["Licensed stores", "4,350.4", "", "4,505.1", "", "(3.4)"]],
+            "row_bboxes": [[43.0, 145.6, 551.0, 158.6]],
+        },
+        {
+            "bbox": [43.0, 171.6, 551.0, 184.6],
+            "extracted": [
+                ["Total net revenues", "37,184.4", "", "36,176.2", "", "2.8%"]
+            ],
+            "row_bboxes": [[43.0, 171.6, 551.0, 184.6]],
+        },
+    ]
+    merged = _merge_single_row_detections(raw)
+    assert len(merged) == 1
+    t = merged[0]
+    assert t["extracted"][0][1] == "Sep 28,\n2025"  # real header kept
+    body = t["extracted"][1:]
+    assert ["Licensed stores", "4,350.4", "", "4,505.1", "", "(3.4)"] in body
+    assert ["Total net revenues", "37,184.4", "", "36,176.2", "", "2.8%"] in body
+    assert len(t["row_bboxes"]) == len(t["extracted"])  # stays index-aligned
+
+
+def test_unfragmented_tables_are_left_alone():
+    """A single well-formed detection must pass through untouched."""
+    from pdf_mcp.extractor import _merge_single_row_detections
+
+    raw = [
+        {
+            "bbox": [50.0, 50.0, 300.0, 150.0],
+            "extracted": [["Parameter", "Min", "Max"], ["Supply Voltage", "4.5", "16"]],
+            "row_bboxes": [[50.0, 50.0, 300.0, 83.0], [50.0, 83.0, 300.0, 116.0]],
+        }
+    ]
+    assert _merge_single_row_detections(raw) == raw

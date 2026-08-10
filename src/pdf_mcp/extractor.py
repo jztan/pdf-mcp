@@ -1612,7 +1612,11 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
 #: detach from their numbers ("4.5" -> "45\n."), so every cached numeric cell
 #: from that era is untrustworthy and must be discarded.
 #: 3: per-row bboxes added for geometric row selection in pdf_search.
-TABLE_EXTRACTION_VERSION = 3
+#: 4: tables split by find_tables into one detection per row are merged
+#: back together. Before this, a single-row detection filed its DATA as
+#: the header and returned rows: [], so Starbucks 2025 p34 reported 8
+#: tables whose values were all in the wrong field.
+TABLE_EXTRACTION_VERSION = 4
 
 
 def _extract_tables_worker(
@@ -1649,6 +1653,84 @@ def _extract_tables_worker(
     return out
 
 
+#: Tolerance, in points, for calling two detections the same column block.
+_FRAGMENT_X_TOLERANCE = 6.0
+
+
+def _merge_single_row_detections(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reassemble tables that ``find_tables`` split into one detection per row.
+
+    Some documents (Starbucks 2025 p34 is the reference case) come back as
+    a run of detections sharing a column block: one carries the real
+    header, the rest carry a single data row each. A single-row detection
+    has ``extracted[0]`` as DATA, not a header, so treating index 0 as the
+    header filed the values under ``header`` and returned ``rows: []``.
+    A caller then saw eight tables with no rows and their data in the
+    wrong field.
+
+    Detections are grouped by column count and horizontal extent, and a
+    group is merged only when it contains a single-row detection: an
+    ordinary page of distinct tables is left exactly as it was.
+    """
+    groups: dict[tuple[int, int, int], list[dict[str, Any]]] = {}
+    order: list[tuple[int, int, int]] = []
+    for item in raw:
+        cols = len(item["extracted"][0]) if item["extracted"] else 0
+        key = (
+            cols,
+            int(item["bbox"][0] / _FRAGMENT_X_TOLERANCE),
+            int(item["bbox"][2] / _FRAGMENT_X_TOLERANCE),
+        )
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(item)
+
+    out: list[dict[str, Any]] = []
+    for key in order:
+        group = groups[key]
+        fragmented = len(group) > 1 and any(len(g["extracted"]) == 1 for g in group)
+        if not fragmented:
+            out.extend(group)
+            continue
+
+        group = sorted(group, key=lambda g: g["bbox"][1])
+        # The header comes from the first detection that actually has one,
+        # i.e. carries more than the single row it was split into.
+        head_idx = next(
+            (i for i, g in enumerate(group) if len(g["extracted"]) > 1), None
+        )
+        extracted: list[list[str]] = []
+        row_bboxes: list[list[float]] = []
+        if head_idx is None:
+            # No detection carries a header. Emit an empty one rather than
+            # promoting a data row into it and inventing column labels.
+            extracted.append([""] * key[0])
+            row_bboxes.append(list(group[0]["row_bboxes"][0]))
+        else:
+            extracted.append(group[head_idx]["extracted"][0])
+            row_bboxes.append(list(group[head_idx]["row_bboxes"][0]))
+
+        for i, g in enumerate(group):
+            start = 1 if i == head_idx else 0
+            extracted.extend(g["extracted"][start:])
+            row_bboxes.extend([list(b) for b in g["row_bboxes"][start:]])
+
+        out.append(
+            {
+                "bbox": [
+                    min(g["bbox"][0] for g in group),
+                    min(g["bbox"][1] for g in group),
+                    max(g["bbox"][2] for g in group),
+                    max(g["bbox"][3] for g in group),
+                ],
+                "extracted": extracted,
+                "row_bboxes": row_bboxes,
+            }
+        )
+    return out
+
+
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     """
     Extract tables from a PDF page using PyMuPDF's table finder.
@@ -1676,6 +1758,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
           Empty list if geometry could not be aligned with the rows.
     """
     tables: list[dict[str, Any]] = []
+    raw: list[dict[str, Any]] = []
     try:
         found = page.find_tables()
         for table in found.tables:
@@ -1688,25 +1771,39 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
             extracted = table.extract()
             if not extracted:
                 continue
-            header = [str(cell) if cell is not None else "" for cell in extracted[0]]
-            rows = [
-                [str(cell) if cell is not None else "" for cell in row]
-                for row in extracted[1:]
-            ]
+            # Collect raw first. Some documents split one table into a
+            # detection per row, and that can only be undone with the whole
+            # page in hand. `table.rows` includes the header at index 0, so
+            # these geometries align with `extracted` one for one.
+            raw.append(
+                {
+                    "bbox": [round(v, 1) for v in table.bbox],
+                    "extracted": [
+                        [str(cell) if cell is not None else "" for cell in row]
+                        for row in extracted
+                    ],
+                    "row_bboxes": [[round(v, 1) for v in tr.bbox] for tr in table.rows],
+                }
+            )
+
+        for item in _merge_single_row_detections(raw):
+            extracted = item["extracted"]
+            header = extracted[0]
+            rows = extracted[1:]
             # Per-row geometry, index-aligned with `rows` (header excluded).
-            # `table.rows` includes the header at index 0, so skip it. A
-            # caller selects the row containing a match bbox; token overlap
-            # was measured picking the wrong row, so geometry is the input.
-            row_bboxes = [[round(v, 1) for v in tr.bbox] for tr in table.rows[1:]]
+            # A caller selects the row containing a match bbox; token
+            # overlap was measured picking the wrong row, so geometry is
+            # the input.
+            row_bboxes = item["row_bboxes"][1:]
             # Never let the two drift: a caller indexes one by the other.
             if len(row_bboxes) != len(rows):
                 row_bboxes = []
             tables.append(
                 {
                     "index": len(tables),
-                    "bbox": [round(v, 1) for v in table.bbox],
+                    "bbox": item["bbox"],
                     "row_count": len(extracted),
-                    "col_count": len(extracted[0]),
+                    "col_count": len(header),
                     "header": header,
                     "rows": rows,
                     "row_bboxes": row_bboxes,

@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contains the answer but nothing says which number is the minimum, because
   the header is a separate text block and position is no guide (empty cells
   are elided). Ambiguous matches now carry the table `header`, their own
-  `row`, and `columns_reliable`.
+  `rows` (every table row the hit covers), and `columns_reliable`.
   Context is attached only when the excerpt holds two or more numbers and
   no column label, so prose searches are unaffected; extraction is cached
   per page. `columns_reliable` is false when a table's cells hold merged
@@ -144,8 +144,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `pdf_read_pages` table entries gain `row_bboxes`, one bounding box per
-  row, which `pdf_search` uses to pick the row matching a hit. Cached
+  row, which `pdf_search` uses to find the rows matching a hit. Cached
   tables re-extract once on first access after upgrade.
+- Tables that `find_tables` split into one detection per row are merged
+  back into a single table. A single-row detection had its DATA filed as
+  the header with `rows: []`, so Starbucks' 2025 annual report reported
+  eight tables on one page whose values were all in the wrong field; it
+  now reports two tables with their rows populated.
 - Documented what each transport is for, rather than presenting HTTP as
   stdio's equivalent. Paths resolve on the server, so an HTTP caller reads
   files already under an allow-listed root or `https://` URLs the server

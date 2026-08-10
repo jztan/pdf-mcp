@@ -1517,10 +1517,9 @@ _NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 #: rather than a column label, which is what keeps a sparse-but-real header
 #: from being displaced by the row beneath it.
 _MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
-#: How much taller than its row a match bbox may be and still be taken to
-#: identify that row. 2.0 sits well clear of the 0.8 ceiling measured on
-#: correct attaches and well below the 6.5 of the wrong one.
-_MAX_MATCH_TO_ROW_HEIGHT = 2.0
+#: Upper bound on rows returned in a table_context, so a match covering a
+#: whole large table cannot bloat the response.
+_MAX_CONTEXT_ROWS = 20
 
 
 def _excerpt_is_ambiguous(excerpt: str) -> bool:
@@ -1663,18 +1662,19 @@ def _attach_table_context(
 def _context_for_match(
     match: dict[str, Any], tables: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """Header and the single row the match bbox identifies.
+    """Header and every table row the match bbox covers.
 
     Geometric, not token overlap: token overlap was measured selecting the
     wrong row (5 vs 3 on the right one).
 
-    Requires the bbox to overlap EXACTLY ONE row, rather than testing which
-    row contains its centre. PyMuPDF returns some tables as one text block
-    (Berkshire 2024 p134: a 202pt block over 16 rows of ~12pt), and a centre
-    test on that bbox returns whichever row sits in the vertical middle,
-    confidently and wrongly. A bbox spanning many rows identifies no row, so
-    it yields nothing. Absent beats wrong-and-confident, the same call the
-    chart extractor makes when it declines.
+    Returns ALL covered rows rather than choosing one. An excerpt block
+    routinely spans several rows (Starbucks p34 covers six, Berkshire p134
+    the whole table), and nothing in the geometry says which of them the
+    caller wants. Picking one returned the wrong row; insisting on exactly
+    one returned nothing at all on every document whose blocks are not
+    per-row. The rows are already in the excerpt the caller can see, so the
+    part actually missing is the header, and handing back the header with
+    the rows it governs resolves the ambiguity without a guess.
     """
     bbox = match["bbox"]
     for table in tables:
@@ -1685,10 +1685,10 @@ def _context_for_match(
         header, body = _resolve_header(table.get("header") or [], rows)
         offset = len(rows) - len(body)  # 1 when row 0 was promoted
         hits = _rows_overlapping(bbox, row_bboxes[offset:])
-        if len(hits) == 1:
+        if hits:
             return {
                 "header": header,
-                "row": body[hits[0]],
+                "rows": [body[i] for i in hits[:_MAX_CONTEXT_ROWS]],
                 "columns_reliable": _columns_reliable(body),
             }
     return None
@@ -1709,16 +1709,6 @@ def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[in
         r0, r1 = float(rb[1]), float(rb[3])
         row_h = r1 - r0
         if row_h <= 0:
-            continue
-        # Scale check. `min(...)` below lets a short cell inside a tall
-        # row count, but it also lets a very tall bbox "overlap" a short
-        # row it merely contains. Starbucks p34 is the case: find_tables
-        # fragmented the table into a ONE-row table holding only the
-        # heading 'Net revenues:', so the count test could not reject it
-        # and the caller got a heading instead of the data row. Measured
-        # across every attaching query, correct attaches sit at ratio
-        # <= 0.8 and that wrong attach at 6.5.
-        if box_h > _MAX_MATCH_TO_ROW_HEIGHT * row_h:
             continue
         overlap = min(y1, r1) - max(y0, r0)
         if overlap > 0.5 * min(box_h, row_h):

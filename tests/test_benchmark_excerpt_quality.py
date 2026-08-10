@@ -381,7 +381,7 @@ def test_context_resolution_requires_a_single_number_in_the_cell():
     ti = {
         "table_context": {
             "header": ["PARAMETER", "TEST CONDITIONS", "MIN", "TYP", "MAX", "UNIT"],
-            "row": ["Reset Voltage", "", "0.4 0.5 1", "", "", "V"],
+            "rows": [["Reset Voltage", "", "0.4 0.5 1", "", "", "V"]],
             "columns_reliable": False,
         }
     }
@@ -394,7 +394,7 @@ def test_context_resolution_accepts_a_clean_cell_under_a_named_column():
     esp = {
         "table_context": {
             "header": ["Parameter", "Description", "Min", "Max", "Unit"],
-            "row": ["Ioutput1", "Cumulative IO output current", "-", "1200", "mA"],
+            "rows": [["Ioutput1", "Cumulative IO output current", "-", "1200", "mA"]],
             "columns_reliable": False,
         }
     }
@@ -409,7 +409,7 @@ def test_context_resolution_rejects_an_unnamed_column():
     junk = {
         "table_context": {
             "header": ["Electrical Characteristics (@ TA = +25C)", "", "", ""],
-            "row": ["Reverse Recovery Time", "tRR", "4.0", "ns"],
+            "rows": [["Reverse Recovery Time", "tRR", "4.0", "ns"]],
             "columns_reliable": True,
         }
     }
@@ -423,7 +423,7 @@ def test_context_resolution_uses_number_tokens_not_substrings():
     m = {
         "table_context": {
             "header": ["Parameter", "Max", "Unit"],
-            "row": ["Leakage", "1000", "nA"],
+            "rows": [["Leakage", "1000", "nA"]],
             "columns_reliable": True,
         }
     }
@@ -443,7 +443,7 @@ def test_context_resolution_accepts_a_fiscal_period_column_header():
     sbux = {
         "table_context": {
             "header": ["", "Sep 28,\n2025", "Sep 29,\n2024", "%\nChange"],
-            "row": ["Licensed stores", "4,350.4", "4,505.1", "(3.4"],
+            "rows": [["Licensed stores", "4,350.4", "4,505.1", "(3.4"]],
             "columns_reliable": True,
         }
     }
@@ -456,7 +456,7 @@ def test_context_resolution_accepts_a_bare_year_column_header():
     brk = {
         "table_context": {
             "header": ["", "2024", "2023", "2022"],
-            "row": ["BNSF", "5,031", "5,087", "5,946"],
+            "rows": [["BNSF", "5,031", "5,087", "5,946"]],
             "columns_reliable": True,
         }
     }
@@ -470,7 +470,7 @@ def test_context_resolution_still_rejects_an_unnamed_column_after_widening():
     blank = {
         "table_context": {
             "header": ["", "", "", ""],
-            "row": ["Licensed stores", "4,350.4", "4,505.1", "(3.4"],
+            "rows": [["Licensed stores", "4,350.4", "4,505.1", "(3.4"]],
             "columns_reliable": True,
         }
     }
@@ -484,7 +484,7 @@ def test_context_resolution_still_rejects_ti_packed_cell_after_widening():
     ti = {
         "table_context": {
             "header": ["PARAMETER", "TEST CONDITIONS", "MIN", "TYP", "MAX", "UNIT"],
-            "row": ["Reset Voltage", "", "0.4 0.5 1", "", "", "V"],
+            "rows": [["Reset Voltage", "", "0.4 0.5 1", "", "", "V"]],
             "columns_reliable": False,
         }
     }

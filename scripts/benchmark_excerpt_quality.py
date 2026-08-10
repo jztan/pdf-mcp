@@ -104,8 +104,9 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     """True if the attached table context identifies WHICH quantity the answer is.
 
     All four must hold, and each rejects a real failure seen in the corpus:
-      - the answer is a number token in exactly one cell (substring
-        matching produced a false pass: "25" inside "VR = 25V")
+      - the answer is a number token in exactly one cell across all
+        returned rows (substring matching produced a false pass: "25"
+        inside "VR = 25V")
       - that cell holds exactly one number token (TI's MIN cell is
         "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
       - the header cell at that index names a quantity: a measurement
@@ -118,17 +119,21 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     ctx = match.get("table_context")
     if not ctx:
         return False
-    header, row = ctx.get("header") or [], ctx.get("row") or []
+    header = ctx.get("header") or []
+    rows = ctx.get("rows") or []
     want = _norm(answer)
+    # Search every returned row: the answer must land in exactly ONE cell
+    # across all of them, so a value repeated down a column still fails.
     hits = [
-        i
+        (r, i)
+        for r, row in enumerate(rows)
         for i, cell in enumerate(row)
         if want in [_norm(t) for t in _NUMBER.findall(cell or "")]
     ]
     if len(hits) != 1:
         return False
-    idx = hits[0]
-    if len(_NUMBER.findall(row[idx] or "")) != 1:
+    r, idx = hits[0]
+    if len(_NUMBER.findall(rows[r][idx] or "")) != 1:
         return False
     if idx >= len(header):
         return False

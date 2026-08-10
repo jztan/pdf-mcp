@@ -1604,9 +1604,58 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
     return width_frac >= _FULL_PAGE_TABLE_FRAC and height_frac >= _FULL_PAGE_TABLE_FRAC
 
 
+#: Bump when table extraction logic or response shape changes. Cached
+#: `page_tables` rows carrying an older version are ignored and re-extracted.
+#: 2: tables are extracted in an isolated spawn process. Version 1 rows were
+#: produced in a process that had imported ``pymupdf4llm``, which activates
+#: ``pymupdf.layout`` and corrupts ``find_tables`` cell text -- decimal points
+#: detach from their numbers ("4.5" -> "45\n."), so every cached numeric cell
+#: from that era is untrustworthy and must be discarded.
+TABLE_EXTRACTION_VERSION = 2
+
+
+def _extract_tables_worker(
+    args: tuple[str, list[int]],
+) -> dict[int, "list[dict[str, Any]] | PageError"]:
+    """Picklable worker extracting tables for several pages of one document.
+
+    MUST run in a ``spawn`` process, never ``fork``. Importing
+    ``pymupdf4llm`` (which the server does at startup, and which any
+    column-aware text extraction triggers) executes
+    ``use_layout(True)`` -> ``import pymupdf.layout``, and that import alone
+    swaps PyMuPDF's text engine process-wide and irreversibly. A forked
+    child inherits that state and would return the same corrupt cells; only
+    a spawned child re-imports a clean PyMuPDF.
+
+    Batched over pages so one process spawn (~200-500ms) serves a whole
+    ``pdf_read_pages`` call rather than being paid per page.
+
+    Per-page failure is isolated as a PageError so one bad page cannot cost
+    the batch. A failure is never silently downgraded to "no tables": the
+    parent must not confuse "extraction failed" with "this page has none".
+    """
+    path, page_nums = args
+    out: dict[int, list[dict[str, Any]] | PageError] = {}
+    doc = pymupdf.open(path)
+    try:
+        for page_num in page_nums:
+            try:
+                out[page_num] = extract_tables_from_page(doc[page_num])
+            except Exception as exc:  # noqa: BLE001 - per-page isolation
+                out[page_num] = PageError(repr(exc))
+    finally:
+        doc.close()
+    return out
+
+
 def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     """
     Extract tables from a PDF page using PyMuPDF's table finder.
+
+    .. warning::
+       Calling this in a process that has imported ``pymupdf4llm`` returns
+       corrupted cell text. Use ``_extract_tables_worker`` via an isolated
+       spawn process instead. See TABLE_EXTRACTION_VERSION.
 
     Requires visible line borders to detect table structure.
     Pages without detectable tables return an empty list.

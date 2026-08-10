@@ -1736,9 +1736,15 @@ class TestReadPagesInlineTables:
         assert result["total_tables"] == expected
 
     def test_tableless_page_cached(self, sample_pdf, isolated_server):
-        """extract_tables_from_page called once; [] cached as sentinel."""
+        """One isolated extraction; [] cached as sentinel, not re-extracted.
+
+        Extraction is dispatched to a clean `python -m` subprocess, because
+        in-process `find_tables` returns corrupt cells once pymupdf4llm has
+        been imported. Patching that dispatch is what counts the extraction
+        now.
+        """
         with patch(
-            "pdf_mcp.server.extract_tables_from_page", return_value=[]
+            "pdf_mcp.server.run_module_json", return_value={"tables": {"0": []}}
         ) as mock_extract:
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1

@@ -5,10 +5,13 @@ keeping this module free of PyMuPDF/project imports keeps the spawn re-import
 path cheap.
 """
 
+import json
 import math
 import multiprocessing
 import os
 import queue
+import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable
@@ -149,3 +152,47 @@ def run_pages(
             results[idx] = _run_page_bounded(worker, arg_list[idx], page_timeout)
 
     return results
+
+
+def run_module_json(
+    module: str, payload: dict[str, Any], timeout: float = 120.0
+) -> Any:
+    """Run `python -m <module>` in a clean interpreter, exchanging JSON.
+
+    For work whose correctness *depends* on a pristine interpreter. Table
+    extraction is the case: this process has imported `pymupdf4llm`, which
+    irreversibly swaps PyMuPDF's text engine, so `find_tables` here returns
+    corrupt cells.
+
+    `-m` rather than `multiprocessing`: spawn re-imports the parent's
+    `__main__` in the child, so when `__main__` imports `pdf_mcp.server`
+    (exactly what the `pdf-mcp` console script does) the child re-poisons
+    itself before running. `-m` makes the target module `__main__`, so the
+    child's imports do not depend on how the parent was launched. A spawn
+    version of this passed its tests under pytest and `python -c`, and
+    silently failed in the real server; do not reintroduce one.
+
+    There is deliberately no in-parent fallback: falling back would return
+    confidently wrong numbers instead of failing.
+
+    Raises:
+        TimeoutError: the child did not finish within `timeout`.
+        RuntimeError: the child exited non-zero or emitted unparsable JSON.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-m", module],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"{module} exited {proc.returncode}: {proc.stderr.strip()[:500]}"
+        )
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"{module} emitted unparsable output: {proc.stdout[:200]!r}"
+        ) from exc

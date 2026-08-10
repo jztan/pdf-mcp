@@ -562,7 +562,11 @@
           "query": "power supply ripple rejection ratio",
           "page": 4,
           "answer": "44",
-          "answer_label": "PSRR"
+          "answer_label": "PSRR",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "Paragraph picker returns the row-label block 'Power Supply Ripple Rejection Ratio' (37 chars), which carries no value; the value sits in a separate block on the same row. Snippet mode finds it. This is the short-label-block preference on table pages, a picker weakness predating table_context, and it is the retrieval bucket that accounts for 45% of all table failures."
+          }
         },
         {
           "id": "p02",
@@ -570,7 +574,11 @@
           "query": "thermal shutdown protection",
           "page": 4,
           "answer": "140",
-          "answer_label": "Thermal Shutdown Protection"
+          "answer_label": "Thermal Shutdown Protection",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "Same short-label-block failure as p01: the picker returns 'Thermal Shutdown Protection' (29 chars) without the 140 that follows it in an adjacent block."
+          }
         },
         {
           "id": "p03",
@@ -594,7 +602,11 @@
           "query": "original ResNet CIFAR-10 error rate",
           "page": 6,
           "answer": "6.43",
-          "answer_label": "original-ResNet"
+          "answer_label": "original-ResNet",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "Paragraph picker returns the table CAPTION ('Table 1: Test errors of different methods on CIFAR-10 and CIFAR-100...') instead of the body row holding the value. Caption-over-body preference on table pages; snippet mode finds the row."
+          }
         },
         {
           "id": "x12",

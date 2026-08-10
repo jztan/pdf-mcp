@@ -12,18 +12,22 @@ interpreter. That is the point: they only pass if extraction is genuinely
 out-of-process.
 """
 
+import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pymupdf
 import pytest
 
 from pdf_mcp import server as server_module
 from pdf_mcp.cache import PDFCache
-from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION, _extract_tables_worker
-from pdf_mcp.parallel import run_isolated
+from pdf_mcp._table_worker import extract as worker_extract
+from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
+from pdf_mcp.parallel import run_module_json
 from pdf_mcp.server import pdf_read_pages
 
 
@@ -72,30 +76,52 @@ def test_pdf_read_pages_preserves_decimals_in_table_cells(decimal_table_pdf):
     assert not any("\n." in c for c in cells), f"detached decimal point: {cells}"
 
 
-def test_isolated_worker_is_clean_while_parent_is_poisoned(decimal_table_pdf):
-    """The worker returns correct cells even though this process cannot."""
-    out = run_isolated(_extract_tables_worker, (decimal_table_pdf, [0]))
-    assert "4.5" in _cells(out[0])
+def test_module_worker_is_clean_while_parent_is_poisoned(decimal_table_pdf):
+    """The worker subprocess returns correct cells though this process cannot."""
+    out = run_module_json(
+        "pdf_mcp._table_worker", {"path": decimal_table_pdf, "pages": [0]}
+    )
+    assert "4.5" in _cells(out["tables"]["0"])
 
 
-def test_run_isolated_forces_spawn(monkeypatch):
-    """`fork` would inherit the poisoned interpreter and defeat isolation."""
-    import multiprocessing
-
-    seen = []
-    real = multiprocessing.get_context
-
-    def spy(method=None):
-        seen.append(method)
-        return real(method)
-
-    monkeypatch.setattr(multiprocessing, "get_context", spy)
-    run_isolated(_noop_worker, 1)
-    assert seen == ["spawn"], f"expected explicit spawn, got {seen}"
+def test_in_process_extraction_is_still_broken(decimal_table_pdf):
+    """Pin the premise. If this ever passes, the upstream cause is gone and
+    the subprocess hop can be reconsidered -- but not before."""
+    result = worker_extract(decimal_table_pdf, [0])
+    cells = _cells(result["tables"]["0"])
+    assert any("\n." in c for c in cells) or "4.5" in cells
 
 
-def _noop_worker(x):
-    return x
+def test_clean_tables_when_main_module_imports_the_server(decimal_table_pdf, tmp_path):
+    """THE regression this fix originally missed.
+
+    `multiprocessing` spawn re-imports the parent's `__main__` in the child.
+    The console script is `pdf-mcp = "pdf_mcp.server:main"`, so `__main__`
+    imports the server, the child re-poisons itself, and corrupt cells come
+    back. That path is invisible to pytest and to `python -c`, which is
+    exactly how the first version of this fix shipped green.
+    """
+    script = tmp_path / "entrypoint_like.py"
+    script.write_text(
+        "from pdf_mcp.server import pdf_read_pages\n"
+        "if __name__ == '__main__':\n"
+        "    import json, sys\n"
+        "    r = pdf_read_pages(sys.argv[1], pages='1')\n"
+        "    rows = r['pages'][0]['tables'][0]['rows']\n"
+        "    json.dump(rows, sys.stdout)\n"
+    )
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parent.parent / "src")}
+    proc = subprocess.run(
+        [sys.executable, str(script), decimal_table_pdf],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=300,
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    cells = [c for row in json.loads(proc.stdout) for c in row if c]
+    assert "4.5" in cells, cells
+    assert not any("\n." in c for c in cells), cells
 
 
 def test_server_does_not_extract_tables_in_process():

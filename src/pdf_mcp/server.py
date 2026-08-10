@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -45,12 +46,8 @@ from .extractor import (
     render_page_as_image,
     render_page_as_png,
 )
-from .extractor import (
-    _extract_tables_worker,
-    _ocr_page_worker,
-    _render_page_worker,
-)
-from .parallel import PageError, resolve_workers, run_isolated, run_pages
+from .extractor import _ocr_page_worker, _render_page_worker
+from .parallel import PageError, resolve_workers, run_module_json, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -1034,14 +1031,16 @@ def pdf_read_pages(
                 table_results[n] = cached_tables
         if table_miss_pages:
             try:
-                worker_out = run_isolated(
-                    _extract_tables_worker, (local_path, table_miss_pages)
-                )
-            except (TimeoutError, RuntimeError) as exc:
+                worker_out = run_module_json(
+                    "pdf_mcp._table_worker",
+                    {"path": local_path, "pages": table_miss_pages},
+                ).get("tables", {})
+            except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
                 logger.warning("Isolated table extraction failed: %s", exc)
                 worker_out = {}
             for n in table_miss_pages:
-                extracted = worker_out.get(n)
+                # JSON object keys are strings; page numbers round-trip as such.
+                extracted = worker_out.get(str(n))
                 # A PageError or a missing entry means extraction failed, not
                 # that the page has no tables. Leave it uncached and absent so
                 # the next call retries instead of persisting a false empty.

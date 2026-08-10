@@ -5,10 +5,13 @@ keeping this module free of PyMuPDF/project imports keeps the spawn re-import
 path cheap.
 """
 
+import json
 import math
 import multiprocessing
 import os
 import queue
+import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable
@@ -151,36 +154,45 @@ def run_pages(
     return results
 
 
-def run_isolated(worker: Callable[[Any], Any], arg: Any, timeout: float = 120.0) -> Any:
-    """Run `worker(arg)` once in a freshly SPAWNED process and return its result.
+def run_module_json(
+    module: str, payload: dict[str, Any], timeout: float = 120.0
+) -> Any:
+    """Run `python -m <module>` in a clean interpreter, exchanging JSON.
 
-    Unlike `run_pages`, this never falls back to running the worker in the
-    parent. It exists for work whose correctness *depends* on a clean
-    interpreter, where an in-parent retry would silently return wrong data
-    rather than fail. Table extraction is the case: the parent has imported
-    `pymupdf4llm`, which irreversibly swaps PyMuPDF's text engine.
+    For work whose correctness *depends* on a pristine interpreter. Table
+    extraction is the case: this process has imported `pymupdf4llm`, which
+    irreversibly swaps PyMuPDF's text engine, so `find_tables` here returns
+    corrupt cells.
 
-    `spawn` is explicit and load-bearing. The default start method is `fork`
-    on Linux, and a forked child inherits the parent's poisoned interpreter
-    state, which would defeat the isolation entirely.
+    `-m` rather than `multiprocessing`: spawn re-imports the parent's
+    `__main__` in the child, so when `__main__` imports `pdf_mcp.server`
+    (exactly what the `pdf-mcp` console script does) the child re-poisons
+    itself before running. `-m` makes the target module `__main__`, so the
+    child's imports do not depend on how the parent was launched. A spawn
+    version of this passed its tests under pytest and `python -c`, and
+    silently failed in the real server; do not reintroduce one.
+
+    There is deliberately no in-parent fallback: falling back would return
+    confidently wrong numbers instead of failing.
 
     Raises:
         TimeoutError: the child did not finish within `timeout`.
-        RuntimeError: the child died without producing a result.
+        RuntimeError: the child exited non-zero or emitted unparsable JSON.
     """
-    ctx = multiprocessing.get_context("spawn")
-    q = ctx.Queue()
-    proc = ctx.Process(target=_worker_into_queue, args=(worker, arg, q))
-    proc.start()
+    proc = subprocess.run(
+        [sys.executable, "-m", module],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"{module} exited {proc.returncode}: {proc.stderr.strip()[:500]}"
+        )
     try:
-        try:
-            result = q.get(timeout=timeout)
-        except queue.Empty:
-            raise TimeoutError(f"isolated worker exceeded {timeout}s") from None
-        if isinstance(result, PageError):
-            raise RuntimeError(f"isolated worker failed: {result.detail}")
-        return result
-    finally:
-        if proc.is_alive():
-            proc.terminate()
-        proc.join(timeout=5)
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"{module} emitted unparsable output: {proc.stdout[:200]!r}"
+        ) from exc

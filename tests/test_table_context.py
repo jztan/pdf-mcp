@@ -515,3 +515,48 @@ def test_trigger_fires_for_a_caption_with_no_numbers():
         )
         is True
     )
+
+
+def test_cached_tables_allow_attachment_without_a_subprocess(
+    monkeypatch, ruled_table_pdf
+):
+    """A page whose tables are already cached costs nothing to associate.
+
+    The pre-filter exists only to avoid SPAWNING on prose searches. When
+    a page's tables are already in the cache there is no spawn to avoid,
+    so a bare row label like 'Timing Error, Monostable' can be
+    associated with its table for free. Five of the fifteen remaining
+    failures are blocked by the pre-filter alone, not by geometry.
+    """
+    import pathlib
+    import tempfile as _tf
+
+    from pdf_mcp import server as srv
+    from pdf_mcp.cache import PDFCache
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        # Warm the cache the way a prior read would.
+        tables = run_module_json(
+            "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
+        )["tables"]["0"]
+        cache.save_page_tables(ruled_table_pdf, 0, tables)
+
+        doc = pymupdf.open(ruled_table_pdf)
+        spawned = []
+        monkeypatch.setattr(
+            srv,
+            "run_module_json",
+            lambda *a, **k: spawned.append(a) or {"tables": {}},
+        )
+        # A bare label: no 2+ numbers, no "Table N". The old pre-filter
+        # dropped it outright.
+        match = {
+            "page": 1,
+            "excerpt": "Supply Voltage",
+            "bbox": [55.0, 100.0, 128.0, 112.0],
+        }
+        out = srv._attach_table_context([match], ruled_table_pdf, cache, doc)
+        doc.close()
+    assert spawned == [], "must not spawn: the tables were already cached"
+    assert "table_context" in out[0]

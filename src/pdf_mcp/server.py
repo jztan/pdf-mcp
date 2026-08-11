@@ -1688,23 +1688,25 @@ def _attach_table_context(
     Extraction must stay out of process: this interpreter has imported
     pymupdf4llm, which corrupts find_tables irreversibly.
     """
-    candidates = [
-        m
-        for m in matches
-        if m.get("bbox") and _match_may_touch_a_table(m.get("excerpt", ""))
-    ]
-    if not candidates:
+    placed = [m for m in matches if m.get("bbox")]
+    if not placed:
         return matches
 
-    wanted = sorted({m["page"] - 1 for m in candidates})
+    # Reading the cache is free, so do it for EVERY matched page. Only
+    # pages whose excerpt passes the pre-filter are worth an extraction.
+    # That separation is what lets a bare row label ('Timing Error,
+    # Monostable') associate with its table without prose searches ever
+    # paying for a spawn: no cached tables, no attachment, no cost.
     tables_by_page: dict[int, list[dict[str, Any]]] = {}
-    missing: list[int] = []
-    for page_num in wanted:
+    for page_num in sorted({m["page"] - 1 for m in placed}):
         cached = cache.get_page_tables(local_path, page_num)
-        if cached is None:
-            missing.append(page_num)
-        else:
+        if cached is not None:
             tables_by_page[page_num] = cached
+
+    candidates = [m for m in placed if _match_may_touch_a_table(m.get("excerpt", ""))]
+    missing = sorted(
+        {m["page"] - 1 for m in candidates if (m["page"] - 1) not in tables_by_page}
+    )
 
     if missing:
         try:
@@ -1720,7 +1722,7 @@ def _attach_table_context(
                 tables_by_page[page_num] = extracted
                 cache.save_page_tables(local_path, page_num, extracted)
 
-    for m in candidates:
+    for m in placed:
         page_rect = None
         if doc is not None:
             try:

@@ -348,7 +348,14 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     accum: dict[str, dict[str, list[int]]] = {
         c: defaultdict(list)
         for c in CELLS
-        + ("bbox", "qualified", "interpretable", "interpretable_with_context")
+        + (
+            "bbox",
+            "qualified",
+            "interpretable",
+            "interpretable_with_context",
+            "answerable_from_response",
+            "clip_points_wrong",
+        )
     }
     rows: list[dict] = []
 
@@ -454,6 +461,34 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                         )
                     row["paragraph_interpretable_with_context"] = with_context
 
+                    # The escape hatch, scored. When the columns cannot be
+                    # read in text the tool declines and hands back the
+                    # table's region instead of guessing. Whether a VISION
+                    # model can read the render needs a judged eval, but
+                    # whether we pointed at the right place is checkable
+                    # here for free, and a wrong pointer is worse than
+                    # none: the agent renders it and finds nothing.
+                    ctx = (target or {}).get("table_context") or {}
+                    clip_ok = 0
+                    clip_miss = 0
+                    if ctx.get("bbox") and doc is not None:
+                        page = doc[q["page"] - 1]
+                        if bbox_contains_answer(page, ctx["bbox"], q["answer"]):
+                            clip_ok = 1
+                        else:
+                            clip_miss = 1
+                    # What an agent can actually get to, by reading OR by
+                    # looking. `interpretable_with_context` deliberately
+                    # ignores the clip, so the two are reported side by side.
+                    answerable = int(bool(with_context) or bool(clip_ok))
+                    if q["category"] == "table":
+                        accum["answerable_from_response"][q["category"]].append(
+                            answerable
+                        )
+                        accum["clip_points_wrong"][q["category"]].append(clip_miss)
+                    row["paragraph_answerable_from_response"] = answerable
+                    row["paragraph_clip_points_wrong"] = clip_miss
+
             rows.append(row)
 
         if doc is not None:
@@ -465,6 +500,8 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
         "qualified",
         "interpretable",
         "interpretable_with_context",
+        "answerable_from_response",
+        "clip_points_wrong",
     ):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []

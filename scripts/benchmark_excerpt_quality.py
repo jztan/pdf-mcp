@@ -76,23 +76,19 @@ _PERIOD_WORDS = re.compile(
 )
 
 
-#: Longest header cell still readable as a column label rather than a
-#: caption, and the most words in one. Measured against the corpus: real
-#: labels top out at 'Train (Speech & Text)'; captions start at 'Table 2.
-#: Estimated APRs for select online products'.
-_MAX_LABEL_CHARS = 28
-_MAX_LABEL_WORDS = 4
-
-
 def _names_a_quantity(header_cell: str) -> bool:
     """True when a header cell identifies which quantity a value is.
 
-    Structural, not a word list. Enumerating vocabularies does not
-    converge: measurement qualifiers, then reporting periods, then
-    dataset names ('CIFAR-10', 'Train (Speech & Text)') -- each widening
-    invited the next, and each risked being fitted to whichever corpus
-    was in front of us. A column label is SHORT; a caption is a sentence;
-    a section heading ends in a colon.
+    Cell-level half of the test: non-empty, and not a section heading
+    (those end in a colon). The caption test lives in
+    `_resolves_via_context`, which checks the shape of the whole header
+    ROW -- a caption fills one cell, a header row fills several.
+
+    Length constants were tried and removed. Capping a label at 28 chars
+    / 4 words excluded 'Frequency Observed at Φ = 0.3', a genuine column
+    label, so both numbers were fitted to the corpus rather than derived
+    from anything. Row shape needs no constant and is the same signal
+    header promotion already uses.
 
     The trailing-colon guard is load-bearing. Without it Starbucks p36
     credits a value from 'Store operating expenses' to the section row
@@ -101,11 +97,7 @@ def _names_a_quantity(header_cell: str) -> bool:
     corpus: +1 true resolution, 0 false passes, 0 losses.
     """
     cell = (header_cell or "").strip()
-    if not cell or cell.endswith(":"):
-        return False
-    if len(cell) > _MAX_LABEL_CHARS or cell.count(" ") >= _MAX_LABEL_WORDS:
-        return False
-    return True
+    return bool(cell) and not cell.endswith(":")
 
 
 def _is_interpretable(excerpt: str) -> bool:
@@ -135,11 +127,11 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         inside "VR = 25V")
       - that cell holds exactly one number token (TI's MIN cell is
         "0.4 0.5 1", so nothing identifies 0.4 as the minimum)
-      - the header governing that column names a quantity: a measurement
-        qualifier (MAX) or a reporting period (Sep 28, 2025). Blank
-        spacer columns are skipped leftward, since a currency column
-        shifts a value right of its own label. A mis-detected section
-        title must not count as resolution.
+      - the header ROW is a real header (two or more filled cells), not
+        a one-cell caption band
+      - the header governing that column is non-empty and is not a
+        section heading. Blank spacer columns are skipped leftward,
+        since a currency column shifts a value right of its own label.
 
     Deliberately ignores `columns_reliable`: that flag is a table-level
     caution, while resolution is decided per value.
@@ -164,6 +156,12 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     if len(_NUMBER.findall(rows[r][idx] or "")) != 1:
         return False
     if idx >= len(header):
+        return False
+    # A caption band fills ONE header cell and leaves the rest empty; a
+    # real header row fills several. This is the caption test, and it is
+    # the same signal `_resolve_header` uses to decide promotion, so the
+    # two rest on one principle rather than two hand-tuned heuristics.
+    if sum(1 for c in header if c and c.strip()) < 2:
         return False
     # Look left past spacer columns. A currency or symbol column shifts a
     # value one place right of its own label: Berkshire p55 is header

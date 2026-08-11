@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per page. `columns_reliable` is false when a table's cells hold merged
   values, which happens on datasheets drawn without vertical rules; it is a
   table-level caution, not a judgement on the individual row.
+  A match that sits inside, or directly above or below, a detected table
+  is associated with it, so a hit landing on a table's caption now carries
+  that table. This is geometric: on a table page the query terms cluster in
+  the caption or row label while the value sits in a separate block with
+  few or no query words, so no keyword ranking can reach it.
   `pdf_corpus_search` does not attach this field, to protect its latency
   budget.
 - `pdf_render_pages` now returns legible scanned pages. A page whose PNG

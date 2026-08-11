@@ -466,3 +466,97 @@ def test_clean_table_context_carries_no_clip():
     ctx = _context_for_match(match, clean, page_rect=[0.0, 0.0, 612.0, 792.0])
     assert ctx["columns_reliable"] is True
     assert "clip" not in ctx and "bbox" not in ctx
+
+
+def test_match_beside_a_table_is_associated_with_it():
+    """A caption or nearby block associates with the table it labels.
+
+    Forensics on all 19 retrieval failures: the answer sits in a VALUE
+    block scoring 0-4 query tokens while the winner is a label, caption
+    or prose block scoring 3-6. No token-overlap scorer can prefer the
+    value block, which is why three re-ranking designs failed. Geometry
+    can: 12 of the 19 have the winner inside, or within 60pt of, the
+    table whose rows hold the answer.
+    """
+    from pdf_mcp.server import _table_near_match
+
+    table = {"bbox": [50.0, 200.0, 500.0, 400.0]}
+    # Caption sitting just above the table.
+    assert _table_near_match([50.0, 170.0, 400.0, 190.0], table) is True
+    # A block inside the table.
+    assert _table_near_match([60.0, 250.0, 300.0, 262.0], table) is True
+    # Just below it.
+    assert _table_near_match([50.0, 410.0, 400.0, 430.0], table) is True
+    # Far above: a different part of the page, not this table.
+    assert _table_near_match([50.0, 60.0, 400.0, 80.0], table) is False
+
+
+def test_trigger_fires_for_a_caption_with_no_numbers():
+    """A caption never has two numbers, so the old trigger never fired.
+
+    'Table 3: Variations on the Transformer architecture' is the single
+    largest failure bucket (7 of 19) and carries no value at all.
+    """
+    from pdf_mcp.server import _excerpt_wants_table_context
+
+    cap = "Table 3: Variations on the Transformer architecture."
+    assert _excerpt_wants_table_context(cap, near_table=True) is True
+    # Prose far from any table must still cost nothing.
+    assert (
+        _excerpt_wants_table_context(
+            "we vary the number of attention heads", near_table=False
+        )
+        is False
+    )
+    # The original ambiguity route is unchanged.
+    assert (
+        _excerpt_wants_table_context(
+            "Reset Voltage | 0.4 | 0.5 | 1 | V", near_table=False
+        )
+        is True
+    )
+
+
+def test_cached_tables_allow_attachment_without_a_subprocess(
+    monkeypatch, ruled_table_pdf
+):
+    """A page whose tables are already cached costs nothing to associate.
+
+    The pre-filter exists only to avoid SPAWNING on prose searches. When
+    a page's tables are already in the cache there is no spawn to avoid,
+    so a bare row label like 'Timing Error, Monostable' can be
+    associated with its table for free. Five of the fifteen remaining
+    failures are blocked by the pre-filter alone, not by geometry.
+    """
+    import pathlib
+    import tempfile as _tf
+
+    from pdf_mcp import server as srv
+    from pdf_mcp.cache import PDFCache
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        # Warm the cache the way a prior read would.
+        tables = run_module_json(
+            "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
+        )["tables"]["0"]
+        cache.save_page_tables(ruled_table_pdf, 0, tables)
+
+        doc = pymupdf.open(ruled_table_pdf)
+        spawned = []
+        monkeypatch.setattr(
+            srv,
+            "run_module_json",
+            lambda *a, **k: spawned.append(a) or {"tables": {}},
+        )
+        # A bare label: no 2+ numbers, no "Table N". The old pre-filter
+        # dropped it outright.
+        match = {
+            "page": 1,
+            "excerpt": "Supply Voltage",
+            "bbox": [55.0, 100.0, 128.0, 112.0],
+        }
+        out = srv._attach_table_context([match], ruled_table_pdf, cache, doc)
+        doc.close()
+    assert spawned == [], "must not spawn: the tables were already cached"
+    assert "table_context" in out[0]

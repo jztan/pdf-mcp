@@ -1535,6 +1535,71 @@ def _excerpt_is_ambiguous(excerpt: str) -> bool:
     return len(_NUMBER_TOKEN.findall(excerpt)) >= 2
 
 
+#: Matches a reference to a numbered table, which is what a caption is.
+_TABLE_REF = re.compile(r"\btable\s+\d", re.I)
+
+
+def _match_may_touch_a_table(excerpt: str) -> bool:
+    """Cheap pre-filter: is this worth EXTRACTING tables for?
+
+    Decided from the excerpt alone, before any subprocess, because the
+    geometric test needs tables and extracting them for every matched
+    page would make prose searches pay for a spawn. Two routes, both
+    from measured failure buckets: an ambiguous value list, or a caption
+    naming a table.
+
+    A third route was tried and removed: "short block carrying no value",
+    aimed at bare row labels like 'Timing Error, Monostable'. Nothing
+    textual separates those from short prose -- it fired on "no numbers
+    here at all" -- and prose searches costing a subprocess is a shipped
+    guarantee. It is worth 3 queries and they are given up deliberately.
+    """
+    if _excerpt_is_ambiguous(excerpt):
+        return True
+    return bool(_TABLE_REF.search(excerpt))
+
+
+#: How far above or below a table a block can sit and still be read as
+#: belonging to it (a caption, a note). 60pt is roughly four lines.
+#: Captions are the single largest retrieval-failure bucket: 7 of 19.
+_TABLE_ASSOCIATION_GAP = 60.0
+
+
+def _table_near_match(bbox: list[Any], table: dict[str, Any]) -> bool:
+    """True when a match block sits inside, or just beside, a table.
+
+    Geometric on purpose. The answer lives in a VALUE block scoring 0-4
+    query tokens while the picker's winner is a label, caption or prose
+    block scoring 3-6, so no token-overlap scorer can prefer the value
+    block. Three re-ranking designs died on that. Position can tell what
+    scoring cannot: the caption of a table belongs to that table.
+    """
+    tb = table.get("bbox")
+    if not tb:
+        return False
+    y0, y1 = float(bbox[1]), float(bbox[3])
+    t0, t1 = float(tb[1]), float(tb[3])
+    if y1 >= t0 - 1 and y0 <= t1 + 1:
+        return True  # overlapping or inside
+    if 0 <= t0 - y1 <= _TABLE_ASSOCIATION_GAP:
+        return True  # sits above, like a caption
+    return 0 <= y0 - t1 <= _TABLE_ASSOCIATION_GAP  # sits below, like a note
+
+
+def _excerpt_wants_table_context(excerpt: str, near_table: bool) -> bool:
+    """Should this match carry table context?
+
+    Two routes. The original: the excerpt holds several numbers and no
+    column label, so the caller cannot tell which quantity is which. The
+    second: the excerpt sits in or beside a table, which covers the case
+    the first cannot see at all -- a caption or row label carrying NO
+    value, where the excerpt is not ambiguous, it is simply incomplete.
+    """
+    if _excerpt_is_ambiguous(excerpt):
+        return True
+    return near_table
+
+
 def _resolve_header(
     header: list[str], rows: list[list[str]]
 ) -> tuple[list[str], list[list[str]]]:
@@ -1623,23 +1688,25 @@ def _attach_table_context(
     Extraction must stay out of process: this interpreter has imported
     pymupdf4llm, which corrupts find_tables irreversibly.
     """
-    candidates = [
-        m
-        for m in matches
-        if m.get("bbox") and _excerpt_is_ambiguous(m.get("excerpt", ""))
-    ]
-    if not candidates:
+    placed = [m for m in matches if m.get("bbox")]
+    if not placed:
         return matches
 
-    wanted = sorted({m["page"] - 1 for m in candidates})
+    # Reading the cache is free, so do it for EVERY matched page. Only
+    # pages whose excerpt passes the pre-filter are worth an extraction.
+    # That separation is what lets a bare row label ('Timing Error,
+    # Monostable') associate with its table without prose searches ever
+    # paying for a spawn: no cached tables, no attachment, no cost.
     tables_by_page: dict[int, list[dict[str, Any]]] = {}
-    missing: list[int] = []
-    for page_num in wanted:
+    for page_num in sorted({m["page"] - 1 for m in placed}):
         cached = cache.get_page_tables(local_path, page_num)
-        if cached is None:
-            missing.append(page_num)
-        else:
+        if cached is not None:
             tables_by_page[page_num] = cached
+
+    candidates = [m for m in placed if _match_may_touch_a_table(m.get("excerpt", ""))]
+    missing = sorted(
+        {m["page"] - 1 for m in candidates if (m["page"] - 1) not in tables_by_page}
+    )
 
     if missing:
         try:
@@ -1655,14 +1722,18 @@ def _attach_table_context(
                 tables_by_page[page_num] = extracted
                 cache.save_page_tables(local_path, page_num, extracted)
 
-    for m in candidates:
+    for m in placed:
         page_rect = None
         if doc is not None:
             try:
                 page_rect = [round(v, 1) for v in doc[m["page"] - 1].rect]
             except (IndexError, ValueError, RuntimeError):
                 page_rect = None
-        ctx = _context_for_match(m, tables_by_page.get(m["page"] - 1, []), page_rect)
+        page_tables = tables_by_page.get(m["page"] - 1, [])
+        near = any(_table_near_match(m["bbox"], t) for t in page_tables)
+        if not _excerpt_wants_table_context(m.get("excerpt", ""), near):
+            continue
+        ctx = _context_for_match(m, page_tables, page_rect)
         if ctx is not None:
             m["table_context"] = ctx
     return matches
@@ -1714,6 +1785,31 @@ def _context_for_match(
                 ctx["bbox"] = list(tb)
                 ctx["clip"] = _bbox_to_clip(tb, page_rect)
             return ctx
+
+    # No row contains the match. A caption or note sits BESIDE its table
+    # rather than in it, and that is the largest failure bucket: the
+    # picker lands on "Table 3: Variations on the Transformer
+    # architecture" while every value sits in the table below. Hand back
+    # the associated table whole.
+    for table in tables:
+        if not _table_near_match(bbox, table):
+            continue
+        rows = table.get("rows") or []
+        if not rows:
+            continue
+        header, body = _resolve_header(table.get("header") or [], rows)
+        if not body:
+            continue
+        near_ctx: dict[str, Any] = {
+            "header": header,
+            "rows": body[:_MAX_CONTEXT_ROWS],
+            "columns_reliable": _columns_reliable(body),
+        }
+        tb = table.get("bbox")
+        if tb and page_rect:
+            near_ctx["bbox"] = list(tb)
+            near_ctx["clip"] = _bbox_to_clip(tb, page_rect)
+        return near_ctx
     return None
 
 

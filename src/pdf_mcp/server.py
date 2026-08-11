@@ -1548,15 +1548,83 @@ def _match_may_touch_a_table(excerpt: str) -> bool:
     from measured failure buckets: an ambiguous value list, or a caption
     naming a table.
 
-    A third route was tried and removed: "short block carrying no value",
-    aimed at bare row labels like 'Timing Error, Monostable'. Nothing
-    textual separates those from short prose -- it fired on "no numbers
-    here at all" -- and prose searches costing a subprocess is a shipped
-    guarantee. It is worth 3 queries and they are given up deliberately.
+    A third TEXTUAL route was tried and removed: "short block carrying no
+    value", aimed at bare row labels like 'Timing Error, Monostable'.
+    Nothing textual separates those from short prose -- it fired on "no
+    numbers here at all". Those labels are now reached by geometry
+    instead, via `_block_is_ruled`, which reads the drawn rules around the
+    block rather than the words inside it.
     """
     if _excerpt_is_ambiguous(excerpt):
         return True
     return bool(_TABLE_REF.search(excerpt))
+
+
+#: How far from a block edge a drawn rule can sit and still be read as that
+#: block's own rule. Measured on the graded corpus, the banded test is clean
+#: from 20pt through 90pt -- distance barely discriminates, because what
+#: separates a table row from prose is that horizontally-spanning rules exist
+#: on BOTH sides at all. 30pt is roughly two lines, chosen mid-plateau.
+_RULE_BAND = 30.0
+#: A rule must span this fraction of the block to be the block's own rule
+#: rather than an unrelated segment at the same height. The graded corpus
+#: does not exercise this floor (0.3 and 0.7 score identically); it is a
+#: guard, not a tuned parameter.
+_RULE_X_OVERLAP = 0.5
+
+
+def _page_rules(page: Any) -> list[tuple[float, float, float]]:
+    """Horizontal drawn rules on a page, as (x0, x1, y).
+
+    Reads drawing commands only: no text, no `find_tables`, and no
+    subprocess, so this stays admissible inside a prose search.
+
+    Length-agnostic on purpose. Financial statements rule each numeric
+    column separately -- Berkshire 2024 p67 draws 36 rules of 45.6pt -- so
+    any absolute length floor calibrated on datasheet tables would miss
+    them entirely.
+    """
+    out: list[tuple[float, float, float]] = []
+    for drawing in page.get_drawings():
+        for item in drawing.get("items", []):
+            if item[0] == "l":
+                p0, p1 = item[1], item[2]
+                if abs(p1.y - p0.y) <= 1.5 and abs(p1.x - p0.x) >= 8:
+                    out.append((min(p0.x, p1.x), max(p0.x, p1.x), (p0.y + p1.y) / 2))
+            elif item[0] == "re":
+                rect = item[1]
+                # A thin filled rectangle is how many PDFs draw a rule.
+                if rect.height <= 3 and rect.width >= 8:
+                    out.append((rect.x0, rect.x1, (rect.y0 + rect.y1) / 2))
+    return out
+
+
+def _block_is_ruled(bbox: list[Any], rules: list[tuple[float, float, float]]) -> bool:
+    """True when a block sits in a ruled band, i.e. it is a table row.
+
+    The route that reaches a bare row label. 'Thermal Shutdown Protection'
+    holds no number and names no table, so every textual test is blind to
+    it; what marks it as tabular is that rules spanning its width run both
+    above and below it.
+
+    Banded rather than "a rule within N points of the edge": a wrapped
+    label occupies only part of a tall row, so its own rules can be 3pt
+    above and 18pt below. Requiring a rule near each EDGE missed exactly
+    that shape.
+    """
+    x0, y0, x1, y1 = (float(v) for v in bbox)
+    width = max(x1 - x0, 1.0)
+    above = below = False
+    for rx0, rx1, ry in rules:
+        if (min(x1, rx1) - max(x0, rx0)) / width < _RULE_X_OVERLAP:
+            continue
+        if y0 - _RULE_BAND <= ry <= y0 + 2:
+            above = True
+        if y1 - 2 <= ry <= y1 + _RULE_BAND:
+            below = True
+        if above and below:
+            return True
+    return False
 
 
 #: How far above or below a table a block can sit and still be read as
@@ -1703,7 +1771,27 @@ def _attach_table_context(
         if cached is not None:
             tables_by_page[page_num] = cached
 
-    candidates = [m for m in placed if _match_may_touch_a_table(m.get("excerpt", ""))]
+    # The textual routes first, because they cost nothing. Only a match they
+    # reject is worth reading page geometry for, so a prose search pays the
+    # drawing scan on pages it was going to skip anyway, and never on a page
+    # whose tables are already cached.
+    candidates = []
+    rules_by_page: dict[int, list[tuple[float, float, float]]] = {}
+    for m in placed:
+        if _match_may_touch_a_table(m.get("excerpt", "")):
+            candidates.append(m)
+            continue
+        page_num = m["page"] - 1
+        if doc is None or page_num in tables_by_page:
+            continue
+        if page_num not in rules_by_page:
+            try:
+                rules_by_page[page_num] = _page_rules(doc[page_num])
+            except (IndexError, ValueError, RuntimeError):
+                rules_by_page[page_num] = []
+        if _block_is_ruled(m["bbox"], rules_by_page[page_num]):
+            candidates.append(m)
+
     missing = sorted(
         {m["page"] - 1 for m in candidates if (m["page"] - 1) not in tables_by_page}
     )

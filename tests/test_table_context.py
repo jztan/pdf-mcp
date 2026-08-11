@@ -126,6 +126,121 @@ def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
         assert ctx["columns_reliable"] is True
 
 
+@pytest.fixture
+def wrapped_label_table_pdf():
+    """A datasheet-shaped table whose row LABEL is its own text block.
+
+    The 2x3 `ruled_table_pdf` cannot express this: its rows are so narrow
+    that PyMuPDF returns each whole row as one block, so a label-only match
+    does not exist there. Here the label wraps inside a narrow first column
+    and the values sit far right, which is what splits them apart -- the
+    real shape of the MCP1700 rows behind p01 and p02.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.draw_rect(pymupdf.Rect(50, 50, 520, 182), color=(0, 0, 0))
+        for x in (200, 270, 340, 410, 460):
+            page.draw_line(pymupdf.Point(x, 50), pymupdf.Point(x, 182), color=(0, 0, 0))
+        for y in (83, 116, 149):
+            page.draw_line(pymupdf.Point(50, y), pymupdf.Point(520, y), color=(0, 0, 0))
+        for x, label in (
+            (55, "Parameters"),
+            (205, "Sym."),
+            (275, "Min."),
+            (345, "Typ."),
+            (415, "Max."),
+            (465, "Units"),
+        ):
+            page.insert_text((x, 70), label)
+        page.insert_textbox(
+            pymupdf.Rect(53, 86, 198, 114),
+            "Power Supply Ripple Rejection Ratio",
+            fontsize=9,
+        )
+        for x, cell in (
+            (205, "PSRR"),
+            (275, "-"),
+            (345, "44"),
+            (415, "-"),
+            (465, "dB"),
+        ):
+            page.insert_text((x, 105), cell)
+        page.insert_textbox(
+            pymupdf.Rect(53, 119, 198, 147),
+            "Thermal Shutdown Protection",
+            fontsize=9,
+        )
+        for x, cell in ((205, "TSD"), (275, "-"), (345, "140"), (415, "-"), (465, "C")):
+            page.insert_text((x, 138), cell)
+        doc.save(f.name)
+        doc.close()
+    yield f.name
+    os.unlink(f.name)
+
+
+def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_pdf):
+    """A label carrying no number is invisible to every textual route.
+
+    'Thermal Shutdown Protection' names no table and holds no value, so the
+    excerpt says nothing; only the rules above and below the block say it is
+    a table row. The removed textual route died trying to read this from the
+    words.
+    """
+    import pathlib
+    import tempfile as _tf
+
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.server import _attach_table_context, _match_may_touch_a_table
+
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        doc = pymupdf.open(wrapped_label_table_pdf)
+        blocks = doc[0].get_text("blocks")
+        label = next(b for b in blocks if b[4].strip() == "Thermal Shutdown Protection")
+        excerpt = label[4].strip()
+        # The point of the test: no textual route can see this block.
+        assert _match_may_touch_a_table(excerpt) is False
+        match = {"page": 1, "excerpt": excerpt, "bbox": list(label[:4])}
+        out = _attach_table_context([match], wrapped_label_table_pdf, cache, doc)
+        doc.close()
+
+    ctx = out[0].get("table_context")
+    assert ctx is not None, "a ruled block must reach extraction"
+    assert "Min." in ctx["header"]
+    assert any("140" in c for row in ctx["rows"] for c in row)
+
+
+def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_table_pdf):
+    """The guarantee is per match, so the ruled page must not condemn it.
+
+    The block sits on the same page as a fully ruled table and below it,
+    outside the rules. Reading the signal off the PAGE rather than the
+    BLOCK would spawn here.
+    """
+    import pathlib
+    import tempfile as _tf
+
+    from pdf_mcp import server as srv
+    from pdf_mcp.cache import PDFCache
+
+    called = []
+    monkeypatch.setattr(
+        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+    )
+    with _tf.TemporaryDirectory() as tmp:
+        cache = PDFCache(cache_dir=pathlib.Path(tmp))
+        doc = pymupdf.open(ruled_table_pdf)
+        match = {
+            "page": 1,
+            "excerpt": "no numbers here at all",
+            "bbox": [50.0, 400.0, 300.0, 420.0],
+        }
+        srv._attach_table_context([match], ruled_table_pdf, cache, doc)
+        doc.close()
+    assert called == []
+
+
 def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
     """A prose search must cost nothing."""
     from pdf_mcp import server as srv

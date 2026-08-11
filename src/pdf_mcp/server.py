@@ -1716,10 +1716,19 @@ def _resolve_header(
     # allowance covers side-by-side sub-tables merged into one detection
     # (Berkshire p134 is 20 columns with two captions), while `max(1, ...)`
     # keeps narrow tables at the single-cell reading.
+    #
+    # The `>= 2` floor is load-bearing when the real header is entirely
+    # empty, which happens when `find_tables` cuts the column-label row out
+    # of the detected bbox (Starbucks p36: the fiscal-year dates sit above
+    # the table). Then `2 * filled(header)` is zero and ANY non-empty row 0
+    # would promote, so a lone section label ('Net revenues:') became the
+    # header. A header names two or more columns; one filled cell is a
+    # section band, not a header.
     by_structure = (
         len(header) >= 3
         and filled(header) <= max(1, len(header) // 4)
         and filled(rows[0]) >= 2 * filled(header)
+        and filled(rows[0]) >= 2
     )
     if by_vocabulary or by_structure:
         return rows[0], rows[1:]

@@ -94,6 +94,28 @@ def test_header_fallback_does_not_fire_on_a_real_header():
     assert body == rows
 
 
+def test_empty_header_does_not_promote_a_one_cell_section_row():
+    """A section label is not a column header, however sparse the real one.
+
+    Starbucks p36's real column header (the fiscal-year dates) sits above
+    the detected table bbox, so `find_tables` returns an all-empty header
+    and 'Net revenues:' as row 0. With an empty header, `2 * filled(header)`
+    is zero, so the sparse-caption rule promoted that single section cell as
+    the column header -- a wrong claim that 'Net revenues:' labels a column.
+    A header names two or more columns; one filled cell is a section band.
+    """
+    from pdf_mcp.server import _resolve_header
+
+    empty = ["", "", "", "", "", "", "", ""]
+    rows = [
+        ["Net revenues:", "", "", "", "", "", "", ""],
+        ["Licensed stores", "2,575.6", "", "2,747.4", "", "9.4", "", "10.2"],
+    ]
+    header, body = _resolve_header(empty, rows)
+    assert header == empty, "a one-cell section row must not become the header"
+    assert body == rows
+
+
 def test_columns_reliable_false_when_a_cell_holds_two_numbers():
     from pdf_mcp.server import _columns_reliable
 

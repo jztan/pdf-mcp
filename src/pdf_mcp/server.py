@@ -1608,7 +1608,10 @@ def _columns_reliable(rows: list[list[str]]) -> bool:
 
 
 def _attach_table_context(
-    matches: list[dict[str, Any]], local_path: str, cache: PDFCache
+    matches: list[dict[str, Any]],
+    local_path: str,
+    cache: PDFCache,
+    doc: pymupdf.Document | None = None,
 ) -> list[dict[str, Any]]:
     """Attach header + matched row to ambiguous matches, in place of nothing.
 
@@ -1653,14 +1656,22 @@ def _attach_table_context(
                 cache.save_page_tables(local_path, page_num, extracted)
 
     for m in candidates:
-        ctx = _context_for_match(m, tables_by_page.get(m["page"] - 1, []))
+        page_rect = None
+        if doc is not None:
+            try:
+                page_rect = [round(v, 1) for v in doc[m["page"] - 1].rect]
+            except (IndexError, ValueError, RuntimeError):
+                page_rect = None
+        ctx = _context_for_match(m, tables_by_page.get(m["page"] - 1, []), page_rect)
         if ctx is not None:
             m["table_context"] = ctx
     return matches
 
 
 def _context_for_match(
-    match: dict[str, Any], tables: list[dict[str, Any]]
+    match: dict[str, Any],
+    tables: list[dict[str, Any]],
+    page_rect: list[float] | None = None,
 ) -> dict[str, Any] | None:
     """Header and every table row the match bbox covers.
 
@@ -1686,11 +1697,23 @@ def _context_for_match(
         offset = len(rows) - len(body)  # 1 when row 0 was promoted
         hits = _rows_overlapping(bbox, row_bboxes[offset:])
         if hits:
-            return {
+            reliable = _columns_reliable(body)
+            ctx: dict[str, Any] = {
                 "header": header,
                 "rows": [body[i] for i in hits[:_MAX_CONTEXT_ROWS]],
-                "columns_reliable": _columns_reliable(body),
+                "columns_reliable": reliable,
             }
+            # Columns unreadable in TEXT are still legible on the PAGE:
+            # TI LM555 draws MIN and MAX in separate visual columns while
+            # both collapse into one cell as "4.5 16". Hand back the
+            # region to render rather than leaving the caller with a
+            # value it cannot attribute. Same call `pdf_extract_chart`
+            # makes when it declines and returns a render.
+            tb = table.get("bbox")
+            if not reliable and tb and page_rect:
+                ctx["bbox"] = list(tb)
+                ctx["clip"] = _bbox_to_clip(tb, page_rect)
+            return ctx
     return None
 
 
@@ -2173,7 +2196,7 @@ def pdf_search(
 
             if excerpt_style == "paragraph":
                 matches = _upgrade_excerpts_to_paragraphs(matches, doc, query)
-                matches = _attach_table_context(matches, local_path, cache)
+                matches = _attach_table_context(matches, local_path, cache, doc)
 
             hidden_detected = _attach_hidden(matches)
             sem_page_counts = {str(m["page"]): 1 for m in matches}
@@ -2250,7 +2273,7 @@ def pdf_search(
 
             if excerpt_style == "paragraph":
                 kw_matches = _upgrade_excerpts_to_paragraphs(kw_matches, doc, query)
-                kw_matches = _attach_table_context(kw_matches, local_path, cache)
+                kw_matches = _attach_table_context(kw_matches, local_path, cache, doc)
 
             hidden_detected = _attach_hidden(kw_matches)
 
@@ -2286,7 +2309,7 @@ def pdf_search(
                 m["source"] = auto_sources.get(m["page"] - 1, "extracted")
             if excerpt_style == "paragraph":
                 auto_kw = _upgrade_excerpts_to_paragraphs(auto_kw, doc, query)
-                auto_kw = _attach_table_context(auto_kw, local_path, cache)
+                auto_kw = _attach_table_context(auto_kw, local_path, cache, doc)
             hidden_detected = _attach_hidden(auto_kw)
             response: dict[str, Any] = {
                 "content_warning": (
@@ -2421,7 +2444,9 @@ def pdf_search(
             hybrid_matches = _upgrade_excerpts_to_paragraphs(
                 hybrid_matches, doc, query, keyword_excerpts=keyword_excerpts
             )
-            hybrid_matches = _attach_table_context(hybrid_matches, local_path, cache)
+            hybrid_matches = _attach_table_context(
+                hybrid_matches, local_path, cache, doc
+            )
 
         hidden_detected = _attach_hidden(hybrid_matches)
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}

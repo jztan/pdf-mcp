@@ -76,10 +76,36 @@ _PERIOD_WORDS = re.compile(
 )
 
 
+#: Longest header cell still readable as a column label rather than a
+#: caption, and the most words in one. Measured against the corpus: real
+#: labels top out at 'Train (Speech & Text)'; captions start at 'Table 2.
+#: Estimated APRs for select online products'.
+_MAX_LABEL_CHARS = 28
+_MAX_LABEL_WORDS = 4
+
+
 def _names_a_quantity(header_cell: str) -> bool:
-    """True when a header cell identifies which quantity a value is."""
-    cell = header_cell or ""
-    return bool(_COLUMN_WORDS.search(cell) or _PERIOD_WORDS.search(cell))
+    """True when a header cell identifies which quantity a value is.
+
+    Structural, not a word list. Enumerating vocabularies does not
+    converge: measurement qualifiers, then reporting periods, then
+    dataset names ('CIFAR-10', 'Train (Speech & Text)') -- each widening
+    invited the next, and each risked being fitted to whichever corpus
+    was in front of us. A column label is SHORT; a caption is a sentence;
+    a section heading ends in a colon.
+
+    The trailing-colon guard is load-bearing. Without it Starbucks p36
+    credits a value from 'Store operating expenses' to the section row
+    'Net revenues:' -- a measured false pass, and exactly what the
+    original word list existed to prevent. Verified on the 42-query
+    corpus: +1 true resolution, 0 false passes, 0 losses.
+    """
+    cell = (header_cell or "").strip()
+    if not cell or cell.endswith(":"):
+        return False
+    if len(cell) > _MAX_LABEL_CHARS or cell.count(" ") >= _MAX_LABEL_WORDS:
+        return False
+    return True
 
 
 def _is_interpretable(excerpt: str) -> bool:
@@ -322,7 +348,14 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
     accum: dict[str, dict[str, list[int]]] = {
         c: defaultdict(list)
         for c in CELLS
-        + ("bbox", "qualified", "interpretable", "interpretable_with_context")
+        + (
+            "bbox",
+            "qualified",
+            "interpretable",
+            "interpretable_with_context",
+            "answerable_from_response",
+            "clip_points_wrong",
+        )
     }
     rows: list[dict] = []
 
@@ -428,6 +461,34 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                         )
                     row["paragraph_interpretable_with_context"] = with_context
 
+                    # The escape hatch, scored. When the columns cannot be
+                    # read in text the tool declines and hands back the
+                    # table's region instead of guessing. Whether a VISION
+                    # model can read the render needs a judged eval, but
+                    # whether we pointed at the right place is checkable
+                    # here for free, and a wrong pointer is worse than
+                    # none: the agent renders it and finds nothing.
+                    ctx = (target or {}).get("table_context") or {}
+                    clip_ok = 0
+                    clip_miss = 0
+                    if ctx.get("bbox") and doc is not None:
+                        page = doc[q["page"] - 1]
+                        if bbox_contains_answer(page, ctx["bbox"], q["answer"]):
+                            clip_ok = 1
+                        else:
+                            clip_miss = 1
+                    # What an agent can actually get to, by reading OR by
+                    # looking. `interpretable_with_context` deliberately
+                    # ignores the clip, so the two are reported side by side.
+                    answerable = int(bool(with_context) or bool(clip_ok))
+                    if q["category"] == "table":
+                        accum["answerable_from_response"][q["category"]].append(
+                            answerable
+                        )
+                        accum["clip_points_wrong"][q["category"]].append(clip_miss)
+                    row["paragraph_answerable_from_response"] = answerable
+                    row["paragraph_clip_points_wrong"] = clip_miss
+
             rows.append(row)
 
         if doc is not None:
@@ -439,6 +500,8 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
         "qualified",
         "interpretable",
         "interpretable_with_context",
+        "answerable_from_response",
+        "clip_points_wrong",
     ):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []

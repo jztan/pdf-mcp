@@ -538,15 +538,15 @@ def test_context_resolution_does_not_look_left_to_a_caption():
     assert _resolves_via_context(sbux_bad, "13,973.3") is False
 
 
-def test_header_naming_is_structural_not_a_vocabulary():
-    """Column labels are short; captions are sentences; headings end in ':'.
+def test_header_cell_check_is_structural_not_a_vocabulary():
+    """Cell-level half: non-empty, and not a section heading.
 
-    Enumerating vocabularies does not converge: measurement qualifiers,
-    then reporting periods, then dataset names ('Train (Speech & Text)').
-    The structural rule ends the treadmill. The trailing-colon guard is
-    load-bearing, not decoration: without it Starbucks p36's section row
-    'Net revenues:' credits a value from 'Store operating expenses', a
-    measured false pass.
+    Enumerating vocabularies did not converge -- measurement qualifiers,
+    then reporting periods, then dataset names -- so the word lists are
+    gone. Caption rejection is NOT tested here: it moved to the header
+    ROW shape check in `_resolves_via_context`, since a caption is
+    identified by filling one cell and leaving the rest empty, not by
+    how it reads. See test_header_naming_uses_row_shape_not_a_length_constant.
     """
     from scripts.benchmark_excerpt_quality import _names_a_quantity
 
@@ -555,10 +555,46 @@ def test_header_naming_is_structural_not_a_vocabulary():
     assert _names_a_quantity("2024") is True
     assert _names_a_quantity("CIFAR-10") is True
     assert _names_a_quantity("Train (Speech & Text)") is True
-    # Rejections, each a real corpus case.
+    assert _names_a_quantity("Frequency Observed at \u03a6 = 0.3") is True
+    # A blank cell names nothing, and a section heading introduces rows
+    # rather than labelling a column.
     assert _names_a_quantity("") is False
+    assert _names_a_quantity("   ") is False
     assert _names_a_quantity("Net revenues:") is False
-    assert (
-        _names_a_quantity("Table 2. Estimated APRs for select online products") is False
-    )
-    assert _names_a_quantity("Electrical Characteristics (@ TA = +25C)") is False
+
+
+def test_header_naming_uses_row_shape_not_a_length_constant():
+    """A caption fills ONE header cell; a real header row fills several.
+
+    The previous rule capped a label at 28 chars / 4 words, both numbers
+    picked by hand. They excluded 'Frequency Observed at Φ = 0.3' (29
+    chars, 5 words), a genuine column label, so the constants were
+    fitted rather than principled. Row shape needs no constant and is
+    the same signal header promotion already uses.
+    """
+    from scripts.benchmark_excerpt_quality import _resolves_via_context
+
+    # Long but genuine label, in a header row with several filled cells.
+    real = {
+        "table_context": {
+            "header": [
+                "Unfolding Order",
+                "Frequency Observed at Φ = 0",
+                "Frequency Observed at Φ = 0.3",
+            ],
+            "rows": [["C → B → A", "0.44", "0.56"]],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(real, "0.44") is True
+
+    # A caption band: one filled cell, the rest empty. Must stay rejected,
+    # or Starbucks p36 credits a value to the section row 'Net revenues:'.
+    caption = {
+        "table_context": {
+            "header": ["Net revenues:", "", "", ""],
+            "rows": [["Store operating expenses", "13,973.3", "", "12,467.1"]],
+            "columns_reliable": True,
+        }
+    }
+    assert _resolves_via_context(caption, "13,973.3") is False

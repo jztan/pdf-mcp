@@ -466,3 +466,52 @@ def test_clean_table_context_carries_no_clip():
     ctx = _context_for_match(match, clean, page_rect=[0.0, 0.0, 612.0, 792.0])
     assert ctx["columns_reliable"] is True
     assert "clip" not in ctx and "bbox" not in ctx
+
+
+def test_match_beside_a_table_is_associated_with_it():
+    """A caption or nearby block associates with the table it labels.
+
+    Forensics on all 19 retrieval failures: the answer sits in a VALUE
+    block scoring 0-4 query tokens while the winner is a label, caption
+    or prose block scoring 3-6. No token-overlap scorer can prefer the
+    value block, which is why three re-ranking designs failed. Geometry
+    can: 12 of the 19 have the winner inside, or within 60pt of, the
+    table whose rows hold the answer.
+    """
+    from pdf_mcp.server import _table_near_match
+
+    table = {"bbox": [50.0, 200.0, 500.0, 400.0]}
+    # Caption sitting just above the table.
+    assert _table_near_match([50.0, 170.0, 400.0, 190.0], table) is True
+    # A block inside the table.
+    assert _table_near_match([60.0, 250.0, 300.0, 262.0], table) is True
+    # Just below it.
+    assert _table_near_match([50.0, 410.0, 400.0, 430.0], table) is True
+    # Far above: a different part of the page, not this table.
+    assert _table_near_match([50.0, 60.0, 400.0, 80.0], table) is False
+
+
+def test_trigger_fires_for_a_caption_with_no_numbers():
+    """A caption never has two numbers, so the old trigger never fired.
+
+    'Table 3: Variations on the Transformer architecture' is the single
+    largest failure bucket (7 of 19) and carries no value at all.
+    """
+    from pdf_mcp.server import _excerpt_wants_table_context
+
+    cap = "Table 3: Variations on the Transformer architecture."
+    assert _excerpt_wants_table_context(cap, near_table=True) is True
+    # Prose far from any table must still cost nothing.
+    assert (
+        _excerpt_wants_table_context(
+            "we vary the number of attention heads", near_table=False
+        )
+        is False
+    )
+    # The original ambiguity route is unchanged.
+    assert (
+        _excerpt_wants_table_context(
+            "Reset Voltage | 0.4 | 0.5 | 1 | V", near_table=False
+        )
+        is True
+    )

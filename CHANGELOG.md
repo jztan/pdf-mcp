@@ -53,17 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   257 DPI scan at 400 DPI upsampled without adding information. See
   [`docs/tool-reference.md`](docs/tool-reference.md) for the field shapes and
   the interaction between `render_recompressed` and `render_downsampled`.
-- `tests/test_docs_consistency.py`: five checks pinning the enumerable
-  facts the docs restate about the code. The `tool-reference.md` category
-  index must match both its own tool sections and the tools the server
-  registers; ROADMAP's "Current version" must equal `pyproject.toml`;
-  the hardcoded tool counts in README and ROADMAP must match the
-  registry; and every internal `](file.md#anchor)` link must resolve to
-  a real heading.
-- `tests/test_python_compat.py`: rejects an unguarded import of a
-  stdlib module newer than `requires-python`. `tomllib` is 3.11+ while
-  the package supports 3.10, and such an import fails at collection, so
-  it takes the whole suite down instead of one test.
 
 ### Fixed
 

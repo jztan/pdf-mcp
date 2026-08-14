@@ -21,15 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_render_pages(clip=...)` so a caller can read the table instead of
   trusting a merged cell such as TI's `0.4 0.5 1`.
   Context is attached only when the excerpt holds two or more numbers and
-  no column label, so prose searches are unaffected; extraction is cached
-  per page. `columns_reliable` is false when a table's cells hold merged
+  no column label, or when the match block sits in a table (see below), so
+  prose searches are unaffected; extraction is cached per page.
+  `columns_reliable` is false when a table's cells hold merged
   values, which happens on datasheets drawn without vertical rules; it is a
   table-level caution, not a judgement on the individual row.
   A match that sits inside, or directly above or below, a detected table
   is associated with it, so a hit landing on a table's caption now carries
   that table. This is geometric: on a table page the query terms cluster in
   the caption or row label while the value sits in a separate block with
-  few or no query words, so no keyword ranking can reach it.
+  few or no query words, so no keyword ranking can reach it. A bare row
+  label carrying no number (for example a datasheet parameter name) is
+  reached the same way: when a match block is bracketed by drawn table
+  rules above and below, it is extracted as a table row, without any
+  subprocess on prose searches. When the real column header sits outside
+  the detected table region, the attached `header` is now left empty rather
+  than mislabelled with a section row such as `Net revenues:`.
   `pdf_corpus_search` does not attach this field, to protect its latency
   budget.
 - `pdf_render_pages` now returns legible scanned pages. A page whose PNG

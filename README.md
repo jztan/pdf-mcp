@@ -425,7 +425,11 @@ Background, benchmarks, and design notes from building pdf-mcp:
 - [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): The problem with large PDFs in AI agents and a working solution
 - [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): How AI agents use pdf-mcp tools to read and navigate PDF documents
 - [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Five production-tested patterns for how agents should navigate PDFs at scale
+
+**Corpus & multi-document search**
+
 - [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
+- [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=readme&utm_campaign=pdf-mcp): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 89.9% of 89 queries over a 100-PDF corpus
 
 **Search & retrieval**
 

@@ -77,19 +77,21 @@ Widening a primary key in SQLite means create-new, copy, drop, rename against
 every existing user's `cache.db`. Synthetic cache, 20% OCR rows, plus a
 `page_embeddings` row per page.
 
-| rows | migrate | + VACUUM | file size |
+| rows | migrate | VACUUM | before -> unvacuumed -> after |
 |---|---|---|---|
-| 1,000 | 0.00s | | 4MB |
-| 5,000 | 0.02s | | 21MB |
-| 20,000 | 0.07s | 0.28s | 85MB -> 127MB -> 85MB |
-| 50,000 | 0.19s | 0.69s | 213MB -> 318MB -> 212MB |
+| 1,000 | 0.004s | 0.009s | 4.3MB -> 6.4MB -> 4.3MB |
+| 5,000 | 0.019s | 0.048s | 21.3MB -> 31.8MB -> 21.2MB |
+| 20,000 | 0.078s | 0.287s | 85.0MB -> 127.1MB -> 84.8MB |
+| 50,000 | 0.178s | 0.728s | 212.6MB -> 317.9MB -> 211.9MB |
 
 Under a second end to end at 50,000 cached pages, which is larger than the
 100-doc `CORPUS_MAX_FILES` ceiling normally produces. Not a performance risk.
 
-**Drop-and-rename inflates the file by ~50% and it stays inflated.** `VACUUM`
-reclaims it fully for well under a second, so the migration must include one.
-This would have shipped unnoticed if only the migration had been timed.
+**Drop-and-rename inflates the file by ~50% and it stays inflated.** The middle
+column of sizes above is what a user would be left with if the migration skipped
+the `VACUUM`. `VACUUM` reclaims it fully for well under a second, so it is part
+of the migration rather than an optional extra. This would have shipped
+unnoticed if only the migration itself had been timed.
 
 The script asserts row count, the `''` sentinel backfill, and text integrity, so
 a silent data-loss bug fails loudly instead of printing a fast time.

@@ -4,26 +4,34 @@
     {
       "rows": 1000,
       "seconds": 0.004,
+      "vacuum_seconds": 0.009,
       "db_mb_before": 4.3,
-      "db_mb_after": 6.4
+      "db_mb_unvacuumed": 6.4,
+      "db_mb_after_vacuum": 4.3
     },
     {
       "rows": 5000,
       "seconds": 0.019,
+      "vacuum_seconds": 0.048,
       "db_mb_before": 21.3,
-      "db_mb_after": 31.8
+      "db_mb_unvacuumed": 31.8,
+      "db_mb_after_vacuum": 21.2
     },
     {
       "rows": 20000,
-      "seconds": 0.074,
+      "seconds": 0.078,
+      "vacuum_seconds": 0.287,
       "db_mb_before": 85.0,
-      "db_mb_after": 127.1
+      "db_mb_unvacuumed": 127.1,
+      "db_mb_after_vacuum": 84.8
     },
     {
       "rows": 50000,
-      "seconds": 0.186,
+      "seconds": 0.178,
+      "vacuum_seconds": 0.728,
       "db_mb_before": 212.6,
-      "db_mb_after": 317.9
+      "db_mb_unvacuumed": 317.9,
+      "db_mb_after_vacuum": 211.9
     }
   ]
 }

@@ -118,8 +118,14 @@ def build_cache(db_path: str, n_rows: int, ocr_fraction: float) -> None:
     conn.close()
 
 
-def migrate(db_path: str) -> float:
-    """Run the widening migration; return wall-clock seconds."""
+def migrate(db_path: str) -> tuple[float, float, int]:
+    """Run the migration; return (migrate_s, vacuum_s, size_before_vacuum).
+
+    VACUUM is part of the migration, not an optional extra: drop-and-rename
+    leaves the freed pages in the file, so without it the database stays
+    ~50% larger forever. It cannot run inside a transaction, so it follows
+    the commit.
+    """
     conn = sqlite3.connect(db_path)
     t0 = time.perf_counter()
     conn.executescript(CREATE_NEW + """
@@ -136,8 +142,17 @@ def migrate(db_path: str) -> float:
         """)
     conn.commit()
     elapsed = time.perf_counter() - t0
+
+    # Measured here, between commit and VACUUM: this is the inflated size a
+    # user would be left with if the migration skipped the VACUUM.
+    size_unvacuumed = pathlib.Path(db_path).stat().st_size
+
+    t1 = time.perf_counter()
+    conn.execute("VACUUM")
+    vacuum_elapsed = time.perf_counter() - t1
+
     conn.close()
-    return elapsed
+    return elapsed, vacuum_elapsed, size_unvacuumed
 
 
 def verify(db_path: str, n_rows: int) -> None:
@@ -193,20 +208,24 @@ def main() -> int:
             db = str(pathlib.Path(d) / "cache.db")
             build_cache(db, n, args.ocr_fraction)
             size_before = pathlib.Path(db).stat().st_size
-            elapsed = migrate(db)
+            elapsed, vacuum_elapsed, size_unvacuumed = migrate(db)
             verify(db, n)
             size_after = pathlib.Path(db).stat().st_size
             results.append(
                 {
                     "rows": n,
                     "seconds": round(elapsed, 3),
+                    "vacuum_seconds": round(vacuum_elapsed, 3),
                     "db_mb_before": round(size_before / 1e6, 1),
-                    "db_mb_after": round(size_after / 1e6, 1),
+                    "db_mb_unvacuumed": round(size_unvacuumed / 1e6, 1),
+                    "db_mb_after_vacuum": round(size_after / 1e6, 1),
                 }
             )
             print(
-                f"{n:>7,} rows  {elapsed:>6.2f}s  "
-                f"{size_before / 1e6:>6.1f}MB -> {size_after / 1e6:.1f}MB"
+                f"{n:>7,} rows  migrate {elapsed:>6.3f}s  "
+                f"vacuum {vacuum_elapsed:>6.3f}s  "
+                f"{size_before / 1e6:>6.1f}MB -> "
+                f"{size_unvacuumed / 1e6:.1f}MB -> {size_after / 1e6:.1f}MB"
             )
 
     out = pathlib.Path(args.out)

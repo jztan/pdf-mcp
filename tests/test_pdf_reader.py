@@ -3956,3 +3956,27 @@ class TestLanguageAwareReads:
                 sample_pdf, 0, f"text {i}", source="ocr", ocr_lang=f"l{i}"
             )
         assert cache.get_page_text(sample_pdf, 0) == "text 4"
+
+
+class TestCountsArePerPageNotPerRow:
+    """A page can now hold several rows (one per ocr_lang). Anything that
+    counts "pages" must count pages, not rows (issue #27)."""
+
+    def test_fts_coverage_counts_pages_not_rows(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh text", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en text", source="ocr", ocr_lang="eng+khm")
+        cache.save_page_text(sample_pdf, 1, "page two", source="ocr", ocr_lang="khm")
+
+        indexed, total = cache.get_fts_index_coverage(sample_pdf)
+
+        # Two pages cached, three rows. Reporting 3 would break the
+        # `indexed == total == doc_pages` fast-path check in pdf_search and
+        # silently drop the document onto the slower per-query index.
+        assert total == 2
+        assert indexed == 2
+
+    def test_stats_total_pages_counts_pages_not_rows(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en", source="ocr", ocr_lang="eng+khm")
+
+        assert cache.get_stats()["total_pages"] == 1

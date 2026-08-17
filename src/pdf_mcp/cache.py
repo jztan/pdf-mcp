@@ -1856,9 +1856,10 @@ class PDFCache:
                 "SELECT COUNT(*) FROM pdf_metadata"
             ).fetchone()[0]
 
-            # Count pages
+            # Count pages, not rows: one page can hold several ocr_lang rows.
             stats["total_pages"] = conn.execute(
-                "SELECT COUNT(*) FROM page_text"
+                "SELECT COUNT(*) FROM"
+                " (SELECT DISTINCT file_path, page_num FROM page_text)"
             ).fetchone()[0]
 
             # Count images (exclude sentinel rows)
@@ -2161,8 +2162,13 @@ class PDFCache:
         on a file that has cached page_text rows but no FTS rows.
         """
         with sqlite3.connect(self.db_path) as conn:
+            # DISTINCT page_num: a page holds one row per ocr_lang, but FTS
+            # holds one row per page, so counting rows here would make the
+            # `indexed == total == doc_pages` check fail on any document with
+            # a page cached in two languages and silently drop it onto the
+            # slower per-query index (issue #27).
             total = conn.execute(
-                "SELECT COUNT(*) FROM page_text WHERE file_path = ?",
+                "SELECT COUNT(DISTINCT page_num) FROM page_text" " WHERE file_path = ?",
                 (path,),
             ).fetchone()[0]
 

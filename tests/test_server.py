@@ -5204,6 +5204,13 @@ class TestOcrLangCacheThrash:
         exception fallback. With one page, resolve_workers gates to
         sequential and run_pages calls the worker in-parent, so patching the
         name server.py imported is enough.
+
+        The availability probe has to be stubbed as well. pdf_read_pages
+        calls check_tesseract_available() before it looks at the cache at
+        all, and returns an inline error dict when the binary is missing, so
+        on a machine without Tesseract (CI) these tests would never reach the
+        code they are about to exercise. What is under test here is cache
+        keying, not binary detection.
         """
 
         def fake_worker(args):
@@ -5211,6 +5218,7 @@ class TestOcrLangCacheThrash:
             calls.append(lang)
             return page_num, f"text produced by {lang}"
 
+        monkeypatch.setattr(server, "check_tesseract_available", lambda: None)
         monkeypatch.setattr(server, "_ocr_page_worker", fake_worker)
 
     def test_alternating_languages_still_hit_cache(

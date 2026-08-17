@@ -29,7 +29,7 @@ from . import __version__
 from . import chart_extractor
 from . import content_trust
 from . import corpus
-from .cache import PDFCache
+from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
 from .extractor import (
     block_bbox_for_index,
@@ -470,6 +470,10 @@ def _is_ocr_cache_hit(
     The 'extracted' branch stays language-independent: a page with a real text
     layer should not be OCR'd at all, whatever language is requested.
 
+    Both sides of the language comparison are normalized, so 'KHM' and 'khm'
+    are one cache entry (issue #27). Order is never normalized: it changes
+    what Tesseract produces.
+
     Single source of truth for the OCR hit/miss decision, used by both the
     parallel dispatch (to skip already-cached pages) and the per-page assembly
     loop. Keeping it in one place avoids the two predicates drifting apart.
@@ -477,7 +481,7 @@ def _is_ocr_cache_hit(
     return (
         cached_src == "ocr"
         and cached_lang is not None
-        and cached_lang == requested_lang
+        and cached_lang == normalize_ocr_lang(requested_lang)
         and page_num in cached_texts
         and len(cached_texts.get(page_num, "")) > 0
     ) or (
@@ -836,10 +840,15 @@ def pdf_read_pages(
             Requires Tesseract to be installed. Results are stored in the cache
             with source='ocr' and become searchable via pdf_search.
         ocr_lang: Tesseract language code (default 'eng'), e.g. 'khm' or
-            'khm+eng'. Only used when ocr=True. Cached OCR text is keyed on
-            this value, so requesting a different language re-runs OCR
-            instead of returning the earlier language's text. Pages that
-            have a real text layer are never OCR'd, whatever is requested.
+            'khm+eng'. Only used when ocr=True. Cached OCR text is stored per
+            page per language, so requesting a different language runs OCR
+            for it and keeps the earlier result; asking again for a language
+            already cached is a cache hit. Case and surrounding whitespace
+            are ignored, but ORDER is significant ('khm+eng' and 'eng+khm'
+            are different requests, because Tesseract's output depends on
+            it), so keep this string stable across calls for one document.
+            Pages that have a real text layer are never OCR'd, whatever is
+            requested.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
             Each page dict carries an opaque `render_id` (basename only,
             never an absolute path). To obtain the rendered PNG bytes,
@@ -918,10 +927,19 @@ def pdf_read_pages(
             page_nums = page_nums[:MAX_OCR_PAGES_LIMIT]
             ocr_truncated = True
 
-        # Try to get cached text for all pages at once
-        cached_texts = cache.get_pages_text(local_path, page_nums)
-        cached_sources = cache.get_pages_source(local_path, page_nums) if ocr else {}
-        cached_langs = cache.get_pages_ocr_lang(local_path, page_nums) if ocr else {}
+        # Try to get cached text for all pages at once. In OCR mode every
+        # lookup is scoped to the requested language, so a page cached under a
+        # different language is a miss rather than a silent hit on someone
+        # else's text (issue #25), while a page cached under THIS language is
+        # a hit even if other languages were cached after it (issue #27).
+        lookup_lang = normalize_ocr_lang(ocr_lang) if ocr else None
+        cached_texts = cache.get_pages_text(local_path, page_nums, lookup_lang)
+        cached_sources = (
+            cache.get_pages_source(local_path, page_nums, lookup_lang) if ocr else {}
+        )
+        cached_langs = (
+            cache.get_pages_ocr_lang(local_path, page_nums, lookup_lang) if ocr else {}
+        )
 
         # --- Parallel dispatch: OCR cache-misses ---
         # A page is an OCR-miss unless _is_ocr_cache_hit() is true. The same

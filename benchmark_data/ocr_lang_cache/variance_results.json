@@ -1,0 +1,330 @@
+{
+  "config": {
+    "model": "claude-opus-4-8",
+    "trials_per_arm": 10,
+    "max_budget_usd_per_trial": 0.5,
+    "context_flags": [
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "<pdf-mcp only>"
+    ]
+  },
+  "arms": {
+    "ru_first": [
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      }
+    ],
+    "en_first": [
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "rus+eng"
+          }
+        ],
+        "ocr_langs": [
+          "rus+eng"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      },
+      {
+        "returncode": 0,
+        "tool_calls": [
+          {
+            "path": "/var/folders/3l/vd51sbj94qg0691s7vj3wn2r0000gn/T/tmpatruyidv/bilingual_scan.pdf",
+            "pages": "1",
+            "ocr": true,
+            "ocr_lang": "eng+rus"
+          }
+        ],
+        "ocr_langs": [
+          "eng+rus"
+        ],
+        "stderr_tail": ""
+      }
+    ]
+  },
+  "summary": {
+    "distinct_overall": [
+      "eng+rus",
+      "rus+eng"
+    ],
+    "counts_overall": {
+      "rus+eng": 12,
+      "eng+rus": 8
+    }
+  }
+}

@@ -193,6 +193,153 @@ def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
     return {row[1] for row in cursor.fetchall()}
 
 
+# One row per page, chosen deterministically. With ocr_lang in the primary key
+# a page can hold several rows, so every read must say which one it means.
+#
+# Language-aware callers (the OCR path) pass a language and match either that
+# row or the '' sentinel, since extracted text is language-independent and
+# suppresses OCR whatever was asked for. Precedence within that:
+#   1. usable text first: extracting a scanned page yields '', and that empty
+#      row must not shadow real OCR text or the page would be re-OCR'd.
+#      Tested with `text = ''` rather than LENGTH(text) = 0, because LENGTH
+#      stops at an embedded NUL and real cached pages do contain them
+#   2. then the extracted row, because a page with a real text layer is never
+#      OCR'd whatever language is requested
+#   3. then most recent
+#
+# Language-unaware callers get the most recently written row. created_at has
+# one-second resolution, so rowid is what actually breaks ties.
+#
+# ROW_NUMBER() needs SQLite 3.25+ (2018). Verified 3.51 on the dev machine
+# and 3.46 in the python:3.13-slim runtime image the Dockerfile builds on.
+_PICK_BY_LANG = """
+    SELECT {columns} FROM (
+        SELECT {columns}, ROW_NUMBER() OVER (
+            PARTITION BY page_num
+            ORDER BY (text = '') ASC,
+                     (ocr_lang = '') DESC,
+                     rowid DESC
+        ) AS rn
+        FROM page_text
+        WHERE file_path = ? AND page_num IN ({placeholders})
+          AND ocr_lang IN (?, '')
+    ) WHERE rn = 1
+"""
+
+_PICK_LATEST = """
+    SELECT {columns} FROM (
+        SELECT {columns}, ROW_NUMBER() OVER (
+            PARTITION BY page_num
+            ORDER BY created_at DESC, rowid DESC
+        ) AS rn
+        FROM page_text
+        WHERE file_path = ? AND page_num IN ({placeholders})
+    ) WHERE rn = 1
+"""
+
+
+def _page_rows_query(columns: str, n_pages: int, by_lang: bool) -> str:
+    """Build a one-row-per-page SELECT over page_text."""
+    template = _PICK_BY_LANG if by_lang else _PICK_LATEST
+    return template.format(columns=columns, placeholders=",".join("?" * n_pages))
+
+
+def _page_text_pk(conn: sqlite3.Connection) -> list[str]:
+    """Primary-key column names for page_text, in key order."""
+    rows = conn.execute("PRAGMA table_info(page_text)").fetchall()
+    keyed = [(row[5], row[1]) for row in rows if row[5]]
+    return [name for _, name in sorted(keyed)]
+
+
+def _migrate_page_text_pk(conn: sqlite3.Connection) -> bool:
+    """Widen page_text's PK to (file_path, page_num, ocr_lang).
+
+    SQLite cannot ALTER a primary key, so this is create-copy-drop-rename.
+    Detected by PK shape rather than a version counter, because
+    _EXTRACTION_VERSION DROPS page_text and this migration must preserve every
+    cached page (issue #27).
+
+    Returns True when a migration ran. Idempotent: a no-op once the key has
+    three columns, and on fresh databases created with the current schema.
+    """
+    if _page_text_pk(conn) != ["file_path", "page_num"]:
+        return False
+
+    # Old tables predate several columns (created_at is never added by an
+    # ALTER, and has_hidden_text may not exist yet), so the copy cannot name
+    # columns it has not checked for. Missing ones fall back to the default
+    # the current schema would have given them.
+    old_cols = _get_columns(conn, "page_text")
+    fallbacks = {
+        "source": "'extracted'",
+        "created_at": "CURRENT_TIMESTAMP",
+        "has_hidden_text": "NULL",
+        "ocr_lang": "''",
+    }
+    select_terms = []
+    for column in (
+        "file_path",
+        "page_num",
+        "file_mtime",
+        "text",
+        "text_length",
+        "source",
+        "created_at",
+        "has_hidden_text",
+        "ocr_lang",
+    ):
+        if column == "ocr_lang":
+            select_terms.append(
+                "LOWER(TRIM(COALESCE(ocr_lang, '')))" if column in old_cols else "''"
+            )
+        elif column in old_cols:
+            select_terms.append(column)
+        else:
+            select_terms.append(fallbacks[column])
+
+    conn.executescript(
+        """
+        CREATE TABLE page_text_new (
+            file_path TEXT NOT NULL,
+            page_num INTEGER NOT NULL,
+            file_mtime REAL NOT NULL,
+            text TEXT NOT NULL,
+            text_length INTEGER NOT NULL,
+            source TEXT DEFAULT 'extracted',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            has_hidden_text INTEGER DEFAULT NULL,
+            ocr_lang TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (file_path, page_num, ocr_lang)
+        );
+        INSERT INTO page_text_new
+            (file_path, page_num, file_mtime, text, text_length,
+             source, created_at, has_hidden_text, ocr_lang)
+        SELECT """
+        + ", ".join(select_terms)
+        + """
+        FROM page_text;
+        DROP TABLE page_text;
+        ALTER TABLE page_text_new RENAME TO page_text;
+        CREATE INDEX IF NOT EXISTS idx_page_text_path
+            ON page_text(file_path);
+        """
+    )
+    return True
+
+
+def normalize_ocr_lang(lang: str | None) -> str:
+    """Canonical cache-key form of an ocr_lang argument.
+
+    Case and surrounding whitespace never change what Tesseract does, so they
+    must not create separate cache rows. Language ORDER does change Tesseract's
+    output, so it is preserved exactly (issue #27).
+
+    The '' return is the sentinel for "not OCR text" and is what non-OCR rows
+    store in page_text.ocr_lang.
+    """
+    return (lang or "").strip().lower()
+
+
 class PDFCache:
     """
     SQLite-based cache for PDF metadata and page text.
@@ -242,6 +389,7 @@ class PDFCache:
         Side effect: sets self.fts_available (bool) indicating whether
         the SQLite build supports FTS5 virtual tables.
         """
+        migrated_pk = False
         with sqlite3.connect(self.db_path) as conn:
             # Extraction-logic version: drop cached text and all text-derived
             # tables when the extraction algorithm changes, forcing re-extract.
@@ -343,7 +491,13 @@ class PDFCache:
                     trust_version INTEGER NOT NULL
                 );
 
-                -- Page text cache
+                -- Page text cache. ocr_lang is part of the primary key: the
+                -- same page OCR'd under two language strings is two different
+                -- results (Tesseract's output depends on language order), so
+                -- they coexist rather than evict each other (issue #27).
+                -- '' is the sentinel for non-OCR text. NOT NULL because SQLite
+                -- permits NULL in a non-INTEGER primary key column, which
+                -- would stop extracted rows being unique.
                 CREATE TABLE IF NOT EXISTS page_text (
                     file_path TEXT NOT NULL,
                     page_num INTEGER NOT NULL,
@@ -352,8 +506,8 @@ class PDFCache:
                     text_length INTEGER NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     has_hidden_text INTEGER DEFAULT NULL,
-                    ocr_lang TEXT DEFAULT NULL,
-                    PRIMARY KEY (file_path, page_num)
+                    ocr_lang TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY (file_path, page_num, ocr_lang)
                 );
 
                 -- Page images cache (stores file paths)
@@ -484,6 +638,11 @@ class PDFCache:
                     "ALTER TABLE page_text ADD COLUMN ocr_lang TEXT DEFAULT NULL"
                 )
 
+            # page_text: widen the primary key to include ocr_lang so two
+            # language spellings for one page stop evicting each other
+            # (issue #27). Preserves every cached row.
+            migrated_pk = _migrate_page_text_pk(conn)
+
             # pdf_metadata: add text_coverage_json column to existing tables
             cols = _get_columns(conn, "pdf_metadata")
             if cols and "text_coverage_json" not in cols:
@@ -581,6 +740,13 @@ class PDFCache:
                 else:
                     if not cjk_existed and bool(_get_columns(conn, "page_text")):
                         self._backfill_cjk_tables(conn)
+
+        # The PK migration's drop-and-rename leaves the freed pages in the
+        # file (~50% growth, measured). VACUUM reclaims them and cannot run
+        # inside a transaction, so it follows the commit above.
+        if migrated_pk:
+            with sqlite3.connect(self.db_path) as vac:
+                vac.execute("VACUUM")
 
         self.clear_expired()
 
@@ -787,22 +953,27 @@ class PDFCache:
         """
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute(
-                """SELECT text, file_mtime FROM page_text
-                   WHERE file_path = ? AND page_num = ?""",
+                _page_rows_query("page_num, text, file_mtime", 1, by_lang=False),
                 (path, page_num),
             ).fetchone()
 
             if row is None:
                 return None
 
-            if not self._is_cache_valid(path, row[1]):
+            if not self._is_cache_valid(path, row[2]):
                 return None
 
-            return str(row[0])
+            return str(row[1])
 
-    def get_pages_text(self, path: str, page_nums: list[int]) -> dict[int, str]:
+    def get_pages_text(
+        self, path: str, page_nums: list[int], ocr_lang: str | None = None
+    ) -> dict[int, str]:
         """
         Get cached text for multiple pages.
+
+        With ocr_lang, returns the row for that language (or the extracted
+        row, which answers any language). Without it, returns the most
+        recently written row per page.
 
         Args:
             path: Path to PDF file
@@ -814,16 +985,14 @@ class PDFCache:
         if not page_nums:
             return {}
 
-        placeholders = ",".join("?" * len(page_nums))
+        by_lang = ocr_lang is not None
+        query = _page_rows_query("page_num, text, file_mtime", len(page_nums), by_lang)
+        params: tuple[object, ...] = (path, *page_nums)
+        if by_lang:
+            params = (*params, normalize_ocr_lang(ocr_lang))
 
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                f"""SELECT page_num, text, file_mtime
-                    FROM page_text
-                    WHERE file_path = ?
-                    AND page_num IN ({placeholders})""",
-                (path, *page_nums),
-            ).fetchall()
+            rows = conn.execute(query, params).fetchall()
 
             result = {}
             for page_num, text, mtime in rows:
@@ -849,13 +1018,18 @@ class PDFCache:
         """
         mtime, _ = self._get_file_info(path)
 
+        # Case and whitespace never change what Tesseract does, so they must
+        # not create separate rows. Order IS preserved: it changes the output.
+        # The caller's original string still goes to the -l flag (issue #27).
+        stored_lang = normalize_ocr_lang(ocr_lang)
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
                     text, text_length, source, ocr_lang)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (path, page_num, mtime, text, len(text), source, ocr_lang),
+                (path, page_num, mtime, text, len(text), source, stored_lang),
             )
 
             if self.fts_available:
@@ -896,17 +1070,23 @@ class PDFCache:
                 return None
             return str(row[0]) if row[0] else "extracted"
 
-    def get_pages_source(self, path: str, page_nums: list[int]) -> dict[int, str]:
-        """Bulk lookup of source for multiple pages. Missing/stale pages omitted."""
+    def get_pages_source(
+        self, path: str, page_nums: list[int], ocr_lang: str | None = None
+    ) -> dict[int, str]:
+        """Bulk lookup of source for multiple pages. Missing/stale pages
+        omitted. Row selection matches get_pages_text so the two never
+        describe different rows of the same page."""
         if not page_nums:
             return {}
-        placeholders = ",".join("?" * len(page_nums))
+        by_lang = ocr_lang is not None
+        query = _page_rows_query(
+            "page_num, source, file_mtime", len(page_nums), by_lang
+        )
+        params: tuple[object, ...] = (path, *page_nums)
+        if by_lang:
+            params = (*params, normalize_ocr_lang(ocr_lang))
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                f"SELECT page_num, source, file_mtime FROM page_text"
-                f" WHERE file_path = ? AND page_num IN ({placeholders})",
-                (path, *page_nums),
-            ).fetchall()
+            rows = conn.execute(query, params).fetchall()
         return {
             int(page_num): (str(source) if source else "extracted")
             for page_num, source, mtime in rows
@@ -914,20 +1094,23 @@ class PDFCache:
         }
 
     def get_pages_ocr_lang(
-        self, path: str, page_nums: list[int]
+        self, path: str, page_nums: list[int], ocr_lang: str | None = None
     ) -> dict[int, str | None]:
         """Bulk lookup of the OCR language per page. Missing/stale pages are
-        omitted; a cached page with no recorded language maps to None (either
-        it was extracted, or it predates the ocr_lang column)."""
+        omitted; a row holding the '' sentinel maps to None (it is extracted
+        text, or a legacy row whose language was never recorded, and either
+        way no language describes it)."""
         if not page_nums:
             return {}
-        placeholders = ",".join("?" * len(page_nums))
+        by_lang = ocr_lang is not None
+        query = _page_rows_query(
+            "page_num, ocr_lang, file_mtime", len(page_nums), by_lang
+        )
+        params: tuple[object, ...] = (path, *page_nums)
+        if by_lang:
+            params = (*params, normalize_ocr_lang(ocr_lang))
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                f"SELECT page_num, ocr_lang, file_mtime FROM page_text"
-                f" WHERE file_path = ? AND page_num IN ({placeholders})",
-                (path, *page_nums),
-            ).fetchall()
+            rows = conn.execute(query, params).fetchall()
         return {
             int(page_num): (str(lang) if lang else None)
             for page_num, lang, mtime in rows
@@ -1678,9 +1861,10 @@ class PDFCache:
                 "SELECT COUNT(*) FROM pdf_metadata"
             ).fetchone()[0]
 
-            # Count pages
+            # Count pages, not rows: one page can hold several ocr_lang rows.
             stats["total_pages"] = conn.execute(
-                "SELECT COUNT(*) FROM page_text"
+                "SELECT COUNT(*) FROM"
+                " (SELECT DISTINCT file_path, page_num FROM page_text)"
             ).fetchone()[0]
 
             # Count images (exclude sentinel rows)
@@ -1983,8 +2167,13 @@ class PDFCache:
         on a file that has cached page_text rows but no FTS rows.
         """
         with sqlite3.connect(self.db_path) as conn:
+            # DISTINCT page_num: a page holds one row per ocr_lang, but FTS
+            # holds one row per page, so counting rows here would make the
+            # `indexed == total == doc_pages` check fail on any document with
+            # a page cached in two languages and silently drop it onto the
+            # slower per-query index (issue #27).
             total = conn.execute(
-                "SELECT COUNT(*) FROM page_text WHERE file_path = ?",
+                "SELECT COUNT(DISTINCT page_num) FROM page_text" " WHERE file_path = ?",
                 (path,),
             ).fetchone()[0]
 

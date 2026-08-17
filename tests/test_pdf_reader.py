@@ -12,7 +12,12 @@ import pymupdf
 import pytest
 
 from pdf_mcp import extractor
-from pdf_mcp.cache import PDFCache, _contains_cjk
+from pdf_mcp.cache import (
+    _EXTRACTION_VERSION,
+    PDFCache,
+    _contains_cjk,
+    normalize_ocr_lang,
+)
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.section_detector import Section
 from pdf_mcp.extractor import (
@@ -3012,7 +3017,24 @@ def test_migration_adds_ocr_lang_to_pre_existing_db(tmp_path):
         row = conn.execute(
             "SELECT text, source, ocr_lang FROM page_text WHERE file_path = 'p.pdf'"
         ).fetchone()
-    assert row == ("old ocr", "ocr", None)  # text preserved, language unknown
+    # Text and source are preserved. The language is stored as '' rather than
+    # NULL because ocr_lang joined the primary key (issue #27) and SQLite
+    # permits NULL there, which would break uniqueness. What #25 actually
+    # guaranteed is asserted below: an unknown language is still unknown, and
+    # still forces a re-OCR rather than being served for any language asked.
+    assert row == ("old ocr", "ocr", "")
+
+    # ('' -> None at the API boundary is covered by TestLanguageAwareReads;
+    # this fixture's p.pdf does not exist on disk, so mtime validation drops
+    # the row before it can be read back here.)
+    from pdf_mcp.server import _is_ocr_cache_hit
+
+    assert not _is_ocr_cache_hit(
+        "ocr", {0: "old ocr"}, 0, requested_lang="khm", cached_lang=None
+    )
+    assert not _is_ocr_cache_hit(
+        "ocr", {0: "old ocr"}, 0, requested_lang="eng", cached_lang=None
+    )
 
 
 def test_trust_version_invalidation_nulls_caches(tmp_path, monkeypatch):
@@ -3686,3 +3708,289 @@ class TestRenderCacheCodecKey:
         with sqlite3.connect(db) as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(page_renders)")}
         assert {"codec", "quality"}.issubset(cols)
+
+
+class TestNormalizeOcrLang:
+    """Case and whitespace must not create separate cache rows; language
+    ORDER must, because Tesseract's output depends on it (issue #27)."""
+
+    def test_lowercases(self):
+        assert normalize_ocr_lang("KHM") == "khm"
+
+    def test_strips_whitespace(self):
+        assert normalize_ocr_lang("  khm+eng  ") == "khm+eng"
+
+    def test_none_becomes_sentinel(self):
+        assert normalize_ocr_lang(None) == ""
+
+    def test_whitespace_only_becomes_sentinel(self):
+        assert normalize_ocr_lang("   ") == ""
+
+    def test_does_not_reorder(self):
+        assert normalize_ocr_lang("KHM+ENG") != normalize_ocr_lang("eng+khm")
+        assert normalize_ocr_lang("KHM+ENG") == normalize_ocr_lang("khm+eng")
+
+
+def _make_old_shape_db(db_path):
+    """A cache.db as it exists before the widening: 2-column PK, nullable
+    ocr_lang, one extracted row and one OCR row."""
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE page_text (
+            file_path TEXT NOT NULL,
+            page_num INTEGER NOT NULL,
+            file_mtime REAL NOT NULL,
+            text TEXT NOT NULL,
+            text_length INTEGER NOT NULL,
+            source TEXT DEFAULT 'extracted',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            has_hidden_text INTEGER DEFAULT NULL,
+            ocr_lang TEXT DEFAULT NULL,
+            PRIMARY KEY (file_path, page_num)
+        );
+        """)
+    conn.executemany(
+        "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
+        " text_length, source, ocr_lang) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("/a.pdf", 0, 1.0, "extracted text", 14, "extracted", None),
+            ("/a.pdf", 1, 1.0, "ocr text", 8, "ocr", "khm+eng"),
+        ],
+    )
+    # A real cache carries the current extraction version. Without this the
+    # _EXTRACTION_VERSION check drops page_text before the PK migration runs,
+    # and the test would be exercising the drop path instead.
+    conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
+    conn.commit()
+    conn.close()
+
+
+class TestPageTextPrimaryKeyMigration:
+    def test_migration_preserves_rows_and_backfills_sentinel(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        db_path = cache_dir / "cache.db"
+        _make_old_shape_db(str(db_path))
+
+        PDFCache(cache_dir=cache_dir)
+
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute(
+            "SELECT page_num, text, source, ocr_lang FROM page_text ORDER BY page_num"
+        ).fetchall()
+        nulls = conn.execute(
+            "SELECT COUNT(*) FROM page_text WHERE ocr_lang IS NULL"
+        ).fetchone()[0]
+        conn.close()
+
+        assert rows == [
+            (0, "extracted text", "extracted", ""),
+            (1, "ocr text", "ocr", "khm+eng"),
+        ]
+        assert nulls == 0
+
+    def test_new_pk_lets_two_languages_coexist(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        PDFCache(cache_dir=cache_dir)
+
+        conn = sqlite3.connect(str(cache_dir / "cache.db"))
+        conn.executemany(
+            "INSERT INTO page_text (file_path, page_num, file_mtime, text,"
+            " text_length, source, ocr_lang) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("/a.pdf", 0, 1.0, "kh first", 8, "ocr", "khm+eng"),
+                ("/a.pdf", 0, 1.0, "en first", 8, "ocr", "eng+khm"),
+            ],
+        )
+        conn.commit()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM page_text WHERE file_path = '/a.pdf'"
+        ).fetchone()[0]
+        conn.close()
+
+        assert count == 2
+
+    def test_migration_is_idempotent(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        db_path = cache_dir / "cache.db"
+        _make_old_shape_db(str(db_path))
+
+        PDFCache(cache_dir=cache_dir)
+        PDFCache(cache_dir=cache_dir)
+
+        conn = sqlite3.connect(str(db_path))
+        count = conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0]
+        conn.close()
+        assert count == 2
+
+
+class TestSavePageTextNormalizesLang:
+    """ocr_lang is normalized into the cache key: case and whitespace share a
+    row, distinct orderings do not (issue #27)."""
+
+    def _langs(self, cache, path):
+        with sqlite3.connect(cache.db_path) as conn:
+            return conn.execute(
+                "SELECT ocr_lang, text FROM page_text WHERE file_path = ?"
+                " ORDER BY ocr_lang",
+                (path,),
+            ).fetchall()
+
+    def test_case_variants_share_one_row(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "first", source="ocr", ocr_lang="KHM+ENG")
+        cache.save_page_text(sample_pdf, 0, "second", source="ocr", ocr_lang="khm+eng")
+        assert self._langs(cache, sample_pdf) == [("khm+eng", "second")]
+
+    def test_whitespace_variants_share_one_row(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "first", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(
+            sample_pdf, 0, "second", source="ocr", ocr_lang="  khm+eng  "
+        )
+        assert self._langs(cache, sample_pdf) == [("khm+eng", "second")]
+
+    def test_distinct_orderings_are_separate_rows(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en", source="ocr", ocr_lang="eng+khm")
+        assert self._langs(cache, sample_pdf) == [
+            ("eng+khm", "en"),
+            ("khm+eng", "kh"),
+        ]
+
+    def test_extracted_row_uses_sentinel(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "plain")
+        assert self._langs(cache, sample_pdf) == [("", "plain")]
+
+    def test_ocr_row_survives_re_extraction(self, cache, sample_pdf):
+        """Re-extracting a page no longer destroys its cached OCR text: they
+        are different artifacts and now occupy different rows."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr", ocr_lang="khm")
+        cache.save_pages_text(sample_pdf, {0: "extracted text"})
+        assert self._langs(cache, sample_pdf) == [
+            ("", "extracted text"),
+            ("khm", "ocr text"),
+        ]
+
+
+class TestLanguageAwareReads:
+    """With ocr_lang in the key a page can hold several rows, so every read
+    must say which one it means (issue #27)."""
+
+    def _two_langs(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh text", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en text", source="ocr", ocr_lang="eng+khm")
+        return sample_pdf
+
+    def test_returns_requested_language(self, cache, sample_pdf):
+        self._two_langs(cache, sample_pdf)
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm+eng") == {
+            0: "kh text"
+        }
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="eng+khm") == {
+            0: "en text"
+        }
+
+    def test_requested_language_is_normalized(self, cache, sample_pdf):
+        self._two_langs(cache, sample_pdf)
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="KHM+ENG ") == {
+            0: "kh text"
+        }
+
+    def test_unknown_language_is_a_miss(self, cache, sample_pdf):
+        self._two_langs(cache, sample_pdf)
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="tha") == {}
+
+    def test_extracted_row_answers_any_language(self, cache, sample_pdf):
+        cache.save_pages_text(sample_pdf, {0: "real text layer"})
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="tha") == {
+            0: "real text layer"
+        }
+        assert cache.get_pages_source(sample_pdf, [0], ocr_lang="tha") == {
+            0: "extracted"
+        }
+
+    def test_real_text_layer_beats_ocr_row(self, cache, sample_pdf):
+        """A page with a real text layer is never OCR'd, whatever language is
+        asked for, so the extracted row wins when both are usable."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr", ocr_lang="khm")
+        cache.save_pages_text(sample_pdf, {0: "real text layer"})
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm") == {
+            0: "real text layer"
+        }
+        assert cache.get_pages_source(sample_pdf, [0], ocr_lang="khm") == {
+            0: "extracted"
+        }
+
+    def test_empty_extracted_row_loses_to_ocr_text(self, cache, sample_pdf):
+        """Extracting a scanned page yields '', and that empty row must not
+        shadow real OCR text: doing so would force a pointless re-OCR."""
+        cache.save_page_text(sample_pdf, 0, "ocr text", source="ocr", ocr_lang="khm")
+        cache.save_pages_text(sample_pdf, {0: ""})
+        assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm") == {0: "ocr text"}
+        assert cache.get_pages_ocr_lang(sample_pdf, [0], ocr_lang="khm") == {0: "khm"}
+
+    def test_unaware_reader_returns_latest_row(self, cache, sample_pdf):
+        self._two_langs(cache, sample_pdf)
+        assert cache.get_pages_text(sample_pdf, [0]) == {0: "en text"}
+        assert cache.get_page_text(sample_pdf, 0) == "en text"
+
+    def test_unaware_reader_agrees_with_fts(self, cache, sample_pdf):
+        """save_page_text DELETE-then-INSERTs the FTS row, so FTS holds the
+        last text written. A language-unaware read must return that same text,
+        or a search hit and its excerpt would come from different rows."""
+        self._two_langs(cache, sample_pdf)
+        with sqlite3.connect(cache.db_path) as conn:
+            fts = conn.execute(
+                "SELECT text FROM pdf_search_fts WHERE file_path = ?",
+                (sample_pdf,),
+            ).fetchall()
+        assert [t for (t,) in fts] == ["en text"]
+        assert cache.get_page_text(sample_pdf, 0) == "en text"
+
+    def test_unaware_reader_is_deterministic_within_one_second(self, cache, sample_pdf):
+        """created_at has one-second resolution, so rowid is what actually
+        orders these. Without that tiebreak this flakes."""
+        for i in range(5):
+            cache.save_page_text(
+                sample_pdf, 0, f"text {i}", source="ocr", ocr_lang=f"l{i}"
+            )
+        assert cache.get_page_text(sample_pdf, 0) == "text 4"
+
+
+class TestCountsArePerPageNotPerRow:
+    """A page can now hold several rows (one per ocr_lang). Anything that
+    counts "pages" must count pages, not rows (issue #27)."""
+
+    def test_fts_coverage_counts_pages_not_rows(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh text", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en text", source="ocr", ocr_lang="eng+khm")
+        cache.save_page_text(sample_pdf, 1, "page two", source="ocr", ocr_lang="khm")
+
+        indexed, total = cache.get_fts_index_coverage(sample_pdf)
+
+        # Two pages cached, three rows. Reporting 3 would break the
+        # `indexed == total == doc_pages` fast-path check in pdf_search and
+        # silently drop the document onto the slower per-query index.
+        assert total == 2
+        assert indexed == 2
+
+    def test_stats_total_pages_counts_pages_not_rows(self, cache, sample_pdf):
+        cache.save_page_text(sample_pdf, 0, "kh", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(sample_pdf, 0, "en", source="ocr", ocr_lang="eng+khm")
+
+        assert cache.get_stats()["total_pages"] == 1
+
+
+def test_nul_bearing_text_is_not_treated_as_empty(cache, sample_pdf):
+    """Real cached pages contain embedded NULs. SQLite's LENGTH() stops at
+    the first one, so a NUL-leading page would look empty and lose the
+    row-preference ordering to a genuinely empty row."""
+    cache.save_page_text(
+        sample_pdf, 0, "\x00leading nul but real text", source="ocr", ocr_lang="khm"
+    )
+    cache.save_pages_text(sample_pdf, {0: ""})
+
+    assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm") == {
+        0: "\x00leading nul but real text"
+    }

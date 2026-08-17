@@ -3980,3 +3980,17 @@ class TestCountsArePerPageNotPerRow:
         cache.save_page_text(sample_pdf, 0, "en", source="ocr", ocr_lang="eng+khm")
 
         assert cache.get_stats()["total_pages"] == 1
+
+
+def test_nul_bearing_text_is_not_treated_as_empty(cache, sample_pdf):
+    """Real cached pages contain embedded NULs. SQLite's LENGTH() stops at
+    the first one, so a NUL-leading page would look empty and lose the
+    row-preference ordering to a genuinely empty row."""
+    cache.save_page_text(
+        sample_pdf, 0, "\x00leading nul but real text", source="ocr", ocr_lang="khm"
+    )
+    cache.save_pages_text(sample_pdf, {0: ""})
+
+    assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm") == {
+        0: "\x00leading nul but real text"
+    }

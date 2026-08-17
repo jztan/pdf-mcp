@@ -199,8 +199,10 @@ def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
 # Language-aware callers (the OCR path) pass a language and match either that
 # row or the '' sentinel, since extracted text is language-independent and
 # suppresses OCR whatever was asked for. Precedence within that:
-#   1. usable text first — extracting a scanned page yields '', and that empty
-#      row must not shadow real OCR text or the page would be re-OCR'd
+#   1. usable text first: extracting a scanned page yields '', and that empty
+#      row must not shadow real OCR text or the page would be re-OCR'd.
+#      Tested with `text = ''` rather than LENGTH(text) = 0, because LENGTH
+#      stops at an embedded NUL and real cached pages do contain them
 #   2. then the extracted row, because a page with a real text layer is never
 #      OCR'd whatever language is requested
 #   3. then most recent
@@ -211,7 +213,7 @@ _PICK_BY_LANG = """
     SELECT {columns} FROM (
         SELECT {columns}, ROW_NUMBER() OVER (
             PARTITION BY page_num
-            ORDER BY (LENGTH(text) = 0) ASC,
+            ORDER BY (text = '') ASC,
                      (ocr_lang = '') DESC,
                      rowid DESC
         ) AS rn

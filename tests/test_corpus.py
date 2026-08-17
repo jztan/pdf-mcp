@@ -543,6 +543,52 @@ class TestWarmDocs:
         assert cache.get_page_text(path, 0) == "OCRED SEARCHABLE CONTENT"
         assert cache.get_page_source(path, 0) == "ocr"
 
+    def test_warm_preserves_ocr_text_carrying_a_language(self, cache, tmp_path):
+        """The existing preservation test writes an OCR row with no language,
+        which stores the '' sentinel. A row carrying a real language sits in a
+        different primary-key slot now (issue #27), so cover that too."""
+        p = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+
+        cache.save_page_text(path, 0, "KHMER OCR CONTENT", source="ocr", ocr_lang="khm")
+
+        out = corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+
+        assert {d["status"] for d in out["docs"]} == {"warmed"}
+        # The blank native extraction must not shadow the OCR text.
+        assert cache.get_page_text(path, 0) == "KHMER OCR CONTENT"
+        # And the language-scoped read still finds the khm row.
+        assert cache.get_pages_text(path, [0], ocr_lang="khm") == {
+            0: "KHMER OCR CONTENT"
+        }
+
+    def test_multi_language_page_counts_once_when_warm(self, cache, tmp_path):
+        """A page cached under two languages is still ONE warm page. Counting
+        rows instead of pages here would make _cached_pages disagree with
+        page_count and re-warm a document that is already warm."""
+        p = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        doc.new_page()
+        doc.save(str(p))
+        doc.close()
+        path = str(p.resolve())
+
+        cache.save_page_text(path, 0, "kh text", source="ocr", ocr_lang="khm+eng")
+        cache.save_page_text(path, 0, "en text", source="ocr", ocr_lang="eng+khm")
+
+        assert len(cache.get_pages_text(path, [0])) == 1
+
+        first = corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+        assert first["docs"][0]["status"] == "warmed"
+
+        # Already warm: the second pass must recognise it, not re-extract.
+        second = corpus.warm_docs([path], 60, cache, clock=SteppingClock(0))
+        assert second["docs"][0]["status"] == "cached"
+
     def test_warm_embeds_preserved_ocr_text(self, cache, tmp_path):
         # Same setup, but with embeddings on: the preserved OCR text
         # (not the blank native extraction) must feed the embed input.

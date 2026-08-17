@@ -209,6 +209,9 @@ def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
 #
 # Language-unaware callers get the most recently written row. created_at has
 # one-second resolution, so rowid is what actually breaks ties.
+#
+# ROW_NUMBER() needs SQLite 3.25+ (2018). Verified 3.51 on the dev machine
+# and 3.46 in the python:3.13-slim runtime image the Dockerfile builds on.
 _PICK_BY_LANG = """
     SELECT {columns} FROM (
         SELECT {columns}, ROW_NUMBER() OVER (

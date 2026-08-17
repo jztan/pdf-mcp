@@ -5182,3 +5182,83 @@ class TestHTTPTransportEntryPoint:
         body = response.json()
         assert body["status"] == "ok"
         assert body["version"] == server.__version__
+
+
+class TestOcrLangCacheThrash:
+    """Alternating ocr_lang spellings for one page must stop re-running OCR
+    every call (issue #27).
+
+    OCR is stubbed at the extractor boundary, so these need neither Tesseract
+    nor language packs. Keep the page range at "1": ocr_page is called
+    in-parent only when parallel.resolve_workers returns sequential (the OCR
+    gate is 2 pages). Ask for more pages and the work goes to a spawned
+    process where this monkeypatch does not exist.
+    """
+
+    @staticmethod
+    def _stub_ocr(monkeypatch, calls):
+        """Stub the picklable worker, not ocr_page.
+
+        pdf_read_pages always dispatches OCR through run_pages(
+        _ocr_page_worker, ...); the in-parent ocr_page call is only the
+        exception fallback. With one page, resolve_workers gates to
+        sequential and run_pages calls the worker in-parent, so patching the
+        name server.py imported is enough.
+        """
+
+        def fake_worker(args):
+            path, page_num, lang, dpi, tessdata = args
+            calls.append(lang)
+            return page_num, f"text produced by {lang}"
+
+        monkeypatch.setattr(server, "_ocr_page_worker", fake_worker)
+
+    def test_alternating_languages_still_hit_cache(
+        self, isolated_server, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        calls: list[str] = []
+        self._stub_ocr(monkeypatch, calls)
+        path = sample_pdf_synthetic_scan
+
+        server.pdf_read_pages(path, "1", ocr=True, ocr_lang="khm+eng")
+        server.pdf_read_pages(path, "1", ocr=True, ocr_lang="eng+khm")
+        third = server.pdf_read_pages(path, "1", ocr=True, ocr_lang="khm+eng")
+
+        # One OCR run per distinct language. The third call reuses the first
+        # call's row instead of re-running it.
+        assert calls == ["khm+eng", "eng+khm"]
+        assert third["cache_hits"] == 1
+        assert third["cache_misses"] == 0
+        assert third["pages"][0]["text"] == "text produced by khm+eng"
+
+    def test_case_variant_hits_cache(
+        self, isolated_server, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        calls: list[str] = []
+        self._stub_ocr(monkeypatch, calls)
+        path = sample_pdf_synthetic_scan
+
+        server.pdf_read_pages(path, "1", ocr=True, ocr_lang="khm+eng")
+        second = server.pdf_read_pages(path, "1", ocr=True, ocr_lang="KHM+ENG")
+
+        assert calls == ["khm+eng"]
+        assert second["cache_hits"] == 1
+
+    def test_each_language_keeps_its_own_text(
+        self, isolated_server, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        """The point of keeping both rows: neither language is served the
+        other's text."""
+        calls: list[str] = []
+        self._stub_ocr(monkeypatch, calls)
+        path = sample_pdf_synthetic_scan
+
+        server.pdf_read_pages(path, "1", ocr=True, ocr_lang="khm+eng")
+        server.pdf_read_pages(path, "1", ocr=True, ocr_lang="eng+khm")
+
+        kh = server.pdf_read_pages(path, "1", ocr=True, ocr_lang="khm+eng")
+        en = server.pdf_read_pages(path, "1", ocr=True, ocr_lang="eng+khm")
+
+        assert kh["pages"][0]["text"] == "text produced by khm+eng"
+        assert en["pages"][0]["text"] == "text produced by eng+khm"
+        assert calls == ["khm+eng", "eng+khm"]

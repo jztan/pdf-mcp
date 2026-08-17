@@ -96,6 +96,26 @@ unnoticed if only the migration itself had been timed.
 The script asserts row count, the `''` sentinel backfill, and text integrity, so
 a silent data-loss bug fails loudly instead of printing a fast time.
 
+## After the fix
+
+Same harness, same corpus, re-run once the wider primary key and the
+language-scoped reads landed (`thrash_results_after.json`):
+
+| sequence | wall clock | page-misses | page-hits |
+|---|---|---|---|
+| baseline | 2.77s | 10 | 50 |
+| case-thrash | 2.71s | 10 | 50 |
+| order-thrash | 4.53s | 20 | 40 |
+
+Case variants now share a cache row, so `rus+eng` / `RUS+ENG` costs exactly
+what a single spelling costs. Distinct orderings each pay for one OCR pass and
+are free thereafter, which is the intended behaviour rather than a shortfall:
+they are genuinely different requests to Tesseract.
+
+`order-thrash` landing on 20 rather than 10 is the load-bearing check. 10 would
+mean the two orderings had been collapsed into one row, which would be the
+correctness bug this whole investigation ruled out.
+
 ## Verdict
 
 The wider primary key is justified: the cost is real and structural, the

@@ -1,0 +1,156 @@
+{
+  "config": {
+    "pages": 10,
+    "calls_per_sequence": 6,
+    "tessdata_prefix": "/private/tmp/claude-501/-Users-jztan-src-pdf-mcp/b0b66719-4b0b-4001-98a0-21f1bf096393/scratchpad/tessdata"
+  },
+  "results": {
+    "baseline": {
+      "calls": [
+        {
+          "call": 1,
+          "ocr_lang": "rus+eng",
+          "seconds": 2.71,
+          "page_misses": 10,
+          "page_hits": 0
+        },
+        {
+          "call": 2,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.013,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 3,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 4,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 5,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.011,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 6,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        }
+      ],
+      "total_seconds": 2.77,
+      "page_misses": 10,
+      "page_hits": 50
+    },
+    "case-thrash": {
+      "calls": [
+        {
+          "call": 1,
+          "ocr_lang": "rus+eng",
+          "seconds": 2.655,
+          "page_misses": 10,
+          "page_hits": 0
+        },
+        {
+          "call": 2,
+          "ocr_lang": "RUS+ENG",
+          "seconds": 0.013,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 3,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.011,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 4,
+          "ocr_lang": "RUS+ENG",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 5,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 6,
+          "ocr_lang": "RUS+ENG",
+          "seconds": 0.012,
+          "page_misses": 0,
+          "page_hits": 10
+        }
+      ],
+      "total_seconds": 2.715,
+      "page_misses": 10,
+      "page_hits": 50
+    },
+    "order-thrash": {
+      "calls": [
+        {
+          "call": 1,
+          "ocr_lang": "rus+eng",
+          "seconds": 2.658,
+          "page_misses": 10,
+          "page_hits": 0
+        },
+        {
+          "call": 2,
+          "ocr_lang": "eng+rus",
+          "seconds": 1.794,
+          "page_misses": 10,
+          "page_hits": 0
+        },
+        {
+          "call": 3,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.029,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 4,
+          "ocr_lang": "eng+rus",
+          "seconds": 0.016,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 5,
+          "ocr_lang": "rus+eng",
+          "seconds": 0.015,
+          "page_misses": 0,
+          "page_hits": 10
+        },
+        {
+          "call": 6,
+          "ocr_lang": "eng+rus",
+          "seconds": 0.014,
+          "page_misses": 0,
+          "page_hits": 10
+        }
+      ],
+      "total_seconds": 4.526,
+      "page_misses": 20,
+      "page_hits": 40
+    }
+  }
+}

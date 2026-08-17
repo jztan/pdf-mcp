@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+
+- OCR text is now cached per page **per language**, so alternating `ocr_lang`
+  spellings for the same page no longer evict each other and re-run OCR on
+  every call. Case and surrounding whitespace in `ocr_lang` are ignored for
+  caching (`KHM` and `khm` are one entry); language order remains significant
+  and is cached separately, because Tesseract's output depends on it. Existing
+  caches migrate in place on first open
+  ([#27](https://github.com/jztan/pdf-mcp/issues/27), reported by @deepdmk)
+
+### Contributors
+
+- @deepdmk — reported the `ocr_lang` cache-key thrash and built the Tesseract
+  language-order test rig that ruled out sorting the key
+  ([#27](https://github.com/jztan/pdf-mcp/issues/27))
+
 ## [2.2.0] - 2026-08-15
 ### Added
 

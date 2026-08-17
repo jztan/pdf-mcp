@@ -12,6 +12,10 @@ often it is reachable, and what the fix's migration costs.
 |---|---|---|
 | `scripts/measure_ocr_lang_thrash.py` | what does the thrash cost? | no |
 | `scripts/probe_ocr_lang_variance.py` | do callers actually vary the string? | **yes** |
+
+The variance probe was run twice: once before the fix
+(`variance_results.json`) and once against the reworded tool description
+(`variance_results_after_docs.json`).
 | `scripts/measure_page_text_migration.py` | what does the migration cost? | no |
 
 ## 1. Cost of the thrash
@@ -71,6 +75,38 @@ Judge/caller config is recorded in `variance_results.json`. Per CLAUDE.md the
 run used `--setting-sources ''` and `--strict-mcp-config` with only pdf-mcp
 loaded, and no `--system-prompt`.
 
+## 2b. Does the tool description change what callers emit?
+
+The fix ships a reworded `ocr_lang` parameter description saying order is
+significant and asking callers to keep the string stable. Whether documentation
+changes model behaviour is testable with the same 20-session protocol, so it was
+tested rather than assumed (`variance_results_after_docs.json`).
+
+| arm (user's phrasing) | before the doc change | after |
+|---|---|---|
+| "Russian and English" | `rus+eng` 10/10 | `rus+eng` 10/10 |
+| "English and Russian" | `eng+rus` 8/10, `rus+eng` 2/10 | `eng+rus` 10/10 |
+| distinct strings overall | 2 | 2 |
+
+Within-phrasing variance disappeared: the 8/2 split became 10/10. Cross-phrasing
+mirroring did not move. The model reads "order is significant", takes it
+seriously, and concludes the significant order is the one the user used, which
+is a reasonable reading of the sentence.
+
+**Treat this as weak evidence.** Going 8/2 to 10/10 is two ballots moving on
+n=10, no noise floor has been measured for this probe, and the before condition
+was not re-run, so any drift between the two runs is confounded with the doc
+change. What it does rule out is the failure mode worth worrying about: telling
+a model that an arbitrary choice matters could have made it deliberate about the
+choice and produced *more* variance. That did not happen.
+
+The practical consequence is that cross-phrasing variance, the kind that
+actually creates a second cache row, survives. A caller who says "Russian and
+English" today and "English and Russian" next month still pays two OCR passes,
+and closing that gap would require normalizing order, which is the correctness
+bug this investigation ruled out. The 20-page-miss figure in the after-the-fix
+table below is therefore the real-world number, not a way station.
+
 ## 3. Migration cost
 
 Widening a primary key in SQLite means create-new, copy, drop, rename against
@@ -122,6 +158,13 @@ The wider primary key is justified: the cost is real and structural, the
 trigger is ordinary caller behaviour rather than misuse, and the migration is
 cheap. The design must include the `VACUUM`.
 
+Documentation is not a substitute for it. The reworded parameter description
+removed within-phrasing variance in a 20-session probe but left cross-phrasing
+mirroring intact, and cross-phrasing variance is what creates a second cached
+row. Two distinct `ocr_lang` strings for one document remain reachable from
+ordinary phrasing differences, which is exactly what the cache now handles
+correctly instead of thrashing on.
+
 ## Reproducing
 
 Measurements 1 and 2 need a tessdata directory holding `eng` and `rus`
@@ -134,7 +177,8 @@ curl -sLo /tmp/td/rus.traineddata \
 
 TESSDATA_PREFIX=/tmp/td python scripts/measure_ocr_lang_thrash.py --pages 10 --calls 6
 python scripts/measure_page_text_migration.py
-TESSDATA_PREFIX=/tmp/td python scripts/probe_ocr_lang_variance.py --trials 10   # billed
+TESSDATA_PREFIX=/tmp/td python scripts/probe_ocr_lang_variance.py --trials 10 \
+  --out benchmark_data/ocr_lang_cache/variance_results.json   # billed, 20 sessions
 ```
 
 @deepdmk's own order-invariance rig (which established that language order

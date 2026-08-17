@@ -193,6 +193,19 @@ def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
     return {row[1] for row in cursor.fetchall()}
 
 
+def normalize_ocr_lang(lang: str | None) -> str:
+    """Canonical cache-key form of an ocr_lang argument.
+
+    Case and surrounding whitespace never change what Tesseract does, so they
+    must not create separate cache rows. Language ORDER does change Tesseract's
+    output, so it is preserved exactly (issue #27).
+
+    The '' return is the sentinel for "not OCR text" and is what non-OCR rows
+    store in page_text.ocr_lang.
+    """
+    return (lang or "").strip().lower()
+
+
 class PDFCache:
     """
     SQLite-based cache for PDF metadata and page text.

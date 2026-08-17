@@ -12,7 +12,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp import extractor
-from pdf_mcp.cache import PDFCache, _contains_cjk
+from pdf_mcp.cache import PDFCache, _contains_cjk, normalize_ocr_lang
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.section_detector import Section
 from pdf_mcp.extractor import (
@@ -3686,3 +3686,24 @@ class TestRenderCacheCodecKey:
         with sqlite3.connect(db) as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(page_renders)")}
         assert {"codec", "quality"}.issubset(cols)
+
+
+class TestNormalizeOcrLang:
+    """Case and whitespace must not create separate cache rows; language
+    ORDER must, because Tesseract's output depends on it (issue #27)."""
+
+    def test_lowercases(self):
+        assert normalize_ocr_lang("KHM") == "khm"
+
+    def test_strips_whitespace(self):
+        assert normalize_ocr_lang("  khm+eng  ") == "khm+eng"
+
+    def test_none_becomes_sentinel(self):
+        assert normalize_ocr_lang(None) == ""
+
+    def test_whitespace_only_becomes_sentinel(self):
+        assert normalize_ocr_lang("   ") == ""
+
+    def test_does_not_reorder(self):
+        assert normalize_ocr_lang("KHM+ENG") != normalize_ocr_lang("eng+khm")
+        assert normalize_ocr_lang("KHM+ENG") == normalize_ocr_lang("khm+eng")

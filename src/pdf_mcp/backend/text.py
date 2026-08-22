@@ -30,6 +30,7 @@ import statistics
 from collections import OrderedDict
 from typing import Any
 
+import numpy as np
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_raw
 
@@ -208,9 +209,15 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
     bulk = full if (full is not None and len(full) == n) else None
 
     style_cache: dict[int, tuple[str, float, int]] = {}
+    raw_tp = textpage.raw
+    get_obj = pdfium_raw.FPDFText_GetTextObject
+    get_box = pdfium_raw.FPDFText_GetCharBox
+    c_left, c_right = ctypes.c_double(), ctypes.c_double()
+    c_bottom, c_top = ctypes.c_double(), ctypes.c_double()
+    ref = ctypes.byref
 
     def style_of(index: int) -> tuple[str, float, int]:
-        obj = pdfium_raw.FPDFText_GetTextObject(textpage.raw, index)
+        obj = get_obj(raw_tp, index)
         key = ctypes.cast(obj, ctypes.c_void_p).value or 0
         cached = style_cache.get(key)
         if cached is None:
@@ -228,10 +235,13 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
         # left as U+FFFE, "English" was unfindable in the extracted text.
         if ch == "\ufffe":
             ch = "-"
-        try:
-            left, bottom, right, top = textpage.get_charbox(i)
-        except Exception:  # noqa: BLE001 - one bad box must not kill the page
+        # Direct FPDFText_GetCharBox with reused ctypes doubles: the
+        # pypdfium2 wrapper allocates four fresh doubles per call, which
+        # is measurable at thousands of glyphs per page.
+        if not get_box(raw_tp, i, ref(c_left), ref(c_right), ref(c_bottom), ref(c_top)):
             continue
+        left, right = c_left.value, c_right.value
+        bottom, top = c_bottom.value, c_top.value
         if right < left or top < bottom:
             continue
         key = (ch, round(left, 1), round(top, 1))
@@ -340,18 +350,22 @@ def _rows_by_baseline(chars: list[_Char]) -> list[list[_Char]]:
         runs, key=lambda run: (min(c.y1 for c in run), min(c.x0 for c in run))
     )
     rows: list[list[_Char]] = list(vertical_rows)
-    anchors: list[float] = [-1e9] * len(vertical_rows)
+    # First-match-in-insertion-order semantics are load-bearing (a later
+    # anchor never shadows an earlier one), so the vectorised form takes
+    # the FIRST index of the boolean hit vector, not a nearest match.
+    # The buffer is preallocated so each append stays O(1); vertical
+    # rows occupy sentinel slots no baseline can match.
+    anchor_buf = np.full(len(vertical_rows) + len(ordered), -1e9, dtype=np.float64)
+    count = len(vertical_rows)
     for run in ordered:
         baseline = min(c.y1 for c in run)
-        placed = False
-        for i, anchor in enumerate(anchors):
-            if abs(baseline - anchor) <= tol:
-                rows[i].extend(run)
-                placed = True
-                break
-        if not placed:
+        hits = np.flatnonzero(np.abs(anchor_buf[:count] - baseline) <= tol)
+        if hits.size:
+            rows[int(hits[0])].extend(run)
+        else:
             rows.append(list(run))
-            anchors.append(baseline)
+            anchor_buf[count] = baseline
+            count += 1
     return rows
 
 

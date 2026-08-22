@@ -122,12 +122,35 @@ def _spans_for_page(page: Any) -> list[dict[str, Any]]:
     return out
 
 
+#: Small in-process cache keyed on file identity. The hidden-text flag
+#: check runs get_texttrace on every hit page of every query (~12ms per
+#: page of object walking), and hot documents repeat across queries.
+_TRACE_CACHE_MAX = 256
+_TRACE_CACHE: "dict[tuple[str, int, int, int], list[dict[str, Any]]]" = {}
+
+
 def get_texttrace(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
+    import os
+
+    try:
+        st = os.stat(pdf_path)
+        key = (os.path.abspath(pdf_path), st.st_mtime_ns, st.st_size, page_num)
+    except OSError:
+        key = None
+    if key is not None:
+        cached = _TRACE_CACHE.get(key)
+        if cached is not None:
+            return cached
     doc = pdfium.PdfDocument(pdf_path)
     try:
-        return _spans_for_page(doc[page_num])
+        spans = _spans_for_page(doc[page_num])
     finally:
         doc.close()
+    if key is not None:
+        if len(_TRACE_CACHE) > _TRACE_CACHE_MAX:
+            _TRACE_CACHE.clear()
+        _TRACE_CACHE[key] = spans
+    return spans
 
 
 __all__ = ["get_texttrace"]

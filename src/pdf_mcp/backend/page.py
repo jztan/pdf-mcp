@@ -108,7 +108,12 @@ class Document:
     def __init__(self, pdf_path: str) -> None:
         self._path = pdf_path
         self._doc = _document.open_document(pdf_path)
-        self._sizes = [self._doc[i].rect for i in range(self._doc.page_count)]
+        self._page_count = self._doc.page_count
+        # Lazy: loading a page just to read its size costs a pdfium page
+        # object each. Computing every page's rect at open time made
+        # open_pdf ~40ms on a 50-page document and accounted for 0.28s
+        # of every corpus query (the excerpt path opens each hit doc).
+        self._sizes: dict[int, Rect] = {}
 
     @property
     def name(self) -> str:
@@ -117,16 +122,25 @@ class Document:
 
     @property
     def page_count(self) -> int:
-        return len(self._sizes)
+        return self._page_count
 
     def __len__(self) -> int:
-        return len(self._sizes)
+        return self._page_count
+
+    def _rect(self, index: int) -> Rect:
+        rect = self._sizes.get(index)
+        if rect is None:
+            rect = self._doc[index].rect
+            self._sizes[index] = rect
+        return rect
 
     def __getitem__(self, index: int) -> Page:
-        return Page(self._path, index, self._sizes[index])
+        if not 0 <= index < self._page_count:
+            raise IndexError(index)
+        return Page(self._path, index, self._rect(index))
 
     def __iter__(self) -> Any:
-        for i in range(len(self._sizes)):
+        for i in range(self._page_count):
             yield self[i]
 
     @property
@@ -142,7 +156,7 @@ class Document:
 
     def extract_image(self, key: Any) -> dict[str, Any]:
         """Pixel metadata for one image, looked up by get_images' key."""
-        for index in range(len(self._sizes)):
+        for index in range(self._page_count):
             for image in _raster.page_images(self._path, index):
                 if image["key"] == key:
                     return {

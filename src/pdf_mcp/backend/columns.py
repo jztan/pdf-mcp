@@ -1,4 +1,4 @@
-"""Column-band detection over glyph boxes. Pure logic, stdlib only.
+"""Column-band detection over glyph boxes. Pure logic (numpy for the histogram).
 
 Lifted from extractor.py (native column detection, PR #31) so the text
 backend and the extractor share ONE column model. That sharing is the
@@ -17,6 +17,8 @@ two-column article passes, and its rows split exactly at the gutter.
 from __future__ import annotations
 
 import statistics
+
+import numpy as np
 
 Box = tuple[float, float, float, float]
 
@@ -64,26 +66,25 @@ def find_gutters(
 
     step = max(0.5, med_h / 4.0)
     n = int(page_width / step) + 1
-    covered = [0.0] * n
-    for x0, y0, x1, y1 in boxes:
-        i0 = max(0, int(x0 / step))
-        i1 = min(n - 1, int(x1 / step))
-        h = max(y1 - y0, 0.1)
-        for i in range(i0, i1 + 1):
-            covered[i] += h
+    # Interval accumulation as a difference array + cumsum: the naive
+    # per-box bin loop was the single hottest spot in the cold-page
+    # profile (it runs three times per page through the recursion).
+    arr = np.asarray(boxes, dtype=np.float64)
+    i0 = np.clip((arr[:, 0] / step).astype(np.int64), 0, n - 1)
+    i1 = np.clip((arr[:, 2] / step).astype(np.int64), 0, n - 1)
+    heights = np.maximum(arr[:, 3] - arr[:, 1], 0.1)
+    diff = np.zeros(n + 1, dtype=np.float64)
+    np.add.at(diff, i0, heights)
+    np.add.at(diff, i1 + 1, -heights)
+    covered = np.cumsum(diff[:n])
 
     threshold = band * (1.0 - GUTTER_MIN_COVERAGE)
-    runs: list[tuple[float, float]] = []
-    start: int | None = None
-    for i, c in enumerate(covered):
-        if c <= threshold:
-            if start is None:
-                start = i
-        elif start is not None:
-            runs.append((start * step, i * step))
-            start = None
-    if start is not None:
-        runs.append((start * step, n * step))
+    open_bins = covered <= threshold
+    edges = np.flatnonzero(np.diff(np.concatenate(([False], open_bins, [False]))))
+    runs = [
+        (float(edges[j]) * step, float(edges[j + 1]) * step)
+        for j in range(0, len(edges), 2)
+    ]
 
     text_x0 = min(b[0] for b in boxes)
     text_x1 = max(b[2] for b in boxes)

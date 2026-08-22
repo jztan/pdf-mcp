@@ -150,3 +150,40 @@ def test_content_recovery_is_near_total():
     ref_doc.close()
     assert total > 500, "fixture too small to be meaningful"
     assert hit / total >= 0.99, f"content recall {hit / total:.4f}"
+
+
+def test_lines_do_not_splice_across_a_column_gutter():
+    """Baseline grouping spans the whole page width, so a left-column and
+    a right-column line sharing a baseline become one line, and the page
+    reads as interleaved nonsense ("...the more sensitive the IV.
+    SIMULATION RESULTS").
+
+    Recall cannot see this: every word is still present, just in the
+    wrong order. It cost 0.21 of two-column reading order against
+    PyMuPDF on the READoc corpus while recall stayed at 0.874.
+    """
+    import os
+
+    path = "benchmark_data/.reading_order_pdfs/0709.4466.pdf"
+    if not os.path.exists(path):
+        pytest.skip("local reading-order corpus not present")
+
+    tree = get_text(path, 2, "dict")
+    lines = [
+        line
+        for block in tree["blocks"]
+        if block.get("type") == 0
+        for line in block.get("lines", [])
+    ]
+    assert_non_empty(lines, "lines")
+
+    page_width = 612.0
+    spanning = [
+        line
+        for line in lines
+        if (line["bbox"][2] - line["bbox"][0]) > 0.62 * page_width
+    ]
+    assert not spanning, (
+        f"{len(spanning)} line(s) span both columns, e.g. "
+        f"{spanning[0]['bbox']}: baseline grouping is splicing the gutter"
+    )

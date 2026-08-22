@@ -199,6 +199,41 @@ def _rows_by_baseline(chars: list[_Char]) -> list[list[_Char]]:
 #: Rotated runs are the case that matters, and they must never merge.
 _TALL_ROW_FACTOR = 3.0
 
+#: A horizontal gap wider than this many median glyph heights splits one
+#: baseline group into separate lines.
+_ROW_X_GAP_FACTOR = 1.6
+
+
+def _split_rows_at_gutters(rows: list[list[_Char]], med_h: float) -> list[list[_Char]]:
+    """Split a baseline group wherever a column gutter crosses it.
+
+    Grouping purely by baseline spans the whole page width, so on a
+    two-column page a left-column line and a right-column line sharing a
+    baseline become ONE line. Measured on the READoc corpus that took
+    two-column reading order from 0.806 (PyMuPDF) to 0.598, while recall
+    stayed at 0.874: every word was present and merely in the wrong
+    order, which is the failure mode containment metrics cannot see.
+
+    Word gaps run a few points; a gutter runs tens. The threshold sits
+    between them and scales with glyph height so it holds across font
+    sizes.
+    """
+    limit = max(8.0, _ROW_X_GAP_FACTOR * med_h)
+    out: list[list[_Char]] = []
+    for row in rows:
+        ordered = sorted(row, key=lambda c: c.x0)
+        segment = [ordered[0]]
+        right = ordered[0].x1
+        for char in ordered[1:]:
+            if char.x0 - right > limit:
+                out.append(segment)
+                segment = [char]
+            else:
+                segment.append(char)
+            right = max(right, char.x1)
+        out.append(segment)
+    return out
+
 
 def _merge_overlapping_rows(rows: list[list[_Char]]) -> list[list[_Char]]:
     """Merge rows whose vertical extents substantially overlap.
@@ -225,6 +260,18 @@ def _merge_overlapping_rows(rows: list[list[_Char]]) -> list[list[_Char]]:
         top, bottom = min(c.y0 for c in row), max(c.y1 for c in row)
         prev_h, cur_h = prev_bottom - prev_top, bottom - top
         if prev_h > tall_limit or cur_h > tall_limit:
+            merged.append(row)
+            continue
+        # Vertical overlap alone is not enough. Two lines in different
+        # columns share a baseline, so an overlap-only rule glued them
+        # back together immediately after the gutter split separated
+        # them: 115 rows collapsed to 59 on a two-column page, and
+        # two-column reading order stayed at 0.60 against PyMuPDF's 0.81
+        # even though the split itself was working.
+        prev_left, prev_right = min(c.x0 for c in prev), max(c.x1 for c in prev)
+        left, right = min(c.x0 for c in row), max(c.x1 for c in row)
+        x_gap = max(left - prev_right, prev_left - right, 0.0)
+        if x_gap > max(8.0, _ROW_X_GAP_FACTOR * med_h):
             merged.append(row)
             continue
         overlap = min(prev_bottom, bottom) - max(prev_top, top)
@@ -314,7 +361,13 @@ def _split_into_spans(row: list[_Char]) -> list[list[_Char]]:
 
 def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
     chars = _collect_chars(page, textpage)
-    rows = _merge_overlapping_rows(_rows_by_baseline(chars))
+    med_h = statistics.median([c.height for c in chars if c.height > 0] or [10.0])
+    rows = _split_rows_at_gutters(_rows_by_baseline(chars), med_h)
+    # Split again after merging. _merge_overlapping_rows compares each
+    # row only against the previously kept one, so on a two-column page,
+    # where rows alternate between columns, a merge can chain across the
+    # gutter even though the first split separated them correctly.
+    rows = _split_rows_at_gutters(_merge_overlapping_rows(rows), med_h)
     return sorted(rows, key=lambda r: (_row_bbox(r)[1], _row_bbox(r)[0]))
 
 
@@ -489,3 +542,41 @@ def get_text(
         return _build_tree(blocks, raw=(kind == "rawdict"))
     finally:
         doc.close()
+
+
+class TextPage:
+    """Page-shaped adapter so extractor's text path can consume this.
+
+    extract_text_from_page and detect_column_boxes read only
+    ``get_text(...)`` and ``rect``, so a full page object is not needed,
+    only those two. Same approach as backend.tables.TablePage.
+    """
+
+    def __init__(self, pdf_path: str, page_num: int, rect: Any) -> None:
+        self._path = pdf_path
+        self.number = page_num
+        self.rect = rect
+
+    def get_text(
+        self,
+        kind: str = "text",
+        *,
+        sort: bool = False,
+        clip: Any = None,
+        **_ignored: Any,
+    ) -> Any:
+        box = None
+        if clip is not None:
+            box = (float(clip[0]), float(clip[1]), float(clip[2]), float(clip[3]))
+        return get_text(self._path, self.number, kind, sort=sort, clip=box)
+
+
+def open_text_page(pdf_path: str, page_num: int) -> TextPage:
+    from .geometry import Rect
+
+    doc = pdfium.PdfDocument(pdf_path)
+    try:
+        width, height = doc[page_num].get_size()
+    finally:
+        doc.close()
+    return TextPage(pdf_path, page_num, Rect(0.0, 0.0, width, height))

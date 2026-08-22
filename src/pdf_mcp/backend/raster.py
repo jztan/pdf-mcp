@@ -114,7 +114,9 @@ def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
-        height = page.get_size()[1]
+        from .pagespace import page_transform
+
+        x_off, y_top = page_transform(page)
         out: list[dict[str, Any]] = []
         for index in range(pdfium_raw.FPDFPage_CountObjects(page.raw)):
             obj = pdfium_raw.FPDFPage_GetObject(page.raw, index)
@@ -148,10 +150,10 @@ def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
                 {
                     "key": key,
                     "bbox": (
-                        left.value,
-                        height - top.value,
-                        right.value,
-                        height - bottom.value,
+                        left.value - x_off,
+                        y_top - top.value,
+                        right.value - x_off,
+                        y_top - bottom.value,
                     ),
                     "width": int(meta.width),
                     "height": int(meta.height),
@@ -180,7 +182,9 @@ def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
-        height = page.get_size()[1]
+        from .pagespace import page_transform
+
+        x_off, y_top = page_transform(page)
         out: list[dict[str, Any]] = []
         for index in range(pdfium_raw.FPDFPage_CountObjects(page.raw)):
             obj = pdfium_raw.FPDFPage_GetObject(page.raw, index)
@@ -199,10 +203,10 @@ def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
                     "number": len(out),
                     # y-flipped into PyMuPDF's top-left page space.
                     "bbox": (
-                        left.value,
-                        height - top.value,
-                        right.value,
-                        height - bottom.value,
+                        left.value - x_off,
+                        y_top - top.value,
+                        right.value - x_off,
+                        y_top - bottom.value,
                     ),
                 }
             )

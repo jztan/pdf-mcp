@@ -101,15 +101,16 @@ class ContentWalker:
     """Walks a page's content streams (recursing into Form XObjects and
     Tiling Patterns) and emits PyMuPDF-`get_drawings()`-shaped dicts."""
 
-    def __init__(self, page_height: float) -> None:
+    def __init__(self, page_height: float, x_offset: float = 0.0) -> None:
         self.page_height = page_height
+        self.x_offset = x_offset
         self.out: list[dict[str, Any]] = []
 
     # -- geometry helpers -------------------------------------------------
 
     def _pt(self, m: Matrix, x: float, y: float) -> _Pt:
         px, py = _apply(m, x, y)
-        return _Pt(round(px, 2), round(self.page_height - py, 2))
+        return _Pt(round(px - self.x_offset, 2), round(self.page_height - py, 2))
 
     # -- main walk --------------------------------------------------------
 
@@ -384,10 +385,14 @@ def get_drawings(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
     cannot."""
     reader = PdfReader(pdf_path)
     page = reader.pages[page_num]
-    box = page.mediabox
-    height = float(box.top) - float(box.bottom)
+    # Same visible-page transform as backend.pagespace: PyMuPDF space is
+    # the mediabox-cropbox intersection with a top-left origin.
+    media = page.mediabox
+    crop = page.cropbox
+    x_offset = max(float(media.left), float(crop.left))
+    y_top = min(float(media.top), float(crop.top))
 
-    walker = ContentWalker(height)
+    walker = ContentWalker(y_top, x_offset)
     data = page.get_contents()
     if data is None:
         return []

@@ -44,6 +44,7 @@ sys.stderr = _StderrSwigFilter(sys.stderr)  # type: ignore[assignment]
 import pymupdf  # noqa: E402
 
 from .docopen import open_pdf  # noqa: E402
+from .backend import columns as _columns  # noqa: E402
 
 from .parallel import PageError  # noqa: E402
 
@@ -258,63 +259,8 @@ def _page_glyph_boxes(page: Any) -> list[tuple[float, float, float, float]]:
 def _find_gutters(
     boxes: list[tuple[float, float, float, float]], page_width: float, med_h: float
 ) -> list[tuple[float, float]]:
-    """x-intervals crossed by no glyph, wide and tall enough to be columns.
-
-    Runs on glyphs rather than assembled lines on purpose: line assembly
-    groups by baseline, and in a two-column layout both columns share
-    baselines, so a "line" spans the gutter and it never looks empty.
-    """
-    if len(boxes) < 40:
-        return []
-    top = min(b[1] for b in boxes)
-    bottom = max(b[3] for b in boxes)
-    band = bottom - top
-    if band <= 0:
-        return []
-
-    step = max(0.5, med_h / 4.0)
-    n = int(page_width / step) + 1
-    covered = [0.0] * n
-    for x0, y0, x1, y1 in boxes:
-        i0 = max(0, int(x0 / step))
-        i1 = min(n - 1, int(x1 / step))
-        h = max(y1 - y0, 0.1)
-        for i in range(i0, i1 + 1):
-            covered[i] += h
-
-    threshold = band * (1.0 - _GUTTER_MIN_COVERAGE)
-    runs: list[tuple[float, float]] = []
-    start: int | None = None
-    for i, c in enumerate(covered):
-        if c <= threshold:
-            if start is None:
-                start = i
-        elif start is not None:
-            runs.append((start * step, i * step))
-            start = None
-    if start is not None:
-        runs.append((start * step, n * step))
-
-    text_x0 = min(b[0] for b in boxes)
-    text_x1 = max(b[2] for b in boxes)
-    # Floor is relative to median glyph WIDTH, not height. Height is not
-    # comparable across engines or documents: PyMuPDF's rawdict char boxes
-    # span the full line height (~9.96pt on arXiv papers) where a tight
-    # glyph box is ~4.7pt, so a height-relative floor has to be recalibrated
-    # per convention and drifts with leading. A gutter is naturally a few
-    # character widths across, which is stable.
-    widths = [b[2] - b[0] for b in boxes if b[2] > b[0]]
-    med_w = statistics.median(widths) if widths else med_h / 2.0
-    min_w = _GUTTER_MIN_WIDTH_FACTOR * med_w
-    out = []
-    for g0, g1 in runs:
-        if g1 - g0 < min_w:
-            continue
-        # Must have text on BOTH sides; otherwise it is a page margin.
-        if g0 <= text_x0 + min_w or g1 >= text_x1 - min_w:
-            continue
-        out.append((g0, g1))
-    return out
+    """Delegates to backend.columns; see there for rationale."""
+    return _columns.find_gutters(boxes, page_width, med_h)
 
 
 def _best_split(
@@ -324,25 +270,8 @@ def _best_split(
     page_width: float,
     med_h: float,
 ) -> tuple[float, float] | None:
-    """Most balanced gutter strictly inside [x0, x1], or None."""
-    span = x1 - x0
-    if span <= 0:
-        return None
-    best: tuple[float, tuple[float, float]] | None = None
-    for g0, g1 in _find_gutters(boxes, page_width, med_h):
-        if g0 <= x0 or g1 >= x1:
-            continue
-        lw, rw = g0 - x0, x1 - g1
-        if lw <= 0 or rw <= 0:
-            continue
-        if lw / span < _COLUMN_MIN_WIDTH_FRAC or rw / span < _COLUMN_MIN_WIDTH_FRAC:
-            continue
-        ratio = max(lw, rw) / min(lw, rw)
-        if ratio > _SPLIT_MAX_WIDTH_RATIO:
-            continue
-        if best is None or ratio < best[0]:
-            best = (ratio, (g0, g1))
-    return best[1] if best else None
+    """Delegates to backend.columns; see there for rationale."""
+    return _columns.best_split(boxes, x0, x1, page_width, med_h)
 
 
 def column_detection_available() -> bool:
@@ -358,49 +287,19 @@ def column_detection_available() -> bool:
 def detect_column_boxes(page: Any) -> list[Any]:
     """Return column bounding boxes in reading order, or [] if not split.
 
-    Recursive vertical-projection gutter finding: split the text area at the
-    most balanced whitespace channel, then re-split each resulting band. Each
-    level re-applies the width and balance guards, so a band that is really
-    one column simply stops. Any failure degrades to [] so callers fall back
+    The band logic lives in backend.columns (shared with the text
+    backend, which must split visual rows at exactly these gutters and
+    nowhere else). This wrapper adds only the glyph extraction and the
+    Rect construction. Any failure degrades to [] so callers fall back
     to positional-sort extraction.
     """
     try:
         boxes = _page_glyph_boxes(page)
-        if len(boxes) < 40:
+        bands = _columns.column_bands(boxes, page.rect.width)
+        if not bands:
             return []
-        heights = [b[3] - b[1] for b in boxes]
-        med_h = statistics.median(heights) if heights else 10.0
-        text_x0 = min(b[0] for b in boxes)
-        text_x1 = max(b[2] for b in boxes)
         top = min(b[1] for b in boxes)
         bottom = max(b[3] for b in boxes)
-        page_width = page.rect.width
-
-        bands = [(text_x0, text_x1)]
-        for _ in range(_MAX_COLUMNS):
-            out: list[tuple[float, float]] = []
-            changed = False
-            for b0, b1 in bands:
-                if len(bands) + len(out) >= _MAX_COLUMNS:
-                    out.append((b0, b1))
-                    continue
-                subset = [b for b in boxes if b0 - 0.5 <= (b[0] + b[2]) / 2 <= b1 + 0.5]
-                gut = _best_split(subset, b0, b1, page_width, med_h)
-                if gut is None:
-                    out.append((b0, b1))
-                    continue
-                out.extend([(b0, gut[0]), (gut[1], b1)])
-                changed = True
-            bands = out
-            if not changed:
-                break
-
-        if len(bands) <= 1:
-            return []
-        widths = [b1 - b0 for b0, b1 in bands]
-        if max(widths) / max(min(widths), 0.1) > _COLUMN_MAX_WIDTH_RATIO:
-            # Lopsided final set means a sidebar or pull-quote, not columns.
-            return []
         return [pymupdf.Rect(b0, top, b1, bottom) for b0, b1 in bands]
     except Exception:  # pragma: no cover - defensive fail-safe
         return []

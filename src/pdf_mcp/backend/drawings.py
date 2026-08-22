@@ -95,7 +95,7 @@ def _iter_path_objects(
             yield obj, obj_matrix
 
 
-def _raw_points(obj: Any, matrix: Matrix, page_height: float) -> list[Any]:
+def _raw_points(obj: Any, matrix: Matrix, transform: tuple[float, float]) -> list[Any]:
     """(seg_type, Point, is_close) in top-left page space, matrix + y-flip applied."""
     n = pdfium_c.FPDFPath_CountSegments(obj)
     out = []
@@ -106,7 +106,8 @@ def _raw_points(obj: Any, matrix: Matrix, page_height: float) -> list[Any]:
         px, py = _apply(matrix, lx.value, ly.value)
         stype = pdfium_c.FPDFPathSegment_GetType(seg)
         close = bool(pdfium_c.FPDFPathSegment_GetClose(seg))
-        out.append((stype, _Point(round(px, 2), round(page_height - py, 2)), close))
+        x_off, y_top = transform
+        out.append((stype, _Point(round(px - x_off, 2), round(y_top - py, 2)), close))
     return out
 
 
@@ -181,7 +182,9 @@ def _subpath_to_items(points: list[tuple[int, _Point, bool]]) -> list[tuple[Any,
 def get_drawings(page: pdfium.PdfPage) -> list[dict[str, Any]]:
     """PyMuPDF-shaped page.get_drawings() reconstruction, restricted to the
     dict keys chart_extractor.py actually reads."""
-    height = page.get_size()[1]
+    from .pagespace import page_transform
+
+    x_off, y_top = page_transform(page)
     out = []
     for obj, matrix in _iter_path_objects(
         page.raw, pdfium_c.FPDFPage_CountObjects, pdfium_c.FPDFPage_GetObject, _IDENTITY
@@ -189,7 +192,7 @@ def get_drawings(page: pdfium.PdfPage) -> list[dict[str, Any]]:
         n_seg = pdfium_c.FPDFPath_CountSegments(obj)
         if n_seg == 0:
             continue
-        raw = _raw_points(obj, matrix, height)
+        raw = _raw_points(obj, matrix, (x_off, y_top))
 
         subpaths: list[list[tuple[int, _Point, bool]]] = []
         for entry in raw:

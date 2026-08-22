@@ -30,6 +30,9 @@ from typing import Any
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_raw
 
+from .columns import column_bands
+from .pagespace import page_transform
+
 #: Baseline tolerance for calling two glyphs the same row, x median height.
 _BASELINE_TOL_FACTOR = 0.35
 #: Vertical gap above this, x median line height, starts a new block.
@@ -127,12 +130,18 @@ def _char_style(textpage: Any, index: int) -> tuple[str, float, int]:
 
 def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
     """Per-glyph text, box and style in top-left space, document order."""
-    height = page.get_size()[1]
+    x_off, y_top = page_transform(page)
     out: list[_Char] = []
     for i in range(textpage.count_chars()):
         ch = textpage.get_text_range(i, 1)
         if not ch or ch in ("\r", "\n"):
             continue
+        # pdfium emits U+FFFE where a line-end soft hyphen was resolved;
+        # PyMuPDF keeps the hyphen ("En-\nglish"). Downstream matching
+        # folds hyphens to rejoin such words, so the hyphen must survive:
+        # left as U+FFFE, "English" was unfindable in the extracted text.
+        if ch == "\ufffe":
+            ch = "-"
         try:
             left, bottom, right, top = textpage.get_charbox(i)
         except Exception:  # noqa: BLE001 - one bad box must not kill the page
@@ -141,7 +150,17 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
             continue
         font, size, flags = _char_style(textpage, i)
         out.append(
-            _Char(i, ch, left, height - top, right, height - bottom, font, size, flags)
+            _Char(
+                i,
+                ch,
+                left - x_off,
+                y_top - top,
+                right - x_off,
+                y_top - bottom,
+                font,
+                size,
+                flags,
+            )
         )
     return out
 
@@ -200,11 +219,38 @@ def _rows_by_baseline(chars: list[_Char]) -> list[list[_Char]]:
     med_h = statistics.median([c.height for c in chars if c.height > 0] or [10.0])
     tol = max(1.0, _BASELINE_TOL_FACTOR * med_h)
 
+    # A run that is clearly VERTICAL is a text column (or column segment)
+    # and is a row of its own. Baseline grouping otherwise merges the
+    # side-by-side columns of a vertical-Japanese page into one wide
+    # pseudo-row whenever their bottoms align, and the merged row's
+    # direction vector then reads as horizontal: detect_writing_mode
+    # classified vertical pages as horizontal, the extractor's vertical
+    # reorder path never engaged, and every digit-adjacent CJK query on
+    # the yamato corpus returned zero hits.
+    def _is_vertical_run(run: list[_Char]) -> bool:
+        x0 = min(c.x0 for c in run)
+        x1 = max(c.x1 for c in run)
+        y0 = min(c.y0 for c in run)
+        y1 = max(c.y1 for c in run)
+        height = y1 - y0
+        # len >= 2, not 3: the two-character vertical header cells of a
+        # Japanese table ("種別", "内容" written top to bottom) are 25pt
+        # tall, and left in baseline grouping each one vertically
+        # overlaps several horizontal rows and glues them together. Two
+        # stacked glyphs are already unmistakably vertical: a horizontal
+        # two-character pair is wider than it is tall.
+        return len(run) >= 2 and height > 2.0 * (x1 - x0) and height > 2.0 * med_h
+
+    vertical_rows = [run for run in runs if _is_vertical_run(run)]
+    runs = [run for run in runs if not _is_vertical_run(run)]
+    if not runs:
+        return vertical_rows
+
     ordered = sorted(
         runs, key=lambda run: (min(c.y1 for c in run), min(c.x0 for c in run))
     )
-    rows: list[list[_Char]] = []
-    anchors: list[float] = []
+    rows: list[list[_Char]] = list(vertical_rows)
+    anchors: list[float] = [-1e9] * len(vertical_rows)
     for run in ordered:
         baseline = min(c.y1 for c in run)
         placed = False
@@ -223,40 +269,10 @@ def _rows_by_baseline(chars: list[_Char]) -> list[list[_Char]]:
 #: Rotated runs are the case that matters, and they must never merge.
 _TALL_ROW_FACTOR = 3.0
 
-#: A horizontal gap wider than this many median glyph heights splits one
-#: baseline group into separate lines.
+
+#: A horizontal gap wider than this many median glyph heights is treated
+#: as a genuine separation when merging rows.
 _ROW_X_GAP_FACTOR = 1.6
-
-
-def _split_rows_at_gutters(rows: list[list[_Char]], med_h: float) -> list[list[_Char]]:
-    """Split a baseline group wherever a column gutter crosses it.
-
-    Grouping purely by baseline spans the whole page width, so on a
-    two-column page a left-column line and a right-column line sharing a
-    baseline become ONE line. Measured on the READoc corpus that took
-    two-column reading order from 0.806 (PyMuPDF) to 0.598, while recall
-    stayed at 0.874: every word was present and merely in the wrong
-    order, which is the failure mode containment metrics cannot see.
-
-    Word gaps run a few points; a gutter runs tens. The threshold sits
-    between them and scales with glyph height so it holds across font
-    sizes.
-    """
-    limit = max(8.0, _ROW_X_GAP_FACTOR * med_h)
-    out: list[list[_Char]] = []
-    for row in rows:
-        ordered = sorted(row, key=lambda c: c.x0)
-        segment = [ordered[0]]
-        right = ordered[0].x1
-        for char in ordered[1:]:
-            if char.x0 - right > limit:
-                out.append(segment)
-                segment = [char]
-            else:
-                segment.append(char)
-            right = max(right, char.x1)
-        out.append(segment)
-    return out
 
 
 def _merge_overlapping_rows(rows: list[list[_Char]]) -> list[list[_Char]]:
@@ -279,32 +295,115 @@ def _merge_overlapping_rows(rows: list[list[_Char]]) -> list[list[_Char]]:
     ordered = sorted(rows, key=lambda r: min(c.y0 for c in r))
     merged: list[list[_Char]] = [ordered[0]]
     for row in ordered[1:]:
-        prev = merged[-1]
-        prev_top, prev_bottom = min(c.y0 for c in prev), max(c.y1 for c in prev)
         top, bottom = min(c.y0 for c in row), max(c.y1 for c in row)
-        prev_h, cur_h = prev_bottom - prev_top, bottom - top
-        if prev_h > tall_limit or cur_h > tall_limit:
-            merged.append(row)
-            continue
-        # Vertical overlap alone is not enough. Two lines in different
-        # columns share a baseline, so an overlap-only rule glued them
-        # back together immediately after the gutter split separated
-        # them: 115 rows collapsed to 59 on a two-column page, and
-        # two-column reading order stayed at 0.60 against PyMuPDF's 0.81
-        # even though the split itself was working.
-        prev_left, prev_right = min(c.x0 for c in prev), max(c.x1 for c in prev)
+        cur_h = bottom - top
         left, right = min(c.x0 for c in row), max(c.x1 for c in row)
-        x_gap = max(left - prev_right, prev_left - right, 0.0)
-        if x_gap > max(8.0, _ROW_X_GAP_FACTOR * med_h):
+        chosen: int | None = None
+        # Scan ALL still-overlapping kept rows, not only the last one. A
+        # subscript label ("JC(Top)") overlaps its value row, but another
+        # fragment of the same table row can be kept between them, and a
+        # last-row-only comparison then measured the x-gap against the
+        # wrong row and never merged the label back.
+        if cur_h <= tall_limit:
+            for i in range(len(merged) - 1, -1, -1):
+                prev = merged[i]
+                prev_top = min(c.y0 for c in prev)
+                prev_bottom = max(c.y1 for c in prev)
+                if prev_bottom < top:
+                    break
+                prev_h = prev_bottom - prev_top
+                if prev_h > tall_limit:
+                    continue
+                prev_left = min(c.x0 for c in prev)
+                prev_right = max(c.x1 for c in prev)
+                x_gap = max(left - prev_right, prev_left - right, 0.0)
+                if x_gap > max(8.0, _ROW_X_GAP_FACTOR * med_h):
+                    continue
+                # Refuse any merge whose UNION would exceed the tall
+                # limit. Merging grows the row's extent, so each merge
+                # made the next overlap test easier and rows snowballed:
+                # one newsletter table congealed into a 100-glyph blob
+                # spanning 74pt before the per-row height checks could
+                # object.
+                union_h = max(prev_bottom, bottom) - min(prev_top, top)
+                if union_h > tall_limit:
+                    continue
+                overlap = min(prev_bottom, bottom) - max(prev_top, top)
+                smaller = min(prev_h, cur_h)
+                if smaller <= 0:
+                    continue
+
+                # A sub- or superscript label sits mostly outside its base
+                # row's band ("JC(Top)" overlaps its value row by only
+                # 0.47 of its height), so the same-size threshold of 0.6
+                # never reunites it. Font size is the discriminator:
+                # distinct text rows have matching sizes and near-zero
+                # overlap, so the lower bar for smaller-font rows cannot
+                # glue them.
+                def _size(chars: list[_Char]) -> float:
+                    sizes = [c.size for c in chars if c.size > 0]
+                    return statistics.median(sizes) if sizes else 0.0
+
+                size_a, size_b = _size(prev), _size(row)
+                # 0.7, not 0.85: a genuine sub/superscript label is far
+                # smaller than its base ("JC(Top)" is 5.2pt against 8pt,
+                # ratio 0.65). At 0.85 the mixed-size cells of a Japanese
+                # newsletter table (8pt against 9.9pt, ratio 0.81)
+                # qualified, and rows 35pt apart chained into one blob.
+                shifted_label = (
+                    min(size_a, size_b) > 0
+                    and min(size_a, size_b) / max(size_a, size_b) <= 0.7
+                )
+                threshold = 0.3 if shifted_label else 0.6
+                if overlap / smaller > threshold:
+                    chosen = i
+                    break
+        if chosen is None:
             merged.append(row)
-            continue
-        overlap = min(prev_bottom, bottom) - max(prev_top, top)
-        smaller = min(prev_h, cur_h)
-        if smaller > 0 and overlap / smaller > 0.6:
-            merged[-1] = prev + row
         else:
-            merged.append(row)
+            merged[chosen] = merged[chosen] + row
     return merged
+
+
+def _split_rows_at_bands(
+    rows: list[list[_Char]], bands: list[tuple[float, float]]
+) -> list[list[_Char]]:
+    """Split each visual row at the boundaries of accepted column bands.
+
+    ONLY there. A first version split rows at any wide internal gap, and
+    on datasheet tables that dismembered every row; block grouping then
+    stacked the fragments per column, the whole page read column-major
+    (all parameter names, then all the numbers), and each value moved far
+    from its label in the text stream. Search snippets stopped containing
+    the answers next to the labels they matched: excerpt containment fell
+    from 0.707 to 0.413.
+
+    Bands come from backend.columns, the same model the extractor's
+    column detection uses. A table's bands are many, narrow and lopsided,
+    so it gets NO bands and its rows stay whole (row-major, value beside
+    label). A two-column article gets exactly its gutter, where a row
+    genuinely contains one line per column and must split, or two-column
+    reading order collapses (0.598 vs 0.806, while recall stayed 0.874).
+    """
+    if not bands or len(bands) < 2:
+        return rows
+    edges = [(bands[i][1] + bands[i + 1][0]) / 2 for i in range(len(bands) - 1)]
+
+    def band_of(char: _Char) -> int:
+        centre = (char.x0 + char.x1) / 2
+        for i, edge in enumerate(edges):
+            if centre < edge:
+                return i
+        return len(edges)
+
+    out: list[list[_Char]] = []
+    for row in rows:
+        pieces: dict[int, list[_Char]] = {}
+        for char in row:
+            pieces.setdefault(band_of(char), []).append(char)
+        for _, piece in sorted(pieces.items()):
+            out.append(piece)
+    return out
 
 
 def _index_runs(row: list[_Char]) -> list[tuple[int, int]]:
@@ -322,19 +421,100 @@ def _index_runs(row: list[_Char]) -> list[tuple[int, int]]:
     return runs
 
 
-def _render_row(row: list[_Char], textpage: Any) -> str:
-    """Emit a row in DOCUMENT order, spacing delegated to pdfium.
+def _ordered_chars(row: list[_Char]) -> list[_Char]:
+    """The row's glyphs in reading order: x-sorted segments.
 
-    Document order rather than x-sort keeps a bullet ahead of its text
-    and keeps a style-split URL contiguous.
+    One ordering for every output shape. The first version applied the
+    segment sort only in the plain-text renderer, so the dict tree kept
+    raw index order, and the vertical reorder path (which reads the
+    dict shape) still saw "(年度6令和（" for a heading the text shape
+    had already fixed.
     """
-    parts = []
-    for begin, count in _index_runs(row):
+    ordered = sorted(row, key=lambda c: c.idx)
+    if len(ordered) < 2:
+        return ordered
+    x0 = min(c.x0 for c in row)
+    x1 = max(c.x1 for c in row)
+    y0 = min(c.y0 for c in row)
+    y1 = max(c.y1 for c in row)
+    if (x1 - x0) < (y1 - y0):
+        return ordered
+
+    segments: list[list[_Char]] = [[ordered[0]]]
+    for prev, cur in zip(ordered, ordered[1:]):
+        if cur.idx != prev.idx + 1 or cur.x0 < prev.x0 - 1.0:
+            segments.append([cur])
+        else:
+            segments[-1].append(cur)
+    if len(segments) > 1:
+        segments.sort(key=lambda seg: min(c.x0 for c in seg))
+    return [c for seg in segments for c in seg]
+
+
+def _render_row(row: list[_Char], textpage: Any) -> str:
+    """Emit a horizontal row's segments left to right.
+
+    Ordering is per SEGMENT, never per glyph: a segment is a maximal run
+    of index-contiguous glyphs whose x positions move forward, and its
+    text is fetched whole from pdfium (the spike measured per-glyph
+    reassembly shredding words). Segments are what x-ordering may
+    legally rearrange. Document order between them is not reliable: the
+    yamato newsletter emits a table heading as "年度", then "6", then
+    "令和" — index-contiguous, spatially reversed — and document-order
+    rendering produced "(年度6令和（" for "（令和6年度）", which made
+    every digit-adjacent CJK phrase query miss. A predominantly vertical
+    row keeps document order, which for a rotated sidebar or a vertical
+    column IS the reading order.
+    """
+    x0 = min(c.x0 for c in row)
+    x1 = max(c.x1 for c in row)
+    y0 = min(c.y0 for c in row)
+    y1 = max(c.y1 for c in row)
+    horizontal = (x1 - x0) >= (y1 - y0)
+
+    ordered = sorted(row, key=lambda c: c.idx)
+    segments: list[list[_Char]] = [[ordered[0]]]
+    for prev, cur in zip(ordered, ordered[1:]):
+        backward = cur.x0 < prev.x0 - 1.0
+        if cur.idx != prev.idx + 1 or (horizontal and backward):
+            segments.append([cur])
+        else:
+            segments[-1].append(cur)
+    if horizontal and len(segments) > 1:
+        segments.sort(key=lambda seg: min(c.x0 for c in seg))
+
+    pieces: list[tuple[float, float, str]] = []  # (x0, x1, text)
+    for seg in segments:
+        begin = seg[0].idx
+        count = seg[-1].idx - begin + 1
         try:
-            parts.append(textpage.get_text_range(begin, count))
+            # Same U+FFFE mapping as _collect_chars: this path fetches
+            # the text straight from pdfium, so the per-char fix alone
+            # left soft hyphens as U+FFFE in the "text" shape.
+            text = textpage.get_text_range(begin, count).replace("\ufffe", "-")
         except Exception:  # noqa: BLE001
             continue
-    return " ".join(p.strip() for p in parts if p.strip()).strip()
+        if text.strip():
+            pieces.append(
+                (min(c.x0 for c in seg), max(c.x1 for c in seg), text.strip())
+            )
+
+    if not pieces:
+        return ""
+    # Space between segments only across a real visual gap. Segments are
+    # an emission-order artefact, not a word boundary: the digits of
+    # "10" can arrive as two segments 0.3pt apart, and joining them with
+    # a space split the token, so the FTS phrase "10 人" (tokens 10, 人)
+    # could never match a page indexed as 1, 0, 人.
+    sizes = [c.size for c in row if c.size > 0]
+    gap_limit = _WORD_GAP_FACTOR * (statistics.median(sizes) if sizes else 10.0)
+    out = [pieces[0][2]]
+    for prev_piece, cur_piece in zip(pieces, pieces[1:]):
+        gap = cur_piece[0] - prev_piece[1]
+        if abs(gap) > gap_limit:
+            out.append(" ")
+        out.append(cur_piece[2])
+    return "".join(out).strip()
 
 
 def _row_bbox(row: list[_Char]) -> tuple[float, float, float, float]:
@@ -384,7 +564,7 @@ def _split_into_spans(row: list[_Char]) -> list[list[_Char]]:
     read as literal 100..102, calibrated as a clean linear axis, and
     emitted a chart wrong by orders of magnitude.
     """
-    ordered = sorted(row, key=lambda c: c.idx)
+    ordered = row  # caller supplies reading order (_ordered_chars)
     spans: list[list[_Char]] = [[ordered[0]]]
     for prev, cur in zip(ordered, ordered[1:]):
         gap = max(cur.x0 - prev.x1, prev.x0 - cur.x1, 0.0)
@@ -472,14 +652,14 @@ def _attach_superscripts(rows: list[list[_Char]]) -> list[list[_Char]]:
 
 def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
     chars = _collect_chars(page, textpage)
-    med_h = statistics.median([c.height for c in chars if c.height > 0] or [10.0])
-    rows = _split_rows_at_gutters(_rows_by_baseline(chars), med_h)
-    # Split again after merging. _merge_overlapping_rows compares each
-    # row only against the previously kept one, so on a two-column page,
+    boxes = [(c.x0, c.y0, c.x1, c.y1) for c in chars if c.ch.strip()]
+    bands = column_bands(boxes, page.get_size()[0])
+    rows = _split_rows_at_bands(_rows_by_baseline(chars), bands)
+    # Split again after merging: _merge_overlapping_rows compares each row
+    # only against the previously kept one, so on a multi-column page,
     # where rows alternate between columns, a merge can chain across the
     # gutter even though the first split separated them correctly.
-    rows = _split_rows_at_gutters(_merge_overlapping_rows(rows), med_h)
-    rows = _attach_superscripts(rows)
+    rows = _split_rows_at_bands(_merge_overlapping_rows(rows), bands)
     return sorted(rows, key=lambda r: (_row_bbox(r)[1], _row_bbox(r)[0]))
 
 
@@ -498,6 +678,12 @@ def _lines(
 #: Minimum share of the narrower line that must overlap horizontally for
 #: two lines to belong to the same block.
 _BLOCK_X_OVERLAP = 0.35
+#: A line whose baseline pitch from the previous block line exceeds this
+#: multiple of the page's median pitch starts a new block.
+_BLOCK_PITCH_FACTOR = 1.25
+#: A jump this large in document order (glyph indices) starts a new block
+#: even when the geometry is contiguous.
+_BLOCK_DOC_ORDER_JUMP = 100
 
 
 def _x_overlaps(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
@@ -506,42 +692,76 @@ def _x_overlaps(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
     return narrower > 0 and overlap / narrower >= _BLOCK_X_OVERLAP
 
 
-def _group_into_blocks(lines: list[Any]) -> list[list[Any]]:
-    """Group lines into paragraph-shaped blocks.
+def _median_pitch(lines: list[Any]) -> float:
+    """Median baseline-to-baseline distance between stacked lines."""
+    pitches: list[float] = []
+    for i, line in enumerate(lines):
+        bbox = line[0]
+        best: float | None = None
+        for other in lines[i + 1 :]:
+            delta = other[0][1] - bbox[1]
+            if delta <= 0.5 or not _x_overlaps(bbox, other[0]):
+                continue
+            if best is None or delta < best:
+                best = delta
+        if best is not None:
+            pitches.append(best)
+    return statistics.median(pitches) if pitches else 12.0
 
-    Each line joins the most recently extended OPEN block it fits, rather
-    than only the immediately preceding line. Marginal side headings are
-    why: on a page with a heading column the lines alternate between that
-    column and the body in y order, so a consecutive-line rule split the
-    body paragraph at every alternation. Blocks came out at a median of
-    72 characters against PyMuPDF's 180, most of them below the
-    paragraph picker's 80-character floor, and excerpt containment fell
-    from 0.707 to 0.347.
+
+def _group_into_blocks(lines: list[Any]) -> list[list[Any]]:
+    """Group lines into blocks in DOCUMENT order, breaking on geometry.
+
+    Document order is primary, geometry only breaks: this mirrors
+    MuPDF's stext device, whose blocks the paragraph picker was tuned
+    against, and it is the only model that handles tables and columns
+    with one rule. A typesetter emits a table row by row and a
+    two-column page column by column, so document-order runs ARE table
+    rows in one case and column paragraphs in the other. No spatial
+    threshold can do both: on 1807.11632 p4 the caption sits 11.5pt
+    above the table header while the header sits 16.2pt above its data
+    rows, so any y-scan limit either glues the caption on or cuts the
+    data off. In document order the caption run ends before the table
+    run starts (the "Set" corner cell, emitted between them, sits 16.4pt
+    below the caption and breaks the pitch), and the header, sub-header
+    and data rows chain contiguously into one block.
+
+    Breaks:
+      - a jump in glyph indices (figure tick labels sit 145 positions
+        from the caption below them; body prose continues 3 after it)
+      - a baseline pitch beyond the page median (paragraph and section
+        boundaries; also the huge upward jump when a column ends and the
+        next begins, which is what keeps two-column text from gluing)
+
+    There is deliberately NO x-overlap requirement: the "Set" corner
+    cell shares no x-range with the header row beside it, yet belongs to
+    the table block, and cross-column joins are already broken by the
+    pitch rule because a new column restarts near the top of the page.
     """
     if not lines:
         return []
-    heights = [ln[0][3] - ln[0][1] for ln in lines if ln[0][3] > ln[0][1]]
-    med_h = statistics.median(heights) if heights else 10.0
-    gap_limit = med_h * _PARA_GAP_FACTOR
+    pitch_limit = _BLOCK_PITCH_FACTOR * _median_pitch(lines)
 
-    blocks: list[list[Any]] = []
-    for line in lines:
-        bbox = line[0]
-        chosen: int | None = None
-        for i in range(len(blocks) - 1, -1, -1):
-            last = blocks[i][-1][0]
-            if bbox[1] - last[3] > gap_limit:
-                continue
-            if not _x_overlaps(bbox, last):
-                continue
-            if abs(bbox[0] - last[0]) >= _COLUMN_X_TOL:
-                continue
-            chosen = i
-            break
-        if chosen is None:
-            blocks.append([line])
+    def min_idx(line: Any) -> int:
+        idxs = [c.idx for c in line[2]]
+        return min(idxs) if idxs else 0
+
+    def max_idx(line: Any) -> int:
+        idxs = [c.idx for c in line[2]]
+        return max(idxs) if idxs else 0
+
+    ordered = sorted(lines, key=min_idx)
+    blocks: list[list[Any]] = [[ordered[0]]]
+    for prev, cur in zip(ordered, ordered[1:]):
+        idx_gap = min_idx(cur) - max_idx(prev)
+        pitch = cur[0][1] - prev[0][1]
+        same_row = abs(pitch) <= 0.5
+        if idx_gap > _BLOCK_DOC_ORDER_JUMP or (
+            not same_row and abs(pitch) > pitch_limit
+        ):
+            blocks.append([cur])
         else:
-            blocks[chosen].append(line)
+            blocks[-1].append(cur)
     return blocks
 
 
@@ -566,8 +786,39 @@ def _build_tree(blocks: list[list[Any]], raw: bool) -> dict[str, Any]:
     for number, block in enumerate(blocks):
         out_lines = []
         for bbox, _text, row in block:
+            # PyMuPDF emits vertical text as ONE GLYPH PER LINE, and the
+            # vertical reorder path is calibrated to that: it takes the
+            # median line height as its glyph-size unit and bins columns
+            # right-to-left by x in multiples of it. Fed whole-column
+            # lines, the unit became the column height (~300pt), every
+            # column landed in one bin, and vertical pages scrambled.
+            width = bbox[2] - bbox[0]
+            height = bbox[3] - bbox[1]
+            if len(row) >= 2 and height > 2.0 * max(width, 1.0):
+                for ch in sorted(row, key=lambda c: c.idx):
+                    glyph_bbox = (ch.x0, ch.y0, ch.x1, ch.y1)
+                    glyph_span: dict[str, Any] = {
+                        "size": ch.size,
+                        "flags": ch.flags,
+                        "font": ch.font,
+                        "color": 0,
+                        "bbox": glyph_bbox,
+                    }
+                    if raw:
+                        glyph_span["chars"] = [{"c": ch.ch, "bbox": glyph_bbox}]
+                    else:
+                        glyph_span["text"] = ch.ch
+                    out_lines.append(
+                        {
+                            "spans": [glyph_span],
+                            "wmode": 1,
+                            "dir": (0.0, 1.0),
+                            "bbox": glyph_bbox,
+                        }
+                    )
+                continue
             out_spans = []
-            for span_chars in _split_into_spans(row):
+            for span_chars in _split_into_spans(_ordered_chars(row)):
                 head = span_chars[0]
                 span: dict[str, Any] = {
                     "size": head.size,
@@ -579,12 +830,10 @@ def _build_tree(blocks: list[list[Any]], raw: bool) -> dict[str, Any]:
                 if raw:
                     span["chars"] = [
                         {"c": c.ch, "bbox": (c.x0, c.y0, c.x1, c.y1)}
-                        for c in sorted(span_chars, key=lambda c: c.idx)
+                        for c in span_chars
                     ]
                 else:
-                    span["text"] = "".join(
-                        c.ch for c in sorted(span_chars, key=lambda c: c.idx)
-                    )
+                    span["text"] = "".join(c.ch for c in span_chars)
                 out_spans.append(span)
             out_lines.append(
                 {
@@ -631,7 +880,7 @@ def _words_of(blocks: list[list[Any]]) -> list[tuple[Any, ...]]:
     out: list[tuple[Any, ...]] = []
     for block_no, block in enumerate(blocks):
         for line_no, (_bbox, _text, row) in enumerate(block):
-            glyphs = sorted(row, key=lambda c: c.idx)
+            glyphs = _ordered_chars(row)
             sizes = [c.size for c in glyphs if c.size > 0]
             gap_limit = _WORD_GAP_FACTOR * (statistics.median(sizes) if sizes else 10.0)
             word_no = 0

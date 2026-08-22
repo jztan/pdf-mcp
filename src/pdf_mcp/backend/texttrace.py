@@ -72,7 +72,9 @@ def _obj_text(obj: Any, textpage: Any) -> str:
 def _spans_for_page(page: Any) -> list[dict[str, Any]]:
     """PyMuPDF-`get_texttrace()`-shaped spans, restricted to the fields
     content_trust.py actually reads."""
-    page_height = page.get_size()[1]
+    from .pagespace import page_transform
+
+    x_off, y_top = page_transform(page)
     textpage = page.get_textpage()
     n_objs = pdfium_c.FPDFPage_CountObjects(page.raw)
     out: list[dict[str, Any]] = []
@@ -105,7 +107,7 @@ def _spans_for_page(page: Any) -> list[dict[str, Any]]:
                 "color": (round(r / 255, 4), round(g / 255, 4), round(b / 255, 4)),
                 "opacity": round(a / 255, 4),
                 # y-flip to top-left space, matching PyMuPDF's page rect.
-                "bbox": (x0, page_height - y1_pdf, x1, page_height - y0_pdf),
+                "bbox": (x0 - x_off, y_top - y1_pdf, x1 - x_off, y_top - y0_pdf),
                 # Each entry's [0] must be an integer CODEPOINT, not a
                 # character: content_trust.py reconstructs the span text via
                 # `chr(c[0])` (line ~157) as well as taking len(chars). A

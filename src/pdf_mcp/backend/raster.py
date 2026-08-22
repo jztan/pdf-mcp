@@ -95,3 +95,50 @@ def ocr_page_text(
     image = render_page(pdf_path, page_num, dpi=dpi)
     config = f"--tessdata-dir {tessdata}" if tessdata else ""
     return str(pytesseract.image_to_string(image, lang=lang, config=config))
+
+
+def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
+    """Raster image placements on a page, PyMuPDF's get_image_info shape.
+
+    content_trust needs these to exempt an OCR text layer: OCR text is
+    genuinely invisible (render mode 3) and sits over the scan it
+    describes, so without the image bboxes _covered_by_image cannot tell
+    it apart from an injected invisible span, and a clean scanned
+    document is reported as an attack.
+    """
+    import ctypes
+
+    import pypdfium2.raw as pdfium_raw
+
+    doc = pdfium.PdfDocument(pdf_path)
+    try:
+        page = doc[page_num]
+        height = page.get_size()[1]
+        out: list[dict[str, Any]] = []
+        for index in range(pdfium_raw.FPDFPage_CountObjects(page.raw)):
+            obj = pdfium_raw.FPDFPage_GetObject(page.raw, index)
+            if pdfium_raw.FPDFPageObj_GetType(obj) != pdfium_raw.FPDF_PAGEOBJ_IMAGE:
+                continue
+            left, bottom, right, top = (ctypes.c_float() for _ in range(4))
+            pdfium_raw.FPDFPageObj_GetBounds(
+                obj,
+                ctypes.byref(left),
+                ctypes.byref(bottom),
+                ctypes.byref(right),
+                ctypes.byref(top),
+            )
+            out.append(
+                {
+                    "number": len(out),
+                    # y-flipped into PyMuPDF's top-left page space.
+                    "bbox": (
+                        left.value,
+                        height - top.value,
+                        right.value,
+                        height - bottom.value,
+                    ),
+                }
+            )
+        return out
+    finally:
+        doc.close()

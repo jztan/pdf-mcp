@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `pdf_extract_chart` no longer splits a single dashed curve into several
-  phantom series when the chart uses dash lengths below 1.
+  phantom series when the chart uses dash lengths below 1
+  ([#29](https://github.com/jztan/pdf-mcp/issues/29))
 
 ## [2.2.1] - 2026-08-22
 ### Fixed

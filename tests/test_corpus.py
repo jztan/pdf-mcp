@@ -817,13 +817,18 @@ class TestCorpusFusion:
 class TestWarmExtractWorker:
     def test_payload_shape(self, corpus_dir):
         path = str(corpus_dir / "alpha.pdf")
-        page_count, metadata, toc, texts, coverage = _warm_extract_worker(path)
+        page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
         assert page_count == 2
         assert set(texts) == {0, 1}
         assert all(t.strip() for t in texts.values())
         assert [c["page"] for c in coverage] == [1, 2]
         assert isinstance(metadata, dict)
         assert isinstance(toc, list)
+        # Layout (blocks + page size + hidden flag) rides along so warm
+        # can persist it and the query path never opens the PDF.
+        assert set(layout) == {0, 1}
+        blocks, size, hidden = layout[0]
+        assert blocks and len(size) == 2 and isinstance(hidden, bool)
 
     def test_picklable_for_spawn(self):
         # Module-scope function: pickles by qualified name, spawn-safe.

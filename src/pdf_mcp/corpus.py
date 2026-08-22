@@ -201,6 +201,7 @@ def _finalize_doc(
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
+    layout: "dict[int, tuple[list[Any], tuple[float, float], bool]] | None" = None,
 ) -> int:
     """Parent-side tail of warming one doc: OCR preservation, per-doc
     encode, then the three cache writes together (atomic per doc).
@@ -242,6 +243,15 @@ def _finalize_doc(
     cache.save_pages_text(path, to_save)
     if blobs and model_name is not None:
         cache.save_page_embeddings(path, blobs, model_name)
+    if layout:
+        # Written AFTER page_text: the hidden flag lives on page_text
+        # rows, and blocks are keyed independently by mtime.
+        cache.save_page_blocks(
+            path, {pn: (blocks, size) for pn, (blocks, size, _h) in layout.items()}
+        )
+        cache.save_pages_hidden_flag(
+            path, {pn: hidden for pn, (_b, _s, hidden) in layout.items()}
+        )
     return page_count
 
 
@@ -257,8 +267,20 @@ def _warm_one_doc(
     Extraction completes fully before any write, so a failure leaves
     the cache untouched (atomic per doc).
     """
-    payload = _warm_extract_worker(path)
-    return _finalize_doc(path, *payload, cache, embeddings, model_name, embed)
+    page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
+    return _finalize_doc(
+        path,
+        page_count,
+        metadata,
+        toc,
+        texts,
+        coverage,
+        cache,
+        embeddings,
+        model_name,
+        embed,
+        layout=layout,
+    )
 
 
 def _warm_worker_count(n_uncached: int, embeddings: bool) -> int:
@@ -362,9 +384,26 @@ def _warm_concurrent(
                 for fut in done:
                     path = in_flight.pop(fut)
                     try:
-                        payload = fut.result()
+                        (
+                            page_count_w,
+                            metadata_w,
+                            toc_w,
+                            texts_w,
+                            coverage_w,
+                            layout_w,
+                        ) = fut.result()
                         page_count = _finalize_doc(
-                            path, *payload, cache, embeddings, model_name, embed
+                            path,
+                            page_count_w,
+                            metadata_w,
+                            toc_w,
+                            texts_w,
+                            coverage_w,
+                            cache,
+                            embeddings,
+                            model_name,
+                            embed,
+                            layout=layout_w,
                         )
                     except BrokenProcessPool:
                         raise

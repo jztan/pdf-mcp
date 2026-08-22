@@ -69,7 +69,7 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
-_EXTRACTION_VERSION = 7  # 7: same-row fragment merge in multi-column assembly
+_EXTRACTION_VERSION = 8  # 8: permissive-backend cutover (pdfium text pipeline)
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
@@ -403,6 +403,12 @@ class PDFCache:
                 conn.execute("DROP TABLE IF EXISTS page_embeddings")
                 conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
                 conn.execute("DROP TABLE IF EXISTS pdf_section_fts")
+                # Char-split CJK mirrors are rebuilt from page_text on open;
+                # stale rows must go with it or the backfill skips them.
+                conn.execute("DROP TABLE IF EXISTS pdf_search_fts_cjk")
+                conn.execute("DROP TABLE IF EXISTS pdf_section_fts_cjk")
+                # Derived from the same extraction pipeline as page_text.
+                conn.execute("DROP TABLE IF EXISTS page_blocks")
             if extraction_version < _EXTRACTION_VERSION:
                 conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
 
@@ -905,6 +911,73 @@ class PDFCache:
         if not self._is_cache_valid(path, row[1]):
             return None
         return cast(dict[str, Any], json.loads(row[0]))
+
+    def save_page_blocks(
+        self,
+        path: str,
+        blocks_by_page: "dict[int, tuple[list[Any], tuple[float, float]]]",
+    ) -> None:
+        """Persist the sorted text-blocks shape per page (0-indexed).
+
+        Written at warm time (and write-through on first live use) so the
+        search excerpt path can build paragraph excerpts without touching
+        the PDF at all. Keyed by mtime like page_text; dropped wholesale
+        on an _EXTRACTION_VERSION bump because it derives from the same
+        pipeline.
+        """
+        if not blocks_by_page:
+            return
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS page_blocks (
+                    file_path TEXT NOT NULL,
+                    page_num INTEGER NOT NULL,
+                    mtime REAL NOT NULL,
+                    blocks TEXT NOT NULL,
+                    page_size TEXT NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )""")
+            conn.executemany(
+                "INSERT OR REPLACE INTO page_blocks"
+                " (file_path, page_num, mtime, blocks, page_size)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (
+                        path,
+                        pn,
+                        mtime,
+                        json.dumps(blocks, ensure_ascii=False),
+                        json.dumps(size),
+                    )
+                    for pn, (blocks, size) in blocks_by_page.items()
+                ],
+            )
+
+    def get_page_blocks(
+        self, path: str, page_num: int
+    ) -> "tuple[list[Any], tuple[float, float]] | None":
+        """Cached blocks + (width, height) for one page, or None."""
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute(
+                    "SELECT blocks, page_size, mtime FROM page_blocks"
+                    " WHERE file_path = ? AND page_num = ?",
+                    (path, page_num),
+                ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        if row is None or abs(row[2] - mtime) > 1e-6:
+            return None
+        blocks = [tuple(b) for b in json.loads(row[0])]
+        width, height = json.loads(row[1])
+        return blocks, (float(width), float(height))
 
     def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
         """Persist per-page hidden-text booleans (page_num is 0-indexed)."""

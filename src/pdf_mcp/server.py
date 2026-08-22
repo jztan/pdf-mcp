@@ -1952,6 +1952,49 @@ def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[in
     return hits
 
 
+class _LayoutPage:
+    """Page stand-in built from the cached blocks shape.
+
+    The excerpt-upgrade path reads exactly two things from a page: the
+    sorted text-blocks shape and the page rect. When warm has persisted
+    both, a query builds its paragraph excerpts without opening the PDF
+    at all, which is what puts the corpus query path AHEAD of the
+    PyMuPDF baseline instead of chasing it: the baseline still pays live
+    extraction per hit page.
+    """
+
+    def __init__(self, blocks: list[Any], size: tuple[float, float]) -> None:
+        self._blocks = blocks
+        self.rect = GeomRect(0.0, 0.0, size[0], size[1])
+
+    def get_text(self, kind: str = "text", **_kw: Any) -> Any:
+        if kind != "blocks":
+            raise ValueError(f"_LayoutPage serves only 'blocks', not {kind!r}")
+        return self._blocks
+
+
+def _layout_page(doc: Any, page_num_0: int) -> Any:
+    """Cached-blocks page when available; live page (with write-through)
+    otherwise. Best-effort: any failure falls back to the live page."""
+    try:
+        local_path = getattr(doc, "name", None)
+        if not local_path:
+            return doc[page_num_0]
+        cached = cache.get_page_blocks(local_path, page_num_0)
+        if cached is not None:
+            return _LayoutPage(*cached)
+        page = doc[page_num_0]
+        blocks = [tuple(b) for b in page.get_text("blocks", sort=True)]
+        rect = page.rect
+        cache.save_page_blocks(
+            local_path,
+            {page_num_0: (blocks, (float(rect.width), float(rect.height)))},
+        )
+        return _LayoutPage(blocks, (float(rect.width), float(rect.height)))
+    except Exception:  # noqa: BLE001
+        return doc[page_num_0]
+
+
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: Any,
@@ -1986,7 +2029,7 @@ def _upgrade_excerpts_to_paragraphs(
 
     for m in matches:
         page_num_0 = m["page"] - 1
-        page = doc[page_num_0]
+        page = _layout_page(doc, page_num_0)
 
         block_text: str | None = None
         block_idx: int | None = None

@@ -1583,7 +1583,14 @@ def _render_page_worker(
 
 def _warm_extract_worker(
     path: str,
-) -> tuple[int, dict[str, Any], list[Any], dict[int, str], list[dict[str, int]]]:
+) -> tuple[
+    int,
+    dict[str, Any],
+    list[Any],
+    dict[int, str],
+    list[dict[str, int]],
+    "dict[int, tuple[list[Any], tuple[float, float], bool]]",
+]:
     """Picklable whole-doc extraction worker for concurrent corpus warm.
 
     Extracts everything one doc needs (metadata, TOC, per-page text,
@@ -1600,6 +1607,7 @@ def _warm_extract_worker(
         toc = extract_toc(doc)
         texts: dict[int, str] = {}
         coverage: list[dict[str, int]] = []
+        layout: dict[int, tuple[list[Any], tuple[float, float], bool]] = {}
         for pn in range(page_count):
             page = doc[pn]
             texts[pn] = extract_text_from_page(page, sort_by_position=True)
@@ -1610,9 +1618,27 @@ def _warm_extract_worker(
                     "raster_images": len({img[0] for img in page.get_images()}),
                 }
             )
+            # Layout for the search excerpt path: the sorted blocks shape
+            # and the hidden-text verdict, both computed here while the
+            # page's line model is hot in the extraction cache, persisted
+            # by the parent. With these in SQLite a query builds its
+            # paragraph excerpts and trust flags without opening the PDF.
+            try:
+                blocks = page.get_text("blocks", sort=True)
+                rect = page.rect
+                from . import content_trust
+
+                hidden = content_trust.page_has_hidden_text(page)
+                layout[pn] = (
+                    [tuple(b) for b in blocks],
+                    (float(rect.width), float(rect.height)),
+                    bool(hidden),
+                )
+            except Exception:  # noqa: BLE001 - layout is an optimisation
+                pass
     finally:
         doc.close()
-    return page_count, metadata, toc, texts, coverage
+    return page_count, metadata, toc, texts, coverage, layout
 
 
 # A detected "table" whose bounding box spans almost the entire page body in

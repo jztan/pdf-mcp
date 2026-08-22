@@ -169,6 +169,10 @@ module = "pymupdf"
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*", "pdfplumber", "pdfplumber.*", "pytesseract"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "fastembed"
 ignore_missing_imports = true
 

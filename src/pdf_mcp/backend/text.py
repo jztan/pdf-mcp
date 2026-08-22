@@ -129,9 +129,18 @@ def _char_style(textpage: Any, index: int) -> tuple[str, float, int]:
 
 
 def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
-    """Per-glyph text, box and style in top-left space, document order."""
+    """Per-glyph text, box and style in top-left space, document order.
+
+    Exact-overlap duplicates are dropped. Some documents draw a glyph
+    twice at the same position for a faux-bold effect (the iwaki
+    newsletter's interview block does this page-wide), MuPDF's stext
+    dedups them, and everything downstream is calibrated to deduped
+    text: fed both copies, every character doubled ("めぐみ" became
+    "めめぐぐみみ") and CJK phrase queries stopped matching.
+    """
     x_off, y_top = page_transform(page)
     out: list[_Char] = []
+    seen: set[tuple[str, float, float]] = set()
     for i in range(textpage.count_chars()):
         ch = textpage.get_text_range(i, 1)
         if not ch or ch in ("\r", "\n"):
@@ -148,6 +157,10 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
             continue
         if right < left or top < bottom:
             continue
+        key = (ch, round(left, 1), round(top, 1))
+        if key in seen:
+            continue
+        seen.add(key)
         font, size, flags = _char_style(textpage, i)
         out.append(
             _Char(
@@ -650,6 +663,74 @@ def _attach_superscripts(rows: list[list[_Char]]) -> list[list[_Char]]:
     return [row for i, row in merged.items() if i not in attached]
 
 
+def _split_row_into_lines(row: list[_Char]) -> list[list[_Char]]:
+    """Split a horizontal row into visual lines at cell-sized gaps.
+
+    MuPDF's granularity: each chart axis label and each table cell is its
+    own LINE ("1月", "2月", ... / "Reset Voltage", "0.4", ...), and both
+    the vertical reorder path and the CJK excerpt filter consume that
+    shape. Kept as one line, the stream's own space glyphs land inside
+    the wrong label after x-ordering ("1月2 月3 月4 月"), and the literal
+    "3月" the contiguity post-filter needs never appears in page text.
+
+    The threshold is one font size, the same the span splitter uses:
+    word gaps run ~0.3 of the size, cell and label gaps run 1.5 to 3.
+    Whitespace glyphs at the boundaries are dropped, not carried into a
+    line, since the gap itself now expresses the separation.
+    """
+    ordered = _ordered_chars(row)
+    x0 = min(c.x0 for c in row)
+    x1 = max(c.x1 for c in row)
+    y0 = min(c.y0 for c in row)
+    y1 = max(c.y1 for c in row)
+    if (x1 - x0) < (y1 - y0) or len(ordered) < 2:
+        return [row]
+
+    sizes = [c.size for c in ordered if c.size > 0]
+    limit = max(2.0, statistics.median(sizes) if sizes else 10.0)
+
+    def _is_cjk(ch: str) -> bool:
+        cp = ord(ch[0]) if ch else 0
+        return (
+            0x3000 <= cp <= 0x9FFF or 0xF900 <= cp <= 0xFAFF or 0xFF00 <= cp <= 0xFFEF
+        )
+
+    lines: list[list[_Char]] = [[]]
+    prev: _Char | None = None
+    for pos, ch in enumerate(ordered):
+        if not ch.ch.strip():
+            # A whitespace glyph never starts or spans a cell boundary,
+            # and next to a CJK glyph it is a typesetting artifact, not a
+            # word boundary: the stream's space inside a "2月" axis label
+            # kept the literal 2月 out of the page text, and the CJK
+            # excerpt contiguity filter dropped the page.
+            nxt = next((c for c in ordered[pos + 1 :] if c.ch.strip()), None)
+            near_cjk = (prev is not None and _is_cjk(prev.ch)) or (
+                nxt is not None and _is_cjk(nxt.ch)
+            )
+            if (
+                lines[-1]
+                and prev is not None
+                and ch.x0 - prev.x1 <= limit
+                and not near_cjk
+            ):
+                lines[-1].append(ch)
+                prev = ch
+            continue
+        if lines[-1] and prev is not None and ch.x0 - prev.x1 > limit:
+            lines.append([ch])
+        else:
+            lines[-1].append(ch)
+        prev = ch
+    out = []
+    for line in lines:
+        while line and not line[-1].ch.strip():
+            line = line[:-1]
+        if line:
+            out.append(line)
+    return out or [row]
+
+
 def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
     chars = _collect_chars(page, textpage)
     boxes = [(c.x0, c.y0, c.x1, c.y1) for c in chars if c.ch.strip()]
@@ -660,6 +741,7 @@ def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
     # where rows alternate between columns, a merge can chain across the
     # gutter even though the first split separated them correctly.
     rows = _split_rows_at_bands(_merge_overlapping_rows(rows), bands)
+    rows = [line for row in rows for line in _split_row_into_lines(row)]
     return sorted(rows, key=lambda r: (_row_bbox(r)[1], _row_bbox(r)[0]))
 
 

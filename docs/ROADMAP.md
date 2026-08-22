@@ -2,7 +2,7 @@
 
 ## Project Status
 
-- **Current version:** v2.2.0 (released 2026-08-15)
+- **Current version:** v2.2.1 (released 2026-08-22)
 - **MCP Registry:** Published (v2.1.0)
 - **Test suite:** 1449 tests in `tests/` across unit, integration, and retrieval-quality benchmarks (1445 fast + 4 `slow`); archived spikes under `scripts/archive/` are not counted and no gate runs them. OCR tests skip cleanly when system Tesseract is absent. The `test_benchmark_*` files are fast unit tests for the benchmark scripts' helpers; billed/multi-minute checks (the LLM-judge coherence eval and the RRF v2 retrieval gate, both `slow`) are excluded from the release gate, which runs `pytest -m "not slow"`.
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)

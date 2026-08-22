@@ -182,7 +182,7 @@ Read text, embedded images, and tables from selected pages. Each page entry incl
 Reading order depends on page layout:
 
 - **Standard pages** — positional block sort.
-- **Multi-column pages** — column reading order when `pdf-mcp[multicolumn]` is installed; falls back to positional sort without it (columns may interleave). Reading order is deterministic and dedup'd given a fixed column layout, but the underlying column detector is occasionally nondeterministic across runs, so re-extracting a multi-column page after a cache invalidation may rarely produce a slightly different reading order. Single-column pages are unaffected.
+- **Multi-column pages** — column reading order is built in and needs no extra. Detection is deterministic geometry over glyph positions, so re-extracting a page always yields the same reading order; the previous detector could return a different column count across runs.
 - **Vertical-script pages** (Japanese/Chinese tategaki / 直排) — auto-detected; reconstructed top-to-bottom, right-to-left from glyph geometry. Dense magazine layouts are segmented by drawn rules; decorative-font mojibake is filtered. See `server_info` → `extraction.vertical_aware`. Limitations: pages delimited only by colored boxes or header styles are not segmented; whole-page decorative fonts produce no extractable text. The reorder is script-agnostic (glyph geometry, not language) and is validated on a Japanese vertical corpus; Traditional Chinese vertical is expected to work by the same path but is not corpus-validated.
 
 **Parameters:**
@@ -975,7 +975,7 @@ Reports which optional features are installed and which configuration values are
 **Returns:**
 - `version` (string) — `pdf-mcp` release version.
 - `features` (object):
-  - `extraction.column_aware` — `{available, description}`. `available` is `true` when the column detector (the `[multicolumn]` extra) is importable; the same predicate the extractor uses, so it never reports a capability extraction doesn't have.
+  - `extraction.column_aware` — `{available, description}`. `available` is always `true`: column detection is built in and no longer depends on an optional package, so it cannot drift from what extraction does.
   - `extraction.vertical_aware` — `{available, description}`. `available` is always `true`: vertical-script (tategaki / 直排) reading-order reconstruction is PyMuPDF-only and needs no extra.
   - `extraction.ocr` — `{available, description}`. `available` reflects `shutil.which("tesseract")`.
   - `search.modes_available` (array) — always includes `"keyword"`; includes `"semantic"` and `"auto"` only when `fastembed` is installed and the configured embedding model is valid.

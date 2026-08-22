@@ -33,7 +33,7 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 | Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
 | Tables | Lost in raw text | Extracted and inlined per page |
 | Charts | Trapped in the plot image | Extracted as `(x, y)` data tables |
-| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order (`pdf-mcp[multicolumn]`) |
+| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order, built in |
 | Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き); CJK keyword search works on unspaced Japanese/Chinese/Korean text via a char-split FTS index |
 | Images | Ignored | Extracted as PNG files |
 | Repeated access | Re-parse every time | SQLite cache |
@@ -82,13 +82,9 @@ Semantic search is included by default (hybrid `auto` search is built on it;
 `onnxruntime` has no wheels for Intel macOS on Python 3.14+ or Alpine/musl;
 use Python ≤ 3.13 there.
 
-For correct reading order on multi-column PDFs (adds `pymupdf4llm`, which pulls `pymupdf_layout`/`onnxruntime`):
-
-```bash
-pip install 'pdf-mcp[multicolumn]'
-```
-
-Without it, multi-column pages fall back to positional-sort extraction, which can interleave columns.
+Correct reading order on multi-column PDFs is built in and needs no extra.
+The former `[multicolumn]` extra remains as a no-op alias, so existing
+install instructions keep working.
 
 Japanese/Chinese/Korean PDFs work out of the box: keyword search uses a
 char-split FTS index that matches unspaced CJK terms, and semantic CJK

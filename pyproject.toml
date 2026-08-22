@@ -94,9 +94,6 @@ dev = [
     # GHSA-6v7p-g79w-8964 (dev/build-time only, not shipped at runtime).
     "msgpack>=1.2.1",
     "pre-commit>=3.5",
-    # Column-aware extraction tests need the real detector; reference the
-    # extra so its version floor lives in one place (see `multicolumn`).
-    "pdf-mcp[multicolumn]",
     # Parses docker-compose.yml in tests/test_docker_contract.py. Present
     # transitively today via pre-commit; declared so the contract test
     # cannot silently skip when that changes.
@@ -111,20 +108,14 @@ semantic = []
 # both work in the default install.
 cjk = []
 
-# Column-aware reading order for multi-column PDFs. Optional because it pulls
-# pymupdf_layout/onnxruntime; without it, extraction gracefully falls back to
-# the positional-sort path (which interleaves columns on multi-column pages).
-multicolumn = [
-    # <1.28 caps a SEPARATE failure (empty cells, Table.bbox raising
-    # ValueError). It does NOT protect find_tables generally: 1.27.2.2 also
-    # runs use_layout(True) at import, and the resulting `import
-    # pymupdf.layout` swaps PyMuPDF's text engine process-wide and
-    # irreversibly, detaching decimal points in table cells ("4.5" ->
-    # "45\n."). That is handled by extracting tables in an isolated spawn
-    # process (see extractor.TABLE_EXTRACTION_VERSION); do not assume this
-    # cap makes in-process find_tables safe.
-    "pymupdf4llm>=1.24.0,<1.28",
-]
+# No-op compatibility alias (see semantic): column-aware reading order is
+# built in now. It used to require pymupdf4llm, which pulls pymupdf_layout
+# (licensed Polyform NONCOMMERCIAL, a use restriction) and loaded that at
+# server startup. Detection is now pure geometry over glyph boxes PyMuPDF
+# already provides, and scores better than the old path on the
+# reading-order benchmark. Kept so existing install instructions
+# ('pdf-mcp[multicolumn]') keep working.
+multicolumn = []
 
 [project.urls]
 Homepage = "https://github.com/jztan/pdf-mcp"

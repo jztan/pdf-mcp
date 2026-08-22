@@ -6,11 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+
+- Column-aware reading order is now built in and no longer needs the
+  `[multicolumn]` extra, which removes `pymupdf4llm` and its transitive
+  `pymupdf_layout`. That package is licensed Polyform Noncommercial, a use
+  restriction rather than copyleft, and it was loaded at server startup and
+  installed by `pip install -e '.[dev]'`. Installing `pdf-mcp[multicolumn]`
+  still works and is now a no-op, so existing instructions keep working.
+
+  Reading-order quality is close to, but not yet at, the previous path.
+  Against READoc ground truth over 44 arXiv documents: two-column 0.806
+  versus 0.815, one-column 0.826 versus 0.836. The mean cost is about 0.01
+  and it is not evenly spread: several documents improve substantially
+  (up to +0.17) while a few regress, currently because some single-column
+  pages are split in error.
+
+  Multi-column extraction is also deterministic now. The previous detector
+  could return a different box count across repeated opens of the same
+  page, so re-extracting a document could yield different text.
+
 ### Fixed
 
 - `pdf_extract_chart` no longer splits a single dashed curve into several
   phantom series when the chart uses dash lengths below 1
   ([#29](https://github.com/jztan/pdf-mcp/issues/29))
+- Letter-spaced and small-caps headings stay contiguous on single-column
+  pages (`GROWTH AND MIXING`, not `GR/O/WTH/AND/MIXING`). The row-fragment
+  merge that fixes this was previously reachable only on pages the old
+  detector treated as multi-column.
+- Table extraction no longer fails when `pymupdf_layout` is absent. The
+  isolated worker exchanges JSON over stdout, and PyMuPDF's advisory
+  message about that package landed in the same channel.
 
 ## [2.2.1] - 2026-08-22
 ### Fixed

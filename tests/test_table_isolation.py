@@ -63,8 +63,20 @@ def _cells(tables):
 
 
 def test_pymupdf4llm_is_loaded_in_this_process():
-    """Guard the premise: without this, the tests below prove nothing."""
-    assert "pymupdf.layout" in sys.modules or "pymupdf4llm" in sys.modules
+    """Guard the premise for the corruption tests below.
+
+    Column-aware reading order no longer imports pymupdf4llm (detection is
+    native geometry now), so the package is not necessarily installed or
+    loaded. When it is absent there is no text-engine corruption to guard
+    against and the tests below prove nothing either way, so skip rather
+    than fail: a red test here would report a problem that does not exist.
+
+    The isolation machinery itself is retained for now because any
+    consumer importing pymupdf4llm in the same process still triggers the
+    corruption; removing it is tracked separately.
+    """
+    if "pymupdf.layout" not in sys.modules and "pymupdf4llm" not in sys.modules:
+        pytest.skip("pymupdf4llm not loaded; no corruption to isolate")
 
 
 def test_pdf_read_pages_preserves_decimals_in_table_cells(decimal_table_pdf):

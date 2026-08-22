@@ -24,6 +24,8 @@ about ``mcp`` for the same reason.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 from typing import Any
@@ -56,8 +58,20 @@ def extract(path: str, pages: list[int]) -> dict[str, Any]:
 
 
 def main() -> int:
+    """Exchange JSON over stdio.
+
+    Extraction runs with stdout redirected because PyMuPDF writes advisory
+    text there. With ``pymupdf_layout`` absent it emits "Consider using the
+    pymupdf_layout package for a greatly improved page layout analysis.",
+    which landed ahead of the payload and made the parent's ``json.loads``
+    fail with "Expecting value: line 1 column 1". The dependency was
+    masking that; stdout is this worker's data channel and nothing else may
+    write to it.
+    """
     request = json.load(sys.stdin)
-    result = extract(request["path"], request["pages"])
+    noise = io.StringIO()
+    with contextlib.redirect_stdout(noise):
+        result = extract(request["path"], request["pages"])
     json.dump(result, sys.stdout)
     return 0
 

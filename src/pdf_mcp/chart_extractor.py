@@ -528,11 +528,20 @@ def _dash_key(d: dict[str, Any]) -> str | None:
     "sawtooth" chimera that traced neither real curve and, when the fit ran
     past the axis corner, dragged the whole panel into an out-of-range
     decline (consumer-found on Henighan Fig 16). Numbers are rounded so
-    float noise between segments of one curve cannot split it."""
+    float noise between segments of one curve cannot split it.
+
+    The alternation accepts a bare leading dot. PyMuPDF writes dash values
+    below 1 without a leading zero (e.g. ``[ 1.0834783 .4685312 ] 0``), and
+    a pattern requiring a digit before the point matched only the digits
+    after it, turning ``.4685312`` into ``4685312``. That inverted the
+    rounding this key depends on: two segments of one curve differing in
+    the 7th decimal became ``4685312.0`` vs ``4685319.0``, still distinct
+    after rounding, so a single dashed curve could split into phantom
+    series, exactly the failure the rounding is meant to prevent."""
     raw = d.get("dashes")
     if not raw or raw in ("[] 0", "[]0"):
         return None
-    nums = re.findall(r"-?\d+(?:\.\d+)?", str(raw))
+    nums = re.findall(r"-?(?:\d+(?:\.\d+)?|\.\d+)", str(raw))
     if not nums or all(float(n) == 0 for n in nums):
         return None
     return " ".join(f"{float(n):.1f}" for n in nums[:4])

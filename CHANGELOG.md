@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+
+- `pdf_extract_chart` no longer splits a single dashed curve into several
+  phantom series. Dash lengths below 1 are written without a leading zero
+  (`.4685312`), and the dash pattern was parsed as if the leading dot were
+  absent, so that value became `4685312`. The dash pattern is part of the
+  series style key, and that key rounds its numbers precisely so
+  floating-point noise between segments of one curve cannot separate them.
+  With the misparse, a difference in the 7th decimal survived rounding and
+  broke one curve into two.
+
 ## [2.2.1] - 2026-08-22
 ### Fixed
 

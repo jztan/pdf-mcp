@@ -59,14 +59,46 @@ def test_cell_text_keeps_inter_word_spaces():
     assert multiword, "no cell contains a space; x tolerance is wrong"
 
 
-def test_one_row_detection_is_not_a_table():
-    """extract_tables_from_page treats row 0 as the header and rows[1:]
-    as data, so a one-row detection carries no data at all. pdfplumber
-    reported section headings this way ("1 Introduct" | "ion")."""
-    from pdf_mcp.backend.tables import _is_a_table
+def test_one_row_rejection_is_scoped_to_the_fallback():
+    """The fallback invents one-row tables out of section headings
+    ("1 Introduct" | "ion"), so it rejects them.
 
-    assert not _is_a_table([["1 Introduct", "ion"]])
-    assert _is_a_table([["h1", "h2"], ["a", "b"]])
+    The ruled-line arm must NOT: financial statements come back as a run
+    of one-row detections that extract_tables_from_page's
+    _merge_single_row_detections stitches together. Rejecting them here
+    starves that merger, which is what cost Starbucks p34 its answer, and
+    Starbucks p34 is the case that merger was written for."""
+    from pdf_mcp.backend.tables import _FALLBACK_MIN_ROWS, _is_a_table
+
+    one_row = [["1 Introduct", "ion"]]
+    assert not _is_a_table(one_row, _FALLBACK_MIN_ROWS)
+    assert _is_a_table(one_row), "ruled-line arm must pass one-row detections on"
+    assert _is_a_table([["h1", "h2"], ["a", "b"]], _FALLBACK_MIN_ROWS)
+
+
+def test_finer_column_split_of_the_same_region_wins():
+    """SGDR p6: ruled lines read the region as 4 columns and drop the
+    queried values; text alignment reads the same region as 8 and keeps
+    them. Same region, strictly finer resolution, so the finer read wins."""
+    from pdf_mcp.backend.tables import Rect, TableResult, _refine_columns
+
+    coarse = TableResult(
+        bbox=Rect(0, 0, 100, 50), rows=[], cells=[["a b", "c d"], ["1 2", "3 4"]]
+    )
+    fine = TableResult(
+        bbox=Rect(1, 1, 99, 49),
+        rows=[],
+        cells=[["a", "b", "c", "d"], ["1", "2", "3", "4"]],
+    )
+    assert _refine_columns([coarse], [fine]) == [fine]
+
+    elsewhere = TableResult(
+        bbox=Rect(400, 400, 500, 450), rows=[], cells=[["x", "y"], ["1", "2"]]
+    )
+    assert _refine_columns([coarse], [elsewhere]) == [coarse], (
+        "a fallback table overlapping nothing must not be added; that is "
+        "the unguarded behaviour that invents tables out of prose"
+    )
 
 
 def test_single_column_detection_is_not_a_table():
@@ -106,3 +138,38 @@ def test_borderless_academic_table_is_found_via_fallback():
     assert_non_empty(tables, "transformer p9 tables")
     flat = " ".join(str(c) for t in tables for row in t.extract() for c in row if c)
     assert "25.8" in flat
+
+
+def test_bbox_is_normalised_when_the_page_origin_is_not_zero():
+    """pdfplumber reports raw PDF coordinates; PyMuPDF normalises the page
+    to (0, 0) and the rest of pdf_mcp assumes that.
+
+    Berkshire's 2024 annual report has a mediabox origin of (18, 18), so
+    every untranslated box came back 18pt out in both axes. That is
+    enough for a table_context clip to miss the very table it describes.
+    """
+    import os
+
+    path = "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf"
+    if not os.path.exists(path):
+        import pytest
+
+        pytest.skip("local financial sample not present")
+    page_no = 64
+
+    ref_doc = pymupdf.open(path)
+    assert tuple(ref_doc[page_no].mediabox)[:2] != (
+        0.0,
+        0.0,
+    ), "fixture no longer has an offset origin; this test proves nothing"
+    ref = sorted(t.bbox for t in ref_doc[page_no].find_tables().tables)
+    ref_doc.close()
+
+    got = sorted(
+        (t.bbox.x0, t.bbox.y0, t.bbox.x1, t.bbox.y1) for t in find_tables(path, page_no)
+    )
+    assert_non_empty(ref, "pymupdf bboxes")
+    assert len(got) == len(ref)
+    for ref_box, got_box in zip(ref, got):
+        for ref_v, got_v in zip(ref_box, got_box):
+            assert abs(ref_v - got_v) < 2.0, f"{got_box} != {ref_box}"

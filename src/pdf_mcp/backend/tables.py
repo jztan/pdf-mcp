@@ -61,6 +61,11 @@ _FALLBACK_SETTINGS: dict[str, Any] = {
 #: so prose-only tables still come through it.
 _FALLBACK_MIN_NUMERIC = 0.5
 
+#: Minimum rows for a FALLBACK detection. See _is_a_table: this must not
+#: be applied to the ruled-line arm, whose one-row detections are the
+#: input to extract_tables_from_page's _merge_single_row_detections.
+_FALLBACK_MIN_ROWS = 2
+
 
 @dataclass(frozen=True)
 class RowResult:
@@ -107,18 +112,23 @@ def open_table_page(pdf_path: str, page_num: int) -> TablePage:
     return TablePage(pdf_path, page_num, rect)
 
 
-def _is_a_table(cells: list[list[str | None]]) -> bool:
+def _is_a_table(cells: list[list[str | None]], min_rows: int = 1) -> bool:
     """Reject detections that carry no table structure.
 
     pdfplumber reports aligned prose blocks as tables. Attaching one as
     table_context points the agent at a paragraph and calls it a table,
     which is worse than attaching nothing.
 
-    Two rows minimum because extract_tables_from_page treats row 0 as the
-    header and rows[1:] as the data: a one-row detection has no data at
-    all. That alone removed two invented tables ("1 Introduct | ion").
+    ``min_rows`` is 2 for the FALLBACK arm only, where a one-row
+    detection is invented structure ("1 Introduct | ion"). It must stay 1
+    for the ruled-line arm: financial statements legitimately come back
+    as a run of one-row detections sharing a column block, and
+    extract_tables_from_page's _merge_single_row_detections exists to
+    stitch those back together. Filtering them here starves that merger,
+    which cost the Starbucks p34 query its answer, and Starbucks p34 is
+    the very case that merger was written for.
     """
-    if len(cells) < 2:
+    if len(cells) < max(min_rows, 1):
         return False
     if max((len(row) for row in cells), default=0) < 2:
         return False
@@ -133,35 +143,88 @@ def _numeric_fraction(cells: list[list[str | None]]) -> float:
     return sum(1 for v in values if _DIGIT.search(v)) / len(values)
 
 
-def _collect(
-    page: Any, settings: dict[str, Any] | None, min_numeric: float = 0.0
+def _ncols(table: TableResult) -> int:
+    return max((len(row) for row in table.cells), default=0)
+
+
+def _covers(outer: Rect, inner: Rect) -> bool:
+    """Do the two regions describe the same part of the page?"""
+    ix = min(outer.x1, inner.x1) - max(outer.x0, inner.x0)
+    iy = min(outer.y1, inner.y1) - max(outer.y0, inner.y0)
+    if ix <= 0 or iy <= 0:
+        return False
+    smaller = min(outer.get_area(), inner.get_area())
+    return smaller > 0 and (ix * iy) / smaller > 0.5
+
+
+def _refine_columns(
+    primary: list[TableResult], fallback: list[TableResult]
 ) -> list[TableResult]:
+    """Prefer a fallback detection that splits the same region further.
+
+    The ruled-line arm reads SGDR p6 as 4 columns and drops the values
+    the query wants; text alignment reads the same region as 8 and keeps
+    them. Same region, strictly finer column resolution, so the finer
+    read wins. A fallback table overlapping nothing is not added here:
+    that is the unguarded behaviour that invents tables out of prose.
+    """
+    out = list(primary)
+    for cand in fallback:
+        for i, existing in enumerate(out):
+            if _covers(existing.bbox, cand.bbox) and _ncols(cand) > _ncols(existing):
+                out[i] = cand
+                break
+    return out
+
+
+def _collect(
+    page: Any,
+    settings: dict[str, Any] | None,
+    min_numeric: float = 0.0,
+    min_rows: int = 1,
+) -> list[TableResult]:
+    # pdfplumber reports raw PDF coordinates, so a page whose mediabox
+    # origin is not (0, 0) yields boxes shifted by that origin. PyMuPDF
+    # normalises the page to (0, 0) and the rest of pdf_mcp assumes that,
+    # so translate here. Berkshire's 2024 annual report has an origin of
+    # (18, 18): every box came back 18pt out in both axes, which is
+    # enough to make a table_context clip miss its own table.
+    origin_x, origin_y = float(page.bbox[0]), float(page.bbox[1])
+
+    def _rect(box: Any) -> Rect:
+        return Rect(
+            box[0] - origin_x,
+            box[1] - origin_y,
+            box[2] - origin_x,
+            box[3] - origin_y,
+        )
+
     out: list[TableResult] = []
     found = page.find_tables(settings) if settings else page.find_tables()
     for table in found:
         cells = table.extract(**_TEXT_SETTINGS)
-        if not _is_a_table(cells):
+        if not _is_a_table(cells, min_rows):
             continue
         if min_numeric and _numeric_fraction(cells) < min_numeric:
             continue
-        x0, top, x1, bottom = table.bbox
-        rows = [
-            RowResult(bbox=Rect(r.bbox[0], r.bbox[1], r.bbox[2], r.bbox[3]))
-            for r in table.rows
-        ]
-        out.append(TableResult(bbox=Rect(x0, top, x1, bottom), rows=rows, cells=cells))
+        rows = [RowResult(bbox=_rect(r.bbox)) for r in table.rows]
+        out.append(TableResult(bbox=_rect(table.bbox), rows=rows, cells=cells))
     return out
 
 
 def find_tables(pdf_path: str, page_num: int) -> list[TableResult]:
     """Tables on one page, ruled-line finder first.
 
-    The fallback runs only when the ruled-line finder sees nothing at
-    all, so pages it handles keep their cleaner cells.
+    The fallback either replaces the result outright, when ruled lines
+    see nothing, or refines the column split of a region they read too
+    coarsely. Pages the ruled-line arm reads well keep its cleaner cells.
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_num]
-        out = _collect(page, None)
-        if not out:
-            out = _collect(page, _FALLBACK_SETTINGS, _FALLBACK_MIN_NUMERIC)
-    return out
+        primary = _collect(page, None)
+        fallback = _collect(
+            page, _FALLBACK_SETTINGS, _FALLBACK_MIN_NUMERIC, _FALLBACK_MIN_ROWS
+        )
+        if not primary:
+            return fallback
+        return _refine_columns(primary, fallback)

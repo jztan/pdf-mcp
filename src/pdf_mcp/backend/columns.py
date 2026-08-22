@@ -35,6 +35,14 @@ SPLIT_MAX_WIDTH_RATIO = 3.0
 MAX_COLUMNS = 16
 #: Fewer glyphs than this cannot establish a layout.
 MIN_GLYPHS = 40
+#: Fewer text rows than this cannot establish a layout either. Word gaps
+#: on two short lines can align into a glyph-free channel that passes
+#: every width guard ("introduction body about" over "graph neural
+#: networks" split mid-word at such a channel, and the broken tokens
+#: made a section query miss). A genuine column layout runs dozens of
+#: rows; the coverage guard only means something when there are rows to
+#: cover.
+MIN_ROWS = 8
 
 
 def find_gutters(
@@ -129,6 +137,9 @@ def column_bands(boxes: list[Box], page_width: float) -> list[tuple[float, float
         return []
     heights = [b[3] - b[1] for b in boxes]
     med_h = statistics.median(heights) if heights else 10.0
+    row_bins = {round(b[3] / max(med_h, 1.0)) for b in boxes}
+    if len(row_bins) < MIN_ROWS:
+        return []
     text_x0 = min(b[0] for b in boxes)
     text_x1 = max(b[2] for b in boxes)
 

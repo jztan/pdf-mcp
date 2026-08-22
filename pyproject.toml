@@ -43,7 +43,6 @@ classifiers = [
 
 dependencies = [
     "fastmcp>=3.0.0",
-    "pymupdf>=1.24.0",
     "pydantic>=2.0",
     # Imported directly (mcp.types) in server.py; arrives transitively via
     # fastmcp today, but declare it explicitly so the direct import can't break
@@ -92,6 +91,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # Dev-only: builds the fixture PDFs in tests/conftest.py and is the
+    # reference engine for the backend differential tests and benchmarks.
+    # Not a runtime dependency; published wheels contain no AGPL code.
+    "pymupdf>=1.24.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0",

@@ -1,8 +1,11 @@
 """Single place where a PDF is opened.
 
-Exists so the permissive backend can be exercised end to end before it
-becomes the default. ``PDF_MCP_BACKEND=pdfium`` routes every path-based
-open through ``backend.page``; anything else keeps PyMuPDF.
+The permissive backend (pypdfium2 + pdfplumber + pypdf) is the ONLY
+runtime engine: pymupdf is a dev-only dependency, present for the test
+fixtures and the differential benchmarks, and a published wheel carries
+no AGPL code. ``PDF_MCP_BACKEND=pymupdf`` switches back for A/B
+measurement in a dev environment where pymupdf is installed; it is not a
+supported runtime mode.
 
 The flag is read per call rather than cached at import, because the
 benchmarks set it in the environment of a subprocess that may already
@@ -16,7 +19,7 @@ from typing import Any
 
 
 def use_backend() -> bool:
-    return os.environ.get("PDF_MCP_BACKEND") == "pdfium"
+    return os.environ.get("PDF_MCP_BACKEND") != "pymupdf"
 
 
 def open_pdf(path: str) -> Any:

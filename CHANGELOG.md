@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 
+- **pdf-mcp no longer depends on PyMuPDF at runtime, so the declared MIT
+  license is now true of the whole install.** PyMuPDF is dual-licensed
+  AGPL-3.0 / Artifex Commercial, and every previous install pulled AGPL
+  code into the process (an operator running `pdf-mcp-http` was running a
+  network service containing it). The runtime engine is now a permissive
+  stack: pypdfium2 (Apache-2.0/BSD-3) for documents, text, drawings and
+  rendering; pdfplumber (MIT) for table detection; pypdf (BSD-3) for
+  content-stream access; pytesseract (Apache-2.0) for OCR. PyMuPDF
+  remains a dev-only dependency for test fixtures and differential
+  benchmarks; published wheels contain no AGPL code. Verified with
+  PyMuPDF actually uninstalled (`uv sync --no-dev`), not merely
+  undeclared.
+
+  Quality was gated on the project's full benchmark set before the swap,
+  measured end to end against the PyMuPDF baseline: excerpt-quality
+  containment 0.773 vs 0.707 (paragraph containment 0.841 vs 0.791, and
+  three of the baseline's documented known-failure queries now pass);
+  chart extraction 19 emitted series, 0 wrong-emits (identical verdicts
+  case for case); hidden-text detection 14/14 on the attack corpus; CJK
+  keyword recall 1.000; corpus search doc-NDCG 0.845 vs 0.840; financial
+  10-K fidelity 95/100 with 0 document misses and one question improved;
+  coherence (LLM-judged) 20/20 pages at baseline verdicts. Reading order
+  on two-column documents is 0.798 vs 0.806, within the benchmark's
+  noise; one-column improved to 0.856 vs 0.826.
+
 - Column-aware reading order is now built in and no longer needs the
   `[multicolumn]` extra, which removes `pymupdf4llm` and its transitive
   `pymupdf_layout`. That package is licensed Polyform Noncommercial, a use

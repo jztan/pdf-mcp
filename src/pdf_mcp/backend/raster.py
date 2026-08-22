@@ -19,6 +19,104 @@ from .geometry import Rect
 _TEXT_LAYER_MIN_CHARS = 32
 
 
+class Pixmap:
+    """PyMuPDF-Pixmap-shaped wrapper over a Pillow image.
+
+    render_page_as_image reads .width/.height/.n and calls
+    .save(path, output=..., jpg_quality=...); extract_images_from_page
+    additionally branches colour format on .n. Only that surface exists.
+    """
+
+    def __init__(self, image: Any) -> None:
+        self._image = image
+        self.width = int(image.width)
+        self.height = int(image.height)
+        self.n = len(image.getbands())
+
+    def to_pil(self) -> Any:
+        return self._image
+
+    def save(self, path: str, output: str | None = None, jpg_quality: int = 0) -> None:
+        fmt = (output or "png").upper()
+        if fmt in ("JPG", "JPEG"):
+            image = self._image
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+            image.save(path, format="JPEG", quality=jpg_quality or 75)
+        else:
+            self._image.save(path, format="PNG")
+
+
+def render_pixmap(
+    pdf_path: str,
+    page_num: int,
+    dpi: int = 150,
+    clip: Rect | tuple[float, float, float, float] | None = None,
+) -> Pixmap:
+    return Pixmap(render_page(pdf_path, page_num, dpi=dpi, clip=clip))
+
+
+def extract_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
+    """Distinct embedded raster images, decoded, with their placements.
+
+    Decoding goes through pdfium's bitmap (render=False: the image's own
+    pixels, untransformed), not the raw stream bytes: raw data is
+    filter-encoded (DCT, Flate over a predictor, ...) and only pdfium
+    knows the full decode chain. Deduplication is by raw-stream hash,
+    matching Page.get_images, so one logo placed four times extracts
+    once with four placements.
+    """
+    import hashlib
+
+    import pypdfium2.raw as pdfium_raw
+
+    doc = pdfium.PdfDocument(pdf_path)
+    try:
+        page = doc[page_num]
+        from .pagespace import page_transform
+
+        x_off, y_top = page_transform(page)
+        out: list[dict[str, Any]] = []
+        seen: dict[int, dict[str, Any]] = {}
+        for obj in page.get_objects(filter=[pdfium_raw.FPDF_PAGEOBJ_IMAGE]):
+            try:
+                raw = obj.get_data(decode_simple=False)
+                key = int.from_bytes(hashlib.sha256(bytes(raw)).digest()[:6], "big")
+            except Exception:  # noqa: BLE001 - fall back to identity by position
+                key = id(obj)
+            left, bottom, right, top = obj.get_bounds()
+            bbox = (left - x_off, y_top - top, right - x_off, y_top - bottom)
+            if key in seen:
+                seen[key]["placements"].append(bbox)
+                continue
+            try:
+                image = obj.get_bitmap(render=False).to_pil()
+            except Exception:  # noqa: BLE001 - one undecodable image
+                continue
+            # pdfium's bitmap is RGB(A) regardless of the source
+            # colorspace, and PyMuPDF reported grayscale sources as
+            # grayscale, which pdf_read_pages' image dicts rely on. The
+            # colorspace enum cannot carry that signal (an ICC-wrapped
+            # gray reports ICCBASED, exactly like an ICC RGB); bits per
+            # PIXEL can: 8 or less means one channel.
+            try:
+                bpp = int(obj.get_metadata().bits_per_pixel)
+            except Exception:  # noqa: BLE001
+                bpp = 0
+            if 0 < bpp <= 8 and image.mode not in ("L", "LA"):
+                image = image.convert("L")
+            entry = {
+                "key": key,
+                "image": Pixmap(image),
+                "placements": [bbox],
+            }
+            seen[key] = entry
+            out.append(entry)
+        return out
+    finally:
+        doc.close()
+
+
 def render_page(
     pdf_path: str,
     page_num: int,
@@ -32,20 +130,27 @@ def render_page(
     insets in points from each edge, so passing a rect straight through
     renders the wrong region silently instead of raising.
     """
+    import math
+
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
-        crop = (0.0, 0.0, 0.0, 0.0)
+        image = page.render(scale=dpi / 72.0).to_pil()
         if clip is not None:
-            width, height = page.get_size()
+            # Crop in PIXELS from the full render, with PyMuPDF's
+            # enclosing-rect rounding (floor the origin, ceil the far
+            # edge). pdfium's own crop insets round each edge down
+            # independently, which came out 2px smaller than PyMuPDF's
+            # render of the same rect and failed the halo-render
+            # pixel-diff test on shape alone.
+            scale = dpi / 72.0
             x0, y0, x1, y1 = (float(v) for v in clip)
-            crop = (
-                max(0.0, x0),
-                max(0.0, height - y1),
-                max(0.0, width - x1),
-                max(0.0, y0),
-            )
-        return page.render(scale=dpi / 72.0, crop=crop).to_pil()
+            left = max(0, math.floor(x0 * scale))
+            top = max(0, math.floor(y0 * scale))
+            right = min(image.width, math.ceil(x1 * scale))
+            bottom = min(image.height, math.ceil(y1 * scale))
+            image = image.crop((left, top, right, bottom))
+        return image
     finally:
         doc.close()
 

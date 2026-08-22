@@ -41,9 +41,8 @@ class _StderrSwigFilter:
 
 sys.stderr = _StderrSwigFilter(sys.stderr)  # type: ignore[assignment]
 
-import pymupdf  # noqa: E402
-
 from .docopen import open_pdf  # noqa: E402
+from .backend.geometry import Rect as GeomRect  # noqa: E402
 from .backend import columns as _columns  # noqa: E402
 
 from .parallel import PageError  # noqa: E402
@@ -300,7 +299,7 @@ def detect_column_boxes(page: Any) -> list[Any]:
             return []
         top = min(b[1] for b in boxes)
         bottom = max(b[3] for b in boxes)
-        return [pymupdf.Rect(b0, top, b1, bottom) for b0, b1 in bands]
+        return [GeomRect(b0, top, b1, bottom) for b0, b1 in bands]
     except Exception:  # pragma: no cover - defensive fail-safe
         return []
 
@@ -1012,7 +1011,7 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
         # block-sort below rather than raising.
         try:
             if not boxes:
-                boxes = [pymupdf.Rect(page.rect)]
+                boxes = [page.rect]
             assembled = _assemble_columns_from_rawdict(page, boxes)
         except Exception:  # pragma: no cover - defensive fail-safe
             assembled = ""
@@ -1248,7 +1247,7 @@ def extract_text_with_coordinates(page: Any) -> list[dict[str, Any]]:
 
 
 def extract_images_from_page(
-    doc: pymupdf.Document,
+    doc: Any,
     page_num: int,
     output_dir: Path | None = None,
     pdf_hash: str = "",
@@ -1256,111 +1255,60 @@ def extract_images_from_page(
     """
     Extract images from a PDF page as PNG files saved to disk.
 
-    Args:
-        doc: PyMuPDF document object
-        page_num: Page number (0-indexed)
-        output_dir: Directory to save PNG files
-        pdf_hash: Hash prefix for deterministic filenames
+    Decoding goes through the backend's pdfium bitmap path (raw stream
+    bytes are filter-encoded and not directly decodable); deduplication
+    is by raw-stream identity, so one image placed several times is
+    extracted once and carries its placements.
 
     Returns:
-        List of image dicts with width, height, format, path, size_bytes
+        List of image dicts with width, height, format, path, size_bytes,
+        and bbox/placements when the placement geometry is available.
     """
-    page = doc[page_num]
-    images = []
+    from .backend.raster import extract_images as _backend_extract_images
 
-    image_list = page.get_images(full=True)
-    seen: set[int] = set()
+    images: list[dict[str, Any]] = []
     kept_index = 0
+    for entry in _backend_extract_images(doc.name, page_num):
+        pix = entry["image"]
+        if pix.n == 1:
+            color_format = "grayscale"
+        elif pix.n == 3:
+            color_format = "rgb"
+        elif pix.n == 4:
+            color_format = "rgba"
+        else:
+            color_format = "unknown"
 
-    for img_info in image_list:
-        xref = img_info[0]
-        # get_images lists an image once per placement; extract each
-        # distinct xref only once (dedup by object reference).
-        if xref in seen:
-            continue
-        seen.add(xref)
-
+        file_name = f"{pdf_hash}_p{page_num}_i{kept_index}.png"
+        file_path = (output_dir or Path(".")) / file_name
         try:
-            # Extract image as Pixmap
-            pix = pymupdf.Pixmap(doc, xref)
-
-            # Handle CMYK images
-            if pix.n - pix.alpha > 3:
-                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-
-            # Determine color format
-            if pix.n == 1:
-                color_format = "grayscale"
-            elif pix.n == 3:
-                color_format = "rgb"
-            elif pix.n == 4:
-                color_format = "rgba"
-            else:
-                color_format = "unknown"
-
-            # Save to disk
-            assert output_dir is not None
-            file_name = f"{pdf_hash}_p{page_num}_i{kept_index}.png"
-            file_path = output_dir / file_name
-            try:
-                pix.save(str(file_path))
-                os.chmod(str(file_path), 0o600)
-            except Exception as e:
-                try:
-                    file_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
-                logger.warning(
-                    "Failed to save image xref %d from page %d: %s",
-                    xref,
-                    page_num,
-                    e,
-                )
-                continue
-
-            img_dict: dict[str, Any] = {
-                "page": page_num + 1,  # 1-indexed for output
-                "index": kept_index,
-                "width": pix.width,
-                "height": pix.height,
-                "format": color_format,
-                "path": str(file_path),
-                "size_bytes": file_path.stat().st_size,
-            }
-            try:
-                rects = page.get_image_rects(xref)
-            except Exception:
-                rects = []
-            if rects:
-                p = rects[0]
-                img_dict["bbox"] = [
-                    round(p.x0, 1),
-                    round(p.y0, 1),
-                    round(p.x1, 1),
-                    round(p.y1, 1),
-                ]
-                if len(rects) > 1:
-                    img_dict["placements"] = [
-                        [
-                            round(r.x0, 1),
-                            round(r.y0, 1),
-                            round(r.x1, 1),
-                            round(r.y1, 1),
-                        ]
-                        for r in rects
-                    ]
-            images.append(img_dict)
-            kept_index += 1
-
-        except (ValueError, RuntimeError, KeyError) as e:
-            # Skip problematic images but log the issue
+            pix.save(str(file_path))
+            os.chmod(str(file_path), 0o600)
+        except Exception as e:  # noqa: BLE001 - skip problem images, keep batch
             logger.warning(
-                "Failed to extract image xref %d from page %d: %s",
-                xref,
-                page_num,
-                e,
+                "Failed to save image %d from page %d: %s", kept_index, page_num, e
             )
             continue
+
+        img_dict: dict[str, Any] = {
+            "page": page_num + 1,  # 1-indexed for output
+            "index": kept_index,
+            "width": pix.width,
+            "height": pix.height,
+            "format": color_format,
+            "path": str(file_path),
+            "size_bytes": file_path.stat().st_size,
+        }
+        placements = entry.get("placements") or []
+        if placements:
+            first = placements[0]
+            img_dict["bbox"] = [round(v, 1) for v in first]
+            if len(placements) > 1:
+                img_dict["placements"] = [
+                    [round(v, 1) for v in box] for box in placements
+                ]
+        images.append(img_dict)
+        kept_index += 1
 
     return images
 
@@ -1369,12 +1317,12 @@ _RENDER_CODECS = {"png": ".png", "jpeg": ".jpg"}
 
 
 def render_page_as_image(
-    doc: pymupdf.Document,
+    doc: Any,
     page_num: int,
     output_dir: Path,
     pdf_hash: str,
     dpi: int = 200,
-    clip: "pymupdf.Rect | None" = None,
+    clip: "Any | None" = None,
     codec: str = "png",
     quality: int = 0,
 ) -> dict[str, Any]:
@@ -1455,12 +1403,12 @@ def render_page_as_image(
 
 
 def render_page_as_png(
-    doc: pymupdf.Document,
+    doc: Any,
     page_num: int,
     output_dir: Path,
     pdf_hash: str,
     dpi: int = 200,
-    clip: "pymupdf.Rect | None" = None,
+    clip: "Any | None" = None,
 ) -> dict[str, Any]:
     """Render a page as PNG. Thin wrapper over render_page_as_image kept so
     the five existing call sites (including the picklable spawn-pool worker)
@@ -1477,7 +1425,7 @@ def render_page_as_png(
 _SCAN_COVERAGE_MIN = 0.98
 
 
-def native_render_dpi_cap(doc: pymupdf.Document, page_num: int) -> "int | None":
+def native_render_dpi_cap(doc: Any, page_num: int) -> "int | None":
     """
     Native raster resolution of a page that is a single full-page image.
 
@@ -1554,35 +1502,32 @@ def check_tesseract_available() -> None:
 
 
 def ocr_page(
-    doc: pymupdf.Document,
+    doc: Any,
     page_num: int,
     lang: str = "eng",
     dpi: int = 300,
     tessdata: str | None = None,
 ) -> str:
     """
-    OCR a PDF page using PyMuPDF's built-in Tesseract binding.
+    OCR a PDF page via the backend (pytesseract over a pdfium render).
 
-    Passes tessdata path explicitly if available, bypassing PyMuPDF's
-    fragile shell=True subprocess discovery (which crashes in spawned
-    worker processes on Windows).
+    Mirrors PyMuPDF's get_textpage_ocr(full=False) semantics: a page with
+    a usable text layer returns that text without OCRing, which is both
+    parity and faster.
 
     Args:
-        doc: PyMuPDF document object
+        doc: backend Document (any object with a ``.name`` file path)
         page_num: Page number (0-indexed)
         lang: Tesseract language code (default 'eng')
-        dpi: Internal render DPI for OCR (fixed at 300 for v1; not user-configurable
-             to keep the surface minimal — expose as parameter in a future release
-             if user feedback demands finer control)
-        tessdata: Explicit tessdata directory path. When None, PyMuPDF
-            auto-discovers (may use shell subprocesses).
+        dpi: Internal render DPI for OCR
+        tessdata: Explicit tessdata directory path.
 
     Returns:
         Extracted text string (empty string if OCR produces nothing)
     """
-    page = doc[page_num]
-    textpage = page.get_textpage_ocr(language=lang, dpi=dpi, tessdata=tessdata)
-    return str(page.get_text(textpage=textpage))
+    from .backend.raster import ocr_page_text
+
+    return ocr_page_text(doc.name, page_num, lang=lang, dpi=dpi, tessdata=tessdata)
 
 
 def _ocr_page_worker(
@@ -1715,49 +1660,25 @@ def _extract_tables_worker(
 ) -> dict[int, "list[dict[str, Any]] | PageError"]:
     """Picklable worker extracting tables for several pages of one document.
 
-    MUST run in a ``spawn`` process, never ``fork``. Importing
-    ``pymupdf4llm`` (which the server does at startup, and which any
-    column-aware text extraction triggers) executes
-    ``use_layout(True)`` -> ``import pymupdf.layout``, and that import alone
-    swaps PyMuPDF's text engine process-wide and irreversibly. A forked
-    child inherits that state and would return the same corrupt cells; only
-    a spawned child re-imports a clean PyMuPDF.
+    Table detection runs on pdfplumber (backend.tables), which has no
+    process-wide corruption problem, so no spawn isolation is required
+    any more; the worker shape is kept so existing callers and the
+    versioned cache path stay unchanged.
 
-    Batched over pages so one process spawn (~200-500ms) serves a whole
-    ``pdf_read_pages`` call rather than being paid per page.
-
-    Per-page failure is isolated as a PageError so one bad page cannot cost
-    the batch. A failure is never silently downgraded to "no tables": the
-    parent must not confuse "extraction failed" with "this page has none".
+    Per-page failure is isolated as a PageError so one bad page cannot
+    cost the batch. A failure is never silently downgraded to "no
+    tables": the parent must not confuse "extraction failed" with "this
+    page has none".
     """
+    from .backend.tables import open_table_page
+
     path, page_nums = args
     out: dict[int, list[dict[str, Any]] | PageError] = {}
-
-    if os.environ.get("PDF_MCP_TABLE_BACKEND") == "pdfplumber":
-        # Migration switch, off by default. pdfplumber has no process-wide
-        # corruption problem, so this path does not need the spawn at all;
-        # it runs here so the two backends are measured through identical
-        # post-processing.
-        from .backend.tables import open_table_page
-
-        for page_num in page_nums:
-            try:
-                out[page_num] = extract_tables_from_page(
-                    open_table_page(path, page_num)
-                )
-            except Exception as exc:  # noqa: BLE001 - per-page isolation
-                out[page_num] = PageError(repr(exc))
-        return out
-
-    doc = open_pdf(path)
-    try:
-        for page_num in page_nums:
-            try:
-                out[page_num] = extract_tables_from_page(doc[page_num])
-            except Exception as exc:  # noqa: BLE001 - per-page isolation
-                out[page_num] = PageError(repr(exc))
-    finally:
-        doc.close()
+    for page_num in page_nums:
+        try:
+            out[page_num] = extract_tables_from_page(open_table_page(path, page_num))
+        except Exception as exc:  # noqa: BLE001 - per-page isolation
+            out[page_num] = PageError(repr(exc))
     return out
 
 
@@ -1922,7 +1843,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
     return tables
 
 
-def extract_metadata(doc: pymupdf.Document) -> dict[str, Any]:
+def extract_metadata(doc: Any) -> dict[str, Any]:
     """
     Extract metadata from PDF document.
 
@@ -1948,7 +1869,7 @@ def extract_metadata(doc: pymupdf.Document) -> dict[str, Any]:
     }
 
 
-def extract_toc(doc: pymupdf.Document) -> list[dict[str, Any]]:
+def extract_toc(doc: Any) -> list[dict[str, Any]]:
     """
     Extract table of contents from PDF document.
 

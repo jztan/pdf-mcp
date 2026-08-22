@@ -3802,7 +3802,13 @@ class TestFitDpiLadder:
         RENDER_DPI_MIN floor fallback must still produce a page (not
         oversized), constructed via a very small real byte budget rather
         than a synthetic huge fixture."""
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 58_000)
+        # 41k, not the historical 58k. The budget must sit just above
+        # the floor render's base64 length and below every above-floor
+        # rung: the backend's JPEG encoder produces ~30KB raw (~40.2KB
+        # base64) at the 72dpi floor where PyMuPDF's produced more, so
+        # at 58k a legitimate above-floor rung now fits, which exercises
+        # the ladder rather than the floor fallback this test pins.
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 41_000)
         result = pdf_render_pages(big_scan_pdf, "1", dpi=300)
         summary = result[0]
 

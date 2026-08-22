@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Annotated, Any, Callable
 
 import httpx
-import pymupdf
 
+from .backend.geometry import Rect as GeomRect
 from .docopen import open_pdf
 from fastmcp import FastMCP
 from mcp.types import ImageContent
@@ -583,7 +583,7 @@ def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
 
 
 def _resolve_hidden_flags(
-    local_path: str, doc: "pymupdf.Document", page_nums: list[int]
+    local_path: str, doc: Any, page_nums: list[int]
 ) -> dict[int, bool]:
     """Per-page hidden-text bool for page_nums (0-indexed). Serves cached
     flags; computes+persists only pages whose flag is NULL (not yet computed).
@@ -1773,7 +1773,7 @@ def _attach_table_context(
     matches: list[dict[str, Any]],
     local_path: str,
     cache: PDFCache,
-    doc: pymupdf.Document | None = None,
+    doc: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Attach header + matched row to ambiguous matches, in place of nothing.
 
@@ -1954,7 +1954,7 @@ def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[in
 
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
-    doc: pymupdf.Document,
+    doc: Any,
     query: str,
     keyword_excerpts: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
@@ -1996,8 +1996,16 @@ def _upgrade_excerpts_to_paragraphs(
             if fragment:
                 blocks = page.get_text("blocks", sort=True)
                 text_blocks = [b[4] for b in blocks if b[6] == 0]
+                # Whitespace-normalised containment: the FTS excerpt is a
+                # window over page_text, whose line joins differ from the
+                # blocks shape (spaces vs newlines around table cells), so
+                # a literal substring test failed on exactly the matches
+                # this anchor exists for. The query-dense-block fallback
+                # then picked an intro sentence over the table row holding
+                # the answer (Berkshire p67, "manufacturing revenues").
+                fragment_norm = " ".join(fragment.split())
                 for idx, bt in enumerate(text_blocks):
-                    if fragment in bt:
+                    if fragment_norm in " ".join(bt.split()):
                         stripped = bt.strip()
                         if len(stripped) <= 2000:
                             block_text = stripped
@@ -3989,7 +3997,7 @@ def _render_clip(
     r = page.rect
     w, h = r.width, r.height
     x0, y0, x1, y1 = frac
-    rect = pymupdf.Rect(
+    rect = GeomRect(
         r.x0 + x0 * w,
         r.y0 + y0 * h,
         r.x0 + x1 * w,
@@ -4793,7 +4801,7 @@ def pdf_extract_chart(
         response_charts = []
         for chart in result.get("charts", []):
             bbox = chart.get("region_bbox")
-            clip = pymupdf.Rect(*bbox) if bbox else None
+            clip = GeomRect(*bbox) if bbox else None
             info = render_page_as_png(
                 doc, page - 1, out_dir, pdf_hash, dpi=150, clip=clip
             )

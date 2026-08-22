@@ -18,7 +18,6 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-import pymupdf
 
 from .docopen import open_pdf
 
@@ -358,7 +357,7 @@ def _toc_entries_to_sections(
     return sections
 
 
-def extract_toc_sections(doc: pymupdf.Document) -> list[Section]:
+def extract_toc_sections(doc: Any) -> list[Section]:
     """
     Derive sections from the PDF's TOC, filling section.text from page text.
 

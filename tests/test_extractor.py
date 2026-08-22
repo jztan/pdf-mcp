@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import pymupdf
 
 import pdf_mcp.extractor as extractor
+from pdf_mcp.docopen import open_pdf
 from pdf_mcp.extractor import (
     parse_page_range,
     extract_text_from_page,
@@ -339,33 +340,50 @@ class TestExtractImagesFromPage:
             img_bytes.seek(0)
 
             page.insert_image(pymupdf.Rect(50, 50, 100, 100), stream=img_bytes.read())
+            pdf_path = tmp_path / "cmyk.pdf"
+            doc.save(str(pdf_path))
 
+        with open_pdf(str(pdf_path)) as bdoc:
             images = extract_images_from_page(
-                doc, 0, output_dir=tmp_path, pdf_hash="cmyk"
+                bdoc, 0, output_dir=tmp_path, pdf_hash="cmyk"
             )
 
         assert len(images) >= 1
         # After CMYK→RGB conversion, pix.n should be 3 → "rgb"
         assert images[0]["format"] == "rgb"
 
-    def test_bad_xref_skipped_with_warning(
+    def test_undecodable_image_skipped_without_crash(
         self, sample_pdf_with_images, tmp_path, caplog
     ):
-        """Images that raise exceptions are skipped and logged."""
-        doc = pymupdf.open(sample_pdf_with_images)
+        """An image the decoder cannot handle is skipped, not fatal.
 
-        with patch("pymupdf.Pixmap", side_effect=RuntimeError("corrupt")):
-            import logging
+        The guarantee is per-image isolation: one bad image must not
+        take down the page's whole extraction, and the skip is logged.
+        The failure is injected at the backend save step, the first
+        point where a decoded image touches disk.
+        """
+        import logging
 
+        from unittest.mock import MagicMock, patch
+
+        broken = MagicMock()
+        broken.n = 3
+        broken.width = 10
+        broken.height = 10
+        broken.save = MagicMock(side_effect=RuntimeError("corrupt"))
+        with patch(
+            "pdf_mcp.backend.raster.extract_images",
+            return_value=[{"key": 1, "image": broken, "placements": []}],
+        ):
             with caplog.at_level(logging.WARNING, logger="pdf_mcp.extractor"):
+                doc = open_pdf(sample_pdf_with_images)
                 images = extract_images_from_page(
                     doc, 0, output_dir=tmp_path, pdf_hash="bad"
                 )
-
-        doc.close()
+                doc.close()
 
         assert images == []
-        assert "Failed to extract image" in caplog.text
+        assert "Failed to save image" in caplog.text
 
     def test_multiple_images_indexed(self, tmp_path):
         """Multiple images on one page get sequential indices."""
@@ -384,9 +402,12 @@ class TestExtractImagesFromPage:
                 page.insert_image(
                     pymupdf.Rect(x, 50, x + 30, 80), stream=img_bytes.read()
                 )
+            pdf_path = tmp_path / "multi.pdf"
+            doc.save(str(pdf_path))
 
+        with open_pdf(str(pdf_path)) as bdoc:
             images = extract_images_from_page(
-                doc, 0, output_dir=tmp_path, pdf_hash="multi"
+                bdoc, 0, output_dir=tmp_path, pdf_hash="multi"
             )
 
         assert len(images) == 3

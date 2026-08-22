@@ -95,7 +95,11 @@ class Page:
         return _tables.TableFinding(tables=_tables.find_tables(self._path, self.number))
 
     def get_pixmap(self, dpi: int = 150, clip: Any = None) -> Any:
-        return _raster.render_page(self._path, self.number, dpi=dpi, clip=clip)
+        """A Pixmap-shaped render (see raster.Pixmap for the surface)."""
+        box = None
+        if clip is not None:
+            box = (float(clip[0]), float(clip[1]), float(clip[2]), float(clip[3]))
+        return _raster.render_pixmap(self._path, self.number, dpi=dpi, clip=box)
 
 
 class Document:
@@ -105,6 +109,11 @@ class Document:
         self._path = pdf_path
         self._doc = _document.open_document(pdf_path)
         self._sizes = [self._doc[i].rect for i in range(self._doc.page_count)]
+
+    @property
+    def name(self) -> str:
+        """The file path, as PyMuPDF's Document.name reports it."""
+        return self._path
 
     @property
     def page_count(self) -> int:

@@ -80,10 +80,6 @@
           "query": "base model BLEU dev score",
           "page": 9,
           "answer": "25.8",
-          "known_fail": {
-            "cell": "paragraph",
-            "reason": "long-block win: the 324-char Table 3 caption beats the 50-char base row"
-          },
           "answer_label": "base"
         },
         {
@@ -319,10 +315,6 @@
           "query": "output voltage drop low ISINK = 200 mA",
           "page": 5,
           "answer": "2.5",
-          "known_fail": {
-            "cell": "paragraph",
-            "reason": "wrong sibling row: picks a 45-char ISINK row for a different current"
-          },
           "answer_label": "Output Voltage Drop"
         },
         {
@@ -331,10 +323,6 @@
           "query": "initial accuracy monostable timing error",
           "page": 5,
           "answer": "1 %",
-          "known_fail": {
-            "cell": "paragraph",
-            "reason": "wrong sibling row: picks a 24-char row from the astable block"
-          },
           "answer_label": "Initial Accuracy"
         },
         {
@@ -507,7 +495,11 @@
           "query": "manufacturing revenues",
           "page": 67,
           "answer": "77,231",
-          "answer_label": "Manufacturing"
+          "answer_label": "Manufacturing",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "tie: the intro sentence ('A summary of revenues and earnings of our manufacturing...') and the revenue table block both score 2 query tokens, and the intro sorts first. Failed under PyMuPDF too (snippet AND paragraph both 0); the permissive backend fixed the snippet, which made this paragraph gap visible to clause 2 for the first time."
+          }
         },
         {
           "id": "b06",

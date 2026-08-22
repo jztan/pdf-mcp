@@ -33,7 +33,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pymupdf
 
 CHART_EXTRACTION_VERSION = 18
 
@@ -2550,10 +2549,29 @@ def annotate_questions(
         if pi >= len(panels):
             continue
         panel = panels[pi]
-        tmp = pymupdf.open()
-        tmp.insert_pdf(doc, from_page=page_num, to_page=page_num)
-        page = tmp[0]
-        shape = page.new_shape()
+        # Render the panel clip via the backend, then draw the halos with
+        # Pillow. The halo geometry is identical to the old PyMuPDF
+        # Shape path: a wide translucent polyline OVER the page content
+        # (drawn under, it is buried beneath matplotlib's opaque white
+        # plot-background rectangle), leaving the thin opaque series
+        # stroke readable through the band -- that trajectory is the cue
+        # the vision agent needs.
+        from PIL import Image, ImageDraw
+
+        from .backend.raster import render_page
+
+        dpi = 200
+        scale = dpi / 72.0
+        clip = (
+            panel["rx0"] - 5,
+            panel["ry0"] - 5,
+            panel["rx1"] + 5,
+            panel["ry1"] + 5,
+        )
+        base = render_page(doc.name, page_num, dpi=dpi, clip=clip).convert("RGBA")
+        overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        drawer = ImageDraw.Draw(overlay)
+
         masks = legend_masks(src_page, panel)
         _, _, _, clouds = collect(draws, panel, masks)
         for q in qs:
@@ -2566,34 +2584,26 @@ def annotate_questions(
                 for style, pts in clouds.items():
                     if style[0] == target and pts:
                         seq = sorted(pts)[:400]
-                        shape.draw_polyline(seq)
-                        # wide translucent band: ~4x the series' own stroke
-                        # width, low opacity, so the thin opaque stroke stays
-                        # readable through the halo
+                        # wide translucent band: ~4x the series' own
+                        # stroke width, low opacity
                         w = 4.0 * float((series_style or {}).get("width") or 1.0)
-                        shape.finish(
-                            color=_HALOS[hue],
-                            width=max(w, 4.0),
-                            stroke_opacity=0.35,
+                        rgb = tuple(int(round(255 * c)) for c in _HALOS[hue])
+                        line = [
+                            (
+                                (x - clip[0]) * scale,
+                                (y - clip[1]) * scale,
+                            )
+                            for x, y in seq
+                        ]
+                        drawer.line(
+                            line,
+                            fill=rgb + (89,),  # 0.35 opacity
+                            width=max(int(round(max(w, 4.0) * scale)), 1),
                         )
                         break
-        # overlay=True: the halo must go ON TOP of existing content.
-        # overlay=False (under) buries it beneath the chart's opaque white
-        # plot-background rectangle (matplotlib paints one over the whole
-        # figure), making the halo invisible. A wide low-opacity band over a
-        # thin opaque stroke keeps the stroke's trajectory clearly readable,
-        # which is the actual cue the vision agent needs.
-        shape.commit(overlay=True)
-        clip = pymupdf.Rect(
-            panel["rx0"] - 5,
-            panel["ry0"] - 5,
-            panel["rx1"] + 5,
-            panel["ry1"] + 5,
-        )
-        pix = page.get_pixmap(dpi=200, clip=clip)
+        annotated = Image.alpha_composite(base, overlay).convert("RGB")
         path = str(out_dir / f"chart_hints_{pdf_hash}_p{page_num + 1}_{chart_id}.png")
-        pix.save(path)
-        tmp.close()
+        annotated.save(path, format="PNG")
         for q in qs:
             q["render_path"] = path
         out[chart_id] = path

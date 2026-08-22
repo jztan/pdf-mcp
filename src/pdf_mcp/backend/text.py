@@ -822,7 +822,13 @@ def _group_into_blocks(lines: list[Any]) -> list[list[Any]]:
     """
     if not lines:
         return []
-    pitch_limit = _BLOCK_PITCH_FACTOR * _median_pitch(lines)
+    heights = [ln[0][3] - ln[0][1] for ln in lines if ln[0][3] > ln[0][1]]
+    med_line_h = statistics.median(heights) if heights else 10.0
+    # Capped by line height: on a page with only a couple of lines the
+    # "median pitch" IS the gap between them (350pt on a two-block test
+    # fixture), and an uncapped limit then merges blocks that are half a
+    # page apart. No paragraph's leading approaches three line heights.
+    pitch_limit = min(_BLOCK_PITCH_FACTOR * _median_pitch(lines), 3.0 * med_line_h)
 
     def min_idx(line: Any) -> int:
         idxs = [c.idx for c in line[2]]
@@ -876,7 +882,13 @@ def _build_tree(blocks: list[list[Any]], raw: bool) -> dict[str, Any]:
             # column landed in one bin, and vertical pages scrambled.
             width = bbox[2] - bbox[0]
             height = bbox[3] - bbox[1]
-            if len(row) >= 2 and height > 2.0 * max(width, 1.0):
+            cjk = sum(1 for c in row if c.ch and 0x3000 <= ord(c.ch[0]) <= 0x9FFF)
+            # Per-glyph lines are for CJK vertical COLUMNS only. A rotated
+            # Latin run (a chart's right-axis title, a margin URL) is one
+            # LINE that happens to run downward, and PyMuPDF reports it as
+            # one line with its full text: split per glyph, the axis-title
+            # reader saw a single "(" where it needed "RMSE (nm)".
+            if len(row) >= 2 and height > 2.0 * max(width, 1.0) and cjk * 2 >= len(row):
                 for ch in sorted(row, key=lambda c: c.idx):
                     glyph_bbox = (ch.x0, ch.y0, ch.x1, ch.y1)
                     glyph_span: dict[str, Any] = {

@@ -20,6 +20,7 @@ from pdf_mcp.cache import (
 )
 from pdf_mcp.config import PDFConfig
 from pdf_mcp.section_detector import Section
+from pdf_mcp.docopen import open_pdf
 from pdf_mcp.extractor import (
     count_query_tokens,
     estimate_tokens,
@@ -259,45 +260,45 @@ class TestExtractor:
         assert 5 <= tokens <= 10
 
     def test_extract_images_rgba_format(self, sample_pdf_with_images, tmp_path):
-        """RGBA format detected when pix.n == 4."""
-        mock_pix = MagicMock()
-        mock_pix.n = 4
-        mock_pix.alpha = 1
-        mock_pix.width = 10
-        mock_pix.height = 10
-        mock_pix.save = MagicMock(
+        """RGBA format detected from a 4-channel decoded image."""
+        fake = MagicMock()
+        fake.n = 4
+        fake.width = 10
+        fake.height = 10
+        fake.save = MagicMock(
             side_effect=lambda path: Path(path).write_bytes(b"\x89PNG")
         )
-
-        with patch("pdf_mcp.extractor.pymupdf.Pixmap", return_value=mock_pix):
-            doc = pymupdf.open(sample_pdf_with_images)
+        with patch(
+            "pdf_mcp.backend.raster.extract_images",
+            return_value=[{"key": 1, "image": fake, "placements": []}],
+        ):
+            doc = open_pdf(sample_pdf_with_images)
             images = extract_images_from_page(
                 doc, 0, output_dir=tmp_path, pdf_hash="test"
             )
             doc.close()
 
-        assert len(images) >= 1
         assert images[0]["format"] == "rgba"
 
     def test_extract_images_unknown_format(self, sample_pdf_with_images, tmp_path):
-        """Unknown format detected when pix.n is not 1, 3, or 4."""
-        mock_pix = MagicMock()
-        mock_pix.n = 2
-        mock_pix.alpha = 0
-        mock_pix.width = 10
-        mock_pix.height = 10
-        mock_pix.save = MagicMock(
+        """Unknown format detected when the channel count is not 1, 3, or 4."""
+        fake = MagicMock()
+        fake.n = 2
+        fake.width = 10
+        fake.height = 10
+        fake.save = MagicMock(
             side_effect=lambda path: Path(path).write_bytes(b"\x89PNG")
         )
-
-        with patch("pdf_mcp.extractor.pymupdf.Pixmap", return_value=mock_pix):
-            doc = pymupdf.open(sample_pdf_with_images)
+        with patch(
+            "pdf_mcp.backend.raster.extract_images",
+            return_value=[{"key": 1, "image": fake, "placements": []}],
+        ):
+            doc = open_pdf(sample_pdf_with_images)
             images = extract_images_from_page(
                 doc, 0, output_dir=tmp_path, pdf_hash="test"
             )
             doc.close()
 
-        assert len(images) >= 1
         assert images[0]["format"] == "unknown"
 
     def test_extract_images_save_fail_cleanup_fail(

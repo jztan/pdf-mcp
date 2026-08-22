@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+import re
 import statistics
 from typing import Any
 
@@ -46,6 +47,8 @@ _FLAG_ITALIC = 1 << 1
 _BOLD_WEIGHT = 600
 #: PDF font descriptor flag bit 7 (value 64) means italic.
 _DESCRIPTOR_ITALIC = 1 << 6
+
+_SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 
 _SHAPES = ("text", "blocks", "dict", "rawdict", "words")
 
@@ -93,7 +96,13 @@ def _char_style(textpage: Any, index: int) -> tuple[str, float, int]:
     pdfium_raw.FPDFText_GetFontInfo(
         textpage.raw, index, buffer, 128, ctypes.byref(descriptor)
     )
-    font = buffer.value.decode("utf-8", "replace")
+    # Strip the PDF font SUBSET tag ("EZSFUB+DejaVuSans"), as PyMuPDF
+    # does. The six-letter prefix identifies one embedded subset, not a
+    # typeface, and the same face can appear under several. Keeping it
+    # split "10^-2" into three spans, because the minus sign lived in a
+    # different subset from its digit, and chart_extractor then could not
+    # read the negative exponent of a log axis.
+    font = _SUBSET_TAG.sub("", buffer.value.decode("utf-8", "replace"))
 
     matrix = pdfium_raw.FS_MATRIX()
     pdfium_raw.FPDFText_GetMatrix(textpage.raw, index, ctypes.byref(matrix))
@@ -146,7 +155,16 @@ def _runs_by_adjacency(chars: list[_Char]) -> list[list[_Char]]:
     if not chars:
         return []
     med_h = statistics.median([c.height for c in chars if c.height > 0] or [10.0])
-    limit = max(2.0, 2.5 * med_h)
+    # Sized for LETTER spacing, not line spacing. Consecutive glyphs of a
+    # run are ~1-2pt apart whichever way the run points, so this only has
+    # to clear that. At 2.5x median height it also swallowed y-axis tick
+    # labels stacked 25pt apart (a 17.8pt gap against an 18.5pt limit),
+    # merging four of them into the single word "2468".
+    #
+    # Splitting a run too eagerly is cheap: _rows_by_baseline regroups
+    # same-line pieces immediately afterwards. Splitting too late is not,
+    # because a merged run is never reconsidered.
+    limit = max(2.0, 0.9 * med_h)
 
     runs: list[list[_Char]] = [[chars[0]]]
     for prev, cur in zip(chars, chars[1:]):
@@ -155,7 +173,13 @@ def _runs_by_adjacency(chars: list[_Char]) -> list[list[_Char]]:
             continue
         dx = max(cur.x0 - prev.x1, prev.x0 - cur.x1, 0.0)
         dy = max(cur.y0 - prev.y1, prev.y0 - cur.y1, 0.0)
-        if min(dx, dy) > limit:
+        # Both gaps, not the smaller one. Consecutive glyphs of one visual
+        # line are close along the run and overlapping across it,
+        # whichever way the line points, so this still keeps a rotated run
+        # intact. Taking the SMALLER gap merged anything sharing a column:
+        # two y-axis tick labels stacked 40pt apart became one word "05",
+        # and chart axis calibration then found no tick series at all.
+        if max(dx, dy) > limit:
             runs.append([cur])
         else:
             runs[-1].append(cur)
@@ -341,22 +365,109 @@ def _row_direction(row: list[_Char]) -> tuple[float, float]:
     return (round(dx / norm, 6), round(dy / norm, 6))
 
 
+#: A gap wider than this many font sizes starts a new span, so separately
+#: placed items on one baseline do not become one span.
+_SPAN_GAP_FACTOR = 1.0
+
+
 def _split_into_spans(row: list[_Char]) -> list[list[_Char]]:
-    """Split a row where font, size or flags change, as PyMuPDF does."""
+    """Split a row where font, size or flags change, as PyMuPDF does.
+
+    Also on a wide horizontal gap, because a whole axis of tick labels
+    shares one baseline and would otherwise be a single span ("101010").
+
+    Deliberately NOT on an index discontinuity. pdfium's character
+    indices skip the glyphs _collect_chars filters out, so "1" and "0" of
+    a "10" tick can be indices 0 and 3. Splitting there broke the base
+    into two spans, and chart_extractor._power_pairs needs a span whose
+    text is exactly "10" to recognise a log axis: without it, 10^0..10^2
+    read as literal 100..102, calibrated as a clean linear axis, and
+    emitted a chart wrong by orders of magnitude.
+    """
     ordered = sorted(row, key=lambda c: c.idx)
     spans: list[list[_Char]] = [[ordered[0]]]
     for prev, cur in zip(ordered, ordered[1:]):
+        gap = max(cur.x0 - prev.x1, prev.x0 - cur.x1, 0.0)
         changed = (
             cur.font != prev.font
             or cur.flags != prev.flags
             or abs(cur.size - prev.size) > _SPAN_SIZE_TOL
-            or cur.idx != prev.idx + 1
+            or gap > _SPAN_GAP_FACTOR * max(prev.size, 1.0)
         )
         if changed:
             spans.append([cur])
         else:
             spans[-1].append(cur)
     return spans
+
+
+#: A run this much smaller than its neighbour is a superscript, not a
+#: line of its own.
+_SUPERSCRIPT_SIZE_RATIO = 0.9
+
+
+def _attach_superscripts(rows: list[list[_Char]]) -> list[list[_Char]]:
+    """Reattach superscripts to the row they belong to.
+
+    A log axis is labelled 10^0, 10^1, 10^2. The exponent sits on its own
+    raised baseline, 4.2pt above the base against a 2.6pt grouping
+    tolerance, so baseline grouping alone files it as a separate line and
+    the tick reads as "10" and "0" rather than "100". Three log-axis
+    charts then failed to calibrate at all.
+
+    Loosening the baseline tolerance to cover it would merge genuinely
+    separate lines. The superscript signature is specific instead: a
+    SMALLER run, vertically overlapping its base, horizontally adjacent,
+    and to its right.
+
+    Candidates are identified before any attachment. A superscript sits
+    ABOVE its base, so it sorts first, and a pass that treated each row
+    in turn as a potential base consumed the exponent before its own
+    base could claim it.
+    """
+    if len(rows) < 2:
+        return rows
+
+    def size_of(row: list[_Char]) -> float:
+        sizes = [c.size for c in row if c.size > 0]
+        return statistics.median(sizes) if sizes else 0.0
+
+    sizes = [size_of(r) for r in rows]
+    body = statistics.median([s for s in sizes if s > 0] or [0.0])
+    if body <= 0:
+        return rows
+
+    small = [
+        i
+        for i, size in enumerate(sizes)
+        if 0 < size <= _SUPERSCRIPT_SIZE_RATIO * body and len(rows[i]) <= 3
+    ]
+    if not small:
+        return rows
+
+    attached: set[int] = set()
+    merged = {i: list(row) for i, row in enumerate(rows)}
+    for i in small:
+        cand = rows[i]
+        c_top, c_bottom = min(c.y0 for c in cand), max(c.y1 for c in cand)
+        c_left = min(c.x0 for c in cand)
+        best: tuple[float, int] | None = None
+        for j, base in enumerate(rows):
+            if j == i or j in small or sizes[j] <= sizes[i]:
+                continue
+            b_top, b_bottom = min(c.y0 for c in base), max(c.y1 for c in base)
+            if min(b_bottom, c_bottom) - max(b_top, c_top) <= 0:
+                continue
+            gap = c_left - max(c.x1 for c in base)
+            if not 0 <= gap <= 0.5 * sizes[j]:
+                continue
+            if best is None or gap < best[0]:
+                best = (gap, j)
+        if best is not None:
+            merged[best[1]].extend(cand)
+            attached.add(i)
+
+    return [row for i, row in merged.items() if i not in attached]
 
 
 def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
@@ -368,6 +479,7 @@ def _rows_of(page: Any, textpage: Any) -> list[list[_Char]]:
     # where rows alternate between columns, a merge can chain across the
     # gutter even though the first split separated them correctly.
     rows = _split_rows_at_gutters(_merge_overlapping_rows(rows), med_h)
+    rows = _attach_superscripts(rows)
     return sorted(rows, key=lambda r: (_row_bbox(r)[1], _row_bbox(r)[0]))
 
 
@@ -459,44 +571,64 @@ def _build_tree(blocks: list[list[Any]], raw: bool) -> dict[str, Any]:
     return {"blocks": out_blocks}
 
 
+#: A gap wider than this fraction of the font size ends a word, even
+#: with no space character between the glyphs.
+#:
+#: Font SIZE, not glyph ink height. Word spacing scales with the former;
+#: the latter varies per glyph, and a minus sign's ink box is under a
+#: point tall. Using ink height dragged a negative tick label's limit
+#: down to 1.3pt, split "-1" into "-" and "1", and the sign was then lost
+#: from the axis: a WRONG-EMIT at 155% error on line_neg_linear, caught
+#: by the chart ground-truth gate.
+_WORD_GAP_FACTOR = 0.32
+
+
 def _words_of(blocks: list[list[Any]]) -> list[tuple[Any, ...]]:
     """8-tuples (x0, y0, x1, y1, word, block, line, word_no).
 
-    Word boxes are apportioned across the word's own glyphs rather than
-    by proportional advance, so a word box is exact rather than
-    interpolated.
+    Words break on whitespace AND on a horizontal gap, because pdfium
+    emits no space character between separately placed runs. Splitting
+    on whitespace alone merged four x-axis tick labels into the single
+    word "2468", and chart axis calibration then found no tick series.
+
+    Word boxes come from the word's own glyphs rather than by
+    proportional advance, so each box is exact rather than interpolated.
     """
     out: list[tuple[Any, ...]] = []
     for block_no, block in enumerate(blocks):
         for line_no, (_bbox, _text, row) in enumerate(block):
+            glyphs = sorted(row, key=lambda c: c.idx)
+            sizes = [c.size for c in glyphs if c.size > 0]
+            gap_limit = _WORD_GAP_FACTOR * (statistics.median(sizes) if sizes else 10.0)
             word_no = 0
             current: list[_Char] = []
-            for c in sorted(row, key=lambda c: c.idx):
-                if c.ch.isspace():
-                    if current:
-                        out.append(
-                            (
-                                *_row_bbox(current),
-                                "".join(ch.ch for ch in current),
-                                block_no,
-                                line_no,
-                                word_no,
-                            )
+
+            def flush() -> None:
+                nonlocal current, word_no
+                if current:
+                    out.append(
+                        (
+                            *_row_bbox(current),
+                            "".join(ch.ch for ch in current),
+                            block_no,
+                            line_no,
+                            word_no,
                         )
-                        word_no += 1
-                        current = []
-                    continue
-                current.append(c)
-            if current:
-                out.append(
-                    (
-                        *_row_bbox(current),
-                        "".join(ch.ch for ch in current),
-                        block_no,
-                        line_no,
-                        word_no,
                     )
-                )
+                    word_no += 1
+                    current = []
+
+            for char in glyphs:
+                if char.ch.isspace():
+                    flush()
+                    continue
+                if current:
+                    prev = current[-1]
+                    gap = max(char.x0 - prev.x1, prev.x0 - char.x1, 0.0)
+                    if gap > gap_limit:
+                        flush()
+                current.append(char)
+            flush()
     return out
 
 

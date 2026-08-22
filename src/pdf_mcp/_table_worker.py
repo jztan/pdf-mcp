@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 from typing import Any
 
@@ -45,6 +46,22 @@ def extract(path: str, pages: list[int]) -> dict[str, Any]:
     """
     tables: dict[str, Any] = {}
     errors: dict[str, str] = {}
+
+    if os.environ.get("PDF_MCP_TABLE_BACKEND") == "pdfplumber":
+        # Migration switch, off by default. Routed here rather than only in
+        # extractor._extract_tables_worker because THIS is the live path:
+        # the server always reaches table extraction through this module.
+        from .backend.tables import open_table_page
+
+        for page_num in pages:
+            try:
+                tables[str(page_num)] = extract_tables_from_page(
+                    open_table_page(path, page_num)
+                )
+            except Exception as exc:  # noqa: BLE001 - per-page isolation
+                errors[str(page_num)] = repr(exc)
+        return {"tables": tables, "errors": errors}
+
     doc = pymupdf.open(path)
     try:
         for page_num in pages:

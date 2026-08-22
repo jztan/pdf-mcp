@@ -1,0 +1,296 @@
+[
+ {
+  "id": "t11",
+  "path": "docs_internal/sample_pdfs/academic/1706.03762v7.pdf",
+  "page": 8,
+  "answer": "25.8",
+  "label": "base"
+ },
+ {
+  "id": "t12",
+  "path": "docs_internal/sample_pdfs/academic/1706.03762v7.pdf",
+  "page": 8,
+  "answer": "4.92",
+  "label": "positional"
+ },
+ {
+  "id": "t13",
+  "path": "docs_internal/sample_pdfs/academic/1706.03762v7.pdf",
+  "page": 8,
+  "answer": "24.9",
+  "label": "attention heads"
+ },
+ {
+  "id": "d01",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "4.5",
+  "label": "Supply Voltage"
+ },
+ {
+  "id": "d02",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "2.5",
+  "label": "Output Voltage Drop"
+ },
+ {
+  "id": "d03",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "1 %",
+  "label": "Initial Accuracy"
+ },
+ {
+  "id": "d04",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "0.4",
+  "label": "Reset Voltage"
+ },
+ {
+  "id": "d05",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "0.25",
+  "label": "Threshold Current"
+ },
+ {
+  "id": "d06",
+  "path": "docs_internal/sample_pdfs/datasheets/ti_lm555.pdf",
+  "page": 4,
+  "answer": "100",
+  "label": "Pin 7 Leakage"
+ },
+ {
+  "id": "v01",
+  "path": "docs_internal/sample_pdfs/datasheets/vishay_1n4001.pdf",
+  "page": 1,
+  "answer": "1.1",
+  "label": "forward voltage"
+ },
+ {
+  "id": "v02",
+  "path": "docs_internal/sample_pdfs/datasheets/vishay_1n4001.pdf",
+  "page": 1,
+  "answer": "15",
+  "label": "junction capacitance"
+ },
+ {
+  "id": "v03",
+  "path": "docs_internal/sample_pdfs/datasheets/vishay_1n4001.pdf",
+  "page": 1,
+  "answer": "5.0",
+  "label": "reverse current"
+ },
+ {
+  "id": "x01",
+  "path": "docs_internal/sample_pdfs/datasheets/diodes_1n4148w.pdf",
+  "page": 1,
+  "answer": "1.25",
+  "label": "Forward Voltage"
+ },
+ {
+  "id": "x02",
+  "path": "docs_internal/sample_pdfs/datasheets/diodes_1n4148w.pdf",
+  "page": 1,
+  "answer": "4.0",
+  "label": "Reverse Recovery Time"
+ },
+ {
+  "id": "x03",
+  "path": "docs_internal/sample_pdfs/datasheets/diodes_1n4148w.pdf",
+  "page": 1,
+  "answer": "2.0",
+  "label": "Total Capacitance"
+ },
+ {
+  "id": "e01",
+  "path": "docs_internal/sample_pdfs/datasheets/espressif_esp32.pdf",
+  "page": 50,
+  "answer": "1200",
+  "label": "Cumulative IO output current"
+ },
+ {
+  "id": "e02",
+  "path": "docs_internal/sample_pdfs/datasheets/espressif_esp32.pdf",
+  "page": 50,
+  "answer": "150",
+  "label": "Storage temperature"
+ },
+ {
+  "id": "e03",
+  "path": "docs_internal/sample_pdfs/datasheets/espressif_esp32.pdf",
+  "page": 50,
+  "answer": "3.6",
+  "label": "Allowed input voltage"
+ },
+ {
+  "id": "b01",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 54,
+  "answer": "5,031",
+  "label": "BNSF"
+ },
+ {
+  "id": "b02",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 54,
+  "answer": "9,020",
+  "label": "Insurance \u2013 underwriting"
+ },
+ {
+  "id": "b03",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 60,
+  "answer": "5,500",
+  "label": "Dividend income"
+ },
+ {
+  "id": "b04",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 64,
+  "answer": "21,566",
+  "label": "Energy operating revenue"
+ },
+ {
+  "id": "b05",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 66,
+  "answer": "77,231",
+  "label": "Manufacturing"
+ },
+ {
+  "id": "b06",
+  "path": "docs_internal/sample_pdfs/financial/berkshire_2024ar.pdf",
+  "page": 71,
+  "answer": "46,891",
+  "label": "Pilot"
+ },
+ {
+  "id": "g01",
+  "path": "pages/corpus/fed-consumer-context.pdf",
+  "page": 6,
+  "answer": "70% APR",
+  "label": "1.15 factor rate"
+ },
+ {
+  "id": "g02",
+  "path": "pages/corpus/fed-consumer-context.pdf",
+  "page": 6,
+  "answer": "45% APR",
+  "label": "4% fee rate"
+ },
+ {
+  "id": "g03",
+  "path": "pages/corpus/fed-consumer-context.pdf",
+  "page": 5,
+  "answer": "1.99% to 8.99%",
+  "label": "Company A"
+ },
+ {
+  "id": "p01",
+  "path": "docs_internal/sample_pdfs/datasheets/microchip_mcp1700.pdf",
+  "page": 3,
+  "answer": "44",
+  "label": "PSRR"
+ },
+ {
+  "id": "p02",
+  "path": "docs_internal/sample_pdfs/datasheets/microchip_mcp1700.pdf",
+  "page": 3,
+  "answer": "140",
+  "label": "Thermal Shutdown Protection"
+ },
+ {
+  "id": "p03",
+  "path": "docs_internal/sample_pdfs/datasheets/microchip_mcp1700.pdf",
+  "page": 4,
+  "answer": "74",
+  "label": "JC(Top)"
+ },
+ {
+  "id": "x11",
+  "path": "benchmark_data/.reading_order_pdfs/1608.03983.pdf",
+  "page": 5,
+  "answer": "6.43",
+  "label": "original-ResNet"
+ },
+ {
+  "id": "x12",
+  "path": "benchmark_data/.reading_order_pdfs/1608.03983.pdf",
+  "page": 5,
+  "answer": "5.23",
+  "label": "stoc-depth"
+ },
+ {
+  "id": "x13",
+  "path": "benchmark_data/.reading_order_pdfs/1608.03983.pdf",
+  "page": 5,
+  "answer": "22.07",
+  "label": "WRN"
+ },
+ {
+  "id": "x14",
+  "path": "benchmark_data/.reading_order_pdfs/2205.14135.pdf",
+  "page": 27,
+  "answer": "0.10",
+  "label": "Apex FMHA forward"
+ },
+ {
+  "id": "x15",
+  "path": "benchmark_data/.reading_order_pdfs/2205.14135.pdf",
+  "page": 27,
+  "answer": "0.17",
+  "label": "Apex FMHA backward"
+ },
+ {
+  "id": "x16",
+  "path": "benchmark_data/.reading_order_pdfs/1807.11632.pdf",
+  "page": 3,
+  "answer": "26785",
+  "label": "en.base"
+ },
+ {
+  "id": "x17",
+  "path": "benchmark_data/.reading_order_pdfs/1807.11632.pdf",
+  "page": 3,
+  "answer": "34713",
+  "label": "jp.base"
+ },
+ {
+  "id": "x18",
+  "path": "benchmark_data/.reading_order_pdfs/0811.0781.pdf",
+  "page": 20,
+  "answer": "0.44",
+  "label": "C \u2192 B \u2192 A"
+ },
+ {
+  "id": "x19",
+  "path": "benchmark_data/.reading_order_pdfs/0811.0781.pdf",
+  "page": 20,
+  "answer": "0.25",
+  "label": "B \u2192 C \u2192 A"
+ },
+ {
+  "id": "s01",
+  "path": "docs_internal/sample_pdfs/financial/starbucks_2025ar.pdf",
+  "page": 33,
+  "answer": "4,350.4",
+  "label": "Licensed stores"
+ },
+ {
+  "id": "s02",
+  "path": "docs_internal/sample_pdfs/financial/starbucks_2025ar.pdf",
+  "page": 35,
+  "answer": "13,973.3",
+  "label": "Store operating expenses"
+ },
+ {
+  "id": "s03",
+  "path": "docs_internal/sample_pdfs/financial/starbucks_2025ar.pdf",
+  "page": 36,
+  "answer": "2,749.8",
+  "label": "Product and distribution costs"
+ }
+]

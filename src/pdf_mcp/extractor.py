@@ -1831,6 +1831,23 @@ def _extract_tables_worker(
     """
     path, page_nums = args
     out: dict[int, list[dict[str, Any]] | PageError] = {}
+
+    if os.environ.get("PDF_MCP_TABLE_BACKEND") == "pdfplumber":
+        # Migration switch, off by default. pdfplumber has no process-wide
+        # corruption problem, so this path does not need the spawn at all;
+        # it runs here so the two backends are measured through identical
+        # post-processing.
+        from .backend.tables import open_table_page
+
+        for page_num in page_nums:
+            try:
+                out[page_num] = extract_tables_from_page(
+                    open_table_page(path, page_num)
+                )
+            except Exception as exc:  # noqa: BLE001 - per-page isolation
+                out[page_num] = PageError(repr(exc))
+        return out
+
     doc = pymupdf.open(path)
     try:
         for page_num in page_nums:

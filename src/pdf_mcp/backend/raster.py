@@ -97,6 +97,73 @@ def ocr_page_text(
     return str(pytesseract.image_to_string(image, lang=lang, config=config))
 
 
+def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
+    """Raster image placements with a stable key per distinct image.
+
+    pdfium exposes no xref, and callers use one to DEDUPE: pdf_info
+    counts distinct raster images per page, so keying on the page-object
+    index would count one logo placed four times as four images. The key
+    is a hash of the image's RAW stream bytes instead, so repeated
+    placements of the same XObject collapse exactly as an xref would.
+    """
+    import ctypes
+    import hashlib
+
+    import pypdfium2.raw as pdfium_raw
+
+    doc = pdfium.PdfDocument(pdf_path)
+    try:
+        page = doc[page_num]
+        height = page.get_size()[1]
+        out: list[dict[str, Any]] = []
+        for index in range(pdfium_raw.FPDFPage_CountObjects(page.raw)):
+            obj = pdfium_raw.FPDFPage_GetObject(page.raw, index)
+            if pdfium_raw.FPDFPageObj_GetType(obj) != pdfium_raw.FPDF_PAGEOBJ_IMAGE:
+                continue
+
+            size = pdfium_raw.FPDFImageObj_GetImageDataRaw(obj, None, 0)
+            raw = b""
+            if size > 0:
+                buf = ctypes.create_string_buffer(size)
+                pdfium_raw.FPDFImageObj_GetImageDataRaw(obj, buf, size)
+                raw = buf.raw[:size]
+
+            meta = pdfium_raw.FPDF_IMAGEOBJ_METADATA()
+            pdfium_raw.FPDFImageObj_GetImageMetadata(obj, page.raw, ctypes.byref(meta))
+
+            left, bottom, right, top = (ctypes.c_float() for _ in range(4))
+            pdfium_raw.FPDFPageObj_GetBounds(
+                obj,
+                ctypes.byref(left),
+                ctypes.byref(bottom),
+                ctypes.byref(right),
+                ctypes.byref(top),
+            )
+            key = (
+                int.from_bytes(hashlib.sha256(raw).digest()[:6], "big")
+                if raw
+                else index
+            )
+            out.append(
+                {
+                    "key": key,
+                    "bbox": (
+                        left.value,
+                        height - top.value,
+                        right.value,
+                        height - bottom.value,
+                    ),
+                    "width": int(meta.width),
+                    "height": int(meta.height),
+                    "bpc": int(meta.bits_per_pixel),
+                    "raw": raw,
+                }
+            )
+        return out
+    finally:
+        doc.close()
+
+
 def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
     """Raster image placements on a page, PyMuPDF's get_image_info shape.
 

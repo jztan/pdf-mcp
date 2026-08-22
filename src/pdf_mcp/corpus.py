@@ -17,7 +17,8 @@ from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import Any, Callable
 
-import pymupdf
+
+from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker
 from .parallel import resolve_workers
@@ -463,7 +464,7 @@ def warm_docs(
             )
             continue
         try:
-            with pymupdf.open(path) as probe:
+            with open_pdf(path) as probe:
                 uncached.append((path, len(probe)))
         except Exception as e:
             skipped.append({"path": path, "reason": f"unreadable: {e}"})

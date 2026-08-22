@@ -495,19 +495,53 @@ def _lines(
     return out
 
 
+#: Minimum share of the narrower line that must overlap horizontally for
+#: two lines to belong to the same block.
+_BLOCK_X_OVERLAP = 0.35
+
+
+def _x_overlaps(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+    overlap = min(a[2], b[2]) - max(a[0], b[0])
+    narrower = min(a[2] - a[0], b[2] - b[0])
+    return narrower > 0 and overlap / narrower >= _BLOCK_X_OVERLAP
+
+
 def _group_into_blocks(lines: list[Any]) -> list[list[Any]]:
+    """Group lines into paragraph-shaped blocks.
+
+    Each line joins the most recently extended OPEN block it fits, rather
+    than only the immediately preceding line. Marginal side headings are
+    why: on a page with a heading column the lines alternate between that
+    column and the body in y order, so a consecutive-line rule split the
+    body paragraph at every alternation. Blocks came out at a median of
+    72 characters against PyMuPDF's 180, most of them below the
+    paragraph picker's 80-character floor, and excerpt containment fell
+    from 0.707 to 0.347.
+    """
     if not lines:
         return []
     heights = [ln[0][3] - ln[0][1] for ln in lines if ln[0][3] > ln[0][1]]
     med_h = statistics.median(heights) if heights else 10.0
-    blocks: list[list[Any]] = [[lines[0]]]
-    for prev, cur in zip(lines, lines[1:]):
-        gap = cur[0][1] - prev[0][3]
-        same_column = abs(cur[0][0] - prev[0][0]) < _COLUMN_X_TOL
-        if gap > med_h * _PARA_GAP_FACTOR or not same_column:
-            blocks.append([cur])
+    gap_limit = med_h * _PARA_GAP_FACTOR
+
+    blocks: list[list[Any]] = []
+    for line in lines:
+        bbox = line[0]
+        chosen: int | None = None
+        for i in range(len(blocks) - 1, -1, -1):
+            last = blocks[i][-1][0]
+            if bbox[1] - last[3] > gap_limit:
+                continue
+            if not _x_overlaps(bbox, last):
+                continue
+            if abs(bbox[0] - last[0]) >= _COLUMN_X_TOL:
+                continue
+            chosen = i
+            break
+        if chosen is None:
+            blocks.append([line])
         else:
-            blocks[-1].append(cur)
+            blocks[chosen].append(line)
     return blocks
 
 

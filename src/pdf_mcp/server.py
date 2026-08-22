@@ -21,6 +21,8 @@ from typing import Annotated, Any, Callable
 
 import httpx
 import pymupdf
+
+from .docopen import open_pdf
 from fastmcp import FastMCP
 from mcp.types import ImageContent
 from pydantic import BeforeValidator
@@ -569,7 +571,7 @@ def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
         cached = cache.get_content_trust(local_path)
         if cached is not None:
             return content_trust.summarize(cached, detail=detail, phrases=phrases)
-        doc = pymupdf.open(local_path)
+        doc = open_pdf(local_path)
         try:
             scan = content_trust.scan_document(doc)
         finally:
@@ -727,7 +729,7 @@ def pdf_info(
         coverage = cached.get("text_coverage")
         if coverage is None:
             # Lazy backfill: pre-v1.9.0 cached row has no coverage
-            doc = pymupdf.open(local_path)
+            doc = open_pdf(local_path)
             try:
                 coverage = [
                     {
@@ -762,7 +764,7 @@ def pdf_info(
         return result
 
     # Parse PDF
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         page_count = len(doc)
@@ -904,7 +906,7 @@ def pdf_read_pages(
     if render_dpi is not None:
         clamped_dpi = _clamp(render_dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         page_nums = parse_page_range(pages, len(doc))
@@ -988,7 +990,7 @@ def pdf_read_pages(
                     )
                     for n in ocr_miss_pages:
                         try:
-                            doc_local = pymupdf.open(local_path)
+                            doc_local = open_pdf(local_path)
                             try:
                                 from .extractor import _TESSDATA_PATH
 
@@ -1338,7 +1340,7 @@ def pdf_read_all(
     # Clamp max_pages to prevent resource exhaustion
     max_pages = _clamp(max_pages, 1, MAX_PAGES_LIMIT)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         total_pages = len(doc)
@@ -2299,7 +2301,7 @@ def pdf_search(
     if granularity == "section":
         return _pdf_search_section_mode(local_path, query, max_results)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         doc_pages = len(doc)
@@ -2736,7 +2738,7 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
             "from_cache": True,
         }
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         toc = extract_toc(doc)
@@ -3209,7 +3211,7 @@ def _finalize_corpus_matches(
 
     matches: list[dict[str, Any]] = []
     for path, doc_hits in hits_by_doc.items():
-        doc = pymupdf.open(path)
+        doc = open_pdf(path)
         try:
             page_nums_0idx = [h["page"] - 1 for h in doc_hits]
             hidden = _resolve_hidden_flags(path, doc, page_nums_0idx)
@@ -4390,7 +4392,7 @@ def pdf_render_pages(
         return [_res[1]]
     local_path = _res[0]
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
     try:
         page_nums = parse_page_range(pages, len(doc))
         if not page_nums:
@@ -4768,7 +4770,7 @@ def pdf_extract_chart(
         blocks = _attach_chart_image_blocks(cached, include_render)
         return [cached, *blocks]
     try:
-        doc = pymupdf.open(local_path)
+        doc = open_pdf(local_path)
     except Exception as e:
         return [{"error": f"Cannot open PDF: {e}"}]
     try:

@@ -31,8 +31,8 @@ import os
 import sys
 from typing import Any
 
-import pymupdf
 
+from .docopen import open_pdf
 from .extractor import extract_tables_from_page
 
 
@@ -62,7 +62,7 @@ def extract(path: str, pages: list[int]) -> dict[str, Any]:
                 errors[str(page_num)] = repr(exc)
         return {"tables": tables, "errors": errors}
 
-    doc = pymupdf.open(path)
+    doc = open_pdf(path)
     try:
         for page_num in pages:
             try:

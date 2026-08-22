@@ -43,6 +43,8 @@ sys.stderr = _StderrSwigFilter(sys.stderr)  # type: ignore[assignment]
 
 import pymupdf  # noqa: E402
 
+from .docopen import open_pdf  # noqa: E402
+
 from .parallel import PageError  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -1702,7 +1704,7 @@ def _ocr_page_worker(
     page_num = args[1]  # safe fallback when unpack fails
     try:
         path, page_num, lang, dpi, tessdata = args
-        doc = pymupdf.open(path)
+        doc = open_pdf(path)
         try:
             return page_num, ocr_page(
                 doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata
@@ -1725,7 +1727,7 @@ def _render_page_worker(
     page_num = args[1]  # safe fallback when unpack fails
     try:
         path, page_num, out_dir, pdf_hash, dpi = args
-        doc = pymupdf.open(path)
+        doc = open_pdf(path)
         try:
             info = render_page_as_png(doc, page_num, Path(out_dir), pdf_hash, dpi)
             return page_num, info
@@ -1747,7 +1749,7 @@ def _warm_extract_worker(
     PyMuPDF, never FastMCP (same rule as the per-page workers above).
     Coverage counts use raw ``get_text()`` chars, matching pdf_info.
     """
-    doc = pymupdf.open(path)
+    doc = open_pdf(path)
     try:
         page_count = len(doc)
         metadata = extract_metadata(doc)
@@ -1848,7 +1850,7 @@ def _extract_tables_worker(
                 out[page_num] = PageError(repr(exc))
         return out
 
-    doc = pymupdf.open(path)
+    doc = open_pdf(path)
     try:
         for page_num in page_nums:
             try:

@@ -56,6 +56,41 @@ class Page:
     def get_image_info(self) -> list[dict[str, Any]]:
         return _raster.get_image_info(self._path, self.number)
 
+    def get_images(self, full: bool = False) -> list[tuple[Any, ...]]:
+        """PyMuPDF's get_images shape, deduped by image identity.
+
+        Callers read only element 0 (the xref, used to dedupe and to look
+        the image up again) and elements 2 and 3 (pixel width/height).
+        pdfium has no xref, so element 0 is a hash of the raw image
+        stream: repeated placements of one XObject collapse to a single
+        entry exactly as an xref would, which is what pdf_info's distinct
+        raster-image count depends on.
+        """
+        seen: dict[int, tuple[Any, ...]] = {}
+        for image in _raster.page_images(self._path, self.number):
+            key = image["key"]
+            if key not in seen:
+                seen[key] = (
+                    key,
+                    0,
+                    image["width"],
+                    image["height"],
+                    image["bpc"],
+                    "",
+                    "",
+                    "",
+                    "",
+                    0,
+                )
+        return list(seen.values())
+
+    def get_image_rects(self, key: Any) -> list[Rect]:
+        return [
+            Rect(*image["bbox"])
+            for image in _raster.page_images(self._path, self.number)
+            if image["key"] == key
+        ]
+
     def find_tables(self) -> Any:
         return _tables.TableFinding(tables=_tables.find_tables(self._path, self.number))
 
@@ -95,6 +130,19 @@ class Document:
 
     def get_toc(self) -> list[list[Any]]:
         return self._doc.get_toc()
+
+    def extract_image(self, key: Any) -> dict[str, Any]:
+        """Pixel metadata for one image, looked up by get_images' key."""
+        for index in range(len(self._sizes)):
+            for image in _raster.page_images(self._path, index):
+                if image["key"] == key:
+                    return {
+                        "image": image["raw"],
+                        "ext": "png",
+                        "width": image["width"],
+                        "height": image["height"],
+                    }
+        raise ValueError(f"no image with key {key!r}")
 
     def close(self) -> None:
         self._doc.close()

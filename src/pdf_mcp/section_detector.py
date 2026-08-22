@@ -20,6 +20,8 @@ from typing import Any
 
 import pymupdf
 
+from .docopen import open_pdf
+
 
 # ---- Core dataclass ----
 @dataclass
@@ -386,7 +388,7 @@ def detect_boundaries(pdf_path: str) -> list[Section]:
     Multi-line headings (a number line followed by the title text on the
     next line) are merged via _merge_split_headings before section assembly.
     """
-    doc = pymupdf.open(pdf_path)
+    doc = open_pdf(pdf_path)
     try:
         # Phase 1: collect every line with its dict-shape attributes.
         all_lines: list[tuple[int, dict[str, Any], float]] = []
@@ -471,7 +473,7 @@ def derive_sections(pdf_path: str) -> list[Section]:
     Otherwise falls back to the multi-signal heuristic detector.
     Returns [] if both yield no sections.
     """
-    doc = pymupdf.open(pdf_path)
+    doc = open_pdf(pdf_path)
     try:
         if doc.get_toc():
             return extract_toc_sections(doc)

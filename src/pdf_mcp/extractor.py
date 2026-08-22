@@ -195,17 +195,30 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
 # (22 two-column + 22 one-column arXiv documents), it is not a downgrade:
 #
 #   group        pymupdf4llm   native
-#   two_column      0.815       0.829
-#   one_column      0.842       0.873
+#   two_column      0.815       0.806
+#   one_column      0.836       0.826
 #
 # and on generated 3- and 4-column fixtures with exact ground truth both
 # reach 1.000, where no detection at all scores 0.359 / 0.279.
+#
+# CURRENT STATE, measured not assumed: two_column 0.806 vs the previous
+# path's 0.815, one_column 0.826 vs 0.836. About 0.01 short on the mean,
+# and bimodal rather than uniform - several documents gain a lot
+# (0706.0954 +0.166, 1406.4582 +0.095, 1601.06071 +0.084) while a few
+# regress. The regressions are false splits: 0710.2265 and 0802.0539 are
+# single-column and currently split on every page. A width-threshold sweep
+# scored against ground truth plateaus here, so closing the rest needs a
+# better discriminator (e.g. requiring lines to start at each candidate
+# column's left edge), not more threshold tuning.
+#
+# The same algorithm over pypdfium2's tight glyph boxes scored 0.829 /
+# 0.873, so the headroom is real and the limit is not the approach.
 
 # A gutter must be this wide relative to median GLYPH height. Measured
 # against glyph height (~4.7pt on arXiv two-column papers), not line height:
 # real inter-column gutters run 10-21pt. Swept - 2.0 gives an 85% split rate
 # on two-column pages while leaving one-column false positives flat.
-_GUTTER_MIN_WIDTH_FACTOR = 0.9
+_GUTTER_MIN_WIDTH_FACTOR = 0.6
 # A gutter must be clear across this fraction of the text band's height.
 _GUTTER_MIN_COVERAGE = 0.80
 # A column narrower than this fraction of the text width is a figure margin.
@@ -282,7 +295,15 @@ def _find_gutters(
 
     text_x0 = min(b[0] for b in boxes)
     text_x1 = max(b[2] for b in boxes)
-    min_w = _GUTTER_MIN_WIDTH_FACTOR * med_h
+    # Floor is relative to median glyph WIDTH, not height. Height is not
+    # comparable across engines or documents: PyMuPDF's rawdict char boxes
+    # span the full line height (~9.96pt on arXiv papers) where a tight
+    # glyph box is ~4.7pt, so a height-relative floor has to be recalibrated
+    # per convention and drifts with leading. A gutter is naturally a few
+    # character widths across, which is stable.
+    widths = [b[2] - b[0] for b in boxes if b[2] > b[0]]
+    med_w = statistics.median(widths) if widths else med_h / 2.0
+    min_w = _GUTTER_MIN_WIDTH_FACTOR * med_w
     out = []
     for g0, g1 in runs:
         if g1 - g0 < min_w:

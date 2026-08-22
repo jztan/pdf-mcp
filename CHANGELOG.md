@@ -9,16 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Column-aware reading order is now built in and no longer needs the
-  `[multicolumn]` extra. Detection is pure geometry over glyph positions
-  PyMuPDF already provides, and it scores better than the previous path on
-  the reading-order benchmark (two-column 0.829 vs 0.815, one-column 0.873
-  vs 0.842, both against READoc ground truth), while also handling 3- and
-  4-column layouts. Installing `pdf-mcp[multicolumn]` still works and is
-  now a no-op, so existing instructions keep working.
+  `[multicolumn]` extra, which removes `pymupdf4llm` and its transitive
+  `pymupdf_layout`. That package is licensed Polyform Noncommercial, a use
+  restriction rather than copyleft, and it was loaded at server startup and
+  installed by `pip install -e '.[dev]'`. Installing `pdf-mcp[multicolumn]`
+  still works and is now a no-op, so existing instructions keep working.
 
-  This removes `pymupdf4llm` and its transitive `pymupdf_layout`, which is
-  licensed Polyform Noncommercial. That package was loaded at server
-  startup and installed by `pip install -e '.[dev]'`.
+  Reading-order quality is close to, but not yet at, the previous path.
+  Against READoc ground truth over 44 arXiv documents: two-column 0.806
+  versus 0.815, one-column 0.826 versus 0.836. The mean cost is about 0.01
+  and it is not evenly spread: several documents improve substantially
+  (up to +0.17) while a few regress, currently because some single-column
+  pages are split in error.
 
   Multi-column extraction is also deterministic now. The previous detector
   could return a different box count across repeated opens of the same

@@ -1357,3 +1357,34 @@ def test_dual_axis_exposes_right_axis():
     result2 = chart_extractor.extract_charts(doc2, 0)
     doc2.close()
     assert "y_axis_right" not in result2["charts"][0]
+
+
+def test_dash_key_parses_leading_dot_values():
+    """PyMuPDF writes dash values below 1 without a leading zero — real
+    output includes `[ 1.0834783 .4685312 ] 0`. The number pattern used to
+    require a digit before the decimal point, so it matched only the digits
+    *after* the dot and read `.4685312` as the integer 4685312.
+
+    That inverted the rounding `_dash_key` depends on. Its contract is that
+    numbers are rounded "so float noise between segments of one curve cannot
+    split it"; with the bug, two segments differing in the 7th decimal
+    became `4685312.0` vs `4685319.0` — still distinct after rounding — so a
+    single dashed curve could split into phantom series.
+    """
+    key = lambda raw: chart_extractor._dash_key({"dashes": raw})  # noqa: E731
+
+    # A leading dot must parse as a fraction, not as a large integer.
+    assert key("[ 1.0834783 .4685312 ] 0") == "1.1 0.5 0.0"
+    assert key("[ .5 .5 ] 0") == "0.5 0.5 0.0"
+
+    # Leading-dot and leading-zero spellings of the same pattern must not
+    # produce different style keys, or one curve splits by notation alone.
+    assert key("[ .5 .5 ] 0") == key("[ 0.5 0.5 ] 0")
+
+    # The noise tolerance the docstring promises must hold for sub-1 values.
+    assert key("[ 1.08 .4685312 ] 0") == key("[ 1.08 .4685319 ] 0")
+
+    # Unchanged behaviour for values >= 1 and for solid strokes.
+    assert key("[ 5.55 2.4 ] 0") == "5.5 2.4 0.0"
+    assert key("[] 0") is None
+    assert key("") is None

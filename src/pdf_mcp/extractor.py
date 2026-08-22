@@ -182,50 +182,204 @@ def parse_page_range(pages: str | list[int] | None, total_pages: int) -> list[in
     return unique_result
 
 
-def _import_column_boxes() -> Any:
-    """Import the optional column detector, or return None if unavailable.
+# --- native column detection -------------------------------------------
+#
+# Replaces pymupdf4llm's column_boxes(). That import pulled pymupdf_layout,
+# which is licensed **Polyform Noncommercial** (a use restriction, not
+# copyleft), loaded at server startup via the server_info feature probe, and
+# was installed into every `pip install -e '.[dev]'`. This detector is pure
+# geometry over per-glyph boxes PyMuPDF already provides, so the capability
+# survives without that dependency.
+#
+# Scored against READoc ground truth with scripts/benchmark_reading_order.py
+# (22 two-column + 22 one-column arXiv documents), it is not a downgrade:
+#
+#   group        pymupdf4llm   native
+#   two_column      0.815       0.829
+#   one_column      0.842       0.873
+#
+# and on generated 3- and 4-column fixtures with exact ground truth both
+# reach 1.000, where no detection at all scores 0.359 / 0.279.
 
-    Single source of truth for column-aware availability: both
-    ``detect_column_boxes`` (the extraction fallback path) and
-    ``column_detection_available`` (server_info feature discovery) go through
-    here, so the reported feature flag can never drift from what extraction
-    actually does. Any failure — missing dependency or its version-guard
-    ImportError — yields None.
-    """
+# A gutter must be this wide relative to median GLYPH height. Measured
+# against glyph height (~4.7pt on arXiv two-column papers), not line height:
+# real inter-column gutters run 10-21pt. Swept - 2.0 gives an 85% split rate
+# on two-column pages while leaving one-column false positives flat.
+_GUTTER_MIN_WIDTH_FACTOR = 0.9
+# A gutter must be clear across this fraction of the text band's height.
+_GUTTER_MIN_COVERAGE = 0.80
+# A column narrower than this fraction of the text width is a figure margin.
+_COLUMN_MIN_WIDTH_FRAC = 0.12
+# Real column grids are near-symmetric (measured true positives: 231/235 and
+# 234/234 points). Applied to the FINAL band set only: a 3-column page's
+# first 2-way split is inherently 1:2, so enforcing this per split would make
+# odd column counts undetectable. Sidebars still fail it, because their wide
+# side never subdivides.
+_COLUMN_MAX_WIDTH_RATIO = 1.35
+# Generous bound for intermediate splits during recursion (see above).
+_SPLIT_MAX_WIDTH_RATIO = 3.0
+_MAX_COLUMNS = 6
+
+
+def _page_glyph_boxes(page: Any) -> list[tuple[float, float, float, float]]:
+    """Per-glyph bboxes from rawdict, skipping whitespace."""
+    out: list[tuple[float, float, float, float]] = []
     try:
-        from pymupdf4llm.helpers.multi_column import column_boxes
+        raw = page.get_text("rawdict")
+    except Exception:  # pragma: no cover - defensive
+        return out
+    for block in raw.get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                for ch in span.get("chars", []):
+                    if not str(ch.get("c", "")).strip():
+                        continue
+                    x0, y0, x1, y1 = ch["bbox"]
+                    if x1 > x0 and y1 > y0:
+                        out.append((x0, y0, x1, y1))
+    return out
 
-        return column_boxes
-    except Exception:
+
+def _find_gutters(
+    boxes: list[tuple[float, float, float, float]], page_width: float, med_h: float
+) -> list[tuple[float, float]]:
+    """x-intervals crossed by no glyph, wide and tall enough to be columns.
+
+    Runs on glyphs rather than assembled lines on purpose: line assembly
+    groups by baseline, and in a two-column layout both columns share
+    baselines, so a "line" spans the gutter and it never looks empty.
+    """
+    if len(boxes) < 40:
+        return []
+    top = min(b[1] for b in boxes)
+    bottom = max(b[3] for b in boxes)
+    band = bottom - top
+    if band <= 0:
+        return []
+
+    step = max(0.5, med_h / 4.0)
+    n = int(page_width / step) + 1
+    covered = [0.0] * n
+    for x0, y0, x1, y1 in boxes:
+        i0 = max(0, int(x0 / step))
+        i1 = min(n - 1, int(x1 / step))
+        h = max(y1 - y0, 0.1)
+        for i in range(i0, i1 + 1):
+            covered[i] += h
+
+    threshold = band * (1.0 - _GUTTER_MIN_COVERAGE)
+    runs: list[tuple[float, float]] = []
+    start: int | None = None
+    for i, c in enumerate(covered):
+        if c <= threshold:
+            if start is None:
+                start = i
+        elif start is not None:
+            runs.append((start * step, i * step))
+            start = None
+    if start is not None:
+        runs.append((start * step, n * step))
+
+    text_x0 = min(b[0] for b in boxes)
+    text_x1 = max(b[2] for b in boxes)
+    min_w = _GUTTER_MIN_WIDTH_FACTOR * med_h
+    out = []
+    for g0, g1 in runs:
+        if g1 - g0 < min_w:
+            continue
+        # Must have text on BOTH sides; otherwise it is a page margin.
+        if g0 <= text_x0 + min_w or g1 >= text_x1 - min_w:
+            continue
+        out.append((g0, g1))
+    return out
+
+
+def _best_split(
+    boxes: list[tuple[float, float, float, float]],
+    x0: float,
+    x1: float,
+    page_width: float,
+    med_h: float,
+) -> tuple[float, float] | None:
+    """Most balanced gutter strictly inside [x0, x1], or None."""
+    span = x1 - x0
+    if span <= 0:
         return None
+    best: tuple[float, tuple[float, float]] | None = None
+    for g0, g1 in _find_gutters(boxes, page_width, med_h):
+        if g0 <= x0 or g1 >= x1:
+            continue
+        lw, rw = g0 - x0, x1 - g1
+        if lw <= 0 or rw <= 0:
+            continue
+        if lw / span < _COLUMN_MIN_WIDTH_FRAC or rw / span < _COLUMN_MIN_WIDTH_FRAC:
+            continue
+        ratio = max(lw, rw) / min(lw, rw)
+        if ratio > _SPLIT_MAX_WIDTH_RATIO:
+            continue
+        if best is None or ratio < best[0]:
+            best = (ratio, (g0, g1))
+    return best[1] if best else None
 
 
 def column_detection_available() -> bool:
-    """True when the optional column detector is importable.
+    """True: column-aware reading order is always available.
 
-    Mirrors the exact guard ``detect_column_boxes`` relies on (see
-    ``_import_column_boxes``), so server_info reports column-aware
-    availability that matches real extraction behaviour.
+    Kept so server_info's feature flag and any caller guarding on it keep
+    working. Detection no longer depends on an optional package, so this can
+    no longer drift from what extraction actually does.
     """
-    return _import_column_boxes() is not None
+    return True
 
 
 def detect_column_boxes(page: Any) -> list[Any]:
-    """Return column bounding boxes in reading order, or [] if unavailable.
+    """Return column bounding boxes in reading order, or [] if not split.
 
-    Wraps pymupdf4llm's column detector. Any failure — missing dependency,
-    its version-guard ImportError, or a detection error — degrades to [] so
-    callers fall back to positional-sort extraction.
+    Recursive vertical-projection gutter finding: split the text area at the
+    most balanced whitespace channel, then re-split each resulting band. Each
+    level re-applies the width and balance guards, so a band that is really
+    one column simply stops. Any failure degrades to [] so callers fall back
+    to positional-sort extraction.
     """
-    column_boxes = _import_column_boxes()
-    if column_boxes is None:
-        return []
     try:
-        # margins=0 keeps running headers/footers/page numbers in the column
-        # boxes, matching the single-column path (which extracts the full page).
-        # Verified to not affect reading-order benchmark score.
-        return list(column_boxes(page, footer_margin=0, header_margin=0))
-    except Exception:
+        boxes = _page_glyph_boxes(page)
+        if len(boxes) < 40:
+            return []
+        heights = [b[3] - b[1] for b in boxes]
+        med_h = statistics.median(heights) if heights else 10.0
+        text_x0 = min(b[0] for b in boxes)
+        text_x1 = max(b[2] for b in boxes)
+        top = min(b[1] for b in boxes)
+        bottom = max(b[3] for b in boxes)
+        page_width = page.rect.width
+
+        bands = [(text_x0, text_x1)]
+        for _ in range(_MAX_COLUMNS):
+            out: list[tuple[float, float]] = []
+            changed = False
+            for b0, b1 in bands:
+                if len(bands) + len(out) >= _MAX_COLUMNS:
+                    out.append((b0, b1))
+                    continue
+                subset = [b for b in boxes if b0 - 0.5 <= (b[0] + b[2]) / 2 <= b1 + 0.5]
+                gut = _best_split(subset, b0, b1, page_width, med_h)
+                if gut is None:
+                    out.append((b0, b1))
+                    continue
+                out.extend([(b0, gut[0]), (gut[1], b1)])
+                changed = True
+            bands = out
+            if not changed:
+                break
+
+        if len(bands) <= 1:
+            return []
+        widths = [b1 - b0 for b0, b1 in bands]
+        if max(widths) / max(min(widths), 0.1) > _COLUMN_MAX_WIDTH_RATIO:
+            # Lopsided final set means a sidebar or pull-quote, not columns.
+            return []
+        return [pymupdf.Rect(b0, top, b1, bottom) for b0, b1 in bands]
+    except Exception:  # pragma: no cover - defensive fail-safe
         return []
 
 
@@ -907,26 +1061,41 @@ def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:
             # distinct from the heuristic vote which filters to non-empty blocks.
             text_blocks = [block[4] for block in blocks if block[6] == 0]
             return "\n\n".join(text_blocks)
-        # NOTE: the rawdict assembly below is deterministic and dedup'd given
-        # a fixed set of column boxes, but detect_column_boxes (pymupdf4llm's
-        # column_boxes()) can itself return a varying box count across
-        # repeated opens of the same page, so multi-column extraction is not
-        # fully deterministic on re-extraction. The mtime-keyed cache masks
-        # this in steady state (extraction runs once per file). A
-        # deterministic column detector is a deferred follow-up.
+        # rawdict assembly is now deterministic: the native detector is pure
+        # geometry over glyph boxes, unlike pymupdf4llm's column_boxes()
+        # which returned a varying box count across repeated opens of the
+        # same page. That non-determinism was a tracked limitation; it is
+        # gone with the dependency.
         boxes = detect_column_boxes(page)
-        if _is_multi_column_layout(boxes):
-            # Multi-column: assemble each column in reading order from
-            # deterministic rawdict line data (each line used once), so the
-            # text is neither interleaved row-by-row nor duplicated by
-            # overlapping column boxes. Any failure degrades to the
-            # positional block-sort below.
-            try:
-                assembled = _assemble_columns_from_rawdict(page, boxes)
-            except Exception:  # pragma: no cover - defensive fail-safe
-                assembled = ""
-            if assembled:
-                return assembled
+        if not _is_multi_column_layout(boxes):
+            # Single column: assemble from the whole page rather than
+            # falling through to the positional block sort.
+            #
+            # _merge_row_fragments (inside the assembly) rejoins same-row
+            # rawdict fragments, which is what keeps letter-spaced and
+            # small-caps headings contiguous ("GROWTH AND MIXING" rather
+            # than "GR\nO\nWTH\nAND\nMIXING"). That is general text
+            # quality, not a multi-column concern, but it used to be
+            # reachable only via this branch - and only because
+            # pymupdf4llm over-split: it returned 24 boxes on the
+            # one-column page 0706.0954 p11, so _is_multi_column_layout
+            # was incidentally true. A detector that reports columns
+            # honestly would otherwise regress those headings.
+            boxes = []
+        # Assemble each column in reading order from deterministic rawdict
+        # line data (each line used once), so text is neither interleaved
+        # row-by-row nor duplicated by overlapping boxes. Building the
+        # whole-page box is inside the guard because it needs a real
+        # page.rect; anything short of that degrades to the positional
+        # block-sort below rather than raising.
+        try:
+            if not boxes:
+                boxes = [pymupdf.Rect(page.rect)]
+            assembled = _assemble_columns_from_rawdict(page, boxes)
+        except Exception:  # pragma: no cover - defensive fail-safe
+            assembled = ""
+        if assembled:
+            return assembled
         # Single-column (or detection unavailable): positional block sort.
         # blocks format: (x0, y0, x1, y1, "text", block_no, block_type)
         text_blocks = [block[4] for block in blocks if block[6] == 0]

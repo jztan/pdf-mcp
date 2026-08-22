@@ -23,8 +23,11 @@ from __future__ import annotations
 
 import ctypes
 import math
+import os
+import threading
 import re
 import statistics
+from collections import OrderedDict
 from typing import Any
 
 import pypdfium2 as pdfium
@@ -52,6 +55,46 @@ _BOLD_WEIGHT = 600
 _DESCRIPTOR_ITALIC = 1 << 6
 
 _SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
+
+#: In-process cache of the assembled line model, keyed on file identity
+#: (path, mtime_ns, size) and page. The corpus query path re-extracts the
+#: same hit pages repeatedly (paragraph picker, bbox lookup, retry), which
+#: PyMuPDF absorbed at ~3ms/page and this pipeline could not; per-query
+#: latency ran 3x the baseline before this existed.
+_LINE_CACHE_MAX = 256
+_LINE_CACHE: "OrderedDict[tuple[str, int, int, int], list[Any]]" = OrderedDict()
+_LINE_CACHE_LOCK = threading.Lock()
+
+
+def _file_key(pdf_path: str, page_num: int) -> tuple[str, int, int, int] | None:
+    try:
+        st = os.stat(pdf_path)
+    except OSError:
+        return None
+    return (os.path.abspath(pdf_path), st.st_mtime_ns, st.st_size, page_num)
+
+
+def _cached_lines(pdf_path: str, page_num: int) -> "list[Any] | None":
+    key = _file_key(pdf_path, page_num)
+    if key is None:
+        return None
+    with _LINE_CACHE_LOCK:
+        lines = _LINE_CACHE.get(key)
+        if lines is not None:
+            _LINE_CACHE.move_to_end(key)
+        return lines
+
+
+def _store_lines(pdf_path: str, page_num: int, lines: "list[Any]") -> None:
+    key = _file_key(pdf_path, page_num)
+    if key is None:
+        return
+    with _LINE_CACHE_LOCK:
+        _LINE_CACHE[key] = lines
+        _LINE_CACHE.move_to_end(key)
+        while len(_LINE_CACHE) > _LINE_CACHE_MAX:
+            _LINE_CACHE.popitem(last=False)
+
 
 _SHAPES = ("text", "blocks", "dict", "rawdict", "words")
 
@@ -137,12 +180,46 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
     dedups them, and everything downstream is calibrated to deduped
     text: fed both copies, every character doubled ("めぐみ" became
     "めめぐぐみみ") and CJK phrase queries stopped matching.
+
+    Two hot-path economies, measured on the corpus query benchmark
+    (per-query latency was 3x PyMuPDF's before them):
+
+    Style is computed once per TEXT OBJECT, not per glyph. Every glyph
+    of one Tj run shares its font, matrix scale and weight, and a page
+    has tens of objects against thousands of glyphs; the per-glyph
+    FontInfo call (buffer + UTF-8 decode each time) dominated the
+    profile. FPDFText_GetTextObject is one cheap call and its pointer
+    keys the cache.
+
+    Page text is fetched in ONE call and indexed, guarded by the
+    count == length check (a non-BMP character can make pdfium's
+    UTF-16 indices diverge from Python string positions; such pages
+    fall back to per-char fetches).
     """
     x_off, y_top = page_transform(page)
     out: list[_Char] = []
     seen: set[tuple[str, float, float]] = set()
-    for i in range(textpage.count_chars()):
-        ch = textpage.get_text_range(i, 1)
+
+    n = textpage.count_chars()
+    try:
+        full = textpage.get_text_range()
+    except Exception:  # noqa: BLE001
+        full = None
+    bulk = full if (full is not None and len(full) == n) else None
+
+    style_cache: dict[int, tuple[str, float, int]] = {}
+
+    def style_of(index: int) -> tuple[str, float, int]:
+        obj = pdfium_raw.FPDFText_GetTextObject(textpage.raw, index)
+        key = ctypes.cast(obj, ctypes.c_void_p).value or 0
+        cached = style_cache.get(key)
+        if cached is None:
+            cached = _char_style(textpage, index)
+            style_cache[key] = cached
+        return cached
+
+    for i in range(n):
+        ch = bulk[i] if bulk is not None else textpage.get_text_range(i, 1)
         if not ch or ch in ("\r", "\n"):
             continue
         # pdfium emits U+FFFE where a line-end soft hyphen was resolved;
@@ -161,7 +238,7 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
         if key in seen:
             continue
         seen.add(key)
-        font, size, flags = _char_style(textpage, i)
+        font, size, flags = style_of(i)
         out.append(
             _Char(
                 i,
@@ -777,15 +854,20 @@ def _x_overlaps(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
 def _median_pitch(lines: list[Any]) -> float:
     """Median baseline-to-baseline distance between stacked lines."""
     pitches: list[float] = []
-    for i, line in enumerate(lines):
+    ordered = sorted(lines, key=lambda ln: ln[0][1])
+    for i, line in enumerate(ordered):
         bbox = line[0]
         best: float | None = None
-        for other in lines[i + 1 :]:
+        for other in ordered[i + 1 :]:
             delta = other[0][1] - bbox[1]
+            # y-sorted: once delta exceeds the best found, no later line
+            # can beat it. Without this the scan was O(n^2) per call and
+            # showed up in the corpus query profile.
+            if best is not None and delta >= best:
+                break
             if delta <= 0.5 or not _x_overlaps(bbox, other[0]):
                 continue
-            if best is None or delta < best:
-                best = delta
+            best = delta
         if best is not None:
             pitches.append(best)
     return statistics.median(pitches) if pitches else 12.0
@@ -1026,29 +1108,18 @@ def get_text(
     if kind not in _SHAPES:
         raise ValueError(f"unknown get_text shape {kind!r}; expected one of {_SHAPES}")
 
+    cached = _cached_lines(pdf_path, page_num)
+    if cached is not None:
+        lines = cached
+        return _shape_from_lines(lines, kind, sort=sort, clip=clip)
+
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
         textpage = page.get_textpage()
         lines = _lines(page, textpage)
-        if clip is not None:
-            lines = [ln for ln in lines if _clipped(ln[0], clip)]
-        blocks = _group_into_blocks(lines)
-
-        if kind == "text":
-            return "\n\n".join("\n".join(ln[1] for ln in block) for block in blocks)
-        if kind == "blocks":
-            out = [
-                (*_block_bbox(block), "\n".join(ln[1] for ln in block), number, 0)
-                for number, block in enumerate(blocks)
-            ]
-            if sort:
-                out = sorted(out, key=lambda b: (round(b[1], 1), round(b[0], 1)))
-                out = [(*b[:5], i, b[6]) for i, b in enumerate(out)]
-            return out
-        if kind == "words":
-            return _words_of(blocks)
-        return _build_tree(blocks, raw=(kind == "rawdict"))
+        _store_lines(pdf_path, page_num, lines)
+        return _shape_from_lines(lines, kind, sort=sort, clip=clip)
     finally:
         doc.close()
 
@@ -1089,3 +1160,47 @@ def open_text_page(pdf_path: str, page_num: int) -> TextPage:
     finally:
         doc.close()
     return TextPage(pdf_path, page_num, Rect(0.0, 0.0, width, height))
+
+
+#: Grouped blocks are cached alongside the lines for unclipped calls
+#: (the paragraph picker and bbox lookup always call unclipped, several
+#: times per hit page). A clip changes the line set and therefore the
+#: grouping, so clipped calls always group fresh.
+_BLOCK_CACHE: "dict[int, list[list[Any]]]" = {}
+
+
+def _shape_from_lines(
+    lines: list[Any],
+    kind: str,
+    *,
+    sort: bool = False,
+    clip: tuple[float, float, float, float] | None = None,
+) -> Any:
+    if clip is not None:
+        clipped_lines = [ln for ln in lines if _clipped(ln[0], clip)]
+        blocks = _group_into_blocks(clipped_lines)
+    else:
+        cache_key = id(lines)
+        cached_blocks = _BLOCK_CACHE.get(cache_key)
+        if cached_blocks is None:
+            cached_blocks = _group_into_blocks(lines)
+            with _LINE_CACHE_LOCK:
+                if len(_BLOCK_CACHE) > _LINE_CACHE_MAX:
+                    _BLOCK_CACHE.clear()
+                _BLOCK_CACHE[cache_key] = cached_blocks
+        blocks = cached_blocks
+
+    if kind == "text":
+        return "\n\n".join("\n".join(ln[1] for ln in block) for block in blocks)
+    if kind == "blocks":
+        out = [
+            (*_block_bbox(block), "\n".join(ln[1] for ln in block), number, 0)
+            for number, block in enumerate(blocks)
+        ]
+        if sort:
+            out = sorted(out, key=lambda b: (round(b[1], 1), round(b[0], 1)))
+            out = [(*b[:5], i, b[6]) for i, b in enumerate(out)]
+        return out
+    if kind == "words":
+        return _words_of(blocks)
+    return _build_tree(blocks, raw=(kind == "rawdict"))

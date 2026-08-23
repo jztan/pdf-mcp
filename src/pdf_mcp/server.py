@@ -43,6 +43,7 @@ from .extractor import (
     extract_toc,
     get_best_paragraph_for_query,
     native_render_dpi_cap,
+    page_text_chars,
     ocr_page,
     parse_page_range,
     render_page_as_image,
@@ -734,7 +735,7 @@ def pdf_info(
                 coverage = [
                     {
                         "page": pn + 1,
-                        "text_chars": len(doc[pn].get_text()),
+                        "text_chars": page_text_chars(doc[pn]),
                         "raster_images": len({img[0] for img in doc[pn].get_images()}),
                     }
                     for pn in range(cached["page_count"])
@@ -776,7 +777,7 @@ def pdf_info(
         coverage = [
             {
                 "page": pn + 1,
-                "text_chars": len(doc[pn].get_text()),
+                "text_chars": page_text_chars(doc[pn]),
                 "raster_images": len({img[0] for img in doc[pn].get_images()}),
             }
             for pn in range(page_count)

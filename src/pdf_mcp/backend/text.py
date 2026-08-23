@@ -950,12 +950,25 @@ def _group_into_blocks(lines: list[Any]) -> list[list[Any]]:
 
 
 def _block_bbox(block: list[Any]) -> tuple[float, float, float, float]:
-    return (
-        min(ln[0][0] for ln in block),
-        min(ln[0][1] for ln in block),
-        max(ln[0][2] for ln in block),
-        max(ln[0][3] for ln in block),
-    )
+    x0 = min(ln[0][0] for ln in block)
+    y0 = min(ln[0][1] for ln in block)
+    x1 = max(ln[0][2] for ln in block)
+    y1 = max(ln[0][3] for ln in block)
+    if y1 <= y0:
+        # pdfium returns flat char boxes when it cannot resolve a font's
+        # vertical metrics, which happens for a CJK font the PDF
+        # references without embedding and the host cannot supply. Widths
+        # still come from the font's widths array, so only the height
+        # collapses and pdf_search reported bbox evidence of
+        # (72, 200, 450, 200): a rect a caller cannot draw or crop with.
+        # Fall back to the em box above the baseline.
+        size = max(
+            (c.size for ln in block for c in ln[2] if c.size > 0),
+            default=0.0,
+        )
+        if size > 0:
+            y0 = y1 - size
+    return (x0, y0, x1, y1)
 
 
 def _clipped(bbox: tuple[float, ...], clip: tuple[float, float, float, float]) -> bool:
@@ -1218,3 +1231,34 @@ def _shape_from_lines(
     if kind == "words":
         return _words_of(blocks)
     return _build_tree(blocks, raw=(kind == "rawdict"))
+
+
+def count_chars(pdf_path: str, page_num: int, doc: Any = None) -> int:
+    """Characters in the page's text layer, without assembling text.
+
+    pdf_info's text_coverage needs a per-page volume signal, not reading
+    order, and it needs it for every page in the document. Running the
+    full line model 500 times to take len() of the result made cold
+    pdf_info on a 500-page PDF roughly 6x slower than the old engine and
+    blew the 2s budget on CI hardware.
+
+    The count runs about 2.4% above len(get_text(...)) because the
+    assembled text drops trailing whitespace and inserts its own line
+    breaks. That is immaterial to what the number is used for (a
+    per-page has-text / how-much-text signal feeding the OCR-candidate
+    threshold) and the metric already shifted when the engine changed.
+    """
+    owned = doc is None
+    if owned:
+        doc = pdfium.PdfDocument(pdf_path)
+    try:
+        text_page = pdfium_raw.FPDFText_LoadPage(doc[page_num].raw)
+        if not text_page:
+            return 0
+        try:
+            return max(0, int(pdfium_raw.FPDFText_CountChars(text_page)))
+        finally:
+            pdfium_raw.FPDFText_ClosePage(text_page)
+    finally:
+        if owned:
+            doc.close()

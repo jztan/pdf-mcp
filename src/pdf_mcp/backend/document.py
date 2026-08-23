@@ -26,6 +26,12 @@ class Document:
         self._pdf = pdfium.PdfDocument(path)
 
     @property
+    def raw_pdf(self) -> Any:
+        """The open pypdfium2 document, for callers that would otherwise
+        reopen the file per page (see Page.count_chars)."""
+        return self._pdf
+
+    @property
     def page_count(self) -> int:
         return len(self._pdf)
 

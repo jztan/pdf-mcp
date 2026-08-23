@@ -62,6 +62,20 @@ def _has_traineddata(path: str) -> bool:
         return False
 
 
+def page_text_chars(page: Any) -> int:
+    """Per-page character count for pdf_info's text_coverage.
+
+    Uses the backend's cheap text-layer count when available and falls
+    back to len(get_text()) for the PDF_MCP_BACKEND=pymupdf A/B lever.
+    Assembling text just to measure its length made cold pdf_info on a
+    500-page PDF about 6x slower than the old engine.
+    """
+    counter = getattr(page, "count_chars", None)
+    if counter is not None:
+        return int(counter())
+    return len(page.get_text())
+
+
 def _resolve_tessdata() -> str | None:
     """Find tessdata directory via safe subprocess call (no shell=True).
 
@@ -1614,7 +1628,7 @@ def _warm_extract_worker(
             coverage.append(
                 {
                     "page": pn + 1,
-                    "text_chars": len(page.get_text()),
+                    "text_chars": page_text_chars(page),
                     "raster_images": len({img[0] for img in page.get_images()}),
                 }
             )

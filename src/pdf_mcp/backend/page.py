@@ -27,10 +27,21 @@ from .geometry import Rect
 
 
 class Page:
-    def __init__(self, pdf_path: str, page_num: int, rect: Rect) -> None:
+    def __init__(
+        self,
+        pdf_path: str,
+        page_num: int,
+        rect: Rect,
+        raw_doc: Any = None,
+    ) -> None:
         self._path = pdf_path
         self.number = page_num
         self.rect = rect
+        # The owning Document's already-open pdfium handle, when a Document
+        # made this page. Only count_chars uses it, and only to avoid
+        # reopening the file once per page: pdf_info's coverage scan calls
+        # it for every page, and 500 opens cost more than the counting.
+        self._raw_doc = raw_doc
 
     def get_text(
         self,
@@ -44,6 +55,9 @@ class Page:
         if clip is not None:
             box = (float(clip[0]), float(clip[1]), float(clip[2]), float(clip[3]))
         return _text.get_text(self._path, self.number, kind, sort=sort, clip=box)
+
+    def count_chars(self) -> int:
+        return _text.count_chars(self._path, self.number, doc=self._raw_doc)
 
     def get_drawings(self) -> list[dict[str, Any]]:
         from .drawings_router import get_drawings
@@ -67,7 +81,7 @@ class Page:
         raster-image count depends on.
         """
         seen: dict[int, tuple[Any, ...]] = {}
-        for image in _raster.page_images(self._path, self.number):
+        for image in _raster.page_images(self._path, self.number, self._raw_doc):
             key = image["key"]
             if key not in seen:
                 seen[key] = (
@@ -87,7 +101,7 @@ class Page:
     def get_image_rects(self, key: Any) -> list[Rect]:
         return [
             Rect(*image["bbox"])
-            for image in _raster.page_images(self._path, self.number)
+            for image in _raster.page_images(self._path, self.number, self._raw_doc)
             if image["key"] == key
         ]
 
@@ -137,7 +151,7 @@ class Document:
     def __getitem__(self, index: int) -> Page:
         if not 0 <= index < self._page_count:
             raise IndexError(index)
-        return Page(self._path, index, self._rect(index))
+        return Page(self._path, index, self._rect(index), self._doc.raw_pdf)
 
     def __iter__(self) -> Any:
         for i in range(self._page_count):

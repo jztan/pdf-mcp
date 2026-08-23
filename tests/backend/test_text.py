@@ -187,3 +187,39 @@ def test_lines_do_not_splice_across_a_column_gutter():
         f"{len(spanning)} line(s) span both columns, e.g. "
         f"{spanning[0]['bbox']}: baseline grouping is splicing the gutter"
     )
+
+
+def test_block_bbox_recovers_height_from_flat_char_boxes():
+    """A block whose glyph boxes are all zero-height still reports a
+    usable rect.
+
+    pdfium returns flat char boxes when it cannot resolve a font's
+    vertical metrics: a CJK font referenced but not embedded, on a host
+    with no substitute. Widths survive (they come from the font's widths
+    array) so only the height collapses, and pdf_search's bbox evidence
+    became (72, 200, 450, 200). That is a rect a caller can neither draw
+    nor crop with, and it reached CI as a real failure on Linux while
+    passing on a machine that happened to have the font.
+    """
+    from pdf_mcp.backend.text import _Char, _block_bbox
+
+    flat = [
+        _Char(i, "厚", 72.0 + i * 14, 200.0, 86.0 + i * 14, 200.0, "japan-s", 14.0, 0)
+        for i in range(4)
+    ]
+    block = [((72.0, 200.0, 128.0, 200.0), "厚木基地", flat)]
+
+    x0, y0, x1, y1 = _block_bbox(block)
+    assert x1 > x0, "width should be unaffected"
+    assert y1 > y0, "height must be recovered, not left flat"
+    assert y1 - y0 == 14.0, "height should be the em box above the baseline"
+
+
+def test_block_bbox_leaves_normal_blocks_untouched():
+    """The flat-box fallback must not perturb ordinary geometry, which
+    chart calibration reads."""
+    from pdf_mcp.backend.text import _Char, _block_bbox
+
+    chars = [_Char(0, "A", 72.0, 190.0, 86.0, 204.0, "Helvetica", 14.0, 0)]
+    block = [((72.0, 190.0, 86.0, 204.0), "A", chars)]
+    assert _block_bbox(block) == (72.0, 190.0, 86.0, 204.0)

@@ -324,7 +324,7 @@ def ocr_page_text(
     return str(pytesseract.image_to_string(image, lang=lang, config=config))
 
 
-def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
+def page_images(pdf_path: str, page_num: int, doc: Any = None) -> list[dict[str, Any]]:
     """Raster image placements with a stable key per distinct image.
 
     pdfium exposes no xref, and callers use one to DEDUPE: pdf_info
@@ -338,7 +338,12 @@ def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
 
     import pypdfium2.raw as pdfium_raw
 
-    doc = pdfium.PdfDocument(pdf_path)
+    # Reuse the caller's open handle when it has one: pdf_info's coverage
+    # scan asks every page for its images, and reopening the file once per
+    # page cost more than the scan itself on a 500-page document.
+    owned = doc is None
+    if owned:
+        doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
         from .pagespace import page_transform
@@ -390,7 +395,8 @@ def page_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
             )
         return out
     finally:
-        doc.close()
+        if owned:
+            doc.close()
 
 
 def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:

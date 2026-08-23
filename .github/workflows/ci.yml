@@ -47,6 +47,16 @@ jobs:
         # Intentionally src/-only: test and script bodies are untyped and
         # would need per-module relaxations. Tracked in docs_internal/backlog.md.
         run: uv run mypy src/
+      - name: Warm the embedding model cache
+        # fastembed downloads bge-small into one shared cache directory.
+        # Under -n auto several workers can trigger that first download at
+        # the same time and race, which failed the RRF gate on one Python
+        # version with NO_SUCHFILE while the others passed. Fetching it
+        # once, before pytest, removes the race rather than retrying it.
+        run: >
+          uv run python -c
+          "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
+          encode(['warm the model cache'], DEFAULT_MODEL)"
       - name: Run tests
         # -n auto: the suite is I/O and subprocess heavy (nearly every test
         # builds or opens a PDF), so it parallelises well. xdist workers are
@@ -102,6 +112,16 @@ jobs:
         run: |
           tesseract --version
           uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
+      - name: Warm the embedding model cache
+        # fastembed downloads bge-small into one shared cache directory.
+        # Under -n auto several workers can trigger that first download at
+        # the same time and race, which failed the RRF gate on one Python
+        # version with NO_SUCHFILE while the others passed. Fetching it
+        # once, before pytest, removes the race rather than retrying it.
+        run: >
+          uv run python -c
+          "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
+          encode(['warm the model cache'], DEFAULT_MODEL)"
       - name: Run tests
         # Deselect the slow marker here, unlike the Linux job. It covers
         # the retrieval-quality gates, which measure ranking rather than

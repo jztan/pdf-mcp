@@ -1228,6 +1228,26 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     [(path, pn, txt) for pn, txt in pages.items()],
                 )
+                # CJK mirror, exactly as save_page_text maintains it. This
+                # batch path skipped it, and the one-time backfill only runs
+                # when the CJK tables are first created -- so a CJK document
+                # warmed via pdf_corpus_warm had no rows in
+                # pdf_search_fts_cjk and CJK keyword search found nothing in
+                # it despite the text being cached.
+                cjk = {pn: txt for pn, txt in pages.items() if _contains_cjk(txt)}
+                if cjk:
+                    cjk_nums = list(cjk.keys())
+                    cjk_ph = ",".join("?" * len(cjk_nums))
+                    conn.execute(
+                        f"DELETE FROM pdf_search_fts_cjk"
+                        f" WHERE file_path = ? AND page_num IN ({cjk_ph})",
+                        (path, *cjk_nums),
+                    )
+                    conn.executemany(
+                        "INSERT INTO pdf_search_fts_cjk"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        [(path, pn, _cjk_split(txt)) for pn, txt in cjk.items()],
+                    )
 
     # ==================== Image Operations ====================
 

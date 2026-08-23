@@ -2407,6 +2407,7 @@ def pdf_search(
             if uncached_nums:
                 sem_texts = cache.get_pages_text(local_path, uncached_nums)
                 page_texts_sem: dict[int, str] = {}
+                new_texts_sem: dict[int, str] = {}
                 for page_num in uncached_nums:
                     if page_num in sem_texts:
                         page_texts_sem[page_num] = sem_texts[page_num]
@@ -2414,8 +2415,11 @@ def pdf_search(
                         text = extract_text_from_page(
                             doc[page_num], sort_by_position=True
                         )
-                        cache.save_page_text(local_path, page_num, text)
+                        new_texts_sem[page_num] = text
                         page_texts_sem[page_num] = text
+                # Batched for the same fsync-per-commit reason as the
+                # keyword path above.
+                cache.save_pages_text(local_path, new_texts_sem)
 
                 non_empty = {pn: t for pn, t in page_texts_sem.items() if t.strip()}
                 if non_empty:
@@ -2520,14 +2524,22 @@ def pdf_search(
                 m.setdefault("position", 0)
         else:
             page_texts_kw: dict[int, str] = {}
+            new_texts_kw: dict[int, str] = {}
             for page_num in range(doc_pages):
                 cached_text = cache.get_page_text(local_path, page_num)
                 if cached_text is not None:
                     page_texts_kw[page_num] = cached_text
                 else:
                     text = extract_text_from_page(doc[page_num], sort_by_position=True)
-                    cache.save_page_text(local_path, page_num, text)
+                    new_texts_kw[page_num] = text
                     page_texts_kw[page_num] = text
+            # One transaction for the whole document, not one per page.
+            # Each save_page_text call commits, and a commit is an fsync:
+            # ~1ms on Linux but ~28ms on Windows, so the per-page loop made
+            # cold search on a 500-page PDF 17.5s there against 3.2s on
+            # Linux (measured on same-spec CI runners; the warm path was at
+            # parity, which is what isolated the cache-write cost).
+            cache.save_pages_text(local_path, new_texts_kw)
 
             if cache.fts_available:
                 kw_matches = cache.search_fts(
@@ -2637,13 +2649,17 @@ def pdf_search(
         if uncached_nums:
             hybrid_texts = cache.get_pages_text(local_path, uncached_nums)
             page_texts_hyb: dict[int, str] = {}
+            new_texts_hyb: dict[int, str] = {}
             for page_num in uncached_nums:
                 if page_num in hybrid_texts:
                     page_texts_hyb[page_num] = hybrid_texts[page_num]
                 else:
                     text = extract_text_from_page(doc[page_num], sort_by_position=True)
-                    cache.save_page_text(local_path, page_num, text)
+                    new_texts_hyb[page_num] = text
                     page_texts_hyb[page_num] = text
+            # Batched for the same fsync-per-commit reason as the keyword
+            # path above.
+            cache.save_pages_text(local_path, new_texts_hyb)
             non_empty = {pn: t for pn, t in page_texts_hyb.items() if t.strip()}
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())

@@ -146,6 +146,60 @@ def main() -> int:
             1 for d in warm["docs"] if d.get("status") == "warmed"
         )
 
+        # Warm is 4.6x slower on Windows and the cause is not established.
+        # Split it three ways so the next run says WHICH part is slow
+        # instead of leaving it to reasoning.
+        #
+        #   warm_pooled      the shipped path (>= 4 uncached docs uses a pool)
+        #   warm_sequential  same work, pool forced off, so the delta is the
+        #                    pool's cost on this OS
+        #   warm_extract     extraction alone in-process, no SQLite writes,
+        #                    so warm_sequential minus this is the write cost
+        #
+        # Each runs on its own copy of the corpus, because a warmed cache
+        # makes the next run free and would silently measure nothing.
+        import shutil as _shutil
+
+        from pdf_mcp.extractor import _warm_extract_worker
+
+        def _fresh_corpus(tag: str) -> list[str]:
+            dst = workdir / f"corpus_{tag}"
+            _shutil.copytree(fixtures["corpus"], dst)
+            return corpus_mod.resolve_corpus(str(dst), recursive=False)["files"]
+
+        def _timed_warm(tag: str, max_workers: str | None) -> float:
+            files_t = _fresh_corpus(tag)
+            prev = os.environ.get("PDF_MCP_MAX_WORKERS")
+            if max_workers is None:
+                os.environ.pop("PDF_MCP_MAX_WORKERS", None)
+            else:
+                os.environ["PDF_MCP_MAX_WORKERS"] = max_workers
+            try:
+                t = time.perf_counter()
+                corpus_mod.warm_docs(
+                    files_t,
+                    budget_seconds=300,
+                    cache=server.cache,
+                    embeddings=False,
+                    model_name=None,
+                    embed=None,
+                )
+                return round(time.perf_counter() - t, 3)
+            finally:
+                if prev is None:
+                    os.environ.pop("PDF_MCP_MAX_WORKERS", None)
+                else:
+                    os.environ["PDF_MCP_MAX_WORKERS"] = prev
+
+        results["warm_pooled"] = _timed_warm("pooled", None)
+        results["warm_sequential"] = _timed_warm("seq", "1")
+
+        extract_files = _fresh_corpus("extract")
+        t0 = time.perf_counter()
+        for f in extract_files:
+            _warm_extract_worker(f)
+        results["warm_extract_only"] = round(time.perf_counter() - t0, 3)
+
         # The unit cost every parallel feature pays per worker on this OS.
         from concurrent.futures import ProcessPoolExecutor
 

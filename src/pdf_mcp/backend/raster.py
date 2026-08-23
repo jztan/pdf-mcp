@@ -314,14 +314,41 @@ def ocr_page_text(
             api.SetImage(image)
             return str(api.GetUTF8Text())
 
+    import os
     import pytesseract
 
     # Grayscale here too: the fallback is the only OCR path on platforms
     # without tesserocr wheels (pip on Windows foremost), and feeding RGB
     # costs Tesseract ~0.12s/page in internal conversion either way.
     image = render_page(pdf_path, page_num, dpi=effective_dpi, grayscale=True)
-    config = f"--tessdata-dir {tessdata}" if tessdata else ""
-    return str(pytesseract.image_to_string(image, lang=lang, config=config))
+
+    # A tessdata path containing a space cannot travel through `config`.
+    # pytesseract does shlex.split(config, posix=not_windows): unquoted,
+    # "C:\Program Files\Tesseract-OCR\tessdata" splits at the space and
+    # Tesseract reports `Error opening data file C:\Program/eng.traineddata`
+    # -- which is exactly what every Windows user with the default install
+    # location got. Quoting does not help either, because posix=False keeps
+    # the quote characters inside the token.
+    #
+    # TESSDATA_PREFIX carries it intact, and is what Tesseract's own error
+    # message recommends. Only used for the spaced case, so the flag path
+    # that already works everywhere else is left alone.
+    config = ""
+    restore: tuple[bool, str | None] = (False, None)
+    if tessdata:
+        if " " in tessdata:
+            restore = (True, os.environ.get("TESSDATA_PREFIX"))
+            os.environ["TESSDATA_PREFIX"] = tessdata
+        else:
+            config = f"--tessdata-dir {tessdata}"
+    try:
+        return str(pytesseract.image_to_string(image, lang=lang, config=config))
+    finally:
+        if restore[0]:
+            if restore[1] is None:
+                os.environ.pop("TESSDATA_PREFIX", None)
+            else:
+                os.environ["TESSDATA_PREFIX"] = restore[1]
 
 
 def page_images(pdf_path: str, page_num: int, doc: Any = None) -> list[dict[str, Any]]:

@@ -149,3 +149,40 @@ def test_scan_native_dpi_cap(tmp_path):
     scan = _make_image_only_pdf(tmp_path)  # rasterised at 200 dpi
     assert _scan_native_dpi(str(scan), 0) == 200
     assert _scan_native_dpi(_FIXTURE, _PAGE) is None
+
+
+@pytest.mark.skipif(not _HAS_TESSERACT, reason="system tesseract not installed")
+def test_ocr_works_when_tessdata_path_contains_a_space(tmp_path, monkeypatch):
+    """Tesseract's default Windows install is C:\\Program Files\\Tesseract-OCR.
+
+    pytesseract passes `config` through shlex.split(config,
+    posix=not_windows), so an unquoted spaced path splits at the space and
+    Tesseract reports `Error opening data file C:\\Program/eng.traineddata`.
+    Quoting does not fix it either: with posix=False the quote characters
+    stay inside the token. Every Windows user with the default install
+    location got no OCR at all, which is how CI found this.
+    """
+    import os
+    import shutil
+
+    from pdf_mcp.extractor import _resolve_tessdata
+
+    source = _resolve_tessdata()
+    if not source or not os.path.isdir(source):
+        pytest.skip("no resolvable tessdata directory")
+    spaced = tmp_path / "Program Files" / "tessdata"
+    spaced.mkdir(parents=True)
+    for name in os.listdir(source):
+        if name.endswith(".traineddata"):
+            shutil.copy(os.path.join(source, name), spaced)
+    if not list(spaced.glob("*.traineddata")):
+        pytest.skip("no traineddata files to copy")
+
+    monkeypatch.setenv("PDF_MCP_OCR", "pytesseract")
+    monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
+    scan = _make_image_only_pdf(tmp_path)
+    text = ocr_page_text(str(scan), 0, lang="eng", dpi=300, tessdata=str(spaced))
+
+    assert_non_empty(text.strip(), "ocr text with spaced tessdata path")
+    assert len(text.split()) > 80, "OCR returned implausibly little text"
+    assert "TESSDATA_PREFIX" not in os.environ, "env var must be restored"

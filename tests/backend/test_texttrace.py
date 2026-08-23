@@ -7,18 +7,44 @@ comparison agreed, and it reported 14/14 with every attack fixture
 passing as safe.
 """
 
+import importlib.util
+from pathlib import Path
+
 import pymupdf
 import pytest
 
 from pdf_mcp.backend.texttrace import get_texttrace
 from tests.backend.differential import assert_non_empty
 
-_CORPUS = "benchmark_data/content_trust_corpus"
-_INVISIBLE = f"{_CORPUS}/attack_invisible_en.pdf"
-_TRANSPARENT = f"{_CORPUS}/attack_transparent_en.pdf"
-_TINY = f"{_CORPUS}/attack_tiny_en.pdf"
-_WHITE = f"{_CORPUS}/attack_white_en.pdf"
-_CLEAN = f"{_CORPUS}/clean_plain.pdf"
+# Absolute, not cwd-relative: pytest run from any directory must find these.
+_ROOT = Path(__file__).resolve().parents[2]
+_CORPUS = _ROOT / "benchmark_data/content_trust_corpus"
+_INVISIBLE = str(_CORPUS / "attack_invisible_en.pdf")
+_TRANSPARENT = str(_CORPUS / "attack_transparent_en.pdf")
+_TINY = str(_CORPUS / "attack_tiny_en.pdf")
+_WHITE = str(_CORPUS / "attack_white_en.pdf")
+_CLEAN = str(_CORPUS / "clean_plain.pdf")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _corpus():
+    """Build the attack corpus if absent (0.12s for all 14 fixtures).
+
+    The PDFs are generated artifacts and gitignored, so a clean checkout
+    has only generate.py. Building rather than skipping is deliberate:
+    this module tests a SAFETY detector whose failure mode is reporting
+    a hidden-text attack as clean, and a skip on CI would have looked
+    exactly like a pass. That is how these tests reached CI green
+    locally and red on a clean checkout.
+    """
+    if (_CORPUS / "attack_invisible_en.pdf").is_file():
+        return
+    spec = importlib.util.spec_from_file_location(
+        "_ct_generate", _CORPUS / "generate.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.build(str(_CORPUS))
 
 
 def test_chars_carry_integer_codepoints():

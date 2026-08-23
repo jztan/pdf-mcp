@@ -156,7 +156,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    with tempfile.TemporaryDirectory() as workdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workdir:
         pdf_path = str(pathlib.Path(workdir) / "bilingual_scan.pdf")
         build_bilingual_scan(pdf_path, 1)
 

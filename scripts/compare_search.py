@@ -385,7 +385,7 @@ def main() -> None:
     print(bold("\npdf-mcp FTS5 vs Python Scan — Comparison Report"))
     print(f"{'─' * 68}")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         tmp = Path(tmpdir)
         r1 = run_ranking(tmp / "ranking")
         r2 = run_stemming(tmp / "stemming")

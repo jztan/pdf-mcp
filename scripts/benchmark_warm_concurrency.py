@@ -127,7 +127,7 @@ def main() -> int:
         TEXT_WORKER_COUNTS if args.mode == "text" else EMBEDDINGS_WORKER_COUNTS
     )
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         root = Path(tmp)
         seq_cache = _cold_cache(root, "seq")
         t0 = time.perf_counter()

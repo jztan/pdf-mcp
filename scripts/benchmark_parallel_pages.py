@@ -493,7 +493,7 @@ def main() -> None:
 
     workers = [int(w) for w in args.workers.split(",") if w.strip()]
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmpdir = Path(tmp)
         text_pdf = tmpdir / "text.pdf"
         corpus_note = "synthetic"

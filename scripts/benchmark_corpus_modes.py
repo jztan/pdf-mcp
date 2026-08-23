@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     single: dict[str, dict] = {}
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         prev_cache = server_module.cache
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
         try:

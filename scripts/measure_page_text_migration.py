@@ -204,7 +204,7 @@ def main() -> int:
 
     results = []
     for n in args.scales:
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             db = str(pathlib.Path(d) / "cache.db")
             build_cache(db, n, args.ocr_fraction)
             size_before = pathlib.Path(db).stat().st_size

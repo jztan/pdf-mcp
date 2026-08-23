@@ -178,7 +178,7 @@ def main() -> None:
     header += f" {'par==seq':>9s} {'wordrec':>8s}"
     print(header)
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         for cls in classes:
             cdir = fetch_isri(cls)
             if cdir is None:

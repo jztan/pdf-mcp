@@ -113,7 +113,7 @@ def search_pages(
     """Keyword-mode pdf_search on a fresh index; return ranked 1-indexed pages."""
     orig_cache = server_module.cache
     orig_extract = server_module.extract_text_from_page
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         server_module.extract_text_from_page = make_extractor(removal)
         try:

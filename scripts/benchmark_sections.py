@@ -919,7 +919,7 @@ def main(argv: list[str] | None = None) -> None:
 
     results: dict = {}
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         original_cache = server_module.cache
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         try:

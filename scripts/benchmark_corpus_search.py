@@ -306,7 +306,7 @@ def run_benchmark(force: bool = False) -> int:
         print("No corpus PDFs available locally; aborting.")
         return 1
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         t0 = time.perf_counter()
         warm = warm_docs(paths, budget_seconds=3600, cache=cache)

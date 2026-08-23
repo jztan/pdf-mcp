@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     labelled = {lb["doc"] for q in qs for lb in q["labels"]}
     print(labelled_position_skew([d["id"] for d in manifest["docs"]], labelled))
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         warm = warm_docs(paths, budget_seconds=3600, cache=cache)
         pages: list[tuple[str, int, str]] = []

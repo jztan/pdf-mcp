@@ -97,7 +97,7 @@ def run_sequence(pdf_path: str, page_spec: str, langs: list[str], calls: int) ->
     from pdf_mcp import server as server_module
     from pdf_mcp.cache import PDFCache
 
-    with tempfile.TemporaryDirectory() as cache_dir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cache_dir:
         server_module.cache = PDFCache(cache_dir=pathlib.Path(cache_dir))
         per_call = []
         for i in range(calls):
@@ -157,7 +157,7 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - setup probe, report and stop
         sys.exit(f"[setup] Tesseract unavailable: {exc}")
 
-    with tempfile.TemporaryDirectory() as workdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workdir:
         pdf_path = str(pathlib.Path(workdir) / "bilingual_scan.pdf")
         build_bilingual_scan(pdf_path, args.pages)
         page_spec = f"1-{args.pages}"

@@ -920,7 +920,7 @@ Returns a breakdown of what's cached per document — page text, images, tables,
 
 **Returns:**
 - Per-table counters: `total_files`, `total_pages`, `total_images`, etc.
-- `cache_size_mb` (float) — Total SQLite cache size on disk.
+- `cache_size_mb` (float) — Total cache size on disk, including the SQLite database, its WAL/SHM sidecar files, and extracted images and renders.
 - `embedding_model` (string) — Currently configured model name.
 - `url_cache` (object) — `{cached_files, total_size_bytes, total_size_mb, cache_dir}` for the URL download cache.
 
@@ -1032,6 +1032,11 @@ server_info()
 #     "roots": ["/data/pdfs"],
 #     "allow_patterns": ["/data/pdfs/**"],
 #     "deny_patterns": []
+#   },
+#   "storage": {
+#     "sqlite_version": "3.51.0",
+#     "journal_mode": "wal",
+#     "keyword_search_ranked": true
 #   },
 #   "config": {
 #     "max_workers": 8,

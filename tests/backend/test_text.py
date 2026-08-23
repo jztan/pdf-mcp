@@ -223,3 +223,23 @@ def test_block_bbox_leaves_normal_blocks_untouched():
     chars = [_Char(0, "A", 72.0, 190.0, 86.0, 204.0, "Helvetica", 14.0, 0)]
     block = [((72.0, 190.0, 86.0, 204.0), "A", chars)]
     assert _block_bbox(block) == (72.0, 190.0, 86.0, 204.0)
+
+
+def test_block_bbox_recovers_height_when_font_size_is_also_zero():
+    """The real CI case: pdfium reports size 0 alongside the flat boxes.
+
+    The first fix guarded on size > 0 and therefore did nothing, and the
+    bbox reached CI flat a second time. Widths are still trustworthy, so
+    the median advance carries the height for the full-width CJK glyphs
+    this occurs on.
+    """
+    from pdf_mcp.backend.text import _Char, _block_bbox
+
+    flat = [
+        _Char(i, "厚", 72.0 + i * 14, 200.0, 86.0 + i * 14, 200.0, "japan-s", 0.0, 0)
+        for i in range(4)
+    ]
+    block = [((72.0, 200.0, 128.0, 200.0), "厚木基地", flat)]
+    x0, y0, x1, y1 = _block_bbox(block)
+    assert y1 > y0, "height must be recovered even with no font size"
+    assert y1 - y0 == 14.0

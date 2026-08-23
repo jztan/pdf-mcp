@@ -966,6 +966,15 @@ def _block_bbox(block: list[Any]) -> tuple[float, float, float, float]:
             (c.size for ln in block for c in ln[2] if c.size > 0),
             default=0.0,
         )
+        if size <= 0:
+            # When pdfium cannot resolve the metrics it often reports a
+            # font size of 0 as well, so the em box is not available
+            # either. Glyph WIDTHS still come from the font's widths
+            # array, and for the CJK case this arises in they are full
+            # width, so the median advance is a sound stand-in for the
+            # line height.
+            widths = [c.x1 - c.x0 for ln in block for c in ln[2] if c.x1 > c.x0]
+            size = statistics.median(widths) if widths else 0.0
         if size > 0:
             y0 = y1 - size
     return (x0, y0, x1, y1)

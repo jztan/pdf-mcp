@@ -244,3 +244,32 @@ def test_clear_all_survives_unsupported_checkpoint(cache, sample_pdf, monkeypatc
     )
 
     cache.clear_all()  # must not raise
+
+
+def test_journal_mode_env_override_forces_rollback(temp_cache_dir, monkeypatch):
+    """PDF_MCP_JOURNAL_MODE=delete keeps the cache off WAL.
+
+    WAL is not a universal win: whether it beats the rollback journal depends
+    on the SQLite build, and on some it is measurably worse. An operator on a
+    bad build (or a filesystem we failed to detect) needs a way out that does
+    not involve deleting their cache, and the A/B is what makes the platform
+    benchmark able to measure both arms of the same code.
+    """
+    import pdf_mcp.cache as cache_mod
+
+    monkeypatch.setenv("PDF_MCP_JOURNAL_MODE", "delete")
+    c = cache_mod.PDFCache(cache_dir=temp_cache_dir)
+
+    assert c.journal_mode == "delete"
+    with c._connect() as conn:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+
+
+def test_journal_mode_env_override_ignores_junk(temp_cache_dir, monkeypatch):
+    """An unrecognised value falls back to normal WAL selection."""
+    import pdf_mcp.cache as cache_mod
+
+    monkeypatch.setenv("PDF_MCP_JOURNAL_MODE", "banana")
+    c = cache_mod.PDFCache(cache_dir=temp_cache_dir)
+
+    assert c.journal_mode == "wal"

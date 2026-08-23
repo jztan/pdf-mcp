@@ -86,6 +86,20 @@ jobs:
           version: "latest"
       - name: Install dependencies
         run: uv sync --frozen --extra dev
+      - name: Exclude the work and temp trees from Defender
+        # The suite writes thousands of PDFs, and the Windows test phase is
+        # I/O bound rather than CPU bound: -n auto with 4 workers moved it
+        # only 660s -> 628s, because the workers queue on the filesystem
+        # rather than on cores. Defender inspects every one of those writes.
+        # Best effort: if the runner ever refuses, the job still passes,
+        # just slower.
+        run: |
+          Add-MpPreference -ExclusionPath "$env:RUNNER_TEMP" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:TEMP" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionProcess "python.exe" -ErrorAction SilentlyContinue
+          exit 0
+        shell: pwsh
       - name: Install Tesseract
         # Without this the OCR tests skip themselves (shutil.which guard) and
         # the Windows-specific tessdata discovery path would never be tested,

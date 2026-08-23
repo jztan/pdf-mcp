@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Table extraction is about 3x faster. Tables were extracted in a separate
+  Python process, because an old dependency corrupted the table finder
+  process-wide and extraction needed an interpreter that had never imported
+  it. That dependency is gone, so the extra process was pure overhead:
+  reading a ruled table drops from 0.19s to 0.06s, and more than that on
+  Windows, where starting a process is dearer. Affects `pdf_read_pages`
+  tables and `pdf_search`'s table context.
+
 - **CJK keyword search found nothing in a document warmed through
   `pdf_corpus_warm`, even though its text was cached.** The bulk text-save
   path never populated the char-split CJK index that CJK keyword queries

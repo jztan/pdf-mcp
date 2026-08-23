@@ -7,6 +7,14 @@ name: Platform bench
 # scripts/benchmark_platform_smoke.py for what each number means.
 on:
   workflow_dispatch:
+  # workflow_dispatch only resolves once the file exists on the default
+  # branch; the paths-filtered push trigger is what lets the bench run
+  # from a feature branch, and it fires only when the bench itself
+  # changes.
+  push:
+    paths:
+      - scripts/benchmark_platform_smoke.py
+      - .github/workflows/platform-bench.yml
 
 permissions:
   contents: read

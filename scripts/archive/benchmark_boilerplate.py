@@ -329,7 +329,7 @@ def prf(tp: int, fp: int, fn: int) -> tuple[float, float, float]:
 
 
 def run() -> dict[str, Any]:
-    corpus = json.loads(CORPUS.read_text())
+    corpus = json.loads(CORPUS.read_text(encoding="utf-8"))
     seed = corpus.get("seed", 0)
     scenarios = corpus["scenarios"]
 
@@ -496,7 +496,7 @@ def eval_real_doc(doc: pymupdf.Document, known: list[dict[str, str]]) -> dict[st
 
 
 def run_real() -> list[tuple[dict[str, str], dict[str, Any]]]:
-    corpus = json.loads(REAL_CORPUS.read_text())
+    corpus = json.loads(REAL_CORPUS.read_text(encoding="utf-8"))
     out = []
     for entry in corpus["documents"]:
         pdf = REAL_PDFS / entry["file"]

@@ -808,8 +808,12 @@ def run_gate(update_baseline: bool) -> int:
             "Install with: pip install 'pdf-mcp[semantic]'"
         )
         return 1
-    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
-    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
+    corpus = json.loads(
+        Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8", encoding="utf-8")
+    )
+    gt = json.loads(
+        Path("benchmark_data/ground_truth.json").read_text("utf-8", encoding="utf-8")
+    )
     with _isolated_corpus_cache():
         current = run_graded(corpus, gt)
     if update_baseline or not _BASELINE.exists():
@@ -817,7 +821,7 @@ def run_gate(update_baseline: bool) -> int:
         fb_ver = current["fastembed_version"]
         print(f"Baseline written to {_BASELINE} (fastembed {fb_ver})")
         return 0
-    baseline = json.loads(_BASELINE.read_text("utf-8"))
+    baseline = json.loads(_BASELINE.read_text("utf-8", encoding="utf-8"))
     warn = check_fastembed(current["fastembed_version"], baseline["fastembed_version"])
     if warn:
         print("ERROR:", warn)
@@ -849,8 +853,12 @@ def run_invariance() -> int:
         )
         return 1
 
-    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
-    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
+    corpus = json.loads(
+        Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8", encoding="utf-8")
+    )
+    gt = json.loads(
+        Path("benchmark_data/ground_truth.json").read_text("utf-8", encoding="utf-8")
+    )
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="pdf-mcp-invariance-"))
     tmp_copy_dir = tmp_dir / "cache"

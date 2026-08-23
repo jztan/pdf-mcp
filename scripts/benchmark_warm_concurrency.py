@@ -106,7 +106,7 @@ def main() -> int:
     ap.add_argument("--mode", choices=["text", "embeddings"], default="text")
     args = ap.parse_args()
 
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     paths = [
         str(REPO / d["path"]) for d in manifest["docs"] if (REPO / d["path"]).exists()
     ][: args.docs]

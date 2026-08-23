@@ -301,7 +301,7 @@ def main() -> None:
         print(report)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(report + "\n")
+            args.output.write_text(report + "\n", encoding="utf-8")
             print(f"\nWrote {args.output}")
         return
 
@@ -379,7 +379,7 @@ def main() -> None:
     print(report)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(report + "\n")
+        args.output.write_text(report + "\n", encoding="utf-8")
         print(f"\nWrote {args.output}")
 
 

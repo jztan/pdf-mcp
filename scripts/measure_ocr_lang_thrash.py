@@ -184,7 +184,7 @@ def main() -> int:
     }
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2))
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     base = results["baseline"]["total_seconds"]
     print("\n" + "=" * 58)

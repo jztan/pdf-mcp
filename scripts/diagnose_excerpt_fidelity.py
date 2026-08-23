@@ -82,7 +82,7 @@ def load_dataset(data_dir: Path) -> list[Question]:
     for name in QUESTION_FILES:
         path = data_dir / name
         if path.exists():
-            raw = json.loads(path.read_text())["questions"]
+            raw = json.loads(path.read_text(encoding="utf-8"))["questions"]
             break
     else:
         raise SystemExit(
@@ -247,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
     server_module.cache = cache
 
-    manifest = json.loads((data / "manifest.json").read_text())
+    manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
     questions = load_dataset(data)
     if args.ids:
@@ -434,7 +434,8 @@ def main(argv: list[str] | None = None) -> int:
             },
             indent=2,
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
     )
     print(f"\nwrote {out}")
     return 0

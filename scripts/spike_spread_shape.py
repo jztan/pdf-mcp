@@ -51,12 +51,14 @@ def main(argv: list[str] | None = None) -> int:
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text())["queries"]
+        for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
+            "queries"
+        ]
         if q["class"] == "spread"
     ]
 
@@ -64,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.emissions:
         emitted = {
             r["id"]: r["old_query"]
-            for r in json.loads(args.emissions.read_text())["rows"]
+            for r in json.loads(args.emissions.read_text(encoding="utf-8"))["rows"]
             if r.get("old_query")
         }
         queries = [
@@ -97,7 +99,8 @@ def main(argv: list[str] | None = None) -> int:
     suffix = "_caller" if args.emissions else ""
     out = DATA / f"spread_shape_decomposition{suffix}.json"
     out.write_text(
-        json.dumps({"top_k": TOP_K, "queries": label, "rows": rows}, indent=1)
+        json.dumps({"top_k": TOP_K, "queries": label, "rows": rows}, indent=1),
+        encoding="utf-8",
     )
     print(f"wrote {out}\n")
     print(f"SPREAD DECOMPOSITION (n={n}, {label}, hybrid, top_k={TOP_K})")

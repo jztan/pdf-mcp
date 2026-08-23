@@ -167,11 +167,13 @@ def main(argv: list[str] | None = None) -> int:
     stream_dir = STREAM_DIR if not args.tag else Path(str(STREAM_DIR) + "_" + args.tag)
     stream_dir.mkdir(exist_ok=True)
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_name = {Path(d["path"]).name: d["id"] for d in manifest["docs"]}
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text())["queries"]
+        for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
+            "queries"
+        ]
         if q["class"] == "spread"
     ]
     if args.ids:
@@ -181,10 +183,10 @@ def main(argv: list[str] | None = None) -> int:
     def get_stream(q: dict) -> tuple[str, str | None]:
         path = stream_dir / f"{q['id']}.jsonl"
         if path.exists():
-            return q["id"], path.read_text()
+            return q["id"], path.read_text(encoding="utf-8")
         stream = run_session(q["query"], args.model, args.project_dir)
         if stream is not None:
-            path.write_text(stream)
+            path.write_text(stream, encoding="utf-8")
         return q["id"], stream
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
@@ -272,7 +274,8 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {"model": args.model, "budget": PER_SESSION_BUDGET_USD, "rows": rows},
             indent=1,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"wrote {out}\n")
     n = len(ok)

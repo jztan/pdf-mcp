@@ -100,8 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.corpus import warm_docs
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
-    queries = json.loads((DATA / "queries.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
     qs = [q for q in queries["queries"] if q["class"] in SPIKE_CLASSES]
 
     paths = [

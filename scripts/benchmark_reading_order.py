@@ -264,7 +264,7 @@ def run(
     When reference_cmd/tool/args are all provided, an external reading-order
     reference is spawned once and scored alongside the two built-in extractors.
     """
-    corpus = json.loads(CORPUS.read_text())
+    corpus = json.loads(CORPUS.read_text(encoding="utf-8"))
     use_ref = bool(reference_cmd and reference_tool and reference_args)
     client = None
     if use_ref:

@@ -23,11 +23,11 @@ def test_save_results_writes_json_and_ansi_stripped_text(tmp_path):
     )
 
     assert json_path == tmp_path / "mlx_backend_20260101_000000.json"
-    assert json.loads(json_path.read_text()) == data
+    assert json.loads(json_path.read_text(encoding="utf-8")) == data
 
     txt_path = tmp_path / "mlx_backend_20260101_000000.txt"
     assert txt_path.exists()
-    text = txt_path.read_text()
+    text = txt_path.read_text(encoding="utf-8")
     assert "green line" in text
     assert "\x1b[" not in text  # ANSI escapes stripped
 

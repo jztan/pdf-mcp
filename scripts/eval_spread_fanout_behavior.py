@@ -109,7 +109,7 @@ def _cache_key(qid: str, model: str, arm: str, ds: str = "") -> str:
 def _load_cache() -> dict[str, str]:
     cache: dict[str, str] = {}
     if CACHE_FILE.exists():
-        for line in CACHE_FILE.read_text().splitlines():
+        for line in CACHE_FILE.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
                 cache[row["key"]] = row["reply"]
@@ -190,12 +190,14 @@ def main(argv: list[str] | None = None) -> int:
     data_dir = Path(args.data_dir)
     data_dir = data_dir if data_dir.is_absolute() else REPO / data_dir
     ds_tag = "" if data_dir == DATA else data_dir.name
-    manifest = json.loads((data_dir / "manifest.json").read_text())
+    manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((data_dir / args.queries_file).read_text())["queries"]
+        for q in json.loads((data_dir / args.queries_file).read_text(encoding="utf-8"))[
+            "queries"
+        ]
         if q["class"] in wanted
     ]
     if args.raw:
@@ -206,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             "caller_eval_spread_results.json",
             "caller_eval_results.json",
         ):
-            for r in json.loads((OUT_DIR / name).read_text())["rows"]:
+            for r in json.loads((OUT_DIR / name).read_text(encoding="utf-8"))["rows"]:
                 if r.get("old_query"):
                     emitted.setdefault(r["id"], r["old_query"])
 
@@ -314,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
                 "rows": rows,
             },
             indent=1,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"wrote {out}\n")
     n = len(rows)

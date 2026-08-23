@@ -98,7 +98,7 @@ def run_command(
 def get_current_version(project_root: Path) -> str:
     """Read current version from pyproject.toml."""
     pyproject = project_root / "pyproject.toml"
-    content = pyproject.read_text()
+    content = pyproject.read_text(encoding="utf-8")
     match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
     if not match:
         print("Error: Could not find version in pyproject.toml")
@@ -321,7 +321,7 @@ def create_release_branch(new_version: str, dry_run: bool) -> str:
 def update_pyproject_toml(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update version in pyproject.toml."""
     pyproject = project_root / "pyproject.toml"
-    content = pyproject.read_text()
+    content = pyproject.read_text(encoding="utf-8")
     new_content = re.sub(
         r'^(version\s*=\s*)"[^"]+"',
         f'\\1"{new_version}"',
@@ -332,14 +332,14 @@ def update_pyproject_toml(project_root: Path, new_version: str, dry_run: bool) -
     if dry_run:
         print(f"  [DRY-RUN] Would update pyproject.toml version to {new_version}")
     else:
-        pyproject.write_text(new_content)
+        pyproject.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated pyproject.toml")
 
 
 def update_server_json(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update version in server.json (both occurrences)."""
     server_json = project_root / "server.json"
-    content = json.loads(server_json.read_text())
+    content = json.loads(server_json.read_text(encoding="utf-8"))
 
     content["version"] = new_version
     if "packages" in content and len(content["packages"]) > 0:
@@ -348,14 +348,14 @@ def update_server_json(project_root: Path, new_version: str, dry_run: bool) -> N
     if dry_run:
         print(f"  [DRY-RUN] Would update server.json version to {new_version}")
     else:
-        server_json.write_text(json.dumps(content, indent=2) + "\n")
+        server_json.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
         print("  ✓ Updated server.json")
 
 
 def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update __version__ in __init__.py."""
     init_py = project_root / "src" / "pdf_mcp" / "__init__.py"
-    content = init_py.read_text()
+    content = init_py.read_text(encoding="utf-8")
     new_content = re.sub(
         r'^(__version__\s*=\s*)"[^"]+"',
         f'\\1"{new_version}"',
@@ -366,7 +366,7 @@ def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
     if dry_run:
         print(f"  [DRY-RUN] Would update __init__.py version to {new_version}")
     else:
-        init_py.write_text(new_content)
+        init_py.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated __init__.py")
 
 
@@ -379,7 +379,7 @@ def update_roadmap_version(project_root: Path, new_version: str, dry_run: bool) 
     that gates the PyPI publish.
     """
     roadmap = project_root / "docs" / "ROADMAP.md"
-    content = roadmap.read_text()
+    content = roadmap.read_text(encoding="utf-8")
     today = date.today().isoformat()
     new_content, count = re.subn(
         r"^(- \*\*Current version:\*\* )v[0-9]+\.[0-9]+\.[0-9]+ \(released [^)]*\)",
@@ -399,7 +399,7 @@ def update_roadmap_version(project_root: Path, new_version: str, dry_run: bool) 
     if dry_run:
         print(f"  [DRY-RUN] Would update ROADMAP.md version to {new_version}")
     else:
-        roadmap.write_text(new_content)
+        roadmap.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated ROADMAP.md")
 
 
@@ -440,9 +440,11 @@ def update_readme_contributors(project_root: Path, dry_run: bool) -> None:
     authors), hence this runs on every release.
     """
     readme = project_root / "README.md"
-    content = readme.read_text()
+    content = readme.read_text(encoding="utf-8")
     line = render_contributors_line(
-        collect_changelog_contributors((project_root / "CHANGELOG.md").read_text())
+        collect_changelog_contributors(
+            (project_root / "CHANGELOG.md").read_text(encoding="utf-8")
+        )
     )
 
     new_content, count = re.subn(
@@ -464,14 +466,14 @@ def update_readme_contributors(project_root: Path, dry_run: bool) -> None:
     elif new_content == content:
         print("  ✓ README.md Contributors list already current")
     else:
-        readme.write_text(new_content)
+        readme.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated README.md Contributors list")
 
 
 def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> None:
     """Update CHANGELOG.md: add new version header with today's date."""
     changelog = project_root / "CHANGELOG.md"
-    content = changelog.read_text()
+    content = changelog.read_text(encoding="utf-8")
     today = date.today().strftime("%Y-%m-%d")
 
     # Require an [Unreleased] section with real content. Auto-stamping a
@@ -507,14 +509,14 @@ def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> Non
     if dry_run:
         print(f"  [DRY-RUN] Would update CHANGELOG.md with version {new_version}")
     else:
-        changelog.write_text(new_content)
+        changelog.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated CHANGELOG.md")
 
 
 def extract_changelog_section(project_root: Path, version: str) -> str:
     """Extract the changelog section for a specific version."""
     changelog = project_root / "CHANGELOG.md"
-    content = changelog.read_text()
+    content = changelog.read_text(encoding="utf-8")
 
     # Find the section for this version
     pattern = rf"## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
@@ -527,7 +529,7 @@ def extract_changelog_section(project_root: Path, version: str) -> str:
 
 def extract_unreleased_section(project_root: Path) -> str:
     """Extract the [Unreleased] body (dry-run preview source)."""
-    content = (project_root / "CHANGELOG.md").read_text()
+    content = (project_root / "CHANGELOG.md").read_text(encoding="utf-8")
     match = re.search(
         r"## \[Unreleased\]\s*\n(.*?)(?=^## \[|\Z)",
         content,
@@ -677,12 +679,12 @@ def generate_release_notes(
 
 def write_notes_file(path: Path, title: str, body: str) -> None:
     """Persist approved notes; first line is an invisible title comment."""
-    path.write_text(f"<!-- title: {title} -->\n{body.strip()}\n")
+    path.write_text(f"<!-- title: {title} -->\n{body.strip()}\n", encoding="utf-8")
 
 
 def read_notes_file(path: Path) -> tuple[str | None, str]:
     """Read persisted notes back. Returns (title or None, body)."""
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     match = re.match(r"<!-- title: (.*?) -->\n", content)
     if match:
         return match.group(1), content[match.end() :].strip()

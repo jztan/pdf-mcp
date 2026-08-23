@@ -101,16 +101,20 @@ def main() -> int:
         _wants_a_figure,
     )
 
-    man = json.loads((DATA / "manifest.json").read_text())
+    man = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in man["docs"]}
     fq = {
         q["id"]: q
-        for q in json.loads((DATA / "fidelity_questions.json").read_text())["questions"]
+        for q in json.loads(
+            (DATA / "fidelity_questions.json").read_text(encoding="utf-8")
+        )["questions"]
     }
     emit = {
         r["id"]: r["old_query"]
         for r in json.loads(
-            (DATA / "c2_rewrite" / "caller_eval_results.json").read_text()
+            (DATA / "c2_rewrite" / "caller_eval_results.json").read_text(
+                encoding="utf-8"
+            )
         )["rows"]
         if r["class"] == "described" and r.get("old_query")
     }
@@ -158,7 +162,7 @@ def main() -> int:
     for qid in sorted(MISS_IDS):
         print(f"{qid:<15}" + "".join(f"{int(results[v][qid]):>5}" for v in variants))
     out = DATA / "excerpt_picker_variants.json"
-    out.write_text(json.dumps(results, indent=1))
+    out.write_text(json.dumps(results, indent=1), encoding="utf-8")
     print(f"\nwrote {out}")
     return 0
 

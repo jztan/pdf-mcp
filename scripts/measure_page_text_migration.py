@@ -231,7 +231,8 @@ def main() -> int:
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        json.dumps({"ocr_fraction": args.ocr_fraction, "results": results}, indent=2)
+        json.dumps({"ocr_fraction": args.ocr_fraction, "results": results}, indent=2),
+        encoding="utf-8",
     )
     print(f"\nwrote {out}")
     return 0

@@ -112,8 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         _doc_covered_terms,
     )
 
-    manifest = json.loads((data / "manifest.json").read_text())
-    queries = json.loads((data / "queries.json").read_text())["queries"]
+    manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
+    queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))["queries"]
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     if len(paths) != len(manifest["docs"]):
@@ -234,7 +234,8 @@ def main(argv: list[str] | None = None) -> int:
                 "queries": rows,
             },
             indent=1,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"\nwrote {out}")
 

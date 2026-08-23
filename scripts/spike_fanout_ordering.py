@@ -144,19 +144,23 @@ def main() -> int:
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
     model = server_module.pdf_config.embedding_model
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     path_by_id = {v: k for k, v in id_by_path.items()}
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text())["queries"]
+        for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
+            "queries"
+        ]
         if q["class"] == "spread"
     ]
     emitted = {
         r["id"]: r["old_query"]
         for r in json.loads(
-            (DATA / "c2_rewrite" / "caller_eval_spread_results.json").read_text()
+            (DATA / "c2_rewrite" / "caller_eval_spread_results.json").read_text(
+                encoding="utf-8"
+            )
         )["rows"]
     }
 
@@ -285,7 +289,9 @@ def main() -> int:
             f"{cov5 / total:>8.0%}{'ok' if perm else 'FAIL':>6}"
         )
     out = DATA / "fanout_ordering_race.json"
-    out.write_text(json.dumps({"results": results, "rows": rows}, indent=1))
+    out.write_text(
+        json.dumps({"results": results, "rows": rows}, indent=1), encoding="utf-8"
+    )
     print(f"\nwrote {out}")
     return 0
 

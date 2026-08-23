@@ -93,8 +93,10 @@ def main(argv: list[str] | None = None) -> int:
         cache_dir=REPO / "benchmark_data" / ".answerability_cache", ttl_hours=24 * 30
     )
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
-    questions = json.loads((DATA / "answerability_questions.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    questions = json.loads(
+        (DATA / "answerability_questions.json").read_text(encoding="utf-8")
+    )
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
     id_by_path = {v: k for k, v in path_by_id.items()}
 
@@ -243,7 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             indent=2,
             sort_keys=True,
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
     )
     print(f"wrote {out_path}")
     return 0

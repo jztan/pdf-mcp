@@ -991,6 +991,10 @@ Reports which optional features are installed and which configuration values are
   - `roots` (array): existing directories, ready to pass straight to `pdf_corpus_overview` or `pdf_corpus_warm`. Derived from `allow_patterns` by reducing each glob to its literal directory prefix. Empty under `"unrestricted"`, which means *any path the server process can read*, not *no documents available*.
   - `allow_patterns` (array): the configured `[paths] allow` globs, verbatim.
   - `deny_patterns` (array): the configured `[paths] deny` globs, verbatim. Reported in both access modes, because deny applies unconditionally.
+- `storage` (object): what the SQLite build underneath the cache actually supports. `pdf-mcp` declares no minimum SQLite version — `requires-python` is the only floor — and both capabilities below degrade quietly rather than failing, so this is the only place they surface.
+  - `sqlite_version` (string) — the SQLite library version Python is linked against, not the `pdf-mcp` version.
+  - `journal_mode` (string) — `"wal"` normally. `"delete"` means the filesystem refused WAL, which some network mounts do; cache writes then cost roughly 20ms each on Windows instead of 0.02ms. Correctness is unaffected.
+  - `keyword_search_ranked` (bool) — `false` means the SQLite build lacks FTS5 (needs 3.9.0+), so `pdf_search(mode="keyword")` falls back to substring matching with no BM25 ranking and no stemming. Results still return; their ordering and recall are worse. Prefer `mode="semantic"` when this is `false`.
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 8)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.

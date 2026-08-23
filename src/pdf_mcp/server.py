@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -3869,6 +3870,14 @@ def server_info() -> dict[str, Any]:
             configured globs verbatim. Paths resolve on the server, so over
             the HTTP transport these are the server's files, not the
             caller's.
+        - storage: {sqlite_version, journal_mode, keyword_search_ranked}
+            — what the SQLite build actually supports. pdf-mcp declares no
+            minimum SQLite version, and two capabilities degrade quietly on
+            an old one. keyword_search_ranked=False means FTS5 is missing,
+            so mode="keyword" falls back to substring matching with no BM25
+            ranking and no stemming; prefer mode="semantic" there.
+            journal_mode="delete" means the filesystem refused WAL, which
+            costs ~20ms per cache write on Windows instead of ~0.02ms.
         - config: {max_workers, max_response_bytes, cache_ttl_hours,
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
@@ -3888,6 +3897,11 @@ def server_info() -> dict[str, Any]:
             "roots": _document_roots(allow_patterns),
             "allow_patterns": list(allow_patterns),
             "deny_patterns": list(pdf_config.path_deny_patterns),
+        },
+        "storage": {
+            "sqlite_version": sqlite3.sqlite_version,
+            "journal_mode": cache.journal_mode,
+            "keyword_search_ranked": cache.fts_available,
         },
         "config": {
             "max_workers": max_workers,

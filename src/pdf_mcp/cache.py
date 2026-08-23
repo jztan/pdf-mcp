@@ -797,6 +797,19 @@ class PDFCache:
             with self._connect() as vac:
                 vac.execute("VACUUM")
 
+        # One line recording what this SQLite build actually gave us. No
+        # minimum version is enforced (see server_info -> storage), and both
+        # capabilities degrade silently, so a bug report about slow writes or
+        # poor keyword ranking is otherwise indistinguishable from a corpus
+        # problem.
+        logger.debug(
+            "SQLite %s at %s: journal_mode=%s, fts5=%s",
+            sqlite3.sqlite_version,
+            self.db_path,
+            self.journal_mode,
+            self.fts_available,
+        )
+
         self.clear_expired()
 
     def _backfill_cjk_tables(self, conn: sqlite3.Connection) -> None:

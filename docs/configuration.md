@@ -223,6 +223,23 @@ The server uses SQLite for persistent caching.
 
 **Cache location:** `~/.cache/pdf-mcp/cache.db`
 
+The cache runs in SQLite [WAL mode](https://www.sqlite.org/wal.html), so two
+sidecar files sit alongside it: `cache.db-wal` and `cache.db-shm`. Back up or
+mount all three together — copying `cache.db` alone can capture a database
+missing its most recent writes. `pdf_cache_clear` and `pdf_cache_stats`
+already account for them.
+
+WAL is what keeps cache writes cheap: a commit costs about 0.02ms under it
+against roughly 20ms on Windows without it. A filesystem that does not support
+WAL (some network mounts) is detected at startup and the cache falls back to
+the slower rollback journal rather than failing. `server_info` reports which
+mode is in effect under `storage.journal_mode`.
+
+**SQLite version:** no minimum is enforced, but 3.9.0 or newer is recommended.
+Below it, FTS5 is unavailable and keyword search degrades to unranked
+substring matching; `server_info` reports this as
+`storage.keyword_search_ranked: false`.
+
 **What's cached:**
 
 | Data | Benefit |

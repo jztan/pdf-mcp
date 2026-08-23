@@ -53,6 +53,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CJK keyword search found nothing in a document warmed through
+  `pdf_corpus_warm`, even though its text was cached.** The bulk text-save
+  path never populated the char-split CJK index that CJK keyword queries
+  read, and the one-time backfill only runs when that index is first
+  created. Documents warmed page-by-page through `pdf_read_pages` were
+  unaffected, which is why this went unseen. Affected any CJK corpus using
+  the corpus tools.
+- **OCR returned nothing on Windows for anyone using the default Tesseract
+  install.** The tessdata directory was passed as a command-line flag, and
+  the default install path `C:\Program Files\Tesseract-OCR` was split at
+  the space, so Tesseract reported `Error opening data file
+  C:\Program/eng.traineddata` and loaded no language. It is now passed
+  through the environment, which carries a spaced path intact.
+- **Cold `pdf_search` was disproportionately slow on Windows**: 17.5s on a
+  500-page document against 3.2s on Linux, measured on same-spec runners.
+  First-time page text was committed once per page, and each commit is a
+  disk flush, which costs roughly 28x more on Windows than on Linux. The
+  three cold-search paths now write once per document. Repeat searches were
+  never affected. Also improves cold search on macOS and Linux.
+- A search hit's `bbox` could come back with zero height for a document
+  using a font it does not embed, such as a CJK document opened on a
+  machine without a matching font. Widths were correct, so the rectangle
+  was unusable for cropping or highlighting rather than obviously wrong.
 - `pdf_extract_chart` no longer splits a single dashed curve into several
   phantom series when the chart uses dash lengths below 1
   ([#29](https://github.com/jztan/pdf-mcp/issues/29))

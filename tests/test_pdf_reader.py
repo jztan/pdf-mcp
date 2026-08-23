@@ -945,14 +945,16 @@ class TestPDFConfigEmbeddingModel:
     def test_embedding_model_configured(self, tmp_path):
         """Returns the model name set in [embedding] model = ..."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text('[embedding]\nmodel = "BAAI/bge-large-en-v1.5"\n')
+        config_file.write_text(
+            '[embedding]\nmodel = "BAAI/bge-large-en-v1.5"\n', encoding="utf-8"
+        )
         cfg = PDFConfig(config_path=config_file)
         assert cfg.embedding_model == "BAAI/bge-large-en-v1.5"
 
     def test_embedding_model_section_present_key_absent(self, tmp_path):
         """Returns default when [embedding] section exists but model key absent."""
         config_file = tmp_path / "config.toml"
-        config_file.write_text("[embedding]\n")
+        config_file.write_text("[embedding]\n", encoding="utf-8")
         cfg = PDFConfig(config_path=config_file)
         assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
 

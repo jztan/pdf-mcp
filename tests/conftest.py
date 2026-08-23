@@ -20,7 +20,13 @@ from tests.tmpfiles import unlink_quietly
 @pytest.fixture
 def temp_cache_dir():
     """Create a temporary cache directory."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    # ignore_cleanup_errors: the cache holds cache.db open through its
+    # SQLite connection, and Windows refuses to delete an open file, so
+    # cleanup raised WinError 32 and then WinError 267 while retrying and
+    # failed the test at teardown. The directory is a temp dir the OS
+    # reclaims regardless, and cleanup must not fail a passing test.
+    # POSIX is unaffected: unlink there succeeds with the file open.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         yield Path(tmpdir)
 
 

@@ -1391,7 +1391,7 @@ class TestResolvePath:
     def test_bad_extension_inline(self, isolated_server, tmp_path):
         """Non-.pdf extension returns inline error dict."""
         not_pdf = tmp_path / "notes.txt"
-        not_pdf.write_text("hi")
+        not_pdf.write_text("hi", encoding="utf-8")
         local_path, err = _resolve_path(str(not_pdf))
         assert local_path is None
         assert err is not None
@@ -4029,7 +4029,8 @@ def test_pdf_info_content_trust_uses_configured_phrases(
 
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        '[content_trust]\ninjection_phrases = ["purchase the premium plan"]\n'
+        '[content_trust]\ninjection_phrases = ["purchase the premium plan"]\n',
+        encoding="utf-8",
     )
     monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
 
@@ -4057,7 +4058,9 @@ def test_pdf_info_content_trust_malformed_config_degrades_gracefully(
     from pdf_mcp.config import PDFConfig
 
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text('[content_trust]\ninjection_phrases = "not a list"\n')
+    cfg_path.write_text(
+        '[content_trust]\ninjection_phrases = "not a list"\n', encoding="utf-8"
+    )
     monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
 
     p = tmp_path / "simple.pdf"
@@ -5118,7 +5121,7 @@ class TestHTTPTransportEntryPoint:
 
     def _allowlisted_config(self, tmp_path):
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n', encoding="utf-8")
         from pdf_mcp.config import PDFConfig
 
         return PDFConfig(config_path=cfg)

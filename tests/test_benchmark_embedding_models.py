@@ -16,7 +16,8 @@ class TestLoadGroundTruth:
     def test_loads_existing_corpus(self, tmp_path):
         gt_file = tmp_path / "gt.json"
         gt_file.write_text(
-            json.dumps({"pdfs": {"x": {"url": "u", "page_count": 1, "scenarios": {}}}})
+            json.dumps({"pdfs": {"x": {"url": "u", "page_count": 1, "scenarios": {}}}}),
+            encoding="utf-8",
         )
         gt = bem.load_ground_truth(str(gt_file))
         assert "pdfs" in gt
@@ -410,7 +411,8 @@ class TestMainIntegration:
                         }
                     }
                 }
-            )
+            ),
+            encoding="utf-8",
         )
         # Stub _resolve_path and pdf_search
         monkeypatch.setattr(bem, "_resolve_path", lambda u: ("/tmp/fake.pdf", None))

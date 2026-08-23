@@ -17,7 +17,7 @@ class TestConfigLoad:
     def test_malformed_toml_raises_with_file_path(self, tmp_path):
         """Malformed TOML raises ValueError mentioning the file path."""
         bad = tmp_path / "config.toml"
-        bad.write_text("invalid toml [[[")
+        bad.write_text("invalid toml [[[", encoding="utf-8")
         with pytest.raises(ValueError, match="config.toml"):
             PDFConfig(config_path=bad)
 
@@ -25,7 +25,9 @@ class TestConfigLoad:
         """Valid TOML file is loaded and rules applied."""
         cfg = tmp_path / "config.toml"
         secret = tmp_path / "secret"
-        cfg.write_text(f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n')
+        cfg.write_text(
+            f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n', encoding="utf-8"
+        )
         config = PDFConfig(config_path=cfg)
         with pytest.raises(ValueError):
             config.check_path(str(secret / "file.pdf"))
@@ -35,7 +37,7 @@ class TestPathRules:
     def test_no_allow_is_permissive(self, tmp_path):
         """Empty allow list means any path is accepted (within floor)."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text("[paths]\ndeny = []\n")
+        cfg.write_text("[paths]\ndeny = []\n", encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         config.check_path("/any/path/file.pdf")
 
@@ -43,7 +45,7 @@ class TestPathRules:
         """Path outside allow list is rejected."""
         cfg = tmp_path / "config.toml"
         pdfs = tmp_path / "data" / "pdfs"
-        cfg.write_text(f'[paths]\nallow = ["{pdfs.as_posix()}/**"]\n')
+        cfg.write_text(f'[paths]\nallow = ["{pdfs.as_posix()}/**"]\n', encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         config.check_path(str(pdfs / "report.pdf"))
         with pytest.raises(ValueError, match="not in allowed"):
@@ -53,7 +55,9 @@ class TestPathRules:
         """Path matching deny pattern is rejected."""
         cfg = tmp_path / "config.toml"
         secret = tmp_path / "secret"
-        cfg.write_text(f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n')
+        cfg.write_text(
+            f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n', encoding="utf-8"
+        )
         config = PDFConfig(config_path=cfg)
         with pytest.raises(ValueError, match="denied"):
             config.check_path(str(secret / "file.pdf"))
@@ -64,7 +68,8 @@ class TestPathRules:
         data = tmp_path / "data"
         cfg.write_text(
             f'[paths]\nallow = ["{data.as_posix()}/**"]\n'
-            f'deny = ["{(data / "secret").as_posix()}/**"]\n'
+            f'deny = ["{(data / "secret").as_posix()}/**"]\n',
+            encoding="utf-8",
         )
         config = PDFConfig(config_path=cfg)
         config.check_path(str(data / "public" / "report.pdf"))
@@ -75,7 +80,7 @@ class TestPathRules:
         """~ in patterns is expanded to the home directory."""
         home = str(Path.home())
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["~/Documents/**"]\n')
+        cfg.write_text('[paths]\nallow = ["~/Documents/**"]\n', encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         config.check_path(f"{home}/Documents/report.pdf")
         with pytest.raises(ValueError, match="not in allowed"):
@@ -100,7 +105,8 @@ class TestPathRules:
             # fnmatch normalises separators on Windows, so forward slashes
             # match either way.
             f'[paths]\nallow = ["{allowed_dir.as_posix()}/**"]\n'
-            f'deny = ["{secret_dir.as_posix()}/**"]\n'
+            f'deny = ["{secret_dir.as_posix()}/**"]\n',
+            encoding="utf-8",
         )
         config = PDFConfig(config_path=cfg)
 
@@ -117,7 +123,7 @@ class TestUrlRules:
     def test_wildcard_matching(self, tmp_path):
         """* in hostname pattern matches any chars including dots."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[urls]\nallow = ["*.example.com"]\n')
+        cfg.write_text('[urls]\nallow = ["*.example.com"]\n', encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         config.check_url_host("docs.example.com")
         with pytest.raises(ValueError, match="not in allowed"):
@@ -126,7 +132,7 @@ class TestUrlRules:
     def test_case_insensitive(self, tmp_path):
         """Hostname matching is case-insensitive."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[urls]\ndeny = ["Evil.com"]\n')
+        cfg.write_text('[urls]\ndeny = ["Evil.com"]\n', encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         with pytest.raises(ValueError, match="denied"):
             config.check_url_host("EVIL.COM")
@@ -135,7 +141,8 @@ class TestUrlRules:
         """Host matching both allow and deny is denied (fail-closed)."""
         cfg = tmp_path / "config.toml"
         cfg.write_text(
-            '[urls]\nallow = ["*.example.com"]\ndeny = ["bad.example.com"]\n'
+            '[urls]\nallow = ["*.example.com"]\ndeny = ["bad.example.com"]\n',
+            encoding="utf-8",
         )
         config = PDFConfig(config_path=cfg)
         config.check_url_host("docs.example.com")
@@ -145,35 +152,35 @@ class TestUrlRules:
 
 def test_max_response_bytes_default_when_missing(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text("")
+    cfg_path.write_text("", encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 200_000
 
 
 def test_max_response_bytes_honored(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text("[limits]\nmax_response_bytes = 50000\n")
+    cfg_path.write_text("[limits]\nmax_response_bytes = 50000\n", encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 50_000
 
 
 def test_max_response_bytes_clamped_to_ceiling(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text("[limits]\nmax_response_bytes = 999999999\n")
+    cfg_path.write_text("[limits]\nmax_response_bytes = 999999999\n", encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 2_000_000
 
 
 def test_max_response_bytes_clamped_to_floor(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text("[limits]\nmax_response_bytes = 10\n")
+    cfg_path.write_text("[limits]\nmax_response_bytes = 10\n", encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.max_response_bytes == 4_096
 
 
 def test_max_response_bytes_rejects_non_int(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text('[limits]\nmax_response_bytes = "200kb"\n')
+    cfg_path.write_text('[limits]\nmax_response_bytes = "200kb"\n', encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     with pytest.raises(ValueError, match="must be an integer"):
         cfg.max_response_bytes
@@ -181,7 +188,7 @@ def test_max_response_bytes_rejects_non_int(tmp_path):
 
 def test_injection_phrases_default_empty_when_missing(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text("")
+    cfg_path.write_text("", encoding="utf-8")
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.injection_phrases == ()
 
@@ -206,7 +213,9 @@ def test_injection_phrases_loaded_raw(tmp_path):
 
 def test_injection_phrases_rejects_non_list(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text('[content_trust]\ninjection_phrases = "not a list"\n')
+    cfg_path.write_text(
+        '[content_trust]\ninjection_phrases = "not a list"\n', encoding="utf-8"
+    )
     cfg = PDFConfig(config_path=cfg_path)
     with pytest.raises(ValueError, match="must be a list of strings"):
         cfg.injection_phrases
@@ -214,7 +223,9 @@ def test_injection_phrases_rejects_non_list(tmp_path):
 
 def test_injection_phrases_rejects_non_string_element(tmp_path):
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text('[content_trust]\ninjection_phrases = ["ok", 123]\n')
+    cfg_path.write_text(
+        '[content_trust]\ninjection_phrases = ["ok", 123]\n', encoding="utf-8"
+    )
     cfg = PDFConfig(config_path=cfg_path)
     with pytest.raises(ValueError, match="must be a list of strings"):
         cfg.injection_phrases
@@ -227,17 +238,17 @@ class TestPathAllowlistIntrospection:
 
     def test_empty_allow_list_does_not_count(self, tmp_path):
         cfg = tmp_path / "config.toml"
-        cfg.write_text("[paths]\nallow = []\n")
+        cfg.write_text("[paths]\nallow = []\n", encoding="utf-8")
         assert PDFConfig(config_path=cfg).has_path_allowlist is False
 
     def test_deny_only_does_not_count(self, tmp_path):
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\ndeny = ["/secret/**"]\n')
+        cfg.write_text('[paths]\ndeny = ["/secret/**"]\n', encoding="utf-8")
         assert PDFConfig(config_path=cfg).has_path_allowlist is False
 
     def test_non_empty_allow_list_counts(self, tmp_path):
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n', encoding="utf-8")
         assert PDFConfig(config_path=cfg).has_path_allowlist is True
 
     def test_config_path_is_exposed(self, tmp_path):

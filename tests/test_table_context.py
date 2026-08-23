@@ -134,7 +134,7 @@ def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
     from pdf_mcp.server import _attach_table_context
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=__import__("pathlib").Path(tmp))
         doc = pymupdf.open(ruled_table_pdf)
         rows = doc[0].get_text("blocks")
@@ -221,7 +221,7 @@ def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import _attach_table_context, _match_may_touch_a_table
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         doc = pymupdf.open(wrapped_label_table_pdf)
         blocks = doc[0].get_text("blocks")
@@ -256,7 +256,7 @@ def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_tabl
     monkeypatch.setattr(
         srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
     )
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         doc = pymupdf.open(ruled_table_pdf)
         match = {
@@ -280,7 +280,7 @@ def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
     monkeypatch.setattr(
         srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
     )
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         match = {"page": 1, "excerpt": "no numbers here at all", "bbox": [0, 0, 9, 9]}
         srv._attach_table_context([match], ruled_table_pdf, cache)
@@ -294,7 +294,7 @@ def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
     import pathlib
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         match = {"page": 1, "excerpt": "Supply Voltage 4.5 16 V"}
         out = _attach_table_context([match], ruled_table_pdf, cache)
@@ -316,7 +316,7 @@ def test_whole_table_block_returns_every_row_not_one_guess(ruled_table_pdf):
     import pathlib
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         # No column-identity word, or the ambiguity trigger would reject it
         # before geometry is ever consulted and the test would pass vacuously.
@@ -677,7 +677,7 @@ def test_cached_tables_allow_attachment_without_a_subprocess(
     from pdf_mcp import server as srv
     from pdf_mcp.cache import PDFCache
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         # Warm the cache the way a prior read would.
         tables = run_module_json(

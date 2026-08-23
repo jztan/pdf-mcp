@@ -23,7 +23,7 @@ def _gen():
 
 def test_corpus_has_zero_misclassifications():
     gen = _gen()
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         for name, label in gen.build(d):
             doc = pymupdf.open(os.path.join(d, name))
             try:

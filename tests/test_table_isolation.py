@@ -126,7 +126,8 @@ def test_clean_tables_when_main_module_imports_the_server(decimal_table_pdf, tmp
         "    import json, sys\n"
         "    r = pdf_read_pages(sys.argv[1], pages='1')\n"
         "    rows = r['pages'][0]['tables'][0]['rows']\n"
-        "    json.dump(rows, sys.stdout)\n"
+        "    json.dump(rows, sys.stdout)\n",
+        encoding="utf-8",
     )
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parent.parent / "src")}
     proc = subprocess.run(

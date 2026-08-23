@@ -40,7 +40,7 @@ def test_run_all_cells_raises_on_unresolvable_pdf():
 def test_main_returns_2_on_unresolvable_pdf(tmp_path):
     """The abort surfaces as exit code 2 (setup error), not 0 or 1."""
     qfile = tmp_path / "queries.json"
-    qfile.write_text(json.dumps({"pdfs": GHOST_CORPUS}))
+    qfile.write_text(json.dumps({"pdfs": GHOST_CORPUS}), encoding="utf-8")
     assert main(["--queries", str(qfile)]) == 2
 
 
@@ -83,7 +83,8 @@ def _query_file(tmp_path, query: dict):
                     }
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     return str(qfile)
 
@@ -279,7 +280,7 @@ def test_main_returns_2_on_a_drifted_ground_truth_page(tmp_path):
     """A corpus error exits 2 (setup), never 1 (quality regression)."""
     pdf = _one_page_pdf(tmp_path, "supply voltage is 4.5 volts minimum")
     qfile = tmp_path / "queries.json"
-    qfile.write_text(json.dumps({"pdfs": _corpus(pdf, 1, "9.9")}))
+    qfile.write_text(json.dumps({"pdfs": _corpus(pdf, 1, "9.9")}), encoding="utf-8")
     assert main(["--queries", str(qfile)]) == 2
 
 

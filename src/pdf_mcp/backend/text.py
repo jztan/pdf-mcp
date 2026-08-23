@@ -1265,7 +1265,14 @@ def count_chars(pdf_path: str, page_num: int, doc: Any = None) -> int:
     if owned:
         doc = pdfium.PdfDocument(pdf_path)
     try:
-        text_page = pdfium_raw.FPDFText_LoadPage(doc[page_num].raw)
+        # Bind the page to a local. Loading from `doc[page_num].raw`
+        # directly leaves the PdfPage a temporary, and pypdfium2's
+        # finalizer closes the page as soon as it is collected, while the
+        # text page still points into it. That is a use-after-free: it
+        # segfaulted CI (exit 139) on one Python version only, since
+        # whether it crashes depends on when the collector runs.
+        page = doc[page_num]
+        text_page = pdfium_raw.FPDFText_LoadPage(page.raw)
         if not text_page:
             return 0
         try:

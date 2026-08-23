@@ -122,6 +122,7 @@ def render_page(
     page_num: int,
     dpi: int = 150,
     clip: Rect | tuple[float, float, float, float] | None = None,
+    grayscale: bool = False,
 ) -> Any:
     """Render one page to a Pillow image.
 
@@ -135,7 +136,7 @@ def render_page(
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
-        image = page.render(scale=dpi / 72.0).to_pil()
+        image = page.render(scale=dpi / 72.0, grayscale=grayscale).to_pil()
         if clip is not None:
             # Crop in PIXELS from the full render, with PyMuPDF's
             # enclosing-rect rounding (floor the origin, ceil the far
@@ -162,6 +163,111 @@ def _text_layer(pdf_path: str, page_num: int) -> str:
         return str(get_text(pdf_path, page_num, "text"))
     except Exception:  # noqa: BLE001 - absence of text is not an error here
         return ""
+
+
+#: Persistent Tesseract handles, one per (lang, tessdata), guarded by a
+#: lock. Loading traineddata dominates a cold OCR call; PyMuPDF paid it
+#: per call and pytesseract pays it per PROCESS SPAWN, so a reused
+#: in-process handle is what puts this path ahead of both.
+_TESS_APIS: dict[tuple[str, str], Any] = {}
+_TESS_LOCK: Any = None
+
+
+def _tesserocr_api(lang: str, tessdata: str | None) -> Any:
+    """A cached tesserocr handle, or None when tesserocr is unavailable.
+
+    PDF_MCP_OCR=pytesseract forces the subprocess fallback (dev lever).
+    """
+    import os
+    import threading
+
+    global _TESS_LOCK
+    if os.environ.get("PDF_MCP_OCR") == "pytesseract":
+        return None
+    try:
+        import tesserocr
+    except Exception:  # noqa: BLE001 - optional dependency
+        return None
+    if _TESS_LOCK is None:
+        _TESS_LOCK = threading.Lock()
+    if tessdata is None:
+        from ..extractor import _resolve_tessdata
+
+        tessdata = _resolve_tessdata()
+    key = (lang, tessdata or "")
+    with _TESS_LOCK:
+        api = _TESS_APIS.get(key)
+        if api is None:
+            try:
+                if tessdata:
+                    api = tesserocr.PyTessBaseAPI(lang=lang, path=tessdata)
+                else:
+                    api = tesserocr.PyTessBaseAPI(lang=lang)
+            except Exception:  # noqa: BLE001 - bad lang/tessdata -> fallback
+                return None
+            _TESS_APIS[key] = api
+        return api
+
+
+def _scan_native_dpi(pdf_path: str, page_num: int) -> "int | None":
+    """Native raster DPI of a pure-scan page, else None.
+
+    Same argument native_render_dpi_cap makes for renders: OCRing a
+    200dpi scan from a 300dpi upsample costs recognition time on 2.25x
+    the pixels and adds zero information (identical word output,
+    measured). Applied only to pages that are one full-cover image with
+    no text and no vector content, and only when the native resolution
+    is itself OCR-adequate (>= 200), so a low-resolution scan still gets
+    Tesseract's preferred upsampling.
+    """
+    import ctypes
+
+    import pypdfium2.raw as pdfium_raw
+
+    doc = pdfium.PdfDocument(pdf_path)
+    try:
+        page = doc[page_num]
+        if page.get_textpage().count_chars() > 0:
+            return None
+        width_pt = page.get_size()[0]
+        if width_pt <= 0:
+            return None
+        image_obj = None
+        for index in range(pdfium_raw.FPDFPage_CountObjects(page.raw)):
+            obj = pdfium_raw.FPDFPage_GetObject(page.raw, index)
+            kind = pdfium_raw.FPDFPageObj_GetType(obj)
+            if kind == pdfium_raw.FPDF_PAGEOBJ_IMAGE:
+                if image_obj is not None:
+                    return None  # more than one image
+                image_obj = obj
+            elif kind == pdfium_raw.FPDF_PAGEOBJ_PATH:
+                return None  # vector content present
+        if image_obj is None:
+            return None
+        left, bottom, right, top = (ctypes.c_float() for _ in range(4))
+        pdfium_raw.FPDFPageObj_GetBounds(
+            image_obj,
+            ctypes.byref(left),
+            ctypes.byref(bottom),
+            ctypes.byref(right),
+            ctypes.byref(top),
+        )
+        page_w, page_h = page.get_size()
+        covered = (right.value - left.value) * (top.value - bottom.value)
+        if page_w * page_h <= 0 or covered / (page_w * page_h) < 0.98:
+            return None  # not a full-page scan; no cap
+        meta = pdfium_raw.FPDF_IMAGEOBJ_METADATA()
+        pdfium_raw.FPDFImageObj_GetImageMetadata(
+            image_obj, page.raw, ctypes.byref(meta)
+        )
+        if meta.width <= 0:
+            return None
+        native = int(round(meta.width / (width_pt / 72.0)))
+        return native if native >= 200 else None
+    except Exception:  # noqa: BLE001 - fail-safe: no cap
+        return None
+    finally:
+        doc.close()
 
 
 def ocr_page_text(
@@ -195,9 +301,22 @@ def ocr_page_text(
         if len(existing.strip()) >= _TEXT_LAYER_MIN_CHARS:
             return existing
 
+    native = _scan_native_dpi(pdf_path, page_num)
+    effective_dpi = min(dpi, native) if native else dpi
+
+    api = _tesserocr_api(lang, tessdata)
+    if api is not None:
+        # Grayscale render: Tesseract converts internally anyway, and
+        # feeding RGB measured +0.12s per page on the reference fixture.
+        image = render_page(pdf_path, page_num, dpi=effective_dpi, grayscale=True)
+        assert _TESS_LOCK is not None
+        with _TESS_LOCK:
+            api.SetImage(image)
+            return str(api.GetUTF8Text())
+
     import pytesseract
 
-    image = render_page(pdf_path, page_num, dpi=dpi)
+    image = render_page(pdf_path, page_num, dpi=effective_dpi)
     config = f"--tessdata-dir {tessdata}" if tessdata else ""
     return str(pytesseract.image_to_string(image, lang=lang, config=config))
 

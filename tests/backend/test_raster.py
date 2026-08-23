@@ -118,3 +118,34 @@ def test_text_layer_is_returned_without_ocr_when_present():
     ref_words = {w for w in ref.split() if len(w) > 4}
     got_words = {w for w in got.split() if len(w) > 4}
     assert len(ref_words & got_words) / len(ref_words) > 0.9
+
+
+@pytest.mark.skipif(not _HAS_TESSERACT, reason="system tesseract not installed")
+def test_ocr_fast_path_and_fallback_agree(tmp_path, monkeypatch):
+    """The tesserocr fast path and the pytesseract fallback are the same
+    engine behind different bindings; their word sets must agree. Skips
+    the comparison half when tesserocr is not installed."""
+    scan = _make_image_only_pdf(tmp_path)
+    monkeypatch.setenv("PDF_MCP_OCR", "pytesseract")
+    slow = ocr_page_text(str(scan), 0, lang="eng", dpi=300)
+    monkeypatch.delenv("PDF_MCP_OCR")
+    try:
+        import tesserocr  # noqa: F401
+    except Exception:
+        pytest.skip("tesserocr not installed")
+    fast = ocr_page_text(str(scan), 0, lang="eng", dpi=300)
+    slow_words = {w.lower() for w in slow.split() if len(w) > 3}
+    fast_words = {w.lower() for w in fast.split() if len(w) > 3}
+    assert_non_empty(fast_words, "fast-path words")
+    overlap = len(slow_words & fast_words) / max(len(slow_words), 1)
+    assert overlap >= 0.95, f"fast/fallback word overlap {overlap:.2f}"
+
+
+def test_scan_native_dpi_cap(tmp_path):
+    """A pure 200dpi scan reports its native resolution; a born-digital
+    page reports None (it has a text layer)."""
+    from pdf_mcp.backend.raster import _scan_native_dpi
+
+    scan = _make_image_only_pdf(tmp_path)  # rasterised at 200 dpi
+    assert _scan_native_dpi(str(scan), 0) == 200
+    assert _scan_native_dpi(_FIXTURE, _PAGE) is None

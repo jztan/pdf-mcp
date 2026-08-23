@@ -2,6 +2,7 @@
 SQLite-based cache for PDF data persistence across MCP server restarts.
 """
 
+import contextlib
 import json
 import os
 import re
@@ -862,6 +863,34 @@ class PDFCache:
                 ),
             }
 
+    @contextlib.contextmanager
+    def write_transaction(self) -> Any:
+        """One connection, and so one commit, for a group of writes.
+
+        Pass the yielded connection to each ``save_*`` call's ``conn``
+        argument. See ``_write_conn`` for why this matters.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            yield conn
+
+    @contextlib.contextmanager
+    def _write_conn(self, conn: "sqlite3.Connection | None" = None) -> Any:
+        """Yield a connection, reusing the caller's if it owns a transaction.
+
+        Every write here otherwise opens its own connection, and leaving
+        that ``with`` block commits, which is an fsync. That is ~1ms on
+        Linux and far more on Windows: warming a 6-document corpus spent
+        3.18s of its 3.39s in commits there, against 0.05s on Linux, with
+        extraction itself measured FASTER on Windows (0.205s vs 0.253s).
+        Passing one connection through a document's writes turns four
+        fsyncs into one, and keeps the document atomic as a bonus.
+        """
+        if conn is not None:
+            yield conn
+        else:
+            with sqlite3.connect(self.db_path) as owned:
+                yield owned
+
     def save_metadata(
         self,
         path: str,
@@ -869,11 +898,12 @@ class PDFCache:
         metadata: dict[str, Any],
         toc: list[Any],
         text_coverage: list[dict[str, Any]] | None = None,
+        conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """Save PDF metadata to cache, including optional text_coverage."""
         mtime, size = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO pdf_metadata
                    (file_path, file_mtime, file_size,
@@ -916,6 +946,7 @@ class PDFCache:
         self,
         path: str,
         blocks_by_page: "dict[int, tuple[list[Any], tuple[float, float]]]",
+        conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """Persist the sorted text-blocks shape per page (0-indexed).
 
@@ -931,7 +962,7 @@ class PDFCache:
             mtime = os.path.getmtime(path)
         except OSError:
             return
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.execute("""CREATE TABLE IF NOT EXISTS page_blocks (
                     file_path TEXT NOT NULL,
                     page_num INTEGER NOT NULL,
@@ -979,11 +1010,16 @@ class PDFCache:
         width, height = json.loads(row[1])
         return blocks, (float(width), float(height))
 
-    def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
+    def save_pages_hidden_flag(
+        self,
+        path: str,
+        flags: dict[int, bool],
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
         """Persist per-page hidden-text booleans (page_num is 0-indexed)."""
         if not flags:
             return
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 "UPDATE page_text SET has_hidden_text = ?"
                 " WHERE file_path = ? AND page_num = ?",
@@ -1190,7 +1226,12 @@ class PDFCache:
             if self._is_cache_valid(path, mtime)
         }
 
-    def save_pages_text(self, path: str, pages: dict[int, str]) -> None:
+    def save_pages_text(
+        self,
+        path: str,
+        pages: dict[int, str],
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
         """
         Save multiple page texts to cache.
 
@@ -1203,7 +1244,7 @@ class PDFCache:
 
         mtime, _ = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
@@ -1481,7 +1522,11 @@ class PDFCache:
         return result
 
     def save_page_embeddings(
-        self, path: str, embeddings: dict[int, bytes], model_name: str
+        self,
+        path: str,
+        embeddings: dict[int, bytes],
+        model_name: str,
+        conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """
         Save raw embedding bytes to cache.
@@ -1496,7 +1541,7 @@ class PDFCache:
             return
 
         mtime, _ = self._get_file_info(path)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 "INSERT OR REPLACE INTO page_embeddings"
                 " (file_path, page_num, file_mtime, embedding, model)"

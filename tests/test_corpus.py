@@ -8,6 +8,7 @@ import pymupdf
 
 from pdf_mcp import corpus
 from pdf_mcp.extractor import _warm_extract_worker
+import pytest
 
 
 class TestResolveCorpus:
@@ -834,3 +835,57 @@ class TestWarmExtractWorker:
         # Module-scope function: pickles by qualified name, spawn-safe.
         clone = pickle.loads(pickle.dumps(_warm_extract_worker))
         assert clone is _warm_extract_worker
+
+
+class TestWarmDocumentIsAtomic:
+    """_finalize_doc writes a document in ONE transaction.
+
+    The reason is cost (each separate connection commits, and a commit is
+    an fsync: warming 6 documents spent 3.18s of 3.39s in commits on
+    Windows against 0.05s on Linux), but the guarantee is correctness, so
+    that is what this asserts. A failure partway through must leave no
+    half-written document behind.
+    """
+
+    def test_a_failure_midway_leaves_nothing_committed(self, cache, tmp_path):
+        import pymupdf
+
+        from pdf_mcp import corpus
+
+        pdf = tmp_path / "doc.pdf"
+        doc = pymupdf.open()
+        for i in range(3):
+            doc.new_page().insert_text((50, 50), f"page {i} body text here")
+        doc.save(str(pdf))
+        doc.close()
+
+        real_blocks = cache.save_page_blocks
+
+        def explode(*args, **kwargs):
+            raise RuntimeError("disk full, midway through the document")
+
+        cache.save_page_blocks = explode
+        try:
+            with pytest.raises(RuntimeError):
+                corpus._finalize_doc(
+                    cache=cache,
+                    path=str(pdf),
+                    page_count=3,
+                    metadata={"title": "t"},
+                    toc=[],
+                    texts={0: "page 0 body text here"},
+                    coverage=[{"page": 1, "text_chars": 21, "raster_images": 0}],
+                    embeddings=False,
+                    model_name=None,
+                    embed=None,
+                    layout={0: ([], (612.0, 792.0), False)},
+                )
+        finally:
+            cache.save_page_blocks = real_blocks
+
+        assert (
+            cache.get_metadata(str(pdf)) is None
+        ), "metadata was committed even though the document failed partway"
+        assert (
+            cache.get_page_text(str(pdf), 0) is None
+        ), "page text was committed even though the document failed partway"

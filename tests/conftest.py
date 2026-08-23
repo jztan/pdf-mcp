@@ -34,6 +34,11 @@ def cache(temp_cache_dir):
 def sample_pdf():
     """Create a sample 5-page PDF for testing."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Close the handle before anything writes to this path: Windows
+        # refuses to write or replace a file that is still open, which
+        # turned into 639 errors the first time CI ran there. delete=False
+        # means closing early does not remove the file.
+        f.close()
         doc = pymupdf.open()
 
         for i in range(5):
@@ -70,6 +75,7 @@ def isolated_server(temp_cache_dir, monkeypatch):
 def sample_pdf_with_toc():
     """Create a PDF with table of contents."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
 
         for i in range(3):
@@ -125,6 +131,7 @@ def sample_pdf_with_toc_sections(tmp_path):
 def sample_pdf_with_large_toc():
     """Create a PDF with more than 50 TOC entries (triggers truncation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
 
         for i in range(60):
@@ -145,6 +152,7 @@ def sample_pdf_with_large_toc():
 def sample_pdf_with_images():
     """Create a PDF with embedded images."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -174,6 +182,7 @@ def sample_pdf_dup_image():
     One xref, two placements.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         png_data = base64.b64decode(
@@ -192,6 +201,7 @@ def sample_pdf_dup_image():
 def sample_pdf_two_distinct_images():
     """PDF with two DIFFERENT embedded images on one page (two distinct xrefs)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         red = base64.b64decode(
@@ -214,6 +224,7 @@ def sample_pdf_two_distinct_images():
 def sample_pdf_scanned():
     """PDF with zero extractable text but raster images (scan simulation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         png_data = base64.b64decode(
@@ -231,6 +242,7 @@ def sample_pdf_scanned():
 def sample_pdf_mixed():
     """PDF with pages 1-2 having text and pages 3-4 being image-only."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         png_data = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
@@ -263,6 +275,7 @@ def sample_pdf_grayscale():
     import io
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -288,6 +301,7 @@ def sample_pdf_rgba():
     import io
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -314,6 +328,7 @@ def pdf_with_hidden_text():
     carrying a unique token ('zebra'). Page 2: clean body with its own token
     ('omega'). Unique per-page tokens make keyword targeting deterministic."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         p1 = doc.new_page()
         p1.insert_text((50, 50), "alpha visible body text on page one", fontsize=12)
@@ -340,6 +355,7 @@ def sample_pdf_with_table():
     Explicit borders are required for find_tables() to detect it.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -542,6 +558,7 @@ def sample_pdf_synthetic_scan(isolated_server):
     img_bytes.seek(0)
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page(width=600, height=100)
         page.insert_image(pymupdf.Rect(0, 0, 600, 100), stream=img_bytes.read())

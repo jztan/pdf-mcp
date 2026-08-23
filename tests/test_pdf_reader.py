@@ -1627,6 +1627,11 @@ class TestGetParagraphForOffset:
         page.insert_text((50, 50), "First block text.")
         page.insert_text((50, 200), "Second block text.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            # Close the handle before anything writes to this path: Windows
+            # refuses to write or replace a file that is still open, which
+            # turned into 639 errors the first time CI ran there. delete=False
+            # means closing early does not remove the file.
+            f.close()
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1645,6 +1650,7 @@ class TestGetParagraphForOffset:
         page.insert_text((50, 50), "AAA")
         page.insert_text((50, 200), "BBB")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1666,6 +1672,7 @@ class TestGetParagraphForOffset:
         page = doc.new_page()
         page.insert_text((50, 50), "Short.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1682,6 +1689,7 @@ class TestGetParagraphForOffset:
         page = doc.new_page()
         page.insert_text((50, 50), "X" * 100)
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1703,6 +1711,7 @@ class TestGetBestParagraphForQuery:
         page.insert_text((50, 50), "The cat sat on the mat.")
         page.insert_text((50, 200), "Dogs run fast in the park.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1721,6 +1730,7 @@ class TestGetBestParagraphForQuery:
         page.insert_textbox(pymupdf.Rect(50, 50, 520, 170), first, fontsize=10)
         page.insert_textbox(pymupdf.Rect(50, 220, 520, 340), second, fontsize=10)
         handle = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        handle.close()  # see above: Windows open-handle rule
         doc.save(handle.name)
         doc.close()
         return handle.name
@@ -1826,6 +1836,7 @@ class TestGetBestParagraphForQuery:
         page = doc.new_page()
         page.insert_text((50, 50), "The cat sat.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1842,6 +1853,7 @@ class TestGetBestParagraphForQuery:
         page = doc.new_page()
         page.insert_text((50, 50), "keyword " * 50)
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1858,6 +1870,7 @@ class TestGetBestParagraphForQuery:
         page = doc.new_page()
         page.insert_text((50, 50), "Machine Learning is great.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -1884,6 +1897,7 @@ class TestGetBestParagraphForQuery:
             ),
         )
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)

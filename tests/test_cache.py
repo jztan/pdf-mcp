@@ -61,7 +61,12 @@ class TestCacheValidation:
         """Deleted file returns False for cache validity."""
         # Create temp file, cache it, then delete
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            # This site writes THROUGH the handle, so close after the write.
+            # Windows refuses to write or replace a path that is still open,
+            # which turned into 639 errors the first time CI ran there.
+            # delete=False means closing does not remove the file.
             f.write(b"%PDF-1.4")
+            f.close()
             temp_path = f.name
 
         # Get mtime before deletion
@@ -324,6 +329,7 @@ class TestCacheInvalidation:
         import pymupdf
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc = pymupdf.open()
             doc.new_page()
             doc.save(f.name)

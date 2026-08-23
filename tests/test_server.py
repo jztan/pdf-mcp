@@ -1184,7 +1184,12 @@ class TestErrorCases:
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            # This site writes THROUGH the handle, so close after the write.
+            # Windows refuses to write or replace a path that is still open,
+            # which turned into 639 errors the first time CI ran there.
+            # delete=False means closing does not remove the file.
             f.write(b"not a valid pdf content")
+            f.close()
             corrupt_path = f.name
 
         try:
@@ -1204,6 +1209,9 @@ class TestSecurityMitigations:
 
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
             f.write(b"not a pdf")
+            # Close after writing through the handle, not before:
+            # same Windows rule, but this site writes via the handle.
+            f.close()
             txt_path = f.name
 
         try:
@@ -1463,6 +1471,7 @@ class TestSearchWordBoundaryAndEllipsis:
         import pymupdf
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc = pymupdf.open()
             page = doc.new_page()
 
@@ -2897,6 +2906,7 @@ class TestExcerptStyle:
         # Block 2: unrelated
         page.insert_text((50, 350), "Unrelated content about cooking.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             path = str(Path(f.name).resolve())
@@ -2925,6 +2935,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "alpha beta gamma delta")
         page.insert_text((50, 200), "epsilon zeta eta theta")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3013,6 +3024,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "The quick brown fox jumps.")
         page.insert_text((50, 200), "Lazy dog sleeps all day.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             path = str(Path(f.name).resolve())
@@ -3067,6 +3079,7 @@ class TestExcerptStyle:
         # Block 2: unrelated
         page.insert_text((50, 350), "unrelated content about cooking")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3098,6 +3111,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "alpha gamma delta")
         page.insert_text((50, 200), "epsilon zeta eta")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3139,6 +3153,7 @@ class TestExcerptStyle:
             ),
         )
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)

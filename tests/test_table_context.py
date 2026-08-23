@@ -14,6 +14,11 @@ from pdf_mcp.parallel import run_module_json
 def ruled_table_pdf():
     """A bordered 2x3 table with decimal values in a MIN/MAX layout."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Close the handle before anything writes to this path: Windows
+        # refuses to write or replace a file that is still open, which
+        # turned into 639 errors the first time CI ran there. delete=False
+        # means closing early does not remove the file.
+        f.close()
         doc = pymupdf.open()
         page = doc.new_page()
         page.draw_rect(pymupdf.Rect(50, 50, 300, 150), color=(0, 0, 0))
@@ -159,6 +164,7 @@ def wrapped_label_table_pdf():
     real shape of the MCP1700 rows behind p01 and p02.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         page.draw_rect(pymupdf.Rect(50, 50, 520, 182), color=(0, 0, 0))

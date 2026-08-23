@@ -49,6 +49,11 @@ class TestApplyByteCap:
 
 def _make_pdf(pages_text: list[str]) -> str:
     f = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+    # Close the handle before anything writes to this path: Windows
+    # refuses to write or replace a file that is still open, which
+    # turned into 639 errors the first time CI ran there. delete=False
+    # means closing early does not remove the file.
+    f.close()
     doc = pymupdf.open()
     for body in pages_text:
         page = doc.new_page()

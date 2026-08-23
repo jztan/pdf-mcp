@@ -40,6 +40,11 @@ def decimal_table_pdf():
     detect it. That gap is why this shipped.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Close the handle before anything writes to this path: Windows
+        # refuses to write or replace a file that is still open, which
+        # turned into 639 errors the first time CI ran there. delete=False
+        # means closing early does not remove the file.
+        f.close()
         doc = pymupdf.open()
         page = doc.new_page()
         page.draw_rect(pymupdf.Rect(50, 50, 250, 150), color=(0, 0, 0))

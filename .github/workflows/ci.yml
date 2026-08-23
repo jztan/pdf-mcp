@@ -50,6 +50,9 @@ jobs:
       - name: Run tests
         run: uv run pytest tests/ -v
 
+  # (see test-windows below for why the slow marker is deselected there
+  # but not here)
+
   # Windows is ~40% of PyPI downloads and had no coverage at all until the
   # PyMuPDF replacement, which swapped the PDF engine under every user. The
   # backend's platform-sensitive surfaces are real: spawn-only multiprocessing
@@ -60,6 +63,10 @@ jobs:
   # and stay on the Linux job; this one only proves the code runs.
   test-windows:
     runs-on: windows-latest
+    # Windows has no default job timeout worth relying on (GitHub's is 6
+    # hours), and the failure mode this job exists to catch -- spawn-only
+    # multiprocessing -- deadlocks rather than errors.
+    timeout-minutes: 30
     strategy:
       matrix:
         python-version: ['3.10', '3.13']
@@ -92,4 +99,11 @@ jobs:
           tesseract --version
           uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # Deselect the slow marker here, unlike the Linux job. It covers
+        # the retrieval-quality gates, which measure ranking rather than
+        # platform behaviour and cannot fail on Windows alone -- and one
+        # of them, test_rrf_v2_no_regression_vs_baseline, took 8.5 of
+        # this job's 20 minutes. What this job is for is the
+        # platform-divergent surfaces above, and those are not marked
+        # slow.
+        run: uv run pytest tests/ -v -m "not slow"

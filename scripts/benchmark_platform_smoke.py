@@ -22,6 +22,12 @@ Paths timed:
                    out of the measurement)
   spawn_roundtrip  one ProcessPoolExecutor submit/result round trip,
                    the unit cost every parallel path pays per worker
+
+Result so far: this harness found that cold pdf_search and corpus warm
+were both dominated by SQLite commit cost on Windows (fsync per commit),
+not by extraction, which measures FASTER there than on Linux. Both are
+now batched into one transaction each. Reach for the pooled/sequential/
+extract-only split below before theorising about a platform gap.
 """
 
 from __future__ import annotations

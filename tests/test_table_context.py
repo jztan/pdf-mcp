@@ -6,7 +6,7 @@ import pymupdf
 import pytest
 
 from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
-from pdf_mcp.parallel import run_module_json
+from pdf_mcp.extractor import extract_tables_for_pages
 from tests.tmpfiles import unlink_quietly
 
 
@@ -46,9 +46,7 @@ def ruled_table_pdf():
 
 def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     """Geometric row selection needs per-row geometry, which was not cached."""
-    out = run_module_json(
-        "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
-    )
+    out = extract_tables_for_pages(ruled_table_pdf, [0])
     table = out["tables"]["0"][0]
     assert len(table["row_bboxes"]) == len(table["rows"])
     for bbox in table["row_bboxes"]:
@@ -254,7 +252,9 @@ def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_tabl
 
     called = []
     monkeypatch.setattr(
-        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+        srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
     )
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
@@ -278,7 +278,9 @@ def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
 
     called = []
     monkeypatch.setattr(
-        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+        srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
     )
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
@@ -660,7 +662,7 @@ def test_trigger_fires_for_a_caption_with_no_numbers():
     )
 
 
-def test_cached_tables_allow_attachment_without_a_subprocess(
+def test_cached_tables_allow_attachment_without_re_extracting(
     monkeypatch, ruled_table_pdf
 ):
     """A page whose tables are already cached costs nothing to associate.
@@ -680,17 +682,15 @@ def test_cached_tables_allow_attachment_without_a_subprocess(
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         # Warm the cache the way a prior read would.
-        tables = run_module_json(
-            "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
-        )["tables"]["0"]
+        tables = extract_tables_for_pages(ruled_table_pdf, [0])["tables"]["0"]
         cache.save_page_tables(ruled_table_pdf, 0, tables)
 
         doc = pymupdf.open(ruled_table_pdf)
-        spawned = []
+        re_extracted = []
         monkeypatch.setattr(
             srv,
-            "run_module_json",
-            lambda *a, **k: spawned.append(a) or {"tables": {}},
+            "extract_tables_for_pages",
+            lambda *a, **k: re_extracted.append(a) or {"tables": {}},
         )
         # A bare label: no 2+ numbers, no "Table N". The old pre-filter
         # dropped it outright.
@@ -701,5 +701,5 @@ def test_cached_tables_allow_attachment_without_a_subprocess(
         }
         out = srv._attach_table_context([match], ruled_table_pdf, cache, doc)
         doc.close()
-    assert spawned == [], "must not spawn: the tables were already cached"
+    assert re_extracted == [], "must not spawn: the tables were already cached"
     assert "table_context" in out[0]

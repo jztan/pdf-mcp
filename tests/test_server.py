@@ -1763,7 +1763,8 @@ class TestReadPagesInlineTables:
         now.
         """
         with patch(
-            "pdf_mcp.server.run_module_json", return_value={"tables": {"0": []}}
+            "pdf_mcp.server.extract_tables_for_pages",
+            return_value={"tables": {"0": []}},
         ) as mock_extract:
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1

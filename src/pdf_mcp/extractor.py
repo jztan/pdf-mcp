@@ -76,6 +76,37 @@ def page_text_chars(page: Any) -> int:
     return len(page.get_text())
 
 
+def extract_tables_for_pages(path: str, pages: list[int]) -> dict[str, Any]:
+    """Extract tables for `pages` (0-indexed) of the document at `path`.
+
+    Per-page failure is reported in `errors` rather than raising, so one
+    unreadable page cannot cost the whole batch. A page that fails is
+    ABSENT from `tables`: the caller must not read "no entry" as "no
+    tables on this page", or it would cache a false empty.
+
+    This used to run in a separate interpreter (`python -m
+    pdf_mcp._table_worker`). That existed because importing
+    `pymupdf4llm` corrupted PyMuPDF's `find_tables` process-wide and
+    irreversibly, so table extraction needed an interpreter that had
+    never imported it. Detection runs on pdfplumber now and pymupdf4llm
+    is not a dependency at all, so the spawn bought nothing and cost
+    0.13s per call on macOS, more on Windows where process start is
+    roughly 9x dearer.
+    """
+    from .backend.tables import open_table_page
+
+    tables: dict[str, Any] = {}
+    errors: dict[str, str] = {}
+    for page_num in pages:
+        try:
+            tables[str(page_num)] = extract_tables_from_page(
+                open_table_page(path, page_num)
+            )
+        except Exception as exc:  # noqa: BLE001 - per-page isolation
+            errors[str(page_num)] = repr(exc)
+    return {"tables": tables, "errors": errors}
+
+
 def _resolve_tessdata() -> str | None:
     """Find tessdata directory via safe subprocess call (no shell=True).
 

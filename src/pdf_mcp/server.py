@@ -15,7 +15,6 @@ import logging
 import math
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -39,6 +38,7 @@ from .extractor import (
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
+    extract_tables_for_pages,
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
@@ -50,7 +50,7 @@ from .extractor import (
     render_page_as_png,
 )
 from .extractor import _ocr_page_worker, _render_page_worker
-from .parallel import PageError, resolve_workers, run_module_json, run_pages
+from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -1037,11 +1037,9 @@ def pdf_read_pages(
                     render_results[n] = res[1] if isinstance(res, tuple) else res
 
         # --- Isolated dispatch: table cache-misses ---
-        # Tables MUST be extracted out-of-process. This process has imported
-        # pymupdf4llm (at startup, and again on any column-aware extraction),
-        # which activates pymupdf.layout and irreversibly corrupts
-        # find_tables cell text -- "4.5" comes back as "45\n.". One spawn
-        # serves every uncached page in this call.
+        # One call serves every uncached page here. This used to spawn a
+        # clean interpreter, because importing pymupdf4llm corrupted
+        # find_tables process-wide; that dependency is gone.
         table_results: dict[int, list[dict[str, Any]]] = {}
         table_miss_pages: list[int] = []
         for n in page_nums:
@@ -1052,12 +1050,11 @@ def pdf_read_pages(
                 table_results[n] = cached_tables
         if table_miss_pages:
             try:
-                worker_out = run_module_json(
-                    "pdf_mcp._table_worker",
-                    {"path": local_path, "pages": table_miss_pages},
-                ).get("tables", {})
-            except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
-                logger.warning("Isolated table extraction failed: %s", exc)
+                worker_out = extract_tables_for_pages(local_path, table_miss_pages).get(
+                    "tables", {}
+                )
+            except Exception as exc:  # noqa: BLE001 - tables are optional
+                logger.warning("Table extraction failed: %s", exc)
                 worker_out = {}
             for n in table_miss_pages:
                 # JSON object keys are strings; page numbers round-trip as such.
@@ -1845,10 +1842,8 @@ def _attach_table_context(
 
     if missing:
         try:
-            out = run_module_json(
-                "pdf_mcp._table_worker", {"path": local_path, "pages": missing}
-            ).get("tables", {})
-        except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            out = extract_tables_for_pages(local_path, missing).get("tables", {})
+        except Exception as exc:  # noqa: BLE001 - table context is optional
             logger.warning("Table context extraction failed: %s", exc)
             out = {}
         for page_num in missing:

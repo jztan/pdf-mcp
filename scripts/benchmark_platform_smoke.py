@@ -278,6 +278,42 @@ def main() -> int:
             _warm_extract_worker(f)
         results["warm_extract_only"] = round(time.perf_counter() - t0, 3)
 
+        # WHY a commit costs 91ms on Windows and 1.8ms on Linux, and
+        # whether WAL would actually fix it. Both are hypotheses until
+        # measured, and the last two hypotheses about this gap were wrong.
+        #
+        # Rollback-journal mode (the default) creates a -journal file per
+        # transaction, syncs it, syncs the DB, then deletes it: a file
+        # create plus delete plus directory metadata per commit. WAL keeps
+        # one persistent file and appends. If the cost is the per-commit
+        # file churn, WAL collapses it; if it is raw fsync, synchronous=OFF
+        # collapses it and WAL only helps somewhat. The four cells
+        # distinguish those.
+        import sqlite3 as _sq
+
+        def _commit_cost(journal: str, sync: str, n: int = 40) -> float:
+            db = workdir / f"probe_{journal}_{sync}.db"
+            conn = _sq.connect(str(db))
+            conn.execute(f"PRAGMA journal_mode={journal}")
+            conn.execute(f"PRAGMA synchronous={sync}")
+            conn.execute("CREATE TABLE t (k INTEGER PRIMARY KEY, v TEXT)")
+            conn.commit()
+            t = time.perf_counter()
+            for i in range(n):
+                conn.execute("INSERT INTO t (v) VALUES (?)", ("x" * 200,))
+                conn.commit()
+            per = (time.perf_counter() - t) / n
+            conn.close()
+            return round(per * 1000, 2)  # ms per commit
+
+        results["commit_ms"] = {
+            "delete_FULL": _commit_cost("delete", "FULL"),
+            "delete_NORMAL": _commit_cost("delete", "NORMAL"),
+            "wal_FULL": _commit_cost("wal", "FULL"),
+            "wal_NORMAL": _commit_cost("wal", "NORMAL"),
+            "delete_OFF": _commit_cost("delete", "OFF"),
+        }
+
         # The unit cost every parallel feature pays per worker on this OS.
         from concurrent.futures import ProcessPoolExecutor
 

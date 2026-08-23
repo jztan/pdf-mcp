@@ -954,29 +954,33 @@ def _block_bbox(block: list[Any]) -> tuple[float, float, float, float]:
     y0 = min(ln[0][1] for ln in block)
     x1 = max(ln[0][2] for ln in block)
     y1 = max(ln[0][3] for ln in block)
-    if y1 <= y0:
-        # pdfium returns flat char boxes when it cannot resolve a font's
-        # vertical metrics, which happens for a CJK font the PDF
-        # references without embedding and the host cannot supply. Widths
-        # still come from the font's widths array, so only the height
-        # collapses and pdf_search reported bbox evidence of
-        # (72, 200, 450, 200): a rect a caller cannot draw or crop with.
-        # Fall back to the em box above the baseline.
+    # pdfium returns near-flat char boxes when it cannot resolve a font's
+    # vertical metrics, which is what happens to a font the PDF
+    # references without embedding on a host that cannot supply a
+    # substitute (a CJK Type0 font on a machine with no CJK font). Glyph
+    # WIDTHS survive, because they come from the font's widths array, so
+    # only the height collapses. pdf_search then reported bbox evidence
+    # of (72, 200, 450, 200): a rect a caller can neither draw nor crop
+    # with.
+    #
+    # The test is relative to the glyph advance, not height <= 0. The
+    # collapsed height is not exactly zero but a fraction of a point,
+    # which survived an earlier `y1 <= y0` guard untouched and only
+    # became visibly flat once block_bbox_for_index rounded both edges to
+    # 1dp. Real text is never a small fraction of its own advance tall,
+    # and scaling the threshold by the advance keeps genuinely small type
+    # (superscripts, 2pt hidden text) out of the fallback.
+    widths = [c.x1 - c.x0 for ln in block for c in ln[2] if c.x1 > c.x0]
+    advance = statistics.median(widths) if widths else 0.0
+    if advance > 0 and (y1 - y0) < 0.25 * advance:
         size = max(
             (c.size for ln in block for c in ln[2] if c.size > 0),
             default=0.0,
         )
-        if size <= 0:
-            # When pdfium cannot resolve the metrics it often reports a
-            # font size of 0 as well, so the em box is not available
-            # either. Glyph WIDTHS still come from the font's widths
-            # array, and for the CJK case this arises in they are full
-            # width, so the median advance is a sound stand-in for the
-            # line height.
-            widths = [c.x1 - c.x0 for ln in block for c in ln[2] if c.x1 > c.x0]
-            size = statistics.median(widths) if widths else 0.0
-        if size > 0:
-            y0 = y1 - size
+        # pdfium usually reports a font size of 0 in this state too, so
+        # the em box is often unavailable. The glyphs this arises on are
+        # full-width CJK, which advance by about their em.
+        y0 = y1 - (size if size > 0 else advance)
     return (x0, y0, x1, y1)
 
 

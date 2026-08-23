@@ -1,6 +1,6 @@
 name: Platform bench
 
-# Manual only. Times the user-facing product paths (open, read, search,
+# Manual, or on a push that changes the bench itself. Times the user-facing product paths (open, read, search,
 # render, OCR, corpus warm, spawn round trip) on Linux and Windows so a
 # platform slowdown in the PRODUCT is measured directly instead of
 # inferred from test-suite duration. See

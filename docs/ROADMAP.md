@@ -12,9 +12,14 @@
 
 ## Next Release
 
-**Unqueued, and the version is a decision to make rather than a default.** `CHANGELOG.md`'s `[Unreleased]` now holds the PyMuPDF replacement: the runtime engine is a permissive stack (pypdfium2, pdfplumber, pypdf, pytesseract), so the declared MIT licence is true of the whole install for the first time, and `pymupdf4llm` with its Polyform Noncommercial transitive dependency is gone. Alongside it are four user-facing fixes: CJK keyword search finding nothing in a corpus-warmed document, OCR returning nothing on a default Windows Tesseract install, cold `pdf_search` costing 17.5s on Windows against 3.2s on Linux, and zero-height search bboxes for documents using unembedded fonts.
+**Overdue, and the version is a decision to make rather than a default.** `develop` carries 72 commits since v2.2.1. `CHANGELOG.md`'s `[Unreleased]` holds the PyMuPDF replacement: the runtime engine is a permissive stack (pypdfium2, pdfplumber, pypdf, pytesseract), so the declared MIT licence is true of the whole install for the first time, and `pymupdf4llm` with its Polyform Noncommercial transitive dependency is gone. Alongside it are eight user-facing fixes, including CJK keyword search finding nothing in a corpus-warmed document (a total-failure case for any CJK user of the corpus tools), OCR returning nothing on a default Windows Tesseract install, cold `pdf_search` costing 17.5s on Windows against 3.2s on Linux, zero-height search bboxes for documents using unembedded fonts, and `pdf_extract_chart` splitting a dashed curve into phantom series ([#29](https://github.com/jztan/pdf-mcp/issues/29)).
 
-No tool signature or response field changes, and quality was gated against the PyMuPDF baseline on the full benchmark set before the swap. Whether that reads as a minor or a major cut is a judgement about how loudly to signal the engine change to existing users, not something the diff decides. Cut from `develop` via `python scripts/release.py <minor|major>` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
+No tool signature or response field changes, `pdf-mcp[multicolumn]` still installs as a no-op, and quality was gated against the PyMuPDF baseline on the full benchmark set before the swap. Two things bear on the minor-versus-major call beyond how loudly to signal the engine change:
+
+- **v3.0 is already spoken for.** The MCP protocol track below reserves it for the protocol major. Spending 3.0 on the engine swap pushes that to 4.0.
+- **Semver governs the public API, and none of it broke here.** The `feat!` marker on the cutover commit is about the dependency and licence, not the interface.
+
+The one user-visible cost is the `_EXTRACTION_VERSION` bump (7 to 8), which forces a cold re-extraction on first use after upgrade. That is a cost to call out in the release notes, not an API break. Cut from `develop` via `python scripts/release.py <minor|major>` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
 
 ---
 
@@ -82,4 +87,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-08-08 (synced to v2.1.0; docs restructured, no scope change)
+**Last Updated:** 2026-08-23 (synced to `develop` post-backend-cutover; Next Release re-scoped, no change to Under Consideration)

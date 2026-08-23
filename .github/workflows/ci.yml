@@ -49,3 +49,47 @@ jobs:
         run: uv run mypy src/
       - name: Run tests
         run: uv run pytest tests/ -v
+
+  # Windows is ~40% of PyPI downloads and had no coverage at all until the
+  # PyMuPDF replacement, which swapped the PDF engine under every user. The
+  # backend's platform-sensitive surfaces are real: spawn-only multiprocessing
+  # (parallel.py, corpus.py), SQLite cache files that Windows will not let us
+  # delete while open, and tessdata discovery, which differs from Unix in two
+  # ways (--list-langs goes to stdout, and TESSDATA_PREFIX points at the
+  # install root). Lint, format, type-check and audit are platform-independent
+  # and stay on the Linux job; this one only proves the code runs.
+  test-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.13']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Install Tesseract
+        # Without this the OCR tests skip themselves (shutil.which guard) and
+        # the Windows-specific tessdata discovery path would never be tested,
+        # which is the single most platform-divergent piece of code we have.
+        run: choco install --no-progress -y tesseract
+      - name: Put Tesseract on PATH
+        # choco edits the machine PATH, which does not reliably reach later
+        # steps. Without this the which() guard fails and every OCR test
+        # skips -- green, and testing nothing.
+        run: echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+        shell: pwsh
+      - name: Verify Tesseract is visible to the tests
+        # Fail loudly here rather than let the OCR tests skip themselves.
+        run: |
+          tesseract --version
+          uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
+      - name: Run tests
+        run: uv run pytest tests/ -v

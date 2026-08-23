@@ -33,6 +33,7 @@ from pdf_mcp.extractor import (
     parse_page_range,
     reorder_vertical_glyphs,
 )
+from tests.tmpfiles import unlink_quietly
 
 # ============================================================================
 # Page Range Parser Tests
@@ -1220,6 +1221,9 @@ class TestPageRendersCache:
         assert c.renders_dir.exists()
         assert c.renders_dir != c.images_dir
 
+    @pytest.mark.skipif(
+        os.name == "nt", reason="POSIX mode bits are not the mechanism on Windows"
+    )
     def test_renders_dir_permissions(self, temp_cache_dir):
         """renders_dir has 0o700 permissions."""
         import stat
@@ -1549,6 +1553,9 @@ class TestExtractorRenderAndOcr:
         assert high["width"] > low["width"]
         assert high["height"] > low["height"]
 
+    @pytest.mark.skipif(
+        os.name == "nt", reason="POSIX mode bits are not the mechanism on Windows"
+    )
     def test_render_page_as_png_file_permissions(self, sample_pdf, temp_cache_dir):
         """Rendered PNG has 0o600 permissions."""
         import stat
@@ -1641,7 +1648,7 @@ class TestGetParagraphForOffset:
             assert "First" in text
             assert idx == 0
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_offset_in_second_block(self):
         """Offset past first block lands in the second block."""
@@ -1664,7 +1671,7 @@ class TestGetParagraphForOffset:
             assert "BBB" in text
             assert idx == 1
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_offset_beyond_text_returns_none(self):
         """Offset past all text returns (None, None)."""
@@ -1681,7 +1688,7 @@ class TestGetParagraphForOffset:
             assert text is None
             assert idx is None
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_oversized_block_returns_none(self):
         """Block exceeding max_chars returns (None, None)."""
@@ -1698,7 +1705,7 @@ class TestGetParagraphForOffset:
             assert text is None
             assert idx is None
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
 
 class TestGetBestParagraphForQuery:
@@ -1720,7 +1727,7 @@ class TestGetBestParagraphForQuery:
             assert text is not None
             assert "cat" in text
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     @staticmethod
     def _two_block_page(first: str, second: str):
@@ -1770,7 +1777,7 @@ class TestGetBestParagraphForQuery:
             assert "46.2%" in text, f"picked the figure-less block: {text!r}"
             doc.close()
         finally:
-            os.unlink(path)
+            unlink_quietly(path)
 
     def test_non_quantitative_query_keeps_document_order_on_a_tie(self):
         """The figure preference must not fire on non-numeric questions.
@@ -1796,7 +1803,7 @@ class TestGetBestParagraphForQuery:
             assert "risks relating to cybersecurity" in text
             doc.close()
         finally:
-            os.unlink(path)
+            unlink_quietly(path)
 
     def test_hyphenated_page_text_matches_unhyphenated_query_token(self):
         """'pretraining' must match a block that spells it 'pre-training'.
@@ -1822,7 +1829,7 @@ class TestGetBestParagraphForQuery:
             assert "Pre-training" in text
             doc.close()
         finally:
-            os.unlink(path)
+            unlink_quietly(path)
 
     def test_count_query_tokens_folds_hyphens(self):
         """count_query_tokens must share the picker's hyphen folding, or
@@ -1845,7 +1852,7 @@ class TestGetBestParagraphForQuery:
             assert text is None
             assert idx is None
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_oversized_block_returns_none(self):
         """Best-matching block exceeding max_chars returns (None, None)."""
@@ -1862,7 +1869,7 @@ class TestGetBestParagraphForQuery:
             assert text is None
             assert idx is None
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_case_insensitive_matching(self):
         """Token matching is case-insensitive."""
@@ -1879,7 +1886,7 @@ class TestGetBestParagraphForQuery:
             assert text is not None
             assert "Machine" in text
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_min_chars_skips_short_blocks(self):
         """Blocks shorter than min_chars are skipped."""
@@ -1914,7 +1921,7 @@ class TestGetBestParagraphForQuery:
             assert len(text_with_floor) > 80
             assert "weighted sum" in text_with_floor.lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
 
 def test_extraction_version_bump_drops_text_and_derived(tmp_path):

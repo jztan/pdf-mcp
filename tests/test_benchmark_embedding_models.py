@@ -374,12 +374,12 @@ class TestSaveResults:
         )
         txt = (
             tmp_path / "benchmark_results" / "embedding_models_20260509_120000.txt"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         assert "hello\nworld" == txt  # ANSI stripped
         data = json.loads(
             (
                 tmp_path / "benchmark_results" / "embedding_models_20260509_120000.json"
-            ).read_text()
+            ).read_text(encoding="utf-8")
         )
         assert data["timestamp"] == "2026-05-09T12:00:00"
         assert data["baseline"] == "BAAI/bge-small-en-v1.5"
@@ -435,7 +435,7 @@ class TestMainIntegration:
         assert results_dir.exists()
         json_files = list(results_dir.glob("embedding_models_*.json"))
         assert len(json_files) == 1
-        data = json.loads(json_files[0].read_text())
+        data = json.loads(json_files[0].read_text(encoding="utf-8"))
         # All configured models ran (against the stubbed pdf_search)
         assert len(data["models"]) == len(bem.MODELS)
         assert data["verdict"]["baseline"] == "BAAI/bge-small-en-v1.5"

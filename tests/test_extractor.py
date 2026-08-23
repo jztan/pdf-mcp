@@ -1,3 +1,6 @@
+import pytest
+import os
+
 # tests/test_extractor.py
 """Tests for pdf_mcp.extractor module - edge cases and uncovered functions."""
 
@@ -198,6 +201,9 @@ class TestExtractTextWithCoordinates:
 class TestExtractImagesFromPage:
     """Tests for extract_images_from_page."""
 
+    @pytest.mark.skipif(
+        os.name == "nt", reason="POSIX mode bits are not the mechanism on Windows"
+    )
     def test_rgb_image_output_structure(self, sample_pdf_with_images, tmp_path):
         """Extracted images are saved to disk with correct metadata."""
         doc = pymupdf.open(sample_pdf_with_images)

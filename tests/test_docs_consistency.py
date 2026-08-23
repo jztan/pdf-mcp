@@ -45,7 +45,7 @@ def _slugify(heading: str) -> str:
 
 
 def _anchors(path: Path) -> set[str]:
-    return {_slugify(h) for h in _HEADING_RE.findall(path.read_text())}
+    return {_slugify(h) for h in _HEADING_RE.findall(path.read_text(encoding="utf-8"))}
 
 
 def _tool_names() -> set[str]:
@@ -75,14 +75,14 @@ def _tool_names() -> set[str]:
 
 
 def _project_version() -> str:
-    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     return str(data["project"]["version"])
 
 
 def test_tool_reference_indexes_every_tool() -> None:
     """The category table at the top of tool-reference.md must list every
     tool that has a section in the same file, and nothing else."""
-    text = (DOCS / "tool-reference.md").read_text()
+    text = (DOCS / "tool-reference.md").read_text(encoding="utf-8")
 
     indexed: set[str] = set()
     for line in text.splitlines():
@@ -102,7 +102,7 @@ def test_tool_reference_indexes_every_tool() -> None:
 def test_tool_reference_documents_every_registered_tool() -> None:
     """Every tool the server registers must have a section, and no section
     may describe a tool that no longer exists."""
-    text = (DOCS / "tool-reference.md").read_text()
+    text = (DOCS / "tool-reference.md").read_text(encoding="utf-8")
     documented = set(re.findall(r"^### `([a-z_]+)`", text, re.M))
     registered = _tool_names()
 
@@ -116,7 +116,7 @@ def test_tool_reference_documents_every_registered_tool() -> None:
 def test_roadmap_current_version_matches_pyproject() -> None:
     """ROADMAP's Project Status must name the version actually in
     pyproject.toml, so a release bump cannot leave it stale."""
-    text = (DOCS / "ROADMAP.md").read_text()
+    text = (DOCS / "ROADMAP.md").read_text(encoding="utf-8")
     match = re.search(r"\*\*Current version:\*\*\s*v?([0-9]+\.[0-9]+\.[0-9]+)", text)
 
     assert match, "ROADMAP.md has no '**Current version:**' line to check"
@@ -130,14 +130,14 @@ def test_documented_tool_counts_match_the_registry() -> None:
     """README and ROADMAP both hardcode the number of tools in prose."""
     expected = len(_tool_names())
 
-    readme = (REPO_ROOT / "README.md").read_text()
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     counts = {int(n) for n in re.findall(r"(\d+) specialized tools", readme)}
     assert counts == {expected}, (
         f"README.md claims {sorted(counts)} specialized tools, "
         f"but {expected} are registered."
     )
 
-    roadmap = (DOCS / "ROADMAP.md").read_text()
+    roadmap = (DOCS / "ROADMAP.md").read_text(encoding="utf-8")
     match = re.search(r"\*\*Tools:\*\*\s*(\d+) released \(([^)]*)\)", roadmap)
     assert match, "ROADMAP.md has no '**Tools:** N released (...)' line"
     assert (
@@ -158,7 +158,7 @@ def test_internal_doc_anchors_resolve() -> None:
     broken: list[str] = []
 
     for doc in LINKED_DOCS:
-        for target, anchor in _LINK_RE.findall(doc.read_text()):
+        for target, anchor in _LINK_RE.findall(doc.read_text(encoding="utf-8")):
             dest = doc if not target else (doc.parent / target).resolve()
             rel = doc.relative_to(REPO_ROOT)
             if not dest.is_file():

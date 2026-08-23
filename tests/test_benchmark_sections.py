@@ -591,13 +591,13 @@ class TestSaveResults:
         )
         txt = (
             tmp_path / "benchmark_results" / "sections_20260503_120000.txt"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         assert "line 1" in txt
         assert "\x1b[" not in txt  # ANSI stripped
         data = json.loads(
             (
                 tmp_path / "benchmark_results" / "sections_20260503_120000.json"
-            ).read_text()
+            ).read_text(encoding="utf-8")
         )
         assert data["timestamp"] == "2026-05-03T12:00:00"
         assert data["results"] == results

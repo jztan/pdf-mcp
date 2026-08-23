@@ -11,6 +11,7 @@ import pytest
 
 from pdf_mcp.cache import PDFCache, _get_columns
 from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
@@ -73,7 +74,7 @@ class TestCacheValidation:
         mtime = os.stat(temp_path).st_mtime
 
         # Delete the file
-        os.unlink(temp_path)
+        unlink_quietly(temp_path)
 
         # _is_cache_valid should return False (OSError)
         result = cache._is_cache_valid(temp_path, mtime)
@@ -365,7 +366,7 @@ class TestCacheInvalidation:
         assert stats["total_files"] == 0
         assert not png.exists()
 
-        os.unlink(pdf_path)
+        unlink_quietly(pdf_path)
 
     def test_save_page_images_cleans_stale_files(self, cache, sample_pdf, tmp_path):
         """Re-saving images for a page deletes old PNGs first."""

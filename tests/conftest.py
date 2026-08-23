@@ -3,7 +3,6 @@
 
 import base64
 import io
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +14,7 @@ from PIL import Image, ImageDraw
 from pdf_mcp.cache import PDFCache
 from pdf_mcp.url_fetcher import URLFetcher
 import pdf_mcp.server as server_module
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def sample_pdf():
         resolved = str(Path(f.name).resolve())
         yield resolved
 
-        os.unlink(resolved)
+        unlink_quietly(resolved)
 
 
 @pytest.fixture
@@ -94,7 +94,7 @@ def sample_pdf_with_toc():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -145,7 +145,7 @@ def sample_pdf_with_large_toc():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -172,7 +172,7 @@ def sample_pdf_with_images():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -194,7 +194,7 @@ def sample_pdf_dup_image():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -217,7 +217,7 @@ def sample_pdf_two_distinct_images():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -235,7 +235,7 @@ def sample_pdf_scanned():
         doc.save(f.name)
         doc.close()
         yield str(Path(f.name).resolve())
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -257,7 +257,7 @@ def sample_pdf_mixed():
         doc.save(f.name)
         doc.close()
         yield str(Path(f.name).resolve())
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -291,7 +291,7 @@ def sample_pdf_grayscale():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -319,7 +319,7 @@ def sample_pdf_rgba():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -345,7 +345,7 @@ def pdf_with_hidden_text():
         doc.save(f.name)
         doc.close()
         yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -378,7 +378,7 @@ def sample_pdf_with_table():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -566,4 +566,4 @@ def sample_pdf_synthetic_scan(isolated_server):
         doc.close()
         path = str(Path(f.name).resolve())
         yield path
-        os.unlink(path)
+        unlink_quietly(path)

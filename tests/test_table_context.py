@@ -1,6 +1,5 @@
 """Table context attached to pdf_search matches."""
 
-import os
 import tempfile
 
 import pymupdf
@@ -8,6 +7,7 @@ import pytest
 
 from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
 from pdf_mcp.parallel import run_module_json
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def ruled_table_pdf():
         doc.save(f.name)
         doc.close()
     yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
@@ -204,7 +204,7 @@ def wrapped_label_table_pdf():
         doc.save(f.name)
         doc.close()
     yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_pdf):

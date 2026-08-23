@@ -123,10 +123,10 @@ def test_version_bump_keeps_roadmap_in_sync(tmp_path):
     release.update_roadmap_version(tmp_path, "1.1.0", dry_run=False)
     release.update_pyproject_toml(tmp_path, "1.1.0", dry_run=False)
 
-    roadmap = (tmp_path / "docs" / "ROADMAP.md").read_text()
+    roadmap = (tmp_path / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
     assert "v1.1.0" in roadmap
     assert "v1.0.0" not in roadmap
-    assert '"1.1.0"' in (tmp_path / "pyproject.toml").read_text()
+    assert '"1.1.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_version_bump_stages_the_roadmap():
@@ -196,7 +196,7 @@ def test_readme_contributors_lists_every_changelog_credit(tmp_path):
 
     release.update_readme_contributors(tmp_path, dry_run=False)
 
-    readme = (tmp_path / "README.md").read_text()
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
     assert "[@first](https://github.com/first)" in readme
     assert "[@second](https://github.com/second)" in readme
     assert "[@newest](https://github.com/newest)" in readme
@@ -217,7 +217,7 @@ def test_readme_contributors_are_oldest_first_and_deduped(tmp_path):
     line = release.render_contributors_line(
         release.collect_changelog_contributors(CHANGELOG_WITH_CREDITS)
     )
-    assert line in (tmp_path / "README.md").read_text()
+    assert line in (tmp_path / "README.md").read_text(encoding="utf-8")
     assert release.collect_changelog_contributors(CHANGELOG_WITH_CREDITS) == [
         "first",
         "second",
@@ -230,7 +230,7 @@ def test_readme_contributors_dry_run_writes_nothing(tmp_path):
 
     release.update_readme_contributors(tmp_path, dry_run=True)
 
-    assert (tmp_path / "README.md").read_text() == README_WITH_MARKERS
+    assert (tmp_path / "README.md").read_text(encoding="utf-8") == README_WITH_MARKERS
 
 
 def test_readme_contributors_fails_loudly_when_markers_go_missing(tmp_path):
@@ -256,6 +256,8 @@ def test_committed_readme_contributors_match_the_changelog():
     """Guards the checked-in files: a credit added to the CHANGELOG without a
     release cut would otherwise sit unlisted until the next bump."""
     expected = release.render_contributors_line(
-        release.collect_changelog_contributors((REPO_ROOT / "CHANGELOG.md").read_text())
+        release.collect_changelog_contributors(
+            (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        )
     )
-    assert expected in (REPO_ROOT / "README.md").read_text()
+    assert expected in (REPO_ROOT / "README.md").read_text(encoding="utf-8")

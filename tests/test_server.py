@@ -34,6 +34,7 @@ from pdf_mcp.server import (
 )
 from pdf_mcp.url_fetcher import URLFetcher
 from pdf_mcp.parallel import PageError
+from tests.tmpfiles import unlink_quietly
 
 
 class TestURLDownloadCacheWiring:
@@ -1180,7 +1181,6 @@ class TestErrorCases:
 
     def test_corrupted_pdf(self, temp_cache_dir, isolated_server):
         """Corrupted file handled."""
-        import os
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
@@ -1196,7 +1196,7 @@ class TestErrorCases:
             with pytest.raises(Exception):  # PyMuPDF raises various errors
                 pdf_info(corrupt_path)
         finally:
-            os.unlink(corrupt_path)
+            unlink_quietly(corrupt_path)
 
 
 class TestSecurityMitigations:
@@ -1205,7 +1205,6 @@ class TestSecurityMitigations:
     def test_non_pdf_extension_rejected(self, isolated_server):
         """Non-PDF file extensions return inline error dict."""
         import tempfile
-        import os
 
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
             f.write(b"not a pdf")
@@ -1220,7 +1219,7 @@ class TestSecurityMitigations:
             assert "Only PDF files are supported" in result["error"]
             assert "hint" in result
         finally:
-            os.unlink(txt_path)
+            unlink_quietly(txt_path)
 
     def test_content_warning_in_read_pages(self, sample_pdf, isolated_server):
         """Read pages includes content warning."""
@@ -1288,7 +1287,14 @@ class TestResolvePath:
 
     def test_relative_path_resolved(self, sample_pdf, isolated_server):
         """Relative path is resolved to an absolute string with no error."""
-        rel_path = os.path.relpath(sample_pdf)
+        try:
+            rel_path = os.path.relpath(sample_pdf)
+        except ValueError:
+            # Windows: the fixture lands on the TEMP drive (C:) while the
+            # checkout is on another (D: on GitHub runners), and a
+            # relative path between two drives does not exist. The
+            # scenario is unrepresentable rather than broken.
+            pytest.skip("no relative path exists across Windows drives")
         local_path, err = _resolve_path(rel_path)
         assert err is None
         assert local_path is not None
@@ -1302,6 +1308,10 @@ class TestResolvePath:
         doc.save(str(tmp_path / "home_doc.pdf"))
         doc.close()
         monkeypatch.setenv("HOME", str(tmp_path))
+        # Windows' expanduser reads USERPROFILE (then HOMEDRIVE+HOMEPATH),
+        # not HOME, so setting HOME alone leaves ~ unexpanded there and
+        # the test measures nothing.
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         local_path, err = _resolve_path("~/home_doc.pdf")
         assert err is None
         assert local_path == str((tmp_path / "home_doc.pdf").resolve())
@@ -1495,7 +1505,7 @@ class TestSearchWordBoundaryAndEllipsis:
 
             yield f.name
 
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_search_excerpt_has_ellipsis(self, long_text_pdf, isolated_server):
         """Search match in middle of long text gets ellipsis on both sides."""
@@ -2922,7 +2932,7 @@ class TestExcerptStyle:
                 excerpt = result["matches"][0]["excerpt"].lower()
                 assert "best practices" in excerpt
             finally:
-                os.unlink(path)
+                unlink_quietly(path)
 
     def test_upgrade_deduplicates_same_block(self, isolated_server):
         """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
@@ -2949,7 +2959,7 @@ class TestExcerptStyle:
             assert len(upgraded) == 1
             assert upgraded[0]["score"] == 0.9  # kept higher score
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_keyword_explicit_snippet_mode(self, sample_pdf, isolated_server):
         """Explicit snippet mode works and sets excerpt_style='snippet'."""
@@ -3040,7 +3050,7 @@ class TestExcerptStyle:
                 if result["matches"]:
                     assert result.get("excerpt_style") == "paragraph"
             finally:
-                os.unlink(path)
+                unlink_quietly(path)
 
     def test_section_granularity_ignores_excerpt_style(
         self, sample_pdf, isolated_server
@@ -3095,7 +3105,7 @@ class TestExcerptStyle:
             assert len(upgraded) == 1
             assert "beta" in upgraded[0]["excerpt"].lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_keyword_excerpt_not_found_falls_back_to_token_overlap(
         self, isolated_server
@@ -3129,7 +3139,7 @@ class TestExcerptStyle:
             # Falls back to token overlap — picks block with "alpha gamma"
             assert "alpha" in upgraded[0]["excerpt"].lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_short_block_skipped_in_favor_of_body_paragraph(self, isolated_server):
         """Heading/caption blocks under the minimum-length floor are
@@ -3167,7 +3177,7 @@ class TestExcerptStyle:
             assert len(excerpt) > 80
             assert "weighted sum" in excerpt.lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
 
 class TestSearchGeometry:

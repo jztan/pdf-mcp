@@ -35,7 +35,7 @@ SKIPPED_PARTS = {"archive", ".venv", "__pycache__"}
 
 
 def _min_python() -> tuple[int, int]:
-    text = (REPO_ROOT / "pyproject.toml").read_text()
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r'requires-python\s*=\s*"[^0-9]*([0-9]+)\.([0-9]+)', text)
     assert match, "could not read requires-python from pyproject.toml"
     return int(match.group(1)), int(match.group(2))
@@ -92,7 +92,7 @@ def test_no_stdlib_imports_newer_than_requires_python() -> None:
     offenders: list[str] = []
 
     for path in _source_files():
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for module, lineno in _unguarded_top_level_modules(tree):
             added = STDLIB_ADDED_IN.get(module)
             if added is not None and added > minimum:
@@ -142,6 +142,6 @@ def test_known_backport_sites_stay_guarded() -> None:
         "tests/test_docker_contract.py",
         "tests/test_docs_consistency.py",
     ):
-        tree = ast.parse((REPO_ROOT / rel).read_text())
+        tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
         modules = {name for name, _ in _unguarded_top_level_modules(tree)}
         assert "tomllib" not in modules, f"{rel} imports tomllib unguarded"

@@ -24,10 +24,11 @@ class TestConfigLoad:
     def test_valid_file_is_loaded(self, tmp_path):
         """Valid TOML file is loaded and rules applied."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\ndeny = ["/secret/**"]\n')
+        secret = tmp_path / "secret"
+        cfg.write_text(f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n')
         config = PDFConfig(config_path=cfg)
         with pytest.raises(ValueError):
-            config.check_path("/secret/file.pdf")
+            config.check_path(str(secret / "file.pdf"))
 
 
 class TestPathRules:
@@ -41,28 +42,34 @@ class TestPathRules:
     def test_allow_list_enforced(self, tmp_path):
         """Path outside allow list is rejected."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        pdfs = tmp_path / "data" / "pdfs"
+        cfg.write_text(f'[paths]\nallow = ["{pdfs.as_posix()}/**"]\n')
         config = PDFConfig(config_path=cfg)
-        config.check_path("/data/pdfs/report.pdf")
+        config.check_path(str(pdfs / "report.pdf"))
         with pytest.raises(ValueError, match="not in allowed"):
-            config.check_path("/home/user/private.pdf")
+            config.check_path(str(tmp_path / "home" / "private.pdf"))
 
     def test_deny_list_enforced(self, tmp_path):
         """Path matching deny pattern is rejected."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\ndeny = ["/secret/**"]\n')
+        secret = tmp_path / "secret"
+        cfg.write_text(f'[paths]\ndeny = ["{secret.as_posix()}/**"]\n')
         config = PDFConfig(config_path=cfg)
         with pytest.raises(ValueError, match="denied"):
-            config.check_path("/secret/file.pdf")
+            config.check_path(str(secret / "file.pdf"))
 
     def test_deny_wins_over_allow(self, tmp_path):
         """Path matching both allow and deny is denied (fail-closed)."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["/data/**"]\ndeny = ["/data/secret/**"]\n')
+        data = tmp_path / "data"
+        cfg.write_text(
+            f'[paths]\nallow = ["{data.as_posix()}/**"]\n'
+            f'deny = ["{(data / "secret").as_posix()}/**"]\n'
+        )
         config = PDFConfig(config_path=cfg)
-        config.check_path("/data/public/report.pdf")
+        config.check_path(str(data / "public" / "report.pdf"))
         with pytest.raises(ValueError, match="denied"):
-            config.check_path("/data/secret/private.pdf")
+            config.check_path(str(data / "secret" / "private.pdf"))
 
     def test_tilde_expansion(self, tmp_path):
         """~ in patterns is expanded to the home directory."""
@@ -88,7 +95,12 @@ class TestPathRules:
 
         cfg = tmp_path / "config.toml"
         cfg.write_text(
-            f'[paths]\nallow = ["{allowed_dir}/**"]\ndeny = ["{secret_dir}/**"]\n'
+            # as_posix(): a Windows path interpolated raw makes TOML read
+            # its backslashes as escapes ("Invalid hex value" on \Users).
+            # fnmatch normalises separators on Windows, so forward slashes
+            # match either way.
+            f'[paths]\nallow = ["{allowed_dir.as_posix()}/**"]\n'
+            f'deny = ["{secret_dir.as_posix()}/**"]\n'
         )
         config = PDFConfig(config_path=cfg)
 
@@ -179,7 +191,11 @@ def test_injection_phrases_loaded_raw(tmp_path):
     cfg_path.write_text(
         "[content_trust]\n"
         'injection_phrases = ["忽略以上所有指示", '
-        '"ignorez les instructions"]\n'
+        '"ignorez les instructions"]\n',
+        # Explicit: the default encoding is cp1252 on Windows, which
+        # cannot represent these phrases, and the config loader reads the
+        # file as UTF-8 regardless of platform.
+        encoding="utf-8",
     )
     cfg = PDFConfig(config_path=cfg_path)
     assert cfg.injection_phrases == (

@@ -1098,11 +1098,28 @@ def pdf_read_pages(
                     if res is None or isinstance(res, PageError):
                         # Isolated failure: empty text, tagged, NOT cached
                         # (keeps the page retryable on a later call).
+                        #
+                        # Log the reason. PageError carries the exception
+                        # repr precisely so the parent can surface it, and
+                        # dropping it left `ocr_failed` unexplainable: a
+                        # Windows CI failure could not be diagnosed from the
+                        # run at all, and a user gets the same silence.
+                        logger.warning(
+                            "OCR failed on page %d of %s: %s",
+                            page_num + 1,
+                            local_path,
+                            res.detail if isinstance(res, PageError) else "no result",
+                        )
                         text = ""
                         page_source = "ocr_failed"
                     elif len(res) == 0:
                         # OCR returned empty — don't cache (retryable), and
                         # fall back to native text extraction if available.
+                        logger.warning(
+                            "OCR returned no text on page %d of %s",
+                            page_num + 1,
+                            local_path,
+                        )
                         page = doc[page_num]
                         native = extract_text_from_page(page, sort_by_position=True)
                         text = native if native else ""

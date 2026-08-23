@@ -29,6 +29,7 @@ from pdf_mcp._table_worker import extract as worker_extract
 from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
 from pdf_mcp.parallel import run_module_json
 from pdf_mcp.server import pdf_read_pages
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ def decimal_table_pdf():
         doc.save(f.name)
         doc.close()
     yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 def _cells(tables):

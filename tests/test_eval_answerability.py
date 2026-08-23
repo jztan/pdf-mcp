@@ -140,7 +140,7 @@ class TestQuestionScopeField:
             Path(__file__).resolve().parents[1]
             / "benchmark_data/financial_reports/answerability_questions.json"
         )
-        return json.loads(path.read_text())["questions"]
+        return json.loads(path.read_text(encoding="utf-8"))["questions"]
 
     def test_every_question_declares_a_scope(self):
         for q in self._questions():

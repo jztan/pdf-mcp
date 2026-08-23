@@ -122,8 +122,11 @@ dev = [
 # precise wheel gaps (checked against PyPI 2.11.0): no Windows wheels at
 # all, and macOS wheels require macOS 15+ - on both, pip falls back to a
 # source build needing Tesseract dev headers. Linux is fully covered
-# (manylinux x86_64/aarch64 and musllinux x86_64). Without it OCR works
-# unchanged through pytesseract.
+# (manylinux x86_64/aarch64 and musllinux x86_64). Windows users can get
+# the same binding from conda-forge (win-64 builds verified); without
+# tesserocr, OCR works unchanged through pytesseract, which itself
+# renders grayscale at native scan resolution now (within ~4% of
+# PyMuPDF's speed on typical 200dpi scans).
 fast-ocr = ["tesserocr>=2.6"]
 
 # No-op compatibility alias: fastembed is a core dependency now.

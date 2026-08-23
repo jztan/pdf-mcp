@@ -316,7 +316,10 @@ def ocr_page_text(
 
     import pytesseract
 
-    image = render_page(pdf_path, page_num, dpi=effective_dpi)
+    # Grayscale here too: the fallback is the only OCR path on platforms
+    # without tesserocr wheels (pip on Windows foremost), and feeding RGB
+    # costs Tesseract ~0.12s/page in internal conversion either way.
+    image = render_page(pdf_path, page_num, dpi=effective_dpi, grayscale=True)
     config = f"--tessdata-dir {tessdata}" if tessdata else ""
     return str(pytesseract.image_to_string(image, lang=lang, config=config))
 

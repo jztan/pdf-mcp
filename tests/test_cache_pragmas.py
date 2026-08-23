@@ -80,24 +80,37 @@ def test_cache_operations_open_no_bare_connections(cache, monkeypatch):
     )
 
 
-def test_cache_size_accounts_for_wal_sidecars(cache, sample_pdf):
-    """cache_size_bytes counts the -wal and -shm files.
+def test_cache_size_counts_data_still_in_the_wal(cache, sample_pdf):
+    """cache_size_bytes never under-reports data sitting in the WAL.
 
     WAL moves recently-committed data out of cache.db and into the sidecar
-    until a checkpoint. Sizing only cache.db would under-report the cache
-    by however much is still in the log, which is what pdf_cache_stats
-    shows a user.
+    until a checkpoint, so sizing cache.db alone reported an almost-empty
+    cache (4KB) while ~800KB of text was on disk. get_stats checkpoints
+    first so the number is both complete and stable across calls.
     """
+    written = 200 * 4000
     for i in range(200):
-        cache.save_page_text(sample_pdf, i, f"page {i} " + "x" * 4000)
+        cache.save_page_text(sample_pdf, i, "x" * 4000)
 
     wal = cache.db_path.with_name(cache.db_path.name + "-wal")
     assert wal.exists() and wal.stat().st_size > 0, "expected an active WAL"
 
-    on_disk = sum(
-        f.stat().st_size for f in cache.cache_dir.glob("cache.db*") if f.is_file()
+    assert cache.get_stats()["cache_size_bytes"] >= written
+
+
+def test_cache_size_is_stable_across_repeated_calls(cache, sample_pdf):
+    """Two get_stats calls with no work between them agree.
+
+    Summing cache.db* without checkpointing made the reported size move with
+    auto-checkpoint timing, so it could fall right after a caller added a
+    document. That broke an unrelated server test non-deterministically.
+    """
+    for i in range(200):
+        cache.save_page_text(sample_pdf, i, "x" * 4000)
+
+    assert cache.get_stats()["cache_size_bytes"] == (
+        cache.get_stats()["cache_size_bytes"]
     )
-    assert cache.get_stats()["cache_size_bytes"] >= on_disk
 
 
 def _refuse_wal(monkeypatch, cache_mod):

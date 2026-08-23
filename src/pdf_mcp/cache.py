@@ -2101,10 +2101,17 @@ class PDFCache:
                 )
             except FileNotFoundError:
                 renders_size = 0
-            # "cache.db*" not just cache.db: WAL keeps recently-committed
-            # data in the -wal sidecar (plus a small -shm index) until a
-            # checkpoint, so sizing the main file alone under-reports the
-            # cache by whatever is still in the log.
+            # Fold the WAL back into the main database before sizing it.
+            # Summing cache.db* instead would report a number that moves with
+            # checkpoint timing: the -wal sidecar grows as pages are written
+            # and drops back on every auto-checkpoint, so the reported cache
+            # size could FALL right after a caller added a document. This is
+            # a diagnostic call, so paying a checkpoint here buys a stable,
+            # monotonic number. TRUNCATE is best-effort: it no-ops while
+            # another connection is reading, which only leaves some bytes in
+            # the sidecar, so both files are still counted below.
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             db_size = sum(
                 f.stat().st_size
                 for f in self.cache_dir.glob(self.db_path.name + "*")

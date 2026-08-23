@@ -12,29 +12,30 @@
 
 ## Next Release
 
-**Overdue, and the version is a decision to make rather than a default.** `develop` carries 72 commits since v2.2.1. `CHANGELOG.md`'s `[Unreleased]` holds the PyMuPDF replacement: the runtime engine is a permissive stack (pypdfium2, pdfplumber, pypdf, pytesseract), so the declared MIT licence is true of the whole install for the first time, and `pymupdf4llm` with its Polyform Noncommercial transitive dependency is gone. Alongside it are eight user-facing fixes, including CJK keyword search finding nothing in a corpus-warmed document (a total-failure case for any CJK user of the corpus tools), OCR returning nothing on a default Windows Tesseract install, cold `pdf_search` costing 17.5s on Windows against 3.2s on Linux, zero-height search bboxes for documents using unembedded fonts, and `pdf_extract_chart` splitting a dashed curve into phantom series ([#29](https://github.com/jztan/pdf-mcp/issues/29)).
+**Overdue, and the version is decided: this cuts as v3.0.0.** `develop` carries 72 commits since v2.2.1. `CHANGELOG.md`'s `[Unreleased]` holds the PyMuPDF replacement: the runtime engine is a permissive stack (pypdfium2, pdfplumber, pypdf, pytesseract), so the declared MIT licence is true of the whole install for the first time, and `pymupdf4llm` with its Polyform Noncommercial transitive dependency is gone. Alongside it are eight user-facing fixes, including CJK keyword search finding nothing in a corpus-warmed document (a total-failure case for any CJK user of the corpus tools), OCR returning nothing on a default Windows Tesseract install, cold `pdf_search` costing 17.5s on Windows against 3.2s on Linux, zero-height search bboxes for documents using unembedded fonts, and `pdf_extract_chart` splitting a dashed curve into phantom series ([#29](https://github.com/jztan/pdf-mcp/issues/29)).
 
-No tool signature or response field changes, `pdf-mcp[multicolumn]` still installs as a no-op, and quality was gated against the PyMuPDF baseline on the full benchmark set before the swap. Two things bear on the minor-versus-major call beyond how loudly to signal the engine change:
+No tool signature or response field changes, `pdf-mcp[multicolumn]` still installs as a no-op, and quality was gated against the PyMuPDF baseline on the full benchmark set before the swap, so semver alone would have permitted a minor. The major is a deliberate signal rather than a forced one: replacing the whole runtime engine and changing which licence a user is installing is something existing users should read about, not discover. The `feat!` marker on the cutover commit covers the dependency and licence, not the interface.
 
-- **v3.0 is already spoken for.** The MCP protocol track below reserves it for the protocol major. Spending 3.0 on the engine swap pushes that to 4.0.
-- **Semver governs the public API, and none of it broke here.** The `feat!` marker on the cutover commit is about the dependency and licence, not the interface.
+The consequence is that the MCP protocol track below moves from v3.0 to **v4.0**. It is renumbered here rather than left to collide.
 
-The one user-visible cost is the `_EXTRACTION_VERSION` bump (7 to 8), which forces a cold re-extraction on first use after upgrade. That is a cost to call out in the release notes, not an API break. Cut from `develop` via `python scripts/release.py <minor|major>` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
+Two things belong in the release notes. The `_EXTRACTION_VERSION` bump (7 to 8) forces a cold re-extraction on first use after upgrade, a one-time cost that will otherwise read as a regression. And the licence is the headline: the declared MIT licence is now true of the whole install, verified with PyMuPDF actually uninstalled rather than merely undeclared.
+
+Cut from `develop` via `python scripts/release.py major` per [`RELEASE_SOP.md`](../docs_internal/RELEASE_SOP.md).
 
 ---
 
 ## Tracking MCP 2026-07-28
 
-The MCP spec **shipped GA on 2026-07-28** ([announcement](https://blog.modelcontextprotocol.io/posts/2026-07-28/)). Protocol-level work is now gated only on fastmcp shipping support for it; the goal is a single coordinated protocol release rather than dribbling breaking changes across patches. The v2.x releases are feature work, not this track; the protocol bump lands as its own major, v3.0.
+The MCP spec **shipped GA on 2026-07-28** ([announcement](https://blog.modelcontextprotocol.io/posts/2026-07-28/)). Protocol-level work is now gated only on fastmcp shipping support for it; the goal is a single coordinated protocol release rather than dribbling breaking changes across patches. The v2.x releases are feature work, not this track; the protocol bump lands as its own major, **v4.0** (it was v3.0 until the engine swap took that number; see Next Release above).
 
-**v3.0 scope (protocol major, gated on fastmcp v4):**
+**v4.0 scope (protocol major, gated on fastmcp v4):**
 
 - [ ] **Stateless transport.** Adopt the new request model once fastmcp supports it. The `initialize` handshake and `Mcp-Session-Id` header are removed by the spec; per-request `_meta` replaces them. Now that `pdf-mcp-http` has shipped, the HTTP-routing additions (`Mcp-Method` / `Mcp-Name` headers, header-based load balancing) are real surface to verify rather than no-ops, though single-tenant-by-contract means header-based load balancing across instances is not a deployment pdf-mcp supports.
 - [ ] **Error-code update.** Confirm fastmcp surfaces missing-resource errors as JSON-RPC `-32602` (was MCP-custom `-32002`). pdf-mcp's inline error contract (`{"error": ...}` with `status=OK`) sidesteps this for tool-level validation; only the framework "resource not found" path is affected.
 - [ ] **Cacheable read-side responses.** Add `ttlMs` + `cacheScope` hints to slow-changing read tools (`pdf_info`, `pdf_get_toc`, `pdf_read_pages`). pdf-mcp already has authoritative mtime-based invalidation in SQLite; surfacing the metadata lets MCP clients skip redundant calls within a session. `cacheScope` = per-session (matches single-user STDIO model).
 - [ ] **JSON Schema 2020-12.** Use composition operators (`oneOf`, `anyOf`, conditionals) to express `pdf_search`'s `mode × granularity` constraints and `pdf_info`'s `detail` flag. Land alongside the fastmcp v4 bump.
 
-**v3.1+ (post-spec GA, gated on host adoption):**
+**v4.1+ (post-spec GA, gated on host adoption):**
 
 - [ ] **Tasks Extension** for long-running operations: OCR on large scans and first-time embedding indexing. The redesigned API is stateless (server returns a handle; client drives `tasks/get` / `tasks/update` / `tasks/cancel`) and maps cleanly onto SQLite-backed job state. Gate on whether Claude Desktop ships task-extension UI: without host support there's no user-visible win.
 - [ ] **MCP Apps** (server-rendered HTML in sandboxed iframe) for `pdf_render_pages`. Today the tool returns PNG file paths; an iframe UI could embed thumbnails / a page navigator inline with audit/consent parity. Experiment only once adoption is clear.
@@ -87,4 +88,4 @@ For per-release detail (features, fixes, CVE patches, breaking changes), see:
 
 ---
 
-**Last Updated:** 2026-08-23 (synced to `develop` post-backend-cutover; Next Release re-scoped, no change to Under Consideration)
+**Last Updated:** 2026-08-23 (next cut decided as v3.0.0; MCP protocol track renumbered v3.0 to v4.0)

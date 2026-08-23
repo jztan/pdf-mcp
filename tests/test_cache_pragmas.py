@@ -201,3 +201,46 @@ def test_existing_rollback_cache_migrates_to_wal(temp_cache_dir, monkeypatch):
 
     migrated = cache_mod.PDFCache(cache_dir=temp_cache_dir)
     assert migrated.journal_mode == "wal"
+
+
+def test_clear_all_survives_unsupported_checkpoint(cache, sample_pdf, monkeypatch):
+    """clear_all() does not raise when wal_checkpoint(TRUNCATE) is rejected.
+
+    The TRUNCATE argument needs SQLite 3.8.8 (2015). Nothing in this project
+    declares a minimum SQLite version -- requires-python is the only floor,
+    and the established pattern here is to detect and degrade (fts_available)
+    rather than to demand a version. A checkpoint is an optimisation, so
+    failing it must never take down a cache clear.
+    """
+    import pdf_mcp.cache as cache_mod
+
+    cache.save_page_text(sample_pdf, 0, "text")
+
+    real_connect = cache_mod.sqlite3.connect
+
+    class _NoTruncate:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, *a, **kw):
+            if "wal_checkpoint" in sql:
+                raise sqlite3.OperationalError('near "TRUNCATE": syntax error')
+            return self._inner.execute(sql, *a, **kw)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def __enter__(self):
+            self._inner.__enter__()
+            return self
+
+        def __exit__(self, *exc):
+            return self._inner.__exit__(*exc)
+
+    monkeypatch.setattr(
+        cache_mod.sqlite3,
+        "connect",
+        lambda *a, **kw: _NoTruncate(real_connect(*a, **kw)),
+    )
+
+    cache.clear_all()  # must not raise

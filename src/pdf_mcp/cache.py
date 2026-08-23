@@ -2034,7 +2034,14 @@ class PDFCache:
             # checkpoint folds them back in. TRUNCATE also resets the sidecar
             # itself, so cache_size_bytes reports the real post-clear size
             # instead of megabytes of residual.
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            #
+            # Suppressed: the TRUNCATE argument needs SQLite 3.8.8, and this
+            # project declares no minimum SQLite version (requires-python is
+            # the only floor). It also no-ops while another connection reads.
+            # Either way a checkpoint is an optimisation and must not be able
+            # to fail a cache clear.
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:

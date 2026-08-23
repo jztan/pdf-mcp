@@ -423,17 +423,10 @@ class PDFCache:
             # one. PRAGMA returns the resulting mode, so a filesystem that
             # refuses WAL (network mounts) is detected by value, not by
             # exception, and simply stays in rollback mode.
-            # PDF_MCP_JOURNAL_MODE is an escape hatch, not a tuning knob.
-            # WAL is not a universal win: whether it beats the rollback
-            # journal depends on the SQLite build, and on some it is
-            # measurably worse. Anything other than "delete" is ignored so a
-            # typo cannot land the cache in an exotic mode.
-            requested = os.environ.get("PDF_MCP_JOURNAL_MODE", "").strip().lower()
-            target = "delete" if requested == "delete" else "wal"
             self.journal_mode = str(
-                conn.execute(f"PRAGMA journal_mode={target}").fetchone()[0]
+                conn.execute("PRAGMA journal_mode=wal").fetchone()[0]
             ).lower()
-            if self.journal_mode != target:
+            if self.journal_mode != "wal":
                 logger.warning(
                     "SQLite refused WAL mode at %s (got %r); cache stays in "
                     "rollback mode. Commits will be slow on Windows.",

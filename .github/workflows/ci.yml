@@ -131,3 +131,33 @@ jobs:
         # platform-divergent surfaces above, and those are not marked
         # slow.
         run: uv run pytest tests/ -v -m "not slow" -n auto
+
+  # Per-commit SQLite latency by journal_mode x synchronous pairing, on both
+  # platforms. This exists because the cost it measures is ~40x larger on
+  # Windows than on Linux, and every prior number for it was produced ad hoc
+  # and could not be reproduced. The script is stdlib-only, so this job needs
+  # no dependency install and finishes in seconds.
+  benchmark-commit-latency:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+      - name: Measure commit latency
+        # Median of N, not a single run: benchmark_platform_smoke.py showed
+        # 4x swings between identical runs on the same runner type, so a
+        # lone measurement of a sub-millisecond cell carries no signal.
+        run: >
+          python scripts/benchmark_commit_latency.py
+          --repeats 9 --json-out commit-latency-${{ matrix.os }}.json
+      - name: Upload results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: commit-latency-${{ matrix.os }}
+          path: commit-latency-${{ matrix.os }}.json

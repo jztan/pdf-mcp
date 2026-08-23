@@ -28,47 +28,14 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 
 | | Without pdf-mcp | With pdf-mcp |
 |---|---|---|
-| Large PDFs | Context overflow | Chunked reading |
-| Token budgeting | Guess and overflow | Estimated tokens before reading |
-| Finding content | Load everything | Hybrid search (BM25 keyword + semantic) |
-| Tables | Lost in raw text | Extracted and inlined per page |
-| Charts | Trapped in the plot image | Extracted as `(x, y)` data tables |
-| Multi-column PDFs | Columns interleaved in extracted text | Column-aware reading order, built in |
-| Vertical scripts (Japanese) | Columns scrambled / glyph soup | Geometric reorder of vertical text (tategaki / 縦書き); CJK keyword search works on unspaced Japanese/Chinese/Korean text via a char-split FTS index |
-| Images | Ignored | Extracted as PNG files |
-| Repeated access | Re-parse every time | SQLite cache |
-| Scanned PDFs | No text extracted | OCR via Tesseract, parallelized across pages (`pdf_read_pages(ocr=True)`) |
-| Visual content | Must describe in words | Render page as image (`pdf_render_pages`) |
-| Hidden / injected text | Silently ingested as if a human vetted it | Flagged as untrusted: hidden-text detection (`content_trust=True`) |
-| Folders of PDFs | One document at a time | Corpus tools: warm, triage, and search across a whole folder |
-| Tool design | Single monolithic tool | 13 specialized tools |
-
-## Features
-
-- **Hybrid search**: find relevant pages with a question, not a page range. Combines BM25 keyword and semantic search via Reciprocal Rank Fusion
-- **Corpus search**: point the server at a folder of PDFs: warm them into the cache, get per-document triage cards, and search across all documents at once with ranked, document-attributed hits
-- **Paginated reading**: fetch only the pages your agent needs; large documents don't blow your context window
-- **OCR**: scanned and image-based PDFs are fully readable and searchable via Tesseract, parallelized across pages for ~2–3x faster extraction on typical scans
-- **Structured extraction**: tables, embedded images, and table of contents returned as structured data, not text soup
-- **Chart data extraction**: pull exact `(x, y)` tables from vector charts, read from the plot geometry rather than guessed from the image; declines with a rendered image when a chart can't be read reliably
-- **Vertical-script reading order**: Japanese tategaki (縦書き) reconstructed from glyph geometry into correct top-to-bottom, right-to-left order; article segmentation for dense magazine layouts; mojibake filtered
-- **Persistent cache**: SQLite-backed; re-reads are instant and survive server restarts
-- **Secure URL fetching**: HTTPS-only with SSRF protection; local network ranges are blocked
-- **Content-trust / hidden-text detection**: flags text a human reader can't see (invisible render mode, sub-point fonts, transparent or white-on-white fill, off-page) so an agent treats it as untrusted rather than vetted. Flag-only: nothing is stripped
-
-## Contents
-
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Tools](#tools)
-- [Example Workflow](#example-workflow)
-- [Remote / HTTP transport](#remote--http-transport)
-- [Configuration](#configuration)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [Contributors](#contributors)
-- [Security](#security)
-- [License](#license)
+| Large PDFs | Context overflow | Read only the pages you need |
+| Finding content | Load everything | Hybrid search: BM25 keyword + semantic |
+| Folders of PDFs | One document at a time | Warm, triage, and search a whole folder |
+| Tables and charts | Lost in raw text | Structured rows, and `(x, y)` data from vector charts |
+| Multi-column and vertical layouts | Columns interleaved | Correct reading order, including Japanese tategaki |
+| Scanned PDFs | No text at all | OCR via Tesseract, parallel across pages |
+| Repeated access | Re-parse every time | SQLite cache that survives restarts |
+| Hidden or injected text | Silently ingested | Flagged as untrusted, nothing stripped |
 
 ## Installation
 
@@ -76,212 +43,52 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 pip install pdf-mcp
 ```
 
-Semantic search is included by default (hybrid `auto` search is built on it;
-~67 MB embedding model download on first use). The former `[semantic]` and
-`[cjk]` extras remain as no-op aliases. Platform note: the bundled
-`onnxruntime` has no wheels for Intel macOS on Python 3.14+ or Alpine/musl;
-use Python ≤ 3.13 there.
+That is the whole install: hybrid search, corpus tools, multi-column and
+CJK reading order all work out of the box.
 
-Correct reading order on multi-column PDFs is built in and needs no extra.
-The former `[multicolumn]` extra remains as a no-op alias, so existing
-install instructions keep working.
-
-Japanese/Chinese/Korean PDFs work out of the box: keyword search uses a
-char-split FTS index that matches unspaced CJK terms, and semantic CJK
-search is covered by the default install.
-
-For OCR on scanned PDFs (requires system Tesseract):
+OCR on scanned PDFs additionally needs system Tesseract:
 
 ```bash
-# macOS
-brew install tesseract
-
-# Ubuntu/Debian
-apt install tesseract-ocr
-
-# On Windows, download the installer from:
-# https://github.com/UB-Mannheim/tesseract/wiki
-# Then add the install directory to your PATH.
+brew install tesseract        # macOS
+apt install tesseract-ocr     # Ubuntu/Debian
+winget install Tesseract-OCR  # Windows
 ```
 
 ## Quick Start
-
-Choose your MCP client below to get started:
-
-<details open>
-<summary><strong>Claude Code</strong></summary>
 
 ```bash
 claude mcp add pdf-mcp -- pdf-mcp
 ```
 
-Or add to `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "pdf-mcp": {
-      "command": "pdf-mcp"
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Claude Desktop</strong></summary>
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "pdf-mcp": {
-      "command": "pdf-mcp"
-    }
-  }
-}
-```
-
-Config file location:
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Restart Claude Desktop after updating the config.
-
-</details>
-
-<details>
-<summary><strong>Visual Studio Code</strong></summary>
-
-Requires VS Code 1.101+ with GitHub Copilot.
-
-**CLI:**
-```bash
-code --add-mcp '{"name":"pdf-mcp","command":"pdf-mcp"}'
-```
-
-**Command Palette:**
-1. Open Command Palette (`Cmd/Ctrl+Shift+P`)
-2. Run `MCP: Open User Configuration` (global) or `MCP: Open Workspace Folder Configuration` (project-specific)
-3. Add the configuration:
-   ```json
-   {
-     "servers": {
-       "pdf-mcp": {
-         "command": "pdf-mcp"
-       }
-     }
-   }
-   ```
-4. Save. VS Code will automatically load the server.
-
-**Manual:** Create `.vscode/mcp.json` in your workspace:
-```json
-{
-  "servers": {
-    "pdf-mcp": {
-      "command": "pdf-mcp"
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Codex CLI</strong></summary>
-
-```bash
-codex mcp add pdf-mcp -- pdf-mcp
-```
-
-Or configure manually in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.pdf-mcp]
-command = "pdf-mcp"
-```
-
-</details>
-
-<details>
-<summary><strong>Kiro</strong></summary>
-
-Create or edit `.kiro/settings/mcp.json` in your workspace:
-
-```json
-{
-  "mcpServers": {
-    "pdf-mcp": {
-      "command": "pdf-mcp",
-      "args": [],
-      "disabled": false
-    }
-  }
-}
-```
-
-Save and restart Kiro.
-
-</details>
-
-<details>
-<summary><strong>Other MCP Clients</strong></summary>
-
-Most MCP clients use a standard configuration format:
-
-```json
-{
-  "mcpServers": {
-    "pdf-mcp": {
-      "command": "pdf-mcp"
-    }
-  }
-}
-```
-
-With `uvx` (for isolated environments):
-
-```json
-{
-  "mcpServers": {
-    "pdf-mcp": {
-      "command": "uvx",
-      "args": ["pdf-mcp"]
-    }
-  }
-}
-```
-
-</details>
-
-### Verify Installation
-
-```bash
-pdf-mcp --help
-```
+Then ask Claude to read a PDF. For Claude Desktop, VS Code, Codex CLI,
+Kiro, or any other MCP client, see **[docs/clients.md](docs/clients.md)**.
 
 ## Tools
 
-The typical pattern: call `pdf_info` first to plan, then `pdf_search` to locate; its paragraph excerpts are often enough to answer directly. Use `pdf_read_pages` or `pdf_read_all` when you need deeper context. For a folder of PDFs, start with `pdf_corpus_overview` to triage, then `pdf_corpus_search` to search across documents.
+13 specialized tools rather than one monolithic one. Typical pattern:
+`pdf_info` to plan, `pdf_search` to locate (its paragraph excerpts often
+answer the question outright), `pdf_read_pages` when you need more. For a
+folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 
 | Tool | What it does |
 |------|--------------|
-| `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** Pass `content_trust=True` for a `content_trust` block (`suspicious`, `hidden_text_runs`, `hidden_chars`, `injection_in_hidden`, `pages_flagged`, `signals`); add `detail=True` for per-span `spans`. |
-| `pdf_get_toc` | Full table of contents for documents with >50 bookmarks |
-| `pdf_corpus_warm` | Warm a folder (or list) of PDFs into the cache, text and optional embeddings, within a time budget. Returns per-doc status plus `unprocessed`/`skipped`. |
-| `pdf_corpus_overview` | Per-document triage cards for a folder: title, page count, top TOC entries, text coverage. Auto-warms within the budget. |
-| `pdf_corpus_search` | Search across a folder of PDFs (keyword, semantic, or hybrid), returning ranked hits with document and page provenance, excerpts, and coverage. |
-| `pdf_read_pages` | Read specific pages or ranges; OCR-on-demand; embedded images + tables, each with source `bbox` + `clip` coordinates. Always returns `hidden_text_detected` (response level) and per-page `hidden_text`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
-| `pdf_read_all` | Read entire document in one call (byte-capped for safety). Always returns `hidden_text_detected`; `hidden_text_detected: true` means some returned text was invisible to a human reader and should be treated as especially untrusted. |
+| `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
+| `pdf_search` | Hybrid search (keyword + semantic), page or section granularity, paragraph excerpts with source coordinates |
+| `pdf_read_pages` | Read specific pages or ranges, with OCR on demand, tables, and embedded images |
+| `pdf_read_all` | Read a whole document in one call, byte-capped |
+| `pdf_get_toc` | Full table of contents for documents with many bookmarks |
 | `pdf_render_pages` | Render pages as PNG for vision models: diagrams, handwriting, scans |
-| `pdf_extract_chart` | Extract chart data as exact `(x, y)` tables from vector charts; declines with a rendered image when not reliably extractable |
-| `pdf_search` | Hybrid RRF search (keyword + semantic), page or section granularity, optional paragraph excerpts (paragraph hits also carry `bbox` + `clip` coordinates, and `table_context` when the excerpt's numbers need column labels) |
-| `pdf_cache_stats` | Per-document cache breakdown + total size |
+| `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
+| `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
+| `pdf_corpus_overview` | Per-document triage cards for a folder |
+| `pdf_corpus_search` | Search across a folder, with document and page provenance |
+| `pdf_cache_stats` | Per-document cache breakdown and total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
-| `server_info` | Which optional features (column-aware, OCR, semantic) and config are active. **Call before feature-dependent calls.** |
+| `server_info` | Which optional features and config are active |
+
+Text returned by any of these is untrusted content extracted from a PDF.
+`pdf_info(content_trust=True)` reports hidden text a human reader cannot
+see, and the read tools flag it per page.
 
 Example prompts:
 
@@ -293,7 +100,9 @@ Example prompts:
 "OCR pages 3-5 of the scanned PDF"
 ```
 
-See **[docs/tool-reference.md](docs/tool-reference.md)** for the complete reference: every parameter, response shape, security contract, and example. For semantic-search model selection, see **[docs/embedding-models.md](docs/embedding-models.md)**.
+Full reference, every parameter and response shape:
+**[docs/tool-reference.md](docs/tool-reference.md)**. Embedding model
+selection: **[docs/embedding-models.md](docs/embedding-models.md)**.
 
 ## Example Workflow
 
@@ -320,60 +129,40 @@ Agent workflow:
 
 ## Remote / HTTP transport
 
-STDIO remains the default and is what every example above uses. A second entry
-point serves the same tools over HTTP, but the two transports suit different
-jobs:
-
-| transport | what it serves | use it for |
-|---|---|---|
-| **STDIO** (default) | any local file the agent can name, since agent and server share a filesystem | ad hoc documents on your own machine |
-| **HTTP** (`pdf-mcp-http`) | a curated corpus on the server, plus `https://` URLs it can fetch | clients that cannot spawn a process (Anthropic API MCP connector, claude.ai custom connectors), and a warm corpus shared by several clients |
+STDIO is the default and is what every example above uses. `pdf-mcp-http`
+serves the same tools over HTTP, for clients that cannot spawn a process
+(the Anthropic API MCP connector, claude.ai custom connectors) and for a
+warm corpus shared by several clients.
 
 ```bash
 export PDF_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
 pdf-mcp-http
 ```
 
-Because paths resolve on the server, an agent connected over HTTP reads what is
-already there: files under an allow-listed root, or a URL the server fetches. It
-cannot hand over a file from its own machine. Call `server_info` to discover the
-roots a server will open. See
-**[Getting documents to the server](docs/remote-access.md#getting-documents-to-the-server)**.
+Paths resolve on the server, so an HTTP agent reads what is already there:
+files under an allow-listed root, or a URL the server fetches. It cannot
+hand over a file from its own machine. It is single-tenant and fails
+closed: with no auth token and no `[paths]` allow list, the process exits
+rather than serving an open endpoint.
 
-It is single-tenant and fails closed: without an auth token and a `[paths]`
-allow list, the process exits rather than starting an open endpoint. Before
-you deploy it, read **[docs/remote-access.md](docs/remote-access.md)** for the
-trust boundary and the threat model versus stdio, and
-**[docs/configuration.md](docs/configuration.md#http-transport-setup)** for
-setup, client config, and token rotation.
-
-### Docker
+Docker images are published to GHCR for amd64 and arm64, with everything
+baked in, so every tool works on the first request:
 
 ```bash
-./deploy.sh              # generates .env with a token, pulls the image, starts, health-checks
-cp your.pdf documents/   # the intake path: this folder is the server's /data/pdfs
+./deploy.sh              # token, image, start, health-check
+cp your.pdf documents/   # this folder is the server's /data/pdfs
 ```
 
-The image is published to GHCR for amd64 and arm64, so nothing is compiled
-locally. Everything is baked in (OCR, column-aware extraction, embedding
-model), so all tools work on the first request. The container runs as a
-non-root user and publishes to host loopback only; put a TLS proxy in front
-for public access.
-
-`./deploy.sh --help` lists the lifecycle commands, including `--build` to
-build locally instead of pulling. For the environment variables (host port,
-image tag, auth token) and the deployment guards, see
-[docs/configuration.md](docs/configuration.md).
+Read **[docs/remote-access.md](docs/remote-access.md)** for the trust
+boundary and threat model before deploying, and
+**[docs/configuration.md](docs/configuration.md#http-transport-setup)**
+for setup, client config, and token rotation.
 
 ## Configuration
 
-pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.
-
-- **Access control**: `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
-- **Content-trust phrases**: extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
-- **Environment variables**: cache directory, TTL, and parallel OCR/render worker count
-- **HTTP transport setup**: token generation, TLS, client config, and token rotation for `pdf-mcp-http`
-- **Caching**: SQLite-backed persistence, what's cached, and invalidation
+pdf-mcp works out of the box. To restrict which paths and URL hosts the
+server may touch, tune cache and worker settings, or add your own
+content-trust phrases, see **[docs/configuration.md](docs/configuration.md)**.
 
 ## Roadmap
 

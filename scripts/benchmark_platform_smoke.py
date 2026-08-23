@@ -200,6 +200,78 @@ def main() -> int:
         results["warm_pooled"] = _timed_warm("pooled", None)
         results["warm_sequential"] = _timed_warm("seq", "1")
 
+        # Batching four commits into one cut the Windows write cost by only
+        # ~20%, so the rest is not commit COUNT. Attribute it per call
+        # instead of theorising: wrap each writer and the transaction exit
+        # (where the single remaining commit lands) and report the totals.
+        timings: dict[str, float] = {}
+
+        def _instrument(name: str):
+            real = getattr(server.cache, name)
+
+            def wrapper(*a, **k):
+                t = time.perf_counter()
+                try:
+                    return real(*a, **k)
+                finally:
+                    timings[name] = round(
+                        timings.get(name, 0.0) + time.perf_counter() - t, 3
+                    )
+
+            return real, wrapper
+
+        import contextlib as _ctx
+
+        originals = {}
+        for _name in (
+            "save_metadata",
+            "save_pages_text",
+            "save_page_blocks",
+            "save_pages_hidden_flag",
+        ):
+            originals[_name], _w = _instrument(_name)
+            setattr(server.cache, _name, _w)
+
+        real_tx = server.cache.write_transaction
+
+        @_ctx.contextmanager
+        def timed_tx():
+            t_open = time.perf_counter()
+            with real_tx() as conn:
+                timings["tx_open"] = round(
+                    timings.get("tx_open", 0.0) + time.perf_counter() - t_open, 3
+                )
+                t_body = time.perf_counter()
+                yield conn
+                timings["tx_body"] = round(
+                    timings.get("tx_body", 0.0) + time.perf_counter() - t_body, 3
+                )
+                t_commit = time.perf_counter()
+            timings["tx_commit"] = round(
+                timings.get("tx_commit", 0.0) + time.perf_counter() - t_commit, 3
+            )
+
+        server.cache.write_transaction = timed_tx
+        try:
+            files_i = _fresh_corpus("instrumented")
+            os.environ["PDF_MCP_MAX_WORKERS"] = "1"
+            t = time.perf_counter()
+            corpus_mod.warm_docs(
+                files_i,
+                budget_seconds=300,
+                cache=server.cache,
+                embeddings=False,
+                model_name=None,
+                embed=None,
+            )
+            timings["warm_total"] = round(time.perf_counter() - t, 3)
+        finally:
+            os.environ.pop("PDF_MCP_MAX_WORKERS", None)
+            for _name, _real in originals.items():
+                setattr(server.cache, _name, _real)
+            server.cache.write_transaction = real_tx
+        results["warm_write_breakdown"] = timings
+
         extract_files = _fresh_corpus("extract")
         t0 = time.perf_counter()
         for f in extract_files:

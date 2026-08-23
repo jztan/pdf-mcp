@@ -89,13 +89,21 @@ def test_cache_size_counts_data_still_in_the_wal(cache, sample_pdf):
     first so the number is both complete and stable across calls.
     """
     written = 200 * 4000
-    for i in range(200):
-        cache.save_page_text(sample_pdf, i, "x" * 4000)
-
     wal = cache.db_path.with_name(cache.db_path.name + "-wal")
-    assert wal.exists() and wal.stat().st_size > 0, "expected an active WAL"
 
-    assert cache.get_stats()["cache_size_bytes"] >= written
+    # Hold one connection open for the duration. SQLite removes the -wal file
+    # when the LAST connection closes, and PDFCache closes its connections by
+    # refcount rather than explicitly, so without this pin the sidecar's
+    # existence depends on GC timing and varies by Python version.
+    pin = cache._connect()
+    try:
+        for i in range(200):
+            cache.save_page_text(sample_pdf, i, "x" * 4000)
+
+        assert wal.exists() and wal.stat().st_size > 0, "expected an active WAL"
+        assert cache.get_stats()["cache_size_bytes"] >= written
+    finally:
+        pin.close()
 
 
 def test_cache_size_is_stable_across_repeated_calls(cache, sample_pdf):

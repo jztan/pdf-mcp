@@ -129,60 +129,40 @@ Agent workflow:
 
 ## Remote / HTTP transport
 
-STDIO remains the default and is what every example above uses. A second entry
-point serves the same tools over HTTP, but the two transports suit different
-jobs:
-
-| transport | what it serves | use it for |
-|---|---|---|
-| **STDIO** (default) | any local file the agent can name, since agent and server share a filesystem | ad hoc documents on your own machine |
-| **HTTP** (`pdf-mcp-http`) | a curated corpus on the server, plus `https://` URLs it can fetch | clients that cannot spawn a process (Anthropic API MCP connector, claude.ai custom connectors), and a warm corpus shared by several clients |
+STDIO is the default and is what every example above uses. `pdf-mcp-http`
+serves the same tools over HTTP, for clients that cannot spawn a process
+(the Anthropic API MCP connector, claude.ai custom connectors) and for a
+warm corpus shared by several clients.
 
 ```bash
 export PDF_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
 pdf-mcp-http
 ```
 
-Because paths resolve on the server, an agent connected over HTTP reads what is
-already there: files under an allow-listed root, or a URL the server fetches. It
-cannot hand over a file from its own machine. Call `server_info` to discover the
-roots a server will open. See
-**[Getting documents to the server](docs/remote-access.md#getting-documents-to-the-server)**.
+Paths resolve on the server, so an HTTP agent reads what is already there:
+files under an allow-listed root, or a URL the server fetches. It cannot
+hand over a file from its own machine. It is single-tenant and fails
+closed: with no auth token and no `[paths]` allow list, the process exits
+rather than serving an open endpoint.
 
-It is single-tenant and fails closed: without an auth token and a `[paths]`
-allow list, the process exits rather than starting an open endpoint. Before
-you deploy it, read **[docs/remote-access.md](docs/remote-access.md)** for the
-trust boundary and the threat model versus stdio, and
-**[docs/configuration.md](docs/configuration.md#http-transport-setup)** for
-setup, client config, and token rotation.
-
-### Docker
+Docker images are published to GHCR for amd64 and arm64, with everything
+baked in, so every tool works on the first request:
 
 ```bash
-./deploy.sh              # generates .env with a token, pulls the image, starts, health-checks
-cp your.pdf documents/   # the intake path: this folder is the server's /data/pdfs
+./deploy.sh              # token, image, start, health-check
+cp your.pdf documents/   # this folder is the server's /data/pdfs
 ```
 
-The image is published to GHCR for amd64 and arm64, so nothing is compiled
-locally. Everything is baked in (OCR, column-aware extraction, embedding
-model), so all tools work on the first request. The container runs as a
-non-root user and publishes to host loopback only; put a TLS proxy in front
-for public access.
-
-`./deploy.sh --help` lists the lifecycle commands, including `--build` to
-build locally instead of pulling. For the environment variables (host port,
-image tag, auth token) and the deployment guards, see
-[docs/configuration.md](docs/configuration.md).
+Read **[docs/remote-access.md](docs/remote-access.md)** for the trust
+boundary and threat model before deploying, and
+**[docs/configuration.md](docs/configuration.md#http-transport-setup)**
+for setup, client config, and token rotation.
 
 ## Configuration
 
-pdf-mcp works out of the box with no configuration. To restrict which paths and URL hosts the server can access, tune cache and worker settings, or understand what's cached, see **[docs/configuration.md](docs/configuration.md)**.
-
-- **Access control**: `~/.config/pdf-mcp/config.toml` allow/deny rules for paths and URLs, plus response byte caps
-- **Content-trust phrases**: extend the hidden-text `injection_in_hidden` hint with your own (including non-English) phrases via `[content_trust].injection_phrases`
-- **Environment variables**: cache directory, TTL, and parallel OCR/render worker count
-- **HTTP transport setup**: token generation, TLS, client config, and token rotation for `pdf-mcp-http`
-- **Caching**: SQLite-backed persistence, what's cached, and invalidation
+pdf-mcp works out of the box. To restrict which paths and URL hosts the
+server may touch, tune cache and worker settings, or add your own
+content-trust phrases, see **[docs/configuration.md](docs/configuration.md)**.
 
 ## Roadmap
 

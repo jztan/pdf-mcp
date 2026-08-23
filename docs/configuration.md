@@ -99,6 +99,9 @@ scheduled job. An agent connected over HTTP cannot put a file here. It reads
 what is already present, or an `https://` URL the server fetches for it. See
 [Getting documents to the server](remote-access.md#getting-documents-to-the-server).
 
+`./deploy.sh --help` lists the lifecycle commands (start, stop, logs,
+health-check, and `--build`).
+
 `docker compose` pulls `ghcr.io/jztan/pdf-mcp`, published for both
 amd64 and arm64, so `./deploy.sh` needs no local build; `./deploy.sh --build`
 builds locally instead, on whichever architecture you run it on. The built

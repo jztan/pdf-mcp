@@ -96,6 +96,11 @@ dev = [
     # Not a runtime dependency; published wheels contain no AGPL code.
     "pymupdf>=1.24.0",
     "pytest>=8.0",
+    # Parallel test execution. The suite is I/O and subprocess heavy
+    # (every test builds or opens a PDF), so it scales well across cores;
+    # on Windows, where spawn re-imports the interpreter per worker and
+    # Defender inspects every temp file, it is the only lever left.
+    "pytest-xdist>=3.5",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0",
     "mypy>=1.8.0",

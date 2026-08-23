@@ -48,7 +48,11 @@ jobs:
         # would need per-module relaxations. Tracked in docs_internal/backlog.md.
         run: uv run mypy src/
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # -n auto: the suite is I/O and subprocess heavy (nearly every test
+        # builds or opens a PDF), so it parallelises well. xdist workers are
+        # separate processes, so the gates that swap module-level state (the
+        # isolated corpus cache) stay isolated per worker rather than racing.
+        run: uv run pytest tests/ -v -n auto
 
   # (see test-windows below for why the slow marker is deselected there
   # but not here)
@@ -106,4 +110,4 @@ jobs:
         # this job's 20 minutes. What this job is for is the
         # platform-divergent surfaces above, and those are not marked
         # slow.
-        run: uv run pytest tests/ -v -m "not slow"
+        run: uv run pytest tests/ -v -m "not slow" -n auto

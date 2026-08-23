@@ -17,6 +17,36 @@ import pdf_mcp.server as server_module
 from tests.tmpfiles import unlink_quietly
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_fsync_in_tests():
+    """Turn off SQLite fsync for the whole test session.
+
+    Every test builds a fresh cache in a temp dir that dies with the
+    test, so durability across a power loss protects nothing here -- but
+    each commit still pays a real fsync, and the suite commits thousands
+    of times. That cost is invisible on Linux (~1ms) and dominant on
+    Windows (~28ms, the same measurement that explained the 5.4x cold
+    search gap). Patching sqlite3.connect keeps the change test-only:
+    the product's durability is untouched, and spawn workers re-import
+    a clean sqlite3 so they are unaffected.
+    """
+    import sqlite3 as _sqlite3
+
+    real_connect = _sqlite3.connect
+
+    def connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        try:
+            conn.execute("PRAGMA synchronous=OFF")
+        except Exception:
+            pass
+        return conn
+
+    _sqlite3.connect = connect
+    yield
+    _sqlite3.connect = real_connect
+
+
 @pytest.fixture
 def temp_cache_dir():
     """Create a temporary cache directory."""

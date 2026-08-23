@@ -51,6 +51,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could return a different box count across repeated opens of the same
   page, so re-extracting a document could yield different text.
 
+- The SQLite cache now runs in WAL mode, which makes cache writes
+  dramatically faster on Windows. A first-time page extraction commits to
+  the cache in about 10ms instead of 80ms on Python 3.11+, so cold reads,
+  searches, and `pdf_corpus_warm` over a folder finish several times
+  sooner; a 300-page document that had spent roughly 24 seconds writing to
+  the cache now spends about 3. Linux was already fast and stays fast. The
+  cache falls back to the previous journal mode automatically on filesystems
+  that do not support WAL (some network mounts), so nothing is required to
+  opt in. Two sidecar files (`cache.db-wal`, `cache.db-shm`) now sit beside
+  `cache.db`; back them up or mount them together with it.
+
+- `server_info` gains a `storage` block reporting the SQLite version, the
+  cache journal mode, and `keyword_search_ranked`. The last is `false` when
+  the SQLite build lacks FTS5, in which case `pdf_search(mode="keyword")`
+  falls back to unranked substring matching; a caller can read the flag and
+  prefer `mode="semantic"` rather than discovering the degrade downstream.
+
 ### Fixed
 
 - Table extraction is about 3x faster. Tables were extracted in a separate

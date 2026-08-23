@@ -43,7 +43,6 @@ classifiers = [
 
 dependencies = [
     "fastmcp>=3.0.0",
-    "pymupdf>=1.24.0",
     "pydantic>=2.0",
     # Imported directly (mcp.types) in server.py; arrives transitively via
     # fastmcp today, but declare it explicitly so the direct import can't break
@@ -74,16 +73,36 @@ dependencies = [
     "pygments>=2.20.0",
     "httpx>=0.27.0",
     "tomli>=2.0; python_version < '3.11'",
+    # Permissive PDF backend (src/pdf_mcp/backend/). These replace pymupdf,
+    # which is dual-licensed AGPL-3.0 / Artifex Commercial and therefore
+    # contradicts the MIT licence this package declares.
+    # pypdfium2: Apache-2.0 / BSD-3. Document, text, drawings, rasterisation.
+    "pypdfium2>=4.30",
+    # pdfplumber: MIT. Table detection.
+    "pdfplumber>=0.11",
+    # pypdf: BSD-3. Content-stream access for tiling-pattern pages.
+    "pypdf>=5.0",
+    # pytesseract: Apache-2.0. OCR, replacing PyMuPDF's Tesseract binding.
+    "pytesseract>=0.3.10",
+    # Runtime since the backend swap: pypdfium2 renders to a Pillow image and
+    # image/render output is written as PNG through it.
+    "pillow>=12.3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+    # Dev-only: builds the fixture PDFs in tests/conftest.py and is the
+    # reference engine for the backend differential tests and benchmarks.
+    # Not a runtime dependency; published wheels contain no AGPL code.
+    "pymupdf>=1.24.0",
     "pytest>=8.0",
+    # Parallel test execution. The suite is I/O and subprocess heavy
+    # (every test builds or opens a PDF), so it scales well across cores;
+    # on Windows, where spawn re-imports the interpreter per worker and
+    # Defender inspects every temp file, it is the only lever left.
+    "pytest-xdist>=3.5",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.0",
-    # Floor to clear PYSEC-2026-2253..2257 / 3451..3453 (dev-only; not shipped
-    # at runtime — image extraction uses PyMuPDF, not Pillow).
-    "pillow>=12.3.0",
     "mypy>=1.8.0",
     "flake8>=7.0",
     "black>=26.3.1",
@@ -99,6 +118,21 @@ dev = [
     # cannot silently skip when that changes.
     "pyyaml>=6.0",
 ]
+
+# Optional in-process OCR fast path. tesserocr (MIT) binds Tesseract's
+# C API directly; with the persistent per-language handle in
+# backend.raster this makes per-page OCR 1.4-1.8x faster than the
+# default pytesseract subprocess path and faster than PyMuPDF's binding
+# was on typical (<=250 dpi native) scans. Optional, not core, for two
+# precise wheel gaps (checked against PyPI 2.11.0): no Windows wheels at
+# all, and macOS wheels require macOS 15+ - on both, pip falls back to a
+# source build needing Tesseract dev headers. Linux is fully covered
+# (manylinux x86_64/aarch64 and musllinux x86_64). Windows users can get
+# the same binding from conda-forge (win-64 builds verified); without
+# tesserocr, OCR works unchanged through pytesseract, which itself
+# renders grayscale at native scan resolution now (within ~4% of
+# PyMuPDF's speed on typical 200dpi scans).
+fast-ocr = ["tesserocr>=2.6"]
 
 # No-op compatibility alias: fastembed is a core dependency now.
 # Kept so existing install instructions ('pdf-mcp[semantic]') keep working.
@@ -156,6 +190,17 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = "pymupdf"
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
+    "pypdfium2",
+    "pypdfium2.*",
+    "pdfplumber",
+    "pdfplumber.*",
+    "pytesseract",
+    "tesserocr",
+]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "fastembed"

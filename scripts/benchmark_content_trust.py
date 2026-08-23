@@ -31,7 +31,7 @@ def _load_generator():
 
 def main() -> None:
     gen = _load_generator()
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         specs = gen.build(d)
         tp = fp = tn = fn = 0
         misses = []

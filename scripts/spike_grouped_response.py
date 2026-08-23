@@ -63,7 +63,7 @@ def load_emissions() -> dict[str, str]:
     for name in ("caller_eval_results.json", "caller_eval_spread_results.json"):
         path = DATA / "c2_rewrite" / name
         if path.exists():
-            for r in json.loads(path.read_text())["rows"]:
+            for r in json.loads(path.read_text(encoding="utf-8"))["rows"]:
                 if r.get("old_query"):
                     emitted[r["id"]] = r["old_query"]
     return emitted
@@ -83,10 +83,10 @@ def main() -> int:
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
     model = server_module.pdf_config.embedding_model
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
-    queries = json.loads((DATA / "queries.json").read_text())["queries"]
+    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))["queries"]
     emitted = load_emissions()
 
     rows = []
@@ -167,7 +167,8 @@ def main() -> int:
                 "rows": rows,
             },
             indent=1,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"wrote {out}\n")
     print(

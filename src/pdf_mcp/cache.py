@@ -2,6 +2,7 @@
 SQLite-based cache for PDF data persistence across MCP server restarts.
 """
 
+import contextlib
 import json
 import os
 import re
@@ -69,7 +70,7 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
-_EXTRACTION_VERSION = 7  # 7: same-row fragment merge in multi-column assembly
+_EXTRACTION_VERSION = 8  # 8: permissive-backend cutover (pdfium text pipeline)
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
@@ -403,6 +404,12 @@ class PDFCache:
                 conn.execute("DROP TABLE IF EXISTS page_embeddings")
                 conn.execute("DROP TABLE IF EXISTS pdf_search_fts")
                 conn.execute("DROP TABLE IF EXISTS pdf_section_fts")
+                # Char-split CJK mirrors are rebuilt from page_text on open;
+                # stale rows must go with it or the backfill skips them.
+                conn.execute("DROP TABLE IF EXISTS pdf_search_fts_cjk")
+                conn.execute("DROP TABLE IF EXISTS pdf_section_fts_cjk")
+                # Derived from the same extraction pipeline as page_text.
+                conn.execute("DROP TABLE IF EXISTS page_blocks")
             if extraction_version < _EXTRACTION_VERSION:
                 conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
 
@@ -856,6 +863,34 @@ class PDFCache:
                 ),
             }
 
+    @contextlib.contextmanager
+    def write_transaction(self) -> Any:
+        """One connection, and so one commit, for a group of writes.
+
+        Pass the yielded connection to each ``save_*`` call's ``conn``
+        argument. See ``_write_conn`` for why this matters.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            yield conn
+
+    @contextlib.contextmanager
+    def _write_conn(self, conn: "sqlite3.Connection | None" = None) -> Any:
+        """Yield a connection, reusing the caller's if it owns a transaction.
+
+        Every write here otherwise opens its own connection, and leaving
+        that ``with`` block commits, which is an fsync. That is ~1ms on
+        Linux and far more on Windows: warming a 6-document corpus spent
+        3.18s of its 3.39s in commits there, against 0.05s on Linux, with
+        extraction itself measured FASTER on Windows (0.205s vs 0.253s).
+        Passing one connection through a document's writes turns four
+        fsyncs into one, and keeps the document atomic as a bonus.
+        """
+        if conn is not None:
+            yield conn
+        else:
+            with sqlite3.connect(self.db_path) as owned:
+                yield owned
+
     def save_metadata(
         self,
         path: str,
@@ -863,11 +898,12 @@ class PDFCache:
         metadata: dict[str, Any],
         toc: list[Any],
         text_coverage: list[dict[str, Any]] | None = None,
+        conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """Save PDF metadata to cache, including optional text_coverage."""
         mtime, size = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO pdf_metadata
                    (file_path, file_mtime, file_size,
@@ -906,11 +942,84 @@ class PDFCache:
             return None
         return cast(dict[str, Any], json.loads(row[0]))
 
-    def save_pages_hidden_flag(self, path: str, flags: dict[int, bool]) -> None:
+    def save_page_blocks(
+        self,
+        path: str,
+        blocks_by_page: "dict[int, tuple[list[Any], tuple[float, float]]]",
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
+        """Persist the sorted text-blocks shape per page (0-indexed).
+
+        Written at warm time (and write-through on first live use) so the
+        search excerpt path can build paragraph excerpts without touching
+        the PDF at all. Keyed by mtime like page_text; dropped wholesale
+        on an _EXTRACTION_VERSION bump because it derives from the same
+        pipeline.
+        """
+        if not blocks_by_page:
+            return
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return
+        with self._write_conn(conn) as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS page_blocks (
+                    file_path TEXT NOT NULL,
+                    page_num INTEGER NOT NULL,
+                    mtime REAL NOT NULL,
+                    blocks TEXT NOT NULL,
+                    page_size TEXT NOT NULL,
+                    PRIMARY KEY (file_path, page_num)
+                )""")
+            conn.executemany(
+                "INSERT OR REPLACE INTO page_blocks"
+                " (file_path, page_num, mtime, blocks, page_size)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (
+                        path,
+                        pn,
+                        mtime,
+                        json.dumps(blocks, ensure_ascii=False),
+                        json.dumps(size),
+                    )
+                    for pn, (blocks, size) in blocks_by_page.items()
+                ],
+            )
+
+    def get_page_blocks(
+        self, path: str, page_num: int
+    ) -> "tuple[list[Any], tuple[float, float]] | None":
+        """Cached blocks + (width, height) for one page, or None."""
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute(
+                    "SELECT blocks, page_size, mtime FROM page_blocks"
+                    " WHERE file_path = ? AND page_num = ?",
+                    (path, page_num),
+                ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        if row is None or abs(row[2] - mtime) > 1e-6:
+            return None
+        blocks = [tuple(b) for b in json.loads(row[0])]
+        width, height = json.loads(row[1])
+        return blocks, (float(width), float(height))
+
+    def save_pages_hidden_flag(
+        self,
+        path: str,
+        flags: dict[int, bool],
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
         """Persist per-page hidden-text booleans (page_num is 0-indexed)."""
         if not flags:
             return
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 "UPDATE page_text SET has_hidden_text = ?"
                 " WHERE file_path = ? AND page_num = ?",
@@ -1117,7 +1226,12 @@ class PDFCache:
             if self._is_cache_valid(path, mtime)
         }
 
-    def save_pages_text(self, path: str, pages: dict[int, str]) -> None:
+    def save_pages_text(
+        self,
+        path: str,
+        pages: dict[int, str],
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
         """
         Save multiple page texts to cache.
 
@@ -1130,7 +1244,7 @@ class PDFCache:
 
         mtime, _ = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
@@ -1155,6 +1269,26 @@ class PDFCache:
                     " VALUES (?, ?, ?)",
                     [(path, pn, txt) for pn, txt in pages.items()],
                 )
+                # CJK mirror, exactly as save_page_text maintains it. This
+                # batch path skipped it, and the one-time backfill only runs
+                # when the CJK tables are first created -- so a CJK document
+                # warmed via pdf_corpus_warm had no rows in
+                # pdf_search_fts_cjk and CJK keyword search found nothing in
+                # it despite the text being cached.
+                cjk = {pn: txt for pn, txt in pages.items() if _contains_cjk(txt)}
+                if cjk:
+                    cjk_nums = list(cjk.keys())
+                    cjk_ph = ",".join("?" * len(cjk_nums))
+                    conn.execute(
+                        f"DELETE FROM pdf_search_fts_cjk"
+                        f" WHERE file_path = ? AND page_num IN ({cjk_ph})",
+                        (path, *cjk_nums),
+                    )
+                    conn.executemany(
+                        "INSERT INTO pdf_search_fts_cjk"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        [(path, pn, _cjk_split(txt)) for pn, txt in cjk.items()],
+                    )
 
     # ==================== Image Operations ====================
 
@@ -1388,7 +1522,11 @@ class PDFCache:
         return result
 
     def save_page_embeddings(
-        self, path: str, embeddings: dict[int, bytes], model_name: str
+        self,
+        path: str,
+        embeddings: dict[int, bytes],
+        model_name: str,
+        conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """
         Save raw embedding bytes to cache.
@@ -1403,7 +1541,7 @@ class PDFCache:
             return
 
         mtime, _ = self._get_file_info(path)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._write_conn(conn) as conn:
             conn.executemany(
                 "INSERT OR REPLACE INTO page_embeddings"
                 " (file_path, page_num, file_mtime, embedding, model)"

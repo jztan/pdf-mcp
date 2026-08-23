@@ -362,8 +362,8 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
 
-    manifest = json.loads((data / "manifest.json").read_text())
-    queries = json.loads((data / "queries.json").read_text())
+    manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
+    queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))
     classes = class_names(queries)
     subset_ids = nonlatin_ids(manifest)
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
@@ -392,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         fidelity_path = data / "fidelity_questions.json"
         n_questions = 0
         if fidelity_path.exists():
-            fidelity = json.loads(fidelity_path.read_text())
+            fidelity = json.loads(fidelity_path.read_text(encoding="utf-8"))
             n_questions = len(fidelity["questions"])
             errors += validate_fidelity_questions(fidelity, queries, lookup)
         for err in errors:
@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     single: dict[str, dict] = {}
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         prev_cache = server_module.cache
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
         try:
@@ -528,7 +528,7 @@ def main(argv: list[str] | None = None) -> int:
         "per_query": {m: per_mode[m]["per_query"] for m in MODES},
     }
     (data / "modes_results.json").write_text(
-        json.dumps(out, indent=2, sort_keys=True) + "\n"
+        json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
     dataset_note = manifest.get("results_note", "graded ground truth, stage-2")
@@ -618,11 +618,11 @@ def main(argv: list[str] | None = None) -> int:
     md_path = data / "modes_results.md"
     interp = ""
     if md_path.exists():
-        prev = md_path.read_text()
+        prev = md_path.read_text(encoding="utf-8")
         idx = prev.find("## Interpretation")
         if idx != -1:
             interp = prev[idx:]
-    md_path.write_text("\n".join(lines) + interp)
+    md_path.write_text("\n".join(lines) + interp, encoding="utf-8")
     print("\nwrote modes_results.{json,md}")
     for mode in MODES:
         s = summary[mode]

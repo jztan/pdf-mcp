@@ -16,7 +16,7 @@ FACT = "Greater China net sales decreased 8% to $66.9 billion during 2024"
 
 
 def _write(tmp_path, name, payload):
-    (tmp_path / name).write_text(json.dumps(payload))
+    (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
     return tmp_path
 
 

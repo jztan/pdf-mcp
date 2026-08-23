@@ -75,8 +75,10 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: the 'claude' CLI is not on PATH -- the judge cannot run.")
         return 2
 
-    prior = json.loads(Path(args.results).read_text())
-    questions = json.loads((DATA / "answerability_questions.json").read_text())
+    prior = json.loads(Path(args.results).read_text(encoding="utf-8"))
+    questions = json.loads(
+        (DATA / "answerability_questions.json").read_text(encoding="utf-8")
+    )
     by_id = {q["id"]: q for q in questions["questions"]}
     rows = prior["per_question"]
     print(
@@ -131,7 +133,8 @@ def main(argv: list[str] | None = None) -> int:
             indent=2,
             sort_keys=True,
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
     )
     print(f"\nwrote {out}")
     print(

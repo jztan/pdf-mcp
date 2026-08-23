@@ -1,0 +1,52 @@
+name: Platform bench
+
+# Manual, or on a push that changes the bench itself. Times the user-facing product paths (open, read, search,
+# render, OCR, corpus warm, spawn round trip) on Linux and Windows so a
+# platform slowdown in the PRODUCT is measured directly instead of
+# inferred from test-suite duration. See
+# scripts/benchmark_platform_smoke.py for what each number means.
+on:
+  workflow_dispatch:
+  # workflow_dispatch only resolves once the file exists on the default
+  # branch; the paths-filtered push trigger is what lets the bench run
+  # from a feature branch, and it fires only when the bench itself
+  # changes.
+  push:
+    paths:
+      - scripts/benchmark_platform_smoke.py
+      - .github/workflows/platform-bench.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Install Tesseract (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
+      - name: Install Tesseract (Windows)
+        if: runner.os == 'Windows'
+        run: choco install --no-progress -y tesseract
+      - name: Put Tesseract on PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+        shell: pwsh
+      - name: Run product-path benchmark
+        run: uv run python scripts/benchmark_platform_smoke.py

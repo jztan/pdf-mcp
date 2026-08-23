@@ -188,7 +188,7 @@ class TestServerInfoDocumentsBlock:
         if deny is not None:
             body += f"deny = {deny!r}\n".replace("'", '"')
         cfg_file = tmp_path / "config.toml"
-        cfg_file.write_text(body)
+        cfg_file.write_text(body, encoding="utf-8")
         monkeypatch.setattr(server, "pdf_config", PDFConfig(cfg_file))
 
     def test_allowlist_mode_reports_usable_roots(self, tmp_path, monkeypatch):
@@ -246,7 +246,12 @@ class TestDocumentRootsAreConsumable:
         from pdf_mcp.server import pdf_corpus_overview
 
         cfg_file = tmp_path / "config.toml"
-        cfg_file.write_text(f'[paths]\nallow = ["{corpus_dir}/**"]\n')
+        # as_posix(): a raw Windows path makes TOML read its
+        # backslashes as escapes ("Invalid hex value" on \Users).
+        cfg_file.write_text(
+            f'[paths]\nallow = ["{Path(corpus_dir).as_posix()}/**"]\n',
+            encoding="utf-8",
+        )
         monkeypatch.setattr(server, "pdf_config", PDFConfig(cfg_file))
 
         roots = server_info()["documents"]["roots"]
@@ -262,7 +267,12 @@ class TestDocumentRootsAreConsumable:
     ):
         """A root must never name a directory check_path would refuse."""
         cfg_file = tmp_path / "config.toml"
-        cfg_file.write_text(f'[paths]\nallow = ["{corpus_dir}/**"]\n')
+        # as_posix(): a raw Windows path makes TOML read its
+        # backslashes as escapes ("Invalid hex value" on \Users).
+        cfg_file.write_text(
+            f'[paths]\nallow = ["{Path(corpus_dir).as_posix()}/**"]\n',
+            encoding="utf-8",
+        )
         config = PDFConfig(cfg_file)
         monkeypatch.setattr(server, "pdf_config", config)
 

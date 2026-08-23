@@ -141,7 +141,7 @@ def word_recall(ocr_text: str, gt_path: str) -> float:
     def toks(s: str) -> "Counter[str]":
         return Counter(re.findall(r"[a-z0-9]+", s.lower()))
 
-    gt = toks(Path(gt_path).read_text(errors="ignore"))
+    gt = toks(Path(gt_path).read_text(errors="ignore", encoding="utf-8"))
     if not gt:
         return 0.0
     hit = sum((toks(ocr_text) & gt).values())
@@ -178,7 +178,7 @@ def main() -> None:
     header += f" {'par==seq':>9s} {'wordrec':>8s}"
     print(header)
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         for cls in classes:
             cdir = fetch_isri(cls)
             if cdir is None:

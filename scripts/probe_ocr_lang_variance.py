@@ -156,7 +156,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    with tempfile.TemporaryDirectory() as workdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workdir:
         pdf_path = str(pathlib.Path(workdir) / "bilingual_scan.pdf")
         build_bilingual_scan(pdf_path, 1)
 
@@ -175,7 +175,7 @@ def main() -> int:
                 print(f"{arm} {i + 1:>2}/{args.trials}: {langs}", flush=True)
                 # Persist after every trial: these calls cost money, and a
                 # crash in trial 7 must not throw away trials 1-6.
-                out.write_text(json.dumps({"arms": arms}, indent=2))
+                out.write_text(json.dumps({"arms": arms}, indent=2), encoding="utf-8")
 
     payload = {
         "config": {
@@ -203,7 +203,7 @@ def main() -> int:
         "counts_overall": dict(collections.Counter(all_langs)),
     }
 
-    pathlib.Path(args.out).write_text(json.dumps(payload, indent=2))
+    pathlib.Path(args.out).write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"wrote {args.out}")
     return 0
 

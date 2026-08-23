@@ -254,23 +254,28 @@ class TestWriteResultsMdGuard:
     def test_writes_when_no_file_exists(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
         write_results_md(self.GENERATED)
-        assert out.read_text() == self.GENERATED
+        assert out.read_text(encoding="utf-8") == self.GENERATED
 
     def test_refuses_to_clobber_hand_written_sections(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
         edited = self.GENERATED + "\n## Described queries\n\nhand-written\n"
-        out.write_text(edited)
+        out.write_text(edited, encoding="utf-8")
         write_results_md(self.GENERATED)
-        assert out.read_text() == edited, "guard let a hand-written section die"
+        assert (
+            out.read_text(encoding="utf-8") == edited
+        ), "guard let a hand-written section die"
 
     def test_force_overwrites(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
-        out.write_text(self.GENERATED + "\n## Described queries\n\nhand-written\n")
+        out.write_text(
+            self.GENERATED + "\n## Described queries\n\nhand-written\n",
+            encoding="utf-8",
+        )
         write_results_md(self.GENERATED, force=True)
-        assert out.read_text() == self.GENERATED
+        assert out.read_text(encoding="utf-8") == self.GENERATED
 
     def test_regenerates_an_untouched_file(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
-        out.write_text(self.GENERATED)
+        out.write_text(self.GENERATED, encoding="utf-8")
         write_results_md(self.GENERATED.replace("body", "newer body"))
-        assert "newer body" in out.read_text()
+        assert "newer body" in out.read_text(encoding="utf-8")

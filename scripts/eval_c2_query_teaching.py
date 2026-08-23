@@ -100,7 +100,7 @@ def _cache_key(arm: str, qid: str, model: str) -> str:
 def _load_cache() -> dict[str, str]:
     cache: dict[str, str] = {}
     if CACHE_FILE.exists():
-        for line in CACHE_FILE.read_text().splitlines():
+        for line in CACHE_FILE.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
                 cache[row["key"]] = row["query"]
@@ -171,8 +171,8 @@ def main(argv: list[str] | None = None) -> int:
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
-    queries = json.loads((DATA / "queries.json").read_text())["queries"]
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))["queries"]
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     subjects = [q for q in queries if q["class"] in classes]
@@ -249,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         "rows": rows,
     }
     out = OUT_DIR / args.out
-    out.write_text(json.dumps(summary, indent=1))
+    out.write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(f"wrote {out}\n")
     print(f"caller model={args.model}  calls={len(jobs)}  errors={n_errors}")
     print(f"{'class':<11}{'arm':<10}{'doc-hit@1':>10}{'doc-hit@3':>10}")

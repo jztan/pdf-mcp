@@ -12,6 +12,15 @@ import json, os, sys
 import numpy as np
 import fitz
 
+# PDF_MCP_CHART_BACKEND=pdfium scores the permissive backend through the
+# same gate, on the same ground truth, in the same run.
+if os.environ.get("PDF_MCP_CHART_BACKEND") == "pdfium":
+    from pdf_mcp.backend.page import open_document as _open
+
+    class fitz:  # noqa: N801 - deliberate shadow, benchmark-local
+        open = staticmethod(_open)
+
+
 SP = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(SP, "..", "..", "src"))
 from pdf_mcp import chart_extractor as v3

@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 from urllib.parse import urlparse
 
 import httpx
-import pymupdf
 
 # Maximum download size: 100 MB
 MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
@@ -56,12 +55,16 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
     without authentication, and PDF 1.5+ object-stream layouts report
     zero pages until unlocked (issue #19).
     """
+    from .backend.bytesopen import open_pdf_bytes
+
     try:
-        doc = pymupdf.open(stream=content, filetype="pdf")
+        doc, needs_pass = open_pdf_bytes(content)
     except Exception as exc:
         raise PDFValidationError(
             f"Downloaded PDF is corrupt and cannot be opened: {exc}"
         ) from exc
+    if needs_pass:
+        return
     try:
         # Short-circuit password-protected PDFs before any page access:
         # opening succeeded, which confirms a structurally valid PDF, but
@@ -69,15 +72,13 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
         # layouts read as zero pages, tripping the truncation check below).
         # needs_pass is more precise than is_encrypted — owner-password-only
         # PDFs auto-authenticate (needs_pass False) and still get full checks.
-        if doc.needs_pass:
-            return
         page_count = len(doc)
         if page_count == 0:
             raise PDFValidationError(
                 f"Downloaded PDF has zero pages — likely a truncated file: {url}"
             )
         # Trigger deferred stream decompression (catches zlib corruption).
-        doc[0].get_text()
+        doc[0].get_textpage().get_text_range()
     except PDFValidationError:
         raise
     except Exception as exc:

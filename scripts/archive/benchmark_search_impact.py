@@ -113,7 +113,7 @@ def search_pages(
     """Keyword-mode pdf_search on a fresh index; return ranked 1-indexed pages."""
     orig_cache = server_module.cache
     orig_extract = server_module.extract_text_from_page
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         server_module.extract_text_from_page = make_extractor(removal)
         try:
@@ -146,8 +146,8 @@ def jaccard(a: list[int], b: list[int]) -> float:
 # Runs
 # --------------------------------------------------------------------------- #
 def run_realistic() -> list[dict[str, Any]]:
-    gt = json.loads(GROUND_TRUTH.read_text())
-    files = json.loads(QUERIES.read_text())["realistic_pdf_files"]
+    gt = json.loads(GROUND_TRUTH.read_text(encoding="utf-8"))
+    files = json.loads(QUERIES.read_text(encoding="utf-8"))["realistic_pdf_files"]
     rows = []
     for pid, fname in files.items():
         pdf = REAL_PDFS / fname
@@ -172,7 +172,7 @@ def run_realistic() -> list[dict[str, Any]]:
 
 
 def run_distortion() -> list[dict[str, Any]]:
-    dist = json.loads(QUERIES.read_text())["distortion"]
+    dist = json.loads(QUERIES.read_text(encoding="utf-8"))["distortion"]
     rows = []
     for pid, spec in dist.items():
         pdf = REAL_PDFS / spec["file"]

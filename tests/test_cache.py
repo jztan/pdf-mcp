@@ -11,6 +11,7 @@ import pytest
 
 from pdf_mcp.cache import PDFCache, _get_columns
 from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
@@ -61,14 +62,19 @@ class TestCacheValidation:
         """Deleted file returns False for cache validity."""
         # Create temp file, cache it, then delete
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            # This site writes THROUGH the handle, so close after the write.
+            # Windows refuses to write or replace a path that is still open,
+            # which turned into 639 errors the first time CI ran there.
+            # delete=False means closing does not remove the file.
             f.write(b"%PDF-1.4")
+            f.close()
             temp_path = f.name
 
         # Get mtime before deletion
         mtime = os.stat(temp_path).st_mtime
 
         # Delete the file
-        os.unlink(temp_path)
+        unlink_quietly(temp_path)
 
         # _is_cache_valid should return False (OSError)
         result = cache._is_cache_valid(temp_path, mtime)
@@ -324,6 +330,7 @@ class TestCacheInvalidation:
         import pymupdf
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc = pymupdf.open()
             doc.new_page()
             doc.save(f.name)
@@ -359,7 +366,7 @@ class TestCacheInvalidation:
         assert stats["total_files"] == 0
         assert not png.exists()
 
-        os.unlink(pdf_path)
+        unlink_quietly(pdf_path)
 
     def test_save_page_images_cleans_stale_files(self, cache, sample_pdf, tmp_path):
         """Re-saving images for a page deletes old PNGs first."""
@@ -1532,3 +1539,29 @@ def test_page_charts_stale_version_filtered_on_read(sample_pdf, tmp_path):
             (str(sample_pdf),),
         )
     assert cache.get_page_charts(str(sample_pdf), 1, "k", 24) is None
+
+
+class TestSavePagesTextCjkMirror:
+    def test_batch_save_populates_the_cjk_fts_mirror(self, cache, tmp_path):
+        """save_pages_text must maintain pdf_search_fts_cjk exactly as the
+        per-page save_page_text does. It did not, and the one-time backfill
+        only runs when the CJK tables are first created -- so a CJK document
+        warmed via pdf_corpus_warm had no CJK index rows and CJK keyword
+        search found nothing in it despite the text being cached."""
+        pdf = tmp_path / "cjk.pdf"
+        pdf.write_bytes(b"%PDF-1.4 fake")
+        cache.save_pages_text(
+            str(pdf), {0: "厚木基地の面積について", 1: "plain latin text only"}
+        )
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            cjk_rows = conn.execute(
+                "SELECT page_num FROM pdf_search_fts_cjk WHERE file_path = ?",
+                (str(pdf),),
+            ).fetchall()
+        assert [r[0] for r in cjk_rows] == [
+            0
+        ], "the CJK page must be mirrored, and only the CJK page"
+        hits = cache.search_fts(str(pdf), "厚木基地", 10, 100)
+        assert hits, "CJK keyword search must find batch-saved text"

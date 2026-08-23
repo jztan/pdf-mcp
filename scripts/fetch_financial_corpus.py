@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     failures: list[str] = []
     changed = False
 
@@ -132,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             failures.append(doc["id"])
 
     if changed:
-        MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n")
+        MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         print(f"\nupdated {MANIFEST}")
 
     total = len(manifest["docs"])

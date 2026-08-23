@@ -1,19 +1,24 @@
 """Table context attached to pdf_search matches."""
 
-import os
 import tempfile
 
 import pymupdf
 import pytest
 
 from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
-from pdf_mcp.parallel import run_module_json
+from pdf_mcp.extractor import extract_tables_for_pages
+from tests.tmpfiles import unlink_quietly
 
 
 @pytest.fixture
 def ruled_table_pdf():
     """A bordered 2x3 table with decimal values in a MIN/MAX layout."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Close the handle before anything writes to this path: Windows
+        # refuses to write or replace a file that is still open, which
+        # turned into 639 errors the first time CI ran there. delete=False
+        # means closing early does not remove the file.
+        f.close()
         doc = pymupdf.open()
         page = doc.new_page()
         page.draw_rect(pymupdf.Rect(50, 50, 300, 150), color=(0, 0, 0))
@@ -36,14 +41,12 @@ def ruled_table_pdf():
         doc.save(f.name)
         doc.close()
     yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     """Geometric row selection needs per-row geometry, which was not cached."""
-    out = run_module_json(
-        "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
-    )
+    out = extract_tables_for_pages(ruled_table_pdf, [0])
     table = out["tables"]["0"][0]
     assert len(table["row_bboxes"]) == len(table["rows"])
     for bbox in table["row_bboxes"]:
@@ -129,7 +132,7 @@ def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
     from pdf_mcp.server import _attach_table_context
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=__import__("pathlib").Path(tmp))
         doc = pymupdf.open(ruled_table_pdf)
         rows = doc[0].get_text("blocks")
@@ -159,6 +162,7 @@ def wrapped_label_table_pdf():
     real shape of the MCP1700 rows behind p01 and p02.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         page.draw_rect(pymupdf.Rect(50, 50, 520, 182), color=(0, 0, 0))
@@ -198,7 +202,7 @@ def wrapped_label_table_pdf():
         doc.save(f.name)
         doc.close()
     yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_pdf):
@@ -215,7 +219,7 @@ def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import _attach_table_context, _match_may_touch_a_table
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         doc = pymupdf.open(wrapped_label_table_pdf)
         blocks = doc[0].get_text("blocks")
@@ -248,9 +252,11 @@ def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_tabl
 
     called = []
     monkeypatch.setattr(
-        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+        srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
     )
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         doc = pymupdf.open(ruled_table_pdf)
         match = {
@@ -272,9 +278,11 @@ def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
 
     called = []
     monkeypatch.setattr(
-        srv, "run_module_json", lambda *a, **k: called.append(a) or {"tables": {}}
+        srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
     )
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         match = {"page": 1, "excerpt": "no numbers here at all", "bbox": [0, 0, 9, 9]}
         srv._attach_table_context([match], ruled_table_pdf, cache)
@@ -288,7 +296,7 @@ def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
     import pathlib
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         match = {"page": 1, "excerpt": "Supply Voltage 4.5 16 V"}
         out = _attach_table_context([match], ruled_table_pdf, cache)
@@ -310,7 +318,7 @@ def test_whole_table_block_returns_every_row_not_one_guess(ruled_table_pdf):
     import pathlib
     import tempfile as _tf
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         # No column-identity word, or the ambiguity trigger would reject it
         # before geometry is ever consulted and the test would pass vacuously.
@@ -654,7 +662,7 @@ def test_trigger_fires_for_a_caption_with_no_numbers():
     )
 
 
-def test_cached_tables_allow_attachment_without_a_subprocess(
+def test_cached_tables_allow_attachment_without_re_extracting(
     monkeypatch, ruled_table_pdf
 ):
     """A page whose tables are already cached costs nothing to associate.
@@ -671,20 +679,18 @@ def test_cached_tables_allow_attachment_without_a_subprocess(
     from pdf_mcp import server as srv
     from pdf_mcp.cache import PDFCache
 
-    with _tf.TemporaryDirectory() as tmp:
+    with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
         # Warm the cache the way a prior read would.
-        tables = run_module_json(
-            "pdf_mcp._table_worker", {"path": ruled_table_pdf, "pages": [0]}
-        )["tables"]["0"]
+        tables = extract_tables_for_pages(ruled_table_pdf, [0])["tables"]["0"]
         cache.save_page_tables(ruled_table_pdf, 0, tables)
 
         doc = pymupdf.open(ruled_table_pdf)
-        spawned = []
+        re_extracted = []
         monkeypatch.setattr(
             srv,
-            "run_module_json",
-            lambda *a, **k: spawned.append(a) or {"tables": {}},
+            "extract_tables_for_pages",
+            lambda *a, **k: re_extracted.append(a) or {"tables": {}},
         )
         # A bare label: no 2+ numbers, no "Table N". The old pre-filter
         # dropped it outright.
@@ -695,5 +701,5 @@ def test_cached_tables_allow_attachment_without_a_subprocess(
         }
         out = srv._attach_table_context([match], ruled_table_pdf, cache, doc)
         doc.close()
-    assert spawned == [], "must not spawn: the tables were already cached"
+    assert re_extracted == [], "must not spawn: the tables were already cached"
     assert "table_context" in out[0]

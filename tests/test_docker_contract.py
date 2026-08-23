@@ -41,13 +41,13 @@ def _allow_patterns():
 
 @pytest.fixture(scope="module")
 def service():
-    data = yaml.safe_load(COMPOSE.read_text())
+    data = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
     return data["services"]["pdf-mcp"]
 
 
 @pytest.fixture(scope="module")
 def dockerfile():
-    return DOCKERFILE.read_text()
+    return DOCKERFILE.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +57,7 @@ def workflow():
     PyYAML turns the bare `on:` key into the boolean True (the Norway
     problem); nothing here reads it, so that is harmless.
     """
-    return yaml.safe_load(WORKFLOW.read_text())
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
 
 
 def _container_home(dockerfile_text):
@@ -125,10 +125,10 @@ class TestPortPublishing:
             "owned and PDFCache.__init__ chmods the cache dir, which "
             "requires ownership"
         )
-        assert source in yaml.safe_load(COMPOSE.read_text())["volumes"]
+        assert source in yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["volumes"]
 
     def test_compose_has_no_obsolete_version_key(self):
-        assert "version" not in yaml.safe_load(COMPOSE.read_text())
+        assert "version" not in yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
 
 
 class TestContainerPortAgreesEverywhere:
@@ -204,7 +204,7 @@ class TestContainerPortAgreesEverywhere:
         )
         host_default = match.group(1)
 
-        caddyfile_text = CADDYFILE.read_text()
+        caddyfile_text = CADDYFILE.read_text(encoding="utf-8")
         proxied = re.search(r"reverse_proxy 127\.0\.0\.1:(\d+)", caddyfile_text)
         assert proxied, "Caddyfile.example has no reverse_proxy target to check"
         assert proxied.group(1) == host_default, (
@@ -250,7 +250,9 @@ class TestPullFirstImageContract:
         assert service["build"]["dockerfile"] == "Dockerfile"
 
     def test_env_example_documents_the_image_tag(self):
-        assert "PDF_MCP_IMAGE_TAG" in (REPO / ".env.example").read_text()
+        assert "PDF_MCP_IMAGE_TAG" in (REPO / ".env.example").read_text(
+            encoding="utf-8"
+        )
 
 
 class TestDeployScriptPullsByDefault:
@@ -259,7 +261,7 @@ class TestDeployScriptPullsByDefault:
 
     @property
     def script(self):
-        return (REPO / "deploy.sh").read_text()
+        return (REPO / "deploy.sh").read_text(encoding="utf-8")
 
     def test_build_flag_is_documented(self):
         # `"--build" in script` would be satisfied by the pre-existing
@@ -315,7 +317,7 @@ class TestMultiArchBuildJobs:
         assert not runners["linux/amd64"].endswith("-arm")
 
     def test_no_qemu_setup(self, workflow):
-        text = WORKFLOW.read_text()
+        text = WORKFLOW.read_text(encoding="utf-8")
         assert "setup-qemu-action" not in text
 
     def test_build_does_not_wait_for_tests(self, workflow):
@@ -438,7 +440,9 @@ class TestImageNameIsSingleSourced:
 
     def test_no_literal_image_reference_outside_the_env_declaration(self):
         offenders = []
-        for num, line in enumerate(WORKFLOW.read_text().splitlines(), 1):
+        for num, line in enumerate(
+            WORKFLOW.read_text(encoding="utf-8").splitlines(), 1
+        ):
             if "ghcr.io" not in line:
                 continue
             stripped = line.strip()

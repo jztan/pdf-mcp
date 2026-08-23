@@ -49,7 +49,7 @@ pdf-mcp routinely processes attacker-controllable input — PDF byte streams (lo
 
 **Out of scope:**
 
-- Vulnerabilities in third-party dependencies (PyMuPDF, FastMCP, fastembed, httpx, etc.) — please report those to their upstream maintainers. We will pick up their fixes via dependency bumps.
+- Vulnerabilities in third-party dependencies (pypdfium2, pdfplumber, pypdf, pytesseract, FastMCP, fastembed, httpx, etc.): please report those to their upstream maintainers. We will pick up their fixes via dependency bumps. PyMuPDF is no longer among them; it is a development dependency only and is absent from published wheels.
 - Resource exhaustion from PDFs the user explicitly requested at full size (e.g. legitimately reading a 3000-page document via `pdf_read_pages`). The configured `[limits].max_response_bytes` is the knob; complaints about legitimate large-document use go to the maintainer as feature requests, not security.
 - Prompt-injection attacks that succeed despite the LLM agent ignoring the documented untrusted-content contract. The contract is restated in every tool description; downstream non-compliance is a client-side issue.
 - Vulnerabilities requiring an attacker to already have write access to the user's local filesystem (e.g. malicious symlinks pre-planted in the cache directory).

@@ -3,7 +3,6 @@
 
 import base64
 import io
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -15,12 +14,49 @@ from PIL import Image, ImageDraw
 from pdf_mcp.cache import PDFCache
 from pdf_mcp.url_fetcher import URLFetcher
 import pdf_mcp.server as server_module
+from tests.tmpfiles import unlink_quietly
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_fsync_in_tests():
+    """Turn off SQLite fsync for the whole test session.
+
+    Every test builds a fresh cache in a temp dir that dies with the
+    test, so durability across a power loss protects nothing here -- but
+    each commit still pays a real fsync, and the suite commits thousands
+    of times. That cost is invisible on Linux (~1ms) and dominant on
+    Windows (~28ms, the same measurement that explained the 5.4x cold
+    search gap). Patching sqlite3.connect keeps the change test-only:
+    the product's durability is untouched, and spawn workers re-import
+    a clean sqlite3 so they are unaffected.
+    """
+    import sqlite3 as _sqlite3
+
+    real_connect = _sqlite3.connect
+
+    def connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        try:
+            conn.execute("PRAGMA synchronous=OFF")
+        except Exception:
+            pass
+        return conn
+
+    _sqlite3.connect = connect
+    yield
+    _sqlite3.connect = real_connect
 
 
 @pytest.fixture
 def temp_cache_dir():
     """Create a temporary cache directory."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    # ignore_cleanup_errors: the cache holds cache.db open through its
+    # SQLite connection, and Windows refuses to delete an open file, so
+    # cleanup raised WinError 32 and then WinError 267 while retrying and
+    # failed the test at teardown. The directory is a temp dir the OS
+    # reclaims regardless, and cleanup must not fail a passing test.
+    # POSIX is unaffected: unlink there succeeds with the file open.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         yield Path(tmpdir)
 
 
@@ -34,6 +70,11 @@ def cache(temp_cache_dir):
 def sample_pdf():
     """Create a sample 5-page PDF for testing."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Close the handle before anything writes to this path: Windows
+        # refuses to write or replace a file that is still open, which
+        # turned into 639 errors the first time CI ran there. delete=False
+        # means closing early does not remove the file.
+        f.close()
         doc = pymupdf.open()
 
         for i in range(5):
@@ -48,7 +89,7 @@ def sample_pdf():
         resolved = str(Path(f.name).resolve())
         yield resolved
 
-        os.unlink(resolved)
+        unlink_quietly(resolved)
 
 
 @pytest.fixture
@@ -70,6 +111,7 @@ def isolated_server(temp_cache_dir, monkeypatch):
 def sample_pdf_with_toc():
     """Create a PDF with table of contents."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
 
         for i in range(3):
@@ -88,7 +130,7 @@ def sample_pdf_with_toc():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -125,6 +167,7 @@ def sample_pdf_with_toc_sections(tmp_path):
 def sample_pdf_with_large_toc():
     """Create a PDF with more than 50 TOC entries (triggers truncation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
 
         for i in range(60):
@@ -138,13 +181,14 @@ def sample_pdf_with_large_toc():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
 def sample_pdf_with_images():
     """Create a PDF with embedded images."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -164,7 +208,7 @@ def sample_pdf_with_images():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -174,6 +218,7 @@ def sample_pdf_dup_image():
     One xref, two placements.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         png_data = base64.b64decode(
@@ -185,13 +230,14 @@ def sample_pdf_dup_image():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
 def sample_pdf_two_distinct_images():
     """PDF with two DIFFERENT embedded images on one page (two distinct xrefs)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         red = base64.b64decode(
@@ -207,13 +253,14 @@ def sample_pdf_two_distinct_images():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
 def sample_pdf_scanned():
     """PDF with zero extractable text but raster images (scan simulation)."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
         png_data = base64.b64decode(
@@ -224,13 +271,14 @@ def sample_pdf_scanned():
         doc.save(f.name)
         doc.close()
         yield str(Path(f.name).resolve())
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
 def sample_pdf_mixed():
     """PDF with pages 1-2 having text and pages 3-4 being image-only."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         png_data = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
@@ -245,7 +293,7 @@ def sample_pdf_mixed():
         doc.save(f.name)
         doc.close()
         yield str(Path(f.name).resolve())
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -263,6 +311,7 @@ def sample_pdf_grayscale():
     import io
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -278,7 +327,7 @@ def sample_pdf_grayscale():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -288,6 +337,7 @@ def sample_pdf_rgba():
     import io
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -305,7 +355,7 @@ def sample_pdf_rgba():
         doc.close()
 
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -314,6 +364,7 @@ def pdf_with_hidden_text():
     carrying a unique token ('zebra'). Page 2: clean body with its own token
     ('omega'). Unique per-page tokens make keyword targeting deterministic."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         p1 = doc.new_page()
         p1.insert_text((50, 50), "alpha visible body text on page one", fontsize=12)
@@ -330,7 +381,7 @@ def pdf_with_hidden_text():
         doc.save(f.name)
         doc.close()
         yield f.name
-    os.unlink(f.name)
+    unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -340,6 +391,7 @@ def sample_pdf_with_table():
     Explicit borders are required for find_tables() to detect it.
     """
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page()
 
@@ -362,7 +414,7 @@ def sample_pdf_with_table():
         doc.save(f.name)
         doc.close()
         yield f.name
-        os.unlink(f.name)
+        unlink_quietly(f.name)
 
 
 @pytest.fixture
@@ -542,6 +594,7 @@ def sample_pdf_synthetic_scan(isolated_server):
     img_bytes.seek(0)
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()  # see above: Windows open-handle rule
         doc = pymupdf.open()
         page = doc.new_page(width=600, height=100)
         page.insert_image(pymupdf.Rect(0, 0, 600, 100), stream=img_bytes.read())
@@ -549,4 +602,4 @@ def sample_pdf_synthetic_scan(isolated_server):
         doc.close()
         path = str(Path(f.name).resolve())
         yield path
-        os.unlink(path)
+        unlink_quietly(path)

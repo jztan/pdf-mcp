@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pymupdf
+from .backend.geometry import Rect
 
 # Detection-logic version. Bump when geometry rules / thresholds change so the
 # cache layer (cache.py) re-scans. See cache._TRUST_VERSION wiring.
@@ -52,23 +52,21 @@ def _is_light(color: Any) -> bool:
         return False
 
 
-def _page_fills(page: pymupdf.Page) -> list[tuple[pymupdf.Rect, Any]]:
+def _page_fills(page: Any) -> list[tuple[Rect, Any]]:
     """Filled vector drawings as (rect, fill_color), in paint order. Best-effort:
     returns [] on any PyMuPDF error so a flaky page never breaks detection."""
     try:
-        out: list[tuple[pymupdf.Rect, Any]] = []
+        out: list[tuple[Rect, Any]] = []
         for d in page.get_drawings():
             fill = d.get("fill")
             if fill is not None:
-                out.append((pymupdf.Rect(d["rect"]), fill))
+                out.append((Rect(*d["rect"]), fill))
         return out
     except (RuntimeError, AttributeError, KeyError, TypeError, ValueError):
         return []
 
 
-def _bg_is_light(
-    span_rect: pymupdf.Rect, fills: list[tuple[pymupdf.Rect, Any]]
-) -> bool:
+def _bg_is_light(span_rect: Rect, fills: list[tuple[Rect, Any]]) -> bool:
     """Is the background behind a span light enough to hide white text? The
     default page background is white; a filled drawing substantially covering
     the span overrides it (topmost in paint order wins). White text on a dark
@@ -83,9 +81,9 @@ def _bg_is_light(
     return True if bg is None else _is_light(bg)
 
 
-def _image_bboxes(page: pymupdf.Page) -> list[pymupdf.Rect]:
+def _image_bboxes(page: Any) -> list[Rect]:
     try:
-        return [pymupdf.Rect(im["bbox"]) for im in page.get_image_info()]
+        return [Rect(*im["bbox"]) for im in page.get_image_info()]
     except (RuntimeError, AttributeError, KeyError, TypeError, ValueError):
         # Best-effort guard: RuntimeError covers PyMuPDF/mupdf-level errors;
         # the rest cover a malformed image-info dict. A flaky page must not
@@ -93,7 +91,7 @@ def _image_bboxes(page: pymupdf.Page) -> list[pymupdf.Rect]:
         return []
 
 
-def _covered_by_image(span_rect: pymupdf.Rect, images: list[pymupdf.Rect]) -> bool:
+def _covered_by_image(span_rect: Rect, images: list[Rect]) -> bool:
     # Deliberate false-positive control: invisible-render-mode text that lies
     # within a raster image's bbox is treated as a benign OCR text layer and
     # exempted from flagging. Known blind spot: invisible text *drawn over* an
@@ -110,11 +108,11 @@ def _covered_by_image(span_rect: pymupdf.Rect, images: list[pymupdf.Rect]) -> bo
     return False
 
 
-def _scan_page_geometry(page: pymupdf.Page, page_index: int) -> list[HiddenSpan]:
+def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
     """Return hidden spans on one page. page_index is 0-indexed."""
     page_rect = page.rect
     images = _image_bboxes(page)
-    fills: list[tuple[pymupdf.Rect, Any]] | None = None  # lazy: only if needed
+    fills: list[tuple[Rect, Any]] | None = None  # lazy: only if needed
     spans: list[HiddenSpan] = []
 
     for s in page.get_texttrace():
@@ -127,7 +125,7 @@ def _scan_page_geometry(page: pymupdf.Page, page_index: int) -> list[HiddenSpan]
         size = float(s.get("size", 12.0))
         color = s.get("color", (0.0, 0.0, 0.0))
         bbox = tuple(float(c) for c in s.get("bbox", (0, 0, 0, 0)))
-        span_rect = pymupdf.Rect(bbox)
+        span_rect = Rect(*bbox)
 
         reasons: list[str] = []
 
@@ -228,7 +226,7 @@ def _count_injection_in_hidden(
     )
 
 
-def scan_document(doc: pymupdf.Document) -> dict[str, Any]:
+def scan_document(doc: Any) -> dict[str, Any]:
     """Full document scan. Best-effort: a page that throws is counted in
     pages_errored and contributes nothing."""
     all_spans: list[HiddenSpan] = []
@@ -315,7 +313,7 @@ def summarize(
     return block
 
 
-def page_has_hidden_text(page: pymupdf.Page) -> bool:
+def page_has_hidden_text(page: Any) -> bool:
     """Lightweight geometry-only check for the read-path flag.
     Page index is irrelevant here (no aggregation), pass 0."""
     try:

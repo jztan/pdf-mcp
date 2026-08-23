@@ -47,5 +47,87 @@ jobs:
         # Intentionally src/-only: test and script bodies are untyped and
         # would need per-module relaxations. Tracked in docs_internal/backlog.md.
         run: uv run mypy src/
+      - name: Warm the embedding model cache
+        # fastembed downloads bge-small into one shared cache directory.
+        # Under -n auto several workers can trigger that first download at
+        # the same time and race, which failed the RRF gate on one Python
+        # version with NO_SUCHFILE while the others passed. Fetching it
+        # once, before pytest, removes the race rather than retrying it.
+        run: >
+          uv run python -c
+          "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
+          encode(['warm the model cache'], DEFAULT_MODEL)"
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # -n auto: the suite is I/O and subprocess heavy (nearly every test
+        # builds or opens a PDF), so it parallelises well. xdist workers are
+        # separate processes, so the gates that swap module-level state (the
+        # isolated corpus cache) stay isolated per worker rather than racing.
+        run: uv run pytest tests/ -v -n auto
+
+  # (see test-windows below for why the slow marker is deselected there
+  # but not here)
+
+  # Windows is ~40% of PyPI downloads and had no coverage at all until the
+  # PyMuPDF replacement, which swapped the PDF engine under every user. The
+  # backend's platform-sensitive surfaces are real: spawn-only multiprocessing
+  # (parallel.py, corpus.py), SQLite cache files that Windows will not let us
+  # delete while open, and tessdata discovery, which differs from Unix in two
+  # ways (--list-langs goes to stdout, and TESSDATA_PREFIX points at the
+  # install root). Lint, format, type-check and audit are platform-independent
+  # and stay on the Linux job; this one only proves the code runs.
+  test-windows:
+    runs-on: windows-latest
+    # Windows has no default job timeout worth relying on (GitHub's is 6
+    # hours), and the failure mode this job exists to catch -- spawn-only
+    # multiprocessing -- deadlocks rather than errors.
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.13']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Install Tesseract
+        # Without this the OCR tests skip themselves (shutil.which guard) and
+        # the Windows-specific tessdata discovery path would never be tested,
+        # which is the single most platform-divergent piece of code we have.
+        run: choco install --no-progress -y tesseract
+      - name: Put Tesseract on PATH
+        # choco edits the machine PATH, which does not reliably reach later
+        # steps. Without this the which() guard fails and every OCR test
+        # skips -- green, and testing nothing.
+        run: echo "C:\Program Files\Tesseract-OCR" >> $env:GITHUB_PATH
+        shell: pwsh
+      - name: Verify Tesseract is visible to the tests
+        # Fail loudly here rather than let the OCR tests skip themselves.
+        run: |
+          tesseract --version
+          uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
+      - name: Warm the embedding model cache
+        # fastembed downloads bge-small into one shared cache directory.
+        # Under -n auto several workers can trigger that first download at
+        # the same time and race, which failed the RRF gate on one Python
+        # version with NO_SUCHFILE while the others passed. Fetching it
+        # once, before pytest, removes the race rather than retrying it.
+        run: >
+          uv run python -c
+          "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
+          encode(['warm the model cache'], DEFAULT_MODEL)"
+      - name: Run tests
+        # Deselect the slow marker here, unlike the Linux job. It covers
+        # the retrieval-quality gates, which measure ranking rather than
+        # platform behaviour and cannot fail on Windows alone -- and one
+        # of them, test_rrf_v2_no_regression_vs_baseline, took 8.5 of
+        # this job's 20 minutes. What this job is for is the
+        # platform-divergent surfaces above, and those are not marked
+        # slow.
+        run: uv run pytest tests/ -v -m "not slow" -n auto

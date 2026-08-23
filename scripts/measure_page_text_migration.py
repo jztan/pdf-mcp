@@ -204,7 +204,7 @@ def main() -> int:
 
     results = []
     for n in args.scales:
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             db = str(pathlib.Path(d) / "cache.db")
             build_cache(db, n, args.ocr_fraction)
             size_before = pathlib.Path(db).stat().st_size
@@ -231,7 +231,8 @@ def main() -> int:
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        json.dumps({"ocr_fraction": args.ocr_fraction, "results": results}, indent=2)
+        json.dumps({"ocr_fraction": args.ocr_fraction, "results": results}, indent=2),
+        encoding="utf-8",
     )
     print(f"\nwrote {out}")
     return 0

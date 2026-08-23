@@ -15,12 +15,13 @@ import logging
 import math
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
 import httpx
-import pymupdf
+
+from .backend.geometry import Rect as GeomRect
+from .docopen import open_pdf
 from fastmcp import FastMCP
 from mcp.types import ImageContent
 from pydantic import BeforeValidator
@@ -37,17 +38,19 @@ from .extractor import (
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
+    extract_tables_for_pages,
     extract_text_from_page,
     extract_toc,
     get_best_paragraph_for_query,
     native_render_dpi_cap,
+    page_text_chars,
     ocr_page,
     parse_page_range,
     render_page_as_image,
     render_page_as_png,
 )
 from .extractor import _ocr_page_worker, _render_page_worker
-from .parallel import PageError, resolve_workers, run_module_json, run_pages
+from .parallel import PageError, resolve_workers, run_pages
 from .section_detector import derive_sections
 from .url_fetcher import URLFetcher
 
@@ -569,7 +572,7 @@ def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
         cached = cache.get_content_trust(local_path)
         if cached is not None:
             return content_trust.summarize(cached, detail=detail, phrases=phrases)
-        doc = pymupdf.open(local_path)
+        doc = open_pdf(local_path)
         try:
             scan = content_trust.scan_document(doc)
         finally:
@@ -581,7 +584,7 @@ def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
 
 
 def _resolve_hidden_flags(
-    local_path: str, doc: "pymupdf.Document", page_nums: list[int]
+    local_path: str, doc: Any, page_nums: list[int]
 ) -> dict[int, bool]:
     """Per-page hidden-text bool for page_nums (0-indexed). Serves cached
     flags; computes+persists only pages whose flag is NULL (not yet computed).
@@ -727,12 +730,12 @@ def pdf_info(
         coverage = cached.get("text_coverage")
         if coverage is None:
             # Lazy backfill: pre-v1.9.0 cached row has no coverage
-            doc = pymupdf.open(local_path)
+            doc = open_pdf(local_path)
             try:
                 coverage = [
                     {
                         "page": pn + 1,
-                        "text_chars": len(doc[pn].get_text()),
+                        "text_chars": page_text_chars(doc[pn]),
                         "raster_images": len({img[0] for img in doc[pn].get_images()}),
                     }
                     for pn in range(cached["page_count"])
@@ -762,7 +765,7 @@ def pdf_info(
         return result
 
     # Parse PDF
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         page_count = len(doc)
@@ -774,7 +777,7 @@ def pdf_info(
         coverage = [
             {
                 "page": pn + 1,
-                "text_chars": len(doc[pn].get_text()),
+                "text_chars": page_text_chars(doc[pn]),
                 "raster_images": len({img[0] for img in doc[pn].get_images()}),
             }
             for pn in range(page_count)
@@ -904,7 +907,7 @@ def pdf_read_pages(
     if render_dpi is not None:
         clamped_dpi = _clamp(render_dpi, RENDER_DPI_MIN, RENDER_DPI_MAX)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         page_nums = parse_page_range(pages, len(doc))
@@ -988,7 +991,7 @@ def pdf_read_pages(
                     )
                     for n in ocr_miss_pages:
                         try:
-                            doc_local = pymupdf.open(local_path)
+                            doc_local = open_pdf(local_path)
                             try:
                                 from .extractor import _TESSDATA_PATH
 
@@ -1034,11 +1037,9 @@ def pdf_read_pages(
                     render_results[n] = res[1] if isinstance(res, tuple) else res
 
         # --- Isolated dispatch: table cache-misses ---
-        # Tables MUST be extracted out-of-process. This process has imported
-        # pymupdf4llm (at startup, and again on any column-aware extraction),
-        # which activates pymupdf.layout and irreversibly corrupts
-        # find_tables cell text -- "4.5" comes back as "45\n.". One spawn
-        # serves every uncached page in this call.
+        # One call serves every uncached page here. This used to spawn a
+        # clean interpreter, because importing pymupdf4llm corrupted
+        # find_tables process-wide; that dependency is gone.
         table_results: dict[int, list[dict[str, Any]]] = {}
         table_miss_pages: list[int] = []
         for n in page_nums:
@@ -1049,12 +1050,11 @@ def pdf_read_pages(
                 table_results[n] = cached_tables
         if table_miss_pages:
             try:
-                worker_out = run_module_json(
-                    "pdf_mcp._table_worker",
-                    {"path": local_path, "pages": table_miss_pages},
-                ).get("tables", {})
-            except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
-                logger.warning("Isolated table extraction failed: %s", exc)
+                worker_out = extract_tables_for_pages(local_path, table_miss_pages).get(
+                    "tables", {}
+                )
+            except Exception as exc:  # noqa: BLE001 - tables are optional
+                logger.warning("Table extraction failed: %s", exc)
                 worker_out = {}
             for n in table_miss_pages:
                 # JSON object keys are strings; page numbers round-trip as such.
@@ -1095,11 +1095,28 @@ def pdf_read_pages(
                     if res is None or isinstance(res, PageError):
                         # Isolated failure: empty text, tagged, NOT cached
                         # (keeps the page retryable on a later call).
+                        #
+                        # Log the reason. PageError carries the exception
+                        # repr precisely so the parent can surface it, and
+                        # dropping it left `ocr_failed` unexplainable: a
+                        # Windows CI failure could not be diagnosed from the
+                        # run at all, and a user gets the same silence.
+                        logger.warning(
+                            "OCR failed on page %d of %s: %s",
+                            page_num + 1,
+                            local_path,
+                            res.detail if isinstance(res, PageError) else "no result",
+                        )
                         text = ""
                         page_source = "ocr_failed"
                     elif len(res) == 0:
                         # OCR returned empty — don't cache (retryable), and
                         # fall back to native text extraction if available.
+                        logger.warning(
+                            "OCR returned no text on page %d of %s",
+                            page_num + 1,
+                            local_path,
+                        )
                         page = doc[page_num]
                         native = extract_text_from_page(page, sort_by_position=True)
                         text = native if native else ""
@@ -1338,7 +1355,7 @@ def pdf_read_all(
     # Clamp max_pages to prevent resource exhaustion
     max_pages = _clamp(max_pages, 1, MAX_PAGES_LIMIT)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         total_pages = len(doc)
@@ -1771,7 +1788,7 @@ def _attach_table_context(
     matches: list[dict[str, Any]],
     local_path: str,
     cache: PDFCache,
-    doc: pymupdf.Document | None = None,
+    doc: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Attach header + matched row to ambiguous matches, in place of nothing.
 
@@ -1825,10 +1842,8 @@ def _attach_table_context(
 
     if missing:
         try:
-            out = run_module_json(
-                "pdf_mcp._table_worker", {"path": local_path, "pages": missing}
-            ).get("tables", {})
-        except (TimeoutError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            out = extract_tables_for_pages(local_path, missing).get("tables", {})
+        except Exception as exc:  # noqa: BLE001 - table context is optional
             logger.warning("Table context extraction failed: %s", exc)
             out = {}
         for page_num in missing:
@@ -1950,9 +1965,52 @@ def _rows_overlapping(bbox: list[Any], row_bboxes: list[list[float]]) -> list[in
     return hits
 
 
+class _LayoutPage:
+    """Page stand-in built from the cached blocks shape.
+
+    The excerpt-upgrade path reads exactly two things from a page: the
+    sorted text-blocks shape and the page rect. When warm has persisted
+    both, a query builds its paragraph excerpts without opening the PDF
+    at all, which is what puts the corpus query path AHEAD of the
+    PyMuPDF baseline instead of chasing it: the baseline still pays live
+    extraction per hit page.
+    """
+
+    def __init__(self, blocks: list[Any], size: tuple[float, float]) -> None:
+        self._blocks = blocks
+        self.rect = GeomRect(0.0, 0.0, size[0], size[1])
+
+    def get_text(self, kind: str = "text", **_kw: Any) -> Any:
+        if kind != "blocks":
+            raise ValueError(f"_LayoutPage serves only 'blocks', not {kind!r}")
+        return self._blocks
+
+
+def _layout_page(doc: Any, page_num_0: int) -> Any:
+    """Cached-blocks page when available; live page (with write-through)
+    otherwise. Best-effort: any failure falls back to the live page."""
+    try:
+        local_path = getattr(doc, "name", None)
+        if not local_path:
+            return doc[page_num_0]
+        cached = cache.get_page_blocks(local_path, page_num_0)
+        if cached is not None:
+            return _LayoutPage(*cached)
+        page = doc[page_num_0]
+        blocks = [tuple(b) for b in page.get_text("blocks", sort=True)]
+        rect = page.rect
+        cache.save_page_blocks(
+            local_path,
+            {page_num_0: (blocks, (float(rect.width), float(rect.height)))},
+        )
+        return _LayoutPage(blocks, (float(rect.width), float(rect.height)))
+    except Exception:  # noqa: BLE001
+        return doc[page_num_0]
+
+
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
-    doc: pymupdf.Document,
+    doc: Any,
     query: str,
     keyword_excerpts: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
@@ -1984,7 +2042,7 @@ def _upgrade_excerpts_to_paragraphs(
 
     for m in matches:
         page_num_0 = m["page"] - 1
-        page = doc[page_num_0]
+        page = _layout_page(doc, page_num_0)
 
         block_text: str | None = None
         block_idx: int | None = None
@@ -1994,8 +2052,16 @@ def _upgrade_excerpts_to_paragraphs(
             if fragment:
                 blocks = page.get_text("blocks", sort=True)
                 text_blocks = [b[4] for b in blocks if b[6] == 0]
+                # Whitespace-normalised containment: the FTS excerpt is a
+                # window over page_text, whose line joins differ from the
+                # blocks shape (spaces vs newlines around table cells), so
+                # a literal substring test failed on exactly the matches
+                # this anchor exists for. The query-dense-block fallback
+                # then picked an intro sentence over the table row holding
+                # the answer (Berkshire p67, "manufacturing revenues").
+                fragment_norm = " ".join(fragment.split())
                 for idx, bt in enumerate(text_blocks):
-                    if fragment in bt:
+                    if fragment_norm in " ".join(bt.split()):
                         stripped = bt.strip()
                         if len(stripped) <= 2000:
                             block_text = stripped
@@ -2299,7 +2365,7 @@ def pdf_search(
     if granularity == "section":
         return _pdf_search_section_mode(local_path, query, max_results)
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         doc_pages = len(doc)
@@ -2336,6 +2402,7 @@ def pdf_search(
             if uncached_nums:
                 sem_texts = cache.get_pages_text(local_path, uncached_nums)
                 page_texts_sem: dict[int, str] = {}
+                new_texts_sem: dict[int, str] = {}
                 for page_num in uncached_nums:
                     if page_num in sem_texts:
                         page_texts_sem[page_num] = sem_texts[page_num]
@@ -2343,8 +2410,11 @@ def pdf_search(
                         text = extract_text_from_page(
                             doc[page_num], sort_by_position=True
                         )
-                        cache.save_page_text(local_path, page_num, text)
+                        new_texts_sem[page_num] = text
                         page_texts_sem[page_num] = text
+                # Batched for the same fsync-per-commit reason as the
+                # keyword path above.
+                cache.save_pages_text(local_path, new_texts_sem)
 
                 non_empty = {pn: t for pn, t in page_texts_sem.items() if t.strip()}
                 if non_empty:
@@ -2449,14 +2519,22 @@ def pdf_search(
                 m.setdefault("position", 0)
         else:
             page_texts_kw: dict[int, str] = {}
+            new_texts_kw: dict[int, str] = {}
             for page_num in range(doc_pages):
                 cached_text = cache.get_page_text(local_path, page_num)
                 if cached_text is not None:
                     page_texts_kw[page_num] = cached_text
                 else:
                     text = extract_text_from_page(doc[page_num], sort_by_position=True)
-                    cache.save_page_text(local_path, page_num, text)
+                    new_texts_kw[page_num] = text
                     page_texts_kw[page_num] = text
+            # One transaction for the whole document, not one per page.
+            # Each save_page_text call commits, and a commit is an fsync:
+            # ~1ms on Linux but ~28ms on Windows, so the per-page loop made
+            # cold search on a 500-page PDF 17.5s there against 3.2s on
+            # Linux (measured on same-spec CI runners; the warm path was at
+            # parity, which is what isolated the cache-write cost).
+            cache.save_pages_text(local_path, new_texts_kw)
 
             if cache.fts_available:
                 kw_matches = cache.search_fts(
@@ -2566,13 +2644,17 @@ def pdf_search(
         if uncached_nums:
             hybrid_texts = cache.get_pages_text(local_path, uncached_nums)
             page_texts_hyb: dict[int, str] = {}
+            new_texts_hyb: dict[int, str] = {}
             for page_num in uncached_nums:
                 if page_num in hybrid_texts:
                     page_texts_hyb[page_num] = hybrid_texts[page_num]
                 else:
                     text = extract_text_from_page(doc[page_num], sort_by_position=True)
-                    cache.save_page_text(local_path, page_num, text)
+                    new_texts_hyb[page_num] = text
                     page_texts_hyb[page_num] = text
+            # Batched for the same fsync-per-commit reason as the keyword
+            # path above.
+            cache.save_pages_text(local_path, new_texts_hyb)
             non_empty = {pn: t for pn, t in page_texts_hyb.items() if t.strip()}
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())
@@ -2736,7 +2818,7 @@ def pdf_get_toc(path: str) -> dict[str, Any]:
             "from_cache": True,
         }
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
 
     try:
         toc = extract_toc(doc)
@@ -3209,7 +3291,7 @@ def _finalize_corpus_matches(
 
     matches: list[dict[str, Any]] = []
     for path, doc_hits in hits_by_doc.items():
-        doc = pymupdf.open(path)
+        doc = open_pdf(path)
         try:
             page_nums_0idx = [h["page"] - 1 for h in doc_hits]
             hidden = _resolve_hidden_flags(path, doc, page_nums_0idx)
@@ -3987,7 +4069,7 @@ def _render_clip(
     r = page.rect
     w, h = r.width, r.height
     x0, y0, x1, y1 = frac
-    rect = pymupdf.Rect(
+    rect = GeomRect(
         r.x0 + x0 * w,
         r.y0 + y0 * h,
         r.x0 + x1 * w,
@@ -4390,7 +4472,7 @@ def pdf_render_pages(
         return [_res[1]]
     local_path = _res[0]
 
-    doc = pymupdf.open(local_path)
+    doc = open_pdf(local_path)
     try:
         page_nums = parse_page_range(pages, len(doc))
         if not page_nums:
@@ -4768,7 +4850,7 @@ def pdf_extract_chart(
         blocks = _attach_chart_image_blocks(cached, include_render)
         return [cached, *blocks]
     try:
-        doc = pymupdf.open(local_path)
+        doc = open_pdf(local_path)
     except Exception as e:
         return [{"error": f"Cannot open PDF: {e}"}]
     try:
@@ -4791,7 +4873,7 @@ def pdf_extract_chart(
         response_charts = []
         for chart in result.get("charts", []):
             bbox = chart.get("region_bbox")
-            clip = pymupdf.Rect(*bbox) if bbox else None
+            clip = GeomRect(*bbox) if bbox else None
             info = render_page_as_png(
                 doc, page - 1, out_dir, pdf_hash, dpi=150, clip=clip
             )

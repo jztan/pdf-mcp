@@ -54,19 +54,23 @@ def main() -> int:
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     path_by_id = {v: k for k, v in id_by_path.items()}
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text())["queries"]
+        for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
+            "queries"
+        ]
         if q["class"] == "spread"
     ]
     emitted = {
         r["id"]: r["old_query"]
         for r in json.loads(
-            (DATA / "c2_rewrite" / "caller_eval_spread_results.json").read_text()
+            (DATA / "c2_rewrite" / "caller_eval_spread_results.json").read_text(
+                encoding="utf-8"
+            )
         )["rows"]
         if r.get("old_query")
     }
@@ -120,7 +124,8 @@ def main() -> int:
         json.dumps(
             {"top_k": TOP_K, "hop2_results": HOP2_RESULTS, "rows": rows},
             indent=1,
-        )
+        ),
+        encoding="utf-8",
     )
     print(f"wrote {out}\n")
     n = len(rows)

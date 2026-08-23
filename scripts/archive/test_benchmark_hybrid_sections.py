@@ -83,7 +83,8 @@ def test_query_loader_basic(tmp_path):
                     }
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     out = load_queries(str(f))
     assert "x" in out
@@ -115,7 +116,8 @@ def test_query_loader_rejects_unknown_category(tmp_path):
                     }
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     with pytest.raises(ValueError, match="weird"):
         load_queries(str(f))
@@ -137,7 +139,8 @@ def test_query_loader_rejects_missing_field(tmp_path):
                     }
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     with pytest.raises(ValueError, match="gold_section_keys"):
         load_queries(str(f))
@@ -443,7 +446,8 @@ def test_run_all_cells_end_to_end(tmp_path):
                     }
                 }
             }
-        )
+        ),
+        encoding="utf-8",
     )
     pdfs = load_queries(str(qfile))
 

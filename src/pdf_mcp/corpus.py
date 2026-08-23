@@ -17,7 +17,8 @@ from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import Any, Callable
 
-import pymupdf
+
+from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker
 from .parallel import resolve_workers
@@ -200,6 +201,7 @@ def _finalize_doc(
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
+    layout: "dict[int, tuple[list[Any], tuple[float, float], bool]] | None" = None,
 ) -> int:
     """Parent-side tail of warming one doc: OCR preservation, per-doc
     encode, then the three cache writes together (atomic per doc).
@@ -237,10 +239,36 @@ def _finalize_doc(
 
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
 
-    cache.save_metadata(path, page_count, metadata, toc, text_coverage=coverage)
-    cache.save_pages_text(path, to_save)
-    if blobs and model_name is not None:
-        cache.save_page_embeddings(path, blobs, model_name)
+    # ONE transaction for the whole document. Each of these writes used to
+    # open its own connection, and leaving that block commits, which is an
+    # fsync. Measured on same-spec CI runners, warming a 6-document corpus
+    # spent 3.18s of 3.39s in commits on Windows against 0.05s on Linux,
+    # while extraction itself was FASTER on Windows (0.205s vs 0.253s). So
+    # warm was dominated by durability barriers, not by work.
+    #
+    # It is also more correct: a document's metadata, text, embeddings and
+    # layout now land together or not at all, which is the atomicity
+    # _warm_one_doc already aims for by extracting fully before writing.
+    with cache.write_transaction() as conn:
+        cache.save_metadata(
+            path, page_count, metadata, toc, text_coverage=coverage, conn=conn
+        )
+        cache.save_pages_text(path, to_save, conn=conn)
+        if blobs and model_name is not None:
+            cache.save_page_embeddings(path, blobs, model_name, conn=conn)
+        if layout:
+            # Written AFTER page_text: the hidden flag lives on page_text
+            # rows, and blocks are keyed independently by mtime.
+            cache.save_page_blocks(
+                path,
+                {pn: (blocks, size) for pn, (blocks, size, _h) in layout.items()},
+                conn=conn,
+            )
+            cache.save_pages_hidden_flag(
+                path,
+                {pn: hidden for pn, (_b, _s, hidden) in layout.items()},
+                conn=conn,
+            )
     return page_count
 
 
@@ -256,8 +284,20 @@ def _warm_one_doc(
     Extraction completes fully before any write, so a failure leaves
     the cache untouched (atomic per doc).
     """
-    payload = _warm_extract_worker(path)
-    return _finalize_doc(path, *payload, cache, embeddings, model_name, embed)
+    page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
+    return _finalize_doc(
+        path,
+        page_count,
+        metadata,
+        toc,
+        texts,
+        coverage,
+        cache,
+        embeddings,
+        model_name,
+        embed,
+        layout=layout,
+    )
 
 
 def _warm_worker_count(n_uncached: int, embeddings: bool) -> int:
@@ -361,9 +401,26 @@ def _warm_concurrent(
                 for fut in done:
                     path = in_flight.pop(fut)
                     try:
-                        payload = fut.result()
+                        (
+                            page_count_w,
+                            metadata_w,
+                            toc_w,
+                            texts_w,
+                            coverage_w,
+                            layout_w,
+                        ) = fut.result()
                         page_count = _finalize_doc(
-                            path, *payload, cache, embeddings, model_name, embed
+                            path,
+                            page_count_w,
+                            metadata_w,
+                            toc_w,
+                            texts_w,
+                            coverage_w,
+                            cache,
+                            embeddings,
+                            model_name,
+                            embed,
+                            layout=layout_w,
                         )
                     except BrokenProcessPool:
                         raise
@@ -463,7 +520,7 @@ def warm_docs(
             )
             continue
         try:
-            with pymupdf.open(path) as probe:
+            with open_pdf(path) as probe:
                 uncached.append((path, len(probe)))
         except Exception as e:
             skipped.append({"path": path, "reason": f"unreadable: {e}"})

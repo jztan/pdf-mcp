@@ -494,6 +494,10 @@ class TestDefaultCacheDir:
     def test_default_is_under_per_user_cache_root(self, tmp_path, monkeypatch):
         """URLFetcher() with no cache_dir defaults to ~/.cache/pdf-mcp/downloads."""
         monkeypatch.setenv("HOME", str(tmp_path))
+        # Path.home() reads USERPROFILE on Windows, not HOME, so setting
+        # HOME alone leaves the real profile in place and the assertion
+        # compares two unrelated directories.
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         fetcher = URLFetcher()
         assert fetcher.cache_dir == tmp_path / ".cache" / "pdf-mcp" / "downloads"
 
@@ -505,6 +509,10 @@ class TestDefaultCacheDir:
         home, not tempfile.gettempdir().
         """
         monkeypatch.setenv("HOME", str(tmp_path))
+        # Path.home() reads USERPROFILE on Windows, not HOME, so setting
+        # HOME alone leaves the real profile in place and the assertion
+        # compares two unrelated directories.
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         fetcher = URLFetcher()
         old_shared = Path(tempfile.gettempdir()) / "pdf-mcp" / "downloads"
         assert fetcher.cache_dir != old_shared
@@ -528,7 +536,7 @@ class TestFloorStillApplies:
     def test_config_wildcard_allow_cannot_bypass_cidr(self, tmp_path):
         """config url.allow=['*'] cannot bypass the CIDR block floor."""
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[urls]\nallow = ["*"]\n')
+        cfg.write_text('[urls]\nallow = ["*"]\n', encoding="utf-8")
         config = PDFConfig(config_path=cfg)
         fetcher = URLFetcher(cache_dir=tmp_path / "cache", config=config)
 

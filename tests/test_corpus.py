@@ -8,6 +8,7 @@ import pymupdf
 
 from pdf_mcp import corpus
 from pdf_mcp.extractor import _warm_extract_worker
+import pytest
 
 
 class TestResolveCorpus:
@@ -171,6 +172,111 @@ class TestConcurrentWarm:
             got = con_cache.get_pages_text(path, pages)
             # Fixtures are single-column: exact equality is valid here.
             assert got == want
+
+    def test_concurrent_matches_sequential_on_multi_column(self, tmp_path, monkeypatch):
+        """Full-text equality on the class that was historically unstable.
+
+        Concurrent warm shipped WITHOUT this assertion. The blocker was
+        real: pymupdf4llm's column detector returned 39/40/41 boxes
+        depending on what ran before it, so multi-column text could differ
+        between two extractions of the same page and an equality test
+        would have been flaky rather than wrong.
+
+        Both engines behind that are gone, and the drift measurement now
+        says the replacement is stable: 8 repeats over 100 multi-column
+        pages, with varied preceding work, gave 100/100 page-stable and
+        25/25 doc-stable, against roughly 95.7%/80% for the old path.
+
+        The fixture is generated rather than borrowed from the gitignored
+        reading-order corpus, so this runs on a clean checkout, and the
+        test asserts the column path actually engaged: a two-column
+        fixture that fell back to positional sort would pass this
+        trivially while testing nothing.
+        """
+        import pymupdf
+
+        from pdf_mcp.backend.columns import column_bands
+        from pdf_mcp.backend.text import get_text
+        from pdf_mcp.cache import PDFCache
+
+        src = tmp_path / "corpus"
+        src.mkdir()
+        # Varied line content, not repeated text: with every row
+        # identical, the channels BETWEEN characters line up down the page
+        # and register as gutters too, and the balance guard then rejects
+        # the page outright. Real prose does not align that way.
+        words = [
+            "retrieval",
+            "ranking",
+            "budget",
+            "latency",
+            "corpus",
+            "segment",
+            "anchor",
+            "column",
+            "warm",
+            "index",
+            "query",
+            "paragraph",
+        ]
+
+        def line(i: int, off: int) -> str:
+            n = 3 + (i * 7 + off) % 4
+            return " ".join(words[(i * 5 + j + off) % len(words)] for j in range(n))[
+                :34
+            ]
+
+        for d in range(4):
+            doc = pymupdf.open()
+            for _ in range(2):
+                page = doc.new_page(width=612, height=792)
+                y = 80
+                for i in range(24):
+                    page.insert_text((56, y), line(i, d), fontsize=8)
+                    page.insert_text((320, y), line(i, d + 5), fontsize=8)
+                    y += 13
+            doc.save(str(src / f"twocol{d}.pdf"))
+            doc.close()
+
+        files = _files(src)
+
+        # Guard against a vacuous pass: the column detector must accept
+        # this layout, otherwise both arms just run the single-column path.
+        page_dict = get_text(files[0], 0, "rawdict")
+        boxes = [
+            (c["bbox"][0], c["bbox"][1], c["bbox"][2], c["bbox"][3])
+            for blk in page_dict["blocks"]
+            for ln in blk.get("lines", [])
+            for sp in ln.get("spans", [])
+            for c in sp.get("chars", [])
+        ]
+        assert len(column_bands(boxes, 612.0)) >= 2, (
+            "fixture did not register as multi-column, so this test would "
+            "assert nothing about the column path"
+        )
+
+        seq_cache = PDFCache(cache_dir=tmp_path / "mc_seq", ttl_hours=1)
+        con_cache = PDFCache(cache_dir=tmp_path / "mc_con", ttl_hours=1)
+
+        corpus.warm_docs(files, 600, seq_cache, clock=SteppingClock(0))
+        self._force_pool(monkeypatch)
+        pool_calls = []
+        real_pool = corpus.ProcessPoolExecutor
+
+        def spy(*args, **kwargs):
+            pool_calls.append(1)
+            return real_pool(*args, **kwargs)
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
+
+        assert pool_calls, "expected the concurrent path to create a pool"
+        for path in files:
+            meta = seq_cache.get_metadata(path)
+            pages = list(range(meta["page_count"]))
+            assert con_cache.get_pages_text(path, pages) == seq_cache.get_pages_text(
+                path, pages
+            ), f"concurrent and sequential text differ for {path}"
 
     def test_pool_uses_spawn_context(self, corpus_dir, cache, monkeypatch):
         self._force_pool(monkeypatch)
@@ -817,15 +923,74 @@ class TestCorpusFusion:
 class TestWarmExtractWorker:
     def test_payload_shape(self, corpus_dir):
         path = str(corpus_dir / "alpha.pdf")
-        page_count, metadata, toc, texts, coverage = _warm_extract_worker(path)
+        page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
         assert page_count == 2
         assert set(texts) == {0, 1}
         assert all(t.strip() for t in texts.values())
         assert [c["page"] for c in coverage] == [1, 2]
         assert isinstance(metadata, dict)
         assert isinstance(toc, list)
+        # Layout (blocks + page size + hidden flag) rides along so warm
+        # can persist it and the query path never opens the PDF.
+        assert set(layout) == {0, 1}
+        blocks, size, hidden = layout[0]
+        assert blocks and len(size) == 2 and isinstance(hidden, bool)
 
     def test_picklable_for_spawn(self):
         # Module-scope function: pickles by qualified name, spawn-safe.
         clone = pickle.loads(pickle.dumps(_warm_extract_worker))
         assert clone is _warm_extract_worker
+
+
+class TestWarmDocumentIsAtomic:
+    """_finalize_doc writes a document in ONE transaction.
+
+    The reason is cost (each separate connection commits, and a commit is
+    an fsync: warming 6 documents spent 3.18s of 3.39s in commits on
+    Windows against 0.05s on Linux), but the guarantee is correctness, so
+    that is what this asserts. A failure partway through must leave no
+    half-written document behind.
+    """
+
+    def test_a_failure_midway_leaves_nothing_committed(self, cache, tmp_path):
+        import pymupdf
+
+        from pdf_mcp import corpus
+
+        pdf = tmp_path / "doc.pdf"
+        doc = pymupdf.open()
+        for i in range(3):
+            doc.new_page().insert_text((50, 50), f"page {i} body text here")
+        doc.save(str(pdf))
+        doc.close()
+
+        real_blocks = cache.save_page_blocks
+
+        def explode(*args, **kwargs):
+            raise RuntimeError("disk full, midway through the document")
+
+        cache.save_page_blocks = explode
+        try:
+            with pytest.raises(RuntimeError):
+                corpus._finalize_doc(
+                    cache=cache,
+                    path=str(pdf),
+                    page_count=3,
+                    metadata={"title": "t"},
+                    toc=[],
+                    texts={0: "page 0 body text here"},
+                    coverage=[{"page": 1, "text_chars": 21, "raster_images": 0}],
+                    embeddings=False,
+                    model_name=None,
+                    embed=None,
+                    layout={0: ([], (612.0, 792.0), False)},
+                )
+        finally:
+            cache.save_page_blocks = real_blocks
+
+        assert (
+            cache.get_metadata(str(pdf)) is None
+        ), "metadata was committed even though the document failed partway"
+        assert (
+            cache.get_page_text(str(pdf), 0) is None
+        ), "page text was committed even though the document failed partway"

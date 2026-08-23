@@ -33,6 +33,7 @@ import contextlib
 import difflib
 import io
 import json
+import os
 import re
 import sys
 import time
@@ -180,6 +181,25 @@ def _load_gt(arxiv_id: str) -> str | None:
 
 
 def _pdfmcp_text(pdf: Path) -> str:
+    """Extract via the column-aware path.
+
+    PDF_MCP_TEXT_BACKEND=pdfium routes the same path through the
+    permissive backend, so both engines are scored against the SAME
+    ground truth in one run rather than across two runs whose corpora
+    could silently differ.
+    """
+    if os.environ.get("PDF_MCP_TEXT_BACKEND") == "pdfium":
+        from pdf_mcp.backend.text import open_text_page
+
+        import pypdfium2 as _pdfium
+
+        doc = _pdfium.PdfDocument(str(pdf))
+        n = min(PAGE_CAP, len(doc))
+        doc.close()
+        return "\n".join(
+            extract_text_from_page(open_text_page(str(pdf), i)) for i in range(n)
+        )
+
     doc = pymupdf.open(pdf)
     try:
         n = min(PAGE_CAP, doc.page_count)
@@ -244,7 +264,7 @@ def run(
     When reference_cmd/tool/args are all provided, an external reading-order
     reference is spawned once and scored alongside the two built-in extractors.
     """
-    corpus = json.loads(CORPUS.read_text())
+    corpus = json.loads(CORPUS.read_text(encoding="utf-8"))
     use_ref = bool(reference_cmd and reference_tool and reference_args)
     client = None
     if use_ref:

@@ -225,11 +225,11 @@ def build_manifest() -> dict:
 
 
 def load_manifest() -> dict:
-    return json.loads((OUT_DIR / "manifest.json").read_text())
+    return json.loads((OUT_DIR / "manifest.json").read_text(encoding="utf-8"))
 
 
 def load_queries() -> dict:
-    return json.loads((OUT_DIR / "queries.json").read_text())
+    return json.loads((OUT_DIR / "queries.json").read_text(encoding="utf-8"))
 
 
 _WS = re.compile(r"\s+")
@@ -306,7 +306,7 @@ def run_benchmark(force: bool = False) -> int:
         print("No corpus PDFs available locally; aborting.")
         return 1
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         t0 = time.perf_counter()
         warm = warm_docs(paths, budget_seconds=3600, cache=cache)
@@ -395,7 +395,7 @@ def run_benchmark(force: bool = False) -> int:
         "decision": decision,
     }
     (OUT_DIR / "results.json").write_text(
-        json.dumps(results, indent=2, ensure_ascii=False) + "\n"
+        json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     _write_results_md(results, force=force)
     print(f"decision: {decision['winner']}")
@@ -458,7 +458,7 @@ def write_results_md(body: str, force: bool = False) -> None:
     """Write RESULTS.md, refusing to clobber hand-written sections."""
     out = OUT_DIR / "RESULTS.md"
     if out.exists() and not force:
-        existing = out.read_text()
+        existing = out.read_text(encoding="utf-8")
         generated_len = len(body)
         if not existing.startswith(_GENERATED_MARKER) or len(existing) > generated_len:
             print(
@@ -469,7 +469,7 @@ def write_results_md(body: str, force: bool = False) -> None:
                 "generated body against the file by hand."
             )
             return
-    out.write_text(body)
+    out.write_text(body, encoding="utf-8")
     print(f"wrote {out}")
 
 
@@ -489,7 +489,7 @@ def main() -> int:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         manifest = build_manifest()
         (OUT_DIR / "manifest.json").write_text(
-            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         print(f"wrote manifest with {len(manifest['docs'])} docs")
         return 0

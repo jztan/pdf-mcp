@@ -249,7 +249,7 @@ def main() -> None:
     print(info)
 
     if args.output:
-        args.output.write_text(out + "\n" + ft + "\n" + info)
+        args.output.write_text(out + "\n" + ft + "\n" + info, encoding="utf-8")
         print(f"Wrote {args.output}")
 
 

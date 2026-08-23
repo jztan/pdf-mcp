@@ -66,6 +66,9 @@ class TestTtlEnv:
 
 
 class TestCacheDirPerms:
+    @pytest.mark.skipif(
+        os.name == "nt", reason="POSIX mode bits are not the mechanism on Windows"
+    )
     def test_cache_dir_chmod_0o700(self, tmp_path):
         target = tmp_path / "pdfmcp-perm-test"
         PDFCache(cache_dir=target)

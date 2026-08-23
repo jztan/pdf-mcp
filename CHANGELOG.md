@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 
+- **pdf-mcp no longer depends on PyMuPDF at runtime, so the declared MIT
+  license is now true of the whole install.** PyMuPDF is dual-licensed
+  AGPL-3.0 / Artifex Commercial, and every previous install pulled AGPL
+  code into the process (an operator running `pdf-mcp-http` was running a
+  network service containing it). The runtime engine is now a permissive
+  stack: pypdfium2 (Apache-2.0/BSD-3) for documents, text, drawings and
+  rendering; pdfplumber (MIT) for table detection; pypdf (BSD-3) for
+  content-stream access; pytesseract (Apache-2.0) for OCR. PyMuPDF
+  remains a dev-only dependency for test fixtures and differential
+  benchmarks; published wheels contain no AGPL code. Verified with
+  PyMuPDF actually uninstalled (`uv sync --no-dev`), not merely
+  undeclared.
+
+  Quality was gated on the project's full benchmark set before the swap,
+  measured end to end against the PyMuPDF baseline: excerpt-quality
+  containment 0.773 vs 0.707 (paragraph containment 0.841 vs 0.791, and
+  three of the baseline's documented known-failure queries now pass);
+  chart extraction 19 emitted series, 0 wrong-emits (identical verdicts
+  case for case); hidden-text detection 14/14 on the attack corpus; CJK
+  keyword recall 1.000; corpus search doc-NDCG 0.845 vs 0.840; financial
+  10-K fidelity 95/100 with 0 document misses and one question improved;
+  coherence (LLM-judged) 20/20 pages at baseline verdicts. Reading order
+  on two-column documents is 0.798 vs 0.806, within the benchmark's
+  noise; one-column improved to 0.856 vs 0.826.
+
 - Column-aware reading order is now built in and no longer needs the
   `[multicolumn]` extra, which removes `pymupdf4llm` and its transitive
   `pymupdf_layout`. That package is licensed Polyform Noncommercial, a use
@@ -28,6 +53,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Table extraction is about 3x faster. Tables were extracted in a separate
+  Python process, because an old dependency corrupted the table finder
+  process-wide and extraction needed an interpreter that had never imported
+  it. That dependency is gone, so the extra process was pure overhead:
+  reading a ruled table drops from 0.19s to 0.06s, and more than that on
+  Windows, where starting a process is dearer. Affects `pdf_read_pages`
+  tables and `pdf_search`'s table context.
+
+- **CJK keyword search found nothing in a document warmed through
+  `pdf_corpus_warm`, even though its text was cached.** The bulk text-save
+  path never populated the char-split CJK index that CJK keyword queries
+  read, and the one-time backfill only runs when that index is first
+  created. Documents warmed page-by-page through `pdf_read_pages` were
+  unaffected, which is why this went unseen. Affected any CJK corpus using
+  the corpus tools.
+- **OCR returned nothing on Windows for anyone using the default Tesseract
+  install.** The tessdata directory was passed as a command-line flag, and
+  the default install path `C:\Program Files\Tesseract-OCR` was split at
+  the space, so Tesseract reported `Error opening data file
+  C:\Program/eng.traineddata` and loaded no language. It is now passed
+  through the environment, which carries a spaced path intact.
+- **Cold `pdf_search` was disproportionately slow on Windows**: 17.5s on a
+  500-page document against 3.2s on Linux, measured on same-spec runners.
+  First-time page text was committed once per page, and each commit is a
+  disk flush, which costs roughly 28x more on Windows than on Linux. The
+  three cold-search paths now write once per document. Repeat searches were
+  never affected. Also improves cold search on macOS and Linux.
+- A search hit's `bbox` could come back with zero height for a document
+  using a font it does not embed, such as a CJK document opened on a
+  machine without a matching font. Widths were correct, so the rectangle
+  was unusable for cropping or highlighting rather than obviously wrong.
 - `pdf_extract_chart` no longer splits a single dashed curve into several
   phantom series when the chart uses dash lengths below 1
   ([#29](https://github.com/jztan/pdf-mcp/issues/29))

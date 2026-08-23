@@ -105,7 +105,8 @@ def main() -> int:
                 indent=2,
                 sort_keys=True,
             )
-            + "\n"
+            + "\n",
+            encoding="utf-8",
         )
         vals = sorted(pages.values())
         print(
@@ -115,7 +116,7 @@ def main() -> int:
         return 0
 
     if args.check:
-        base = json.loads(BASELINE.read_text())["pages"]
+        base = json.loads(BASELINE.read_text(encoding="utf-8"))["pages"]
         regressed, improved, excluded = [], [], []
         for k, v in pages.items():
             b = base.get(k)

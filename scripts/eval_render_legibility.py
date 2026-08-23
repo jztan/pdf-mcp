@@ -139,7 +139,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    spec = json.loads((DATA / "questions.json").read_text())
+    spec = json.loads((DATA / "questions.json").read_text(encoding="utf-8"))
     corpus = ROOT / spec["corpus_dir"]
     items = spec["items"]
 

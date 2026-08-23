@@ -34,6 +34,7 @@ from pdf_mcp.server import (
 )
 from pdf_mcp.url_fetcher import URLFetcher
 from pdf_mcp.parallel import PageError
+from tests.tmpfiles import unlink_quietly
 
 
 class TestURLDownloadCacheWiring:
@@ -1180,18 +1181,22 @@ class TestErrorCases:
 
     def test_corrupted_pdf(self, temp_cache_dir, isolated_server):
         """Corrupted file handled."""
-        import os
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            # This site writes THROUGH the handle, so close after the write.
+            # Windows refuses to write or replace a path that is still open,
+            # which turned into 639 errors the first time CI ran there.
+            # delete=False means closing does not remove the file.
             f.write(b"not a valid pdf content")
+            f.close()
             corrupt_path = f.name
 
         try:
             with pytest.raises(Exception):  # PyMuPDF raises various errors
                 pdf_info(corrupt_path)
         finally:
-            os.unlink(corrupt_path)
+            unlink_quietly(corrupt_path)
 
 
 class TestSecurityMitigations:
@@ -1200,10 +1205,12 @@ class TestSecurityMitigations:
     def test_non_pdf_extension_rejected(self, isolated_server):
         """Non-PDF file extensions return inline error dict."""
         import tempfile
-        import os
 
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
             f.write(b"not a pdf")
+            # Close after writing through the handle, not before:
+            # same Windows rule, but this site writes via the handle.
+            f.close()
             txt_path = f.name
 
         try:
@@ -1212,7 +1219,7 @@ class TestSecurityMitigations:
             assert "Only PDF files are supported" in result["error"]
             assert "hint" in result
         finally:
-            os.unlink(txt_path)
+            unlink_quietly(txt_path)
 
     def test_content_warning_in_read_pages(self, sample_pdf, isolated_server):
         """Read pages includes content warning."""
@@ -1280,7 +1287,14 @@ class TestResolvePath:
 
     def test_relative_path_resolved(self, sample_pdf, isolated_server):
         """Relative path is resolved to an absolute string with no error."""
-        rel_path = os.path.relpath(sample_pdf)
+        try:
+            rel_path = os.path.relpath(sample_pdf)
+        except ValueError:
+            # Windows: the fixture lands on the TEMP drive (C:) while the
+            # checkout is on another (D: on GitHub runners), and a
+            # relative path between two drives does not exist. The
+            # scenario is unrepresentable rather than broken.
+            pytest.skip("no relative path exists across Windows drives")
         local_path, err = _resolve_path(rel_path)
         assert err is None
         assert local_path is not None
@@ -1294,6 +1308,10 @@ class TestResolvePath:
         doc.save(str(tmp_path / "home_doc.pdf"))
         doc.close()
         monkeypatch.setenv("HOME", str(tmp_path))
+        # Windows' expanduser reads USERPROFILE (then HOMEDRIVE+HOMEPATH),
+        # not HOME, so setting HOME alone leaves ~ unexpanded there and
+        # the test measures nothing.
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         local_path, err = _resolve_path("~/home_doc.pdf")
         assert err is None
         assert local_path == str((tmp_path / "home_doc.pdf").resolve())
@@ -1373,7 +1391,7 @@ class TestResolvePath:
     def test_bad_extension_inline(self, isolated_server, tmp_path):
         """Non-.pdf extension returns inline error dict."""
         not_pdf = tmp_path / "notes.txt"
-        not_pdf.write_text("hi")
+        not_pdf.write_text("hi", encoding="utf-8")
         local_path, err = _resolve_path(str(not_pdf))
         assert local_path is None
         assert err is not None
@@ -1463,6 +1481,7 @@ class TestSearchWordBoundaryAndEllipsis:
         import pymupdf
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc = pymupdf.open()
             page = doc.new_page()
 
@@ -1486,7 +1505,7 @@ class TestSearchWordBoundaryAndEllipsis:
 
             yield f.name
 
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_search_excerpt_has_ellipsis(self, long_text_pdf, isolated_server):
         """Search match in middle of long text gets ellipsis on both sides."""
@@ -1744,7 +1763,8 @@ class TestReadPagesInlineTables:
         now.
         """
         with patch(
-            "pdf_mcp.server.run_module_json", return_value={"tables": {"0": []}}
+            "pdf_mcp.server.extract_tables_for_pages",
+            return_value={"tables": {"0": []}},
         ) as mock_extract:
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1
@@ -2897,6 +2917,7 @@ class TestExcerptStyle:
         # Block 2: unrelated
         page.insert_text((50, 350), "Unrelated content about cooking.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             path = str(Path(f.name).resolve())
@@ -2912,7 +2933,7 @@ class TestExcerptStyle:
                 excerpt = result["matches"][0]["excerpt"].lower()
                 assert "best practices" in excerpt
             finally:
-                os.unlink(path)
+                unlink_quietly(path)
 
     def test_upgrade_deduplicates_same_block(self, isolated_server):
         """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
@@ -2925,6 +2946,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "alpha beta gamma delta")
         page.insert_text((50, 200), "epsilon zeta eta theta")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -2938,7 +2960,7 @@ class TestExcerptStyle:
             assert len(upgraded) == 1
             assert upgraded[0]["score"] == 0.9  # kept higher score
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_keyword_explicit_snippet_mode(self, sample_pdf, isolated_server):
         """Explicit snippet mode works and sets excerpt_style='snippet'."""
@@ -3013,6 +3035,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "The quick brown fox jumps.")
         page.insert_text((50, 200), "Lazy dog sleeps all day.")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             path = str(Path(f.name).resolve())
@@ -3028,7 +3051,7 @@ class TestExcerptStyle:
                 if result["matches"]:
                     assert result.get("excerpt_style") == "paragraph"
             finally:
-                os.unlink(path)
+                unlink_quietly(path)
 
     def test_section_granularity_ignores_excerpt_style(
         self, sample_pdf, isolated_server
@@ -3067,6 +3090,7 @@ class TestExcerptStyle:
         # Block 2: unrelated
         page.insert_text((50, 350), "unrelated content about cooking")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3082,7 +3106,7 @@ class TestExcerptStyle:
             assert len(upgraded) == 1
             assert "beta" in upgraded[0]["excerpt"].lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_keyword_excerpt_not_found_falls_back_to_token_overlap(
         self, isolated_server
@@ -3098,6 +3122,7 @@ class TestExcerptStyle:
         page.insert_text((50, 50), "alpha gamma delta")
         page.insert_text((50, 200), "epsilon zeta eta")
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3115,7 +3140,7 @@ class TestExcerptStyle:
             # Falls back to token overlap — picks block with "alpha gamma"
             assert "alpha" in upgraded[0]["excerpt"].lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
     def test_short_block_skipped_in_favor_of_body_paragraph(self, isolated_server):
         """Heading/caption blocks under the minimum-length floor are
@@ -3139,6 +3164,7 @@ class TestExcerptStyle:
             ),
         )
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.close()  # see above: Windows open-handle rule
             doc.save(f.name)
             doc.close()
             doc2 = pymupdf.open(f.name)
@@ -3152,7 +3178,7 @@ class TestExcerptStyle:
             assert len(excerpt) > 80
             assert "weighted sum" in excerpt.lower()
             doc2.close()
-            os.unlink(f.name)
+            unlink_quietly(f.name)
 
 
 class TestSearchGeometry:
@@ -3802,7 +3828,13 @@ class TestFitDpiLadder:
         RENDER_DPI_MIN floor fallback must still produce a page (not
         oversized), constructed via a very small real byte budget rather
         than a synthetic huge fixture."""
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 58_000)
+        # 41k, not the historical 58k. The budget must sit just above
+        # the floor render's base64 length and below every above-floor
+        # rung: the backend's JPEG encoder produces ~30KB raw (~40.2KB
+        # base64) at the 72dpi floor where PyMuPDF's produced more, so
+        # at 58k a legitimate above-floor rung now fits, which exercises
+        # the ladder rather than the floor fallback this test pins.
+        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 41_000)
         result = pdf_render_pages(big_scan_pdf, "1", dpi=300)
         summary = result[0]
 
@@ -3998,7 +4030,8 @@ def test_pdf_info_content_trust_uses_configured_phrases(
 
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        '[content_trust]\ninjection_phrases = ["purchase the premium plan"]\n'
+        '[content_trust]\ninjection_phrases = ["purchase the premium plan"]\n',
+        encoding="utf-8",
     )
     monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
 
@@ -4026,7 +4059,9 @@ def test_pdf_info_content_trust_malformed_config_degrades_gracefully(
     from pdf_mcp.config import PDFConfig
 
     cfg_path = tmp_path / "config.toml"
-    cfg_path.write_text('[content_trust]\ninjection_phrases = "not a list"\n')
+    cfg_path.write_text(
+        '[content_trust]\ninjection_phrases = "not a list"\n', encoding="utf-8"
+    )
     monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
 
     p = tmp_path / "simple.pdf"
@@ -5087,7 +5122,7 @@ class TestHTTPTransportEntryPoint:
 
     def _allowlisted_config(self, tmp_path):
         cfg = tmp_path / "config.toml"
-        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n')
+        cfg.write_text('[paths]\nallow = ["/data/pdfs/**"]\n', encoding="utf-8")
         from pdf_mcp.config import PDFConfig
 
         return PDFConfig(config_path=cfg)

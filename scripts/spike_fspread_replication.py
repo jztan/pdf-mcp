@@ -44,11 +44,13 @@ def main() -> int:
 
     server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
 
-    man = json.loads((FIN / "manifest.json").read_text())
+    man = json.loads((FIN / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in man["docs"]}
     path_by_id = {v: k for k, v in id_by_path.items()}
     paths = [p for p in id_by_path if Path(p).exists()]
-    queries = json.loads((FIN / "spread_queries.json").read_text())["queries"]
+    queries = json.loads((FIN / "spread_queries.json").read_text(encoding="utf-8"))[
+        "queries"
+    ]
 
     rows = []
     for q in queries:
@@ -104,7 +106,7 @@ def main() -> int:
         rows.append(row)
 
     out = FIN / "spread_replication_results.json"
-    out.write_text(json.dumps({"rows": rows}, indent=1))
+    out.write_text(json.dumps({"rows": rows}, indent=1), encoding="utf-8")
     n = len(rows)
     total = sum(r["n_gold"] for r in rows)
 

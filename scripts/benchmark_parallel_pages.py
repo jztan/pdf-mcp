@@ -99,7 +99,7 @@ def build_corpus_pdf(path: Path, limit: int | None) -> tuple[int, int]:
     Raises RuntimeError if no corpus PDF can be fetched (e.g. no network) so the
     caller can fall back to the synthetic corpus with a clear message.
     """
-    data = json.loads(CORPUS.read_text())
+    data = json.loads(CORPUS.read_text(encoding="utf-8"))
     ids = [*data.get("two_column", []), *data.get("one_column", [])]
     if limit:
         ids = ids[:limit]
@@ -493,7 +493,7 @@ def main() -> None:
 
     workers = [int(w) for w in args.workers.split(",") if w.strip()]
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmpdir = Path(tmp)
         text_pdf = tmpdir / "text.pdf"
         corpus_note = "synthetic"
@@ -597,7 +597,9 @@ def main() -> None:
         sections.append(e2e_md)
 
     if args.output:
-        args.output.write_text("\n".join(header) + "\n" + "\n".join(sections))
+        args.output.write_text(
+            "\n".join(header) + "\n" + "\n".join(sections), encoding="utf-8"
+        )
         print(f"Wrote {args.output}")
 
 

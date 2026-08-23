@@ -235,7 +235,7 @@ def run_model(
     original_cache = server_module.cache
     try:
         server_module.pdf_config = _ConfigStub(model_name)
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
 
             # Pre-resolve paths and warm embed cache per PDF (cold-time recorded)

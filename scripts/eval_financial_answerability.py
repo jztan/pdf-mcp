@@ -294,7 +294,7 @@ def _load_ballot_cache() -> dict[str, list[dict[str, Any]]]:
     cache: dict[str, list[dict[str, Any]]] = {}
     if not BALLOT_CACHE.exists():
         return cache
-    for line in BALLOT_CACHE.read_text().splitlines():
+    for line in BALLOT_CACHE.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
@@ -430,8 +430,10 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
 
-    manifest = json.loads((DATA / "manifest.json").read_text())
-    questions = json.loads((DATA / "answerability_questions.json").read_text())
+    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    questions = json.loads(
+        (DATA / "answerability_questions.json").read_text(encoding="utf-8")
+    )
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     if not paths:
@@ -610,7 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     suffix = "" if args.excerpt_style == "paragraph" else f"_{args.excerpt_style}"
     (DATA / f"answerability_results{suffix}.json").write_text(
-        json.dumps(out, indent=2, sort_keys=True) + "\n"
+        json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(f"\nwrote {DATA / ('answerability_results' + suffix + '.json')}")
     return 0

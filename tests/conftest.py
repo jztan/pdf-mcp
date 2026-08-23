@@ -36,15 +36,41 @@ def _no_fsync_in_tests():
 
     def connect(*args, **kwargs):
         conn = real_connect(*args, **kwargs)
-        try:
-            conn.execute("PRAGMA synchronous=OFF")
-        except Exception:
-            pass
+        if _FSYNC_DISABLED:
+            try:
+                conn.execute("PRAGMA synchronous=OFF")
+            except Exception:
+                pass
         return conn
 
     _sqlite3.connect = connect
     yield
     _sqlite3.connect = real_connect
+
+
+# Consulted per-connection by the session patch above. A test that asserts
+# on the cache's own durability pragmas cannot run under the blanket
+# synchronous=OFF override, because that override IS what it would measure.
+# The session fixture cannot simply be unpatched per-test (it is
+# scope="session"), so the wrapper reads this flag on every call instead.
+_FSYNC_DISABLED = True
+
+
+@pytest.fixture
+def real_fsync():
+    """Let production SQLite pragmas take effect for one test.
+
+    Opt out of the session-wide synchronous=OFF patch, so a test can assert
+    what PDFCache actually configures on its connections. Slow by design
+    (real fsync on every commit); request it only where the pragma values
+    are the thing under test.
+    """
+    global _FSYNC_DISABLED
+    _FSYNC_DISABLED = False
+    try:
+        yield
+    finally:
+        _FSYNC_DISABLED = True
 
 
 @pytest.fixture

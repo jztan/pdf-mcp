@@ -86,12 +86,8 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    corpus = json.loads(
-        Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8", encoding="utf-8")
-    )
-    gt = json.loads(
-        Path("benchmark_data/ground_truth.json").read_text("utf-8", encoding="utf-8")
-    )
+    corpus = json.loads(Path("benchmark_data/rrf_v2_queries.json").read_text("utf-8"))
+    gt = json.loads(Path("benchmark_data/ground_truth.json").read_text("utf-8"))
 
     print(f"Loading cross-encoder: {args.model} ...", flush=True)
     ce = TextCrossEncoder(model_name=args.model)

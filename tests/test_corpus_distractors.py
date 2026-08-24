@@ -76,3 +76,15 @@ def test_apply_cap_raises_but_never_lowers():
     assert mod.CORPUS_MAX_FILES == 500
     bcm.apply_cap(mod, 50)
     assert mod.CORPUS_MAX_FILES == 500
+
+
+def test_build_ranked_keeps_distractor_with_synthetic_id():
+    id_by_path = {"/gold/a.pdf": "0705.4297"}
+    matches = [
+        {"path": "/gold/a.pdf", "page": 3},
+        {"path": "/dist/x.pdf", "page": 1},  # distractor, not in id_by_path
+    ]
+    got = bcm.build_ranked(matches, id_by_path)
+    assert got == [("0705.4297", 3), ("/dist/x.pdf", 1)]
+    # the distractor id is a filesystem path, never equal to a gold arXiv id
+    assert got[1][0] not in id_by_path.values()

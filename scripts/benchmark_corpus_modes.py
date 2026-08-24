@@ -73,6 +73,16 @@ def apply_cap(corpus_module, total: int) -> None:
     corpus_module.CORPUS_MAX_FILES = max(corpus_module.CORPUS_MAX_FILES, total)
 
 
+def build_ranked(
+    matches: list[dict], id_by_path: dict[str, str]
+) -> list[tuple[str, int]]:
+    """(doc_id, page) for each match, in rank order. A match whose path is
+    not a gold doc (a distractor) keeps its slot but gets its path as a
+    synthetic id, absent from every label, so it scores gain 0 and dilutes
+    NDCG rather than crashing the grader or being hidden."""
+    return [(id_by_path.get(m["path"], m["path"]), m["page"]) for m in matches]
+
+
 def agg(rows: dict, key=lambda r: True) -> dict[str, float]:
     sel = [r for r in rows.values() if key(r)]
     if not sel:
@@ -491,9 +501,7 @@ def main(argv: list[str] | None = None) -> int:
                             f"{res['coverage']}"
                         )
                         return 2
-                    ranked = [
-                        (id_by_path[m["path"]], m["page"]) for m in res["matches"]
-                    ]
+                    ranked = build_ranked(res["matches"], id_by_path)
                     graded = grade_query(q, ranked, TOP_K)
                     gold_docs = {
                         lb["doc"] for lb in q["labels"] if float(lb["gain"]) >= 2

@@ -32,3 +32,13 @@ def test_dedup_removes_title_match_case_insensitive():
 
 def test_arxiv_pdf_url():
     assert fcd.arxiv_pdf_url("2401.00001") == "https://arxiv.org/pdf/2401.00001"
+
+
+def test_parse_entries_extracts_id_and_title():
+    xml = (
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        "<entry><id>http://arxiv.org/abs/2401.00001v1</id>"
+        "<title>Deep  Nets</title></entry></feed>"
+    )
+    got = fcd.parse_entries(xml)
+    assert got == [{"id": "2401.00001v1", "title": "Deep  Nets"}]

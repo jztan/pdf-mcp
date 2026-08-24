@@ -73,6 +73,17 @@ def dedup_candidates(
     return out
 
 
+def parse_entries(xml_text: str) -> list[dict]:
+    """[{"id","title"}] from an arXiv Atom API response. id keeps its
+    raw form (e.g. '2401.00001v1'); caller strips the version."""
+    out = []
+    for e in ET.fromstring(xml_text).findall(f"{_ATOM}entry"):
+        raw = e.find(f"{_ATOM}id").text.rsplit("/abs/", 1)[-1]
+        title = e.find(f"{_ATOM}title").text or ""
+        out.append({"id": raw, "title": title})
+    return out
+
+
 def arxiv_pdf_url(arxiv_id: str) -> str:
     return f"https://arxiv.org/pdf/{arxiv_id}"
 
@@ -106,16 +117,41 @@ def list_candidates(need: int) -> list[dict]:
                 timeout=60.0,
             )
             resp.raise_for_status()
-            entries = ET.fromstring(resp.text).findall(f"{_ATOM}entry")
+            entries = parse_entries(resp.text)
             if not entries:
                 break
-            for e in entries:
-                raw = e.find(f"{_ATOM}id").text.rsplit("/abs/", 1)[-1]
-                title = e.find(f"{_ATOM}title").text or ""
-                out.append({"id": raw, "title": title})
+            out.extend(entries)
             start += 30
             time.sleep(DELAY_SECONDS)
     return out
+
+
+def fetch_gold_titles(gold_ids: set[str]) -> set[str]:
+    """Normalized titles of the gold docs, via the arXiv API id_list
+    endpoint. On any HTTP/parse error, returns an empty set (base-id
+    dedup still protects) after printing a warning."""
+    titles: set[str] = set()
+    ids = sorted(gold_ids)
+    for i in range(0, len(ids), 50):
+        batch = ids[i : i + 50]
+        try:
+            resp = httpx.get(
+                API,
+                params={"id_list": ",".join(batch), "max_results": "50"},
+                headers={"User-Agent": BROWSER_UA},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            for e in parse_entries(resp.text):
+                titles.add(_norm_title(e["title"]))
+        except (httpx.HTTPError, ET.ParseError) as exc:
+            print(
+                f"    WARNING gold-title fetch failed ({exc}); "
+                "title dedup disabled, base-id dedup still active"
+            )
+            return set()
+        time.sleep(DELAY_SECONDS)
+    return titles
 
 
 def download(url: str, dest: Path) -> None:
@@ -156,9 +192,7 @@ def main(argv: list[str] | None = None) -> int:
 
     gold = json.loads(GOLD.read_text(encoding="utf-8"))
     gold_ids = gold_base_ids(gold)
-    gold_titles = {
-        _norm_title(d.get("title", "")) for d in gold["docs"] if d.get("title")
-    }
+    gold_titles = fetch_gold_titles(gold_ids)
 
     existing = (
         json.loads(OUT_MANIFEST.read_text(encoding="utf-8"))

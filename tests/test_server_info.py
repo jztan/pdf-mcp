@@ -279,3 +279,31 @@ class TestDocumentRootsAreConsumable:
         for root in server_info()["documents"]["roots"]:
             # check_path matches resolved FILE paths, so probe with a member.
             config.check_path(str(Path(root) / "alpha.pdf"))
+
+
+class TestStorageCapabilities:
+    """The storage block: what the SQLite build actually gave us.
+
+    pdf-mcp declares no minimum SQLite version (requires-python is the only
+    floor), and two capabilities degrade silently when the build is old:
+    FTS5 absence drops keyword search to substring matching with no BM25 and
+    no stemming, and a filesystem or version that refuses WAL leaves the
+    cache in slow rollback mode. Both change results or latency with nothing
+    in any response to say so, which is what this block exists to surface.
+    """
+
+    def test_reports_sqlite_version(self):
+        import sqlite3
+
+        assert server_info()["storage"]["sqlite_version"] == sqlite3.sqlite_version
+
+    def test_reports_journal_mode(self):
+        from pdf_mcp.server import cache
+
+        assert server_info()["storage"]["journal_mode"] == cache.journal_mode
+
+    def test_reports_keyword_search_ranking(self):
+        """False means keyword hits are unranked substring matches."""
+        from pdf_mcp.server import cache
+
+        assert server_info()["storage"]["keyword_search_ranked"] is cache.fts_available

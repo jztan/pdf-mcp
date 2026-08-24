@@ -131,3 +131,4 @@ jobs:
         # platform-divergent surfaces above, and those are not marked
         # slow.
         run: uv run pytest tests/ -v -m "not slow" -n auto
+

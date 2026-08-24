@@ -920,7 +920,7 @@ Returns a breakdown of what's cached per document — page text, images, tables,
 
 **Returns:**
 - Per-table counters: `total_files`, `total_pages`, `total_images`, etc.
-- `cache_size_mb` (float) — Total SQLite cache size on disk.
+- `cache_size_mb` (float) — Total cache size on disk, including the SQLite database, its WAL/SHM sidecar files, and extracted images and renders.
 - `embedding_model` (string) — Currently configured model name.
 - `url_cache` (object) — `{cached_files, total_size_bytes, total_size_mb, cache_dir}` for the URL download cache.
 
@@ -991,6 +991,10 @@ Reports which optional features are installed and which configuration values are
   - `roots` (array): existing directories, ready to pass straight to `pdf_corpus_overview` or `pdf_corpus_warm`. Derived from `allow_patterns` by reducing each glob to its literal directory prefix. Empty under `"unrestricted"`, which means *any path the server process can read*, not *no documents available*.
   - `allow_patterns` (array): the configured `[paths] allow` globs, verbatim.
   - `deny_patterns` (array): the configured `[paths] deny` globs, verbatim. Reported in both access modes, because deny applies unconditionally.
+- `storage` (object): what the SQLite build underneath the cache actually supports. `pdf-mcp` declares no minimum SQLite version — `requires-python` is the only floor — and both capabilities below degrade quietly rather than failing, so this is the only place they surface.
+  - `sqlite_version` (string) — the SQLite library version Python is linked against, not the `pdf-mcp` version.
+  - `journal_mode` (string) — `"wal"` normally. `"delete"` means the filesystem refused WAL, which some network mounts do; cache writes are then several times slower on Windows (about 57ms per page write against about 11ms under WAL). Correctness is unaffected.
+  - `keyword_search_ranked` (bool) — `false` means the SQLite build lacks FTS5 (needs 3.9.0+), so `pdf_search(mode="keyword")` falls back to substring matching with no BM25 ranking and no stemming. Results still return; their ordering and recall are worse. Prefer `mode="semantic"` when this is `false`.
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 8)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.
@@ -1028,6 +1032,11 @@ server_info()
 #     "roots": ["/data/pdfs"],
 #     "allow_patterns": ["/data/pdfs/**"],
 #     "deny_patterns": []
+#   },
+#   "storage": {
+#     "sqlite_version": "3.51.0",
+#     "journal_mode": "wal",
+#     "keyword_search_ranked": true
 #   },
 #   "config": {
 #     "max_workers": 8,

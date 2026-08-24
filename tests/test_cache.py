@@ -751,7 +751,14 @@ class TestCacheCoverageEdgeCases:
 
         stats = cache.get_stats()
 
-        expected_db_size = os.path.getsize(cache.db_path)
+        # cache.db* not cache.db: under WAL most recently-committed data
+        # lives in the -wal sidecar until a checkpoint, and get_stats counts
+        # it (see test_cache_pragmas.py).
+        expected_db_size = sum(
+            f.stat().st_size
+            for f in cache.cache_dir.glob(cache.db_path.name + "*")
+            if f.is_file()
+        )
         assert stats["cache_size_bytes"] == expected_db_size
 
 

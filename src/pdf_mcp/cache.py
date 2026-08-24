@@ -4,6 +4,7 @@ SQLite-based cache for PDF data persistence across MCP server restarts.
 
 import contextlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -16,6 +17,8 @@ from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
 from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
+
+logger = logging.getLogger(__name__)
 
 # FTS5 virtual table schema for full-text search with Porter stemmer.
 # Must be created in a separate conn.execute() call (not inside executescript)
@@ -71,6 +74,10 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
 _EXTRACTION_VERSION = 8  # 8: permissive-backend cutover (pdfium text pipeline)
+
+# Per-connection pragmas. Both reset on every open, unlike journal_mode which
+# is persistent in the database file (see _connect / _init_db).
+_BUSY_TIMEOUT_MS = 5000
 
 _FTS_TOKEN_STRIP = re.compile(r'["()*:^]')
 _NO_MATCH_SENTINEL = '"__pdfmcp_no_match_sentinel__"'
@@ -383,6 +390,24 @@ class PDFCache:
         os.chmod(str(self.renders_dir), 0o700)
         self._init_db()
 
+    def _connect(self) -> sqlite3.Connection:
+        """Open a cache connection with the per-connection pragmas applied.
+
+        `journal_mode` is persistent in the database file and is set once in
+        `_init_db`. `synchronous` and `busy_timeout` are per-connection and
+        revert on every open, so they belong here: the cache opens ~42
+        connections and a pragma set only at init would lapse on all but one.
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        # NORMAL is only safe under WAL, where it costs at most the most
+        # recent transactions on an OS crash and the database stays intact.
+        # Under a rollback journal it weakens the write ordering that keeps
+        # the journal recoverable, so leave SQLite's FULL default alone.
+        if getattr(self, "journal_mode", None) == "wal":
+            conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
+
     def _init_db(self) -> None:
         """
         Initialize database schema.
@@ -391,7 +416,24 @@ class PDFCache:
         the SQLite build supports FTS5 virtual tables.
         """
         migrated_pk = False
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
+            # WAL is persistent in the database file, so it is set once here
+            # rather than on every connect. It must run before any statement
+            # opens an implicit transaction: journal_mode is a no-op inside
+            # one. PRAGMA returns the resulting mode, so a filesystem that
+            # refuses WAL (network mounts) is detected by value, not by
+            # exception, and simply stays in rollback mode.
+            self.journal_mode = str(
+                conn.execute("PRAGMA journal_mode=wal").fetchone()[0]
+            ).lower()
+            if self.journal_mode != "wal":
+                logger.warning(
+                    "SQLite refused WAL mode at %s (got %r); cache stays in "
+                    "rollback mode. Cache writes will be slower on Windows.",
+                    self.db_path,
+                    self.journal_mode,
+                )
+
             # Extraction-logic version: drop cached text and all text-derived
             # tables when the extraction algorithm changes, forcing re-extract.
             # Only runs when the DB is non-empty (user_version=0 on a brand-new
@@ -752,8 +794,21 @@ class PDFCache:
         # file (~50% growth, measured). VACUUM reclaims them and cannot run
         # inside a transaction, so it follows the commit above.
         if migrated_pk:
-            with sqlite3.connect(self.db_path) as vac:
+            with self._connect() as vac:
                 vac.execute("VACUUM")
+
+        # One line recording what this SQLite build actually gave us. No
+        # minimum version is enforced (see server_info -> storage), and both
+        # capabilities degrade silently, so a bug report about slow writes or
+        # poor keyword ranking is otherwise indistinguishable from a corpus
+        # problem.
+        logger.debug(
+            "SQLite %s at %s: journal_mode=%s, fts5=%s",
+            sqlite3.sqlite_version,
+            self.db_path,
+            self.journal_mode,
+            self.fts_available,
+        )
 
         self.clear_expired()
 
@@ -821,7 +876,7 @@ class PDFCache:
         Returns:
             Cached metadata dict or None if not cached/invalid
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
@@ -870,7 +925,7 @@ class PDFCache:
         Pass the yielded connection to each ``save_*`` call's ``conn``
         argument. See ``_write_conn`` for why this matters.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             yield conn
 
     @contextlib.contextmanager
@@ -888,7 +943,7 @@ class PDFCache:
         if conn is not None:
             yield conn
         else:
-            with sqlite3.connect(self.db_path) as owned:
+            with self._connect() as owned:
                 yield owned
 
     def save_metadata(
@@ -923,14 +978,14 @@ class PDFCache:
 
     def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:
         """Persist the content-trust scan without touching other metadata."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "UPDATE pdf_metadata SET content_trust_json = ? WHERE file_path = ?",
                 (json.dumps(scan), path),
             )
 
     def get_content_trust(self, path: str) -> dict[str, Any] | None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT content_trust_json, file_mtime FROM pdf_metadata"
                 " WHERE file_path = ?",
@@ -996,7 +1051,7 @@ class PDFCache:
         except OSError:
             return None
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 row = conn.execute(
                     "SELECT blocks, page_size, mtime FROM page_blocks"
                     " WHERE file_path = ? AND page_num = ?",
@@ -1034,7 +1089,7 @@ class PDFCache:
         if not page_nums:
             return {}
         placeholders = ",".join("?" * len(page_nums))
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 f"SELECT page_num, has_hidden_text, file_mtime FROM page_text"
                 f" WHERE file_path = ? AND page_num IN ({placeholders})",
@@ -1060,7 +1115,7 @@ class PDFCache:
         Returns:
             Cached text or None if not cached/invalid
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 _page_rows_query("page_num, text, file_mtime", 1, by_lang=False),
                 (path, page_num),
@@ -1100,7 +1155,7 @@ class PDFCache:
         if by_lang:
             params = (*params, normalize_ocr_lang(ocr_lang))
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
 
             result = {}
@@ -1132,7 +1187,7 @@ class PDFCache:
         # The caller's original string still goes to the -l flag (issue #27).
         stored_lang = normalize_ocr_lang(ocr_lang)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_text
                    (file_path, page_num, file_mtime,
@@ -1167,7 +1222,7 @@ class PDFCache:
 
     def get_page_source(self, path: str, page_num: int) -> str | None:
         """Return 'extracted', 'ocr', or None (page not cached)."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT source, file_mtime FROM page_text"
                 " WHERE file_path = ? AND page_num = ?",
@@ -1194,7 +1249,7 @@ class PDFCache:
         params: tuple[object, ...] = (path, *page_nums)
         if by_lang:
             params = (*params, normalize_ocr_lang(ocr_lang))
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return {
             int(page_num): (str(source) if source else "extracted")
@@ -1218,7 +1273,7 @@ class PDFCache:
         params: tuple[object, ...] = (path, *page_nums)
         if by_lang:
             params = (*params, normalize_ocr_lang(ocr_lang))
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return {
             int(page_num): (str(lang) if lang else None)
@@ -1303,7 +1358,7 @@ class PDFCache:
         Returns:
             List of image dicts or None if not cached/invalid
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT image_index, width, height,
@@ -1360,7 +1415,7 @@ class PDFCache:
         """
         mtime, _ = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             if not images:
                 old_rows = conn.execute(
                     "SELECT file_path_on_disk FROM page_images"
@@ -1452,7 +1507,7 @@ class PDFCache:
 
     def get_page_tables(self, path: str, page_num: int) -> list[dict[str, Any]] | None:
         """Get cached tables for a specific page. Returns None if not cached/invalid."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT data, file_mtime FROM page_tables"
                 " WHERE file_path = ? AND page_num = ?"
@@ -1470,7 +1525,7 @@ class PDFCache:
     ) -> None:
         """Save page tables to cache. Stores empty list [] as sentinel for tableless pages."""  # noqa: E501
         mtime, _ = self._get_file_info(path)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO page_tables"
                 " (file_path, page_num, file_mtime, data, extraction_version)"
@@ -1502,7 +1557,7 @@ class PDFCache:
             return {}
 
         placeholders = ",".join("?" * len(page_nums))
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "DELETE FROM page_embeddings WHERE file_path = ? AND model != ?",
                 (path, model_name),
@@ -1573,7 +1628,7 @@ class PDFCache:
             mtime, _ = self._get_file_info(path)
         except OSError:
             return False
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             (n_rows,) = conn.execute(
                 "SELECT COUNT(*) FROM page_text"
                 " WHERE file_path = ? AND file_mtime = ?",
@@ -1606,7 +1661,7 @@ class PDFCache:
             return {}
 
         placeholders = ",".join("?" * len(section_ids))
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 f"SELECT section_id, embedding, file_mtime"
                 f" FROM section_embeddings"
@@ -1639,7 +1694,7 @@ class PDFCache:
             return
 
         mtime, _ = self._get_file_info(path)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.executemany(
                 "INSERT OR REPLACE INTO section_embeddings"
                 " (file_path, section_id, section_key, file_mtime,"
@@ -1667,7 +1722,7 @@ class PDFCache:
         request for the lossless PNG at the same DPI.
 
         Returns None if not cached."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_path_on_disk, size_bytes, width, height,
@@ -1705,7 +1760,7 @@ class PDFCache:
         Unlinks the old image if the path changed (orphan guard)."""
         codec = render_dict.get("codec", "png")
         quality = render_dict.get("quality", 0)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             existing = conn.execute(
                 "SELECT file_path_on_disk FROM page_renders"
                 " WHERE file_path = ? AND page_num = ? AND dpi = ?"
@@ -1746,7 +1801,7 @@ class PDFCache:
         Keyed on (path, page_num, hints_hash, max_points). Returns None if
         not cached, or if the source file's mtime has changed since caching.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 # version filter on READ, not just the purge at open: with
@@ -1779,7 +1834,7 @@ class PDFCache:
         """Save a chart-extraction result to cache."""
         mtime, _ = self._get_file_info(path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO page_charts
                    (file_path, page_num, file_mtime, hints_hash, max_points,
@@ -1800,7 +1855,7 @@ class PDFCache:
 
     def _invalidate_file(self, path: str) -> None:
         """Remove all cache entries for a file."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             # Delete image files from disk before removing DB rows
             rows = conn.execute(
                 "SELECT file_path_on_disk FROM page_images WHERE file_path = ?",
@@ -1845,7 +1900,7 @@ class PDFCache:
         Returns:
             Number of files cleared
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             # Get expired file paths. Compute the cutoff with SQLite's own
             # clock — accessed_at is written via CURRENT_TIMESTAMP (UTC,
             # "YYYY-MM-DD HH:MM:SS"), so comparing it against a Python
@@ -1930,7 +1985,7 @@ class PDFCache:
                 )
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
-        with sqlite3.connect(self.db_path) as conn2:
+        with self._connect() as conn2:
             stale_paths = conn2.execute(
                 "SELECT DISTINCT file_path FROM page_renders"
             ).fetchall()
@@ -1966,7 +2021,7 @@ class PDFCache:
         self.renders_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.renders_dir), 0o700)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM pdf_metadata").fetchone()[0]
             conn.execute("DELETE FROM pdf_metadata")
             conn.execute("DELETE FROM page_text")
@@ -1987,11 +2042,24 @@ class PDFCache:
             # transaction, so commit the deletes first.
             conn.commit()
             conn.execute("VACUUM")
+            # In WAL mode VACUUM's rebuilt pages land in the -wal sidecar, so
+            # the main database file keeps its high-water size until a
+            # checkpoint folds them back in. TRUNCATE also resets the sidecar
+            # itself, so cache_size_bytes reports the real post-clear size
+            # instead of megabytes of residual.
+            #
+            # Suppressed: the TRUNCATE argument needs SQLite 3.8.8, and this
+            # project declares no minimum SQLite version (requires-python is
+            # the only floor). It also no-ops while another connection reads.
+            # Either way a checkpoint is an optimisation and must not be able
+            # to fail a cache clear.
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             return int(count)
 
     def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             stats = {}
 
             # Count files
@@ -2053,9 +2121,23 @@ class PDFCache:
                 )
             except FileNotFoundError:
                 renders_size = 0
-            stats["cache_size_bytes"] = (
-                os.path.getsize(self.db_path) + images_size + renders_size
+            # Fold the WAL back into the main database before sizing it.
+            # Summing cache.db* instead would report a number that moves with
+            # checkpoint timing: the -wal sidecar grows as pages are written
+            # and drops back on every auto-checkpoint, so the reported cache
+            # size could FALL right after a caller added a document. This is
+            # a diagnostic call, so paying a checkpoint here buys a stable,
+            # monotonic number. TRUNCATE is best-effort: it no-ops while
+            # another connection is reading, which only leaves some bytes in
+            # the sidecar, so both files are still counted below.
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            db_size = sum(
+                f.stat().st_size
+                for f in self.cache_dir.glob(self.db_path.name + "*")
+                if f.is_file()
             )
+            stats["cache_size_bytes"] = db_size + images_size + renders_size
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats
@@ -2163,7 +2245,7 @@ class PDFCache:
 
         if _contains_cjk(query):
             escaped = _escape_fts5_query_cjk(query)
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 try:
                     self._build_temp_page_fts(conn, path, cjk=True)
                     rows = conn.execute(
@@ -2193,7 +2275,7 @@ class PDFCache:
         # Map context_chars to FTS5 snippet token count (approximate)
         num_tokens = max(4, min(64, context_chars // 5))
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             try:
                 self._build_temp_page_fts(conn, path, cjk=False)
                 sql = (
@@ -2247,7 +2329,7 @@ class PDFCache:
         if _contains_cjk(query):
             escaped = _escape_fts5_query_cjk(query)
             needle = "".join(query.split())
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 try:
                     rows = conn.execute(
                         "SELECT page_num FROM pdf_search_fts_cjk"
@@ -2271,7 +2353,7 @@ class PDFCache:
 
         escaped = _escape_fts5_query(query)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             try:
                 sql = (
                     "SELECT page_num, text"
@@ -2304,7 +2386,7 @@ class PDFCache:
         the FTS eligibility check (indexed == total > 0) never fires
         on a file that has cached page_text rows but no FTS rows.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             # DISTINCT page_num: a page holds one row per ocr_lang, but FTS
             # holds one row per page, so counting rows here would make the
             # `indexed == total == doc_pages` check fail on any document with
@@ -2336,7 +2418,7 @@ class PDFCache:
         """
         if not self.fts_available:
             return
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("DELETE FROM pdf_section_fts WHERE file_path = ?", (path,))
             if sections:
                 conn.executemany(
@@ -2431,7 +2513,7 @@ class PDFCache:
             return []
         if _contains_cjk(query):
             escaped = _escape_fts5_query_cjk(query)
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 try:
                     self._build_temp_section_fts(conn, path, cjk=True)
                     rows = conn.execute(
@@ -2465,7 +2547,7 @@ class PDFCache:
                 for sid, title, sp, ep, title_source, score in rows
             ]
         escaped = _escape_fts5_query(query)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             try:
                 self._build_temp_section_fts(conn, path, cjk=False)
                 sql = (
@@ -2502,7 +2584,7 @@ class PDFCache:
         """
         if not self.fts_available:
             return 0
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             try:
                 row = conn.execute(
                     "SELECT COUNT(*) FROM pdf_section_fts WHERE file_path = ?",
@@ -2514,7 +2596,7 @@ class PDFCache:
 
     def get_section_embeddings_coverage(self, path: str) -> int:
         """Return the number of cached, valid section embeddings for `path`."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 "SELECT file_mtime FROM section_embeddings WHERE file_path = ?",
                 (path,),

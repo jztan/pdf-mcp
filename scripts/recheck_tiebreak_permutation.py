@@ -85,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
         default=6,
         help="number of independent renamings (default 6)",
     )
+    ap.add_argument(
+        "--distractor-manifest",
+        type=Path,
+        default=None,
+        help="add unlabeled distractor PDFs (they only steal rank; arm A "
+        "stays the invariant control)",
+    )
     args = ap.parse_args(argv)
 
     import _corpus_ranking as cr
@@ -111,6 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: no corpus PDFs available locally")
         return 2
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
+
+    if args.distractor_manifest is not None:
+        from benchmark_corpus_modes import load_distractor_paths
+
+        dpaths = load_distractor_paths(args.distractor_manifest, REPO)
+        for dp in dpaths:
+            id_by_path[dp] = Path(dp).stem  # distractor id = filename stem
+        paths = paths + dpaths
+        print(f"added {len(dpaths)} distractors -> {len(paths)} docs")
 
     labelled = {lb["doc"] for q in qs for lb in q["labels"]}
     print(labelled_position_skew([d["id"] for d in manifest["docs"]], labelled))

@@ -35,7 +35,7 @@ BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
     " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
-API = "http://export.arxiv.org/api/query"
+API = "https://export.arxiv.org/api/query"
 # Match the gold set's broad STEM mix without overlapping its exact ids.
 CATEGORIES = ("cs.LG", "cs.CL", "cs.CV", "math.PR", "physics.data-an")
 DELAY_SECONDS = 3.0
@@ -115,6 +115,7 @@ def list_candidates(need: int) -> list[dict]:
                 params=params,
                 headers={"User-Agent": BROWSER_UA},
                 timeout=60.0,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             entries = parse_entries(resp.text)
@@ -140,6 +141,7 @@ def fetch_gold_titles(gold_ids: set[str]) -> set[str]:
                 params={"id_list": ",".join(batch), "max_results": "50"},
                 headers={"User-Agent": BROWSER_UA},
                 timeout=60.0,
+                follow_redirects=True,
             )
             resp.raise_for_status()
             for e in parse_entries(resp.text):

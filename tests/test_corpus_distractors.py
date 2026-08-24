@@ -44,6 +44,10 @@ def test_parse_entries_extracts_id_and_title():
     assert got == [{"id": "2401.00001v1", "title": "Deep  Nets"}]
 
 
+def test_api_endpoint_is_https():
+    assert fcd.API.startswith("https://")
+
+
 import json as _json  # noqa: E402
 import sys  # noqa: E402
 import types  # noqa: E402

@@ -55,6 +55,24 @@ def nonlatin_ids(manifest: dict) -> set[str]:
     return {d["id"] for d in manifest["docs"] if d.get("lang", "en") != "en"}
 
 
+def load_distractor_paths(manifest_path: Path, repo: Path) -> list[str]:
+    """Absolute paths of distractor PDFs present on disk. Unlabeled: they
+    only add rank competition; never graded."""
+    man = json.loads(manifest_path.read_text(encoding="utf-8"))
+    out: list[str] = []
+    for d in man["docs"]:
+        p = Path(d["path"])
+        p = p if p.is_absolute() else repo / p
+        if p.exists():
+            out.append(str(p))
+    return out
+
+
+def apply_cap(corpus_module, total: int) -> None:
+    """Raise the in-process corpus cap to fit `total`; never lowers it."""
+    corpus_module.CORPUS_MAX_FILES = max(corpus_module.CORPUS_MAX_FILES, total)
+
+
 def agg(rows: dict, key=lambda r: True) -> dict[str, float]:
     sel = [r for r in rows.values() if key(r)]
     if not sel:
@@ -355,6 +373,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also measure per-document pdf_search on single-gold-doc queries",
     )
+    ap.add_argument(
+        "--distractor-manifest",
+        type=Path,
+        default=None,
+        help="manifest of unlabeled distractor PDFs to add to the corpus",
+    )
+    ap.add_argument(
+        "--max-docs",
+        type=int,
+        default=None,
+        help="cap the total corpus (gold + distractors) to this many docs",
+    )
     args = ap.parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
@@ -412,6 +442,20 @@ def main(argv: list[str] | None = None) -> int:
     if not paths:
         print("ERROR: no corpus docs available")
         return 2
+
+    gold_n = len(paths)
+    if args.distractor_manifest is not None:
+        import pdf_mcp.corpus as corpus_module
+
+        distractors = load_distractor_paths(args.distractor_manifest, REPO)
+        if args.max_docs is not None:
+            distractors = distractors[: max(0, args.max_docs - gold_n)]
+        paths = paths + distractors
+        apply_cap(corpus_module, len(paths))
+        print(
+            f"corpus: {gold_n} gold + {len(distractors)} distractors "
+            f"= {len(paths)} docs (cap -> {corpus_module.CORPUS_MAX_FILES})"
+        )
 
     single: dict[str, dict] = {}
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:

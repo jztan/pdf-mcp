@@ -42,3 +42,37 @@ def test_parse_entries_extracts_id_and_title():
     )
     got = fcd.parse_entries(xml)
     assert got == [{"id": "2401.00001v1", "title": "Deep  Nets"}]
+
+
+import json as _json  # noqa: E402
+import sys  # noqa: E402
+import types  # noqa: E402
+
+sys.path.insert(0, str(REPO / "scripts"))
+import benchmark_corpus_modes as bcm  # noqa: E402
+
+
+def test_load_distractor_paths_keeps_only_existing(tmp_path):
+    pdf = tmp_path / "x.pdf"
+    pdf.write_bytes(b"%PDF-")
+    man = tmp_path / "d.json"
+    man.write_text(
+        _json.dumps(
+            {
+                "docs": [
+                    {"id": "x", "path": str(pdf)},
+                    {"id": "missing", "path": str(tmp_path / "nope.pdf")},
+                ]
+            }
+        )
+    )
+    got = bcm.load_distractor_paths(man, REPO)
+    assert got == [str(pdf)]
+
+
+def test_apply_cap_raises_but_never_lowers():
+    mod = types.SimpleNamespace(CORPUS_MAX_FILES=100)
+    bcm.apply_cap(mod, 500)
+    assert mod.CORPUS_MAX_FILES == 500
+    bcm.apply_cap(mod, 50)
+    assert mod.CORPUS_MAX_FILES == 500

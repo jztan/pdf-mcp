@@ -1,0 +1,2405 @@
+{
+  "description": "arXiv distractor corpus for the scale-1k benchmark (unlabeled; ids deduped against gold). PDFs not committed.",
+  "docs": [
+    {
+      "id": "2608.21359",
+      "path": "benchmark_data/.corpus_distractors/2608.21359.pdf",
+      "title": "Primal Acceleration of Newton's Method",
+      "sha256": "8a13fe7195a243348c6f2634004f623ef4143ae1a3197ea1d3320dabdfaf2fdd"
+    },
+    {
+      "id": "2608.21349",
+      "path": "benchmark_data/.corpus_distractors/2608.21349.pdf",
+      "title": "PerturbRx: Learning Treatment-Conditioned Latent Transitions for Patient Drug Response Prediction",
+      "sha256": "636e2ca1e5a24127281f88840506881021144e6ae4963db732a4c14e92eb1f80"
+    },
+    {
+      "id": "2608.21348",
+      "path": "benchmark_data/.corpus_distractors/2608.21348.pdf",
+      "title": "Truthful Calibration Measures for Sequential Prediction",
+      "sha256": "6b6ed1213ac1b6cf2153f75a18474f0e145b061e7f0924cc38b27aae27e2da77"
+    },
+    {
+      "id": "2608.21345",
+      "path": "benchmark_data/.corpus_distractors/2608.21345.pdf",
+      "title": "Asymmetric Capacity Allocation in Self-Refinement Pipelines",
+      "sha256": "9b9ab8945b46da23c16c738f916fd5acfad8ab1dfa0f77236b04f60c47d1fe7c"
+    },
+    {
+      "id": "2608.21343",
+      "path": "benchmark_data/.corpus_distractors/2608.21343.pdf",
+      "title": "TurboBias 2.0: Streaming Context-Biasing for Production-Efficient ASR Systems",
+      "sha256": "11832f71b6abfc7bdc15798f3621ca2b5e66db78f9cd7a2c2a83c38ddf2fe0ca"
+    },
+    {
+      "id": "2608.21334",
+      "path": "benchmark_data/.corpus_distractors/2608.21334.pdf",
+      "title": "Across-Design Uncertainty in Short Pricing Panels: Evidence from Simulated Price Trajectories",
+      "sha256": "97b08169657e2390c82b9f7af66b1fc5f6ce9d290c57a223ebddf3a321d5b89d"
+    },
+    {
+      "id": "2608.21324",
+      "path": "benchmark_data/.corpus_distractors/2608.21324.pdf",
+      "title": "Time-Aware Tranformer-Based Prediction Model for AECOPD",
+      "sha256": "7a07ff8992eca1115b719893e97813f9c532b735149d79e10f0fbde630765fd4"
+    },
+    {
+      "id": "2608.21308",
+      "path": "benchmark_data/.corpus_distractors/2608.21308.pdf",
+      "title": "Rethinking Expressivity and Efficiency in Test-Time Training",
+      "sha256": "5e658e3c1c710060ab47b8fe6abb05973da21b5a11bbfce7d906358581604933"
+    },
+    {
+      "id": "2608.21307",
+      "path": "benchmark_data/.corpus_distractors/2608.21307.pdf",
+      "title": "SPARCL: Spectral Partitioned Analytic Continual Learning",
+      "sha256": "b6226624b4c5a3bf27c49becde0436e75b4a358e22fdc9cdf6fd6711f87899e2"
+    },
+    {
+      "id": "2608.21277",
+      "path": "benchmark_data/.corpus_distractors/2608.21277.pdf",
+      "title": "ConceptTS: LLM-Guided Concept Bottlenecks for Interpretable Multivariate Time-Series Forecasting",
+      "sha256": "5101eb2caaa132e35b8e3b27cf7254982373f6765c81bb39547f76bdebd64184"
+    },
+    {
+      "id": "2608.21262",
+      "path": "benchmark_data/.corpus_distractors/2608.21262.pdf",
+      "title": "The Exceedance Design Effect: Effective Sample Size for Thresholds under Clustering",
+      "sha256": "0a6919c8cadff423aa418b21359c539746419f68e71c11b085bc9f9533d24fff"
+    },
+    {
+      "id": "2608.21254",
+      "path": "benchmark_data/.corpus_distractors/2608.21254.pdf",
+      "title": "On the Transferability of Agricultural Weed Detection Under Cross-Field Distribution Shift",
+      "sha256": "5797121f2521f5eff944bc444858a93202ba8c835dc3e346fb85fc78bd5436f4"
+    },
+    {
+      "id": "2608.21251",
+      "path": "benchmark_data/.corpus_distractors/2608.21251.pdf",
+      "title": "TRACE-C: Rank-Calibrated Relational Anomaly Detection for Multi-Stream Operational Telemetry",
+      "sha256": "99e76b4bf467742e1e6f14c075bb3549be152f9272611031ba8ef4067c5c09a6"
+    },
+    {
+      "id": "2608.21234",
+      "path": "benchmark_data/.corpus_distractors/2608.21234.pdf",
+      "title": "Advanced Linear Algebra with Applications - Part I (Numerical linear algebra for PDEs, machine learning, and data assimilation)",
+      "sha256": "2ebd25010371a325d1b0f440541384c3b3dd6b7bfb175ae7c4531e4a59670632"
+    },
+    {
+      "id": "2608.21223",
+      "path": "benchmark_data/.corpus_distractors/2608.21223.pdf",
+      "title": "Event-triggered Implicit Perturbation for Zeroth-Order Fine-Tuning of Spiking Transformers",
+      "sha256": "5a50e8db03eccddacd6088c7c3c5b477a98e078cfeb068aa144cdaeafeb023e4"
+    },
+    {
+      "id": "2608.21209",
+      "path": "benchmark_data/.corpus_distractors/2608.21209.pdf",
+      "title": "Personalized Privacy Control in LLMs via Attention Head Intervention",
+      "sha256": "615fea9cac2750561d49ceecbdc56022999fc369bfd62d29e83774dc2b23d82c"
+    },
+    {
+      "id": "2608.21207",
+      "path": "benchmark_data/.corpus_distractors/2608.21207.pdf",
+      "title": "Curriculum-Aware Interpolate-then-Refine: Learned Physiological Time-Series Imputation under Realistic Missingness",
+      "sha256": "5bca18586775a4e993d1c0979208555648925004d6bae6d5e578f5a6e2da197b"
+    },
+    {
+      "id": "2608.21206",
+      "path": "benchmark_data/.corpus_distractors/2608.21206.pdf",
+      "title": "No PUN Intended: Plausible Unknown Names for Person-Centred LLM Evaluation",
+      "sha256": "7b28bca046e46c49bdeafb4dbb1cc512529feaf256b982c8f12579d884357104"
+    },
+    {
+      "id": "2608.21204",
+      "path": "benchmark_data/.corpus_distractors/2608.21204.pdf",
+      "title": "Beyond Imitation: Self-Improving Robot Policies via Off-Policy Q-Planning",
+      "sha256": "4620ce1fad22d26eee2b7d41c6c144527e52c0ae0b6d79dffb186c318db99140"
+    },
+    {
+      "id": "2608.21199",
+      "path": "benchmark_data/.corpus_distractors/2608.21199.pdf",
+      "title": "Tydra: An Efficient Hybrid Model for Tabular Data",
+      "sha256": "427199aaabcabec3619a6962bd991767f4bb81d3a2babf4a4dd7fd72632cf5a6"
+    },
+    {
+      "id": "2608.21186",
+      "path": "benchmark_data/.corpus_distractors/2608.21186.pdf",
+      "title": "A Neurosymbolic Approach for Constructing Planning Domain Models from Clinical Narratives",
+      "sha256": "befac6b0ac297d51478396f58e1232fac65541382c85d8936f5b4a0b3fc0595a"
+    },
+    {
+      "id": "2608.21172",
+      "path": "benchmark_data/.corpus_distractors/2608.21172.pdf",
+      "title": "Thermo-FL: Thermal-Aware Robust Federated Fine-Tuning of Large Language Models for Edge AI",
+      "sha256": "db767ebf419aab9592fadada4e82cfb8185c091f4eeb6497172b45637c3420c4"
+    },
+    {
+      "id": "2608.21160",
+      "path": "benchmark_data/.corpus_distractors/2608.21160.pdf",
+      "title": "Human-JEPA: A Human-Centric Vision Model that Perceives and Anticipates",
+      "sha256": "62342b7fe2b64a817914e3921f9266a6f5ab9cb36db505401c0eb1eaa59ad4a0"
+    },
+    {
+      "id": "2608.21147",
+      "path": "benchmark_data/.corpus_distractors/2608.21147.pdf",
+      "title": "Capturing Cardiac Cyclicity through Phase-Equivariant Self-Supervised Learning",
+      "sha256": "907b8104eb5c54e76a309c40b40984758d2ab4266a0e82b10caea5a85ef7764b"
+    },
+    {
+      "id": "2608.21142",
+      "path": "benchmark_data/.corpus_distractors/2608.21142.pdf",
+      "title": "COEC: Calibrated Orthogonal-Equivalence Compensation for Structured Pruning of Large Language Models",
+      "sha256": "7ec5c8a58dbe0f8cea908cf5734a72fef259b385547b9fc3e9cdffee2eee36d7"
+    },
+    {
+      "id": "2608.21137",
+      "path": "benchmark_data/.corpus_distractors/2608.21137.pdf",
+      "title": "BackDFL: A Unified Benchmark For Backdoor Attacks and Defenses In Decentralized Federated Learning",
+      "sha256": "3be0d3c15de308a6aa4855a01d6df33f1ff322715def12bb7f5625908d1cb546"
+    },
+    {
+      "id": "2608.21134",
+      "path": "benchmark_data/.corpus_distractors/2608.21134.pdf",
+      "title": "Llama-Mobile: Efficient 2.7-Bit Quantization of VLMs",
+      "sha256": "cce8af2eeb832d02b2d28a7447fcb9a8148fbe60549f3537f81155421db201c6"
+    },
+    {
+      "id": "2608.21096",
+      "path": "benchmark_data/.corpus_distractors/2608.21096.pdf",
+      "title": "FlatLand: Personalized Graph Federated Learning via Tailored Lorentz Space",
+      "sha256": "d524ed6f0950346b3bcfdd49ef20eaae3cf5a82428c14249e5995ea7c7e9f398"
+    },
+    {
+      "id": "2608.21079",
+      "path": "benchmark_data/.corpus_distractors/2608.21079.pdf",
+      "title": "Causal Modeling of Adverse Pregnancy Outcomes via Adaptive LLM Proposals",
+      "sha256": "b629cbb1e4f5cda4f4ffc8681b4079b2437a52f713bda8a2f67a776e41e02ce7"
+    },
+    {
+      "id": "2608.21075",
+      "path": "benchmark_data/.corpus_distractors/2608.21075.pdf",
+      "title": "AudioWorldSim: Realistic Binaural Audio Datasets For World Models",
+      "sha256": "d4ba26494cd8bd5bfb6239f8f332af55adb14ec3198e988924672eb46ba7627f"
+    },
+    {
+      "id": "2608.21070",
+      "path": "benchmark_data/.corpus_distractors/2608.21070.pdf",
+      "title": "TracingFlow: A Simulation-Free Trajectory Inference Framework Based on Second-Order Dynamics",
+      "sha256": "daf0f3f3801e1128a376e081271792420e1f3df6220c289c2c4ee00f9a8ee5d5"
+    },
+    {
+      "id": "2608.21057",
+      "path": "benchmark_data/.corpus_distractors/2608.21057.pdf",
+      "title": "Designing a Robust LLM-Based Evaluation System for Agentic AI in Drug Discovery Through Human Alignment",
+      "sha256": "54d0cf81f254085c464db079d6c632946215a7325ed8bad57ff462219f8be30f"
+    },
+    {
+      "id": "2608.21030",
+      "path": "benchmark_data/.corpus_distractors/2608.21030.pdf",
+      "title": "COMET: Contrastive Motion-Enhanced Temporal Reasoning for Video Multimodal Large Language Models",
+      "sha256": "d732782a82b5d7dcd0b84a275de28d75727f922321c11b96a8ba0baf92329eeb"
+    },
+    {
+      "id": "2608.21024",
+      "path": "benchmark_data/.corpus_distractors/2608.21024.pdf",
+      "title": "RODE: A Radial-Orthogonal Decoupled Engine for Optimization",
+      "sha256": "a197d68e13178ebc90456f0c98d9a08b9d005dab9860a2afb9530e55fe4266e2"
+    },
+    {
+      "id": "2608.21012",
+      "path": "benchmark_data/.corpus_distractors/2608.21012.pdf",
+      "title": "From a Static Multi-Level Small Semantic Codebook to a Dynamic Single-Level Large Semantic Codebook for Generative Recommendation",
+      "sha256": "3aed56f70ccf4815d04a333e13e020e9d9ed6a63915574f4e011f107399fdbf1"
+    },
+    {
+      "id": "2608.20998",
+      "path": "benchmark_data/.corpus_distractors/2608.20998.pdf",
+      "title": "Free-Probability Kernels for Zero-Rollout Hyperparameter Selection in Reservoir Computing",
+      "sha256": "c4231b71c67fd73a488341eb39a217c74423045065ea00b2078b401a4f4cb419"
+    },
+    {
+      "id": "2608.20991",
+      "path": "benchmark_data/.corpus_distractors/2608.20991.pdf",
+      "title": "Trojaning the Alignment: Stealthy Backdoor Attacks against Graph Foundation Models",
+      "sha256": "5b3329817f307b39beac24ae3bb89c53d7898dc3a5a273404ff979a2a81c60fd"
+    },
+    {
+      "id": "2608.20988",
+      "path": "benchmark_data/.corpus_distractors/2608.20988.pdf",
+      "title": "Jacobian-guided Noise Injection for Quantization Robustness in Large Language Models",
+      "sha256": "6430fce96c16e018538fb5832ce0396c8d03a54387895b736003f844f3bc3d15"
+    },
+    {
+      "id": "2608.20980",
+      "path": "benchmark_data/.corpus_distractors/2608.20980.pdf",
+      "title": "A Critical Audit of Spatiotemporal Forecasting Benchmark Datasets and Baselines",
+      "sha256": "d00e7895b8fc019d94ea79f73a911e7a46ad1ad11a6afbca0bb0a7a8d17c63d3"
+    },
+    {
+      "id": "2608.20971",
+      "path": "benchmark_data/.corpus_distractors/2608.20971.pdf",
+      "title": "Training DeepFilterNet with Accurate Room Acoustic Simulations Improves Single-Channel Speech Enhancement",
+      "sha256": "0e3f545ce0656ae7e6add0a84b4874ef468ade00a68be59bbdd793ab40b95159"
+    },
+    {
+      "id": "2608.20965",
+      "path": "benchmark_data/.corpus_distractors/2608.20965.pdf",
+      "title": "Training, learning and inference: unified dynamics of neural systems",
+      "sha256": "0b28cd7bfe51fce4d0e296880727dba9314231d7e2dcf9788a4776c3f5ddecc2"
+    },
+    {
+      "id": "2608.20961",
+      "path": "benchmark_data/.corpus_distractors/2608.20961.pdf",
+      "title": "TreeWY: Speculative Verification for Gated DeltaNet Hybrids",
+      "sha256": "65a6964192e22b071b527730c1797d5d09b95a87479bb57b3bbdf557ea4e2872"
+    },
+    {
+      "id": "2608.20953",
+      "path": "benchmark_data/.corpus_distractors/2608.20953.pdf",
+      "title": "Quantization-Aware Healing: A Practical Recipe for Recovering Compressed, 4-Bit LLMs",
+      "sha256": "3200a2fdc4cadefa1a854724bf2905acdd92ed5eecc14ac3f099dc9964c42edb"
+    },
+    {
+      "id": "2608.20909",
+      "path": "benchmark_data/.corpus_distractors/2608.20909.pdf",
+      "title": "Decoupling Policy Extraction for Offline Reinforcement Learning",
+      "sha256": "d2a38d9de26fe5f42480513f06755ddff9225f817cd1554bc2cf79545b123eee"
+    },
+    {
+      "id": "2608.20886",
+      "path": "benchmark_data/.corpus_distractors/2608.20886.pdf",
+      "title": "EviRank: Structured Relevance Evidence for Multimodal Image Re-ranking",
+      "sha256": "54dd607d89d0073d44bab7323affd121490a5321930620a55d8eb0a7f75250ef"
+    },
+    {
+      "id": "2608.20873",
+      "path": "benchmark_data/.corpus_distractors/2608.20873.pdf",
+      "title": "Nothing Changed but the Model: CellFill -- Bounded In-Cell Learning for Bit-Identical, Revocable Updates to Quantized LLMs",
+      "sha256": "f852ee603a5b5c61c47e5d80017550eec300c65e3d5fe72e53967d0a62dabf1c"
+    },
+    {
+      "id": "2608.20869",
+      "path": "benchmark_data/.corpus_distractors/2608.20869.pdf",
+      "title": "ReCurveflow: A Flow Matching Framework that Learns Curved Reaction Trajectories to Predict Transition State Geometries",
+      "sha256": "5e1faf966975f679ca02484b008097b2f9d890cd94f35262f6e99843b6929707"
+    },
+    {
+      "id": "2608.20858",
+      "path": "benchmark_data/.corpus_distractors/2608.20858.pdf",
+      "title": "Sharing the Control Authority Between Deep Reinforcement Learning and Model Predictive Control: Application to Multi-Class Transportation Networks",
+      "sha256": "9dc14237208de847ccbf06b7cbb4066f57369741528dff7888d4445651e3824d"
+    },
+    {
+      "id": "2608.20839",
+      "path": "benchmark_data/.corpus_distractors/2608.20839.pdf",
+      "title": "SAC-Copula: Quality-Preserving Watermarking for Diffusion Language Models via Smooth Correlated Gumbel Fields",
+      "sha256": "a49cd909aa987cd114f813721d6e22465b1e5768689d9346319ba836ced284f5"
+    },
+    {
+      "id": "2608.20830",
+      "path": "benchmark_data/.corpus_distractors/2608.20830.pdf",
+      "title": "Fine-tuning LLMs for Tourist Trajectory Prediction using Field Experiment Data",
+      "sha256": "e08354a880195bfc83f4c8ccdbaec93618df2d87e3daa17723daf7f52084c1e4"
+    },
+    {
+      "id": "2608.20818",
+      "path": "benchmark_data/.corpus_distractors/2608.20818.pdf",
+      "title": "Scaling Muon for Diffusion Transformers",
+      "sha256": "c037bc14e99a7ec5ac2c4ad25a22bf2258dea345a6480a9111b50c2fa05fd543"
+    },
+    {
+      "id": "2608.20812",
+      "path": "benchmark_data/.corpus_distractors/2608.20812.pdf",
+      "title": "Resolution-Consistent Greedy Neural Approximation on Infinite-Dimensional Spaces",
+      "sha256": "b6507834eecf9992f285142e619d567f3f2c6d3617f15e2cd18dc5d1da2582ca"
+    },
+    {
+      "id": "2608.20807",
+      "path": "benchmark_data/.corpus_distractors/2608.20807.pdf",
+      "title": "Neuro-Geospatial Modelling of EEG Affective States Using Literature-Informed Environmental Context",
+      "sha256": "35a4ccf75631a7768be4d6f08ed61bbc556809ee049f404aa6a45b795b62881b"
+    },
+    {
+      "id": "2608.20803",
+      "path": "benchmark_data/.corpus_distractors/2608.20803.pdf",
+      "title": "CubicSplat: Differentiable Vector Graphics via Error-Bounded Forward Relaxation",
+      "sha256": "8653cf383decea50c07e708743e352934da65d7ae48385636f22d607013e704e"
+    },
+    {
+      "id": "2608.20784",
+      "path": "benchmark_data/.corpus_distractors/2608.20784.pdf",
+      "title": "Rethinking Demonstration Unlearning in Imitation Learning for Robotics",
+      "sha256": "a2cc3e5885a33565e409af6cef1778c11558f5ef470b6b8d4e73a6e3c062bd49"
+    },
+    {
+      "id": "2608.20761",
+      "path": "benchmark_data/.corpus_distractors/2608.20761.pdf",
+      "title": "Fuzzy-MoE: Interpretable Regime-Conditioned Expert Routing for Non-Stationary Multivariate Time Series Forecasting",
+      "sha256": "a72325f2413a033c5aa656c2de381c409689d86ba4f9a9b579a8228578deda52"
+    },
+    {
+      "id": "2608.20758",
+      "path": "benchmark_data/.corpus_distractors/2608.20758.pdf",
+      "title": "Hidden Axis of Uncertainty: Latent-Posterior Alignment in Graph Neural Networks with Bayesian Output Layers",
+      "sha256": "2ff8c0bdbaec1e2592eef6df849ec27af3dab56e4091d237aa99deb2ce8c7b0d"
+    },
+    {
+      "id": "2608.20757",
+      "path": "benchmark_data/.corpus_distractors/2608.20757.pdf",
+      "title": "PSK at WMT 2026 MIST: Task-Specialized QLoRA Adapters for Multilingual Summarization and Question Answering",
+      "sha256": "1df9ea97f26be19cd9f67ff6ec4ef407bc4326a8c620c88bb0600b5309630279"
+    },
+    {
+      "id": "2608.20710",
+      "path": "benchmark_data/.corpus_distractors/2608.20710.pdf",
+      "title": "Geometric Regularization for Long-Tailed Semi-Supervised Learning via Gaussian Feature Bridges",
+      "sha256": "c5e2cca80c54401399bca1c33eab8fc76267942ee2a2b81bb51379c103f551cc"
+    },
+    {
+      "id": "2608.20686",
+      "path": "benchmark_data/.corpus_distractors/2608.20686.pdf",
+      "title": "CDRL: Certification-Driven Reinforcement Learning for Neutrino Flavor Model Discovery",
+      "sha256": "10fc2ad39eb35c4bbfe74a92aa1a2edd30860e85ed8f48422c7b7d6a0c13e2ed"
+    },
+    {
+      "id": "2608.20685",
+      "path": "benchmark_data/.corpus_distractors/2608.20685.pdf",
+      "title": "Temporal Validity on Real Software Histories: Eliminating Stale-Fact Errors in Code-Assistant Memory over GitHub Fixes",
+      "sha256": "2c64bfe81838669442f5c91490fad095c0faa3f19a204751c9e8f64b721433d8"
+    },
+    {
+      "id": "2608.20680",
+      "path": "benchmark_data/.corpus_distractors/2608.20680.pdf",
+      "title": "Reinforcement Learning for Continuous-Time Jump Markov Decision Processes with Applications to Network Dynamic Pricing",
+      "sha256": "5fcd1edd2cfb935d731b3cfed6676b29ddff8822096ebe83da2a8018c13dc2a3"
+    },
+    {
+      "id": "2608.20668",
+      "path": "benchmark_data/.corpus_distractors/2608.20668.pdf",
+      "title": "Lightweight Adaptive ReduNet via Hyperspherical Manifold Learning",
+      "sha256": "88a580a42011155292370517eadab53d5b1ae0aadc7372a4eb79703d9b015051"
+    },
+    {
+      "id": "2608.20667",
+      "path": "benchmark_data/.corpus_distractors/2608.20667.pdf",
+      "title": "C-Score: Beyond Accuracy for Robustness Assessment in Semi-Supervised Learning under Open-World Unlabeled Contamination",
+      "sha256": "37871bfae378ee6a92d0c26828945e878b9890121ca22d9ada0d1ec116d0d3ab"
+    },
+    {
+      "id": "2608.20666",
+      "path": "benchmark_data/.corpus_distractors/2608.20666.pdf",
+      "title": "Amplifying the imaging power of digital sky surveys with space telescopes data and generative AI",
+      "sha256": "7e85b9beabf1101802455aa37b4a56cde40ae9f568ea71058d159b376cab89d4"
+    },
+    {
+      "id": "2608.20660",
+      "path": "benchmark_data/.corpus_distractors/2608.20660.pdf",
+      "title": "Predicting Resource Efficient Hamiltonian Decomposition for Continuous-Time Quantum Walk Simulations",
+      "sha256": "679a947753564e3dee6dde3e86cd098671510ef9eaaeec603ecb56563227e5cc"
+    },
+    {
+      "id": "2608.20656",
+      "path": "benchmark_data/.corpus_distractors/2608.20656.pdf",
+      "title": "RiskTraf: Risk-Extrapolated Residual Learning for Multi-Variate Traffic Flow Prediction",
+      "sha256": "425dab6cab1c7d8aba6b15dc1af52b8e5f989d95ece45973c0540f50651cc0cc"
+    },
+    {
+      "id": "2608.20653",
+      "path": "benchmark_data/.corpus_distractors/2608.20653.pdf",
+      "title": "Meta-clustering of milk mid-infrared spectra identifies dairy cow groups associated with negative energy balance in early lactation",
+      "sha256": "4700681962e12ae232570f9664ae3fdd12f4ea132c4830e973c95839599e22db"
+    },
+    {
+      "id": "2608.20638",
+      "path": "benchmark_data/.corpus_distractors/2608.20638.pdf",
+      "title": "Provable Edge-of-Stability for Adam on a One-Dimensional Quadratic",
+      "sha256": "391e7dbe03354889eb30977a9e1b0c0fa59240dee8a33e43a838d464dc3d0faf"
+    },
+    {
+      "id": "2608.20636",
+      "path": "benchmark_data/.corpus_distractors/2608.20636.pdf",
+      "title": "MIL-BERT: Classification of Arbitrarily Large Text with Performance and Explanatory Guarantees",
+      "sha256": "46b85310ed9e08c08e2df285e3518812566b84a3eefa454ab10d56ddffd66b2c"
+    },
+    {
+      "id": "2608.20635",
+      "path": "benchmark_data/.corpus_distractors/2608.20635.pdf",
+      "title": "Minimax Optimality of Score-Entropy Discrete Diffusion",
+      "sha256": "329a258a013a24d750cf5c12889ec46837318ad0da89379f11447d603d14d216"
+    },
+    {
+      "id": "2608.20617",
+      "path": "benchmark_data/.corpus_distractors/2608.20617.pdf",
+      "title": "Dual-Cache Latent Space Communication between Heterogeneous Language Models",
+      "sha256": "29082138a262167c8c999b82c8bb31527a579a78942581dd9fb94057211441c7"
+    },
+    {
+      "id": "2608.20607",
+      "path": "benchmark_data/.corpus_distractors/2608.20607.pdf",
+      "title": "JuryProbe: An Empirical Consensus-Risk Diagnostic for Routing Reference-Free Factuality Judge Panels to Grounded Verification",
+      "sha256": "33a1c360d4d262985487e6364eafbc32390470645343478b1a355dc3e95c7871"
+    },
+    {
+      "id": "2608.20580",
+      "path": "benchmark_data/.corpus_distractors/2608.20580.pdf",
+      "title": "Keyed Provenance Watermarking with Complementary Lattice-Based Secure Aggregation for Federated Learning",
+      "sha256": "c7b8a6ae43370c0bc49439767a88124493f5e1ba247e0133dca08968e86239ab"
+    },
+    {
+      "id": "2608.20574",
+      "path": "benchmark_data/.corpus_distractors/2608.20574.pdf",
+      "title": "FlavourBench: Ranking Frontier Language Models with Executable Culinary Ground Truth",
+      "sha256": "576f96388c8de6451d9eeaaa409c59fbc20730f3e44cb312004aea2d0aa4d78e"
+    },
+    {
+      "id": "2608.20572",
+      "path": "benchmark_data/.corpus_distractors/2608.20572.pdf",
+      "title": "Faults That Fortify: CNN Adversarial Robustness via GPU Undervolting",
+      "sha256": "e79c7b770756d2f1fc8424c9e1848266684786625709596efb0ad7e81292ee9b"
+    },
+    {
+      "id": "2608.20566",
+      "path": "benchmark_data/.corpus_distractors/2608.20566.pdf",
+      "title": "AgentDecarbonizer: Carbon-Aware Execution for AI Agents",
+      "sha256": "a9d1daa8973b526937260801196f71d859d75c1d31e5fac10fd14b1ea0bfb5ef"
+    },
+    {
+      "id": "2608.20562",
+      "path": "benchmark_data/.corpus_distractors/2608.20562.pdf",
+      "title": "Conditional-Independence-Regularized Distributional Autoencoders for Mixed-Type Data",
+      "sha256": "6e6a17f2d39920ffe2cfe1c4dcee255db2476ecb338341c7b80683599c3989ef"
+    },
+    {
+      "id": "2608.20561",
+      "path": "benchmark_data/.corpus_distractors/2608.20561.pdf",
+      "title": "Consistency Models for Fast MRI Reconstruction Using Regularization by Denoising",
+      "sha256": "81620b9b6fe0be559cf29f46724dd60b65d31a40644019a4383fcf3e8c47fcc3"
+    },
+    {
+      "id": "2608.20557",
+      "path": "benchmark_data/.corpus_distractors/2608.20557.pdf",
+      "title": "Learning Prostate Anatomy at Test Time for Cancer Detection in Micro-Ultrasound",
+      "sha256": "c40c4dae9d209c41be4398155349c354d76edc47b13f133b21d9dd240a2bb54c"
+    },
+    {
+      "id": "2608.20554",
+      "path": "benchmark_data/.corpus_distractors/2608.20554.pdf",
+      "title": "aiXamine: Unified Black-Box Evaluation of Cross-Dimensional Trade-offs in LLM Safety, Security, and Privacy",
+      "sha256": "e647b1d0d782d99ec09faa949c8dc47a24be5646e878d3190a0c120aaf58c656"
+    },
+    {
+      "id": "2608.20548",
+      "path": "benchmark_data/.corpus_distractors/2608.20548.pdf",
+      "title": "Keep Your Friends Close, and the Right Neighbours Closer: Disaster-Conditioned Kernel-Regularized Graph Attention for Building Damage Classification",
+      "sha256": "787697557351053079afce01921c9aa0bcec25f5cd5d68b87c85abba7d208dc4"
+    },
+    {
+      "id": "2608.20532",
+      "path": "benchmark_data/.corpus_distractors/2608.20532.pdf",
+      "title": "Learning Exact NVIDIA SASS Encoders with $\\mathbb{F}_2$ Linear Algebra",
+      "sha256": "9025d84c89433a15204057510ec60499a8783593aad9f08ca263e90b1003456c"
+    },
+    {
+      "id": "2608.20516",
+      "path": "benchmark_data/.corpus_distractors/2608.20516.pdf",
+      "title": "When Graph-JEPA Learns the Wrong Thing: Diagnosing and Repairing Category-Conditional Collapse",
+      "sha256": "ebe75169eb29e6c88e8f6d16d9550e68dc55ba8926cc63f5ea40e0056e293fa5"
+    },
+    {
+      "id": "2608.20497",
+      "path": "benchmark_data/.corpus_distractors/2608.20497.pdf",
+      "title": "Bern2Edge: A Neurosymbolic Compiler for Edge Deployment via Bernstein Polynomial Networks",
+      "sha256": "df799d9b40d435e12bd58f390b0c32e23c524ad180572017e3626b72bb9f51b3"
+    },
+    {
+      "id": "2608.20488",
+      "path": "benchmark_data/.corpus_distractors/2608.20488.pdf",
+      "title": "Metag: A dataset to build agentic meta-reviewing capabilities",
+      "sha256": "7c648efc7f12cedaf20b596957a1f029308bace73ac3eaff22f1ace0e5e65d84"
+    },
+    {
+      "id": "2608.20483",
+      "path": "benchmark_data/.corpus_distractors/2608.20483.pdf",
+      "title": "Uncertainty propagation in auto-regressive random neural network models",
+      "sha256": "e1b429cf71176a80e311782109983be4857fa7b52facdc9aed0400b227a331a3"
+    },
+    {
+      "id": "2608.20480",
+      "path": "benchmark_data/.corpus_distractors/2608.20480.pdf",
+      "title": "When Clean Data Hurts: Learning with Monotone Corruptions Beyond Binary Classification",
+      "sha256": "7ebe533dc4645a614532563e04d41ab131d0d7e012ca3ac03c1261f10791876b"
+    },
+    {
+      "id": "2608.20337",
+      "path": "benchmark_data/.corpus_distractors/2608.20337.pdf",
+      "title": "Information on trajectories: martingales and random times",
+      "sha256": "82788e2467a3dc6a32065a5779bce556922fccdcf729b19e9a5bdc860ef5cbd4"
+    },
+    {
+      "id": "2608.20326",
+      "path": "benchmark_data/.corpus_distractors/2608.20326.pdf",
+      "title": "$TCP_\u03b1$: Margin-Controlled Confidence estimation for reliable Music Information Retrieval",
+      "sha256": "e12a3ad79443c990eb94947a08e59cfde022d4ac254799f9de4e2deb229fc89f"
+    },
+    {
+      "id": "2608.20322",
+      "path": "benchmark_data/.corpus_distractors/2608.20322.pdf",
+      "title": "A comparison between ceiling-mounted FMCW, IR-UWB and Wi-Fi radar for in-bedroom human activity monitoring and sleep interruption detection",
+      "sha256": "73c078cb3ead0035df46f913a1f5a535940072a28b6975a99c34de934acb617a"
+    },
+    {
+      "id": "2608.20318",
+      "path": "benchmark_data/.corpus_distractors/2608.20318.pdf",
+      "title": "AI4AI-Bench: Benchmarking LLM Agents in Algorithmic Design for Recursive Self-Improvement",
+      "sha256": "93029b04f8612f4bfdd221a6f726e86a2d1408cab0a3256866f164e3c3749dfc"
+    },
+    {
+      "id": "2608.20315",
+      "path": "benchmark_data/.corpus_distractors/2608.20315.pdf",
+      "title": "Explainable Transformer Models for Clinical Prediction Tasks on Structured Electronic Health Records",
+      "sha256": "c5bc0d9e955e3bbc73d338f15453823bda9066a2d24f53dee14f751890754d3a"
+    },
+    {
+      "id": "2608.20295",
+      "path": "benchmark_data/.corpus_distractors/2608.20295.pdf",
+      "title": "Physical-Support Confidence Sets for Highly Coherent Dictionaries",
+      "sha256": "b55553e316c00d8bcefa7f83960223d5fc3f9189840988bf271622fde2297e77"
+    },
+    {
+      "id": "2608.20285",
+      "path": "benchmark_data/.corpus_distractors/2608.20285.pdf",
+      "title": "Dynamic Structural Causal Modeling for Sleep",
+      "sha256": "57bb4aab69c04dcc4150a5da34cc39c9111b406c5c5b653282277d21272a5330"
+    },
+    {
+      "id": "2608.20280",
+      "path": "benchmark_data/.corpus_distractors/2608.20280.pdf",
+      "title": "Which Eviction Policy Should an LLM Cache Use? A Systematic Study Across Workloads, Capacities, and Encoders",
+      "sha256": "d730c5f9e4a388732541ceec311405c5b91484573c6086114ca12b353f92fda8"
+    },
+    {
+      "id": "2608.20447",
+      "path": "benchmark_data/.corpus_distractors/2608.20447.pdf",
+      "title": "Mutual information and sensitivity analysis for feature selection in customer targeting: a comparative study",
+      "sha256": "fe657ef03d7cfc965a9676a5b59f8fb6cb83efcda334ceb5b92b500c6986fbb6"
+    },
+    {
+      "id": "2608.20258",
+      "path": "benchmark_data/.corpus_distractors/2608.20258.pdf",
+      "title": "DICS: Data-Informed Centroid Splitting for Decision Tree Classifiers",
+      "sha256": "ca95c3b1ceaacc6748e01c16cc80e4d79643775ce54ba0e921cd81321ec5b452"
+    },
+    {
+      "id": "2608.20255",
+      "path": "benchmark_data/.corpus_distractors/2608.20255.pdf",
+      "title": "Transfer Learning in Nonparametric Regression with Deep ReLU Networks",
+      "sha256": "d789789772f1f257dbe7628d4a4dab6d71a7fac2acdd527c2261002d596526f1"
+    },
+    {
+      "id": "2608.20222",
+      "path": "benchmark_data/.corpus_distractors/2608.20222.pdf",
+      "title": "Gravitational-wave parameter estimation with machine-learning generated surrogate waveforms",
+      "sha256": "034beb03006efb1f2ddda74753b31e0584360a8fca952327e008c7d03f93b4f8"
+    },
+    {
+      "id": "2608.20210",
+      "path": "benchmark_data/.corpus_distractors/2608.20210.pdf",
+      "title": "Daedalus-150M: A Convolution-Attention Hybrid Designed for CPU Inference",
+      "sha256": "63213ad951c25410ce00fbcb74cdfd78d9e32219588fc60e60e95a3d4289d619"
+    },
+    {
+      "id": "2608.20202",
+      "path": "benchmark_data/.corpus_distractors/2608.20202.pdf",
+      "title": "MemTrapBench: Benchmarking Cognitive Traps in LLM Memory Use",
+      "sha256": "85ae54772aaf3a1ecece3e0c165ebc3636915e93f5ca79801b46c5fd4e39e879"
+    },
+    {
+      "id": "2608.20445",
+      "path": "benchmark_data/.corpus_distractors/2608.20445.pdf",
+      "title": "Amortized Bandwidth Learning for Kernel Density Estimation under Logarithmic Score",
+      "sha256": "621f3ad209241ce521ec44487c82546949c30572bc55a830fa24881109f845d6"
+    },
+    {
+      "id": "2608.20186",
+      "path": "benchmark_data/.corpus_distractors/2608.20186.pdf",
+      "title": "Decoding silent reading from non-invasive EEG",
+      "sha256": "7d78d16617935b48b20d145c9b74554946305b335206dd28f0de4bd6267d3496"
+    },
+    {
+      "id": "2608.20183",
+      "path": "benchmark_data/.corpus_distractors/2608.20183.pdf",
+      "title": "Exact Algebraic Computation of Learning Coefficients for Two-Dimensional Singular Models",
+      "sha256": "46f280029dce40ea607ecccc9e4e88ba949026b7555c8b9a9d3e3780180f897f"
+    },
+    {
+      "id": "2608.20181",
+      "path": "benchmark_data/.corpus_distractors/2608.20181.pdf",
+      "title": "A Standardized Framework for Machine Learning in Power System Protection",
+      "sha256": "d5e81a66649186ef4d3084499ea7c9d368f2fbbec29a9ee58d75fa093d53e681"
+    },
+    {
+      "id": "2608.20172",
+      "path": "benchmark_data/.corpus_distractors/2608.20172.pdf",
+      "title": "Ask Self, Ask Others: Relation Is All You Need",
+      "sha256": "419bd1699da8a70814ce25810f5d409432552230602d7cd38ac35330da10c523"
+    },
+    {
+      "id": "2608.20169",
+      "path": "benchmark_data/.corpus_distractors/2608.20169.pdf",
+      "title": "Task-CoEvolve: Efficient Harness Optimization via Adaptive Validation Task Selection",
+      "sha256": "91b52d185703321d55d1d4ae74662102651c3d11267bc7ff503b0cd0fc31bd8c"
+    },
+    {
+      "id": "2608.20442",
+      "path": "benchmark_data/.corpus_distractors/2608.20442.pdf",
+      "title": "Stored in Optimizer State, Valued by Later Training: A Causal Account of Subliminal Trait Transfer",
+      "sha256": "99aa5377b213d35656e435a6be2472099cfa6339712cc258183d9c0843faa430"
+    },
+    {
+      "id": "2608.20134",
+      "path": "benchmark_data/.corpus_distractors/2608.20134.pdf",
+      "title": "Feature Evolution and Migration during Vision Transformer Training",
+      "sha256": "f5ed1d5d93ffdacf735dc43f2a9b8787e4ce18cd0c54ed60b06ea05e1a8f6e76"
+    },
+    {
+      "id": "2608.20123",
+      "path": "benchmark_data/.corpus_distractors/2608.20123.pdf",
+      "title": "Discrete Diffusion Inference-Time Control with Nested Sequential Monte Carlo",
+      "sha256": "82428c6480a85c402234c5bac2d2cf9f1e3817f381d374d02560c8273f53928c"
+    },
+    {
+      "id": "2608.20117",
+      "path": "benchmark_data/.corpus_distractors/2608.20117.pdf",
+      "title": "SAE-Xplainers: Rule-Based Feature Interpretation for Extreme Earth Events",
+      "sha256": "02031b04c296b06567c6b0f460f8291856ff3417c2ee5a07f5e18750cbb12c44"
+    },
+    {
+      "id": "2608.20104",
+      "path": "benchmark_data/.corpus_distractors/2608.20104.pdf",
+      "title": "Structured Affinity for Unsupervised Visual Class-Incremental Memory in Deep Artificial Immune Networks",
+      "sha256": "0e8dcb9bbac36fae0877f51362138f66145f9dc4ad28f85bb2c4dbcf1ba95169"
+    },
+    {
+      "id": "2608.20099",
+      "path": "benchmark_data/.corpus_distractors/2608.20099.pdf",
+      "title": "Reward-Guided Autoregressive Graph Generation for Efficient Multi-Agent Communication Topology Design",
+      "sha256": "74ef655c729fe0202f069b05e9c02825c21f01108ae998731f1ced9a0cd9ed23"
+    },
+    {
+      "id": "2608.20441",
+      "path": "benchmark_data/.corpus_distractors/2608.20441.pdf",
+      "title": "Shared Physics Responses Recover Hidden Rankings in Neural Operator Libraries",
+      "sha256": "be3eadef60e0fed91cf20e91577515de150844854f86bfe34a889167f2656009"
+    },
+    {
+      "id": "2608.20440",
+      "path": "benchmark_data/.corpus_distractors/2608.20440.pdf",
+      "title": "Decision Tree and K-Means Analysis of Raman Spectra for Edible Oils: A Physics-Informed AI Approach",
+      "sha256": "a94b7890f6a9db6dfcb3812e1d3b2faabf9a6cd041fe8c24d9ce4e01b256536f"
+    },
+    {
+      "id": "2608.20065",
+      "path": "benchmark_data/.corpus_distractors/2608.20065.pdf",
+      "title": "Orthogonal JEPA: Factorized Predictive States for Latent World Models",
+      "sha256": "dd3d8cb994bf3acf51b6b3ad07f4c8a4480644dc83ceaedd260b55613282806e"
+    },
+    {
+      "id": "2608.20061",
+      "path": "benchmark_data/.corpus_distractors/2608.20061.pdf",
+      "title": "Let's Scale Step by Step: Compute-Efficient Hyperparameter Transfer for Large-Scale Mixture-of-Experts",
+      "sha256": "6df0d0f49366bfbd55593280526c76ba4d38a90ce57ec249e05cd5025f116799"
+    },
+    {
+      "id": "2608.20054",
+      "path": "benchmark_data/.corpus_distractors/2608.20054.pdf",
+      "title": "What You Can't See Is What You Learn: Restricted Evidence Visibility Favors Compositional Generalization in Shared-Genome Language-Model Societies",
+      "sha256": "986e8b616dda3e49e9d9b745c0f1144c2992484509db2d24b77eb704ca4299c0"
+    },
+    {
+      "id": "2608.20052",
+      "path": "benchmark_data/.corpus_distractors/2608.20052.pdf",
+      "title": "DecoVAE: a Lightweight Interpretable Trend-Seasonal VAE Framework for Efficient Probabilistic Time Series Forecasting",
+      "sha256": "468ac6bef2008d2dea09ec62c716faa6cd09d4ab638464c9cb716bf932ddd594"
+    },
+    {
+      "id": "2608.21325",
+      "path": "benchmark_data/.corpus_distractors/2608.21325.pdf",
+      "title": "Move by Move: Measuring and Steering How LLMs Conduct Psychotherapy",
+      "sha256": "bb347d14497756a85a0be02f21973f4d7434c126ae7fbbc1e5cf76fed0b6225c"
+    },
+    {
+      "id": "2608.21315",
+      "path": "benchmark_data/.corpus_distractors/2608.21315.pdf",
+      "title": "Prompt-Model Interaction Reaches the Fixed Points: A deterministic, task-free structural readout -- and the factorizations of it that failed",
+      "sha256": "6cf2fdd072f64249f24e74497f5c4b4215406d3696d924456da85fe61166149f"
+    },
+    {
+      "id": "2608.21265",
+      "path": "benchmark_data/.corpus_distractors/2608.21265.pdf",
+      "title": "Memory Augmentation Unlocks Efficient Chain-of-Thought Reasoning",
+      "sha256": "b61d57cef39b91b8510f835f9e75599e46c541625db02f7953388e68632da7c6"
+    },
+    {
+      "id": "2608.21252",
+      "path": "benchmark_data/.corpus_distractors/2608.21252.pdf",
+      "title": "EnSI-RAG: Entity-Structure-Indexed Retrieval-Augmented Generation for Long-Document Question Answering",
+      "sha256": "ba9b3cfaaf358b4b8b02d0e2548b5d8c4d87078ada66f07ef1061d0df544ca1e"
+    },
+    {
+      "id": "2608.21249",
+      "path": "benchmark_data/.corpus_distractors/2608.21249.pdf",
+      "title": "Benchmarking Patent Drafting from Inventor-Style Disclosures",
+      "sha256": "73d18a6fc1c442c6f8185ec8ad8e9653d64f7d69f78bd495845eac8161b366da"
+    },
+    {
+      "id": "2608.21242",
+      "path": "benchmark_data/.corpus_distractors/2608.21242.pdf",
+      "title": "Affective Context Amplifies Sycophancy in LLM Responses",
+      "sha256": "c7ec9411467b5c5a3a4f9d52374565e2b8cfec33486808d82412e834c81bd9d7"
+    },
+    {
+      "id": "2608.21236",
+      "path": "benchmark_data/.corpus_distractors/2608.21236.pdf",
+      "title": "RARE: Decoupling Representation Steering from Expert Routing in Mixture-of-Experts Language Models",
+      "sha256": "e1cd6cfe17a3220cae5059fedd44982e4b77a140ad115103fc65c24a46d603c6"
+    },
+    {
+      "id": "2608.21218",
+      "path": "benchmark_data/.corpus_distractors/2608.21218.pdf",
+      "title": "Enhancing LLMs in Predictive Political QA with Semi-Structured Data",
+      "sha256": "d9c4b1f48f0f6942908aba72e8f84ffaab5c07396a96db812b49744b6f961982"
+    },
+    {
+      "id": "2608.21095",
+      "path": "benchmark_data/.corpus_distractors/2608.21095.pdf",
+      "title": "Trustworthy RAG: An Evaluation Agent for Detecting Misinformation and Knowledge Poisoning in Generative AI Systems",
+      "sha256": "3714aa45eb5c695db17a1fd92002798651339e15ae899d58f8ad2a425616bacb"
+    },
+    {
+      "id": "2608.21088",
+      "path": "benchmark_data/.corpus_distractors/2608.21088.pdf",
+      "title": "When the Feature Pool Goes Algorithmic: Extending Mufwene's Ecology of Language Evolution to LLM-Mediated Exposure",
+      "sha256": "d46fa27ce692432a17a8e06e81d252a2f8e5a69b19104135e376d30f2664bdc7"
+    },
+    {
+      "id": "2608.21087",
+      "path": "benchmark_data/.corpus_distractors/2608.21087.pdf",
+      "title": "Jokes Aside: Measuring the Semantic Distance of Double Meanings",
+      "sha256": "03416262bccddce9d9fd6d17631bdd7538b2337d8f6e145a4784957e8b907ebe"
+    },
+    {
+      "id": "2608.21074",
+      "path": "benchmark_data/.corpus_distractors/2608.21074.pdf",
+      "title": "PromptResponse: Optimizing Prompts for LLM Coding Tasks",
+      "sha256": "5df6d915e5d3461ea6365344d89f623a7cc3e045fa1a4b835969b8eb38529ded"
+    },
+    {
+      "id": "2608.21043",
+      "path": "benchmark_data/.corpus_distractors/2608.21043.pdf",
+      "title": "Evidence-Consistent Generative Detection under Scenario-Level Distribution Shift",
+      "sha256": "73aec0ae3e49e12139854a9adc8fb2911ecd9fee8f0fd962e3f5b736c58a595a"
+    },
+    {
+      "id": "2608.21023",
+      "path": "benchmark_data/.corpus_distractors/2608.21023.pdf",
+      "title": "Scaling Unsupervised Word Alignment to Documents via Structural Constraints",
+      "sha256": "b389238fcba78fe29547291a4208b50e2128597f3f4b70f4048f376d482cf4f7"
+    },
+    {
+      "id": "2608.21021",
+      "path": "benchmark_data/.corpus_distractors/2608.21021.pdf",
+      "title": "Free-Text Evaluation of LLMs for 5G Domain Knowledge and Fault Analysis using LLM-as-Judge",
+      "sha256": "3ac9bf274c3a1c4127abcc9a45af2fe73508ea8a5ffdd76540f53ab80ef765a9"
+    },
+    {
+      "id": "2608.21019",
+      "path": "benchmark_data/.corpus_distractors/2608.21019.pdf",
+      "title": "Target-Aware Calibration Data Selection for Preserving Uncertainty in Quantized Language Models",
+      "sha256": "0888dd0d6e89fa1bfd6b4d83217f74f45a0c2eb747f6b62afb6e58d49119646d"
+    },
+    {
+      "id": "2608.20984",
+      "path": "benchmark_data/.corpus_distractors/2608.20984.pdf",
+      "title": "MigrationNarrate: A Dataset for Detection of Migration Narratives in YouTube Videos",
+      "sha256": "f20e23570a4a3e0f2ad64a7c9e5419f71a6f680ddd6bdf906d97e57428624d14"
+    },
+    {
+      "id": "2608.20964",
+      "path": "benchmark_data/.corpus_distractors/2608.20964.pdf",
+      "title": "Extractive Summarization for Arabic Documents Using SAraBERT with a Semantic Siamese Similarity Evaluation Metric",
+      "sha256": "e12e555fb46759e47af35c9de8babe0dff9c662d97090cebe39a83ca20ad4644"
+    },
+    {
+      "id": "2608.20927",
+      "path": "benchmark_data/.corpus_distractors/2608.20927.pdf",
+      "title": "MentorPulse: Refreshing Cross-Model Latent Guidance for Long-Form Generation",
+      "sha256": "d3430a60edd64ef16a936b7f0a6412150364dea26c7c830ec26d2b7a1c79f0f0"
+    },
+    {
+      "id": "2608.20925",
+      "path": "benchmark_data/.corpus_distractors/2608.20925.pdf",
+      "title": "Source-Free MT Evaluation Is Not MT Evaluation",
+      "sha256": "4ac7b58101d28a0fff565a31a4864f70b2b39fd347d9b5e7bdddd6de410d62fe"
+    },
+    {
+      "id": "2608.20920",
+      "path": "benchmark_data/.corpus_distractors/2608.20920.pdf",
+      "title": "ForeDreamer: A Self-Evolving Dual-Agent Memory Architecture for Future Event Prediction",
+      "sha256": "4bf44e754517c38e21dc3d7dc31f6c4def25723763a43ad4d772610a81feacaa"
+    },
+    {
+      "id": "2608.20887",
+      "path": "benchmark_data/.corpus_distractors/2608.20887.pdf",
+      "title": "KREL: Automatic Medical Coding via Knowledge-Guided Reasoning over Clinical Evidence with LLMs",
+      "sha256": "7b06822b9d34b43e1a5f0903ba689ae42f14890d1b00e3d1078ef8e2661c327a"
+    },
+    {
+      "id": "2608.20868",
+      "path": "benchmark_data/.corpus_distractors/2608.20868.pdf",
+      "title": "Identify, Locate, Link: End-to-End Key-Value Extraction from Document Images",
+      "sha256": "6b31fef1f3556cd84c77d0f2cad503c68884eec7e9fd41a98098fd76161bcf13"
+    },
+    {
+      "id": "2608.20856",
+      "path": "benchmark_data/.corpus_distractors/2608.20856.pdf",
+      "title": "Ontology-Driven Structural Regularization for Document-Level Relation Extraction",
+      "sha256": "71597f9cd2414f956e828577270e7ceaa5cf27c95b55af381b43ff98318fd12c"
+    },
+    {
+      "id": "2608.20831",
+      "path": "benchmark_data/.corpus_distractors/2608.20831.pdf",
+      "title": "STAR-OPD: Structured Aspect-Cascade-Aware On-Policy Reward Distillation for ABSA Quadruple Extraction",
+      "sha256": "60bb9f631e78c65d8d032752e4840c7bbcae34d164dd913a01c3885b20bb5369"
+    },
+    {
+      "id": "2608.20804",
+      "path": "benchmark_data/.corpus_distractors/2608.20804.pdf",
+      "title": "Denoising the Future: Context-Aware Spectral Diffusion for Temporal Knowledge Graph Extrapolation",
+      "sha256": "0cabfcb9d98bc9da01f2f6208df9f9f3b0a8cfb32a614d3e3dbedccc017970df"
+    },
+    {
+      "id": "2608.20801",
+      "path": "benchmark_data/.corpus_distractors/2608.20801.pdf",
+      "title": "Profiling What Matters: Context-Aware Item Profiles from Large-Scale Metadata for LLM Recommenders",
+      "sha256": "9c64dbc189c350d98d78d39d9c7e5209e8ae6eba5da4e6cfcbf08e25251819e7"
+    },
+    {
+      "id": "2608.20777",
+      "path": "benchmark_data/.corpus_distractors/2608.20777.pdf",
+      "title": "Tree-of-Concerns: Hierarchical Multi-Agent Debate for Unstated-Limitation Extraction in Scientific Critique",
+      "sha256": "8d56e5481ae5f09a7e8912c7ac28166acec88e3cf2c230e6ddca78b137cea83e"
+    },
+    {
+      "id": "2608.20729",
+      "path": "benchmark_data/.corpus_distractors/2608.20729.pdf",
+      "title": "Calibrating Criterion Revision in LLM Agents: Failure Modes and a Trace-Anchored Protocol",
+      "sha256": "212713a8ba0cc9bb22d754a928e7a35a95dcb38111f32d68e1fad469a77c7906"
+    },
+    {
+      "id": "2608.20711",
+      "path": "benchmark_data/.corpus_distractors/2608.20711.pdf",
+      "title": "AsmEvo: Agentic Assembly-Level Optimization of AMD GPU Kernels with Functional Equivalence Verification",
+      "sha256": "7dec6f1b7abeed25356c9f6d954c1c893a7c4c4c10e268075408d526e6d2066e"
+    },
+    {
+      "id": "2608.20670",
+      "path": "benchmark_data/.corpus_distractors/2608.20670.pdf",
+      "title": "Why2Speak: Faithful Reasoning for Abstaining Action Policies",
+      "sha256": "c247361477312d160db816b60c74e28b5a94bbfb6fe1b98a67913376d5fd4749"
+    },
+    {
+      "id": "2608.20661",
+      "path": "benchmark_data/.corpus_distractors/2608.20661.pdf",
+      "title": "Auditable by Construction: An Ontology-Driven Framework for Trustworthy LLM Analytics in Enterprise Finance",
+      "sha256": "29205d6fee18374d55fe2a8549b54f070ebe2ed116fa953380d7d10689b45fa6"
+    },
+    {
+      "id": "2608.20647",
+      "path": "benchmark_data/.corpus_distractors/2608.20647.pdf",
+      "title": "Directional Contextual Representations for Dependency Relations: Why Cross-Direction Pairing Fails",
+      "sha256": "41ab348ee7eb4b69903b8af406b751f4844dd9fa235d89cc858679437a40f10e"
+    },
+    {
+      "id": "2608.20634",
+      "path": "benchmark_data/.corpus_distractors/2608.20634.pdf",
+      "title": "AgentMercury: Your Agent Can Synthesize Verifiable Environments for Business Scenarios at scale",
+      "sha256": "9e4c9643100959fb1b074738c3c96a7812bc601b80232744f48909118ff90a31"
+    },
+    {
+      "id": "2608.20632",
+      "path": "benchmark_data/.corpus_distractors/2608.20632.pdf",
+      "title": "Sparse Token Routing in Efficient Transformers",
+      "sha256": "2d306045d04b45a375c0094e3dd0fca513fdaf4d1ac94769f1a3178b726bb8c2"
+    },
+    {
+      "id": "2608.20627",
+      "path": "benchmark_data/.corpus_distractors/2608.20627.pdf",
+      "title": "When Failures Propagate: Causal Failure Attribution in Agentic Retrieval-Augmented Generation",
+      "sha256": "fa30f33e6ea1d632b603ceb6df9c048592d78249a3059c910368f97acb11ff48"
+    },
+    {
+      "id": "2608.20569",
+      "path": "benchmark_data/.corpus_distractors/2608.20569.pdf",
+      "title": "Open-Weight Masked Introspection: Measuring What Language Models Can Report About Their Own Computation",
+      "sha256": "a41fd95ef0500e0ae2eb160883cff5535ec3fa440f35e8d673a70f77a31df7d5"
+    },
+    {
+      "id": "2608.20530",
+      "path": "benchmark_data/.corpus_distractors/2608.20530.pdf",
+      "title": "LiLiCorr: Lightweight Likelihood Correlation of Parallel Drafts for Speculative Decoding",
+      "sha256": "4fc5b233f5acc5ac4adaa8e831dcf7ef6789d625dfe86d2d0bbadc8a5168e3c0"
+    },
+    {
+      "id": "2608.20338",
+      "path": "benchmark_data/.corpus_distractors/2608.20338.pdf",
+      "title": "ConceptGuard: Benchmarking Context-Sensitive Unlearning in Large Language Models",
+      "sha256": "baad59615e62a93cae89fb02a7f733d968e6142b4243447e82a3c6de0afbc4f6"
+    },
+    {
+      "id": "2608.20331",
+      "path": "benchmark_data/.corpus_distractors/2608.20331.pdf",
+      "title": "G-CARL: Grounded Checklist-Aligned Reward Learning for Patient-Oriented Medical Report Interpretation",
+      "sha256": "a91e11c0df97c24fe5a7553cc993cc463a958862bc3fbf8b864a7ef9ae352075"
+    },
+    {
+      "id": "2608.20320",
+      "path": "benchmark_data/.corpus_distractors/2608.20320.pdf",
+      "title": "An Agentic Approach for Active Data Collection, Travel Behavior Modeling, and Weather-Sensitive Demand Prediction",
+      "sha256": "558cdae525c97f01e5b50000a3b9e307cae227f37f67d7aa7491a58507845872"
+    },
+    {
+      "id": "2608.20319",
+      "path": "benchmark_data/.corpus_distractors/2608.20319.pdf",
+      "title": "Inducing Task Models from Computer-Use Traces",
+      "sha256": "055abd08c5fed667badebc447be457006c754634853da9c27cf4b8811c8fad15"
+    },
+    {
+      "id": "2608.20290",
+      "path": "benchmark_data/.corpus_distractors/2608.20290.pdf",
+      "title": "Phantom Gains: Auditing Self-Improvement Against a Measured Null",
+      "sha256": "1ca00a66e541929cf3330703da0a6fcd4539ca1c388df29ea251d9b03548782f"
+    },
+    {
+      "id": "2608.20281",
+      "path": "benchmark_data/.corpus_distractors/2608.20281.pdf",
+      "title": "Inject, Align, Recover: Staged Post-Training for Retrieval-Free Document Knowledge Internalization",
+      "sha256": "a04a9e560b15cbc22942af63e4519fc7640812178e0e4de8f2deaeaac8da3060"
+    },
+    {
+      "id": "2608.20274",
+      "path": "benchmark_data/.corpus_distractors/2608.20274.pdf",
+      "title": "Break It Down, Pass It On: Cross-Task Skill Transfer in LLM Agents",
+      "sha256": "cd20ddb4c1d8bfed546baf4212ef71c3fb4d138f96a326d2e5d3ba76e043dc3f"
+    },
+    {
+      "id": "2608.20204",
+      "path": "benchmark_data/.corpus_distractors/2608.20204.pdf",
+      "title": "ContractScrub: A benchmark for final review of legal contracts",
+      "sha256": "e2e07c5f6dc06994f76501607b8f7541c78b40b9c2927f5d78551ab1cf247980"
+    },
+    {
+      "id": "2608.20153",
+      "path": "benchmark_data/.corpus_distractors/2608.20153.pdf",
+      "title": "FormalTCS: Benchmarking End-to-End Frontier Formal Theoretical Computer Science Research of Large Language Models",
+      "sha256": "5f4ef8953e63ac50774117bedcecd254547890faac87b8a24bf793812b855dff"
+    },
+    {
+      "id": "2608.20129",
+      "path": "benchmark_data/.corpus_distractors/2608.20129.pdf",
+      "title": "Multi-Agent Orchestration with the Common-Sense Reasoning Capabilities of LLMs for Autonomous Driving",
+      "sha256": "3b2395611b69ca3d07d2d84fda8d32ed1dc6c9eb35407c1703b530f16fb07f89"
+    },
+    {
+      "id": "2608.20116",
+      "path": "benchmark_data/.corpus_distractors/2608.20116.pdf",
+      "title": "When Text and Numbers Disagree: Evidence Arbitration in Large Language Models",
+      "sha256": "a39e14ced7d54916f6572b825318f938d78930178c4b1c6eb7235865812c20b9"
+    },
+    {
+      "id": "2608.20106",
+      "path": "benchmark_data/.corpus_distractors/2608.20106.pdf",
+      "title": "OenoBench: A Wine-Domain Benchmark for Knowledge-Grounded Evaluation of Large Language Models",
+      "sha256": "324cc41f8ecafc60ed5c853ad8dd3b06c5b6cc943fcdc88d4a67222168800f9a"
+    },
+    {
+      "id": "2608.20083",
+      "path": "benchmark_data/.corpus_distractors/2608.20083.pdf",
+      "title": "SABET-QA: Temporal Knowledge Graph Question Answering",
+      "sha256": "7e4e3db1dc8224be683742f7b6fd010087c2509c3fac70454066db671e0a8128"
+    },
+    {
+      "id": "2608.20047",
+      "path": "benchmark_data/.corpus_distractors/2608.20047.pdf",
+      "title": "Auditing Cross-Lingual Fairness in Language Model Watermarking",
+      "sha256": "c66bbecaf022b105531258d2c35620c32714b8589693740394c9bbfd0e0c99b4"
+    },
+    {
+      "id": "2608.19981",
+      "path": "benchmark_data/.corpus_distractors/2608.19981.pdf",
+      "title": "HealMed: Multilingual Evaluation of Large Language Models in Medicine",
+      "sha256": "05759c9476aa09d53a8ba79ea1936b4a7da148a5e303f0a7e4e19b526f314931"
+    },
+    {
+      "id": "2608.19971",
+      "path": "benchmark_data/.corpus_distractors/2608.19971.pdf",
+      "title": "Robust Incomplete Multimodal Sentiment Analysis via Iterative Proxy Correction",
+      "sha256": "20eefe8701099797dd94604ff4e3385e98d53eb2c9c1193e45c77c6821787c5f"
+    },
+    {
+      "id": "2608.19957",
+      "path": "benchmark_data/.corpus_distractors/2608.19957.pdf",
+      "title": "Natural Language Code Retrieval for 1C:Enterprise: An Open Benchmark and Efficient Bi-Encoder",
+      "sha256": "3e060d1a79043873a36ae52c9d7259a9a9d339ff10a9a3fa67d77130d3da8671"
+    },
+    {
+      "id": "2608.19942",
+      "path": "benchmark_data/.corpus_distractors/2608.19942.pdf",
+      "title": "Dynamic Gated Cross-Modal Fusion with Sarcastic-aware Contrastive Regularization for Multimodal Sarcasm Detection",
+      "sha256": "d8ea9d9bf6e1da04f7f3e93b95c3bcbe930b15ab2f6daf97346be62d35f6257d"
+    },
+    {
+      "id": "2608.19920",
+      "path": "benchmark_data/.corpus_distractors/2608.19920.pdf",
+      "title": "Learning how to Forget: Fine-tuning for Long-Context Sparse Attention",
+      "sha256": "660fe6168c61d714dd6f7a98e6d6efcc989e4291d7c654679fd0a6e798ffeed9"
+    },
+    {
+      "id": "2608.19893",
+      "path": "benchmark_data/.corpus_distractors/2608.19893.pdf",
+      "title": "Interrupting the Loop: Periodic Subject Changes Raise Judged Surprise and Connection in Base Language Models",
+      "sha256": "180b8f89b53ee8eb1d67e80f030e22db060a380a9bc7ec343af2f1d9ff17cb58"
+    },
+    {
+      "id": "2608.19880",
+      "path": "benchmark_data/.corpus_distractors/2608.19880.pdf",
+      "title": "EnvHarness: Awakening Static Worlds for Agent Learning",
+      "sha256": "3859eed3337e0324ef94f38ca21f69cc6daa15b5a78497680370959223d51fd4"
+    },
+    {
+      "id": "2608.19875",
+      "path": "benchmark_data/.corpus_distractors/2608.19875.pdf",
+      "title": "A knowledge-guided agentic framework for mitigating patient-context ambiguity in health queries",
+      "sha256": "36aeece4ea81410dd37dbdf18021f28c671dc67176e93629b227d65d889bcabf"
+    },
+    {
+      "id": "2608.19861",
+      "path": "benchmark_data/.corpus_distractors/2608.19861.pdf",
+      "title": "PolicyGuide: From Guarding One Action to Guiding the Whole Workflow for Policy-Compliant LLM Agents",
+      "sha256": "d4366ab3e0ed956b7aec1f2d3ca5194bead225ec2ce542322df7dd3078674dd8"
+    },
+    {
+      "id": "2608.19825",
+      "path": "benchmark_data/.corpus_distractors/2608.19825.pdf",
+      "title": "Towards Clinically Faithful Medical Image Captioning via Enhanced Vision-Language Alignment",
+      "sha256": "c1284334a284d38b1e84ff5bb73224639a5a2647baefa2687536d23b291636a3"
+    },
+    {
+      "id": "2608.19803",
+      "path": "benchmark_data/.corpus_distractors/2608.19803.pdf",
+      "title": "MileGPO: Milestone Inference with Local Evidence for Graph-Based Policy Optimization of Long-Horizon LLM Agents",
+      "sha256": "a5509228494dbbd00240f58c1f185df462061eea39e0d7629193ea079ddf6e13"
+    },
+    {
+      "id": "2608.19802",
+      "path": "benchmark_data/.corpus_distractors/2608.19802.pdf",
+      "title": "Stopping and Routing LLM Judge Panels",
+      "sha256": "c0e2a37ba3c239ad0e982e3ec6ffdb0792206b1da4428931a87ea8da86e25f61"
+    },
+    {
+      "id": "2608.19800",
+      "path": "benchmark_data/.corpus_distractors/2608.19800.pdf",
+      "title": "LoRA-GA$^2$: Low Rank Adaptation with Multi-step Gradient Adaptive Alignment",
+      "sha256": "50e833c0f6679734cc2cde0ab7a96bfaf055f3db0c45cf84caa39c21e5d75366"
+    },
+    {
+      "id": "2608.19799",
+      "path": "benchmark_data/.corpus_distractors/2608.19799.pdf",
+      "title": "SWE-bench Science: Can Coding Agents Resolve Engineering Tasks in Science?",
+      "sha256": "009577d95fc4d9ccfe3e1584eb572f23dd70f7a9df0bbb7dec7c3fbadc4e73df"
+    },
+    {
+      "id": "2608.19760",
+      "path": "benchmark_data/.corpus_distractors/2608.19760.pdf",
+      "title": "Credit Without Ground Truth: Auditing Step-Level Credit Assignment in LLM Agents Against Executed Replay",
+      "sha256": "349efbe4bce333af4f0b1e04dad55911cb97390be381bc4c8d7b8e22d4d0c495"
+    },
+    {
+      "id": "2608.19758",
+      "path": "benchmark_data/.corpus_distractors/2608.19758.pdf",
+      "title": "FlashPrefill V2: Block-Sparse Prefill Attention for Long-Context LLM Serving",
+      "sha256": "34b05a02018204c3fb408b244c56e13bb0ec390586a6f001f5aeb3356314f8f3"
+    },
+    {
+      "id": "2608.19748",
+      "path": "benchmark_data/.corpus_distractors/2608.19748.pdf",
+      "title": "Truncate Bad, Upweight Good: BoN-Style Distillation via Rank-Based Classification",
+      "sha256": "9b43b6b4413144c7617f8f94311ca68e2626d50b4d6a48b5d2310da10c84687b"
+    },
+    {
+      "id": "2608.19746",
+      "path": "benchmark_data/.corpus_distractors/2608.19746.pdf",
+      "title": "PersonalBench: Measuring the Authorship Gap in LLM Personalization",
+      "sha256": "f867dd2ff6756317fe99025eea6b0d752e4b6bb020f7f3e05e9f4e6cc8eee76f"
+    },
+    {
+      "id": "2608.19741",
+      "path": "benchmark_data/.corpus_distractors/2608.19741.pdf",
+      "title": "One Success Isn't Reliability: Thinkingbox, a Sandbox and Benchmark for Agents in Stateful Business Workflows",
+      "sha256": "ae2057ce49de051298cbaa21c3437db80ae4b0525a0db7e7763733fc0639ae3c"
+    },
+    {
+      "id": "2608.19737",
+      "path": "benchmark_data/.corpus_distractors/2608.19737.pdf",
+      "title": "TempJail: Temporal Jailbreak Attack against Large Vision-Language Models via Subtitle Scheduling",
+      "sha256": "a1142c438d089bc6ab700ca7cffa7e266119c5e70599a850a353746cc133f000"
+    },
+    {
+      "id": "2608.19726",
+      "path": "benchmark_data/.corpus_distractors/2608.19726.pdf",
+      "title": "Projector Is All You Train",
+      "sha256": "feb78f1cc7d521ee66c8389ebd77594b6facdf88fb3456acc53b5a91e23dfc26"
+    },
+    {
+      "id": "2608.19723",
+      "path": "benchmark_data/.corpus_distractors/2608.19723.pdf",
+      "title": "StreamSoccer: Event-Driven Memory for Streaming Soccer Commentary",
+      "sha256": "ca5a964a8770eb66be937df3a149a4f7c90727de6ff7c54b1067591e266e3f0e"
+    },
+    {
+      "id": "2608.19670",
+      "path": "benchmark_data/.corpus_distractors/2608.19670.pdf",
+      "title": "The Asymmetric Harms of LLM Compression",
+      "sha256": "e37b487ee4344346d6dd2b99c5e934d057210d197246b315e8a98169cf7d9d16"
+    },
+    {
+      "id": "2608.19662",
+      "path": "benchmark_data/.corpus_distractors/2608.19662.pdf",
+      "title": "ReCache: Efficient KV Cache Reuse and Compression for Tool-Augmented LLM Agents",
+      "sha256": "80cf86845864920c56ac0a830ce900e7224c45d53a2e112f485a4fbccd20c5e1"
+    },
+    {
+      "id": "2608.19652",
+      "path": "benchmark_data/.corpus_distractors/2608.19652.pdf",
+      "title": "Can Agent Memory Systems Track Evolving State?",
+      "sha256": "fc03a3ae74997cbab8983118a05a19b573991846d3ef48774ebe7fc9e25811b5"
+    },
+    {
+      "id": "2608.19621",
+      "path": "benchmark_data/.corpus_distractors/2608.19621.pdf",
+      "title": "Mitigating Identity Essentialism in LLM Agents with Longitudinal Life Trajectories",
+      "sha256": "1773e1dfab9fa6d4c6d937933bb644d313ba6287dba3df7a3bc3235dab8426c1"
+    },
+    {
+      "id": "2608.19611",
+      "path": "benchmark_data/.corpus_distractors/2608.19611.pdf",
+      "title": "Forking Fast: Efficiently Estimating Uncertainty Dynamics in Text Generation",
+      "sha256": "d7da2e8ba3eea30a7397398500e863c45fd6864b95afaa2e208c285b59be4aa3"
+    },
+    {
+      "id": "2608.19598",
+      "path": "benchmark_data/.corpus_distractors/2608.19598.pdf",
+      "title": "PEA-DPO: Perception-Enhanced Alignment Direct Preference Optimization for MLLMs Alignment",
+      "sha256": "630671367ec73ce95627b5310ef6c8c9f9a0840dc4bfed4d43f5e8ec0fcb18ad"
+    },
+    {
+      "id": "2608.20432",
+      "path": "benchmark_data/.corpus_distractors/2608.20432.pdf",
+      "title": "ProofJudge: Tool-Grounded LLM Evaluation of Formal Proof Quality in Mathlib",
+      "sha256": "6cf47f4fe21e440bbd77a663456505d13dc98280ebc7f8e7397d134d4e3806b8"
+    },
+    {
+      "id": "2608.19564",
+      "path": "benchmark_data/.corpus_distractors/2608.19564.pdf",
+      "title": "Remember, Verify, or Ask? Cross-Family Evaluation of Memory Commitment in LLM Agents",
+      "sha256": "1d9e9ee3019784bc9aa843a7849071595ec57d74ef0f8a3e0f61d973bafce35d"
+    },
+    {
+      "id": "2608.19558",
+      "path": "benchmark_data/.corpus_distractors/2608.19558.pdf",
+      "title": "Reliable Financial Named Entity Recognition under Domain Shift",
+      "sha256": "4e2a21817d519243948a3ee60983eb02277a1be02df317562f9df487bdf3db26"
+    },
+    {
+      "id": "2608.19549",
+      "path": "benchmark_data/.corpus_distractors/2608.19549.pdf",
+      "title": "Generating Diverse Personas for User Simulators to Test Interview Dialogue Systems",
+      "sha256": "01e84ec4326e0b28fca5c786b40024e4ae2043bfa4ec0c1afd8803db50776a49"
+    },
+    {
+      "id": "2608.19535",
+      "path": "benchmark_data/.corpus_distractors/2608.19535.pdf",
+      "title": "From Retrieved Context to Runtime Control: Adaptive Compression for Edge-based RAG",
+      "sha256": "5f17171fef8a7346660f8aa0270beb131901428322c1360c13a994681708a1c5"
+    },
+    {
+      "id": "2608.19529",
+      "path": "benchmark_data/.corpus_distractors/2608.19529.pdf",
+      "title": "When Machines Speak: A Unified Generative Framework for Integrating Machine-Native Symbols into Pretrained Large Language Models",
+      "sha256": "ec5ede387ae96879055be3fa89b52ad491dc8b8de5c951b1300d0dabd6c6cb91"
+    },
+    {
+      "id": "2608.19527",
+      "path": "benchmark_data/.corpus_distractors/2608.19527.pdf",
+      "title": "Does Listening Matter? Backchanneling and Nodding in AI Clone",
+      "sha256": "eb9856cf591ba52da4fd3b346c37570b9168f0d43f44dbad5ab708acc9c2e73d"
+    },
+    {
+      "id": "2608.19526",
+      "path": "benchmark_data/.corpus_distractors/2608.19526.pdf",
+      "title": "Automated Summarization of Financial News Using Large Language Models and Retrieval-Augmented Generation: An Early Empirical Study (Fall 2023)",
+      "sha256": "429d1e36656afe1325562c9aea52fdb6905f14de1615fa2940d7e85e583c6779"
+    },
+    {
+      "id": "2608.19515",
+      "path": "benchmark_data/.corpus_distractors/2608.19515.pdf",
+      "title": "Hear2Act: Benchmarking When Prosody Should Change What an Assistant Does",
+      "sha256": "0290c616789340e2d60e70b535ebb288332917b107c2f22d7010503fe2951272"
+    },
+    {
+      "id": "2608.19491",
+      "path": "benchmark_data/.corpus_distractors/2608.19491.pdf",
+      "title": "DeltaMomentum: A Key-Value based Anisotropic Momentum Update via Delta Rule",
+      "sha256": "3bc706feede27ae3a29a2962efee641d23967b030be3d87c4d0ced333354062b"
+    },
+    {
+      "id": "2608.19475",
+      "path": "benchmark_data/.corpus_distractors/2608.19475.pdf",
+      "title": "Measuring What a Specification Determines: A Formal Semantic-Block Model and an Execution-Judged Benchmark",
+      "sha256": "8a0121685e2d64c92c72c711f0d844d12c25d2bbea5ddebb7df0aaa606936d71"
+    },
+    {
+      "id": "2608.19472",
+      "path": "benchmark_data/.corpus_distractors/2608.19472.pdf",
+      "title": "SynFlow: A Multidimensional Diachronic Semantic Analysis Toolkit",
+      "sha256": "70327ecb859dd71048da58e4530fa5825ac10e8b220216bfa8556e0b760be1b3"
+    },
+    {
+      "id": "2608.19437",
+      "path": "benchmark_data/.corpus_distractors/2608.19437.pdf",
+      "title": "Are LLMs becoming similarly creative? Evidence from three years of models",
+      "sha256": "451f9e68d530e4eaff9e3ab42d21fbc065db377faac33fcce9513669f89d866b"
+    },
+    {
+      "id": "2608.19430",
+      "path": "benchmark_data/.corpus_distractors/2608.19430.pdf",
+      "title": "HARP: Hierarchical Adaptive Ranking with Preference-Adaptive Fusion for Query-Based CVE Prioritization",
+      "sha256": "3e8dc18fb9b0681c6097158e371d6dc730a3271eb0979bf24db476f6e4ed9492"
+    },
+    {
+      "id": "2608.19369",
+      "path": "benchmark_data/.corpus_distractors/2608.19369.pdf",
+      "title": "Linguistic Holonomy and Statistical Watermarks: Inner Geometry of Meaning-Preserving Transformations",
+      "sha256": "75ec6cfa73567ce8b63567af21e05f8db34b08ed368f4a0da929648f221548f1"
+    },
+    {
+      "id": "2608.19361",
+      "path": "benchmark_data/.corpus_distractors/2608.19361.pdf",
+      "title": "A Speech Corpus for Mizo Automatic Speech Recognition: Whisper and SraVaani 1.0 Fine-Tuning with Morphology-Aware Evaluation",
+      "sha256": "3a0743d25d75be2e5b827f21f3d1703e0c33a1f3d304a5a77fdf5cfaf16f17d5"
+    },
+    {
+      "id": "2608.19197",
+      "path": "benchmark_data/.corpus_distractors/2608.19197.pdf",
+      "title": "SPADE: Self-Play in Adaptive Synthetic Executable Environments",
+      "sha256": "2459c2b53e79ebf0ceec4879b4163d0f992c7f1073e7503408b2399e1911fe6e"
+    },
+    {
+      "id": "2608.19181",
+      "path": "benchmark_data/.corpus_distractors/2608.19181.pdf",
+      "title": "Beyond Teacher Likelihood: Group-Calibrated On-Policy Distillation for Long-Context Reasoning",
+      "sha256": "4d871acc2b6e36c14c62950b8848d4bb66da3fe40cd161c3365453558256f6e4"
+    },
+    {
+      "id": "2608.19165",
+      "path": "benchmark_data/.corpus_distractors/2608.19165.pdf",
+      "title": "ChildSafeAds Shared Task 2026: Commercial Content in Child-Facing YouTube Videos",
+      "sha256": "fa02c254acb7fe32381b0cd0dda50fb54e9a5b514b83acb9552f81abe2ba5546"
+    },
+    {
+      "id": "2608.19303",
+      "path": "benchmark_data/.corpus_distractors/2608.19303.pdf",
+      "title": "Outcome Monitors: Recovery Affordances for Silent Tool Failures",
+      "sha256": "65c8bbb6b9f150e8126e7ca15c990ff3a4a1a25b14ec3d756bcbb931bc0b49af"
+    },
+    {
+      "id": "2608.19133",
+      "path": "benchmark_data/.corpus_distractors/2608.19133.pdf",
+      "title": "Comment-level Topic Drift Analysis in the Reddit Corpus",
+      "sha256": "ed17f396e341632eaa228644f33080f7cd8ed51caf8c327ff06dbdbccee414b0"
+    },
+    {
+      "id": "2608.19098",
+      "path": "benchmark_data/.corpus_distractors/2608.19098.pdf",
+      "title": "Open-MOPD: Diagnosing and Fixing Capability Imbalance in Multi-Teacher On-Policy Distillation",
+      "sha256": "7b5fb53b45ede572e476d50b6893cc7fabb41ac685a81a018d068441d1223aad"
+    },
+    {
+      "id": "2608.19083",
+      "path": "benchmark_data/.corpus_distractors/2608.19083.pdf",
+      "title": "When Readability and Source Retention Diverge: An Evaluability Gap in AI Translation",
+      "sha256": "9274913cbf6053b221742a58e54cd8ab34a310bd67a183b6ef2e4e924d6f955f"
+    },
+    {
+      "id": "2608.21360",
+      "path": "benchmark_data/.corpus_distractors/2608.21360.pdf",
+      "title": "OmniAssistBench: Assistant-style Interaction Benchmark for Omni-LLMs",
+      "sha256": "5823632a9997a95161a8d971d02d96844dccb5da3be3452aff2e5eb95b68994d"
+    },
+    {
+      "id": "2608.21332",
+      "path": "benchmark_data/.corpus_distractors/2608.21332.pdf",
+      "title": "Anatomy-Informed Neural Networks: Encoding Anatomic Priors in Loss and Architecture, with an SE(3) Formulation of Guidewire-Induced Aortoiliac Deformation",
+      "sha256": "e572b805be6c4bf2acd2a70a6d8c7060f0377fd9d974f46093cef9b8f196fe28"
+    },
+    {
+      "id": "2608.21305",
+      "path": "benchmark_data/.corpus_distractors/2608.21305.pdf",
+      "title": "Re$^3$Cap: Retrieval-Guided Refinement for Image Captioning Enhancement via Reinforcement Learning",
+      "sha256": "1454c9585c9ec28bbf5c8eed55d8907c62517e091abfd33cf47124e5800aa6ad"
+    },
+    {
+      "id": "2608.21300",
+      "path": "benchmark_data/.corpus_distractors/2608.21300.pdf",
+      "title": "When Adaptation Hurts: Connecting Representational Drift to OOD Failures in MedSAM Fine-Tuning",
+      "sha256": "e017085a115e9fccf8245cee181b45fe2818a4217ee6b988d325cbdcfa045fe2"
+    },
+    {
+      "id": "2608.21290",
+      "path": "benchmark_data/.corpus_distractors/2608.21290.pdf",
+      "title": "VT-MUSE: Multimodal Unified Sequential Visuotactile Representation Learning for Manipulation",
+      "sha256": "4bf4ee27d106ac3acc012b267b5da161584b91af24c724e2b66f89bff187e821"
+    },
+    {
+      "id": "2608.21286",
+      "path": "benchmark_data/.corpus_distractors/2608.21286.pdf",
+      "title": "Difficulty-Calibrated Interpolation Paths for Conditional Flow Matching",
+      "sha256": "81c18503c0dab0e19f497f3836715162c445457ece6a2829d447c308e8892dd8"
+    },
+    {
+      "id": "2608.21281",
+      "path": "benchmark_data/.corpus_distractors/2608.21281.pdf",
+      "title": "WildFin: An In-the-Wild Dataset for Fish Behavioral Recognition",
+      "sha256": "eb97d19c837b9b9bf2a3144a57ab3a1d5ad61fd5dc3cb7bd90d7ae567ee97eb1"
+    },
+    {
+      "id": "2608.21276",
+      "path": "benchmark_data/.corpus_distractors/2608.21276.pdf",
+      "title": "The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization",
+      "sha256": "10929a15004ffabbfab97daa05beda435810e910f8cdb42225b43b04ecbfbf75"
+    },
+    {
+      "id": "2608.21247",
+      "path": "benchmark_data/.corpus_distractors/2608.21247.pdf",
+      "title": "Just Noticeable Difference Modeling for Token Compression in Vision-Language-Action Models",
+      "sha256": "8253a62f92482742cfc6dffbf6650c3783673385b2343129275dcd14eaa7972f"
+    },
+    {
+      "id": "2608.21244",
+      "path": "benchmark_data/.corpus_distractors/2608.21244.pdf",
+      "title": "A VLM Answer Is Not an Anomaly Score: Rank Compression in Training-Free Video Anomaly Detection",
+      "sha256": "987f1197f5fbaa3cd4ce88df01e532f6dd4347fb0c44b68bd49ac4a1ed254ba8"
+    },
+    {
+      "id": "2608.21229",
+      "path": "benchmark_data/.corpus_distractors/2608.21229.pdf",
+      "title": "Anchoring Instruction Outside Mask: Exact Reference Caching for Efficient In-Context Diffusion Transformers",
+      "sha256": "965291793bc81eea6a137a5ce4f14e00c0419c540bd5242f7b9b5fd98e7fe605"
+    },
+    {
+      "id": "2608.21194",
+      "path": "benchmark_data/.corpus_distractors/2608.21194.pdf",
+      "title": "ES-VP : Energy-Shaped Dynamic Visual Prompting for Efficient Model Adaptation",
+      "sha256": "9b6fb1ed2482cda7f28a87d30566d8c0462c94016cd2ab76ff9044ef36eb4c85"
+    },
+    {
+      "id": "2608.21189",
+      "path": "benchmark_data/.corpus_distractors/2608.21189.pdf",
+      "title": "Towards Investigating Residual Hearing Loss: Quantification of Fibrosis in a Novel Cochlear OCT Dataset",
+      "sha256": "d7c2d431cf3142695bdfbd38977660db6a1d14bc5aa7d10e96f0565b1cd3b659"
+    },
+    {
+      "id": "2608.21180",
+      "path": "benchmark_data/.corpus_distractors/2608.21180.pdf",
+      "title": "Toward Vision Language Model-based Assessment of Clinical Quality and Usability of LGE-MR Images for Cardiac Ablation Planning",
+      "sha256": "44d3b193c8d655a332a1e5987289a8ab2b325e73a4c45ad35baa00a0a27bc19d"
+    },
+    {
+      "id": "2608.21170",
+      "path": "benchmark_data/.corpus_distractors/2608.21170.pdf",
+      "title": "Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds",
+      "sha256": "465a68253d39dba33c5829ffb1ed54b171fe3e83e37e34139f6a9ee232af7937"
+    },
+    {
+      "id": "2608.21140",
+      "path": "benchmark_data/.corpus_distractors/2608.21140.pdf",
+      "title": "A Modular Agent for Reliable and Auditable Spatial Relation Verification in CT Scans",
+      "sha256": "5e3adba8bb207838e617659185b6e38fd700a5c3189ce610794bd300e4df9464"
+    },
+    {
+      "id": "2608.21136",
+      "path": "benchmark_data/.corpus_distractors/2608.21136.pdf",
+      "title": "Stream3Dv2: Geometric-Semantic Fusion Enhanced Streaming Zero-Shot 3D Scene Understanding",
+      "sha256": "e26fcf6055c8569f217b013a919a98ea833feb95f72b6fac522268b1ad01e5cc"
+    },
+    {
+      "id": "2608.21133",
+      "path": "benchmark_data/.corpus_distractors/2608.21133.pdf",
+      "title": "Masking Is Not Enough: Generative Restoration for Multimodal De-Identification in Medical AI",
+      "sha256": "e296fd669a1f7313d7a57c0d67fedaaac96920a1b7ff16797ecc2d3c00e9f25b"
+    },
+    {
+      "id": "2608.21114",
+      "path": "benchmark_data/.corpus_distractors/2608.21114.pdf",
+      "title": "CIVA: Critic-Induced Value-Subspace Attacks on Visual World-Model Agents",
+      "sha256": "f39e580038ca820fcc4b4c91ddc2e635256b7393c4e70dd3497013e1b4dbd4af"
+    },
+    {
+      "id": "2608.21099",
+      "path": "benchmark_data/.corpus_distractors/2608.21099.pdf",
+      "title": "A2DINOv3: Rethinking Multi-Modal Object Detection via Socialized Collaboration",
+      "sha256": "d4b06995ab3ddcc6c36c1eb5692389f36bb8b4fc05375736c630a400108d27be"
+    },
+    {
+      "id": "2608.21098",
+      "path": "benchmark_data/.corpus_distractors/2608.21098.pdf",
+      "title": "When does fusing hand-crafted knowledge with learned representations pay? A cost-normalized benchmark of stacking, substitution, and interference",
+      "sha256": "04cf1a09a9f93d32e2b595257d3dd86a0b9fecd8ddb3da444d448a4867ffb336"
+    },
+    {
+      "id": "2608.21093",
+      "path": "benchmark_data/.corpus_distractors/2608.21093.pdf",
+      "title": "Gaussian-Mixture Latent Flow for Stochastic 3D Human Motion Prediction",
+      "sha256": "1a6cddb6d6267e6669c1dcdcbc8a87e67a660ea87946771b94bbb862acfa2753"
+    },
+    {
+      "id": "2608.21067",
+      "path": "benchmark_data/.corpus_distractors/2608.21067.pdf",
+      "title": "AT-ViT: Area-Targeted Multi-View Vision Transformer with Cross-Attention and Multi-Scale Patching for Plant Trait Recognition in Herbarium Images",
+      "sha256": "5b91114f4f63ac521b2693006b2f1b9dde7f04ae611edb07aa15eb48b78fc435"
+    },
+    {
+      "id": "2608.21066",
+      "path": "benchmark_data/.corpus_distractors/2608.21066.pdf",
+      "title": "Robust Validation to Geometric Perturbations for Autonomous Pose Estimation",
+      "sha256": "2e5fdad9f0a344657ad056e3fbc36709589759ba0255368676218b94d93e7a3c"
+    },
+    {
+      "id": "2608.21060",
+      "path": "benchmark_data/.corpus_distractors/2608.21060.pdf",
+      "title": "CellPath-Bench: A Multidimensional Benchmark for Whole-Slide Cellular Representations in Pathology Foundation Models",
+      "sha256": "27a977f47f35108db08bdce47f7750357e4e1d5180a29d83709a732e000c4988"
+    },
+    {
+      "id": "2608.21055",
+      "path": "benchmark_data/.corpus_distractors/2608.21055.pdf",
+      "title": "CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors",
+      "sha256": "75831e6dba2e920759b59914a199bf3bb6451dd57e23d8a1107518c894de5022"
+    },
+    {
+      "id": "2608.21041",
+      "path": "benchmark_data/.corpus_distractors/2608.21041.pdf",
+      "title": "CoST: Semantic-Aware Urban Understanding via Spatial-Temporal Alignment",
+      "sha256": "941275a77ac353b4ef7173bbdd300915cebb4ba8a1d551fc9aafdbf9dc8acada"
+    },
+    {
+      "id": "2608.21022",
+      "path": "benchmark_data/.corpus_distractors/2608.21022.pdf",
+      "title": "Recognition-Conditioned Reasoning: A Training-Free Multimodal-LLM Pipeline for Fine-Grained Micro-Action Understanding",
+      "sha256": "59429618facda732745603b1ff56baa42b001638f4a8cffaa1e8ac73ec3bcfbf"
+    },
+    {
+      "id": "2608.21009",
+      "path": "benchmark_data/.corpus_distractors/2608.21009.pdf",
+      "title": "Dorsal Hand Images for Immersive (XR) and Privacy-preserving Age Assurance and Child Safety",
+      "sha256": "8617cf58a3b53e3328a11053296de4fa549209e7469d91a29097b3022115e39e"
+    },
+    {
+      "id": "2608.21008",
+      "path": "benchmark_data/.corpus_distractors/2608.21008.pdf",
+      "title": "Triangulation-Free Bundle Adjustment with Graduated Non-Convexity for Camera Pose Refinement from Coarse Priors",
+      "sha256": "ae62cd25441c2e07f8968de9ae7a9af6479a30fd0a4b63662fbc3066c79ba31b"
+    },
+    {
+      "id": "2608.20999",
+      "path": "benchmark_data/.corpus_distractors/2608.20999.pdf",
+      "title": "Latent Ordinal Evidence, Misaligned Outputs: Inference-Time Ordinal Lens Alignment for Multimodal LLMs",
+      "sha256": "1ce95cd41a1e4febc88888c114dab3405c6089a5f8de6adc0a82ffbd47784b0f"
+    },
+    {
+      "id": "2608.20974",
+      "path": "benchmark_data/.corpus_distractors/2608.20974.pdf",
+      "title": "WA-JEPA: Rethinking the Video JEPA Paradigm for World-Action Modeling in Autonomous Driving",
+      "sha256": "3d239a0bbbfb5cf0307771c02b825bcee89a67b52c8600df072210256aaf23fa"
+    },
+    {
+      "id": "2608.20969",
+      "path": "benchmark_data/.corpus_distractors/2608.20969.pdf",
+      "title": "Kinematic Knowledge Maps for Pattern Alignment: Structured Latent Representational Learning in Multimodal Gait Analysis",
+      "sha256": "8dc21cf1129469f2b8b64bc5655093275deeb49a19de758d02d89ef9e21ff5d1"
+    },
+    {
+      "id": "2608.20967",
+      "path": "benchmark_data/.corpus_distractors/2608.20967.pdf",
+      "title": "Generalizing Soft Tissue Deformation and Force Prediction Across Material Stiffness and Geometry",
+      "sha256": "2b30c30faea6326f0d7fd54d798eb1a3788e4179912db7011fd5db0afa828989"
+    },
+    {
+      "id": "2608.20958",
+      "path": "benchmark_data/.corpus_distractors/2608.20958.pdf",
+      "title": "TLive-Omni: An Omni-Modal Understanding Model for E-Commerce Live Streaming",
+      "sha256": "8e418a3d20f1812231cb6560602adc1d6c141fca2d2983edb915e66fe6e27eb0"
+    },
+    {
+      "id": "2608.20944",
+      "path": "benchmark_data/.corpus_distractors/2608.20944.pdf",
+      "title": "SuppreSensing: Expert-Guided Feature Recalibration and Discrepancy Augmentation for Multimodal Object Detection",
+      "sha256": "33dc12c6ca5ca497ebe6f12207ea85a00f941508bd53577e451b9519da88eb23"
+    },
+    {
+      "id": "2608.20942",
+      "path": "benchmark_data/.corpus_distractors/2608.20942.pdf",
+      "title": "LHMCF-Net: A Learned Hyperbolic Mean Curvature Flow Network for Medical Images Segmentation",
+      "sha256": "3f24ef10ba8c08f538fbecd715720f6b16bd98f1b555d1d9150f169763122105"
+    },
+    {
+      "id": "2608.20932",
+      "path": "benchmark_data/.corpus_distractors/2608.20932.pdf",
+      "title": "OccluRank: Controllable Occlusion-Aware Layout-to-Image Generation by Adding Just an Ordinal Rank",
+      "sha256": "6cef9f274b5ff42742b353342e52817badbdc453ac91e754be3f98b75a7b574f"
+    },
+    {
+      "id": "2608.20929",
+      "path": "benchmark_data/.corpus_distractors/2608.20929.pdf",
+      "title": "GAP-SAM: A Global Artifact Prior for Generalizable AI-Generated Image Manipulation Localization",
+      "sha256": "80fcedab89e2044d1c3464f52aaf434a123a61ff00d8a8bc1c2d7abc3363223f"
+    },
+    {
+      "id": "2608.20916",
+      "path": "benchmark_data/.corpus_distractors/2608.20916.pdf",
+      "title": "Semantically Compatible Knowledge Distillation for Cross-Domain Object Detection with Vision Foundation Models",
+      "sha256": "c77ae6a5c80d22a68e905c7b98772d4c88e2cc7b490395f92fba8c1d2f0e5bf1"
+    },
+    {
+      "id": "2608.20913",
+      "path": "benchmark_data/.corpus_distractors/2608.20913.pdf",
+      "title": "Explainable Deepfake Detection with Feature-robust Augmentation and Evidence-grounded Explanation Optimization",
+      "sha256": "58ad0f16b9a53820d583c56a0114773f4fe43caa4123dda405fba62cd6f90cc3"
+    },
+    {
+      "id": "2608.20910",
+      "path": "benchmark_data/.corpus_distractors/2608.20910.pdf",
+      "title": "InfinityEdit: Infinite Video Editing with a Lightweight Edit-Ignition Adapter",
+      "sha256": "d5143854cbe8e628e6f22bee8bd2c28f4f6d567020c1c507a27afc67d194c346"
+    },
+    {
+      "id": "2608.20905",
+      "path": "benchmark_data/.corpus_distractors/2608.20905.pdf",
+      "title": "EmotionDialogCN: A Spontaneous Multimodal Dataset for Mandarin Emotional Dialogue",
+      "sha256": "83e439322ad08fb94983e2096891fb63377ae4cd6bf9877595424dc79add72c2"
+    },
+    {
+      "id": "2608.20891",
+      "path": "benchmark_data/.corpus_distractors/2608.20891.pdf",
+      "title": "IMU-Free Body-Frame State Estimation with Sparse Scene Flow for Quadcopters",
+      "sha256": "cf33bd051cb40681c579d3508a024da47290644d7bafb1d30a0ec389fe7b0951"
+    },
+    {
+      "id": "2608.20890",
+      "path": "benchmark_data/.corpus_distractors/2608.20890.pdf",
+      "title": "A Collaborative Multi-Modality Interaction for VLA-based End-to-End Autonomous Driving",
+      "sha256": "6a6ed792e37b4926bbf8194dd6cd6ac1d813d144a905e2dcde61c6cd6b465a03"
+    },
+    {
+      "id": "2608.20884",
+      "path": "benchmark_data/.corpus_distractors/2608.20884.pdf",
+      "title": "Breaking High Confidence: Practical Face Impersonation under High-Security Thresholds",
+      "sha256": "82c2c16acea1d4ff7992260d5e1a9ec872988a9572a999dd370b1de10211d100"
+    },
+    {
+      "id": "2608.20882",
+      "path": "benchmark_data/.corpus_distractors/2608.20882.pdf",
+      "title": "LoRC: Detecting AI-Generated Images via Low-Rank Collapse in Semantic Residuals",
+      "sha256": "794bbedc7050d2a79dd5820e7de279e7ea894d7c4f55f8c0272f767b3cde57d8"
+    },
+    {
+      "id": "2608.20874",
+      "path": "benchmark_data/.corpus_distractors/2608.20874.pdf",
+      "title": "Multi-Modal Traffic Sign Detection with Semantic Attributes for Autonomous Driving",
+      "sha256": "928bec76acc8c372f0f58957a2f6e1472fb4ea11a6ecdf592c4399bda351d892"
+    },
+    {
+      "id": "2608.20870",
+      "path": "benchmark_data/.corpus_distractors/2608.20870.pdf",
+      "title": "RDANet: Relative Degradation Aware Network for Infrared Small Target Detection",
+      "sha256": "18384e473d98a93facc16854b20aa190ecf7f21cadef7d9f54e93a9375d41c0d"
+    },
+    {
+      "id": "2608.20840",
+      "path": "benchmark_data/.corpus_distractors/2608.20840.pdf",
+      "title": "KoViDoRe: Korean Visual Document Retrieval",
+      "sha256": "19fff6d4459f402bc18925a8d44d843610e326ad4c9dec58cca9700a88834961"
+    },
+    {
+      "id": "2608.20814",
+      "path": "benchmark_data/.corpus_distractors/2608.20814.pdf",
+      "title": "Enhancing Localized Reasoning for Long Video Understanding via Efficient Segment-to-Video Supervision",
+      "sha256": "2b3e29b50e32161f1b7047b96f7bceeaf9bd70befc2221f85ae3df9a22a344f5"
+    },
+    {
+      "id": "2608.20810",
+      "path": "benchmark_data/.corpus_distractors/2608.20810.pdf",
+      "title": "When Generated Images Look Right and Retrieve Wrong: Coverage-Guided Cross-Scale Re-Indexing for Knowledge-Faithful Generative Perception",
+      "sha256": "ce43e65110a455d9615bc32c18bbfca58c63e7aa97846004d9209c03aa856579"
+    },
+    {
+      "id": "2608.20809",
+      "path": "benchmark_data/.corpus_distractors/2608.20809.pdf",
+      "title": "TRACE: Training-time Report-guided and Clinically Ordered Concept Editing",
+      "sha256": "c80083c01fe27aed2d94f682bbe797c9ca3165952bf11c4e74f12dbca2a9f32d"
+    },
+    {
+      "id": "2608.20805",
+      "path": "benchmark_data/.corpus_distractors/2608.20805.pdf",
+      "title": "Routing Before Looking: Query-Adaptive Evidence Acquisition for Long-form Video Understanding",
+      "sha256": "47a4b249a05501d12dcf3ee042c38f3dc0a89b2da3294631d27790ce3e68032c"
+    },
+    {
+      "id": "2608.20791",
+      "path": "benchmark_data/.corpus_distractors/2608.20791.pdf",
+      "title": "CertVLA: Certified Defense against Physical Visual Attacks for Vision-Language-Action Models",
+      "sha256": "f5d7747c698c7bfd8d644c487b9066655a943b4f35d4cd3b27be1b39077b6a8d"
+    },
+    {
+      "id": "2608.20788",
+      "path": "benchmark_data/.corpus_distractors/2608.20788.pdf",
+      "title": "M2Depth: Unifying Monocular Depth Foundation Priors with Multi-View Stereo",
+      "sha256": "fd5f1626b572d901612e5edba1204fcdee2f04f24cac115e9eba7991c4127580"
+    },
+    {
+      "id": "2608.20770",
+      "path": "benchmark_data/.corpus_distractors/2608.20770.pdf",
+      "title": "MotionPhys: Detecting AI-Generated Videos via Physical Consistency of Optical-Flow Trajectories",
+      "sha256": "3e40ed5fca58481a7270beafee08a6b27d3ad4a527f054653f8d8964a1cc2a7d"
+    },
+    {
+      "id": "2608.20763",
+      "path": "benchmark_data/.corpus_distractors/2608.20763.pdf",
+      "title": "CARD: Diagnosing Belief to Action Routing Failures in Vision Language Models",
+      "sha256": "5358572a07eb53fa6350d2d88f126b55a5ab0ac8590e246f10d92d34926ca392"
+    },
+    {
+      "id": "2608.20759",
+      "path": "benchmark_data/.corpus_distractors/2608.20759.pdf",
+      "title": "DiGS-Avatar: Single-Image Animatable 3D Human Reconstruction via UV-Space Diffusion",
+      "sha256": "75371dcb95d62b0a27dc7fbbc2a26a6677f6504dba98df388af9ffa3edd2452a"
+    },
+    {
+      "id": "2608.20756",
+      "path": "benchmark_data/.corpus_distractors/2608.20756.pdf",
+      "title": "Vis-Poison: Poisoning Visual Knowledge in Multimodal Retrieval-Augmented Generation",
+      "sha256": "bc3723de91dc0b8d0f5b54587761e75321d19fe7c5f146b5aac8bdc86ea33d7a"
+    },
+    {
+      "id": "2608.20754",
+      "path": "benchmark_data/.corpus_distractors/2608.20754.pdf",
+      "title": "SPARK-SAM: Self-Prompt Adaptation with Response Knowledge for SAM in Infrared Small Target Segmentation",
+      "sha256": "ad0ff2dd9daf5b4345a528200e072eebd4066d1829945be8c7a71d685b3ec553"
+    },
+    {
+      "id": "2608.20749",
+      "path": "benchmark_data/.corpus_distractors/2608.20749.pdf",
+      "title": "Identity-Preserving Text-to-Video Generation via Agentic Enhancement and Semantic Repair",
+      "sha256": "8a5ca8311e594aa4524e9720f6fa46e8044f1a27303f32db94a09f515c523aeb"
+    },
+    {
+      "id": "2608.20748",
+      "path": "benchmark_data/.corpus_distractors/2608.20748.pdf",
+      "title": "Generating Multi-view Adversarial Examples for Visual Geometry Grounded Transformer",
+      "sha256": "e7dac06263af51e64aa7ecfd0325c0cb091edd828c940650fe31627ab1a3c771"
+    },
+    {
+      "id": "2608.20740",
+      "path": "benchmark_data/.corpus_distractors/2608.20740.pdf",
+      "title": "VisTa3D: A Dataset and Benchmark for Thin Object Reconstruction from Vision, Tactile, and 3D Point Clouds",
+      "sha256": "dead585330d562a71e07954aa99342e7ff98fe95cafce505d1c6e68405588d7e"
+    },
+    {
+      "id": "2608.20725",
+      "path": "benchmark_data/.corpus_distractors/2608.20725.pdf",
+      "title": "Enabling Memory-efficient Im2win Convolution with Multi-precision Support on GPU CUDA and Tensor Cores",
+      "sha256": "15d88dc446e7e646a01e39ca85c5a15e7c514291d99fd5437e6f6810d0b68665"
+    },
+    {
+      "id": "2608.20720",
+      "path": "benchmark_data/.corpus_distractors/2608.20720.pdf",
+      "title": "AffordAny: Open-World 3D Affordance Grounding from Monocular RGB Images via Vision-Language-Guided Geometric Reasoning",
+      "sha256": "8b1675bedabb759b55e4fb8a6f4e52683e0612390678a34cb65b5b9a0b4d1fcf"
+    },
+    {
+      "id": "2608.20713",
+      "path": "benchmark_data/.corpus_distractors/2608.20713.pdf",
+      "title": "AGIDefect-4K: A Richly Annotated Dataset for AI-Generated Image Defect Detection, Localization and Explanation",
+      "sha256": "49a63ae2866cc34001fe196c68d1533f3d3fbf7900900ebebc891eb33c9edc1e"
+    },
+    {
+      "id": "2608.20712",
+      "path": "benchmark_data/.corpus_distractors/2608.20712.pdf",
+      "title": "Privacy-Preserving Object Detection for Vision Transformer-Based Models",
+      "sha256": "7609f38d48ffcbaa3f0b6e6637aff6bbe809e2c69d11e73c196ccf71117e040d"
+    },
+    {
+      "id": "2608.20699",
+      "path": "benchmark_data/.corpus_distractors/2608.20699.pdf",
+      "title": "ArtiMo: Agent-Driven Articulated Mesh Animation",
+      "sha256": "7c4dd64dae5863c89557695bca02c72b3c026449d36bd002c73b46734d2f0504"
+    },
+    {
+      "id": "2608.20691",
+      "path": "benchmark_data/.corpus_distractors/2608.20691.pdf",
+      "title": "Bridging Language and Spherical Space: Object-Centric Control for Text-to-Panorama Generation",
+      "sha256": "45aefb8d9333cc858c6c641d99c9a5fcce41b9c3aa9b8ec34c58c6bf34965348"
+    },
+    {
+      "id": "2608.20690",
+      "path": "benchmark_data/.corpus_distractors/2608.20690.pdf",
+      "title": "Identity-Aware Human-Object Interaction Motion Captioning",
+      "sha256": "edae0f6cd59f7482b58dd3d15bd94877f234c201a1396a6ef7234fb71bf6e0a2"
+    },
+    {
+      "id": "2608.20687",
+      "path": "benchmark_data/.corpus_distractors/2608.20687.pdf",
+      "title": "TopoSurfel: Closing the Loop between Gaussian Surfels and Meshes for Surface Reconstruction",
+      "sha256": "512a5c6ee0478e8d27ff13c06f4e55e768dc569e948da1090a34d97386e60ae1"
+    },
+    {
+      "id": "2608.20682",
+      "path": "benchmark_data/.corpus_distractors/2608.20682.pdf",
+      "title": "Aristotelian Manifolds: Leveraging Platonic Perceptual Features for Backpropagation Free Rapid Concept Learning",
+      "sha256": "aabbc415f54eaef255af1d37fff8e976012924ad580a2832516c449621cd1ba1"
+    },
+    {
+      "id": "2608.20663",
+      "path": "benchmark_data/.corpus_distractors/2608.20663.pdf",
+      "title": "Shortcut Learning in a Public Grape Disease Dataset: Annotation Granularity as a Modulator, Not a Cause",
+      "sha256": "4d7e689200c228a281eaa9b73f8741757abe0062a15501f6f0a1535fb38b6f1f"
+    },
+    {
+      "id": "2608.20659",
+      "path": "benchmark_data/.corpus_distractors/2608.20659.pdf",
+      "title": "Lift, Associate, and Fuse: A Decision-Centric Framework for 2D-to-3D Foundation Model Transfer",
+      "sha256": "a904d27823fa749d4ce779a08c38e74b6ce43045188f619cbbfae1b4d442da16"
+    },
+    {
+      "id": "2608.20639",
+      "path": "benchmark_data/.corpus_distractors/2608.20639.pdf",
+      "title": "MV2GF: Multi-view Pedestrian Detection with a Visual Geometric Foundation Model",
+      "sha256": "01b72487fa022e4d6512de615cb386632b1214316c985f0319e18a622a9c9257"
+    },
+    {
+      "id": "2608.20621",
+      "path": "benchmark_data/.corpus_distractors/2608.20621.pdf",
+      "title": "RECOUNT: Reference-guided Counting with Synthetic Visual Exemplars",
+      "sha256": "c6f35642c659335ced573bc46acf8dca5b9ab72d8021e179e9e4364046c522cb"
+    },
+    {
+      "id": "2608.20608",
+      "path": "benchmark_data/.corpus_distractors/2608.20608.pdf",
+      "title": "A Dataset-Centric Benchmark of Deep Learning Methods for Grape Leaf Disease Classification and Detection",
+      "sha256": "fdb7ee2532f4dc4dc80238dcb23fba923a8ab3d28f6948344e97eb2595c98f0d"
+    },
+    {
+      "id": "2608.20602",
+      "path": "benchmark_data/.corpus_distractors/2608.20602.pdf",
+      "title": "Sparse Light Field Sampling Improves Casual 3D and 4D Reconstruction",
+      "sha256": "13db9d93dd65be1acf235eb3119f363c7797e4a786e009f062830d0db77a7123"
+    },
+    {
+      "id": "2608.20587",
+      "path": "benchmark_data/.corpus_distractors/2608.20587.pdf",
+      "title": "Aggregate, Don't Adapt: Subject-Level Posterior Aggregation and Transductive Calibration for Cross-Site Parkinsonian Gait Severity",
+      "sha256": "45f5b7807f79664b906e80a1775145003b99931e4fe6959bf3cce0ce74e15686"
+    },
+    {
+      "id": "2608.20558",
+      "path": "benchmark_data/.corpus_distractors/2608.20558.pdf",
+      "title": "Zero-Shot Color Image Manipulation Localization via Noise Residual Artifact Pattern Analysis",
+      "sha256": "6abb9f692b82b7c56ec9e4c18ab26cc4ff9b0e6e233a3917298fb02303103cce"
+    },
+    {
+      "id": "2608.20534",
+      "path": "benchmark_data/.corpus_distractors/2608.20534.pdf",
+      "title": "Grounded-Exo2Ego: Structured Semantic Grounding for Robust Exocentric-to-Egocentric Video Generation",
+      "sha256": "fa2a410ca2dea342c6d23c79853eacd7d846c2a9cd3e4ece8e9b6c5a7c2771d9"
+    },
+    {
+      "id": "2608.20524",
+      "path": "benchmark_data/.corpus_distractors/2608.20524.pdf",
+      "title": "Frozen CLIP Priors for Robust Self-Supervised Poisson Inverse Problems",
+      "sha256": "eaeac4ea9cfb720d5be6113cd59ca2b8020de72b41d69b1b50fc7e91caff9751"
+    },
+    {
+      "id": "2608.20515",
+      "path": "benchmark_data/.corpus_distractors/2608.20515.pdf",
+      "title": "DiffVC-ONE: Diffusion-based Generative Video Compression with One-Step Video Diffusion Transformer",
+      "sha256": "a7579ad880ff52394cdf45e0c97924ba131ebd4344457662419a157e8de75993"
+    },
+    {
+      "id": "2608.20492",
+      "path": "benchmark_data/.corpus_distractors/2608.20492.pdf",
+      "title": "Annotations as Rollouts: Efficient and Scalable Reinforcement Learning for Video MLLMs",
+      "sha256": "16d1f6e59b937ad7bbef1914cfc4c2de5bd52953fb32597a81a04f7010f42e21"
+    },
+    {
+      "id": "2608.20473",
+      "path": "benchmark_data/.corpus_distractors/2608.20473.pdf",
+      "title": "Aggregating Visual Information with Optimal Transport for VideoLM Token Compression",
+      "sha256": "3cfccacdc6f5bdd6d438bc2ce3f8d80fa3c16397776843dc4d3ec6be8b55df29"
+    },
+    {
+      "id": "2608.20335",
+      "path": "benchmark_data/.corpus_distractors/2608.20335.pdf",
+      "title": "4DAnyone: Create Anyone in 4D from a Casual Monocular Video",
+      "sha256": "aa3ae604a453e8118c432fd323a3d35efac4294de67eb3cb0e361f55924031e2"
+    },
+    {
+      "id": "2608.20336",
+      "path": "benchmark_data/.corpus_distractors/2608.20336.pdf",
+      "title": "WithEveryone: Unified Planning and Identity Grounding for Group Image Generation",
+      "sha256": "8f58bca9b0cc2c1497ca7f1b5cbd41ac7d37e10bb9c2d8c3f05dd05b5aa447db"
+    },
+    {
+      "id": "2608.20334",
+      "path": "benchmark_data/.corpus_distractors/2608.20334.pdf",
+      "title": "Exploring the Performance Frontier of Compact Unified Image Generation Models",
+      "sha256": "7eae971bc38587af5139503a671d540b4fb91febfaeda537bf7589b5221a4a53"
+    },
+    {
+      "id": "2608.20312",
+      "path": "benchmark_data/.corpus_distractors/2608.20312.pdf",
+      "title": "Inter-X++: A Comprehensive Benchmark for Multimodal Human-Human Interaction Analysis",
+      "sha256": "ba17c8c07a7ff685ae12e49b857ce3942e86db7843cc31303aab9b5069251bbf"
+    },
+    {
+      "id": "2608.20308",
+      "path": "benchmark_data/.corpus_distractors/2608.20308.pdf",
+      "title": "DreamHand: Repurposing Video Diffusion Models for Occlusion-Robust Egocentric 3D Hand Motion Recovery",
+      "sha256": "a3553744fa02c573d3b66acd8e1f7c9c98a64f4392945e1beb079c16f096880c"
+    },
+    {
+      "id": "2608.20305",
+      "path": "benchmark_data/.corpus_distractors/2608.20305.pdf",
+      "title": "CalcSeg: Confidence-aware 3D Latent Context Curriculum Learning For Myocardial Scar Segmentation From Single-Stack LGE-CMRs",
+      "sha256": "577b0da380aee1ed58a84cf6fb7dde792887f80898fc7570b74727d7651a68a0"
+    },
+    {
+      "id": "2608.20448",
+      "path": "benchmark_data/.corpus_distractors/2608.20448.pdf",
+      "title": "MultiCube: Compositional 3D Generation With Part-Level Semantic and Spatial Control",
+      "sha256": "1651b66ceb255e41377bd73e1bf428beb40828e2e66c0f3d1c48cdbd5f312418"
+    },
+    {
+      "id": "2608.20284",
+      "path": "benchmark_data/.corpus_distractors/2608.20284.pdf",
+      "title": "Towards Surgical World-Action Modeling: A Preliminary Joint Visual-Trajectory Forecasting for Surgical Motion Planning",
+      "sha256": "1e34c7ff31bd1957db46f663eb331df290df660482ff6fc8fee9fad7265be767"
+    },
+    {
+      "id": "2608.20229",
+      "path": "benchmark_data/.corpus_distractors/2608.20229.pdf",
+      "title": "Prompt-Conditioned Channel Attention for Hierarchical Feature Modulation toward Anatomy-Agnostic Segmentation",
+      "sha256": "d23b91575ab6da6b66e0b2b19826c74af5f52d5d9e18a3ce29ec457dbb13d25e"
+    },
+    {
+      "id": "2608.20212",
+      "path": "benchmark_data/.corpus_distractors/2608.20212.pdf",
+      "title": "Unwarping the Lens: A Physics-Grounded Approach to Video Glasses Removal",
+      "sha256": "519c5643f8e4e68659e735e1cdd85f3ddd1c34c7dc075cb6adf4cb5329c95411"
+    },
+    {
+      "id": "2608.20208",
+      "path": "benchmark_data/.corpus_distractors/2608.20208.pdf",
+      "title": "RoMAN-Flow: Taming Autoregressive Normalizing Flows for Offline Reinforcement Learning in Robotic Manipulation",
+      "sha256": "e2f7fffdf51be34a386267d4aabecdfa2b2e52bd94c5d20907d533bd792597de"
+    },
+    {
+      "id": "2608.20157",
+      "path": "benchmark_data/.corpus_distractors/2608.20157.pdf",
+      "title": "G3Ego: Gaze-Guided Graphs for Egocentric Action Understanding",
+      "sha256": "ec6d7cebcfe27a6b21f7a99c336c3313127f1ef647d59070ec739c2d5a5e5af0"
+    },
+    {
+      "id": "2608.20154",
+      "path": "benchmark_data/.corpus_distractors/2608.20154.pdf",
+      "title": "Artificial Intelligence for Workflow Analysis in Colorectal Surgery: A Multicentric, Cross-Procedural Development and Generalization Study",
+      "sha256": "598a8b2567ce8f9e9cc493bedae638ad8f69ab076dd0814862d75b34ae5a1b22"
+    },
+    {
+      "id": "2608.20144",
+      "path": "benchmark_data/.corpus_distractors/2608.20144.pdf",
+      "title": "PelviNeXt: A Modality-Agnostic Hybrid Network for Pelvic Imaging in Women's Health",
+      "sha256": "13a318d4cecc97e024f46486852246dc250e1200081c4ff7e9ee3cfc1ae20c99"
+    },
+    {
+      "id": "2608.20141",
+      "path": "benchmark_data/.corpus_distractors/2608.20141.pdf",
+      "title": "DPC-Net: Dual-Prior Collaborative Network for All-in-One Image Restoration",
+      "sha256": "ac0e7f6dde0f2d3874e23bbc4cb8ceaed4e9b2e5a6974b7288c8711ae5249fcb"
+    },
+    {
+      "id": "2608.20127",
+      "path": "benchmark_data/.corpus_distractors/2608.20127.pdf",
+      "title": "ID-VTG: Image-Disambiguated Video Temporal Grounding",
+      "sha256": "73bc902f3aad0e0b5769cf887b0bcc5df1e422324132431b42152773191a1027"
+    },
+    {
+      "id": "2608.20122",
+      "path": "benchmark_data/.corpus_distractors/2608.20122.pdf",
+      "title": "ArmorOCR: Grounded Adversarial Visual Perception via Observation-Transferred Self-Distillation",
+      "sha256": "c364f7b3cf454516a50f7708347d34aff770601956c0f358511e42be558c206c"
+    },
+    {
+      "id": "2608.20112",
+      "path": "benchmark_data/.corpus_distractors/2608.20112.pdf",
+      "title": "Flow Matching-Based PET Image Reconstruction",
+      "sha256": "7ca09834a428a9b1992f4b9250a81e2a2168d57efdc206f1c73d29abb6ca5a28"
+    },
+    {
+      "id": "2608.20107",
+      "path": "benchmark_data/.corpus_distractors/2608.20107.pdf",
+      "title": "BeyondMasks: Evaluating Causal and Physical Consistency in Video Object Removal",
+      "sha256": "a178268cce3c31322189f5e2429615e0380226e83e80c6767d9cb0c539f4e008"
+    },
+    {
+      "id": "2608.21354",
+      "path": "benchmark_data/.corpus_distractors/2608.21354.pdf",
+      "title": "Almost sure upper bound for sums of random multiplicative functions and critical chaos",
+      "sha256": "8294e1ea867d9b4f883377e1c71327ad89b36af5e0064daf37d328056fe069cc"
+    },
+    {
+      "id": "2608.21312",
+      "path": "benchmark_data/.corpus_distractors/2608.21312.pdf",
+      "title": "Interface between competing random walks on a cycle",
+      "sha256": "226cdd04684417b1e59949057af1916086bbe992e3701dc9fdf4017db1ad49a6"
+    },
+    {
+      "id": "2608.21306",
+      "path": "benchmark_data/.corpus_distractors/2608.21306.pdf",
+      "title": "The spin-1/2 Heisenberg XXZ chain and the Lorentz mirror model with loop weight 2",
+      "sha256": "551e93fba5fe0da272ff2cf63312f004c989bfed4e9bcc60e66a80d49b87acfe"
+    },
+    {
+      "id": "2608.21255",
+      "path": "benchmark_data/.corpus_distractors/2608.21255.pdf",
+      "title": "Laws of the iterated logarithm for random Dirichlet series with general weights",
+      "sha256": "b1adb6f469cc645bab777d41e1e9e92fd5f2221928bd00fc507cf9b5a8d730e1"
+    },
+    {
+      "id": "2608.21125",
+      "path": "benchmark_data/.corpus_distractors/2608.21125.pdf",
+      "title": "Two problems for threshold cascades of interacting diffusions on unimodular random trees: front propagation with a Bramson correction, and the continuous-type limit theory",
+      "sha256": "64484fb650e510843769fb34ef14d51c0ec0b694a753880be8a4f2bd70ce3b47"
+    },
+    {
+      "id": "2608.21090",
+      "path": "benchmark_data/.corpus_distractors/2608.21090.pdf",
+      "title": "Ornstein-Uhlenbeck process conditioned to have restricted $L_2$-norm",
+      "sha256": "05ed2c2b40d468f5e2b60322cab7048a1d96a25766069c7e4180b7155c52ed4e"
+    },
+    {
+      "id": "2608.21063",
+      "path": "benchmark_data/.corpus_distractors/2608.21063.pdf",
+      "title": "Non-bijective scaling limits and phase transitions of planar maps",
+      "sha256": "f67e6fec09b9cbf97e4bb4f3c5beb6485f4152b72037aa07116b3e693808dd82"
+    },
+    {
+      "id": "2608.21014",
+      "path": "benchmark_data/.corpus_distractors/2608.21014.pdf",
+      "title": "The stochastic Cahn-Hilliard equation in critical spaces",
+      "sha256": "0cd60809ad61ea8c09c5565da8e6addc21164e952371b20d229bfc30143300c9"
+    },
+    {
+      "id": "2608.20854",
+      "path": "benchmark_data/.corpus_distractors/2608.20854.pdf",
+      "title": "Heat Codimension and Scalar Curvature",
+      "sha256": "819e06afaa884fef441f3b41eefd975e3b5435327fad6de1d43bbfd302b5fb61"
+    },
+    {
+      "id": "2608.20816",
+      "path": "benchmark_data/.corpus_distractors/2608.20816.pdf",
+      "title": "Thin-Shell implies small-ball deviation via Gaussian tilts",
+      "sha256": "e4b1a8a5e4e891bbdf1dd82b1e3b39f186bc103550afa6b726bba6047e7fcfcd"
+    },
+    {
+      "id": "2608.20620",
+      "path": "benchmark_data/.corpus_distractors/2608.20620.pdf",
+      "title": "A probabilistic approach to the Yang--Baxter equation and skew braces",
+      "sha256": "b1ca5cc7791a492ca64c21b2006eecb42df5dfb74c277af1348cb5acee157fd4"
+    },
+    {
+      "id": "2608.20613",
+      "path": "benchmark_data/.corpus_distractors/2608.20613.pdf",
+      "title": "Random walks on wreath products and spectral gaps for coloured interchange processes",
+      "sha256": "c8b5a49c72142a852084ba3ffa0d8a12d492f9c4226ed31e574076cdd8e86764"
+    },
+    {
+      "id": "2608.20552",
+      "path": "benchmark_data/.corpus_distractors/2608.20552.pdf",
+      "title": "One-point fluctuations for exponential last passage percolation under upper-tail conditioning",
+      "sha256": "d5508c09351488bddb5194360c38cf770f821c747d5e11bf848e38e22500b28e"
+    },
+    {
+      "id": "2608.20537",
+      "path": "benchmark_data/.corpus_distractors/2608.20537.pdf",
+      "title": "Persistent anisotropy in multi-dimensional branching Brownian motion",
+      "sha256": "88bbbcc8f64199163023eb6a127f725c5643edad241a39943378f9fd24664467"
+    },
+    {
+      "id": "2608.20472",
+      "path": "benchmark_data/.corpus_distractors/2608.20472.pdf",
+      "title": "Free Burnside groups of large odd exponent have cost 1",
+      "sha256": "ac074609ec64ec328ec84f4b1647f03b1f1c3083a61dd85266a7780c336efefe"
+    },
+    {
+      "id": "2608.20321",
+      "path": "benchmark_data/.corpus_distractors/2608.20321.pdf",
+      "title": "Large Sample Properties of Higher Order Markov Models",
+      "sha256": "81d07437b62650fd4ae222365c65598a21be4dbce8cbbe886b6b90c5eb75e44c"
+    },
+    {
+      "id": "2608.20279",
+      "path": "benchmark_data/.corpus_distractors/2608.20279.pdf",
+      "title": "Robustness of random-walk Metropolis for steep potentials",
+      "sha256": "9fcd22786047233025648d8e8dc4143a0e8b9cbb25de4a317c853de307f5d2e3"
+    },
+    {
+      "id": "2608.20266",
+      "path": "benchmark_data/.corpus_distractors/2608.20266.pdf",
+      "title": "Necessary conditions for deterministic and stochastic maximal regularity",
+      "sha256": "368f60868f02c31e012a82eb21cf6fadedf4525fbe7869868e2785ff8a52f38f"
+    },
+    {
+      "id": "2608.20252",
+      "path": "benchmark_data/.corpus_distractors/2608.20252.pdf",
+      "title": "Notes on Hydrodynamic Limits and Related Topics",
+      "sha256": "191d8abbd78b1a89891ea3da8bde7b0735c40d39e90ffb0761a1bd8ca0323104"
+    },
+    {
+      "id": "2608.20234",
+      "path": "benchmark_data/.corpus_distractors/2608.20234.pdf",
+      "title": "Algorithms, Complexity, and Entropy of the Bernard-Letac Fair-Sampling Construction",
+      "sha256": "315b8aa421002ed3925cecdf5fe186c18b662573a6702dc7fb358d2f32f2de1a"
+    },
+    {
+      "id": "2608.20105",
+      "path": "benchmark_data/.corpus_distractors/2608.20105.pdf",
+      "title": "An AI-discovered smooth random fast dynamo on $\\mathbb{T}^3$",
+      "sha256": "8deea550c544184a7456583461935911cefc33aba3d6ff1d0997e0ba8e840b0e"
+    },
+    {
+      "id": "2608.20101",
+      "path": "benchmark_data/.corpus_distractors/2608.20101.pdf",
+      "title": "Largest bulk gap of the complex Ginibre ensemble",
+      "sha256": "4539d500cf795443f590d7ad878f360765198d2892a208c80072d5b267956fc6"
+    },
+    {
+      "id": "2608.19996",
+      "path": "benchmark_data/.corpus_distractors/2608.19996.pdf",
+      "title": "Hamiltonian Floer Theory for Quantum Electrodynamics up to First Order in $\\hbar$",
+      "sha256": "86bbf06a0377156493acbdcb4bb03cdba4a007d5afc7b6904eb8989b50096a05"
+    },
+    {
+      "id": "2608.19976",
+      "path": "benchmark_data/.corpus_distractors/2608.19976.pdf",
+      "title": "Random valuations",
+      "sha256": "76d230b115a63c7c8c2812f93178655e3abdd9a66106a19fdd122192cb5b1bf7"
+    },
+    {
+      "id": "2608.19947",
+      "path": "benchmark_data/.corpus_distractors/2608.19947.pdf",
+      "title": "Enumeration of plane hypermaps with a mixed boundary I",
+      "sha256": "583c759e7978861ac95c949e879137555689a02e796aed7ebfbfab1ae657b1d1"
+    },
+    {
+      "id": "2608.19832",
+      "path": "benchmark_data/.corpus_distractors/2608.19832.pdf",
+      "title": "Sharp Convex Concentration for Symmetric Random Tensors with Subgaussian Coordinates",
+      "sha256": "e503fe6eac5d5b7e9310ddb87309a3c8efb43f41e470fb58d8c3d54659ed061e"
+    },
+    {
+      "id": "2608.19831",
+      "path": "benchmark_data/.corpus_distractors/2608.19831.pdf",
+      "title": "Causal Reasoning with Bipartite Graphical Causal Models",
+      "sha256": "3a893607b3e36473a96f7711aa66271bf16bc9e062139d4490b33301ee6f165d"
+    },
+    {
+      "id": "2608.19753",
+      "path": "benchmark_data/.corpus_distractors/2608.19753.pdf",
+      "title": "Uniform large deviation principles for the stochastic heat equation over unbounded sets of initial data",
+      "sha256": "29ca451c88274c37c5bd8c39d209962be52f32be8026595f14993f5994064fcb"
+    },
+    {
+      "id": "2608.19744",
+      "path": "benchmark_data/.corpus_distractors/2608.19744.pdf",
+      "title": "Conditioned Brownian motion and local equivalence of path ensembles",
+      "sha256": "c520db01b95f5bec1e699cbe90d217858b69920ba1f01e8b41c47cee024a3468"
+    },
+    {
+      "id": "2608.19716",
+      "path": "benchmark_data/.corpus_distractors/2608.19716.pdf",
+      "title": "A Bayesian Time-Varying SEIARD Model for State-Level COVID-19 Transmission and Mortality in the United States",
+      "sha256": "47fc92398a13f26dff833e5de155ee2a02e127cf58303413956724069e82da8f"
+    },
+    {
+      "id": "2608.19594",
+      "path": "benchmark_data/.corpus_distractors/2608.19594.pdf",
+      "title": "Mesoscopic Rectangular Spikes under Subspace Local Laws: Outlier Values and Singular Subspaces",
+      "sha256": "d1c50b76ff7720b6863789bd7a18491e26ce817f1758d63d3b81cbb3f08dfd79"
+    },
+    {
+      "id": "2608.19576",
+      "path": "benchmark_data/.corpus_distractors/2608.19576.pdf",
+      "title": "Convex order preservation for graphon mean-field systems",
+      "sha256": "e0ad3ff6647da442a9da8359b1a6514a3f306544ade90d72c3e7ee5cb27aae77"
+    },
+    {
+      "id": "2608.19560",
+      "path": "benchmark_data/.corpus_distractors/2608.19560.pdf",
+      "title": "Computing transient probabilities in Markovian queues with balking conditional on a fixed number of joined customers",
+      "sha256": "86424a9f1a1cd46173bdd3bc1468062c549007c7710b1283bdc01c67346a08b3"
+    },
+    {
+      "id": "2608.19396",
+      "path": "benchmark_data/.corpus_distractors/2608.19396.pdf",
+      "title": "Penalisation of Two-Dimensional Brownian Motion",
+      "sha256": "33245462bc8eabb2af19b81b8347c02e5644dd00a6ab2dce26195921d7cf4350"
+    },
+    {
+      "id": "2608.19358",
+      "path": "benchmark_data/.corpus_distractors/2608.19358.pdf",
+      "title": "An optimal Poincar\u00e9 inequality for the complex Ginibre log-gas",
+      "sha256": "ea7bd1c408f5566d397962e4e286231803a6c98fb1515c0be823d11666d30aa3"
+    },
+    {
+      "id": "2608.19198",
+      "path": "benchmark_data/.corpus_distractors/2608.19198.pdf",
+      "title": "Probabilistic Representation and Convergence of Gromov-Wasserstein Gradient Flows",
+      "sha256": "c0eefe36ddca0ac3a36ae6dbb095c81599ed5be7fccdb30e8e99fc872fa49f40"
+    },
+    {
+      "id": "2608.19179",
+      "path": "benchmark_data/.corpus_distractors/2608.19179.pdf",
+      "title": "A random walk on p-groups with a symmetric perfect pairing",
+      "sha256": "da4595c3bbc472b91b47d88a3bfbce2cc8f66f7cdf4647dada6ea68158ca4f23"
+    },
+    {
+      "id": "2608.19145",
+      "path": "benchmark_data/.corpus_distractors/2608.19145.pdf",
+      "title": "The critical probability for percolation on finite graphs",
+      "sha256": "2de8aa5e3a01d2bf2a211de1000045675403be27a435ca76b801c3cf653b70c2"
+    },
+    {
+      "id": "2608.19104",
+      "path": "benchmark_data/.corpus_distractors/2608.19104.pdf",
+      "title": "Record times for coverage thresholds and maximal spacings",
+      "sha256": "01cc4fdf747c37a14b9295262d783273dd1df5496f06d1a9e19f4256ba035b8c"
+    },
+    {
+      "id": "2608.19065",
+      "path": "benchmark_data/.corpus_distractors/2608.19065.pdf",
+      "title": "Boundedly exchangeable graphs",
+      "sha256": "a70fb22a7f432c45ace6d8b098d34c438b24bc85067f6415e2e230d172e4f1d1"
+    },
+    {
+      "id": "2608.19050",
+      "path": "benchmark_data/.corpus_distractors/2608.19050.pdf",
+      "title": "Online Permutation Embedding: Optimal Stopping and Scaling Laws",
+      "sha256": "2f1ac99bdd980e6c78c4faa8cf0048125f4d5bda62411e363232ef77d3c00871"
+    },
+    {
+      "id": "2608.18999",
+      "path": "benchmark_data/.corpus_distractors/2608.18999.pdf",
+      "title": "A Sharp Joint Bias-Energy Envelope for Radial Clipping",
+      "sha256": "c9078ee8107b9d752ddcff99e74e03df33d055f23892236f9d4a072de0cee39e"
+    },
+    {
+      "id": "2608.18990",
+      "path": "benchmark_data/.corpus_distractors/2608.18990.pdf",
+      "title": "Proving Lehner's formulas via RDT -- indefinite and asymmetric scenarios",
+      "sha256": "402f1de66e71092af8a7cf37f0a78b18540a5763304fb0d235c4b4497c43bb03"
+    },
+    {
+      "id": "2608.18910",
+      "path": "benchmark_data/.corpus_distractors/2608.18910.pdf",
+      "title": "On the Slow Convergence to Trivial Solutions of Algorithms for Hard Optimization Problems",
+      "sha256": "1e794732dda3cfef5339a2dad46eb60712094d44c1b84a1ae8d32ec47a83e7b7"
+    },
+    {
+      "id": "2608.18834",
+      "path": "benchmark_data/.corpus_distractors/2608.18834.pdf",
+      "title": "The Parabolic Anderson Model's Total Mass at Small Times: Geometry, Fluctuations, and Renormalization",
+      "sha256": "d6c9c4875f102adc561ce2a8d645158ea5731fd3af959aa57ea7bc95e5a278ab"
+    },
+    {
+      "id": "2608.18783",
+      "path": "benchmark_data/.corpus_distractors/2608.18783.pdf",
+      "title": "When to Sell an Asset? - A Distribution Builder Approach",
+      "sha256": "c17279ae48e9ebacd9bb53dc46f2876d866cbf6111c39fd30e8e5dbc79f83546"
+    },
+    {
+      "id": "2608.18688",
+      "path": "benchmark_data/.corpus_distractors/2608.18688.pdf",
+      "title": "Regularity Preservation for Jump-Type Stochastic Transport Equations with Singular Drift",
+      "sha256": "216e5172599fc45cbd4e3f3484e5e772abea2a928fec9840c82d04d1a15179d5"
+    },
+    {
+      "id": "2608.18612",
+      "path": "benchmark_data/.corpus_distractors/2608.18612.pdf",
+      "title": "An FPRAS for Antiferromagnetic Ising Models on Random Regular Bipartite Graphs",
+      "sha256": "472f526f38148e63000559560158404d4bc95918f28d2ab6365bfcb0ada82897"
+    },
+    {
+      "id": "2608.18557",
+      "path": "benchmark_data/.corpus_distractors/2608.18557.pdf",
+      "title": "Randomly Permuted Orthogonal Products and Fast Dimension Reduction",
+      "sha256": "f5d3c9d12d9467ce5267e86095093235bdbd586163a6f20acf855ac217734963"
+    },
+    {
+      "id": "2608.18431",
+      "path": "benchmark_data/.corpus_distractors/2608.18431.pdf",
+      "title": "Process Optimization Under Uncertainty for Improving the Bond Quality of Polymer Filaments in Fused Filament Fabrication",
+      "sha256": "7ad9dd93f52cee4fd18281384093305d498c1fc6dd750de309920c2a5a93d500"
+    },
+    {
+      "id": "2608.18392",
+      "path": "benchmark_data/.corpus_distractors/2608.18392.pdf",
+      "title": "On Samuels' Conjecture",
+      "sha256": "c460df30b6c7811c9ed6fa1e274c11c7cd88e339a16db111d30b105c9525c60e"
+    },
+    {
+      "id": "2608.18320",
+      "path": "benchmark_data/.corpus_distractors/2608.18320.pdf",
+      "title": "Asymptotics for Beta-Splitting Trees via Homogeneous Fragmentations and Meromorphic Potential Theory",
+      "sha256": "85c9fad6604d435f9f25f141f0d068abc9ad9fd9b50c1744867dd26351ebcf2c"
+    },
+    {
+      "id": "2608.19275",
+      "path": "benchmark_data/.corpus_distractors/2608.19275.pdf",
+      "title": "A Self-Exciting Model of Eddy Formation at Submesoscale",
+      "sha256": "2e5496506e4f69c8cd9e48fa257e5c1978506d5a307399fd11f5447a94eb7909"
+    },
+    {
+      "id": "2608.18293",
+      "path": "benchmark_data/.corpus_distractors/2608.18293.pdf",
+      "title": "Critical tensor covariance at the Marchenko--Pastur threshold",
+      "sha256": "9cd4c23be30efbbb54ac9083043d77d6d2c3d1f711ddcfb0bb75b97bf3b3eda7"
+    },
+    {
+      "id": "2608.18286",
+      "path": "benchmark_data/.corpus_distractors/2608.18286.pdf",
+      "title": "How far are $d$-dimensional copulas with uniform $(d-1)$-marginals from (total) independence?",
+      "sha256": "463e4909831f5f15a095c6c560883f5ae38ccdbbf7f029ea241f8d7620ff24dc"
+    },
+    {
+      "id": "2608.18276",
+      "path": "benchmark_data/.corpus_distractors/2608.18276.pdf",
+      "title": "The branching random walk in a uniform magnetic field : magnetization concentration and overlap distributions",
+      "sha256": "48277ebbbcead8032f9cbe6b32b50e9a92ac84110060008b77c35016e4e110da"
+    },
+    {
+      "id": "2608.18075",
+      "path": "benchmark_data/.corpus_distractors/2608.18075.pdf",
+      "title": "Unique Ergodicity for the Projective Process of the 2D Navier--Stokes Equation with Nondegenerate Noise",
+      "sha256": "d555ef5bc6cb3a8ff37b4c1af2b63adf0d39da1b89974440bf8eb2bb870f645c"
+    },
+    {
+      "id": "2608.18061",
+      "path": "benchmark_data/.corpus_distractors/2608.18061.pdf",
+      "title": "The concentration game: Bayesian updating, regret, and information",
+      "sha256": "d90a1df7b32b33b85adbee39c7b4b2b9d979dddf4d5aa8d568695f0db865b111"
+    },
+    {
+      "id": "2608.18045",
+      "path": "benchmark_data/.corpus_distractors/2608.18045.pdf",
+      "title": "Supercritical sharpness for the random cluster representation of real-valued spin models",
+      "sha256": "06c430f2222e3b603afb29787390f822bdd1b3e9ee4d877e36e5b017488b3db3"
+    },
+    {
+      "id": "2608.17949",
+      "path": "benchmark_data/.corpus_distractors/2608.17949.pdf",
+      "title": "Tail exponents of conditional guesswork via the method of types",
+      "sha256": "688c0b036361a327263943c288203ed895e584a65e26180de3db71ea1912e238"
+    },
+    {
+      "id": "2608.17927",
+      "path": "benchmark_data/.corpus_distractors/2608.17927.pdf",
+      "title": "Near-unit-root persistence of symmetric stable autoregressive sequences",
+      "sha256": "6678429661a593d60868dd513103fa302a8bc0d7c1f0f5765152e90485022171"
+    },
+    {
+      "id": "2608.17892",
+      "path": "benchmark_data/.corpus_distractors/2608.17892.pdf",
+      "title": "Squarefree polynomials with missing digits",
+      "sha256": "d35dea99fd99ee2b3998161af71c4a025df81920bcd60ab65b90b266354d6267"
+    },
+    {
+      "id": "2608.17802",
+      "path": "benchmark_data/.corpus_distractors/2608.17802.pdf",
+      "title": "Fourth-Moment Geometry of Rademacher Sums",
+      "sha256": "7689fed67e117fe3a6038e86800956cde35bc17f69a34ba8d725efe235ba9aeb"
+    },
+    {
+      "id": "2608.17793",
+      "path": "benchmark_data/.corpus_distractors/2608.17793.pdf",
+      "title": "The non-mathematical section of Kolmogorov's Grundbegriffe",
+      "sha256": "2efdf3645724971dc20345a591d807f0e4200fade02a2ff7e9df9c40c997a274"
+    },
+    {
+      "id": "2608.17778",
+      "path": "benchmark_data/.corpus_distractors/2608.17778.pdf",
+      "title": "Resource Extraction from a Stochastic Population with Harvesting Quotas",
+      "sha256": "f439387767adf198a10a4c20f773f5e3bade1c8c451e094210a005b0098071ce"
+    },
+    {
+      "id": "2608.17743",
+      "path": "benchmark_data/.corpus_distractors/2608.17743.pdf",
+      "title": "A $5/8$ Lower Bound on the Banach-Mazur Distance to the Cross-Polytope",
+      "sha256": "42458ffd12345b3c87cb4d826b4f8e8f189b04b5b0b53ba3a21f77ec09029705"
+    },
+    {
+      "id": "2608.17669",
+      "path": "benchmark_data/.corpus_distractors/2608.17669.pdf",
+      "title": "A Characterization of Measures of Concordance of Degree Two",
+      "sha256": "d253205408dbb79f2dd0245b8634b885d6e01e46fa86d8709f3c5590974cc5d3"
+    },
+    {
+      "id": "2608.17648",
+      "path": "benchmark_data/.corpus_distractors/2608.17648.pdf",
+      "title": "Semicircular law with a few independent entries in a random matrix",
+      "sha256": "ad405aea088c32f7cb0c0587bf47bf56adf0cfc069518bdc40fcab6ff8db3d87"
+    },
+    {
+      "id": "2608.17622",
+      "path": "benchmark_data/.corpus_distractors/2608.17622.pdf",
+      "title": "On the Probability of Network States with Gaussian Connectivity Functions",
+      "sha256": "93e9db95669d2f8b260e3e039070946cf70d61509146c237dbb58bc3f53cd642"
+    },
+    {
+      "id": "2608.17591",
+      "path": "benchmark_data/.corpus_distractors/2608.17591.pdf",
+      "title": "Probabilistic Inverse Modeling of Contaminant Transport via a Conditioned-on-Design Bayesian Physics Informed Neural Network",
+      "sha256": "aad8734d3ccdfa1231a1e5c4b7f82ad524cd75dc9f83e0eb6b27b3335e4cc9b3"
+    },
+    {
+      "id": "2608.17562",
+      "path": "benchmark_data/.corpus_distractors/2608.17562.pdf",
+      "title": "Convergence rates for the extreme value theorem via Stein's method",
+      "sha256": "95cc636fc059fe53f3f029b7c76e8af7b9ed9ed57af04d8a8594d677354b6e82"
+    },
+    {
+      "id": "2608.17540",
+      "path": "benchmark_data/.corpus_distractors/2608.17540.pdf",
+      "title": "Pathwise stability for one-dimensional SDEs driven by Brownian motion and a symmetric stable process",
+      "sha256": "2f9c2715d756ca9309aba95f5266aa0299f2b9fdd74203d2f36020104c9220ed"
+    }
+  ]
+}

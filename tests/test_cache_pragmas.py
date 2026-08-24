@@ -1,9 +1,10 @@
 """SQLite durability/concurrency pragmas on PDFCache connections.
 
-These guard the Windows commit-latency fix: rollback-journal mode costs
-22ms per commit on Windows against 0.5ms on Linux, and the cost is the
-per-transaction journal file rather than the fsync, so WAL is the fix and
-`synchronous=NORMAL` under it removes the remaining per-commit flush.
+These guard the Windows cache-write speedup: on the real save_page_text path
+the rollback journal costs about 57ms per page write on Windows against about
+11ms under WAL (CI runners, scripts/benchmark_cache_write.py), because
+rollback mode creates and deletes a journal file per commit; WAL is the fix
+and `synchronous=NORMAL` under it removes the remaining per-commit flush.
 
 `journal_mode` is persistent in the database file; `synchronous` and
 `busy_timeout` are PER-CONNECTION and reset on every one of the ~42

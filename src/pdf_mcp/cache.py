@@ -429,7 +429,7 @@ class PDFCache:
             if self.journal_mode != "wal":
                 logger.warning(
                     "SQLite refused WAL mode at %s (got %r); cache stays in "
-                    "rollback mode. Commits will be slow on Windows.",
+                    "rollback mode. Cache writes will be slower on Windows.",
                     self.db_path,
                     self.journal_mode,
                 )

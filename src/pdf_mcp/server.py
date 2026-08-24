@@ -3876,8 +3876,9 @@ def server_info() -> dict[str, Any]:
             an old one. keyword_search_ranked=False means FTS5 is missing,
             so mode="keyword" falls back to substring matching with no BM25
             ranking and no stemming; prefer mode="semantic" there.
-            journal_mode="delete" means the filesystem refused WAL, which
-            costs ~20ms per cache write on Windows instead of ~0.02ms.
+            journal_mode="delete" means the filesystem refused WAL; cache
+            writes are then several times slower on Windows (~57ms per page
+            write against ~11ms under WAL).
         - config: {max_workers, max_response_bytes, cache_ttl_hours,
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats

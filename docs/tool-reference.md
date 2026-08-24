@@ -993,7 +993,7 @@ Reports which optional features are installed and which configuration values are
   - `deny_patterns` (array): the configured `[paths] deny` globs, verbatim. Reported in both access modes, because deny applies unconditionally.
 - `storage` (object): what the SQLite build underneath the cache actually supports. `pdf-mcp` declares no minimum SQLite version — `requires-python` is the only floor — and both capabilities below degrade quietly rather than failing, so this is the only place they surface.
   - `sqlite_version` (string) — the SQLite library version Python is linked against, not the `pdf-mcp` version.
-  - `journal_mode` (string) — `"wal"` normally. `"delete"` means the filesystem refused WAL, which some network mounts do; cache writes then cost roughly 20ms each on Windows instead of 0.02ms. Correctness is unaffected.
+  - `journal_mode` (string) — `"wal"` normally. `"delete"` means the filesystem refused WAL, which some network mounts do; cache writes are then several times slower on Windows (about 57ms per page write against about 11ms under WAL). Correctness is unaffected.
   - `keyword_search_ranked` (bool) — `false` means the SQLite build lacks FTS5 (needs 3.9.0+), so `pdf_search(mode="keyword")` falls back to substring matching with no BM25 ranking and no stemming. Results still return; their ordering and recall are worse. Prefer `mode="semantic"` when this is `false`.
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 8)`).

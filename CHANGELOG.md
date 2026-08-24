@@ -51,16 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could return a different box count across repeated opens of the same
   page, so re-extracting a document could yield different text.
 
-- The SQLite cache now runs in WAL mode, which makes cache writes
-  dramatically faster on Windows. A first-time page extraction commits to
-  the cache in about 10ms instead of 80ms on Python 3.11+, so cold reads,
-  searches, and `pdf_corpus_warm` over a folder finish several times
-  sooner; a 300-page document that had spent roughly 24 seconds writing to
-  the cache now spends about 3. Linux was already fast and stays fast. The
-  cache falls back to the previous journal mode automatically on filesystems
-  that do not support WAL (some network mounts), so nothing is required to
-  opt in. Two sidecar files (`cache.db-wal`, `cache.db-shm`) now sit beside
-  `cache.db`; back them up or mount them together with it.
+- The SQLite cache now runs in WAL mode with `synchronous=NORMAL`, so a
+  reader no longer blocks on a concurrent writer (relevant for the HTTP
+  transport serving several clients at once) and page writes avoid the
+  rollback journal's per-commit file create/delete. Measured on the real
+  cache-write path (CI runners), WAL is faster than the rollback journal on
+  every OS tested: about 1.2x on macOS, about 1.5x on Linux, and about 5x on
+  Windows, where creating and deleting a journal file on every commit is the
+  dominant cost (~57ms per commit under the rollback journal, ~11ms under
+  WAL). The write is only a small part of a first-time
+  extraction (which is bound by parsing and embedding), so this speeds up
+  the cache layer rather than end-to-end warm time. The cache falls back to
+  the previous journal mode automatically on filesystems that do not support
+  WAL (some network mounts), so nothing is required to opt in. Two sidecar
+  files (`cache.db-wal`, `cache.db-shm`) now sit beside `cache.db`; back them
+  up or mount them together with it.
 
 - `server_info` gains a `storage` block reporting the SQLite version, the
   cache journal mode, and `keyword_search_ranked`. The last is `false` when

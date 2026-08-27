@@ -57,9 +57,9 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     assert tops == sorted(tops)
 
 
-def test_table_extraction_version_is_3():
-    """Row geometry and fragment merging change the cached shape."""
-    assert TABLE_EXTRACTION_VERSION == 4
+def test_table_extraction_version_is_5():
+    """Packed-cell split changes the cached table shape (columns_reliable)."""
+    assert TABLE_EXTRACTION_VERSION == 5
 
 
 def test_ambiguity_trigger():

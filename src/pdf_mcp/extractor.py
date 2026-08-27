@@ -1742,7 +1742,11 @@ def _columns_reliable(rows: list[list[str]]) -> bool:
     return True
 
 
-TABLE_EXTRACTION_VERSION = 4
+#: 5: packed cells are split against header-column geometry, and each
+#: table dict gains `columns_reliable` (post-split) and `split_cells`.
+#: Version-4 rows carry neither field and the old packed cells, so they
+#: are ignored and re-extracted.
+TABLE_EXTRACTION_VERSION = 5
 
 
 def _extract_tables_worker(
@@ -1845,6 +1849,7 @@ def _merge_single_row_detections(raw: list[dict[str, Any]]) -> list[dict[str, An
                 ],
                 "extracted": extracted,
                 "row_bboxes": row_bboxes,
+                "split_cells": sum(g.get("split_cells", 0) for g in group),
             }
         )
     return out
@@ -1875,6 +1880,10 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
         - rows: list of data rows (excludes header); each row is a list of cell strings
         - row_bboxes: [x0, y0, x1, y1] per entry in `rows`, same order.
           Empty list if geometry could not be aligned with the rows.
+        - columns_reliable: False when any body cell still holds 2+ numbers
+          (columns merged). Table-level caution, not a per-row verdict.
+        - split_cells: count of packed cells rewritten by header-anchored
+          geometry on this table (0 when nothing was split).
     """
     tables: list[dict[str, Any]] = []
     raw: list[dict[str, Any]] = []
@@ -1902,6 +1911,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
                         for row in extracted
                     ],
                     "row_bboxes": [[round(v, 1) for v in tr.bbox] for tr in table.rows],
+                    "split_cells": getattr(table, "split_cells", 0),
                 }
             )
 
@@ -1926,6 +1936,8 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
                     "header": header,
                     "rows": rows,
                     "row_bboxes": row_bboxes,
+                    "columns_reliable": _columns_reliable(rows),
+                    "split_cells": item.get("split_cells", 0),
                 }
             )
     except Exception as e:

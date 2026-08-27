@@ -75,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `pdf_read_pages` now splits packed table cells into their true columns
+  using header geometry, and every `tables[]` entry carries
+  `columns_reliable`. On datasheets drawn without vertical rules (e.g. TI
+  LM555 p5), a row that read `MIN = "4.5 16"` now reads `MIN 4.5 | MAX 16`;
+  cells that cannot be resolved keep `columns_reliable: false` so a caller
+  knows to render the region.
 - Table extraction is about 3x faster. Tables were extracted in a separate
   Python process, because an old dependency corrupted the table finder
   process-wide and extraction needed an interpreter that had never imported

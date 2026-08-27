@@ -272,10 +272,14 @@ def _split_packed_cells(
         ]
         words = page.extract_words(x_tolerance=1.5)
 
+        # Work on a copy: any exception mid-loop must leave the caller's
+        # ``cells`` exactly as extracted, not partially rewritten.
+        new_cells = [list(row) for row in cells]
+
         split_count = 0
-        for i in range(1, len(cells)):
+        for i in range(1, len(new_cells)):
             row_boxes = table.rows[i].cells
-            for j, text in enumerate(cells[i]):
+            for j, text in enumerate(list(new_cells[i])):
                 if not text or len(_NUMBER_TOKEN.findall(str(text))) < 2:  # rule 1
                     continue
                 if j >= len(row_boxes) or row_boxes[j] is None:
@@ -289,15 +293,17 @@ def _split_packed_cells(
                         in_cell.append((cx, str(w["text"])))
                 if not in_cell:
                     continue
-                mapping = _reassign_packed_cell(in_cell, ranges, labels, cells[i], j)
+                mapping = _reassign_packed_cell(
+                    in_cell, ranges, labels, new_cells[i], j
+                )
                 if mapping is None:
                     continue
                 for col, frag in mapping.items():
-                    cells[i][col] = frag
+                    new_cells[i][col] = frag
                 if j not in mapping:
-                    cells[i][j] = ""
+                    new_cells[i][j] = ""
                 split_count += 1
-        return cells, split_count
+        return new_cells, split_count
     except Exception:  # noqa: BLE001 - fail closed, never break extraction
         return cells, 0
 

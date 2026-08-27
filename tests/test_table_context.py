@@ -703,3 +703,14 @@ def test_cached_tables_allow_attachment_without_re_extracting(
         doc.close()
     assert re_extracted == [], "must not spawn: the tables were already cached"
     assert "table_context" in out[0]
+
+
+def test_number_token_and_columns_reliable_live_in_extractor():
+    from pdf_mcp import extractor, server
+
+    assert extractor._NUMBER_TOKEN.findall("4,350.4 and 16") == ["4,350.4", "16"]
+    assert extractor._columns_reliable([["ok", "1"]]) is True
+    assert extractor._columns_reliable([["4.5 16"]]) is False
+    # server must re-use the extractor definitions, not keep its own copies.
+    assert server._NUMBER_TOKEN is extractor._NUMBER_TOKEN
+    assert server._columns_reliable is extractor._columns_reliable

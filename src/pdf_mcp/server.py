@@ -34,6 +34,8 @@ from . import corpus
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
 from .extractor import (
+    _NUMBER_TOKEN,
+    _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
     estimate_tokens,
@@ -1548,7 +1550,6 @@ _COLUMN_IDENTITY_WORDS = re.compile(
 #: reads as two tokens, which made a clean financial cell look merged to
 #: `_columns_reliable` and a single-value excerpt look ambiguous to
 #: `_excerpt_is_ambiguous`, on every table that groups thousands.
-_NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 #: A currency symbol or a thousands-grouped amount. Marks a cell as data
 #: rather than a column label, which is what keeps a sparse-but-real header
 #: from being displaced by the row beneath it.
@@ -1769,20 +1770,6 @@ def _resolve_header(
     if by_vocabulary or by_structure:
         return rows[0], rows[1:]
     return header, rows
-
-
-def _columns_reliable(rows: list[list[str]]) -> bool:
-    """False when any cell holds 2+ numbers, i.e. columns are merged.
-
-    Table-level caution, not a per-value verdict: a table can be flagged
-    while an individual row still resolves cleanly. Callers must not treat
-    False as "this row is wrong".
-    """
-    for row in rows:
-        for cell in row:
-            if cell and len(_NUMBER_TOKEN.findall(cell)) >= 2:
-                return False
-    return True
 
 
 def _attach_table_context(

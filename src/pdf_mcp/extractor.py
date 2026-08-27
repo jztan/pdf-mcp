@@ -1723,6 +1723,25 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
 #: back together. Before this, a single-row detection filed its DATA as
 #: the header and returned rows: [], so Starbucks 2025 p34 reported 8
 #: tables whose values were all in the wrong field.
+#: Thousands separators are part of the number. Without them "4,350.4"
+#: reads as two tokens, which made a clean financial cell look merged.
+_NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+
+
+def _columns_reliable(rows: list[list[str]]) -> bool:
+    """False when any cell holds 2+ numbers, i.e. columns are merged.
+
+    Table-level caution, not a per-value verdict: a table can be flagged
+    while an individual row still resolves cleanly. Callers must not treat
+    False as "this row is wrong".
+    """
+    for row in rows:
+        for cell in row:
+            if cell and len(_NUMBER_TOKEN.findall(cell)) >= 2:
+                return False
+    return True
+
+
 TABLE_EXTRACTION_VERSION = 4
 
 

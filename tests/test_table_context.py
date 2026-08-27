@@ -44,6 +44,65 @@ def ruled_table_pdf():
     unlink_quietly(f.name)
 
 
+@pytest.fixture
+def header_ruled_table_pdf():
+    """A table ruled in the header band only.
+
+    Vertical rules subdivide Parameter|Min|Max|Unit in the header row but
+    NOT in the body, so pdfplumber recovers the 4-column header grid yet
+    packs the body's Min and Max into one cell ("4.5 16"). This is the TI
+    LM555 shape a synthetic PDF can express.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        # Outer border: full-height left/right verticals, top/bottom rules.
+        page.draw_rect(pymupdf.Rect(50, 50, 300, 150), color=(0, 0, 0))
+        # Body verticals: Parameter|rest and rest|Unit span header->bottom,
+        # so Parameter and Unit stay separate; NO Min|Max divider in body.
+        for x in (130, 245):
+            page.draw_line(pymupdf.Point(x, 50), pymupdf.Point(x, 150), color=(0, 0, 0))
+        # Header-only divider between Min and Max (y 50..83 only).
+        page.draw_line(pymupdf.Point(190, 50), pymupdf.Point(190, 83), color=(0, 0, 0))
+        # Horizontal rules: header/body and between the two body rows.
+        for y in (83, 116):
+            page.draw_line(pymupdf.Point(50, y), pymupdf.Point(300, y), color=(0, 0, 0))
+        page.insert_text((55, 75), "Parameter")
+        page.insert_text((135, 75), "Min")
+        page.insert_text((200, 75), "Max")
+        page.insert_text((250, 75), "Unit")
+        # Body row 1: 4.5 under Min (centre ~145), 16 under Max (centre ~207).
+        page.insert_text((55, 108), "Supply Voltage")
+        page.insert_text((135, 108), "4.5")
+        page.insert_text((200, 108), "16")
+        page.insert_text((250, 108), "V")
+        # Body row 2.
+        page.insert_text((55, 141), "Reset Voltage")
+        page.insert_text((135, 141), "0.4")
+        page.insert_text((200, 141), "1")
+        page.insert_text((250, 141), "V")
+        doc.save(f.name)
+        doc.close()
+    yield f.name
+    unlink_quietly(f.name)
+
+
+def test_packed_header_ruled_table_splits_and_turns_reliable(header_ruled_table_pdf):
+    out = extract_tables_for_pages(header_ruled_table_pdf, [0])
+    tables = out["tables"]["0"]
+    assert tables, "fixture must yield a table"
+    t = tables[0]
+    # Header recovered all four columns.
+    assert [c.strip() for c in t["header"]] == ["Parameter", "Min", "Max", "Unit"]
+    # The packed body cell was rewritten: 4.5 -> Min, 16 -> Max.
+    first = t["rows"][0]
+    assert "4.5" in first and "16" in first
+    assert "4.5 16" not in "".join(str(c) for c in first)
+    assert t["split_cells"] >= 1
+    assert t["columns_reliable"] is True
+
+
 def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     """Geometric row selection needs per-row geometry, which was not cached."""
     out = extract_tables_for_pages(ruled_table_pdf, [0])
@@ -60,6 +119,18 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
 def test_table_extraction_version_is_5():
     """Packed-cell split changes the cached table shape (columns_reliable)."""
     assert TABLE_EXTRACTION_VERSION == 5
+
+
+def test_every_table_carries_columns_reliable_and_split_cells(ruled_table_pdf):
+    out = extract_tables_for_pages(ruled_table_pdf, [0])
+    tables = out["tables"]["0"]
+    assert tables, "fixture must yield at least one table"
+    for t in tables:
+        assert isinstance(t["columns_reliable"], bool)
+        assert isinstance(t["split_cells"], int)
+    # A cleanly ruled table is reliable and needs no split.
+    assert tables[0]["columns_reliable"] is True
+    assert tables[0]["split_cells"] == 0
 
 
 def test_ambiguity_trigger():

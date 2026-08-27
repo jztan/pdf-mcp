@@ -471,7 +471,7 @@
           "query": "insurance underwriting earnings",
           "page": 55,
           "answer": "9,020",
-          "answer_label": "Insurance – underwriting"
+          "answer_label": "Insurance \u2013 underwriting"
         },
         {
           "id": "b03",
@@ -678,7 +678,7 @@
           "query": "unfolding order C then B then A observed frequency",
           "page": 21,
           "answer": "0.44",
-          "answer_label": "C → B → A"
+          "answer_label": "C \u2192 B \u2192 A"
         },
         {
           "id": "x19",
@@ -686,7 +686,7 @@
           "query": "unfolding order B then C then A observed frequency",
           "page": 21,
           "answer": "0.25",
-          "answer_label": "B → C → A"
+          "answer_label": "B \u2192 C \u2192 A"
         }
       ]
     },
@@ -719,6 +719,102 @@
           "page": 37,
           "answer": "2,749.8",
           "answer_label": "Product and distribution costs"
+        }
+      ]
+    },
+    "st_lm158": {
+      "path": "docs_internal/sample_pdfs/datasheets/st_lm158.pdf",
+      "source_url": "http://web.archive.org/web/20240702144536if_/https://www.st.com/resource/en/datasheet/lm158.pdf",
+      "sha256": "40a2550bed90848decd14afdf8413c4dbcf52c94dd4f268581a1bb1cf3e85568",
+      "title": "STMicroelectronics LM158/LM258/LM358 Op-Amp Datasheet (DocID2163 Rev 15)",
+      "queries": [
+        {
+          "id": "c01",
+          "category": "table",
+          "query": "slew rate volts per microsecond",
+          "page": 8,
+          "answer": "0.6",
+          "answer_label": "Slew Rate"
+        },
+        {
+          "id": "c02",
+          "category": "table",
+          "query": "gain bandwidth product MHz",
+          "page": 8,
+          "answer": "1.1",
+          "answer_label": "GBP"
+        },
+        {
+          "id": "c03",
+          "category": "table",
+          "query": "total harmonic distortion percentage",
+          "page": 8,
+          "answer": "0.02",
+          "answer_label": "THD"
+        },
+        {
+          "id": "c04",
+          "category": "table",
+          "query": "channel separation crosstalk dB",
+          "page": 8,
+          "answer": "120",
+          "answer_label": "Channel separation"
+        },
+        {
+          "id": "c05",
+          "category": "table",
+          "query": "equivalent input noise voltage nV per root Hz",
+          "page": 8,
+          "answer": "55",
+          "answer_label": "Equivalent input noise voltage"
+        }
+      ]
+    },
+    "onsemi_lm358": {
+      "path": "docs_internal/sample_pdfs/datasheets/onsemi_lm358.pdf",
+      "source_url": "https://web.archive.org/web/20241026111211id_/https://www.onsemi.com/pdf/datasheet/lm358-d.pdf",
+      "sha256": "adae7eeab899c05fe27bfbf647aba0240334bf0ce8967cce1b7fdfdad3a4a067",
+      "title": "onsemi LM258/LM358/LM2904 Op-Amp Datasheet",
+      "queries": [
+        {
+          "id": "o01",
+          "category": "table",
+          "query": "power supply rejection ratio dB",
+          "page": 4,
+          "answer": "65",
+          "answer_label": "PSR"
+        },
+        {
+          "id": "o02",
+          "category": "table",
+          "query": "large signal open loop voltage gain V/mV",
+          "page": 4,
+          "answer": "25",
+          "answer_label": "Avol"
+        },
+        {
+          "id": "o03",
+          "category": "table",
+          "query": "output voltage high limit VCC 30V RL 10k",
+          "page": 4,
+          "answer": "28",
+          "answer_label": "VOH"
+        },
+        {
+          "id": "o04",
+          "category": "table",
+          "query": "common mode rejection RS 10 kOhm dB",
+          "page": 4,
+          "answer": "65",
+          "answer_label": "CMR"
+        },
+        {
+          "id": "o05",
+          "category": "table",
+          "query": "channel separation input referenced dB",
+          "page": 4,
+          "answer": "120",
+          "answer_label": "CS"
         }
       ]
     }

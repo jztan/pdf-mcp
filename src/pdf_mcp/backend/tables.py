@@ -13,6 +13,7 @@ from typing import Any
 
 import pdfplumber
 
+from ..extractor import _NUMBER_TOKEN
 from .geometry import Rect
 
 _DIGIT = re.compile(r"\d")
@@ -77,6 +78,7 @@ class TableResult:
     bbox: Rect
     rows: list[RowResult]
     cells: list[list[str | None]]
+    split_cells: int = 0
 
     def extract(self) -> list[list[str | None]]:
         return self.cells
@@ -177,6 +179,135 @@ def _refine_columns(
     return out
 
 
+#: Non-alphabetic characters allowed inside a value fragment before the
+#: "contains no letter" test (rule 5). Units of <=4 chars are dropped too.
+_VALUE_PUNCT = "+-–±×%/~∼()"
+
+
+def _fragment_value_shaped(fragment: str) -> bool:
+    """Rule 5: a fragment reads as a value, not prose.
+
+    Remove number tokens, value punctuation, and any remaining token of 4
+    or fewer characters (units: V, mA, VDD). What is left must hold no
+    alphabetic character.
+    """
+    stripped = _NUMBER_TOKEN.sub(" ", fragment)
+    stripped = "".join(ch for ch in stripped if ch not in _VALUE_PUNCT)
+    remaining = [tok for tok in stripped.split() if len(tok) > 4]
+    return not any(ch.isalpha() for tok in remaining for ch in tok)
+
+
+def _column_index_for_centre(
+    centre: float, ranges: list[tuple[float, float] | None]
+) -> int | None:
+    """The single header column whose [x0, x1] contains centre, else None.
+
+    None when the centre falls in no column or in two (overlapping boxes):
+    both abort the split for the cell (rule 2).
+    """
+    hits = [j for j, r in enumerate(ranges) if r is not None and r[0] <= centre <= r[1]]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _reassign_packed_cell(
+    words: list[tuple[float, str]],
+    ranges: list[tuple[float, float] | None],
+    labels: list[str],
+    row_cells: list[str | None],
+    src_col: int,
+) -> dict[int, str] | None:
+    """Map a packed cell's words to header columns, or None if any rule fails.
+
+    ``words`` are (x_centre, text) in reading order. Rule 1 (packed: 2+
+    numbers) is the caller's gate. Returns {column: fragment} for every
+    target column, including ``src_col`` mapped to its own words (absent
+    from the map when no word stays there, so the caller empties it).
+    """
+    assign: dict[int, list[str]] = {}
+    for centre, text in words:
+        col = _column_index_for_centre(centre, ranges)
+        if col is None:  # rule 2
+            return None
+        assign.setdefault(col, []).append(text)
+
+    targets = sorted(assign)
+    if len(targets) < 2:  # rule 3
+        return None
+
+    for col in targets:  # rule 4
+        if not labels[col].strip():
+            return None
+        if col != src_col:
+            existing = row_cells[col]
+            if existing and str(existing).strip():
+                return None
+
+    fragments = {col: " ".join(assign[col]) for col in targets}
+    for frag in fragments.values():  # rule 5
+        if not _fragment_value_shaped(frag):
+            return None
+    return fragments
+
+
+def _split_packed_cells(
+    page: Any, table: Any, cells: list[list[str | None]]
+) -> tuple[list[list[str | None]], int]:
+    """Rewrite packed body cells against header geometry. Fails closed.
+
+    Any exception (a None header box, a missing row) leaves the cells
+    exactly as extracted with a count of 0: a failure to split is never a
+    failure to extract.
+    """
+    try:
+        header_boxes = table.rows[0].cells
+        if any(b is None for b in header_boxes):  # cannot evaluate rule 2
+            return cells, 0
+        ranges: list[tuple[float, float] | None] = [
+            (float(b[0]), float(b[2])) for b in header_boxes
+        ]
+        header_row = cells[0] if cells else []
+        labels = [
+            str(header_row[j]) if j < len(header_row) and header_row[j] else ""
+            for j in range(len(ranges))
+        ]
+        words = page.extract_words(x_tolerance=1.5)
+
+        # Work on a copy: any exception mid-loop must leave the caller's
+        # ``cells`` exactly as extracted, not partially rewritten.
+        new_cells = [list(row) for row in cells]
+
+        split_count = 0
+        for i in range(1, len(new_cells)):
+            row_boxes = table.rows[i].cells
+            for j, text in enumerate(list(new_cells[i])):
+                if not text or len(_NUMBER_TOKEN.findall(str(text))) < 2:  # rule 1
+                    continue
+                if j >= len(row_boxes) or row_boxes[j] is None:
+                    continue
+                bx0, btop, bx1, bbot = (float(v) for v in row_boxes[j])
+                in_cell: list[tuple[float, str]] = []
+                for w in words:
+                    cx = (float(w["x0"]) + float(w["x1"])) / 2.0
+                    cy = (float(w["top"]) + float(w["bottom"])) / 2.0
+                    if bx0 - 1.0 <= cx <= bx1 + 1.0 and btop - 1.0 <= cy <= bbot + 1.0:
+                        in_cell.append((cx, str(w["text"])))
+                if not in_cell:
+                    continue
+                mapping = _reassign_packed_cell(
+                    in_cell, ranges, labels, new_cells[i], j
+                )
+                if mapping is None:
+                    continue
+                for col, frag in mapping.items():
+                    new_cells[i][col] = frag
+                if j not in mapping:
+                    new_cells[i][j] = ""
+                split_count += 1
+        return new_cells, split_count
+    except Exception:  # noqa: BLE001 - fail closed, never break extraction
+        return cells, 0
+
+
 def _collect(
     page: Any,
     settings: dict[str, Any] | None,
@@ -207,8 +338,16 @@ def _collect(
             continue
         if min_numeric and _numeric_fraction(cells) < min_numeric:
             continue
+        cells, split_count = _split_packed_cells(page, table, cells)
         rows = [RowResult(bbox=_rect(r.bbox)) for r in table.rows]
-        out.append(TableResult(bbox=_rect(table.bbox), rows=rows, cells=cells))
+        out.append(
+            TableResult(
+                bbox=_rect(table.bbox),
+                rows=rows,
+                cells=cells,
+                split_cells=split_count,
+            )
+        )
     return out
 
 

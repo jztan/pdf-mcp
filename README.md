@@ -63,6 +63,8 @@ claude mcp add pdf-mcp -- pdf-mcp
 Then ask Claude to read a PDF. For Claude Desktop, VS Code, Codex CLI,
 Kiro, or any other MCP client, see **[docs/clients.md](docs/clients.md)**.
 
+Why this exists, and what broke along the way: [Claude's 100-page PDF limit and how I got around it](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=quickstart-how-i-built-pdf-mcp-solving-claude-large-pdf-limitations)
+
 ## Tools
 
 13 specialized tools rather than one monolithic one. Typical pattern:
@@ -201,31 +203,31 @@ MIT. See [LICENSE](LICENSE).
 
 ## Blog posts
 
-**The story behind the releases.** Building pdf-mcp keeps surprising me: benchmarks that go the wrong way, formats that break everything, features I had to remove. I write about that thinking in [The Dispatch](https://blog.jztan.com/newsletter/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp). Come along if that's your kind of thing.
+**The story behind the releases.** Building pdf-mcp keeps surprising me: benchmarks that go the wrong way, formats that break everything, features I had to remove. I write about that thinking in [The Dispatch](https://blog.jztan.com/newsletter/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-newsletter). Come along if that's your kind of thing.
 
 Background, benchmarks, and design notes from building pdf-mcp:
 
 **Getting started**
 
-- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): The problem with large PDFs in AI agents and a working solution
-- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): How AI agents use pdf-mcp tools to read and navigate PDF documents
-- [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Five production-tested patterns for how agents should navigate PDFs at scale
+- [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-i-built-pdf-mcp-solving-claude-large-pdf-limitations): The problem with large PDFs in AI agents and a working solution
+- [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server): How AI agents use pdf-mcp tools to read and navigate PDF documents
+- [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-reading-patterns): Five production-tested patterns for how agents should navigate PDFs at scale
 
 **Corpus & multi-document search**
 
-- [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
-- [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 89.9% of 89 queries over a 100-PDF corpus
+- [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-knowledge-base): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
+- [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 89.9% of 89 queries over a 100-PDF corpus
 
 **Search & retrieval**
 
-- [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
-- [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
-- [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
-- [Section-Level RAG: Why BM25 Beat Hybrid Search in My Benchmark](https://blog.jztan.com/bm25-vs-hybrid-search-section-rag/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Why pdf-mcp's section-grain search is BM25-only: hybrid RRF caused a 33% lexical regression at section grain, so granularity decides the search technique
-- [How One Search Change Eliminated an Entire Agent Step](https://blog.jztan.com/how-paragraph-excerpts-changed-agent-behavior/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Switching pdf_search from fixed-width snippets to paragraph excerpts turned it from a pivot tool into a terminal tool: 97% vs 80% answer containment across a 30-query benchmark
+- [Semantic vs Keyword Search for AI Agents](https://blog.jztan.com/semantic-vs-keyword-search-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-semantic-vs-keyword-search-ai-agents): Benchmarks and a dual-search routing pattern: FTS5 for exact identifiers, embeddings for natural language
+- [Hybrid Search vs Query Routing for AI Agents](https://blog.jztan.com/hybrid-search-vs-query-routing-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-hybrid-search-vs-query-routing-ai-agents): Why pdf-mcp uses hybrid RRF instead of query routing: benchmarks showing RRF wins across query types
+- [Section Chunking vs Page Chunking for AI Agents](https://blog.jztan.com/section-chunking-vs-page-chunking-ai-agents/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-section-chunking-vs-page-chunking-ai-agents): Why section-aware search delivers full section content in one call while page-mode costs 2–6 extra tool calls per query
+- [Section-Level RAG: Why BM25 Beat Hybrid Search in My Benchmark](https://blog.jztan.com/bm25-vs-hybrid-search-section-rag/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-bm25-vs-hybrid-search-section-rag): Why pdf-mcp's section-grain search is BM25-only: hybrid RRF caused a 33% lexical regression at section grain, so granularity decides the search technique
+- [How One Search Change Eliminated an Entire Agent Step](https://blog.jztan.com/how-paragraph-excerpts-changed-agent-behavior/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-paragraph-excerpts-changed-agent-behavior): Switching pdf_search from fixed-width snippets to paragraph excerpts turned it from a pivot tool into a terminal tool: 97% vs 80% answer containment across a 30-query benchmark
 
 **Engineering & security**
 
-- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): What we found when we audited an MCP server for security holes
-- [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
-- [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp): Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both
+- [MCP Server Security: 8 Vulnerabilities](https://blog.jztan.com/mcp-server-security-8-vulnerabilities/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-mcp-server-security-8-vulnerabilities): What we found when we audited an MCP server for security holes
+- [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-llm-free-qa-mcp-server): Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
+- [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-multi-column-pdf-reading-order): Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both

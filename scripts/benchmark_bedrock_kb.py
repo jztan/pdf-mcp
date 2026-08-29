@@ -45,3 +45,30 @@ def check_corpus_quota(
                 f"{d['id']}: {size} bytes exceeds Bedrock limit {limit_bytes}"
             )
     return errors
+
+
+Unit = tuple[str, int | None, str]  # (doc_id, 1-indexed page or None, text)
+
+
+def estimate_tokens(text: str) -> int:
+    return len(text) // TOKEN_CHARS
+
+
+def cap_to_budget(units: list[Unit], budget_tokens: int) -> tuple[list[Unit], int]:
+    """Truncate a ranked unit list to a token budget; return (kept, realized_k).
+
+    Units are consumed in rank order. The first unit is always kept, so a
+    single long section cannot zero a query it answers. After that a unit is
+    kept only if the running total stays within budget, and the walk stops
+    at the first unit that does not fit: skipping ahead to a smaller unit
+    would let an arm cherry-pick by size.
+    """
+    kept: list[Unit] = []
+    used = 0
+    for unit in units:
+        cost = estimate_tokens(unit[2])
+        if kept and used + cost > budget_tokens:
+            break
+        kept.append(unit)
+        used += cost
+    return kept, len(kept)

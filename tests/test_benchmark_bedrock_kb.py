@@ -28,3 +28,41 @@ class TestCheckCorpusQuota:
         manifest = {"docs": [{"id": "gone", "path": "gone.pdf"}]}
         errors = check_corpus_quota(manifest, tmp_path, limit_bytes=100)
         assert errors == ["gone: missing at gone.pdf"]
+
+
+from scripts.benchmark_bedrock_kb import cap_to_budget, estimate_tokens  # noqa: E402
+
+
+class TestEstimateTokens:
+    def test_four_chars_per_token_floor(self):
+        assert estimate_tokens("") == 0
+        assert estimate_tokens("abc") == 0
+        assert estimate_tokens("abcd") == 1
+        assert estimate_tokens("a" * 8000) == 2000
+
+
+class TestCapToBudget:
+    def _u(self, i: int, chars: int):
+        return (f"d{i}", i, "x" * chars)
+
+    def test_keeps_units_in_order_until_budget(self):
+        units = [self._u(1, 4000), self._u(2, 4000), self._u(3, 4000)]
+        kept, k = cap_to_budget(units, budget_tokens=2000)
+        assert kept == units[:2]
+        assert k == 2
+
+    def test_first_unit_always_kept_even_if_oversized(self):
+        units = [self._u(1, 40000), self._u(2, 40)]
+        kept, k = cap_to_budget(units, budget_tokens=2000)
+        assert kept == units[:1]
+        assert k == 1
+
+    def test_stops_at_first_unit_that_does_not_fit(self):
+        # unit 2 does not fit, unit 3 would, but order is rank order
+        units = [self._u(1, 4000), self._u(2, 8000), self._u(3, 40)]
+        kept, k = cap_to_budget(units, budget_tokens=2000)
+        assert kept == units[:1]
+        assert k == 1
+
+    def test_empty(self):
+        assert cap_to_budget([], 2000) == ([], 0)

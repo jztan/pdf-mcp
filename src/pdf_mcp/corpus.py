@@ -10,7 +10,9 @@ caller; this module owns no storage of its own.
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
+import re
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
@@ -26,6 +28,10 @@ from .parallel import resolve_workers
 __all__ = [
     "CORPUS_MAX_FILES",
     "CORPUS_RRF_K",
+    "CORPUS_DOC_ARM_WEIGHT",
+    "PROFILE_HEAD_CHARS",
+    "PROFILE_TERM_LIMIT",
+    "CORPUS_TERM_RE",
     "resolve_corpus",
     "warm_docs",
     "text_coverage_label",
@@ -33,7 +39,11 @@ __all__ = [
     "rrf_fuse_doc_rankings",
     "rrf_fuse_two_rankings",
     "rrf_fuse_two_rankings_scored",
+    "profile_terms",
+    "build_doc_profile",
 ]
+
+logger = logging.getLogger(__name__)
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
 # explicit. Beyond this, corpus tools return an inline error instead
@@ -44,6 +54,21 @@ CORPUS_MAX_FILES = 100
 # fusion and single-doc hybrid fusion share one k. Design decided by the
 # stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
 CORPUS_RRF_K = 60
+
+# Weight of the document arm in hybrid corpus fusion. Measured on the 500-doc
+# distractor rung (spike 2026-08-26, race 2): head vector at 0.25 and 0.5 are
+# indistinguishable (described hit@3 0.68, needle 1.000, trap 0.985); 0.25 is
+# the lighter touch and keeps 100-doc doc-NDCG flat. An equal-weight (1.0)
+# third list dilutes needles the page arms had already nailed. Not a tool
+# parameter: re-measure, never tune.
+CORPUS_DOC_ARM_WEIGHT = 0.25
+# Head text = page 1's first N characters: title, authors and abstract on
+# arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
+PROFILE_HEAD_CHARS = 1500
+PROFILE_TERM_LIMIT = 200
+# Latin word tokens. Shared with server._corpus_query_terms so profile terms
+# and query terms agree on what a term is; 4+ chars filters function words.
+CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 
 # Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
 # Below the gate, sequential is faster (spawn/IPC overhead outweighs the
@@ -190,6 +215,36 @@ def _cached_pages(
     return pages
 
 
+def profile_terms(texts: dict[int, str]) -> dict[str, int]:
+    """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
+    all pages. Ties break by term so the result is deterministic."""
+    counts: dict[str, int] = {}
+    for text in texts.values():
+        for tok in CORPUS_TERM_RE.findall(text.lower()):
+            if len(tok) > 3:
+                counts[tok] = counts.get(tok, 0) + 1
+    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return dict(top[:PROFILE_TERM_LIMIT])
+
+
+def build_doc_profile(
+    texts: dict[int, str],
+    embed: Callable[[list[str]], list[bytes]],
+) -> "tuple[bytes | None, dict[str, int]]":
+    """The per-document profile: (head vector or None, term counts).
+
+    The head vector embeds page 1's first PROFILE_HEAD_CHARS characters
+    with the same callable used for pages, so it lives in the same space
+    as the page embeddings and the query. No text on page 1 means no
+    vector (None), never a vector of an empty string.
+    """
+    head = (texts.get(0) or "")[:PROFILE_HEAD_CHARS]
+    vec: bytes | None = None
+    if head.strip():
+        vec = embed([head])[0]
+    return vec, profile_terms(texts)
+
+
 def _finalize_doc(
     path: str,
     page_count: int,
@@ -239,6 +294,13 @@ def _finalize_doc(
 
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
 
+    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    if embeddings and embed is not None and model_name is not None:
+        try:
+            profile = build_doc_profile(texts, embed)
+        except Exception as exc:  # noqa: BLE001 - profile is optional
+            logger.warning("doc profile skipped for %s: %s", path, exc)
+
     # ONE transaction for the whole document. Each of these writes used to
     # open its own connection, and leaving that block commits, which is an
     # fsync. Measured on same-spec CI runners, warming a 6-document corpus
@@ -256,6 +318,10 @@ def _finalize_doc(
         cache.save_pages_text(path, to_save, conn=conn)
         if blobs and model_name is not None:
             cache.save_page_embeddings(path, blobs, model_name, conn=conn)
+        if profile is not None and model_name is not None:
+            cache.save_doc_profile(
+                path, PROFILE_HEAD_CHARS, profile[0], profile[1], model_name, conn=conn
+            )
         if layout:
             # Written AFTER page_text: the hidden flag lives on page_text
             # rows, and blocks are keyed independently by mtime.

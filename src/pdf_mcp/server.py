@@ -3035,7 +3035,7 @@ def _corpus_python_keyword_hits(
     return matches
 
 
-_CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
+_CORPUS_TERM_RE = corpus.CORPUS_TERM_RE
 
 
 def _corpus_query_terms(query: str) -> set[str]:

@@ -9,8 +9,10 @@ compared to itself; this gives those numbers an outside reference point. Any
 result is acceptable, including "pdf-mcp equals the anchor". There is no kill
 condition and no thesis being tested.
 
-Design: `docs/superpowers/specs/2026-08-29-bedrock-kb-comparison-design.md`
-Plan: `docs/superpowers/plans/2026-08-29-bedrock-kb-anchor.md`
+Design and plan: an anchor comparison of pdf-mcp corpus search against two
+Bedrock Knowledge Base configurations (default chunking, and fixed-1000
+chunking plus Cohere rerank), scored by evidence-span containment at a fixed
+token budget, per query class, with paired bootstrap CIs.
 Branch: `feat/bedrock-kb-anchor`, worktree `/Users/jztan/src/pdf-mcp-bedrock-kb`
 
 ## State as of 2026-08-29
@@ -18,16 +20,22 @@ Branch: `feat/bedrock-kb-anchor`, worktree `/Users/jztan/src/pdf-mcp-bedrock-kb`
 | Piece | File | Status |
 |---|---|---|
 | Corpus warm | (cache) | DONE, 100/100 docs, text + embeddings |
-| Scoring harness | `scripts/benchmark_bedrock_kb.py` | DONE, no CLI yet |
+| Scoring harness | `scripts/benchmark_bedrock_kb.py` | DONE |
 | Arm P adapter | `scripts/benchmark_bedrock_kb.py::run_arm_p` | DONE, runs live |
-| CDK stacks | `infra/bedrock_kb/` | DONE, synth-tested, NOT deployed |
+| CDK stacks | `infra/bedrock_kb/` | DONE, both deployed (`CREATE_COMPLETE`) |
 | boto3 helpers | `scripts/_bedrock_kb.py` | DONE, stub-tested |
 | Arm configs | `benchmark_data/bedrock_kb/config.json` | DONE, committed |
-| Stack CLI | `scripts/bedrock_kb_stack.py` | **NOT BUILT** (plan Task 8) |
-| Bedrock arm adapter | `retrieve` / `rerank` / `run_arm_bedrock` | **NOT BUILT** (plan Task 9) |
-| Benchmark CLI + run | `main()` in the harness | **NOT BUILT** (plan Task 10) |
+| Stack CLI | `scripts/bedrock_kb_stack.py` | DONE |
+| Bedrock arm adapter | `retrieve` / `rerank` / `run_arm_bedrock` | DONE |
+| Benchmark CLI + run | `main()` in the harness | DONE, full run complete |
 
-Nothing has touched AWS. No resource exists, no spend has occurred.
+Both stacks (`pdfmcp-anchor-b0-default-v1`, `pdfmcp-anchor-b1-fixed1000-v1`)
+are deployed, ingested (100 scanned, 100 indexed, 0 failed on both), and
+queried against the full 89-query set; results are in `RESULTS.md` and
+`results.json`. Both stacks are retained deliberately (see "Keep the
+indexes" below): idle cost is about $0.02/month combined. This is not a
+zero-spend state, and it is not meant to be torn down after reading this
+file.
 
 ## Prerequisites
 
@@ -39,57 +47,62 @@ aws sts get-caller-identity        # confirm the right account
 aws configure get region           # must be us-east-1
 ```
 
-Run the tests to confirm the tree is sound (55 tests, no AWS, no spend):
+Run the tests to confirm the tree is sound (76 tests, no AWS, no spend):
 
 ```bash
 uv run pytest tests/test_benchmark_bedrock_kb.py tests/test_bedrock_kb_infra.py \
-              tests/test_bedrock_kb_stack.py -q
+              tests/test_bedrock_kb_stack.py tests/test_bedrock_kb_cli.py -q
 ```
 
-## What remains, in order
+## How to re-run
 
-### Task 8: deploy and ingest (first spend, about $0.10)
-
-Build `scripts/bedrock_kb_stack.py` per plan Task 8, then:
+Both stacks are already deployed and ingested; a re-run only needs the
+benchmark CLI, not `deploy`/`upload`/`ingest` again:
 
 ```bash
-# 1. Budget alarm FIRST, before anything billable
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws budgets create-budget --account-id "$ACCOUNT" \
-  --budget '{"BudgetName":"pdfmcp-anchor","BudgetLimit":{"Amount":"5","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
-  --notifications-with-subscribers '[
-    {"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":50},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"<your-email>"}]},
-    {"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":100},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"<your-email>"}]}
-  ]'
-
-# 2. One-time CDK bootstrap
-cd infra/bedrock_kb
-npx aws-cdk@2 bootstrap "aws://$ACCOUNT/us-east-1"
-npx aws-cdk@2 synth        # sanity: renders both templates locally, free
-cd ../..
-
-# 3. Per arm
-uv run python scripts/bedrock_kb_stack.py deploy --arm B0-default-v1
-uv run python scripts/bedrock_kb_stack.py upload --arm B0-default-v1
-uv run python scripts/bedrock_kb_stack.py ingest --arm B0-default-v1
-# then the same three for B1-fixed1000-v1
+uv run python scripts/benchmark_bedrock_kb.py
 ```
 
-**Ingest must report 100 scanned, 100 indexed, 0 failed.** If any document
-failed, stop and read `failureReasons`. A silently skipped document exists in
-arm P but not in B0/B1, and the gap would read as a retrieval failure rather
-than an ingest failure.
+This runs arm P live, retrieves from both Bedrock arms, and overwrites
+`results.json` and `RESULTS.md` in this directory (never `ANALYSIS.md`,
+which is hand-written; see its top-of-file note). The drift guard in
+`main()` refuses to run if either stack's config tag or ingest stamp no
+longer matches `config.json` or the corpus manifest.
 
-### Task 9: Bedrock arm adapter
+To check a single arm's live status without querying it:
 
-Add `retrieve` and `rerank` to `scripts/_bedrock_kb.py`, and
-`bedrock_results_to_units` plus `run_arm_bedrock` to the harness. See plan
-Task 9 for the exact code and tests.
+```bash
+uv run python scripts/bedrock_kb_stack.py status --arm B0-default-v1
+uv run python scripts/bedrock_kb_stack.py status --arm B1-fixed1000-v1
+```
 
-### Task 10: run it
+## If you need to rebuild from scratch
 
-Add `main()` to the harness, then the 20-query pilot at three budgets, then the
-full run. Results land in `results.json` and `RESULTS.md` here.
+This only applies after a `destroy`, or for a new arm id. The account
+already has a billing guardrail in place ("My Monthly Cost Budget",
+$6/month, 90% and 100% alert thresholds) from before this project started;
+there is no `pdfmcp-anchor`-specific budget and none is needed.
+
+```bash
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+
+# One-time CDK bootstrap, if this account/region has never been bootstrapped
+cd infra/bedrock_kb
+npx aws-cdk@2 bootstrap "aws://$ACCOUNT/us-east-1"
+cd ../..
+
+# Per arm
+uv run python scripts/bedrock_kb_stack.py deploy --arm <arm-id>
+uv run python scripts/bedrock_kb_stack.py upload --arm <arm-id>
+uv run python scripts/bedrock_kb_stack.py ingest --arm <arm-id>
+```
+
+**`ingest` refuses to stamp `ingested` unless its own statistics account
+for every manifest document** (scanned and indexed both equal to the
+manifest count, 0 failed): a silently skipped document would exist in arm
+P but not in this index, and the gap would read as a retrieval failure
+rather than an ingest failure. If it refuses, read `failureReasons` from
+its printed output.
 
 ## Cost
 
@@ -179,13 +192,28 @@ the benchmark refuses to score an arm whose tag or stamp has drifted.
 
 ## Reading the results
 
-`RESULTS.md` has one section per query class (needle, spread, trap, described)
-with a row per arm and a paired bootstrap CI for P minus each Bedrock arm.
+`RESULTS.md` is generated (do not hand-edit; a re-run overwrites it) and has
+one section per query class (needle, spread, trap, described), each with a
+primary table (all 89 queries) and a labelled sensitivity table (flagged
+queries excluded), plus a paired bootstrap CI for P minus each Bedrock arm
+under both. **See [`ANALYSIS.md`](ANALYSIS.md) for the interpretation**,
+including where the excerpt-selection story does and does not hold across
+classes, the flagged-query review, provenance, and observed cost; that file
+is hand-written and is not overwritten by a re-run.
 
-- **Never average across classes.** `described` is 25 of 89 queries and every mode
-  scores under 0.23 on it, so an aggregate is set by that class alone.
+- **Never average across classes.** `described` is 25 of 89 queries, and it is
+  the weakest class for pdf-mcp's own retrieval modes (see
+  `docs_internal/corpus-vs-single-doc-performance.md` and
+  `benchmark_data/corpus_search/modes_results.md`), so an aggregate would be
+  set by that one class. This is not true of every arm anchored here: B0 and
+  B1 score 0.360 and 0.400 span recall on `described` in this run, well above
+  0.23.
 - At 25 queries per class the 95% CI is roughly plus or minus 20 points, so only
   large effects are claimable.
-- Queries whose evidence span no arm retrieved are flagged and excluded from every
-  mean. Review them against the page image: the spans were originally validated
-  against pdf-mcp's own extraction, so a span nobody finds may be a label defect.
+- Queries whose evidence span no arm retrieved are flagged, reviewed against
+  the page image, and (per `ANALYSIS.md`) confirmed as genuine misses rather
+  than label defects, so the primary tables include them as legitimate 0-0
+  observations; the sensitivity tables exclude them, matching the original
+  pre-review methodology. Both are reported; see `ANALYSIS.md`'s
+  flagged-inclusion sensitivity check for why the choice does not change any
+  conclusion.

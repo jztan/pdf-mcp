@@ -123,9 +123,10 @@ class TestGradeContainment:
         g = grade_containment(q, [("d", 1, "anything")])
         assert g["status"] == "missing"
 
-    def test_context_is_concatenation_of_all_kept_units(self):
+    def test_span_split_across_two_kept_units_does_not_match(self):
         kept = [("d0", 1, "Noether"), ("d0", 2, "ian type")]
-        # split across units must NOT match; containment is per unit
+        # split across units must NOT match; containment is per unit, never
+        # across a concatenation of the kept units
         g = grade_containment(self._q("Noetherian type"), kept)
         assert g["span_recall"] == 0.0
 
@@ -399,6 +400,12 @@ class TestRunArmBedrockRowShapeParity:
         # run_arm_p ever changed without _row() being updated in lockstep).
         # summarize() consumes both arms interchangeably, so this needs to
         # catch a divergence in either direction.
+        #
+        # Key-set equality alone is not enough (that is the parity
+        # antipattern this repo was burned by once already, see
+        # corpus source/FTS5, 2026-07-25): also assert value shapes, so a
+        # change to either arm's `kept`/`containment` structure that keeps
+        # the same key names but changes what they hold is still caught.
         query = {
             "id": "q1",
             "class": "needle",
@@ -408,7 +415,9 @@ class TestRunArmBedrockRowShapeParity:
 
         import pdf_mcp.server as pdf_mcp_server
 
-        def fake_pdf_corpus_search(paths, q, mode="auto", top_k=25):
+        def fake_pdf_corpus_search(
+            paths, q, mode="auto", top_k=25, excerpt_style="paragraph"
+        ):
             return {
                 "matches": [
                     {"path": "/abs/a.pdf", "page": 1, "excerpt": "hello world"}
@@ -435,3 +444,151 @@ class TestRunArmBedrockRowShapeParity:
         )["q1"]
 
         assert set(row_p.keys()) == set(row_b.keys())
+
+        for row in (row_p, row_b):
+            assert isinstance(row["kept"], list)
+            for unit in row["kept"]:
+                assert isinstance(unit, tuple)
+                assert len(unit) == 2
+
+        assert set(row_p["containment"].keys()) == {
+            "span_recall",
+            "fidelity_gap",
+            "status",
+        }
+        assert set(row_p["containment"].keys()) == set(row_b["containment"].keys())
+        for key in ("span_recall", "fidelity_gap", "status"):
+            assert type(row_p["containment"][key]) is type(row_b["containment"][key])
+
+
+import json  # noqa: E402
+import sys  # noqa: E402
+
+import scripts.benchmark_bedrock_kb as bm  # noqa: E402
+
+boto3 = pytest.importorskip("boto3")
+
+
+def _write_json(path: Path, obj) -> None:
+    path.write_text(json.dumps(obj), encoding="utf-8")
+
+
+class TestMainDriftGuard:
+    """Exercises main()'s drift guard and its canonical `.stack.json` path,
+    driving `main(argv=[...])` the way tests/test_benchmark_sections.py
+    drives its own main(). No AWS calls: stack_outputs, load_state, and
+    ingest_stamp_matches are monkeypatched on the bare `_bedrock_kb` module
+    object -- the same one main()'s own local `from _bedrock_kb import
+    ...` resolves to at call time, since both reach it via the
+    scripts/-on-sys.path hack under the bare name `_bedrock_kb` (as
+    opposed to the `scripts._bedrock_kb` identity used elsewhere in this
+    suite, which is a distinct module object for the same file and would
+    not be seen by main())."""
+
+    def _setup(self, tmp_path, monkeypatch):
+        sys.path.insert(0, str(bm.REPO / "scripts"))
+        import _bedrock_kb
+
+        out_dir = tmp_path / "canonical_out"
+        out_dir.mkdir()
+        arm_cfg = {"label": "B0", "rerank": None}
+        config = {
+            "region": "us-east-1",
+            "arms": {"P": {"tool": "pdf_corpus_search"}, "B0-default-v1": arm_cfg},
+        }
+        _write_json(out_dir / "config.json", config)
+        monkeypatch.setattr(bm, "OUT_DIR", out_dir)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        _write_json(data_dir / "manifest.json", {"docs": []})
+        _write_json(data_dir / "queries.json", {"queries": []})
+
+        return _bedrock_kb, arm_cfg, data_dir, out_dir
+
+    def _fake_stack_outputs(self, tag_value):
+        return lambda cfn, name: {
+            "tags": {"pdfmcp:arm_config_sha256": tag_value},
+            "KnowledgeBaseId": "kb",
+            "DataSourceId": "ds",
+        }
+
+    def test_returns_2_on_arm_config_tag_mismatch(self, tmp_path, monkeypatch):
+        bkb, arm_cfg, data_dir, out_dir = self._setup(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            bkb, "stack_outputs", self._fake_stack_outputs("stale-hash")
+        )
+        monkeypatch.setattr(
+            bkb,
+            "load_state",
+            lambda path: {"B0-default-v1": {"ingested": True, "stamp": {}}},
+        )
+        monkeypatch.setattr(bkb, "ingest_stamp_matches", lambda stamp, path: [])
+
+        rc = bm.main(
+            [
+                "--arms",
+                "B0-default-v1",
+                "--data-dir",
+                str(data_dir),
+                "--out-dir",
+                str(tmp_path / "pilot"),
+            ]
+        )
+        assert rc == 2
+
+    def test_returns_2_on_manifest_stamp_mismatch(self, tmp_path, monkeypatch):
+        bkb, arm_cfg, data_dir, out_dir = self._setup(tmp_path, monkeypatch)
+        current = bkb.sha256_json(arm_cfg)
+        monkeypatch.setattr(bkb, "stack_outputs", self._fake_stack_outputs(current))
+        monkeypatch.setattr(
+            bkb,
+            "load_state",
+            lambda path: {"B0-default-v1": {"ingested": True, "stamp": {}}},
+        )
+        monkeypatch.setattr(
+            bkb, "ingest_stamp_matches", lambda stamp, path: ["manifest"]
+        )
+
+        rc = bm.main(
+            [
+                "--arms",
+                "B0-default-v1",
+                "--data-dir",
+                str(data_dir),
+                "--out-dir",
+                str(tmp_path / "pilot"),
+            ]
+        )
+        assert rc == 2
+
+    def test_stack_json_read_from_canonical_out_dir_not_pilot_out_dir(
+        self, tmp_path, monkeypatch
+    ):
+        bkb, arm_cfg, data_dir, out_dir = self._setup(tmp_path, monkeypatch)
+        current = bkb.sha256_json(arm_cfg)
+        monkeypatch.setattr(bkb, "stack_outputs", self._fake_stack_outputs(current))
+        seen_paths = []
+
+        def fake_load_state(path):
+            seen_paths.append(path)
+            return {"B0-default-v1": {"ingested": True, "stamp": {}}}
+
+        monkeypatch.setattr(bkb, "load_state", fake_load_state)
+        monkeypatch.setattr(bkb, "ingest_stamp_matches", lambda stamp, path: [])
+
+        pilot_dir = tmp_path / "pilot"
+        rc = bm.main(
+            [
+                "--arms",
+                "B0-default-v1",
+                "--data-dir",
+                str(data_dir),
+                "--out-dir",
+                str(pilot_dir),
+            ]
+        )
+        assert rc == 0
+        assert seen_paths == [out_dir / ".stack.json"]
+        assert (pilot_dir / "results.json").exists()
+        assert not (out_dir / "results.json").exists()

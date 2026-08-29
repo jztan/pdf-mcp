@@ -188,11 +188,16 @@ def run_arm_p(
     id_by_path: dict[str, str],
     budget_tokens: int,
     top_k: int = 25,
+    excerpt_style: str = "paragraph",
 ) -> dict[str, dict]:
     """pdf-mcp corpus search, hybrid mode, run in-session.
 
     Never lift these numbers from modes_results.md: runs from different
-    cache warms are not comparable number for number.
+    cache warms are not comparable number for number. excerpt_style is
+    passed explicitly (rather than relying on the tool default) because
+    config.json records "excerpt_style": "paragraph" as fact about this
+    run; a future change to the tool's default must not silently falsify
+    that record.
     """
     from benchmark_corpus_modes import build_ranked, grade_query
     from pdf_mcp.server import pdf_corpus_search
@@ -200,7 +205,9 @@ def run_arm_p(
     rows: dict[str, dict] = {}
     for q in queries:
         t0 = time.perf_counter()
-        res = pdf_corpus_search(paths, q["query"], mode="auto", top_k=top_k)
+        res = pdf_corpus_search(
+            paths, q["query"], mode="auto", top_k=top_k, excerpt_style=excerpt_style
+        )
         secs = time.perf_counter() - t0
         if "error" in res:
             raise RuntimeError(f"arm P {q['id']}: {res['error']}")
@@ -295,7 +302,23 @@ def summarize(
     classes: list[str],
     anchor_arms: tuple[str, ...] = ("B0", "B1"),
     ref_arm: str = "P",
+    exclude_flagged: bool = True,
 ) -> dict:
+    """Per-class means and paired diffs.
+
+    A query is flagged when no arm's containment status is anything but
+    `missing` (see no_arm_found): the graded span was validated against
+    pdf-mcp's own extraction, so a span nobody finds may be a label defect
+    rather than a retrieval miss, and the spec excludes flagged queries
+    "until reviewed". exclude_flagged selects which contract applies here:
+    True drops them from every mean (the pre-review sensitivity view);
+    False keeps them as legitimate 0-0 observations (the post-review
+    primary view, once every flagged id has been checked against the page
+    image and confirmed a genuine miss). Both variants report `n` (queries
+    actually averaged) alongside `n_total` (every query in the class,
+    regardless of exclude_flagged), so a reader can see how many were
+    dropped.
+    """
     status_by_arm = {
         arm: {qid: r["containment"]["status"] for qid, r in rows.items()}
         for arm, rows in rows_by_arm.items()
@@ -305,10 +328,20 @@ def summarize(
     diffs: dict[str, dict] = {}
     for cls in classes:
         per_class[cls] = {}
+        n_total = None
         for arm, rows in rows_by_arm.items():
-            sel = [
-                r for qid, r in rows.items() if r["class"] == cls and qid not in flagged
-            ]
+            in_class = [r for qid, r in rows.items() if r["class"] == cls]
+            if n_total is None:
+                n_total = len(in_class)
+            sel = (
+                [
+                    r
+                    for qid, r in rows.items()
+                    if r["class"] == cls and qid not in flagged
+                ]
+                if exclude_flagged
+                else in_class
+            )
             n = len(sel)
             mean = lambda key: (  # noqa: E731
                 round(sum(key(r) for r in sel) / n, 4) if n else None
@@ -320,11 +353,14 @@ def summarize(
                 "dochit3": mean(lambda r: r["dochit3"]),
                 "mean_k": mean(lambda r: r["realized_k"]),
                 "n": n,
+                "n_total": n_total,
             }
         diffs[cls] = {}
         ref = rows_by_arm.get(ref_arm, {})
         ids = sorted(
-            q for q, r in ref.items() if r["class"] == cls and q not in flagged
+            q
+            for q, r in ref.items()
+            if r["class"] == cls and (not exclude_flagged or q not in flagged)
         )
         for arm in anchor_arms:
             if arm not in rows_by_arm:
@@ -339,40 +375,85 @@ def _cell(v: float | None) -> str:
     return "n/a" if v is None else f"{v:.3f}"
 
 
-def render_markdown(summary: dict, config: dict) -> str:
+def _table(arms: dict) -> list[str]:
+    lines = [
+        "| arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | "
+        "doc-hit@3 | realized k |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for arm, m in arms.items():
+        lines.append(
+            f"| {arm} | {m['n']} | {m['n_total']} | {_cell(m['span_recall'])} | "
+            f"{_cell(m['fidelity_gap'])} | {_cell(m['doc_ndcg'])} | "
+            f"{_cell(m['dochit3'])} | {_cell(m['mean_k'])} |"
+        )
+    return lines
+
+
+def _diff_lines(diffs: dict) -> list[str]:
+    lines = []
+    for arm, ci in diffs.items():
+        zero = "includes zero" if ci["includes_zero"] else "excludes zero"
+        lines.append(
+            f"- P minus {arm}, span recall: {ci['mean_diff']:+.3f} "
+            f"[{ci['lo']:+.3f}, {ci['hi']:+.3f}] ({zero}, n={ci['n']})"
+        )
+    return lines
+
+
+def render_markdown(
+    summary: dict, config: dict, sensitivity: dict | None = None
+) -> str:
+    """Render the per-class tables. summary is the primary (include-flagged)
+    view; sensitivity, if given, is the exclude-flagged view and is
+    rendered as a labelled second table under each class.
+
+    This file is regenerated on every run: interpretation, the flagged-id
+    review, provenance, and cost notes are hand-written and live in
+    ANALYSIS.md instead, so a re-run never silently destroys them.
+    """
+    n_flagged = len(summary["flagged"])
     out = [
+        "<!-- GENERATED by scripts/benchmark_bedrock_kb.py -- do not hand-edit, "
+        "this file is overwritten on every run. See ANALYSIS.md for the "
+        "interpretation, the flagged-query review, provenance, and observed "
+        "AWS cost. -->",
+        "",
         "# Bedrock KB anchor benchmark",
         "",
         f"Generated {dt.date.today().isoformat()}. Token budget "
         f"{config.get('budget_tokens')} per query per arm. Bedrock is an anchor, "
-        "not a subject; any result is acceptable. Never average across classes.",
+        "not a subject; any result is acceptable. Never average across classes. "
+        "See [ANALYSIS.md](ANALYSIS.md) for the interpretation.",
         "",
     ]
+    if n_flagged:
+        out += [
+            f"{n_flagged} of the queries below had their evidence span found by "
+            "no arm. Each was reviewed against the page image and confirmed a "
+            "genuine miss, not a label defect (see ANALYSIS.md), so the tables "
+            "below include them as legitimate 0-0 observations. A "
+            "flagged-excluded sensitivity table follows each primary table.",
+            "",
+        ]
     for cls, arms in summary["per_class"].items():
         out += [f"## {cls}", ""]
-        out.append(
-            "| arm | n | span recall | fidelity gap | doc-NDCG@10 | "
-            "doc-hit@3 | realized k |"
-        )
-        out.append("|---|---|---|---|---|---|---|")
-        for arm, m in arms.items():
-            out.append(
-                f"| {arm} | {m['n']} | {_cell(m['span_recall'])} | "
-                f"{_cell(m['fidelity_gap'])} | {_cell(m['doc_ndcg'])} | "
-                f"{_cell(m['dochit3'])} | {_cell(m['mean_k'])} |"
-            )
+        out += _table(arms)
         out.append("")
-        for arm, ci in summary["diffs"].get(cls, {}).items():
-            zero = "includes zero" if ci["includes_zero"] else "excludes zero"
-            out.append(
-                f"- P minus {arm}, span recall: {ci['mean_diff']:+.3f} "
-                f"[{ci['lo']:+.3f}, {ci['hi']:+.3f}] ({zero}, n={ci['n']})"
-            )
+        out += _diff_lines(summary["diffs"].get(cls, {}))
         out.append("")
+        if sensitivity is not None:
+            out += [f"### {cls}, sensitivity (flagged queries excluded)", ""]
+            out += _table(sensitivity["per_class"].get(cls, {}))
+            out.append("")
+            out += _diff_lines(sensitivity["diffs"].get(cls, {}))
+            out.append("")
     out += [
         "## Flagged for manual page-image review",
         "",
-        "Evidence span found by no arm; excluded from every mean above.",
+        "Evidence span found by no arm. Included in the primary tables above "
+        "(reviewed and confirmed a genuine miss, see ANALYSIS.md); excluded "
+        "from the sensitivity tables.",
         "",
     ]
     out += [f"- {q}" for q in summary["flagged"]] or ["- none"]
@@ -381,20 +462,25 @@ def render_markdown(summary: dict, config: dict) -> str:
 
 
 def write_results(
-    summary: dict, rows_by_arm: dict, config: dict, out_dir: Path
+    summary: dict,
+    rows_by_arm: dict,
+    config: dict,
+    out_dir: Path,
+    sensitivity: dict | None = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(),
         "config": config,
         "summary": summary,
+        "summary_excl_flagged": sensitivity,
         "per_query": rows_by_arm,
     }
     (out_dir / "results.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     (out_dir / "RESULTS.md").write_text(
-        render_markdown(summary, config), encoding="utf-8"
+        render_markdown(summary, config, sensitivity=sensitivity), encoding="utf-8"
     )
 
 
@@ -518,9 +604,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     rows_by_arm = rows_by_label
     anchors = tuple(label_of[a] for a in bedrock_arms)
-    summary = summarize(rows_by_arm, classes, anchor_arms=anchors, ref_arm="P")
-    write_results(summary, rows_by_arm, config, args.out_dir)
-    print(render_markdown(summary, config))
+    summary = summarize(
+        rows_by_arm, classes, anchor_arms=anchors, ref_arm="P", exclude_flagged=False
+    )
+    sensitivity = summarize(
+        rows_by_arm, classes, anchor_arms=anchors, ref_arm="P", exclude_flagged=True
+    )
+    write_results(summary, rows_by_arm, config, args.out_dir, sensitivity=sensitivity)
+    print(render_markdown(summary, config, sensitivity=sensitivity))
     return 0
 
 

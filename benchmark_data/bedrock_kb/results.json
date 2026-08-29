@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-29T15:57:10.760451+00:00",
+  "generated": "2026-08-29T16:23:22.244890+00:00",
   "config": {
     "description": "Arm configurations for the Bedrock KB anchor benchmark. Committed before any run so the configs are on record. Bedrock is an anchor, not a subject; no sweep.",
     "region": "us-east-1",
@@ -65,12 +65,222 @@
     "per_class": {
       "described": {
         "P": {
+          "span_recall": 0.12,
+          "fidelity_gap": 0.04,
+          "doc_ndcg": 0.7784,
+          "dochit3": 0.72,
+          "mean_k": 13.28,
+          "n": 25,
+          "n_total": 25
+        },
+        "B0": {
+          "span_recall": 0.36,
+          "fidelity_gap": 0.0,
+          "doc_ndcg": 0.8492,
+          "dochit3": 0.84,
+          "mean_k": 6.84,
+          "n": 25,
+          "n_total": 25
+        },
+        "B1": {
+          "span_recall": 0.4,
+          "fidelity_gap": 0.0,
+          "doc_ndcg": 0.94,
+          "dochit3": 0.92,
+          "mean_k": 1.52,
+          "n": 25,
+          "n_total": 25
+        }
+      },
+      "needle": {
+        "P": {
+          "span_recall": 0.4286,
+          "fidelity_gap": 0.0714,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 19.5,
+          "n": 14,
+          "n_total": 14
+        },
+        "B0": {
+          "span_recall": 0.7143,
+          "fidelity_gap": 0.0,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 12.8571,
+          "n": 14,
+          "n_total": 14
+        },
+        "B1": {
+          "span_recall": 0.7143,
+          "fidelity_gap": 0.0,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 3.5714,
+          "n": 14,
+          "n_total": 14
+        }
+      },
+      "spread": {
+        "P": {
+          "span_recall": 0.64,
+          "fidelity_gap": 0.08,
+          "doc_ndcg": 0.7254,
+          "dochit3": 0.84,
+          "mean_k": 13.84,
+          "n": 25,
+          "n_total": 25
+        },
+        "B0": {
+          "span_recall": 0.6,
+          "fidelity_gap": 0.04,
+          "doc_ndcg": 0.6731,
+          "dochit3": 0.8,
+          "mean_k": 7.24,
+          "n": 25,
+          "n_total": 25
+        },
+        "B1": {
+          "span_recall": 0.68,
+          "fidelity_gap": 0.04,
+          "doc_ndcg": 0.6947,
+          "dochit3": 0.8,
+          "mean_k": 1.64,
+          "n": 25,
+          "n_total": 25
+        }
+      },
+      "trap": {
+        "P": {
+          "span_recall": 0.52,
+          "fidelity_gap": 0.16,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 15.48,
+          "n": 25,
+          "n_total": 25
+        },
+        "B0": {
+          "span_recall": 0.84,
+          "fidelity_gap": 0.2,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 6.8,
+          "n": 25,
+          "n_total": 25
+        },
+        "B1": {
+          "span_recall": 0.88,
+          "fidelity_gap": 0.16,
+          "doc_ndcg": 1.0,
+          "dochit3": 1.0,
+          "mean_k": 1.64,
+          "n": 25,
+          "n_total": 25
+        }
+      }
+    },
+    "diffs": {
+      "described": {
+        "B0": {
+          "mean_diff": -0.24,
+          "lo": -0.44,
+          "hi": -0.04,
+          "includes_zero": false,
+          "n": 25
+        },
+        "B1": {
+          "mean_diff": -0.28,
+          "lo": -0.48,
+          "hi": -0.12,
+          "includes_zero": false,
+          "n": 25
+        }
+      },
+      "needle": {
+        "B0": {
+          "mean_diff": -0.2857,
+          "lo": -0.5714,
+          "hi": 0.0,
+          "includes_zero": true,
+          "n": 14
+        },
+        "B1": {
+          "mean_diff": -0.2857,
+          "lo": -0.5714,
+          "hi": 0.0,
+          "includes_zero": true,
+          "n": 14
+        }
+      },
+      "spread": {
+        "B0": {
+          "mean_diff": 0.04,
+          "lo": -0.24,
+          "hi": 0.28,
+          "includes_zero": true,
+          "n": 25
+        },
+        "B1": {
+          "mean_diff": -0.04,
+          "lo": -0.28,
+          "hi": 0.2,
+          "includes_zero": true,
+          "n": 25
+        }
+      },
+      "trap": {
+        "B0": {
+          "mean_diff": -0.32,
+          "lo": -0.52,
+          "hi": -0.12,
+          "includes_zero": false,
+          "n": 25
+        },
+        "B1": {
+          "mean_diff": -0.36,
+          "lo": -0.6,
+          "hi": -0.16,
+          "includes_zero": false,
+          "n": 25
+        }
+      }
+    },
+    "flagged": [
+      "described-02",
+      "described-03",
+      "described-04",
+      "described-06",
+      "described-08",
+      "described-09",
+      "described-10",
+      "described-15",
+      "described-16",
+      "described-19",
+      "described-21",
+      "described-25",
+      "needle-10",
+      "needle-12",
+      "needle-13",
+      "spread-05",
+      "spread-06",
+      "spread-08",
+      "spread-14",
+      "trap-03",
+      "trap-12"
+    ]
+  },
+  "summary_excl_flagged": {
+    "per_class": {
+      "described": {
+        "P": {
           "span_recall": 0.2308,
           "fidelity_gap": 0.0769,
           "doc_ndcg": 0.7797,
           "dochit3": 0.6923,
           "mean_k": 13.5385,
-          "n": 13
+          "n": 13,
+          "n_total": 25
         },
         "B0": {
           "span_recall": 0.6923,
@@ -78,7 +288,8 @@
           "doc_ndcg": 0.8864,
           "dochit3": 1.0,
           "mean_k": 6.6154,
-          "n": 13
+          "n": 13,
+          "n_total": 25
         },
         "B1": {
           "span_recall": 0.7692,
@@ -86,7 +297,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 1.4615,
-          "n": 13
+          "n": 13,
+          "n_total": 25
         }
       },
       "needle": {
@@ -96,7 +308,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 18.0,
-          "n": 11
+          "n": 11,
+          "n_total": 14
         },
         "B0": {
           "span_recall": 0.9091,
@@ -104,7 +317,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 9.5455,
-          "n": 11
+          "n": 11,
+          "n_total": 14
         },
         "B1": {
           "span_recall": 0.9091,
@@ -112,7 +326,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 2.3636,
-          "n": 11
+          "n": 11,
+          "n_total": 14
         }
       },
       "spread": {
@@ -122,7 +337,8 @@
           "doc_ndcg": 0.7674,
           "dochit3": 0.9048,
           "mean_k": 14.3333,
-          "n": 21
+          "n": 21,
+          "n_total": 25
         },
         "B0": {
           "span_recall": 0.7143,
@@ -130,7 +346,8 @@
           "doc_ndcg": 0.7552,
           "dochit3": 0.9048,
           "mean_k": 7.0,
-          "n": 21
+          "n": 21,
+          "n_total": 25
         },
         "B1": {
           "span_recall": 0.8095,
@@ -138,7 +355,8 @@
           "doc_ndcg": 0.7648,
           "dochit3": 0.9048,
           "mean_k": 1.5714,
-          "n": 21
+          "n": 21,
+          "n_total": 25
         }
       },
       "trap": {
@@ -148,7 +366,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 15.8696,
-          "n": 23
+          "n": 23,
+          "n_total": 25
         },
         "B0": {
           "span_recall": 0.913,
@@ -156,7 +375,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 6.7826,
-          "n": 23
+          "n": 23,
+          "n_total": 25
         },
         "B1": {
           "span_recall": 0.9565,
@@ -164,7 +384,8 @@
           "doc_ndcg": 1.0,
           "dochit3": 1.0,
           "mean_k": 1.6087,
-          "n": 23
+          "n": 23,
+          "n_total": 25
         }
       }
     },

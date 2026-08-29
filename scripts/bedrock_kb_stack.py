@@ -210,6 +210,9 @@ def cmd_ingest(arm_id: str) -> int:
         print(f"ERROR {arm_id}: stack {name} not deployed")
         return 2
 
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    expected = len(manifest["docs"])
+
     job_id = ingest(agent, out["KnowledgeBaseId"], out["DataSourceId"])
     job = wait_ingest(
         agent, out["KnowledgeBaseId"], out["DataSourceId"], job_id, poll_s=20
@@ -218,6 +221,22 @@ def cmd_ingest(arm_id: str) -> int:
     print(f"{arm_id}: ingest {job['status']} {json.dumps(stats)}")
     if job["status"] != "COMPLETE":
         print(f"{arm_id}: failureReasons={job.get('failureReasons')}")
+        return 1
+
+    scanned = stats.get("numberOfDocumentsScanned", 0)
+    indexed = stats.get("numberOfNewDocumentsIndexed", 0) + stats.get(
+        "numberOfModifiedDocumentsIndexed", 0
+    )
+    failed = stats.get("numberOfDocumentsFailed", 0)
+    if scanned != expected or indexed != expected or failed != 0:
+        print(
+            f"ERROR {arm_id}: ingest statistics {json.dumps(stats)} do not "
+            f"account for all {expected} manifest documents (scanned={scanned}, "
+            f"indexed={indexed}, failed={failed}). Refusing to stamp ingested: "
+            "a silently skipped document would exist in arm P but not in this "
+            "index, and the gap would read as a retrieval failure rather than "
+            "an ingest failure."
+        )
         return 1
 
     state = load_state(STATE_PATH)

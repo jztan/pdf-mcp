@@ -3,6 +3,8 @@ bucket emptying, and destroy-completion polling. No AWS calls; cdk and
 boto3 clients are stubbed or monkeypatched.
 """
 
+import json
+
 import pytest
 
 boto3 = pytest.importorskip("boto3")
@@ -114,6 +116,95 @@ class TestCdkInvocation:
         assert captured["cwd"] == cli.INFRA_DIR
         assert captured["env"]["JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION"] == "1"
         assert captured["check"] is True
+
+
+class TestCmdIngest:
+    """cmd_ingest must refuse to stamp `ingested` unless the ingestion job's
+    own statistics account for every manifest document: this is the
+    invariant the README calls load-bearing (100 scanned, 100 indexed, 0
+    failed), because a silently skipped document would exist in arm P but
+    not in the Bedrock index, and the gap would read as a retrieval
+    failure rather than an ingest failure."""
+
+    def _setup(self, monkeypatch, tmp_path, stats):
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {"docs": [{"id": "a", "path": "a.pdf"}, {"id": "b", "path": "b.pdf"}]}
+            )
+        )
+        state_path = tmp_path / ".stack.json"
+
+        monkeypatch.setattr(cli, "load_config", lambda: CFG)
+        monkeypatch.setattr(cli, "_session", lambda cfg: _FakeSession())
+        monkeypatch.setattr(
+            cli,
+            "stack_outputs",
+            lambda cfn, name: {"KnowledgeBaseId": "kb", "DataSourceId": "ds"},
+        )
+        monkeypatch.setattr(cli, "ingest", lambda agent, kb, ds: "job1")
+        monkeypatch.setattr(
+            cli,
+            "wait_ingest",
+            lambda agent, kb, ds, job_id, poll_s=20: {
+                "status": "COMPLETE",
+                "statistics": stats,
+            },
+        )
+        monkeypatch.setattr(cli, "MANIFEST_PATH", manifest_path)
+        monkeypatch.setattr(cli, "STATE_PATH", state_path)
+        return state_path
+
+    def test_stamps_ingested_when_statistics_account_for_every_document(
+        self, monkeypatch, tmp_path
+    ):
+        state_path = self._setup(
+            monkeypatch,
+            tmp_path,
+            {
+                "numberOfDocumentsScanned": 2,
+                "numberOfNewDocumentsIndexed": 2,
+                "numberOfModifiedDocumentsIndexed": 0,
+                "numberOfDocumentsFailed": 0,
+            },
+        )
+        rc = cli.cmd_ingest("B0-default-v1")
+        assert rc == 0
+        assert cli.load_state(state_path)["B0-default-v1"]["ingested"] is True
+
+    def test_refuses_when_scanned_is_short_of_manifest_count(
+        self, monkeypatch, tmp_path
+    ):
+        state_path = self._setup(
+            monkeypatch,
+            tmp_path,
+            {
+                "numberOfDocumentsScanned": 1,
+                "numberOfNewDocumentsIndexed": 1,
+                "numberOfModifiedDocumentsIndexed": 0,
+                "numberOfDocumentsFailed": 0,
+            },
+        )
+        rc = cli.cmd_ingest("B0-default-v1")
+        assert rc == 1
+        assert cli.load_state(state_path) == {}
+
+    def test_refuses_when_a_document_failed_even_if_counts_otherwise_match(
+        self, monkeypatch, tmp_path
+    ):
+        state_path = self._setup(
+            monkeypatch,
+            tmp_path,
+            {
+                "numberOfDocumentsScanned": 2,
+                "numberOfNewDocumentsIndexed": 2,
+                "numberOfModifiedDocumentsIndexed": 0,
+                "numberOfDocumentsFailed": 1,
+            },
+        )
+        rc = cli.cmd_ingest("B0-default-v1")
+        assert rc == 1
+        assert cli.load_state(state_path) == {}
 
 
 class TestEmptyBucket:

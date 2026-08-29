@@ -2,8 +2,7 @@
 
 Scores every arm by evidence-span containment at an equal token budget,
 per query class, with bootstrap CIs. Bedrock is an anchor, not a subject:
-any result is acceptable. See
-docs/superpowers/specs/2026-08-29-bedrock-kb-comparison-design.md.
+any result is acceptable.
 
 Arms: P (pdf_corpus_search, hybrid), B0 (Bedrock default), B1 (Bedrock
 fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
@@ -11,6 +10,7 @@ fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import random
@@ -396,3 +396,130 @@ def write_results(
     (out_dir / "RESULTS.md").write_text(
         render_markdown(summary, config), encoding="utf-8"
     )
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--arms",
+        default=None,
+        help="comma list of arm ids; default: P plus every Bedrock arm in config.json",
+    )
+    ap.add_argument("--budget", type=int, default=BUDGET_TOKENS)
+    ap.add_argument("--limit", type=int, default=None, help="pilot: first N queries")
+    ap.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
+    ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    args = ap.parse_args(argv)
+
+    from benchmark_corpus_modes import class_names
+
+    manifest = json.loads((args.data_dir / "manifest.json").read_text(encoding="utf-8"))
+    queries_doc = json.loads(
+        (args.data_dir / "queries.json").read_text(encoding="utf-8")
+    )
+    queries = (
+        queries_doc["queries"][: args.limit] if args.limit else queries_doc["queries"]
+    )
+    classes = class_names(queries_doc)
+    config = json.loads((OUT_DIR / "config.json").read_text(encoding="utf-8"))
+    config["budget_tokens"] = args.budget
+    config["n_queries"] = len(queries)
+
+    errors = check_corpus_quota(manifest, REPO)
+    if errors:
+        for e in errors:
+            print("QUOTA", e)
+        return 2
+
+    id_by_path = {str((REPO / d["path"]).resolve()): d["id"] for d in manifest["docs"]}
+    id_by_stem = {Path(d["path"]).stem: d["id"] for d in manifest["docs"]}
+    arms = (
+        [a.strip() for a in args.arms.split(",") if a.strip()]
+        if args.arms
+        else ["P"] + [a for a in config["arms"] if a != "P"]
+    )
+    rows_by_arm: dict[str, dict] = {}
+
+    if "P" in arms:
+        rows_by_arm["P"] = run_arm_p(list(id_by_path), queries, id_by_path, args.budget)
+        print(f"P: done ({len(rows_by_arm['P'])} queries)")
+
+    bedrock_arms = [a for a in arms if a.startswith("B")]
+    if bedrock_arms:
+        import boto3
+
+        from _bedrock_kb import (
+            TAG_KEY,
+            ingest_stamp_matches,
+            load_state,
+            sha256_json,
+            stack_name,
+            stack_outputs,
+        )
+
+        state = load_state(args.out_dir / ".stack.json")
+        manifest_path = args.data_dir / "manifest.json"
+        cfn = boto3.Session(region_name=config["region"]).client("cloudformation")
+        deployed: dict[str, dict] = {}
+        runtime = boto3.Session(region_name=config["region"]).client(
+            "bedrock-agent-runtime"
+        )
+        for arm in bedrock_arms:
+            out = stack_outputs(cfn, stack_name(arm))
+            st = state.get(arm)
+            if not out or not st or not st.get("ingested"):
+                print(
+                    f"ERROR: arm {arm} not deployed+ingested; run bedrock_kb_stack.py"
+                )
+                return 2
+            drift = []
+            if out.get("tags", {}).get(TAG_KEY) != sha256_json(config["arms"][arm]):
+                drift.append("arm_config")
+            drift += ingest_stamp_matches(st.get("stamp", {}), manifest_path)
+            if drift:
+                print(
+                    f"ERROR: arm {arm} index was built from a different "
+                    f"{' and '.join(drift)}. "
+                    "Indexes are immutable: add a new arm id with a bumped -vN "
+                    "suffix, deploy it, and run that instead."
+                )
+                return 2
+            deployed[arm] = out
+            rows_by_arm[arm] = run_arm_bedrock(
+                runtime,
+                out["KnowledgeBaseId"],
+                queries,
+                id_by_stem,
+                args.budget,
+                rerank_model=config["arms"][arm]["rerank"],
+            )
+            print(f"{arm}: done")
+
+    # Result tables use the short label (B0, B1); the immutable arm id and its
+    # stamp go into provenance so a reader can tell which index produced a row.
+    label_of = {a: config["arms"].get(a, {}).get("label", a) for a in rows_by_arm}
+    rows_by_label = {label_of[a]: r for a, r in rows_by_arm.items()}
+    config["arm_ids"] = {label_of[a]: a for a in rows_by_arm}
+    config["index_stamps"] = (
+        {
+            label_of[a]: {
+                "stack": stack_name(a),
+                "arm_config_sha256": deployed[a]["tags"].get(TAG_KEY),
+                **state[a].get("stamp", {}),
+            }
+            for a in bedrock_arms
+            if a in rows_by_arm
+        }
+        if bedrock_arms
+        else {}
+    )
+    rows_by_arm = rows_by_label
+    anchors = tuple(label_of[a] for a in bedrock_arms)
+    summary = summarize(rows_by_arm, classes, anchor_arms=anchors, ref_arm="P")
+    write_results(summary, rows_by_arm, config, args.out_dir)
+    print(render_markdown(summary, config))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

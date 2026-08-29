@@ -30,10 +30,10 @@ const FPS = Number(process.env.FPS || 16);
 const MAXCOLORS = Number(process.env.MAXCOLORS || 144);
 const LOSSY = Number(process.env.LOSSY || 80);
 const OUT_W = 760;                                 // README display width
-// Capture the full desktop layout at a larger viewport, then downscale to
-// OUT_W — so each frame shows the whole scene (doc card, grid, search, legend)
-// rather than a zoomed-in crop that needs scrolling.
-const CW = Number(process.env.SCENE_W || 1056);
+// Capture at a viewport just under the demo stage's two-column breakpoint
+// (960px) so the document/folder card fills the frame on its own, with the
+// JSON panel stacked below it out of shot; then downscale to OUT_W.
+const CW = Number(process.env.SCENE_W || 940);
 const CH = Number(process.env.SCENE_H || 760);
 const DSF = 2;
 

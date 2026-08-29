@@ -31,10 +31,10 @@ when finished.
 static-serve `pages/` → Playwright/chromium records the journey to webm →
 ffmpeg palette-quantizes and downscales to GIF → gifsicle applies lossy LZW.
 
-The browser captures the full desktop layout at a larger viewport
-(`SCENE_W`×`SCENE_H`, default 1056×760) and ffmpeg downscales to 760 px wide,
-so each frame shows the whole scene (corpus card, grids, search, receipt)
-instead of a zoomed-in crop. Section-to-section moves are eased camera pans
+The browser captures at `SCENE_W`×`SCENE_H` (default 940×760, just under the
+demo stage's 960 px two-column breakpoint, so the corpus card fills the frame
+on its own and the JSON panel stacks below it out of shot) and ffmpeg
+downscales to 760 px wide. Section-to-section moves are eased camera pans
 (not instant scroll jumps). Output is 760 px wide, 16 fps, ~6 MB.
 
 ## Tunables (env vars)
@@ -44,7 +44,7 @@ instead of a zoomed-in crop. Section-to-section moves are eased camera pans
 | `FPS` | `16` | frame rate (higher = smoother, larger) |
 | `MAXCOLORS` | `144` | GIF palette size |
 | `LOSSY` | `80` | gifsicle lossy level (higher = smaller, more artifacts) |
-| `SCENE_W` / `SCENE_H` | `1056` / `760` | capture viewport (downscaled to 760 px wide) |
+| `SCENE_W` / `SCENE_H` | `940` / `760` | capture viewport (downscaled to 760 px wide) |
 | `OUT_GIF` | `../../docs/images/demo.gif` | output path |
 | `PORT` | `8011` | local server port |
 

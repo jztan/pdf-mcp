@@ -104,6 +104,62 @@ const smoothTo = async (selector, ratio = 0.16, dur = 750) => {
   await page.waitForTimeout(150);
 };
 
+// A visible pointer. Playwright's video has no cursor, so clicks would be
+// invisible: inject one, glide it to the target, press, then click for real.
+const installCursor = async () => {
+  await page.evaluate(() => {
+    if (document.getElementById("__cur")) return;
+    const st = document.createElement("style");
+    st.textContent = `
+      #__cur { position: fixed; left: 0; top: 0; z-index: 99999; pointer-events: none; width: 26px; height: 26px;
+               transform: translate(-4px, -2px); filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); transition: transform 0.12s ease; }
+      #__cur.press { transform: translate(-4px, -2px) scale(0.85); }
+      #__ring { position: fixed; z-index: 99998; pointer-events: none; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+                border: 2.5px solid #1f5eff; opacity: 0; transform: scale(0.4); }
+      #__ring.go { animation: __ring 0.55s ease-out both; }
+      @keyframes __ring { 0% { opacity: 0.9; transform: scale(0.4); } 100% { opacity: 0; transform: scale(1.5); } }`;
+    document.head.appendChild(st);
+    const cur = document.createElement("div"); cur.id = "__cur";
+    cur.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M5 3l14 8.5-6.3 1.6L9.5 20 5 3z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+    const ring = document.createElement("div"); ring.id = "__ring";
+    document.body.append(ring, cur);
+    window.__cursor = { x: window.innerWidth * 0.7, y: window.innerHeight * 0.9 };
+    cur.style.left = window.__cursor.x + "px"; cur.style.top = window.__cursor.y + "px";
+  });
+};
+const moveCursor = async (selector, dur = 600, where = { x: 0.5, y: 0.5 }) => {
+  await page.evaluate(({ sel, d, w }) => new Promise((resolve) => {
+    const el = document.querySelector(sel); const r = el.getBoundingClientRect();
+    const tx = r.left + r.width * w.x, ty = r.top + r.height * w.y;
+    const cur = document.getElementById("__cur"); const from = { ...window.__cursor };
+    const t0 = performance.now(); const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / d), k = ease(p);
+      window.__cursor = { x: from.x + (tx - from.x) * k, y: from.y + (ty - from.y) * k };
+      cur.style.left = window.__cursor.x + "px"; cur.style.top = window.__cursor.y + "px";
+      p < 1 ? requestAnimationFrame(step) : resolve();
+    };
+    requestAnimationFrame(step);
+  }), { sel: selector, d: dur, w: where });
+};
+const pressCursor = async () => {
+  await page.evaluate(() => {
+    const cur = document.getElementById("__cur"), ring = document.getElementById("__ring");
+    ring.style.left = window.__cursor.x + "px"; ring.style.top = window.__cursor.y + "px";
+    ring.classList.remove("go"); void ring.offsetWidth; ring.classList.add("go");
+    cur.classList.add("press"); setTimeout(() => cur.classList.remove("press"), 140);
+  });
+};
+// Glide to the element, pause, press (ripple), then perform the real click.
+const clickWithCursor = async (selector, where) => {
+  await moveCursor(selector, 650, where);
+  await page.waitForTimeout(260);
+  await pressCursor();
+  await page.waitForTimeout(120);
+  await page.click(selector, { position: where ? undefined : undefined });
+};
+await installCursor();
+
 // 1. Hero: let the search-scan animation play through once, then pan to
 // the "2 pages read" line it lands on (below the fold at this viewport).
 await page.waitForTimeout(2600);
@@ -117,7 +173,7 @@ await smoothTo("#ctaCorpus", 0.62);
 await page.waitForTimeout(550);
 
 // 2. Corpus first (the headline): load the 6-PDF sample corpus.
-await page.click("#ctaCorpus");
+await clickWithCursor("#ctaCorpus");
 await page.waitForSelector("#corpusWorkflow", { state: "visible", timeout: 60000 });
 // Hold at the hero until the warm rows exist, so the camera arrives on a
 // populated card instead of panning to an empty one while PDFs fetch.
@@ -147,16 +203,17 @@ await smoothTo("#corpusSearchPanel", 0.16);
 const chips = await page.$$eval("#corpusChips .chip", (els) => els.map((e) => e.dataset.q));
 const cq = chips[1] || chips[0];
 mark(`corpus query = "${cq}"`);
+await clickWithCursor("#corpusSearchInput", { x: 0.12, y: 0.5 });
 await page.locator("#corpusSearchInput").pressSequentially(cq, { delay: 80 });
 await page.waitForTimeout(350);
-await page.click("#corpusSearchBtn");
+await clickWithCursor("#corpusSearchBtn");
 await page.waitForSelector("#corpusResults .result-card.on", { timeout: 20000 });
 mark("corpus results shown");
 await page.waitForTimeout(1600);
 
 // 6. Open the top hit: the agent reads one page out of the whole corpus.
 await smoothTo("#corpusResults", 0.22);
-await page.locator("#corpusResults .result-card").first().click();
+await clickWithCursor("#corpusResults .result-card", { x: 0.5, y: 0.35 });
 // Hold on the opened card so the page text the agent read is on screen.
 await page.waitForSelector("#corpusResults .result-card.reading .inline-reader.open", { timeout: 5000 });
 await smoothTo("#corpusResults .result-card.reading", 0.08, 600);
@@ -167,6 +224,7 @@ await page.waitForTimeout(2000);
 // pages across six documents, and the share that never entered the context.
 await page.waitForSelector("#receipt:not(.hidden)", { timeout: 5000 });
 await smoothTo("#receipt", 0.12);
+await moveCursor("#copyLinkBtn", 700, { x: 1.6, y: 1.8 });
 mark("receipt shown");
 await page.waitForTimeout(2800);
 

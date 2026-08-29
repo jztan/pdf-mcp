@@ -25,11 +25,12 @@ the arm starts paying or whether the one-query spread loss at 100 recurs.
   0.64 to 0.72 across the range and spread stops decaying past 300.
 - The spread loss exists only at 100 (spread-03, spread-08). From 150 up
   the control already misses both, so the arm never costs a spread query
-  there and starts paying at 400.
+  there and starts paying at 350 (+1) and 400 (+1), +2 at 500.
 - Needle never moves. Trap is identical in both rows at every size (the
   0.985 at 500 is a corpus effect, present with and without the arm).
-- Not perfectly monotone (described delta 0 at 200): n=25, one query is 4
-  points; read the trend, not single cells.
+- Described gain by size: +2, +2, 0, +2, +4, +4, +5 queries at 100, 150,
+  200, 300, 350, 400, 500. Not perfectly monotone (0 at 200): n=25, one
+  query is 4 points; read the trend, not single cells.
 
 ## Fidelity check
 
@@ -52,6 +53,7 @@ Both match. Full numbers in `sweep.json`.
 | 150 | 0.64 | 0.72 | +2 | 0.678 | 0.711 |
 | 200 | 0.64 | 0.64 | 0 | 0.663 | 0.644 |
 | 300 | 0.56 | 0.64 | +2 | 0.635 | 0.607 |
+| 350 | 0.52 | 0.68 | +4 | 0.618 | 0.615 |
 | 400 | 0.52 | 0.68 | +4 | 0.615 | 0.607 |
 | 500 | 0.48 | 0.68 | +5 | 0.610 | 0.587 |
 
@@ -63,6 +65,7 @@ Both match. Full numbers in `sweep.json`.
 | 150 | 0.84 | 0.84 | 0 | 0.658 | 0.667 |
 | 200 | 0.80 | 0.80 | 0 | 0.582 | 0.642 |
 | 300 | 0.72 | 0.72 | 0 | 0.556 | 0.594 |
+| 350 | 0.72 | 0.76 | +1 | 0.546 | 0.587 |
 | 400 | 0.68 | 0.72 | +1 | 0.521 | 0.572 |
 | 500 | 0.64 | 0.72 | +2 | 0.508 | 0.543 |
 
@@ -74,6 +77,7 @@ Both match. Full numbers in `sweep.json`.
 | 150 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 200 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 300 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
+| 350 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 400 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 500 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 
@@ -85,6 +89,7 @@ Both match. Full numbers in `sweep.json`.
 | 150 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 200 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 300 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
+| 350 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 400 | 1.00 | 1.00 | 0 | 1.000 | 1.000 |
 | 500 | 1.00 | 1.00 | 0 | 0.985 | 0.985 |
 
@@ -96,6 +101,7 @@ Both match. Full numbers in `sweep.json`.
 | 150 | described-07, described-21 | (none) | (none) | (none) |
 | 200 | described-07, described-21 | described-02, described-12 | (none) | (none) |
 | 300 | described-07, described-14, described-21, described-23 | described-02, described-12 | (none) | (none) |
+| 350 | described-07, described-09, described-14, described-21, described-23 | described-12 | spread-07 | (none) |
 | 400 | described-07, described-09, described-14, described-21, described-23 | described-12 | spread-11 | (none) |
 | 500 | described-07, described-09, described-14, described-20, described-21, described-23 | described-12 | spread-11, spread-18 | (none) |
 
@@ -113,6 +119,7 @@ re-weighting. The per-query trace shows a size effect underneath that:
 | 150 | 0 | 0 | 0 | 0 |
 | 200 | 0 | 0 | 0 | 0 |
 | 300 | 0 | 0 | 0 | 0 |
+| 350 | 0 | 0 | 0 | 0 |
 | 400 | 0 | 0 | 0 | 0 |
 | 500 | 0 | 0 | 0 | 0 |
 

@@ -160,6 +160,24 @@ class TestBootstrapDiffCi:
         with pytest.raises(ValueError):
             bootstrap_diff_ci([1.0], [1.0, 0.0])
 
+    def test_paired_resampling_gives_zero_width_ci_when_diffs_are_degenerate(self):
+        # a and b are identical high-variance lists, so every paired
+        # difference is exactly 0: a correct paired bootstrap resamples
+        # query indices and can only ever produce a diff of 0, giving a
+        # zero-width CI (lo == hi == 0.0). If bootstrap_diff_ci were
+        # changed to resample a and b independently instead of resampling
+        # the paired differences, each resample would draw its own mix of
+        # 1.0s and 0.0s from the two high-variance lists and the CI would
+        # come back with real width. The other tests in this class cannot
+        # catch that regression: their fixtures are either already
+        # identical (so independent resampling still lands near 0 width)
+        # or have low enough per-query variance that the difference is
+        # not obvious.
+        a = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+        b = list(a)
+        r = bootstrap_diff_ci(a, b, n_boot=500, seed=3)
+        assert r["lo"] == 0.0 and r["hi"] == 0.0
+
 
 class TestNoArmFound:
     def test_only_queries_missing_everywhere_are_flagged(self):

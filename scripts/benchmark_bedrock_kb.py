@@ -11,6 +11,7 @@ fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
 
 from __future__ import annotations
 
+import random
 import re
 import sys
 from pathlib import Path
@@ -116,3 +117,55 @@ def grade_containment(query: dict, kept: list[Unit]) -> dict:
         "fidelity_gap": 1.0 if best == "normalized" else 0.0,
         "status": best,
     }
+
+
+def bootstrap_diff_ci(
+    a: list[float],
+    b: list[float],
+    n_boot: int = 2000,
+    seed: int = 0,
+    alpha: float = 0.05,
+) -> dict:
+    """Paired bootstrap CI for mean(a) - mean(b) over the same queries.
+
+    Paired resampling matters: each query is answered by both arms, so
+    resampling query indices (not the two lists independently) keeps the
+    per-query dependence that makes the comparison fair.
+    """
+    if len(a) != len(b):
+        raise ValueError(f"unpaired lengths {len(a)} vs {len(b)}")
+    n = len(a)
+    if n == 0:
+        return {"mean_diff": 0.0, "lo": 0.0, "hi": 0.0, "includes_zero": True, "n": 0}
+    rng = random.Random(seed)
+    diffs = [x - y for x, y in zip(a, b)]
+    mean_diff = sum(diffs) / n
+    boots = []
+    for _ in range(n_boot):
+        sample = [diffs[rng.randrange(n)] for _ in range(n)]
+        boots.append(sum(sample) / n)
+    boots.sort()
+    lo = boots[int((alpha / 2) * n_boot)]
+    hi = boots[min(n_boot - 1, int((1 - alpha / 2) * n_boot))]
+    return {
+        "mean_diff": round(mean_diff, 4),
+        "lo": round(lo, 4),
+        "hi": round(hi, 4),
+        "includes_zero": lo <= 0.0 <= hi,
+        "n": n,
+    }
+
+
+def no_arm_found(status_by_arm: dict[str, dict[str, str]]) -> list[str]:
+    """Query ids whose evidence span no arm retrieved.
+
+    The graded spans were validated against pdf-mcp's own extraction, so a
+    span nobody finds may be a label defect rather than a retrieval miss.
+    These go to manual page-image review and are reported, not scored.
+    """
+    if not status_by_arm:
+        return []
+    ids = set.intersection(*(set(s) for s in status_by_arm.values()))
+    return sorted(
+        q for q in ids if all(s[q] == "missing" for s in status_by_arm.values())
+    )

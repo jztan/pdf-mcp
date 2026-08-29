@@ -128,3 +128,46 @@ class TestGradeContainment:
         # split across units must NOT match; containment is per unit
         g = grade_containment(self._q("Noetherian type"), kept)
         assert g["span_recall"] == 0.0
+
+
+from scripts.benchmark_bedrock_kb import bootstrap_diff_ci, no_arm_found  # noqa: E402
+
+
+class TestBootstrapDiffCi:
+    def test_identical_arms_give_zero_diff_and_ci_includes_zero(self):
+        a = [1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+        r = bootstrap_diff_ci(a, list(a), n_boot=500, seed=1)
+        assert r["mean_diff"] == 0.0
+        assert r["lo"] <= 0.0 <= r["hi"]
+        assert r["includes_zero"] is True
+        assert r["n"] == 8
+
+    def test_clear_gap_excludes_zero(self):
+        a = [1.0] * 20
+        b = [0.0] * 20
+        r = bootstrap_diff_ci(a, b, n_boot=500, seed=1)
+        assert r["mean_diff"] == 1.0
+        assert r["includes_zero"] is False
+
+    def test_is_deterministic_for_a_seed(self):
+        a = [1.0, 0.0, 1.0, 0.0, 1.0]
+        b = [0.0, 0.0, 1.0, 0.0, 1.0]
+        assert bootstrap_diff_ci(a, b, seed=7) == bootstrap_diff_ci(a, b, seed=7)
+
+    def test_rejects_unpaired_lengths(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            bootstrap_diff_ci([1.0], [1.0, 0.0])
+
+
+class TestNoArmFound:
+    def test_only_queries_missing_everywhere_are_flagged(self):
+        status = {
+            "P": {"q1": "missing", "q2": "exact", "q3": "missing"},
+            "B0": {"q1": "missing", "q2": "missing", "q3": "normalized"},
+        }
+        assert no_arm_found(status) == ["q1"]
+
+    def test_empty(self):
+        assert no_arm_found({}) == []

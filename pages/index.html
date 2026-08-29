@@ -1025,7 +1025,7 @@ estimated_tokens: 1740</pre>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg>
         <h3 class="cap-head"><b>Reading order</b> that holds</h3>
-        <p class="cap-desc">With the <code>[multicolumn]</code> extra, two-column papers stay in sequence instead of interleaving; vertical Japanese text reads as written. Text comes back as plain text, in order.</p>
+        <p class="cap-desc">Two-column papers stay in sequence instead of interleaving; vertical Japanese text reads as written. Text comes back as plain text, in order.</p>
       </div>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
@@ -1064,7 +1064,7 @@ estimated_tokens: 1740</pre>
           <tr>
             <th>Layout</th>
             <td>Two-column papers interleave, tables flatten into word soup, and a scanned page is a blank.</td>
-            <td class="ours">Column-aware reading order (with the <code>[multicolumn]</code> extra), tables as rows, OCR for image-only pages, and a render when the model needs to look.</td>
+            <td class="ours">Column-aware reading order out of the box, tables as rows, OCR for image-only pages, and a render when the model needs to look.</td>
           </tr>
           <tr>
             <th>Untrusted text</th>
@@ -1091,7 +1091,7 @@ estimated_tokens: 1740</pre>
         <span class="step-n">01</span>
         <h3 class="step-label">Install from PyPI.</h3>
         <div class="codebox" data-copy-install role="button" tabindex="0"><pre>pip install pdf-mcp</pre><small>copy</small></div>
-        <p>Python 3.10+. Add <code>pdf-mcp[ocr]</code> for scanned pages (needs Tesseract) and <code>[multicolumn]</code> for column-aware reading order.</p>
+        <p>Python 3.10+. Add <code>pdf-mcp[ocr]</code> for scanned pages (needs Tesseract). Column-aware reading order is built in.</p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
@@ -1190,7 +1190,7 @@ estimated_tokens: 1740</pre>
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a> · sibling of <a href="https://redmine-mcp-server.jztan.com">redmine-mcp-server</a></p>
-  <p style="margin-top:4px;font-size:11px"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v3.1.0</p>
+  <p style="margin-top:4px;font-size:11px"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v3.1.1</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>

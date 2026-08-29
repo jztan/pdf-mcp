@@ -257,6 +257,9 @@
 
   /* Upload state */
   section.upload { padding: 36px 40px 32px; display: flex; flex-direction: column; gap: 18px; }
+  .stage-intro { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0 8px; }
+  .stage-intro h2 { font-family: var(--font-display); font-size: clamp(24px, 3vw, 32px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; margin: 4px 0 0; }
+  .stage-intro p:last-child { font-size: 15px; line-height: 1.5; color: var(--text-secondary); margin: 0; max-width: 560px; }
   .dropzone {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
     padding: 52px 24px; border: 1.5px dashed var(--border-strong); border-radius: 18px;
@@ -719,6 +722,11 @@
     <div class="stage-card">
 
       <section class="upload" id="uploadSection">
+        <div class="stage-intro">
+          <p class="act-label">try it yourself</p>
+          <h2>See what your agent sees.</h2>
+          <p>Drop in a PDF, paste a URL, or pick a sample. Then search it and read pages the way an agent would, and watch what each step costs.</p>
+        </div>
         <label class="dropzone" id="dropzone">
           <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple />
           <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

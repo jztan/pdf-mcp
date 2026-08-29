@@ -306,7 +306,7 @@ import math  # noqa: E402
 
 import pytest  # noqa: E402
 
-from scripts.benchmark_bedrock_kb import run_arm_bedrock  # noqa: E402
+from scripts.benchmark_bedrock_kb import run_arm_bedrock, run_arm_p  # noqa: E402
 
 
 class _FakeRuntime:
@@ -392,25 +392,46 @@ class TestRunArmBedrockRerankOrdering:
 
 
 class TestRunArmBedrockRowShapeParity:
-    def test_row_keys_match_run_arm_p_shape(self):
-        # run_arm_p's documented row shape (see _row() above and
-        # run_arm_p's docstring): summarize() consumes both arms
-        # interchangeably, so a silent key divergence would corrupt every
-        # number rather than failing loudly.
-        p_shaped_row = _row("needle", "exact")
-        runtime = _FakeRuntime([_result("A", 1, "z" * 4)])
+    def test_row_keys_match_real_run_arm_p_output(self, monkeypatch):
+        # Compare against a REAL run_arm_p row, not the hand-written _row()
+        # fixture (that fixture is only for TestSummarize; using it here
+        # would let the two arms' row shapes drift apart silently if
+        # run_arm_p ever changed without _row() being updated in lockstep).
+        # summarize() consumes both arms interchangeably, so this needs to
+        # catch a divergence in either direction.
         query = {
             "id": "q1",
             "class": "needle",
-            "query": "q",
-            "labels": [{"doc": "A", "page": 1, "gain": 2}],
+            "query": "hello",
+            "labels": [{"doc": "A", "page": 1, "gain": 2, "evidence": "hello"}],
         }
-        rows = run_arm_bedrock(
+
+        import pdf_mcp.server as pdf_mcp_server
+
+        def fake_pdf_corpus_search(paths, q, mode="auto", top_k=25):
+            return {
+                "matches": [
+                    {"path": "/abs/a.pdf", "page": 1, "excerpt": "hello world"}
+                ],
+                "coverage": {"searched": len(paths)},
+            }
+
+        monkeypatch.setattr(pdf_mcp_server, "pdf_corpus_search", fake_pdf_corpus_search)
+        row_p = run_arm_p(
+            ["/abs/a.pdf"],
+            [query],
+            {"/abs/a.pdf": "A"},
+            budget_tokens=100_000,
+        )["q1"]
+
+        runtime = _FakeRuntime([_result("A", 1, "hello world")])
+        row_b = run_arm_bedrock(
             runtime,
             "KB1234567890",
             [query],
             {"A": "A"},
             budget_tokens=100_000,
             rerank_model=None,
-        )
-        assert set(rows["q1"].keys()) == set(p_shaped_row.keys())
+        )["q1"]
+
+        assert set(row_p.keys()) == set(row_b.keys())

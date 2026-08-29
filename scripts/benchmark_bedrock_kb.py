@@ -457,7 +457,10 @@ def main(argv: list[str] | None = None) -> int:
             stack_outputs,
         )
 
-        state = load_state(args.out_dir / ".stack.json")
+        # .stack.json always lives in the canonical OUT_DIR, never in a
+        # pilot/sub out-dir (--out-dir only changes where results.json and
+        # RESULTS.md land for this run).
+        state = load_state(OUT_DIR / ".stack.json")
         manifest_path = args.data_dir / "manifest.json"
         cfn = boto3.Session(region_name=config["region"]).client("cloudformation")
         deployed: dict[str, dict] = {}

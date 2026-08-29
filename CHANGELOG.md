@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+
+- **Browser demo redesigned** (pdf-mcp.jztan.com). New layout and visual
+  language: a page-field animation in the hero, a single demo stage that
+  takes your PDF, a URL, the 216-page sample, or the 6-PDF sample folder,
+  with the document (or folder) on the left and a "What your agent would
+  see" panel on the right showing every tool call's JSON. Below it: a
+  skim / search / read explainer, nine capability cards, a "why not just
+  paste the PDF" comparison, per-client install steps, and an FAQ. All six
+  in-browser tools, the corpus fusion port, and the token ledger are
+  unchanged; the JSON stays field-for-field with the server. The hero's
+  GitHub pill shows the live star count, which is the one request the page
+  makes on load (to api.github.com); PDFs still never leave the tab.
+
 ## [3.0.0] - 2026-08-29
 ### Changed
 

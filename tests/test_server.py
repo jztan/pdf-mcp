@@ -2100,9 +2100,19 @@ class TestPdfInfoTextCoverage:
         assert len(cov["text_chars_per_page"]) == 5
 
     def test_pdf_info_cold_500_page_under_2s(self, isolated_server, tmp_path):
-        """Cold pdf_info on a 500-page PDF completes under 2 seconds."""
+        """Cold pdf_info on a 500-page PDF completes under 2 seconds.
+
+        The 2s budget is the intent; Windows CI runners get 2x headroom
+        because a shared runner under xdist load once measured exactly
+        2.00s and failed on rounding (develop CI run 33223392779) with no
+        code change involved. A guard that trips on runner noise gets
+        ignored, which defeats it.
+        """
+        import sys
         import time
         import pymupdf as _pymupdf
+
+        budget = 4.0 if sys.platform == "win32" else 2.0
 
         pdf_path = str(tmp_path / "big.pdf")
         doc = _pymupdf.open()
@@ -2115,7 +2125,9 @@ class TestPdfInfoTextCoverage:
         start = time.monotonic()
         pdf_info(pdf_path)
         elapsed = time.monotonic() - start
-        assert elapsed < 2.0, f"pdf_info took {elapsed:.2f}s on 500-page PDF"
+        assert (
+            elapsed < budget
+        ), f"pdf_info took {elapsed:.2f}s on 500-page PDF (budget {budget:.1f}s)"
 
 
 class TestPdfReadPagesRender:

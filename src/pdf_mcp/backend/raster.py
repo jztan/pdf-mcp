@@ -12,6 +12,7 @@ from typing import Any
 import pypdfium2 as pdfium
 
 from .geometry import Rect
+from .document import close_pdfium
 
 #: Below this many characters a page is treated as having no usable text
 #: layer, so OCR runs. A handful of stray glyphs on a scan (a page number
@@ -114,7 +115,7 @@ def extract_images(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
             out.append(entry)
         return out
     finally:
-        doc.close()
+        close_pdfium(doc)
 
 
 def render_page(
@@ -153,7 +154,7 @@ def render_page(
             image = image.crop((left, top, right, bottom))
         return image
     finally:
-        doc.close()
+        close_pdfium(doc)
 
 
 def _text_layer(pdf_path: str, page_num: int) -> str:
@@ -267,7 +268,7 @@ def _scan_native_dpi(pdf_path: str, page_num: int) -> "int | None":
     except Exception:  # noqa: BLE001 - fail-safe: no cap
         return None
     finally:
-        doc.close()
+        close_pdfium(doc)
 
 
 def ocr_page_text(
@@ -423,7 +424,7 @@ def page_images(pdf_path: str, page_num: int, doc: Any = None) -> list[dict[str,
         return out
     finally:
         if owned:
-            doc.close()
+            close_pdfium(doc)
 
 
 def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
@@ -472,4 +473,4 @@ def get_image_info(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
             )
         return out
     finally:
-        doc.close()
+        close_pdfium(doc)

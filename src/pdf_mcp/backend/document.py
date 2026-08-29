@@ -91,7 +91,29 @@ class Document:
         return out
 
     def close(self) -> None:
-        self._pdf.close()
+        close_pdfium(self._pdf)
+
+
+def close_pdfium(pdf: Any) -> None:
+    """Close a pypdfium2 PdfDocument without tripping its GC race.
+
+    PdfDocument.close() iterates its `_kids` set of weakrefs. A child
+    (page, textpage) still alive only through a reference cycle is
+    removed from that set by its finalizer when the cyclic GC runs, and
+    that can fire mid-iteration: "RuntimeError: Set changed size during
+    iteration" (CI, Python 3.14). Closing every live child from a
+    snapshot first leaves the upstream loop nothing to allocate on, so
+    the GC cannot run inside it. Guard tested in tests/backend/
+    test_document.py::TestCloseSurvivesGcRace; drop it once
+    test_upstream_close_is_racy starts passing.
+    """
+    kids = getattr(pdf, "_kids", None)
+    if kids:
+        for wref in list(kids):
+            kid = wref()
+            if kid is not None and kid.raw:
+                kid.close(_by_parent=True)
+    pdf.close()
 
 
 def open_document(path: str) -> Document:

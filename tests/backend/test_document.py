@@ -94,3 +94,62 @@ def test_page_rect_matches_pymupdf(corpus_pdfs):
         doc.close()
         assert abs(got.width - ref.width) < 0.05
         assert abs(got.height - ref.height) < 0.05
+
+
+class TestCloseSurvivesGcRace:
+    """pypdfium2's PdfDocument.close() iterates its `_kids` weakref set;
+    a child trapped in a reference cycle is removed from that set by its
+    finalizer only when the cyclic GC runs, which can land mid-iteration
+    ("RuntimeError: Set changed size during iteration", seen on CI's
+    3.14 leg). The guard below must make close() immune to that timing.
+    """
+
+    @staticmethod
+    def _doc_with_cyclic_kid():
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument.new()
+        pdf.new_page(100, 100)
+        live = pdf[0]
+        garbage = pdf[0]
+        garbage.__dict__["_cycle"] = garbage  # only the cyclic GC frees it
+        del garbage
+        return pdf, live
+
+    @staticmethod
+    def _close_under_gc_pressure(close, trials: int = 200) -> int:
+        import gc
+
+        failures = 0
+        old = gc.get_threshold()
+        for _ in range(trials):
+            pdf, live = TestCloseSurvivesGcRace._doc_with_cyclic_kid()
+            gc.set_threshold(1, 1, 1)
+            try:
+                close(pdf)
+            except RuntimeError as exc:
+                assert "changed size" in str(exc)
+                failures += 1
+            finally:
+                gc.set_threshold(*old)
+            del live
+        return failures
+
+    def test_upstream_close_is_racy(self):
+        """Documents the defect the guard exists for; if this stops
+        failing, pypdfium2 fixed it upstream and the guard can go."""
+        failures = self._close_under_gc_pressure(lambda pdf: pdf.close())
+        assert failures > 0
+
+    def test_close_pdfium_is_race_free(self):
+        from pdf_mcp.backend.document import close_pdfium
+
+        assert self._close_under_gc_pressure(close_pdfium) == 0
+
+    def test_close_pdfium_releases_handles(self):
+        from pdf_mcp.backend.document import close_pdfium
+
+        pdf, live = self._doc_with_cyclic_kid()
+        close_pdfium(pdf)
+        assert pdf.raw is None
+        assert live.raw is None

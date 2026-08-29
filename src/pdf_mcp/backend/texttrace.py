@@ -34,6 +34,8 @@ from typing import Any
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
 
+from .document import close_pdfium
+
 
 def _bounds(obj: Any) -> tuple[float, float, float, float]:
     left, bottom, right, top = (ctypes.c_float() for _ in range(4))
@@ -145,7 +147,7 @@ def get_texttrace(pdf_path: str, page_num: int) -> list[dict[str, Any]]:
     try:
         spans = _spans_for_page(doc[page_num])
     finally:
-        doc.close()
+        close_pdfium(doc)
     if key is not None:
         if len(_TRACE_CACHE) > _TRACE_CACHE_MAX:
             _TRACE_CACHE.clear()

@@ -35,6 +35,7 @@ import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_raw
 
 from .columns import column_bands
+from .document import close_pdfium
 from .pagespace import page_transform
 
 #: Baseline tolerance for calling two glyphs the same row, x median height.
@@ -1161,7 +1162,7 @@ def get_text(
         _store_lines(pdf_path, page_num, lines)
         return _shape_from_lines(lines, kind, sort=sort, clip=clip)
     finally:
-        doc.close()
+        close_pdfium(doc)
 
 
 class TextPage:
@@ -1198,7 +1199,7 @@ def open_text_page(pdf_path: str, page_num: int) -> TextPage:
     try:
         width, height = doc[page_num].get_size()
     finally:
-        doc.close()
+        close_pdfium(doc)
     return TextPage(pdf_path, page_num, Rect(0.0, 0.0, width, height))
 
 
@@ -1281,4 +1282,4 @@ def count_chars(pdf_path: str, page_num: int, doc: Any = None) -> int:
             pdfium_raw.FPDFText_ClosePage(text_page)
     finally:
         if owned:
-            doc.close()
+            close_pdfium(doc)

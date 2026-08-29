@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GitHub pill shows the live star count, which is the one request the page
   makes on load (to api.github.com); PDFs still never leave the tab.
 
+### Fixed
+
+- Closing a document could raise `RuntimeError: Set changed size during
+  iteration` from inside pypdfium2 when Python's cyclic garbage collector
+  ran mid-close (seen intermittently on Python 3.14, where it turned an
+  otherwise successful `pdf_render_pages` call into a tool error). Every
+  document close now releases live page handles from a snapshot first, so
+  the collector has nothing to interrupt.
+
 ## [3.0.0] - 2026-08-29
 ### Changed
 

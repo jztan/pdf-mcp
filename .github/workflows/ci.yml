@@ -21,6 +21,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Pin fastembed's model directory so actions/cache can restore it.
+      # Without the pin it lands under the OS temp dir, outside the workspace
+      # and never cached. (runner.temp is not usable in job-level env.)
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
     strategy:
       matrix:
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
@@ -47,7 +52,23 @@ jobs:
         # Intentionally src/-only: test and script bodies are untyped and
         # would need per-module relaxations. Tracked in docs_internal/backlog.md.
         run: uv run mypy src/
+      - name: Restore the embedding model cache
+        # bge-small lives only on Hugging Face Hub (fastembed has no mirror
+        # for it). Downloading it on every job made the gate depend on that
+        # host: on 2026-08-29 one Windows job stalled at file 2/5 for 17
+        # minutes with no error. With this cache the hub is contacted only
+        # when the key misses, roughly once per model or fastembed bump.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.fastembed_cache
+          key: fastembed-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            fastembed-model-${{ runner.os }}-
       - name: Warm the embedding model cache
+        # Bound the cold-miss download. A stalled stream never trips the
+        # hub client's per-read timeout, so without this the job burns its
+        # whole budget; failing fast makes a re-run cheap.
+        timeout-minutes: 3
         # fastembed downloads bge-small into one shared cache directory.
         # Under -n auto several workers can trigger that first download at
         # the same time and race, which failed the RRF gate on one Python
@@ -77,6 +98,11 @@ jobs:
   # and stay on the Linux job; this one only proves the code runs.
   test-windows:
     runs-on: windows-latest
+    env:
+      # Pin fastembed's model directory so actions/cache can restore it.
+      # Without the pin it lands under the OS temp dir, outside the workspace
+      # and never cached. (runner.temp is not usable in job-level env.)
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
     # Windows has no default job timeout worth relying on (GitHub's is 6
     # hours), and the failure mode this job exists to catch -- spawn-only
     # multiprocessing -- deadlocks rather than errors.
@@ -112,7 +138,23 @@ jobs:
         run: |
           tesseract --version
           uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
+      - name: Restore the embedding model cache
+        # bge-small lives only on Hugging Face Hub (fastembed has no mirror
+        # for it). Downloading it on every job made the gate depend on that
+        # host: on 2026-08-29 one Windows job stalled at file 2/5 for 17
+        # minutes with no error. With this cache the hub is contacted only
+        # when the key misses, roughly once per model or fastembed bump.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.fastembed_cache
+          key: fastembed-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            fastembed-model-${{ runner.os }}-
       - name: Warm the embedding model cache
+        # Bound the cold-miss download. A stalled stream never trips the
+        # hub client's per-read timeout, so without this the job burns its
+        # whole budget; failing fast makes a re-run cheap.
+        timeout-minutes: 3
         # fastembed downloads bge-small into one shared cache directory.
         # Under -n auto several workers can trigger that first download at
         # the same time and race, which failed the RRF gate on one Python

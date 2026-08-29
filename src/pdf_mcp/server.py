@@ -3183,7 +3183,9 @@ def _corpus_keyword_rankings(
 
 
 def _merge_doc_match_counts(
-    kw_counts: dict[str, int], sem_ranking: list[tuple[str, int]]
+    kw_counts: dict[str, int],
+    sem_ranking: list[tuple[str, int]],
+    doc_list: list[tuple[str, int]] | None = None,
 ) -> dict[str, int]:
     """Per-doc match counts across BOTH hybrid arms.
 
@@ -3196,7 +3198,11 @@ def _merge_doc_match_counts(
 
     Counts are merged with max(), not sum: the two arms are separate views
     of the same pages, so the value means "at least this many pages in this
-    document matched", never a total of both views.
+    document matched", never a total of both views. The document arm names
+    documents the page arms may never have surfaced; that is the routing
+    gain, and doc_match_counts is the field the fan-out instruction sends
+    callers to, so it must be visible there. One document = at least one
+    matching page.
     """
     merged = dict(kw_counts)
     sem_counts: dict[str, int] = {}
@@ -3204,6 +3210,8 @@ def _merge_doc_match_counts(
         sem_counts[path] = sem_counts.get(path, 0) + 1
     for path, count in sem_counts.items():
         merged[path] = max(merged.get(path, 0), count)
+    for path, _page in doc_list or []:
+        merged[path] = max(merged.get(path, 0), 1)
     return merged
 
 
@@ -3240,6 +3248,28 @@ def _corpus_semantic_scores(
             vec = np.frombuffer(blob, dtype=np.float32).copy()
             scored.append((path, page_num + 1, float(vec @ query_vec)))
     return scored, semantic_unprocessed
+
+
+def _corpus_doc_scores(
+    paths: list[str],
+    model_name: str,
+    query_vec: Any,
+) -> dict[str, float]:
+    """Head-vector cosine per profiled document (the document arm).
+
+    One SELECT over doc_profiles, one matvec. Docs with a NULL vector
+    (page 1 empty) are excluded; the caller reports them through
+    `doc_profile_coverage`.
+    """
+    import numpy as np
+
+    profiles = cache.get_doc_profiles(paths, model_name)
+    keyed = [(p, blob) for p, blob in profiles.items() if blob is not None]
+    if not keyed:
+        return {}
+    mat = np.stack([np.frombuffer(blob, dtype=np.float32) for _p, blob in keyed])
+    sims = mat @ query_vec
+    return {p: float(s) for (p, _b), s in zip(keyed, sims)}
 
 
 def _group_excerpts_by_doc(
@@ -3412,6 +3442,12 @@ def pdf_corpus_search(
         - semantic_unprocessed: (semantic/hybrid only) paths that were
           warmed/cached but had no cached embeddings (e.g. warm raced
           the embeddings budget); additive to `unprocessed`
+        - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
+          profiled < searched means the document arm ran partially
+          (profiles still backfilling, or page 1 has no text); a
+          pdf_corpus_warm(embeddings=True) closes it
+        - doc_score: (hybrid matches only) head-vector cosine of the
+          match's document, 4 dp, null when the doc has no profile
         - all_results_low_confidence, confidence_threshold: semantic
           and hybrid modes
         - model_name: semantic mode only
@@ -3635,6 +3671,7 @@ def pdf_corpus_search(
 
     # ── mode="auto" with embeddings available: hybrid fusion ──────────
     assert embed_model is not None  # guaranteed by check_available above
+    assert embed_fn is not None  # guaranteed by embeddings_needed above
     query_vec = _embedder.encode_query(query, embed_model)
     scored, semantic_unprocessed = _corpus_semantic_scores(
         ready_paths, embed_model, query_vec
@@ -3644,8 +3681,34 @@ def pdf_corpus_search(
     sem_limit = min(top_k * 3, len(scored))
     sem_ranking = [(path, page) for path, page, _s in scored[:sem_limit]]
 
-    fused_scored = corpus.rrf_fuse_two_rankings_scored(
-        kw_fused, sem_ranking, top_k=top_k
+    # ── document arm ──────────────────────────────────────────────────
+    # A third, weighted RRF list ranking DOCUMENTS by head-vector cosine,
+    # each mapped to its best semantic page. The page arms draw a 30-page
+    # shortlist from every page vector in the corpus, so under distractor
+    # pressure gold page-1s fall off it; one vector per document competes
+    # among N docs instead of N*pages. Measured: 500-doc described
+    # doc-hit@3 0.48 -> 0.68, needle/trap unchanged (spec 2026-08-26).
+    try:
+        corpus.backfill_doc_profiles(ready_paths, cache, embed_model, embed_fn)
+    except Exception as exc:  # noqa: BLE001 - arm runs on what it has
+        logger.warning("doc profile backfill failed: %s", exc)
+    doc_cos = _corpus_doc_scores(ready_paths, embed_model, query_vec)
+    best_page: dict[str, int] = {}
+    for path, page, _s in scored:  # already sorted best-first
+        best_page.setdefault(path, page)
+    doc_ranked = sorted(
+        ((p, c) for p, c in doc_cos.items() if p in best_page),
+        key=lambda t: (-t[1], t[0]),
+    )[: top_k * 3]
+    doc_list = [(p, best_page[p]) for p, _c in doc_ranked]
+
+    fused_scored = corpus.rrf_fuse_rankings_scored(
+        [
+            (kw_fused, 1.0),
+            (sem_ranking, 1.0),
+            (doc_list, corpus.CORPUS_DOC_ARM_WEIGHT),
+        ],
+        top_k=top_k,
     )
     fused = [item for item, _s in fused_scored]
     rrf_score_map = dict(fused_scored)
@@ -3673,6 +3736,7 @@ def pdf_corpus_search(
             "excerpt": excerpt,
             "score": round(rrf_score_map[(path, page)], 4),
             "semantic_score": round(sem_score, 4),
+            "doc_score": (round(doc_cos[path], 4) if path in doc_cos else None),
             "low_confidence": low_confidence,
             "position": 0,
             "_fused_pos": idx,
@@ -3689,7 +3753,13 @@ def pdf_corpus_search(
     return {
         "matches": matches,
         "total_matches": len(matches),
-        "doc_match_counts": _merge_doc_match_counts(kw_doc_match_counts, sem_ranking),
+        "doc_match_counts": _merge_doc_match_counts(
+            kw_doc_match_counts, sem_ranking, doc_list
+        ),
+        "doc_profile_coverage": {
+            "profiled": len(doc_cos),
+            "searched": len(ready_paths),
+        },
         "search_mode": "hybrid",
         "excerpt_style": excerpt_style,
         "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},

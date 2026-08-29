@@ -4621,6 +4621,74 @@ class TestPdfCorpusSearchSemanticAuto:
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
         assert "error" in result
 
+    def test_hybrid_carries_doc_arm_fields(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        cov = result["doc_profile_coverage"]
+        assert cov == {"profiled": 3, "searched": 3}
+        for m in result["matches"]:
+            assert "doc_score" in m
+            assert m["doc_score"] is None or isinstance(m["doc_score"], float)
+        assert any(m["doc_score"] is not None for m in result["matches"])
+
+    def test_hybrid_backfills_profiles_on_a_pre_existing_cache(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        # Warm with embeddings, then delete the profiles to simulate a cache
+        # written before profiles existed.
+        pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("DELETE FROM doc_profiles")
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["doc_profile_coverage"]["profiled"] == 3
+
+    def test_doc_score_is_null_for_an_unprofiled_doc(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        alpha = str(corpus_dir / "alpha.pdf")
+        # A valid row with a NULL vector means "page 1 had no text": the
+        # backfill must not re-encode it, and its matches score null.
+        cache.save_doc_profile(alpha, 1500, None, {}, server.pdf_config.embedding_model)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
+        assert result["doc_profile_coverage"] == {"profiled": 2, "searched": 3}
+        alpha_hits = [m for m in result["matches"] if m["path"] == alpha]
+        assert alpha_hits and all(m["doc_score"] is None for m in alpha_hits)
+
+    def test_doc_arm_docs_appear_in_doc_match_counts(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        for m in result["matches"]:
+            assert result["doc_match_counts"].get(m["path"], 0) >= 1
+
+    def test_keyword_and_semantic_responses_have_no_doc_arm_fields(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        for mode in ("keyword", "semantic"):
+            result = pdf_corpus_search(str(corpus_dir), "budget", mode=mode)
+            assert "doc_profile_coverage" not in result
+            assert not any("doc_score" in m for m in result["matches"])
+
+    def test_single_doc_pdf_search_hybrid_unchanged(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        single = pdf_search(str(corpus_dir / "alpha.pdf"), "budget", mode="auto")
+        assert "doc_profile_coverage" not in single
+        assert not any("doc_score" in m for m in single["matches"])
+
 
 class TestPdfCorpusSearchSourceLabel:
     """Corpus hits report real per-page text provenance ('ocr' vs

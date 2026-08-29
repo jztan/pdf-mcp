@@ -188,3 +188,77 @@ class TestMatchesToUnits:
     def test_unknown_path_keeps_path_as_id(self):
         units = matches_to_units([{"path": "/x.pdf", "page": 1, "excerpt": ""}], {})
         assert units == [("/x.pdf", 1, "")]
+
+
+from scripts.benchmark_bedrock_kb import (  # noqa: E402
+    render_markdown,
+    summarize,
+    write_results,
+)
+
+
+def _row(cls, status, k=3, doc_ndcg=1.0, dochit3=1):
+    return {
+        "class": cls,
+        "kept": [],
+        "realized_k": k,
+        "containment": {
+            "span_recall": 0.0 if status == "missing" else 1.0,
+            "fidelity_gap": 1.0 if status == "normalized" else 0.0,
+            "status": status,
+        },
+        "doc_ndcg": doc_ndcg,
+        "dochit3": dochit3,
+        "seconds": 0.1,
+    }
+
+
+class TestSummarize:
+    def test_per_class_means_and_paired_diffs(self):
+        rows = {
+            "P": {"q1": _row("needle", "exact"), "q2": _row("needle", "missing")},
+            "B0": {"q1": _row("needle", "normalized"), "q2": _row("needle", "missing")},
+        }
+        s = summarize(rows, ["needle"], anchor_arms=("B0",), ref_arm="P")
+        # q2 is missing in every arm, so no_arm_found flags it and it is
+        # excluded from every mean (per the flagged-exclusion contract
+        # exercised below in test_flagged_queries_are_excluded_from_means).
+        # Only q1 remains: P is exact (span_recall 1.0), B0 is normalized
+        # (fidelity_gap 1.0).
+        assert s["per_class"]["needle"]["P"]["span_recall"] == 1.0
+        assert s["per_class"]["needle"]["B0"]["fidelity_gap"] == 1.0
+        assert s["per_class"]["needle"]["P"]["mean_k"] == 3.0
+        assert s["diffs"]["needle"]["B0"]["mean_diff"] == 0.0
+        assert s["flagged"] == ["q2"]
+
+    def test_flagged_queries_are_excluded_from_means(self):
+        rows = {
+            "P": {"q1": _row("trap", "exact"), "q2": _row("trap", "missing")},
+            "B0": {"q1": _row("trap", "exact"), "q2": _row("trap", "missing")},
+        }
+        s = summarize(rows, ["trap"], anchor_arms=("B0",))
+        assert s["per_class"]["trap"]["P"]["n"] == 1
+        assert s["per_class"]["trap"]["P"]["span_recall"] == 1.0
+
+
+class TestRenderAndWrite:
+    def test_markdown_has_one_table_per_class_and_no_aggregate(self):
+        rows = {
+            "P": {"q1": _row("needle", "exact")},
+            "B0": {"q1": _row("needle", "exact")},
+        }
+        s = summarize(rows, ["needle"], anchor_arms=("B0",))
+        md = render_markdown(s, {"budget_tokens": 2000})
+        assert "## needle" in md
+        assert "realized k" in md
+        assert "overall" not in md.lower()
+
+    def test_write_results_creates_both_files(self, tmp_path: Path):
+        rows = {
+            "P": {"q1": _row("needle", "exact")},
+            "B0": {"q1": _row("needle", "exact")},
+        }
+        s = summarize(rows, ["needle"], anchor_arms=("B0",))
+        write_results(s, rows, {"budget_tokens": 2000}, tmp_path)
+        assert (tmp_path / "results.json").exists()
+        assert (tmp_path / "RESULTS.md").exists()

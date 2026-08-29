@@ -11,6 +11,8 @@ fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 import random
 import re
 import sys
@@ -216,3 +218,111 @@ def run_arm_p(
             "seconds": round(secs, 3),
         }
     return rows
+
+
+def summarize(
+    rows_by_arm: dict[str, dict[str, dict]],
+    classes: list[str],
+    anchor_arms: tuple[str, ...] = ("B0", "B1"),
+    ref_arm: str = "P",
+) -> dict:
+    status_by_arm = {
+        arm: {qid: r["containment"]["status"] for qid, r in rows.items()}
+        for arm, rows in rows_by_arm.items()
+    }
+    flagged = set(no_arm_found(status_by_arm))
+    per_class: dict[str, dict] = {}
+    diffs: dict[str, dict] = {}
+    for cls in classes:
+        per_class[cls] = {}
+        for arm, rows in rows_by_arm.items():
+            sel = [
+                r for qid, r in rows.items() if r["class"] == cls and qid not in flagged
+            ]
+            n = len(sel)
+            mean = lambda key: (  # noqa: E731
+                round(sum(key(r) for r in sel) / n, 4) if n else None
+            )
+            per_class[cls][arm] = {
+                "span_recall": mean(lambda r: r["containment"]["span_recall"]),
+                "fidelity_gap": mean(lambda r: r["containment"]["fidelity_gap"]),
+                "doc_ndcg": mean(lambda r: r["doc_ndcg"]),
+                "dochit3": mean(lambda r: r["dochit3"]),
+                "mean_k": mean(lambda r: r["realized_k"]),
+                "n": n,
+            }
+        diffs[cls] = {}
+        ref = rows_by_arm.get(ref_arm, {})
+        ids = sorted(
+            q for q, r in ref.items() if r["class"] == cls and q not in flagged
+        )
+        for arm in anchor_arms:
+            if arm not in rows_by_arm:
+                continue
+            a = [ref[q]["containment"]["span_recall"] for q in ids]
+            b = [rows_by_arm[arm][q]["containment"]["span_recall"] for q in ids]
+            diffs[cls][arm] = bootstrap_diff_ci(a, b)
+    return {"per_class": per_class, "diffs": diffs, "flagged": sorted(flagged)}
+
+
+def _cell(v: float | None) -> str:
+    return "n/a" if v is None else f"{v:.3f}"
+
+
+def render_markdown(summary: dict, config: dict) -> str:
+    out = [
+        "# Bedrock KB anchor benchmark",
+        "",
+        f"Generated {dt.date.today().isoformat()}. Token budget "
+        f"{config.get('budget_tokens')} per query per arm. Bedrock is an anchor, "
+        "not a subject; any result is acceptable. Never average across classes.",
+        "",
+    ]
+    for cls, arms in summary["per_class"].items():
+        out += [f"## {cls}", ""]
+        out.append(
+            "| arm | n | span recall | fidelity gap | doc-NDCG@10 | "
+            "doc-hit@3 | realized k |"
+        )
+        out.append("|---|---|---|---|---|---|---|")
+        for arm, m in arms.items():
+            out.append(
+                f"| {arm} | {m['n']} | {_cell(m['span_recall'])} | "
+                f"{_cell(m['fidelity_gap'])} | {_cell(m['doc_ndcg'])} | "
+                f"{_cell(m['dochit3'])} | {_cell(m['mean_k'])} |"
+            )
+        out.append("")
+        for arm, ci in summary["diffs"].get(cls, {}).items():
+            zero = "includes zero" if ci["includes_zero"] else "excludes zero"
+            out.append(
+                f"- P minus {arm}, span recall: {ci['mean_diff']:+.3f} "
+                f"[{ci['lo']:+.3f}, {ci['hi']:+.3f}] ({zero}, n={ci['n']})"
+            )
+        out.append("")
+    out += [
+        "## Flagged for manual page-image review",
+        "",
+        "Evidence span found by no arm; excluded from every mean above.",
+        "",
+    ]
+    out += [f"- {q}" for q in summary["flagged"]] or ["- none"]
+    out.append("")
+    return "\n".join(out)
+
+
+def write_results(
+    summary: dict, rows_by_arm: dict, config: dict, out_dir: Path
+) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "config": config,
+        "summary": summary,
+        "per_query": rows_by_arm,
+    }
+    (out_dir / "results.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    (out_dir / "RESULTS.md").write_text(
+        render_markdown(summary, config), encoding="utf-8"
+    )

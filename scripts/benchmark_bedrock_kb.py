@@ -11,6 +11,7 @@ fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -72,3 +73,46 @@ def cap_to_budget(units: list[Unit], budget_tokens: int) -> tuple[list[Unit], in
         kept.append(unit)
         used += cost
     return kept, len(kept)
+
+
+_WS = re.compile(r"\s+")
+_RANK = {"exact": 2, "normalized": 1, "missing": 0}
+
+
+def normalize(text: str) -> str:
+    return _WS.sub(" ", text).strip().lower()
+
+
+def contain(context: str, evidence: str) -> str:
+    """exact: verbatim substring. normalized: substring after whitespace and
+    case folding (retrieved but mangled). missing: neither."""
+    if evidence in context:
+        return "exact"
+    if normalize(evidence) in normalize(context):
+        return "normalized"
+    return "missing"
+
+
+def grade_containment(query: dict, kept: list[Unit]) -> dict:
+    """Best containment status across the query's page-bearing labels.
+
+    Containment is checked per unit, never across a concatenation: a span
+    split across two chunks was not retrieved intact and must not score.
+    """
+    best = "missing"
+    for lb in query["labels"]:
+        if "page" not in lb or "evidence" not in lb:
+            continue
+        for _doc, _page, text in kept:
+            status = contain(text, lb["evidence"])
+            if _RANK[status] > _RANK[best]:
+                best = status
+            if best == "exact":
+                break
+        if best == "exact":
+            break
+    return {
+        "span_recall": 1.0 if best != "missing" else 0.0,
+        "fidelity_gap": 1.0 if best == "normalized" else 0.0,
+        "status": best,
+    }

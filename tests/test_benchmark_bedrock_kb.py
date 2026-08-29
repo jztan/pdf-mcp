@@ -66,3 +66,65 @@ class TestCapToBudget:
 
     def test_empty(self):
         assert cap_to_budget([], 2000) == ([], 0)
+
+
+from scripts.benchmark_bedrock_kb import contain, grade_containment  # noqa: E402
+
+
+class TestContain:
+    def test_exact_substring(self):
+        assert contain("the Noetherian type of X", "Noetherian type") == "exact"
+
+    def test_normalized_only_when_whitespace_or_case_differs(self):
+        ctx = "SPLITTING\n  FAMILIES and\tthe noetherian TYPE"
+        assert contain(ctx, "Splitting families and the Noetherian type") == (
+            "normalized"
+        )
+
+    def test_missing(self):
+        assert contain("unrelated text", "Noetherian type") == "missing"
+
+    def test_exact_wins_over_normalized(self):
+        assert contain("a b", "a b") == "exact"
+
+
+class TestGradeContainment:
+    def _q(self, *evidence: str):
+        return {
+            "id": "q",
+            "class": "spread",
+            "labels": [
+                {"doc": f"d{i}", "page": 1, "gain": 2, "evidence": e}
+                for i, e in enumerate(evidence)
+            ],
+        }
+
+    def test_exact_hit_is_recall_one_no_gap(self):
+        kept = [("d0", 1, "... Noetherian type ...")]
+        g = grade_containment(self._q("Noetherian type"), kept)
+        assert g == {"span_recall": 1.0, "fidelity_gap": 0.0, "status": "exact"}
+
+    def test_normalized_hit_is_recall_one_with_gap(self):
+        kept = [("d0", 1, "... noetherian\n type ...")]
+        g = grade_containment(self._q("Noetherian type"), kept)
+        assert g == {"span_recall": 1.0, "fidelity_gap": 1.0, "status": "normalized"}
+
+    def test_any_label_suffices_for_spread(self):
+        kept = [("d1", 1, "second span here")]
+        g = grade_containment(self._q("first span", "second span"), kept)
+        assert g["span_recall"] == 1.0
+
+    def test_missing(self):
+        g = grade_containment(self._q("nope"), [("d0", 1, "x")])
+        assert g == {"span_recall": 0.0, "fidelity_gap": 0.0, "status": "missing"}
+
+    def test_labels_without_page_are_ignored(self):
+        q = {"id": "q", "class": "route", "labels": [{"doc": "d", "gain": 2}]}
+        g = grade_containment(q, [("d", 1, "anything")])
+        assert g["status"] == "missing"
+
+    def test_context_is_concatenation_of_all_kept_units(self):
+        kept = [("d0", 1, "Noether"), ("d0", 2, "ian type")]
+        # split across units must NOT match; containment is per unit
+        g = grade_containment(self._q("Noetherian type"), kept)
+        assert g["span_recall"] == 0.0

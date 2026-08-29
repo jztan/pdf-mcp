@@ -157,3 +157,44 @@ def wait_ingest(
                 f"{elapsed:.1f}s (max_wait_s={max_wait_s})"
             )
         time.sleep(poll_s)
+
+
+def retrieve(runtime, kb_id: str, query: str, n: int = 25) -> list[dict]:
+    return runtime.retrieve(
+        knowledgeBaseId=kb_id,
+        retrievalQuery={"text": query},
+        retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": n}},
+    )["retrievalResults"]
+
+
+def rerank(
+    runtime,
+    query: str,
+    texts: list[str],
+    model: str = RERANK_MODEL,
+    n: int | None = None,
+    region: str = "us-east-1",
+) -> list[int]:
+    """Return source indices in reranked order (best first)."""
+    if not texts:
+        return []
+    out = runtime.rerank(
+        queries=[{"type": "TEXT", "textQuery": {"text": query}}],
+        sources=[
+            {
+                "type": "INLINE",
+                "inlineDocumentSource": {"type": "TEXT", "textDocument": {"text": t}},
+            }
+            for t in texts
+        ],
+        rerankingConfiguration={
+            "type": "BEDROCK_RERANKING_MODEL",
+            "bedrockRerankingConfiguration": {
+                "modelConfiguration": {
+                    "modelArn": f"arn:aws:bedrock:{region}::foundation-model/{model}"
+                },
+                "numberOfResults": n if n is not None else len(texts),
+            },
+        },
+    )
+    return [r["index"] for r in out["results"]]

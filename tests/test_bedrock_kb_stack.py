@@ -295,3 +295,87 @@ class TestDuplicatedConstants:
 
         payload = {"b": 2, "a": 1}
         assert cdk_app.sha256_json(payload) == helpers.sha256_json(payload)
+
+
+from scripts._bedrock_kb import RERANK_MODEL, rerank, retrieve  # noqa: E402
+
+
+class TestRetrieveAndRerank:
+    def _runtime(self):
+        return boto3.Session(
+            region_name="us-east-1",
+            aws_access_key_id="test",
+            aws_secret_access_key="test",
+        ).client("bedrock-agent-runtime")
+
+    def test_retrieve_returns_results_list(self):
+        rt = self._runtime()
+        with Stubber(rt) as st:
+            st.add_response(
+                "retrieve",
+                {
+                    "retrievalResults": [
+                        {
+                            "content": {"text": "hello"},
+                            "location": {
+                                "type": "S3",
+                                "s3Location": {"uri": "s3://b/a.pdf"},
+                            },
+                            "metadata": {"x-amz-bedrock-kb-document-page-number": 2.0},
+                        }
+                    ]
+                },
+                {
+                    "knowledgeBaseId": "KB1234567890",
+                    "retrievalQuery": {"text": "q"},
+                    "retrievalConfiguration": {
+                        "vectorSearchConfiguration": {"numberOfResults": 5}
+                    },
+                },
+            )
+            # bedrock-agent-runtime validates a minimum knowledgeBaseId
+            # length (unlike bedrock-agent's ingest/wait_ingest ops above),
+            # so this needs a 10+ char id even though it is a fake one.
+            out = retrieve(rt, "KB1234567890", "q", n=5)
+        assert out[0]["content"]["text"] == "hello"
+
+    def test_rerank_returns_indices_in_new_order(self):
+        rt = self._runtime()
+        arn = f"arn:aws:bedrock:us-east-1::foundation-model/{RERANK_MODEL}"
+        with Stubber(rt) as st:
+            st.add_response(
+                "rerank",
+                {
+                    "results": [
+                        {"index": 1, "relevanceScore": 0.9},
+                        {"index": 0, "relevanceScore": 0.1},
+                    ]
+                },
+                {
+                    "queries": [{"type": "TEXT", "textQuery": {"text": "q"}}],
+                    "sources": [
+                        {
+                            "type": "INLINE",
+                            "inlineDocumentSource": {
+                                "type": "TEXT",
+                                "textDocument": {"text": "a"},
+                            },
+                        },
+                        {
+                            "type": "INLINE",
+                            "inlineDocumentSource": {
+                                "type": "TEXT",
+                                "textDocument": {"text": "b"},
+                            },
+                        },
+                    ],
+                    "rerankingConfiguration": {
+                        "type": "BEDROCK_RERANKING_MODEL",
+                        "bedrockRerankingConfiguration": {
+                            "modelConfiguration": {"modelArn": arn},
+                            "numberOfResults": 2,
+                        },
+                    },
+                },
+            )
+            assert rerank(rt, "q", ["a", "b"], n=2) == [1, 0]

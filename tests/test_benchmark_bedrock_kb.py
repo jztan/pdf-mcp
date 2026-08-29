@@ -280,3 +280,23 @@ class TestRenderAndWrite:
         write_results(s, rows, {"budget_tokens": 2000}, tmp_path)
         assert (tmp_path / "results.json").exists()
         assert (tmp_path / "RESULTS.md").exists()
+
+
+from scripts.benchmark_bedrock_kb import bedrock_results_to_units  # noqa: E402
+
+
+class TestBedrockResultsToUnits:
+    def _r(self, key, text, page=None):
+        r = {
+            "content": {"text": text},
+            "location": {"type": "S3", "s3Location": {"uri": f"s3://b/{key}"}},
+            "metadata": {},
+        }
+        if page is not None:
+            r["metadata"]["x-amz-bedrock-kb-document-page-number"] = page
+        return r
+
+    def test_maps_uri_stem_and_float_page(self):
+        res = [self._r("0705.4297.pdf", "AAA", 3.0), self._r("x.pdf", "BBB")]
+        units = bedrock_results_to_units(res, {"0705.4297": "0705.4297"})
+        assert units == [("0705.4297", 3, "AAA"), ("x", None, "BBB")]

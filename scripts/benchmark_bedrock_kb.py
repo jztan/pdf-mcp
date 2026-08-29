@@ -18,6 +18,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
@@ -208,6 +209,69 @@ def run_arm_p(
         units = matches_to_units(res["matches"], id_by_path)
         kept, k = cap_to_budget(units, budget_tokens)
         graded = grade_query(q, build_ranked(res["matches"], id_by_path), 10)
+        rows[q["id"]] = {
+            "class": q["class"],
+            "kept": [(d, p) for d, p, _t in kept],
+            "realized_k": k,
+            "containment": grade_containment(q, kept),
+            "doc_ndcg": graded["doc_ndcg"],
+            "dochit3": graded["dochit3"],
+            "seconds": round(secs, 3),
+        }
+    return rows
+
+
+_PAGE_KEY = "x-amz-bedrock-kb-document-page-number"
+
+
+def bedrock_results_to_units(
+    results: list[dict], id_by_stem: dict[str, str]
+) -> list[Unit]:
+    units: list[Unit] = []
+    for r in results:
+        uri = r.get("location", {}).get("s3Location", {}).get("uri", "")
+        stem = Path(urlparse(uri).path).stem
+        page_raw = r.get("metadata", {}).get(_PAGE_KEY)
+        page = int(page_raw) if page_raw is not None else None
+        text = r.get("content", {}).get("text", "")
+        units.append((id_by_stem.get(stem, stem), page, text))
+    return units
+
+
+def run_arm_bedrock(
+    runtime,
+    kb_id: str,
+    queries: list[dict],
+    id_by_stem: dict[str, str],
+    budget_tokens: int,
+    rerank_model: str | None,
+    n: int = 25,
+) -> dict[str, dict]:
+    """Bedrock KB retrieve (optional Cohere rerank), run in-session.
+
+    Row shape is identical to run_arm_p's so summarize() can consume both
+    arms interchangeably.
+    """
+    from _bedrock_kb import rerank, retrieve
+    from benchmark_corpus_modes import grade_query
+
+    rows: dict[str, dict] = {}
+    for q in queries:
+        t0 = time.perf_counter()
+        results = retrieve(runtime, kb_id, q["query"], n=n)
+        units = bedrock_results_to_units(results, id_by_stem)
+        if rerank_model:
+            order = rerank(
+                runtime, q["query"], [u[2] for u in units], model=rerank_model
+            )
+            units = [units[i] for i in order]
+        secs = time.perf_counter() - t0
+        kept, k = cap_to_budget(units, budget_tokens)
+        # doc-level grading needs (doc_id, page); page may be None for a
+        # chunk with no page metadata, and grade_query only uses page for
+        # page-level labels, so -1 is a safe non-matching placeholder.
+        ranked = [(d, p if p is not None else -1) for d, p, _t in units[:10]]
+        graded = grade_query(q, ranked, 10)
         rows[q["id"]] = {
             "class": q["class"],
             "kept": [(d, p) for d, p, _t in kept],

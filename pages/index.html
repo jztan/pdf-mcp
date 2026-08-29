@@ -261,13 +261,15 @@
   .stage-intro h2 { font-family: var(--font-display); font-size: clamp(24px, 3vw, 32px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; margin: 4px 0 0; }
   .stage-intro p:last-child { font-size: 15px; line-height: 1.5; color: var(--text-secondary); margin: 0; max-width: 560px; }
   .dropzone {
+    position: relative;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
     padding: 52px 24px; border: 1.5px dashed var(--border-strong); border-radius: 18px;
     background: var(--bg); text-align: center; cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
   }
   .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); }
-  .dropzone input { display: none; }
+  .dropzone input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .dropzone:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .dropzone-icon { width: 36px; height: 36px; color: var(--text-tertiary); }
   .dropzone-title { display: block; font-family: var(--font-display); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin: 0; color: var(--text); }
   .dropzone-hint { display: block; font-size: 14px; color: var(--text-tertiary); margin: 0; }
@@ -304,7 +306,6 @@
   }
   .btn-ghost:hover { opacity: 1; color: var(--text); background: var(--bg-subtle); }
   .btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
-  .btn-icon { height: auto; padding: 4px; border: none; }
 
   /* Loader */
   .loader { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 64px 24px; color: var(--text-secondary); font-size: 14px; font-family: var(--font-mono); }
@@ -347,7 +348,6 @@
   .agent-call-head b { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; color: var(--text); }
   .agent-call-head small { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
   .agent-call .step-json-toggle { align-self: flex-start; }
-  .agent-empty { margin: auto; text-align: center; color: var(--text-tertiary); font-size: 13px; max-width: 260px; line-height: 1.5; padding: 24px 0; }
   .json-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
   .json-wrap.open { max-height: 600px; }
   .json-box {
@@ -484,10 +484,10 @@
   .ov-toc { margin: 0; padding: 0; list-style: none; font-size: 11.5px; color: var(--text-secondary); }
   .ov-toc li { padding: 2.5px 0; border-top: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-toc li:first-child { border-top: none; }
-  .cg-row { display: flex; align-items: center; gap: 12px; padding: 5px 0; }
+  .cg-row { display: flex; align-items: flex-start; gap: 12px; padding: 5px 0; }
   .cg-name { flex: 0 0 170px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
-  .cg-grid { flex: 1; display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); gap: 3px; }
-  .cg-cell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 1.5px; background: var(--text-tertiary); opacity: 0.32; cursor: pointer; transition: background 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease; }
+  .cg-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; }
+  .cg-cell { width: 9px; height: 12px; border-radius: 1.5px; background: var(--text-tertiary); opacity: 0.32; cursor: pointer; transition: background 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease; }
   .cg-cell:hover { opacity: 0.8; }
   .cg-cell.dim { opacity: 0.1; }
   .cg-cell.hit { background: var(--accent); opacity: 0.45; }
@@ -610,7 +610,7 @@
   details.seo-content[open] > summary::before { content: "↑ "; }
   details.seo-content > summary:hover { color: var(--text-secondary); background: var(--bg-subtle); }
   .seo-content-body { padding-top: 32px; color: var(--text-secondary); font-size: 15px; line-height: 1.65; }
-  .seo-content-body h1 { font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); margin: 0 0 14px; }
+  .seo-content-body .seo-h1 { font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); margin: 0 0 14px; }
   .seo-content-body h2 { font-family: var(--font-display); font-size: 17px; font-weight: 500; letter-spacing: -0.005em; color: var(--text); margin: 32px 0 10px; }
   .seo-content-body p { margin: 0 0 14px; }
   .seo-content-body .seo-lede { font-size: 16px; margin-bottom: 20px; }
@@ -661,7 +661,7 @@
     .cg-name { flex-basis: 110px; }
     .skim-grid, .caps-grid, .steps { grid-template-columns: 1fr; }
     .skim-head { flex-direction: column; align-items: flex-start; }
-    section.skim, section.caps, section.versus, section.trust, section.connect, section.faq { padding-top: 80px; }
+    section.skim, section.caps, section.versus, section.connect, section.faq { padding-top: 80px; }
     section.closing { margin-top: 80px; padding: 64px 20px; }
     .json-box { font-size: 11px; }
   }
@@ -846,7 +846,6 @@
                   <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div>
                 </div>
               </div>
-              <p class="agent-empty">Search or read a page and the JSON the server would hand your agent appears here.</p>
             </div>
           </aside>
         </div>
@@ -855,7 +854,7 @@
       <section class="workflow hidden" id="corpusWorkflow">
         <div class="stage-head">
           <p class="act-label">your folder</p>
-          <button class="btn-ghost" id="corpusResetBtn">&#8635; Try another PDF</button>
+          <button class="btn-ghost" id="corpusResetBtn">&#8635; Try another folder or PDF</button>
         </div>
         <div class="stage-grid">
           <div class="doc-card" id="corpusCard">
@@ -1153,7 +1152,7 @@ estimated_tokens: 1740</pre>
 <details class="seo-content">
   <summary>About pdf-mcp</summary>
   <div class="seo-content-body">
-  <h1>pdf-mcp: PDF extraction for AI agents</h1>
+  <h2 class="seo-h1">pdf-mcp: PDF extraction for AI agents</h2>
   <p class="seo-lede">
     pdf-mcp is an open-source MCP (Model Context Protocol) server that lets AI agents read, search, and analyze PDF files without loading the whole document into context. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
   </p>

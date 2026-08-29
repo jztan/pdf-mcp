@@ -26,9 +26,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PAGES_DIR = resolve(HERE, "../../pages");
 const OUT = process.env.OUT_GIF || resolve(HERE, "../../docs/images/demo.gif");
 const PORT = Number(process.env.PORT || 8011);
-const FPS = Number(process.env.FPS || 16);
+const FPS = Number(process.env.FPS || 14);
 const MAXCOLORS = Number(process.env.MAXCOLORS || 144);
-const LOSSY = Number(process.env.LOSSY || 80);
+const LOSSY = Number(process.env.LOSSY || 100);
 const OUT_W = 760;                                 // README display width
 // Capture at a viewport just under the demo stage's two-column breakpoint
 // (960px) so the document/folder card fills the frame on its own, with the
@@ -95,8 +95,11 @@ const smoothTo = async (selector, ratio = 0.16, dur = 750) => {
   await page.waitForTimeout(150);
 };
 
-// 1. Hero: let the search-scan animation play through once.
+// 1. Hero: let the search-scan animation play through once, then pan to
+// the "2 pages read" line it lands on (below the fold at this viewport).
 await page.waitForTimeout(2600);
+await smoothTo("#heroStat", 0.5, 700);
+await page.waitForTimeout(1200);
 mark("hero shown");
 
 // Pan down to the "2 pages read" line + CTAs first, so clicking a sample
@@ -145,8 +148,11 @@ await page.waitForTimeout(1600);
 // 6. Open the top hit: the agent reads one page out of the whole corpus.
 await smoothTo("#corpusResults", 0.22);
 await page.locator("#corpusResults .result-card").first().click();
+// Hold on the opened card so the page text the agent read is on screen.
+await page.waitForSelector("#corpusResults .result-card.reading .inline-reader.open", { timeout: 5000 });
+await smoothTo("#corpusResults .result-card.reading", 0.08, 600);
 mark("corpus hit opened");
-await page.waitForTimeout(1800);
+await page.waitForTimeout(2000);
 
 // 7. The payoff: reading a hit reveals the "what just happened" receipt —
 // pages across six documents, and the share that never entered the context.

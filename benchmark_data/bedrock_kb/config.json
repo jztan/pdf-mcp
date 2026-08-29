@@ -1,0 +1,49 @@
+{
+  "description": "Arm configurations for the Bedrock KB anchor benchmark. Committed before any run so the configs are on record. Bedrock is an anchor, not a subject; no sweep.",
+  "region": "us-east-1",
+  "embedding_model": "amazon.titan-embed-text-v2:0",
+  "vector_store": "s3_vectors",
+  "budget_tokens": 2000,
+  "token_chars": 4,
+  "arms": {
+    "P": {
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "paragraph",
+      "label": "P-para"
+    },
+    "P-snippet": {
+      "label": "P-snip",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "snippet",
+      "note": "Same retrieval as P, different excerpt style. Included because excerpt style proved a larger lever than any Bedrock config difference measured here."
+    },
+    "B0-default-v1": {
+      "label": "B0",
+      "parser": "default",
+      "chunking": {
+        "strategy": "NONE_OVERRIDE_DEFAULT",
+        "note": "Bedrock default: ~300 tokens, sentence-aware"
+      },
+      "rerank": null
+    },
+    "B1-fixed1000-v1": {
+      "label": "B1",
+      "parser": "default",
+      "chunking": {
+        "strategy": "FIXED_SIZE",
+        "maxTokens": 1000,
+        "overlapPercentage": 20
+      },
+      "rerank": "cohere.rerank-v3-5:0"
+    }
+  },
+  "revision_rule": "An arm id names one immutable index. To change a config, add a new id with a bumped -vN suffix and provision it; never edit an existing id in place. `label` is the short name used in result tables.",
+  "excluded": {
+    "HIERARCHICAL": "AWS does not recommend with S3 vector buckets (metadata size limits)",
+    "SEMANTIC": "rejects files over 1 MB body text (Arroyo 2026); several corpus docs exceed it",
+    "NONE": "Titan v2 caps 8,192 tokens per request; most corpus docs exceed it",
+    "bedrock_data_automation": "$0.010/page, ~$22 per corpus; not needed for an anchor"
+  }
+}

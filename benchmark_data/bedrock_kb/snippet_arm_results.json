@@ -1,0 +1,536 @@
+{
+  "needle-01": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-02": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-03": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-04": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-05": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-06": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "needle-07": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-08": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-09": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "needle-10": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "needle-11": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "needle-12": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "needle-13": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "needle-14": {
+    "class": "needle",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-01": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-02": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-03": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-04": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-05": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "spread-06": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-07": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "spread-08": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-09": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-10": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-01": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-02": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "normalized",
+    "span_recall": 1.0
+  },
+  "trap-03": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-04": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "normalized",
+    "span_recall": 1.0
+  },
+  "trap-05": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-06": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-07": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-08": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-09": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "normalized",
+    "span_recall": 1.0
+  },
+  "trap-10": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-11": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-12": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "spread-11": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-12": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-13": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-14": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-15": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "normalized",
+    "span_recall": 1.0
+  },
+  "spread-16": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-17": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "spread-18": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-19": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-20": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-21": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-22": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-23": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "normalized",
+    "span_recall": 1.0
+  },
+  "spread-24": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "spread-25": {
+    "class": "spread",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-13": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-14": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-15": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-16": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-17": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-18": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-19": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-20": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-21": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-22": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-23": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "trap-24": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "trap-25": {
+    "class": "trap",
+    "realized_k": 25,
+    "status": "exact",
+    "span_recall": 1.0
+  },
+  "described-01": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-02": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-03": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-04": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-05": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-06": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-07": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-08": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-09": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-10": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-11": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-12": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-13": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-14": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-15": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-16": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-17": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-18": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-19": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-20": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-21": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-22": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-23": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-24": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  },
+  "described-25": {
+    "class": "described",
+    "realized_k": 25,
+    "status": "missing",
+    "span_recall": 0.0
+  }
+}

@@ -522,15 +522,21 @@ def main(argv: list[str] | None = None) -> int:
     arms = (
         [a.strip() for a in args.arms.split(",") if a.strip()]
         if args.arms
-        else ["P"] + [a for a in config["arms"] if a != "P"]
+        else list(config["arms"])
     )
     rows_by_arm: dict[str, dict] = {}
 
-    if "P" in arms:
-        rows_by_arm["P"] = run_arm_p(list(id_by_path), queries, id_by_path, args.budget)
-        print(f"P: done ({len(rows_by_arm['P'])} queries)")
+    for arm in [a for a in arms if config["arms"].get(a, {}).get("tool")]:
+        rows_by_arm[arm] = run_arm_p(
+            list(id_by_path),
+            queries,
+            id_by_path,
+            args.budget,
+            excerpt_style=config["arms"][arm].get("excerpt_style", "paragraph"),
+        )
+        print(f"{arm}: done ({len(rows_by_arm[arm])} queries)")
 
-    bedrock_arms = [a for a in arms if a.startswith("B")]
+    bedrock_arms = [a for a in arms if not config["arms"].get(a, {}).get("tool")]
     if bedrock_arms:
         import boto3
 
@@ -603,12 +609,24 @@ def main(argv: list[str] | None = None) -> int:
         else {}
     )
     rows_by_arm = rows_by_label
-    anchors = tuple(label_of[a] for a in bedrock_arms)
+    ref_label = label_of.get("P", "P")
+    # Every arm except the reference is compared against it, including other
+    # local arms such as P-snippet. Comparing only the Bedrock arms would
+    # silently drop the excerpt-style comparison from the CI tables.
+    anchors = tuple(lbl for a, lbl in label_of.items() if a != "P")
     summary = summarize(
-        rows_by_arm, classes, anchor_arms=anchors, ref_arm="P", exclude_flagged=False
+        rows_by_arm,
+        classes,
+        anchor_arms=anchors,
+        ref_arm=ref_label,
+        exclude_flagged=False,
     )
     sensitivity = summarize(
-        rows_by_arm, classes, anchor_arms=anchors, ref_arm="P", exclude_flagged=True
+        rows_by_arm,
+        classes,
+        anchor_arms=anchors,
+        ref_arm=ref_label,
+        exclude_flagged=True,
     )
     write_results(summary, rows_by_arm, config, args.out_dir, sensitivity=sensitivity)
     print(render_markdown(summary, config, sensitivity=sensitivity))

@@ -6,9 +6,38 @@
   "budget_tokens": 2000,
   "token_chars": 4,
   "arms": {
-    "P": {"tool": "pdf_corpus_search", "mode": "auto", "excerpt_style": "paragraph"},
-    "B0-default-v1": {"label": "B0", "parser": "default", "chunking": {"strategy": "NONE_OVERRIDE_DEFAULT", "note": "Bedrock default: ~300 tokens, sentence-aware"}, "rerank": null},
-    "B1-fixed1000-v1": {"label": "B1", "parser": "default", "chunking": {"strategy": "FIXED_SIZE", "maxTokens": 1000, "overlapPercentage": 20}, "rerank": "cohere.rerank-v3-5:0"}
+    "P": {
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "paragraph",
+      "label": "P-para"
+    },
+    "P-snippet": {
+      "label": "P-snip",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "snippet",
+      "note": "Same retrieval as P, different excerpt style. Included because excerpt style proved a larger lever than any Bedrock config difference measured here."
+    },
+    "B0-default-v1": {
+      "label": "B0",
+      "parser": "default",
+      "chunking": {
+        "strategy": "NONE_OVERRIDE_DEFAULT",
+        "note": "Bedrock default: ~300 tokens, sentence-aware"
+      },
+      "rerank": null
+    },
+    "B1-fixed1000-v1": {
+      "label": "B1",
+      "parser": "default",
+      "chunking": {
+        "strategy": "FIXED_SIZE",
+        "maxTokens": 1000,
+        "overlapPercentage": 20
+      },
+      "rerank": "cohere.rerank-v3-5:0"
+    }
   },
   "revision_rule": "An arm id names one immutable index. To change a config, add a new id with a bumped -vN suffix and provision it; never edit an existing id in place. `label` is the short name used in result tables.",
   "excluded": {

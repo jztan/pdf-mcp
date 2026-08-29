@@ -99,46 +99,46 @@ the metric, not a defect in it: it was chosen because it is unit-agnostic
 across arms with very different chunking, and this asymmetry is the cost
 of that choice.
 
-## Excerpt style: the largest lever measured here
+## Excerpt style, now a first-class arm
 
-Arm P ran with `excerpt_style="paragraph"`, the tool default. pdf-mcp also
-offers `excerpt_style="snippet"`, which returns a window around the actual
-match rather than a selected block. Since the diagnosis above shows P's
-misses on needle and trap are the picker returning the wrong block of a page
-it already retrieved, excerpt style is the obvious variable to test.
+`P-snippet` is a full arm in the run: same retrieval as `P-para`, differing
+only in `excerpt_style`. It therefore carries bootstrap CIs and doc-level
+metrics, which the earlier standalone version could not.
 
-Arm P was rerun over all 89 queries with `snippet`, same 2,000-token budget,
-same containment scorer, local only. `scripts/benchmark_excerpt_style_arm.py`
-reproduces it; per-query output is in `snippet_arm_results.json`.
+Span recall, all 89 queries, with the paired CI against `P-para`:
 
-Span recall, all 89 queries (flagged included, so directly comparable to the
-primary table):
+| class | P-para | P-snip | B0 | B1 | P-para minus P-snip |
+|---|---|---|---|---|---|
+| described | 0.120 | 0.000 | 0.360 | 0.400 | +0.120 [+0.000, +0.280] includes zero |
+| needle | 0.429 | 0.643 | 0.714 | 0.714 | -0.214 [-0.429, +0.000] includes zero |
+| spread | 0.640 | 0.880 | 0.600 | 0.680 | **-0.240 [-0.440, -0.040] excludes zero** |
+| trap | 0.520 | 0.560 | 0.840 | 0.880 | -0.040 [-0.280, +0.200] includes zero |
 
-| class | n | P paragraph | P snippet | delta | B0 | B1 |
-|---|---|---|---|---|---|---|
-| described | 25 | 0.120 | 0.000 | -0.120 | 0.360 | 0.400 |
-| needle | 14 | 0.429 | 0.643 | +0.214 | 0.714 | 0.714 |
-| spread | 25 | 0.640 | 0.880 | +0.240 | 0.600 | 0.680 |
-| trap | 25 | 0.520 | 0.560 | +0.040 | 0.840 | 0.880 |
+What survives the noise:
 
-Three readings:
+1. **On `spread`, snippet is a real improvement over paragraph**, and it is
+   the only excerpt-style difference whose CI excludes zero. At 0.880 it also
+   sits above both Bedrock arms, but that particular comparison is inside the
+   noise (+0.040 against B0, CI includes zero), so the claim is "snippet
+   materially improves pdf-mcp on spread and brings it level with or ahead of
+   Bedrock", not "pdf-mcp beats Bedrock on spread".
+2. **On `needle` the +0.214 does not clear the bar** at n=14. Directionally
+   consistent with the picker diagnosis, not claimable on its own.
+3. **On `trap` snippet does not help** (-0.040, includes zero), even though
+   doc-hit@3 is 1.000. Routing is perfect and neither excerpt style recovers
+   the span, which points at something specific to trap pages: the matched
+   terms are boilerplate that recurs many times on the page, so both pickers
+   have many wrong occurrences to anchor on.
+4. **On `described` snippet is strictly worse**, to zero. Paraphrase queries
+   carry no keyword hit for a snippet window to anchor on. This class fails
+   at the matching stage, before excerpting, so no excerpt change can reach it.
 
-1. **On `spread`, pdf-mcp with snippet beats both Bedrock arms** (0.880
-   against 0.600 and 0.680), and on `needle` it closes most of the gap
-   (0.643 against 0.714). Both were losses under the default.
-2. **On `trap` the style barely helps** (+0.040, still 0.560 against 0.880),
-   and on `described` it collapses to zero. Paraphrase queries carry no
-   keyword hit for a snippet window to anchor on, so the arm returns windows
-   built around nothing; `paragraph` at least returns a coherent block that
-   sometimes contains the span.
-3. **No single excerpt style wins across classes, and the default is the
-   wrong one on three of four.** This is a larger effect than anything
-   architectural measured here, and it is a per-query routing decision the
-   tool could make rather than a fixed default.
+**Neither excerpt style wins across classes.** Snippet wins spread, paragraph
+wins described, and they tie elsewhere. That makes per-query excerpt selection
+a concrete lever, and it is the cheapest improvement this benchmark identified.
 
-Caveat: this arm was not run through the full harness, so it carries no
-bootstrap CI and no doc-level metrics. It is a directional result on the
-same queries and the same scorer, not a fourth arm of equal standing.
+Adding the arm also dropped the flagged count from 21 to 18: the snippet arm
+retrieved three evidence spans no other arm found.
 
 ## Flagged-inclusion sensitivity check
 

@@ -157,3 +157,83 @@ class TestProfileWrittenAtWarm:
         assert out["warmed_this_call"] == 1
         assert cache.get_doc_profiles([pdf], "m1") == {}
         assert cache.embeddings_complete(pdf, "m1")
+
+
+class TestBackfill:
+    def _warm_text_only(self, cache, paths):
+        corpus.warm_docs(paths, 600, cache, embeddings=False, model_name="m1")
+
+    def test_backfills_exactly_the_missing_docs(self, cache, tmp_path):
+        a, b = tmp_path / "a.pdf", tmp_path / "b.pdf"
+        _make_pdf(a, ["alpha budget"])
+        _make_pdf(b, ["bravo budget"])
+        paths = [str(a), str(b)]
+        self._warm_text_only(cache, paths)
+        cache.save_doc_profile(str(a), 1500, b"\x01" * 8, {"alpha": 1}, "m1")
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        n = corpus.backfill_doc_profiles(paths, cache, "m1", spy)
+        assert n == 1
+        # Only b.pdf's head was encoded; a.pdf already had a valid row.
+        assert len(seen) == 1 and "bravo" in seen[0] and "alpha" not in seen[0]
+        assert set(cache.get_doc_profiles(paths, "m1")) == set(paths)
+
+    def test_full_coverage_writes_nothing(self, cache, pdf):
+        self._warm_text_only(cache, [pdf])
+        corpus.backfill_doc_profiles([pdf], cache, "m1", _embed_len)
+
+        def boom(texts):
+            raise AssertionError("no encode expected")
+
+        assert corpus.backfill_doc_profiles([pdf], cache, "m1", boom) == 0
+
+    def test_empty_page1_row_is_written_once(self, cache, tmp_path):
+        p = tmp_path / "blank.pdf"
+        _make_pdf(p, ["", "budget on page two"])
+        self._warm_text_only(cache, [str(p)])
+        assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 1
+        assert cache.get_doc_profiles([str(p)], "m1") == {str(p): None}
+        assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 0
+
+    def test_model_change_rewrites(self, cache, pdf):
+        self._warm_text_only(cache, [pdf])
+        corpus.backfill_doc_profiles([pdf], cache, "m1", _embed_len)
+        assert corpus.backfill_doc_profiles([pdf], cache, "m2", _embed_len) == 1
+        assert cache.get_doc_profiles([pdf], "m1") == {}
+
+    def test_unwarmed_doc_is_skipped(self, cache, pdf):
+        assert corpus.backfill_doc_profiles([pdf], cache, "m1", _embed_len) == 0
+
+    def test_one_failing_encode_does_not_block_the_rest(self, cache, tmp_path):
+        a, b = tmp_path / "a.pdf", tmp_path / "b.pdf"
+        _make_pdf(a, ["alpha budget"])
+        _make_pdf(b, ["bravo budget"])
+        paths = [str(a), str(b)]
+        self._warm_text_only(cache, paths)
+
+        def flaky(texts):
+            if "alpha" in texts[0]:
+                raise RuntimeError("nope")
+            return _embed_len(texts)
+
+        assert corpus.backfill_doc_profiles(paths, cache, "m1", flaky) == 1
+        assert list(cache.get_doc_profiles(paths, "m1")) == [str(b)]
+
+    def test_warm_with_embeddings_backfills_cached_docs(self, cache, pdf):
+        self._warm_text_only(cache, [pdf])
+        out = corpus.warm_docs(
+            [pdf], 600, cache, embeddings=True, model_name="m1", embed=_embed_len
+        )
+        # doc was text-warm but had no embeddings, so it re-warms with them
+        assert pdf in cache.get_doc_profiles([pdf], "m1")
+        # now fully cached: a second embeddings warm still repairs a lost profile
+        cache.save_doc_profile(pdf, 1500, b"\x00" * 8, {}, "other-model")
+        out = corpus.warm_docs(
+            [pdf], 600, cache, embeddings=True, model_name="m1", embed=_embed_len
+        )
+        assert out["docs"][0]["status"] == "cached"
+        assert pdf in cache.get_doc_profiles([pdf], "m1")

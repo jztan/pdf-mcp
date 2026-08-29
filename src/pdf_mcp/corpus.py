@@ -41,6 +41,7 @@ __all__ = [
     "rrf_fuse_two_rankings_scored",
     "profile_terms",
     "build_doc_profile",
+    "backfill_doc_profiles",
 ]
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,48 @@ def build_doc_profile(
     if head.strip():
         vec = embed([head])[0]
     return vec, profile_terms(texts)
+
+
+def backfill_doc_profiles(
+    paths: list[str],
+    cache: Any,
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+) -> int:
+    """Write profiles for warm docs that lack a valid one, from cached text.
+
+    Covers caches warmed before profiles existed, and model changes. Reads
+    only page_text (no PDF open, no page re-embed); one encode per doc
+    (batching measured no faster); all new rows in one transaction.
+    Returns how many rows were written. A doc whose encode raises is
+    logged and skipped so the rest still land.
+    """
+    have = cache.get_doc_profiles(paths, model_name)
+    pending = [p for p in paths if p not in have]
+    if not pending:
+        return 0
+    built: list[tuple[str, "bytes | None", dict[str, int]]] = []
+    for path in pending:
+        meta = cache.get_metadata(path)
+        if meta is None:
+            continue
+        texts = cache.get_pages_text(path, list(range(meta["page_count"])))
+        if not texts:
+            continue
+        try:
+            vec, terms = build_doc_profile(texts, embed)
+        except Exception as exc:  # noqa: BLE001 - never a search/warm error
+            logger.warning("doc profile backfill skipped %s: %s", path, exc)
+            continue
+        built.append((path, vec, terms))
+    if not built:
+        return 0
+    with cache.write_transaction() as conn:
+        for path, vec, terms in built:
+            cache.save_doc_profile(
+                path, PROFILE_HEAD_CHARS, vec, terms, model_name, conn=conn
+            )
+    return len(built)
 
 
 def _finalize_doc(
@@ -590,6 +633,18 @@ def warm_docs(
                 uncached.append((path, len(probe)))
         except Exception as e:
             skipped.append({"path": path, "reason": f"unreadable: {e}"})
+
+    # Profiles are new relative to existing caches: an explicit embeddings
+    # warm repairs coverage on docs that are otherwise fully cached, so a
+    # caller who warms gets the document arm without a search. Cheap
+    # (~17ms per doc) and never charged against the budget, like cached
+    # docs themselves.
+    if embeddings and embed is not None and model_name is not None:
+        cached_paths = [d["path"] for d in docs if d["status"] == "cached"]
+        try:
+            backfill_doc_profiles(cached_paths, cache, model_name, embed)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("doc profile backfill failed: %s", exc)
 
     uncached.sort(key=lambda item: item[1])
     workers = _warm_worker_count(len(uncached), embeddings)

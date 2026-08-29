@@ -118,3 +118,5 @@ This benchmark's `--single-doc-arm` flag was not passed on this pass, so
 no single-doc `pdf_search` figures were regenerated here. The
 previously published single-doc numbers stand: `pdf_search` is untouched
 by the document-arm work on this branch.
+
+Size dependence of the document arm (50 to 500 documents, same cache, control vs arm): `doc_arm_size_sweep.md`.

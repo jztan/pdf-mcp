@@ -166,3 +166,5 @@ previously published single-doc numbers stand: `pdf_search` is untouched
 by the document-arm work on this branch.
 
 ### Overall verdict: all Task 8 gates PASS.
+
+Size dependence of the document arm (50 to 500 documents, same cache, control vs arm): `doc_arm_size_sweep.md`.

@@ -885,6 +885,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - Semantic and hybrid modes require fastembed (included in the default install) and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
 - The document arm reads page 1 only; a document whose first page is a blank cover or an image gets no profile and is ranked by the page arms alone.
 - `about` terms and the document arm's term lists tokenise Latin words only; CJK documents get an empty `about`.
+- The document arm judges a document by its first page, so a paper whose abstract is about one thing but which *uses* the queried method deep inside can lose its top-3 slot to a paper whose abstract mentions the method. Measured cost across corpus sizes 50 to 500: one spread query at 100 documents or fewer, none above; described queries improve at every size (`benchmark_data/corpus_search/doc_arm_size_sweep.md`).
 
 **Example:**
 

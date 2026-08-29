@@ -3676,7 +3676,11 @@ def pdf_corpus_search(
 
     # ── mode="auto" with embeddings available: hybrid fusion ──────────
     assert embed_model is not None  # guaranteed by check_available above
-    assert embed_fn is not None  # guaranteed by embeddings_needed above
+    if embed_fn is None:
+        # embeddings_needed being true always sets embed_fn above; this
+        # branch is unreachable on the request path and exists so mypy
+        # can narrow embed_fn to non-None without an assert here.
+        raise RuntimeError("embed_fn unset despite embeddings_needed")
     query_vec = _embedder.encode_query(query, embed_model)
     scored, semantic_unprocessed = _corpus_semantic_scores(
         ready_paths, embed_model, query_vec

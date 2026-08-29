@@ -1969,6 +1969,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
+            conn.execute("DELETE FROM doc_profiles WHERE file_path = ?", (path,))
             conn.execute(
                 "DELETE FROM section_embeddings WHERE file_path = ?",
                 (path,),
@@ -2033,6 +2034,10 @@ class PDFCache:
                 conn.execute(
                     f"DELETE FROM page_embeddings"
                     f" WHERE file_path IN ({placeholders})",
+                    expired_paths,
+                )
+                conn.execute(
+                    f"DELETE FROM doc_profiles WHERE file_path IN ({placeholders})",
                     expired_paths,
                 )
                 conn.execute(
@@ -2111,6 +2116,7 @@ class PDFCache:
             conn.execute("DELETE FROM page_images")
             conn.execute("DELETE FROM page_tables")
             conn.execute("DELETE FROM page_embeddings")
+            conn.execute("DELETE FROM doc_profiles")
             conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
             conn.execute("DELETE FROM page_charts")

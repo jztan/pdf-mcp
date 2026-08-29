@@ -83,6 +83,37 @@ class TestDocProfileTable:
         reopened = PDFCache(cache_dir=tmp_path / "cache", ttl_hours=1)
         assert reopened.get_doc_profiles([pdf], "m1") == {}
 
+    def test_invalidate_removes_profile(self, cache, pdf):
+        """_invalidate_file must clear doc_profiles along with the rest of
+        the per-file cache, not just page_text/page_embeddings."""
+        cache.save_doc_profile(pdf, 1500, b"\x01" * 8, {"a": 1}, "m1")
+        cache._invalidate_file(pdf)
+        assert cache.get_doc_profiles([pdf], "m1") == {}
+        assert cache.get_doc_terms([pdf]) == {}
+
+    def test_clear_all_removes_profile(self, cache, pdf):
+        cache.save_doc_profile(pdf, 1500, b"\x01" * 8, {"a": 1}, "m1")
+        cache.clear_all()
+        assert cache.get_doc_profiles([pdf], "m1") == {}
+        assert cache.get_doc_terms([pdf]) == {}
+
+    def test_clear_expired_removes_profile(self, cache, pdf):
+        cache.save_metadata(pdf, 1, {}, [])
+        cache.save_doc_profile(pdf, 1500, b"\x01" * 8, {"a": 1}, "m1")
+
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET accessed_at = '2000-01-01'"
+                " WHERE file_path = ?",
+                (pdf,),
+            )
+
+        cache.clear_expired()
+        assert cache.get_doc_profiles([pdf], "m1") == {}
+        assert cache.get_doc_terms([pdf]) == {}
+
 
 def _embed_len(texts):
     """Deterministic fake: unit vector keyed on text length parity."""

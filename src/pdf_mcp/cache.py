@@ -452,6 +452,8 @@ class PDFCache:
                 conn.execute("DROP TABLE IF EXISTS pdf_section_fts_cjk")
                 # Derived from the same extraction pipeline as page_text.
                 conn.execute("DROP TABLE IF EXISTS page_blocks")
+                # Head text and term counts derive from page_text.
+                conn.execute("DROP TABLE IF EXISTS doc_profiles")
             if extraction_version < _EXTRACTION_VERSION:
                 conn.execute(f"PRAGMA user_version = {_EXTRACTION_VERSION}")
 
@@ -609,6 +611,22 @@ class PDFCache:
 
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
+
+                -- Per-document profile: head vector (page 1, first
+                -- PROFILE_HEAD_CHARS chars) for the corpus search's document
+                -- arm, plus term counts for overview `about`. One row per
+                -- document; mtime + model validated on read like
+                -- page_embeddings. embedding is NULL when page 1 had no text.
+                CREATE TABLE IF NOT EXISTS doc_profiles (
+                    file_path   TEXT    NOT NULL,
+                    file_mtime  REAL    NOT NULL,
+                    model       TEXT    NOT NULL,
+                    head_chars  INTEGER NOT NULL,
+                    embedding   BLOB,
+                    terms       TEXT    NOT NULL,
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (file_path)
+                );
 
                 -- Section embeddings cache (Phase-1 validation shim;
                 -- mirrors page_embeddings, keyed by section_id within a PDF).
@@ -1648,6 +1666,71 @@ class PDFCache:
                 (model_name, path, mtime),
             ).fetchall()
         return all(not (text or "").strip() for (text,) in rows)
+
+    def save_doc_profile(
+        self,
+        path: str,
+        head_chars: int,
+        embedding: "bytes | None",
+        terms: dict[str, int],
+        model_name: str,
+        conn: "sqlite3.Connection | None" = None,
+    ) -> None:
+        """Persist one document's profile (see corpus.build_doc_profile).
+
+        ``embedding`` is None when page 1 carried no text; the row is
+        still written so a backfill does not retry it forever. Keyed on
+        file_path alone: a new model or mtime simply replaces the row.
+        """
+        mtime, _ = self._get_file_info(path)
+        with self._write_conn(conn) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO doc_profiles"
+                " (file_path, file_mtime, model, head_chars, embedding, terms)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (path, mtime, model_name, head_chars, embedding, json.dumps(terms)),
+            )
+
+    def _doc_profile_rows(self, paths: list[str]) -> list[tuple[Any, ...]]:
+        """Raw doc_profiles rows for paths whose stored mtime matches the
+        file's current mtime. Files that no longer exist are skipped."""
+        if not paths:
+            return []
+        current: dict[str, float] = {}
+        for p in paths:
+            try:
+                current[p] = self._get_file_info(p)[0]
+            except OSError:
+                continue
+        if not current:
+            return []
+        out: list[tuple[Any, ...]] = []
+        keys = list(current)
+        with self._connect() as conn:
+            for i in range(0, len(keys), 500):
+                chunk = keys[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT file_path, file_mtime, model, embedding, terms"
+                    f" FROM doc_profiles WHERE file_path IN ({placeholders})",
+                    chunk,
+                ).fetchall()
+                out.extend(r for r in rows if r[1] == current[r[0]])
+        return out
+
+    def get_doc_profiles(
+        self, paths: list[str], model_name: str
+    ) -> "dict[str, bytes | None]":
+        """{path: head-vector blob or None} for valid (mtime, model) rows.
+
+        None means "profiled, but page 1 had no text": the document has no
+        vector and the caller should neither score nor re-encode it.
+        """
+        return {r[0]: r[3] for r in self._doc_profile_rows(paths) if r[2] == model_name}
+
+    def get_doc_terms(self, paths: list[str]) -> dict[str, dict[str, int]]:
+        """{path: {term: count}} for mtime-valid rows, any model."""
+        return {r[0]: json.loads(r[4]) for r in self._doc_profile_rows(paths)}
 
     def get_section_embeddings(
         self, path: str, section_ids: list[int]

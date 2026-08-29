@@ -37,6 +37,7 @@ __all__ = [
     "text_coverage_label",
     "build_overview_card",
     "rrf_fuse_doc_rankings",
+    "rrf_fuse_rankings_scored",
     "rrf_fuse_two_rankings",
     "rrf_fuse_two_rankings_scored",
     "profile_terms",
@@ -801,24 +802,38 @@ def rrf_fuse_doc_rankings(
     return fused[:top_k] if top_k is not None else fused
 
 
+def rrf_fuse_rankings_scored(
+    rankings: list[tuple[list[tuple[str, int]], float]],
+    k: int = CORPUS_RRF_K,
+    top_k: int | None = None,
+) -> list[tuple[tuple[str, int], float]]:
+    """Weighted RRF across N global rankings, returning fused scores.
+
+    Each entry is (ranking, weight); an item's score is the sum of
+    weight / (k + rank) over every list it appears in (Cormack et al.
+    2009, with the per-list weight extension). Hybrid corpus search
+    passes [(keyword, 1.0), (semantic, 1.0), (doc_arm,
+    CORPUS_DOC_ARM_WEIGHT)]. Ties break by (doc_path, page), so a
+    document rename never reorders results except at exact ties.
+    """
+    scores: dict[tuple[str, int], float] = {}
+    for ranking, weight in rankings:
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + weight / (k + rank)
+    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
+    return ordered[:top_k] if top_k is not None else ordered
+
+
 def rrf_fuse_two_rankings_scored(
     a: list[tuple[str, int]],
     b: list[tuple[str, int]],
     k: int = CORPUS_RRF_K,
     top_k: int | None = None,
 ) -> list[tuple[tuple[str, int], float]]:
-    """RRF across two global rankings (auto mode: keyword + semantic),
-    returning each item's fused score alongside it.
-
-    The same (doc_path, page) may appear in both lists; its RRF
-    contributions add. Ties break deterministically by (doc_path, page).
-    """
-    scores: dict[tuple[str, int], float] = {}
-    for ranking in (a, b):
-        for rank, item in enumerate(ranking):
-            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
-    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
-    return ordered[:top_k] if top_k is not None else ordered
+    """Two-list RRF at weight 1.0 each (single-doc hybrid and the keyword
+    paths). A wrapper over rrf_fuse_rankings_scored so both stay
+    byte-identical to the pre-document-arm fusion."""
+    return rrf_fuse_rankings_scored([(a, 1.0), (b, 1.0)], k=k, top_k=top_k)
 
 
 def rrf_fuse_two_rankings(

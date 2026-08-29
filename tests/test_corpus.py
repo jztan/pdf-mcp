@@ -919,6 +919,58 @@ class TestCorpusFusion:
         scored = corpus.rrf_fuse_two_rankings_scored(a, b)
         assert [item for item, _s in scored] == corpus.rrf_fuse_two_rankings(a, b)
 
+    def test_n_rankings_weight_scales_contribution(self):
+        kw = [("a.pdf", 1)]
+        sem = [("b.pdf", 2)]
+        doc = [("c.pdf", 3)]
+        scored = dict(
+            corpus.rrf_fuse_rankings_scored([(kw, 1.0), (sem, 1.0), (doc, 0.25)])
+        )
+        k = corpus.CORPUS_RRF_K
+        assert scored[("a.pdf", 1)] == 1.0 / k
+        assert scored[("c.pdf", 3)] == 0.25 / k
+
+    def test_n_rankings_two_lists_at_weight_one_is_byte_identical(self):
+        a = [("x.pdf", 1), ("y.pdf", 2), ("q.pdf", 9)]
+        b = [("y.pdf", 2), ("z.pdf", 3), ("x.pdf", 1)]
+        assert corpus.rrf_fuse_rankings_scored(
+            [(a, 1.0), (b, 1.0)], top_k=3
+        ) == corpus.rrf_fuse_two_rankings_scored(a, b, top_k=3)
+
+    def test_n_rankings_reproduces_spike_fusion(self):
+        # Hand-checked against docprofile_race2.fuse_weighted (k=60):
+        # y: 1/61 + 1/60            = 0.033060...
+        # x: 1/60 + 0.25/60         = 0.020833...
+        # z: 1/61 + 0.25/61         = 0.020491...
+        kw = [("x.pdf", 1), ("y.pdf", 2)]
+        sem = [("y.pdf", 2), ("z.pdf", 3)]
+        doc = [("x.pdf", 1), ("z.pdf", 3)]
+        fused = [
+            it
+            for it, _s in corpus.rrf_fuse_rankings_scored(
+                [(kw, 1.0), (sem, 1.0), (doc, 0.25)]
+            )
+        ]
+        assert fused == [("y.pdf", 2), ("x.pdf", 1), ("z.pdf", 3)]
+
+    def test_n_rankings_invariant_under_document_renaming(self):
+        kw = [("a.pdf", 1), ("m.pdf", 2)]
+        sem = [("z.pdf", 3), ("a.pdf", 1)]
+        doc = [("m.pdf", 2), ("z.pdf", 3)]
+        rename = {"a.pdf": "z9.pdf", "m.pdf": "m9.pdf", "z.pdf": "a9.pdf"}
+        ren = lambda lst: [(rename[d], p) for d, p in lst]  # noqa: E731
+        base = corpus.rrf_fuse_rankings_scored([(kw, 1.0), (sem, 1.0), (doc, 0.25)])
+        moved = corpus.rrf_fuse_rankings_scored(
+            [(ren(kw), 1.0), (ren(sem), 1.0), (ren(doc), 0.25)]
+        )
+        assert [(rename[d], p) for (d, p), _s in base] == [it for it, _s in moved]
+
+    def test_n_rankings_exact_tie_breaks_by_path_then_page(self):
+        scored = corpus.rrf_fuse_rankings_scored(
+            [([("z.pdf", 1)], 1.0), ([("a.pdf", 2)], 1.0), ([], 0.25)]
+        )
+        assert [it for it, _s in scored] == [("a.pdf", 2), ("z.pdf", 1)]
+
 
 class TestWarmExtractWorker:
     def test_payload_shape(self, corpus_dir):

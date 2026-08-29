@@ -11,6 +11,7 @@ caller; this module owns no storage of its own.
 from __future__ import annotations
 
 import logging
+import math
 import multiprocessing
 import re
 import time
@@ -35,6 +36,7 @@ __all__ = [
     "resolve_corpus",
     "warm_docs",
     "text_coverage_label",
+    "about_terms",
     "build_overview_card",
     "rrf_fuse_doc_rankings",
     "rrf_fuse_rankings_scored",
@@ -702,6 +704,34 @@ def text_coverage_label(coverage: list[dict[str, int]]) -> str:
     return "partial"
 
 
+def about_terms(cache: Any, paths: list[str], limit: int = 8) -> dict[str, list[str]]:
+    """Each document's most distinctive stored terms relative to the corpus.
+
+    tf * log(1 + N / df) over the cached term lists only (no page text
+    read). A readability aid on overview cards, validated by inspection;
+    it makes no retrieval claim. Latin tokens only: CJK documents get an
+    empty list (documented limitation).
+    """
+    terms_by_doc = cache.get_doc_terms(paths)
+    n_docs = len(paths)
+    df: dict[str, int] = {}
+    for terms in terms_by_doc.values():
+        for t in terms:
+            df[t] = df.get(t, 0) + 1
+    out: dict[str, list[str]] = {}
+    for path in paths:
+        terms = terms_by_doc.get(path)
+        if not terms:
+            out[path] = []
+            continue
+        ranked = sorted(
+            terms.items(),
+            key=lambda kv: (-kv[1] * math.log(1.0 + n_docs / df[kv[0]]), kv[0]),
+        )
+        out[path] = [t for t, _c in ranked[:limit]]
+    return out
+
+
 # Exporter boilerplate that reads as "no title" for triage purposes.
 # Matched case-insensitively; "untitled" is a prefix match (iWork
 # exports produce e.g. "Untitled 3.pages").
@@ -729,7 +759,12 @@ def _clean_title(title: Any) -> str | None:
     return stripped
 
 
-def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, Any]:
+def build_overview_card(
+    path: str,
+    cache: Any,
+    from_cache: bool,
+    about: list[str] | None = None,
+) -> dict[str, Any]:
     """Build one triage card from cached data only (doc must be warm).
 
     Junk metadata is filtered rather than passed through: whitespace-only
@@ -754,6 +789,7 @@ def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, An
         # as no TOC. Any level counts, not just the level-1 preview.
         "has_toc": any((e.get("title") or "").strip() for e in toc),
         "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
+        "about": list(about or []),
         "size_bytes": meta["file_size"],
         "from_cache": from_cache,
     }

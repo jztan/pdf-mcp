@@ -2961,7 +2961,8 @@ def pdf_corpus_overview(
     Returns:
         - docs: triage cards sorted by path {path, title, pages,
           toc_top (depth-1 titles, max 8), has_toc, text_coverage
-          ("full"|"partial"|"none"), size_bytes, from_cache}
+          ("full"|"partial"|"none"), about (up to 8 distinctive terms,
+          [] when the doc has no profile yet), size_bytes, from_cache}
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted (same envelope as pdf_corpus_warm)
 
@@ -2981,6 +2982,7 @@ def pdf_corpus_overview(
 
     warm = corpus.warm_docs(res["files"], budget, cache)
     skipped = list(res["skipped"]) + list(warm["skipped"])
+    about = corpus.about_terms(cache, [row["path"] for row in warm["docs"]])
     cards = []
     for row in warm["docs"]:
         if cache.get_metadata(row["path"]) is None:
@@ -2993,7 +2995,10 @@ def pdf_corpus_overview(
             continue
         cards.append(
             corpus.build_overview_card(
-                row["path"], cache, from_cache=row["status"] == "cached"
+                row["path"],
+                cache,
+                from_cache=row["status"] == "cached",
+                about=about.get(row["path"], []),
             )
         )
     cards.sort(key=lambda c: str(c["path"]))

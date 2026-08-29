@@ -4383,6 +4383,7 @@ class TestPdfCorpusOverview:
             "toc_top",
             "has_toc",
             "text_coverage",
+            "about",
             "size_bytes",
             "from_cache",
         }
@@ -4428,6 +4429,17 @@ class TestPdfCorpusOverview:
         card_paths = [c["path"] for c in result["docs"]]
         assert target_path not in card_paths
         assert len(result["docs"]) == 2
+
+    def test_cards_carry_about(self, corpus_dir, isolated_server, monkeypatch):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert all(isinstance(c["about"], list) for c in result["docs"])
+        assert any("budget" in c["about"] for c in result["docs"])
+
+    def test_about_is_empty_list_without_profiles(self, corpus_dir, isolated_server):
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert all(c["about"] == [] for c in result["docs"])
 
 
 class TestPdfCorpusSearchKeyword:

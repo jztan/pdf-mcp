@@ -237,3 +237,44 @@ class TestBackfill:
         )
         assert out["docs"][0]["status"] == "cached"
         assert pdf in cache.get_doc_profiles([pdf], "m1")
+
+
+class TestAboutTerms:
+    def test_distinctive_terms_rank_first(self, cache, tmp_path):
+        paths = []
+        for name, terms in [
+            ("a.pdf", {"shared": 9, "alpha": 3}),
+            ("b.pdf", {"shared": 9, "bravo": 3}),
+            ("c.pdf", {"shared": 9, "charlie": 3}),
+        ]:
+            p = tmp_path / name
+            _make_pdf(p, ["x"])
+            cache.save_doc_profile(str(p), 1500, None, terms, "m1")
+            paths.append(str(p))
+        about = corpus.about_terms(cache, paths)
+        # shared: 9*log(1+3/3)=6.24 ; alpha: 3*log(1+3/1)=4.16 -> shared first
+        assert about[paths[0]] == ["shared", "alpha"]
+        assert about[paths[1]] == ["shared", "bravo"]
+
+    def test_limit_and_unprofiled(self, cache, tmp_path):
+        p = tmp_path / "a.pdf"
+        _make_pdf(p, ["x"])
+        cache.save_doc_profile(
+            str(p), 1500, None, {f"term{i:02d}": 1 for i in range(20)}, "m1"
+        )
+        q = tmp_path / "b.pdf"
+        _make_pdf(q, ["x"])
+        about = corpus.about_terms(cache, [str(p), str(q)])
+        assert len(about[str(p)]) == 8
+        assert about[str(q)] == []
+
+    def test_card_carries_about(self, cache, pdf):
+        corpus.warm_docs(
+            [pdf], 600, cache, embeddings=True, model_name="m1", embed=_embed_len
+        )
+        about = corpus.about_terms(cache, [pdf])
+        card = corpus.build_overview_card(pdf, cache, from_cache=True, about=about[pdf])
+        assert card["about"] == about[pdf]
+        assert "budget" in card["about"]
+        bare = corpus.build_overview_card(pdf, cache, from_cache=True)
+        assert bare["about"] == []

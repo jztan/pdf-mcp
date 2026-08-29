@@ -4689,6 +4689,82 @@ class TestPdfCorpusSearchSemanticAuto:
         assert "doc_profile_coverage" not in single
         assert not any("doc_score" in m for m in single["matches"])
 
+    def test_hybrid_wires_doc_arm_into_rrf_fusion(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """Pins the call site at server.py: three arms, in order, at
+        weights (1.0, 1.0, CORPUS_DOC_ARM_WEIGHT); a substituted weight
+        or a swapped list here would slip past every other test."""
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        top_k = 10
+
+        real_fuse = server.corpus.rrf_fuse_rankings_scored
+        captured: dict[str, Any] = {}
+
+        def spy(rankings, k=server.corpus.CORPUS_RRF_K, top_k=None):
+            captured["rankings"] = rankings
+            return real_fuse(rankings, k=k, top_k=top_k)
+
+        monkeypatch.setattr(server.corpus, "rrf_fuse_rankings_scored", spy)
+
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=top_k)
+        assert result["search_mode"] == "hybrid"
+
+        rankings = captured["rankings"]
+        assert len(rankings) == 3
+        weights = tuple(w for _list, w in rankings)
+        assert weights == (1.0, 1.0, server.corpus.CORPUS_DOC_ARM_WEIGHT)
+        kw_list, sem_list, doc_list = (r for r, _w in rankings)
+
+        # Third arm: one best page per profiled doc, no duplicate docs.
+        assert doc_list
+        assert all(isinstance(page, int) and page >= 1 for _p, page in doc_list)
+        assert len(doc_list) == len({p for p, _pg in doc_list})
+        profiled = cache.get_doc_profiles(
+            [p for p, _pg in doc_list], server.pdf_config.embedding_model
+        )
+        assert all(profiled.get(p) is not None for p, _pg in doc_list)
+
+        # First arm: byte-identical to the keyword-only fused ranking a
+        # plain keyword search produces for the same query and top_k.
+        kw_result = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", top_k=top_k
+        )
+        kw_order = [(m["path"], m["page"]) for m in kw_result["matches"]]
+        assert kw_list == kw_order
+
+        # Second arm: a page-level shortlist, strictly larger than the
+        # doc-level one (distinguishes it from the doc arm at a glance).
+        assert len(sem_list) > len(doc_list)
+        assert all(isinstance(page, int) and page >= 1 for _p, page in sem_list)
+
+    def test_doc_arm_changes_the_fused_order(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """corpus_dir's three docs carry identical per-page 'budget'
+        counts, so keyword+semantic alone tie every page and the RRF
+        tie-break (alphabetical path) always puts alpha.pdf first. A
+        document arm that favours charlie.pdf (alphabetically last)
+        must be able to overturn that tie; an arm that never runs
+        (empty doc_cos) must not."""
+        self._fake_embedder(monkeypatch)
+        charlie = str(corpus_dir / "charlie.pdf")
+
+        def favor_charlie(paths, model_name, query_vec):
+            return {charlie: 5.0}
+
+        monkeypatch.setattr(server, "_corpus_doc_scores", favor_charlie)
+        favored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
+        assert favored["matches"][0]["path"] == charlie
+
+        def no_doc_arm(paths, model_name, query_vec):
+            return {}
+
+        monkeypatch.setattr(server, "_corpus_doc_scores", no_doc_arm)
+        unfavored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
+        assert unfavored["matches"][0]["path"] != charlie
+
 
 class TestPdfCorpusSearchSourceLabel:
     """Corpus hits report real per-page text provenance ('ocr' vs

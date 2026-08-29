@@ -4,9 +4,9 @@ Corpus: 100 docs. Queries: 89 (graded ground truth, stage-2). top_k=10. The tool
 
 | mode | overall NDCG@10 | described | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
-| keyword (keyword) | 0.459 | 0.134 | 0.968 | 0.361 | 0.596 | 0.832 | 0.47 |
-| semantic (semantic) | 0.484 | 0.241 | 0.861 | 0.215 | 0.785 | 0.832 | 0.25 |
-| auto (hybrid) | 0.541 | 0.241 | 0.996 | 0.350 | 0.776 | 0.899 | 0.47 |
+| keyword (keyword) | 0.460 | 0.136 | 0.944 | 0.362 | 0.612 | 0.854 | 0.57 |
+| semantic (semantic) | 0.464 | 0.228 | 0.754 | 0.221 | 0.782 | 0.809 | 0.23 |
+| auto (hybrid) | 0.490 | 0.214 | 0.934 | 0.291 | 0.716 | 0.888 | 0.57 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
@@ -14,30 +14,19 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 
 | mode | overall | described | needle | spread | trap |
 |---|---|---|---|---|---|
-| keyword | 0.772 | 0.495 | 1.000 | 0.735 | 0.960 |
-| semantic | 0.792 | 0.698 | 0.974 | 0.576 | 1.000 |
-| auto | 0.838 | 0.698 | 1.000 | 0.727 | 1.000 |
+| keyword | 0.784 | 0.496 | 1.000 | 0.735 | 1.000 |
+| semantic | 0.794 | 0.730 | 0.947 | 0.567 | 1.000 |
+| auto | 0.844 | 0.755 | 1.000 | 0.690 | 1.000 |
 
 ## CJK subset (5 needle queries on Japanese docs; embedding model is English bge-small, so the semantic arm is expected to be weak there)
 
 | mode | CJK NDCG@10 (n=5) | non-CJK NDCG@10 |
 |---|---|---|
-| keyword | 0.985 | 0.428 |
-| semantic | 0.684 | 0.472 |
-| auto | 0.990 | 0.514 |
-
-## Single-doc arm (pdf_search against the one gold document)
-
-The common agent flow: a question asked of a single known document, not the whole corpus. Same page labels, restricted to queries whose gold pages sit in exactly one document.
-
-| mode | NDCG@10 | n |
-|---|---|---|
-| keyword | 0.710 | 64 |
-| semantic | 0.684 | 64 |
-| auto | 0.757 | 64 |
+| keyword | 0.916 | 0.433 |
+| semantic | 0.532 | 0.460 |
+| auto | 0.890 | 0.466 |
 
 Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.
-
 ## Interpretation (89-query run; cite the tables above, not this prose)
 
 Hybrid is the strongest mode on every cut: page NDCG@10 0.541,

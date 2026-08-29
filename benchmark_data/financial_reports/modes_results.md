@@ -4,9 +4,9 @@ Corpus: 24 docs. Queries: 66 (graded ground truth over 8 filers x 3 fiscal years
 
 | mode | overall NDCG@10 | concept | needle | route | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
-| keyword (keyword) | 0.209 | 0.000 | 0.322 | n/a | 0.136 | 0.758 | 0.25 |
-| semantic (semantic) | 0.172 | 0.163 | 0.208 | n/a | 0.093 | 0.818 | 0.12 |
-| auto (hybrid) | 0.298 | 0.163 | 0.398 | n/a | 0.181 | 0.818 | 0.22 |
+| keyword (keyword) | 0.209 | 0.000 | 0.322 | n/a | 0.136 | 0.833 | 0.43 |
+| semantic (semantic) | 0.168 | 0.163 | 0.198 | n/a | 0.100 | 0.833 | 0.14 |
+| auto (hybrid) | 0.238 | 0.163 | 0.310 | n/a | 0.136 | 0.833 | 0.41 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
@@ -14,19 +14,9 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 
 | mode | overall | concept | needle | route | trap |
 |---|---|---|---|---|---|
-| keyword | 0.633 | 0.186 | 0.627 | 0.864 | 0.610 |
-| semantic | 0.759 | 0.488 | 0.767 | 0.937 | 0.639 |
-| auto | 0.776 | 0.468 | 0.807 | 0.927 | 0.689 |
-
-## Single-doc arm (pdf_search against the one gold document)
-
-The common agent flow: a question asked of a single known document, not the whole corpus. Same page labels, restricted to queries whose gold pages sit in exactly one document.
-
-| mode | NDCG@10 | n |
-|---|---|---|
-| keyword | 0.419 | 45 |
-| semantic | 0.367 | 45 |
-| auto | 0.488 | 45 |
+| keyword | 0.692 | 0.262 | 0.752 | 0.867 | 0.602 |
+| semantic | 0.765 | 0.495 | 0.797 | 0.932 | 0.602 |
+| auto | 0.764 | 0.514 | 0.811 | 0.902 | 0.609 |
 
 Page-level NDCG is floored by label sparsity on this corpus: one labeled page per needle against 3,545 pages in which the same phrasing recurs across fiscal years and across MD&A, the notes and the segment sections. Cite the doc-level table. Interpretation is appended by hand after the run.
 ## Interpretation

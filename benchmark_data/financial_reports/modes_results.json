@@ -8,7 +8,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.6309297535714575,
-        "seconds": 0.226
+        "seconds": 0.425
       },
       "concept-02": {
         "cjk": false,
@@ -16,537 +16,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 1.0,
-        "seconds": 0.223
-      },
-      "concept-03": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.3562071871080222,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.238
-      },
-      "concept-04": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.225
-      },
-      "concept-05": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.221
-      },
-      "concept-06": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.238
-      },
-      "concept-07": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.43067655807339306,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.221
-      },
-      "concept-08": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.24
-      },
-      "concept-09": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.223
-      },
-      "concept-10": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.234
-      },
-      "needle-01": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.221
-      },
-      "needle-02": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.218
-      },
-      "needle-03": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.219
-      },
-      "needle-04": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.219
-      },
-      "needle-05": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.3333333333333333,
-        "seconds": 0.219
-      },
-      "needle-06": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.222
-      },
-      "needle-07": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.215
-      },
-      "needle-08": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.231
-      },
-      "needle-09": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.3562071871080222,
-        "seconds": 0.217
-      },
-      "needle-10": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.226
-      },
-      "needle-11": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.2890648263178879,
-        "seconds": 0.221
-      },
-      "needle-12": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.22
-      },
-      "needle-13": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.215
-      },
-      "needle-14": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.219
-      },
-      "needle-15": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.5,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.218
-      },
-      "needle-16": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.5,
-        "dochit3": 0,
-        "ndcg": 0.38685280723454163,
-        "seconds": 0.217
-      },
-      "needle-17": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.23
-      },
-      "needle-18": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.216
-      },
-      "needle-19": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.22
-      },
-      "needle-20": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.217
-      },
-      "needle-21": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.233
-      },
-      "needle-22": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.234
-      },
-      "needle-23": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.236
-      },
-      "needle-24": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.5,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.22
-      },
-      "needle-25": {
-        "cjk": false,
-        "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.218
-      },
-      "route-01": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8403030283801005,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.22
-      },
-      "route-02": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.218
-      },
-      "route-03": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.216
-      },
-      "route-04": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.219
-      },
-      "route-05": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.217
-      },
-      "route-06": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.219
-      },
-      "route-07": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8403030283801005,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.225
-      },
-      "route-08": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.219
-      },
-      "route-09": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.217
-      },
-      "route-10": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.222
-      },
-      "route-11": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.225
-      },
-      "route-12": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.9778585125241057,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.224
-      },
-      "route-13": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.215
-      },
-      "route-14": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.216
-      },
-      "route-15": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 0,
-        "ndcg": null,
-        "seconds": 0.216
-      },
-      "route-16": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 0,
-        "ndcg": null,
-        "seconds": 0.218
-      },
-      "route-17": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.216
-      },
-      "route-18": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.218
-      },
-      "route-19": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8403030283801005,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.227
-      },
-      "route-20": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.9778585125241057,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.24
-      },
-      "route-21": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.9360403422435027,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.239
-      },
-      "trap-01": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.221
-      },
-      "trap-02": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.23
-      },
-      "trap-03": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.218
-      },
-      "trap-04": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.221
-      },
-      "trap-05": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.5,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.221
-      },
-      "trap-06": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.239
-      },
-      "trap-07": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.31546487678572877,
-        "seconds": 0.217
-      },
-      "trap-08": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.22
-      },
-      "trap-09": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 0.5,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.222
-      },
-      "trap-10": {
-        "cjk": false,
-        "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.233
-      }
-    },
-    "keyword": {
-      "concept-01": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.5,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.429
-      },
-      "concept-02": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.41
+        "seconds": 0.411
       },
       "concept-03": {
         "cjk": false,
@@ -554,57 +24,9 @@
         "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.415
+        "seconds": 0.433
       },
       "concept-04": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.405
-      },
-      "concept-05": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.407
-      },
-      "concept-06": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.379
-      },
-      "concept-07": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.177
-      },
-      "concept-08": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.3010299956639812,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.412
-      },
-      "concept-09": {
-        "cjk": false,
-        "class": "concept",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.426
-      },
-      "concept-10": {
         "cjk": false,
         "class": "concept",
         "doc_ndcg": 0.0,
@@ -612,53 +34,101 @@
         "ndcg": 0.0,
         "seconds": 0.424
       },
+      "concept-05": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.31546487678572877,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.408
+      },
+      "concept-06": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.428
+      },
+      "concept-07": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.403
+      },
+      "concept-08": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.425
+      },
+      "concept-09": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.4
+      },
+      "concept-10": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.438
+      },
       "needle-01": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 1.0,
+        "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.23
+        "ndcg": 0.5,
+        "seconds": 0.414
       },
       "needle-02": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.179
+        "ndcg": 0.3333333333333333,
+        "seconds": 0.405
       },
       "needle-03": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.178
+        "ndcg": 1.0,
+        "seconds": 0.408
       },
       "needle-04": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.455
+        "ndcg": 1.0,
+        "seconds": 0.402
       },
       "needle-05": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.5,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.19
+        "ndcg": 0.0,
+        "seconds": 0.427
       },
       "needle-06": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.171
+        "ndcg": 0.38685280723454163,
+        "seconds": 0.408
       },
       "needle-07": {
         "cjk": false,
@@ -666,55 +136,55 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.179
+        "seconds": 0.398
       },
       "needle-08": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.418
+        "seconds": 0.401
       },
       "needle-09": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.198
+        "ndcg": 0.3562071871080222,
+        "seconds": 0.407
       },
       "needle-10": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.258
+        "ndcg": 0.0,
+        "seconds": 0.422
       },
       "needle-11": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.26
+        "ndcg": 0.3010299956639812,
+        "seconds": 0.465
       },
       "needle-12": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.205
+        "seconds": 0.464
       },
       "needle-13": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.5,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.206
+        "seconds": 0.403
       },
       "needle-14": {
         "cjk": false,
@@ -722,119 +192,119 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.216
+        "seconds": 0.418
       },
       "needle-15": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.0,
+        "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.412
+        "seconds": 0.4
       },
       "needle-16": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.5,
-        "dochit3": 1,
-        "ndcg": 0.5,
-        "seconds": 0.181
+        "doc_ndcg": 0.3010299956639812,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.406
       },
       "needle-17": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.5,
+        "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "ndcg": 0.3562071871080222,
-        "seconds": 0.204
+        "ndcg": 0.0,
+        "seconds": 0.424
       },
       "needle-18": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
-        "ndcg": 0.0,
-        "seconds": 0.402
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.6309297535714575,
+        "seconds": 0.405
       },
       "needle-19": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.38685280723454163,
-        "seconds": 0.202
+        "ndcg": 1.0,
+        "seconds": 0.412
       },
       "needle-20": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.217
+        "ndcg": 1.0,
+        "seconds": 0.398
       },
       "needle-21": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "ndcg": 0.38685280723454163,
-        "seconds": 0.255
+        "ndcg": 0.2890648263178879,
+        "seconds": 0.416
       },
       "needle-22": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.209
+        "ndcg": 0.6309297535714575,
+        "seconds": 0.415
       },
       "needle-23": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.219
+        "ndcg": 0.31546487678572877,
+        "seconds": 0.408
       },
       "needle-24": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.0,
-        "dochit3": 0,
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.416
+        "seconds": 0.43
       },
       "needle-25": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 1.0,
+        "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.185
+        "seconds": 0.407
       },
       "route-01": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8821211986607034,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.191
-      },
-      "route-02": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.181
-      },
-      "route-03": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 0.8403030283801005,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.203
+        "seconds": 0.406
+      },
+      "route-02": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.393
+      },
+      "route-03": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.393
       },
       "route-04": {
         "cjk": false,
@@ -842,39 +312,39 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.196
+        "seconds": 0.401
       },
       "route-05": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.186
-      },
-      "route-06": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 0.8403030283801005,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.193
+        "seconds": 0.401
       },
-      "route-07": {
+      "route-06": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.209
+        "seconds": 0.393
       },
-      "route-08": {
+      "route-07": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 0.8403030283801005,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.187
+        "seconds": 0.398
+      },
+      "route-08": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.401
       },
       "route-09": {
         "cjk": false,
@@ -882,15 +352,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.18
+        "seconds": 0.397
       },
       "route-10": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.8821211986607034,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.223
+        "seconds": 0.431
       },
       "route-11": {
         "cjk": false,
@@ -898,7 +368,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.205
+        "seconds": 0.437
       },
       "route-12": {
         "cjk": false,
@@ -906,31 +376,31 @@
         "doc_ndcg": 0.8403030283801005,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.2
+        "seconds": 0.42
       },
       "route-13": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.6387878864795979,
+        "doc_ndcg": 0.762346330035624,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.162
+        "seconds": 0.403
       },
       "route-14": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.171
-      },
-      "route-15": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.206
+        "seconds": 0.414
+      },
+      "route-15": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 0,
+        "ndcg": null,
+        "seconds": 0.398
       },
       "route-16": {
         "cjk": false,
@@ -938,7 +408,7 @@
         "doc_ndcg": 0.7224242270408039,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.185
+        "seconds": 0.392
       },
       "route-17": {
         "cjk": false,
@@ -946,7 +416,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.183
+        "seconds": 0.393
       },
       "route-18": {
         "cjk": false,
@@ -954,7 +424,7 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.208
+        "seconds": 0.407
       },
       "route-19": {
         "cjk": false,
@@ -962,79 +432,79 @@
         "doc_ndcg": 0.8403030283801005,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.171
+        "seconds": 0.403
       },
       "route-20": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.6584645692843067,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.233
+        "seconds": 0.415
       },
       "route-21": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.6363230818084125,
-        "dochit3": 0,
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.215
+        "seconds": 0.411
       },
       "trap-01": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 1.0,
+        "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.173
+        "seconds": 0.444
       },
       "trap-02": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
+        "doc_ndcg": 0.43067655807339306,
+        "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.275
+        "seconds": 0.461
       },
       "trap-03": {
         "cjk": false,
         "class": "trap",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 1.0,
-        "seconds": 0.193
+        "ndcg": 0.0,
+        "seconds": 0.425
       },
       "trap-04": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 0.5,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.3562071871080222,
-        "seconds": 0.23
+        "ndcg": 1.0,
+        "seconds": 0.423
       },
       "trap-05": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 0.6309297535714575,
-        "dochit3": 1,
+        "doc_ndcg": 0.3333333333333333,
+        "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.172
+        "seconds": 0.422
       },
       "trap-06": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 0.0,
+        "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.167
+        "seconds": 0.442
       },
       "trap-07": {
         "cjk": false,
         "class": "trap",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.0,
-        "seconds": 0.212
+        "ndcg": 0.3562071871080222,
+        "seconds": 0.412
       },
       "trap-08": {
         "cjk": false,
@@ -1042,7 +512,7 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.385
+        "seconds": 0.404
       },
       "trap-09": {
         "cjk": false,
@@ -1050,15 +520,545 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.207
+        "seconds": 0.401
       },
       "trap-10": {
         "cjk": false,
         "class": "trap",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.412
+      }
+    },
+    "keyword": {
+      "concept-01": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.75
+      },
+      "concept-02": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.3562071871080222,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.727
+      },
+      "concept-03": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.31546487678572877,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.771
+      },
+      "concept-04": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.759
+      },
+      "concept-05": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.716
+      },
+      "concept-06": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.774
+      },
+      "concept-07": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.321
+      },
+      "concept-08": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.31546487678572877,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.759
+      },
+      "concept-09": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.745
+      },
+      "concept-10": {
+        "cjk": false,
+        "class": "concept",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.765
+      },
+      "needle-01": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 1.0,
+        "seconds": 0.39
+      },
+      "needle-02": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 1.0,
+        "seconds": 0.325
+      },
+      "needle-03": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.6309297535714575,
+        "seconds": 0.339
+      },
+      "needle-04": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.6309297535714575,
+        "seconds": 0.746
+      },
+      "needle-05": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.43067655807339306,
+        "seconds": 0.339
+      },
+      "needle-06": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 1.0,
+        "seconds": 0.323
+      },
+      "needle-07": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.322
+      },
+      "needle-08": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.43067655807339306,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.746
+      },
+      "needle-09": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.43067655807339306,
+        "seconds": 0.327
+      },
+      "needle-10": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.336
+      },
+      "needle-11": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.352
+      },
+      "needle-12": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.335
+      },
+      "needle-13": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.326
+      },
+      "needle-14": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.327
+      },
+      "needle-15": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.707
+      },
+      "needle-16": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.5,
+        "seconds": 0.323
+      },
+      "needle-17": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.3562071871080222,
+        "seconds": 0.323
+      },
+      "needle-18": {
+        "cjk": false,
+        "class": "needle",
         "doc_ndcg": 0.3333333333333333,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.229
+        "seconds": 0.711
+      },
+      "needle-19": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.38685280723454163,
+        "seconds": 0.324
+      },
+      "needle-20": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.43067655807339306,
+        "seconds": 0.334
+      },
+      "needle-21": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.38685280723454163,
+        "seconds": 0.338
+      },
+      "needle-22": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.43067655807339306,
+        "seconds": 0.338
+      },
+      "needle-23": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.43067655807339306,
+        "seconds": 0.341
+      },
+      "needle-24": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.738
+      },
+      "needle-25": {
+        "cjk": false,
+        "class": "needle",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.32
+      },
+      "route-01": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.322
+      },
+      "route-02": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.322
+      },
+      "route-03": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.322
+      },
+      "route-04": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.324
+      },
+      "route-05": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.335
+      },
+      "route-06": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.322
+      },
+      "route-07": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.326
+      },
+      "route-08": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.322
+      },
+      "route-09": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.321
+      },
+      "route-10": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.344
+      },
+      "route-11": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.344
+      },
+      "route-12": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.32
+      },
+      "route-13": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.6387878864795979,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.318
+      },
+      "route-14": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.325
+      },
+      "route-15": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.333
+      },
+      "route-16": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.7224242270408039,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.33
+      },
+      "route-17": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.337
+      },
+      "route-18": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8821211986607034,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.337
+      },
+      "route-19": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.331
+      },
+      "route-20": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.6584645692843067,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.346
+      },
+      "route-21": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.6584645692843067,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.344
+      },
+      "trap-01": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.336
+      },
+      "trap-02": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.379
+      },
+      "trap-03": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 1.0,
+        "seconds": 0.329
+      },
+      "trap-04": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.5,
+        "dochit3": 1,
+        "ndcg": 0.3562071871080222,
+        "seconds": 0.353
+      },
+      "trap-05": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.325
+      },
+      "trap-06": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.32
+      },
+      "trap-07": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.331
+      },
+      "trap-08": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.0,
+        "dochit3": 0,
+        "ndcg": 0.0,
+        "seconds": 0.723
+      },
+      "trap-09": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.334
+      },
+      "trap-10": {
+        "cjk": false,
+        "class": "trap",
+        "doc_ndcg": 0.6309297535714575,
+        "dochit3": 1,
+        "ndcg": 0.0,
+        "seconds": 0.35
       }
     },
     "semantic": {
@@ -1068,7 +1068,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.6309297535714575,
-        "seconds": 0.136
+        "seconds": 0.144
       },
       "concept-02": {
         "cjk": false,
@@ -1076,15 +1076,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 1.0,
-        "seconds": 0.148
+        "seconds": 0.136
       },
       "concept-03": {
         "cjk": false,
         "class": "concept",
-        "doc_ndcg": 0.3562071871080222,
+        "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.197
+        "seconds": 0.164
       },
       "concept-04": {
         "cjk": false,
@@ -1092,7 +1092,7 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.147
+        "seconds": 0.15
       },
       "concept-05": {
         "cjk": false,
@@ -1100,7 +1100,7 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.109
+        "seconds": 0.138
       },
       "concept-06": {
         "cjk": false,
@@ -1108,7 +1108,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.159
+        "seconds": 0.169
       },
       "concept-07": {
         "cjk": false,
@@ -1116,7 +1116,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.155
+        "seconds": 0.132
       },
       "concept-08": {
         "cjk": false,
@@ -1124,7 +1124,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.173
+        "seconds": 0.184
       },
       "concept-09": {
         "cjk": false,
@@ -1132,7 +1132,7 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.128
+        "seconds": 0.145
       },
       "concept-10": {
         "cjk": false,
@@ -1140,7 +1140,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.167
+        "seconds": 0.175
       },
       "needle-01": {
         "cjk": false,
@@ -1148,7 +1148,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.38685280723454163,
-        "seconds": 0.109
+        "seconds": 0.154
       },
       "needle-02": {
         "cjk": false,
@@ -1156,15 +1156,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.109
+        "seconds": 0.127
       },
       "needle-03": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.6309297535714575,
-        "seconds": 0.089
+        "ndcg": 1.0,
+        "seconds": 0.138
       },
       "needle-04": {
         "cjk": false,
@@ -1172,7 +1172,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 1.0,
-        "seconds": 0.108
+        "seconds": 0.129
       },
       "needle-05": {
         "cjk": false,
@@ -1180,7 +1180,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.129
+        "seconds": 0.137
       },
       "needle-06": {
         "cjk": false,
@@ -1188,7 +1188,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.114
+        "seconds": 0.13
       },
       "needle-07": {
         "cjk": false,
@@ -1196,7 +1196,7 @@
         "doc_ndcg": 0.5,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.104
+        "seconds": 0.126
       },
       "needle-08": {
         "cjk": false,
@@ -1204,7 +1204,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.109
+        "seconds": 0.131
       },
       "needle-09": {
         "cjk": false,
@@ -1212,7 +1212,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.114
+        "seconds": 0.123
       },
       "needle-10": {
         "cjk": false,
@@ -1220,23 +1220,23 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.3010299956639812,
-        "seconds": 0.145
+        "seconds": 0.158
       },
       "needle-11": {
         "cjk": false,
         "class": "needle",
-        "doc_ndcg": 0.6309297535714575,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.3562071871080222,
-        "seconds": 0.135
+        "seconds": 0.151
       },
       "needle-12": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 0.6309297535714575,
-        "dochit3": 0,
+        "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.133
+        "seconds": 0.149
       },
       "needle-13": {
         "cjk": false,
@@ -1244,7 +1244,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.095
+        "seconds": 0.124
       },
       "needle-14": {
         "cjk": false,
@@ -1252,7 +1252,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.104
+        "seconds": 0.125
       },
       "needle-15": {
         "cjk": false,
@@ -1260,7 +1260,7 @@
         "doc_ndcg": 0.5,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.093
+        "seconds": 0.132
       },
       "needle-16": {
         "cjk": false,
@@ -1268,7 +1268,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.12
+        "seconds": 0.132
       },
       "needle-17": {
         "cjk": false,
@@ -1276,7 +1276,7 @@
         "doc_ndcg": 0.5,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.174
+        "seconds": 0.152
       },
       "needle-18": {
         "cjk": false,
@@ -1284,7 +1284,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.6309297535714575,
-        "seconds": 0.145
+        "seconds": 0.131
       },
       "needle-19": {
         "cjk": false,
@@ -1292,7 +1292,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.6309297535714575,
-        "seconds": 0.107
+        "seconds": 0.13
       },
       "needle-20": {
         "cjk": false,
@@ -1300,15 +1300,15 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.6309297535714575,
-        "seconds": 0.085
+        "seconds": 0.13
       },
       "needle-21": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.2890648263178879,
-        "seconds": 0.142
+        "ndcg": 0.0,
+        "seconds": 0.143
       },
       "needle-22": {
         "cjk": false,
@@ -1316,15 +1316,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.112
+        "seconds": 0.142
       },
       "needle-23": {
         "cjk": false,
         "class": "needle",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.3333333333333333,
-        "seconds": 0.117
+        "ndcg": 0.0,
+        "seconds": 0.139
       },
       "needle-24": {
         "cjk": false,
@@ -1332,7 +1332,7 @@
         "doc_ndcg": 0.5,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.11
+        "seconds": 0.128
       },
       "needle-25": {
         "cjk": false,
@@ -1340,7 +1340,7 @@
         "doc_ndcg": 0.5,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.09
+        "seconds": 0.13
       },
       "route-01": {
         "cjk": false,
@@ -1348,7 +1348,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.09
+        "seconds": 0.136
       },
       "route-02": {
         "cjk": false,
@@ -1356,7 +1356,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.099
+        "seconds": 0.132
       },
       "route-03": {
         "cjk": false,
@@ -1364,7 +1364,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.089
+        "seconds": 0.134
       },
       "route-04": {
         "cjk": false,
@@ -1372,15 +1372,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.104
+        "seconds": 0.193
       },
       "route-05": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.8821211986607034,
+        "doc_ndcg": 0.8599797111848092,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.116
+        "seconds": 0.181
       },
       "route-06": {
         "cjk": false,
@@ -1388,7 +1388,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.086
+        "seconds": 0.13
       },
       "route-07": {
         "cjk": false,
@@ -1396,7 +1396,7 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.115
+        "seconds": 0.137
       },
       "route-08": {
         "cjk": false,
@@ -1404,7 +1404,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.084
+        "seconds": 0.13
       },
       "route-09": {
         "cjk": false,
@@ -1412,7 +1412,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.084
+        "seconds": 0.131
       },
       "route-10": {
         "cjk": false,
@@ -1420,7 +1420,7 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.122
+        "seconds": 0.159
       },
       "route-11": {
         "cjk": false,
@@ -1428,15 +1428,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.132
+        "seconds": 0.157
       },
       "route-12": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.7002827395649097,
+        "doc_ndcg": 0.6862856989769305,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.119
+        "seconds": 0.14
       },
       "route-13": {
         "cjk": false,
@@ -1444,7 +1444,7 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.13
+        "seconds": 0.134
       },
       "route-14": {
         "cjk": false,
@@ -1452,7 +1452,7 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.086
+        "seconds": 0.134
       },
       "route-15": {
         "cjk": false,
@@ -1460,23 +1460,23 @@
         "doc_ndcg": 0.8821211986607034,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.118
+        "seconds": 0.129
       },
       "route-16": {
-        "cjk": false,
-        "class": "route",
-        "doc_ndcg": 0.8403030283801005,
-        "dochit3": 1,
-        "ndcg": null,
-        "seconds": 0.095
-      },
-      "route-17": {
         "cjk": false,
         "class": "route",
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.084
+        "seconds": 0.13
+      },
+      "route-17": {
+        "cjk": false,
+        "class": "route",
+        "doc_ndcg": 0.8403030283801005,
+        "dochit3": 1,
+        "ndcg": null,
+        "seconds": 0.129
       },
       "route-18": {
         "cjk": false,
@@ -1484,15 +1484,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.116
+        "seconds": 0.136
       },
       "route-19": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.8403030283801005,
+        "doc_ndcg": 0.6584645692843067,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.116
+        "seconds": 0.143
       },
       "route-20": {
         "cjk": false,
@@ -1500,15 +1500,15 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.121
+        "seconds": 0.149
       },
       "route-21": {
         "cjk": false,
         "class": "route",
-        "doc_ndcg": 0.8821211986607034,
+        "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": null,
-        "seconds": 0.114
+        "seconds": 0.145
       },
       "trap-01": {
         "cjk": false,
@@ -1516,7 +1516,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.123
+        "seconds": 0.154
       },
       "trap-02": {
         "cjk": false,
@@ -1524,23 +1524,23 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.136
+        "seconds": 0.165
       },
       "trap-03": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 0.5,
-        "dochit3": 0,
+        "doc_ndcg": 1.0,
+        "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.129
+        "seconds": 0.135
       },
       "trap-04": {
         "cjk": false,
         "class": "trap",
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "ndcg": 0.43067655807339306,
-        "seconds": 0.225
+        "ndcg": 0.5,
+        "seconds": 0.152
       },
       "trap-05": {
         "cjk": false,
@@ -1548,15 +1548,15 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.132
+        "seconds": 0.142
       },
       "trap-06": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 1.0,
-        "dochit3": 1,
+        "doc_ndcg": 0.5,
+        "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.177
+        "seconds": 0.162
       },
       "trap-07": {
         "cjk": false,
@@ -1564,7 +1564,7 @@
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.5,
-        "seconds": 0.13
+        "seconds": 0.148
       },
       "trap-08": {
         "cjk": false,
@@ -1572,7 +1572,7 @@
         "doc_ndcg": 0.0,
         "dochit3": 0,
         "ndcg": 0.0,
-        "seconds": 0.116
+        "seconds": 0.132
       },
       "trap-09": {
         "cjk": false,
@@ -1580,107 +1580,44 @@
         "doc_ndcg": 1.0,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.124
+        "seconds": 0.137
       },
       "trap-10": {
         "cjk": false,
         "class": "trap",
-        "doc_ndcg": 1.0,
+        "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
         "ndcg": 0.0,
-        "seconds": 0.102
+        "seconds": 0.134
       }
     }
   },
   "queries": 66,
-  "single_doc": {
-    "auto": {
-      "n": 45,
-      "ndcg": 0.4883
-    },
-    "keyword": {
-      "n": 45,
-      "ndcg": 0.4191
-    },
-    "semantic": {
-      "n": 45,
-      "ndcg": 0.3671
-    }
-  },
+  "single_doc": {},
   "summary": {
     "auto": {
       "by_class": {
         "concept": {
-          "doc_ndcg": 0.468,
-          "dochit3": 0.5,
+          "doc_ndcg": 0.5139,
+          "dochit3": 0.6,
           "n": 10,
           "ndcg": 0.1631
         },
         "needle": {
-          "doc_ndcg": 0.8071,
-          "dochit3": 0.88,
+          "doc_ndcg": 0.8112,
+          "dochit3": 0.92,
           "n": 25,
-          "ndcg": 0.398
+          "ndcg": 0.3098
         },
         "route": {
-          "doc_ndcg": 0.9271,
-          "dochit3": 0.9048,
-          "n": 21,
-          "ndcg": null
-        },
-        "trap": {
-          "doc_ndcg": 0.6893,
-          "dochit3": 0.8,
-          "n": 10,
-          "ndcg": 0.1815
-        }
-      },
-      "cjk_subset": {
-        "doc_ndcg": 0.0,
-        "dochit3": 0.0,
-        "n": 0,
-        "ndcg": 0.0
-      },
-      "mean_query_seconds": 0.223,
-      "non_cjk": {
-        "doc_ndcg": 0.7761,
-        "dochit3": 0.8182,
-        "n": 66,
-        "ndcg": 0.2977
-      },
-      "overall": {
-        "doc_ndcg": 0.7761,
-        "dochit3": 0.8182,
-        "n": 66,
-        "ndcg": 0.2977
-      },
-      "search_mode_reported": [
-        "hybrid"
-      ]
-    },
-    "keyword": {
-      "by_class": {
-        "concept": {
-          "doc_ndcg": 0.1863,
-          "dochit3": 0.2,
-          "n": 10,
-          "ndcg": 0.0
-        },
-        "needle": {
-          "doc_ndcg": 0.6271,
-          "dochit3": 0.84,
-          "n": 25,
-          "ndcg": 0.3218
-        },
-        "route": {
-          "doc_ndcg": 0.8643,
+          "doc_ndcg": 0.9018,
           "dochit3": 0.9524,
           "n": 21,
           "ndcg": null
         },
         "trap": {
-          "doc_ndcg": 0.6095,
-          "dochit3": 0.7,
+          "doc_ndcg": 0.6087,
+          "dochit3": 0.6,
           "n": 10,
           "ndcg": 0.1356
         }
@@ -1691,16 +1628,66 @@
         "n": 0,
         "ndcg": 0.0
       },
-      "mean_query_seconds": 0.249,
+      "mean_query_seconds": 0.414,
       "non_cjk": {
-        "doc_ndcg": 0.6331,
-        "dochit3": 0.7576,
+        "doc_ndcg": 0.7643,
+        "dochit3": 0.8333,
+        "n": 66,
+        "ndcg": 0.2385
+      },
+      "overall": {
+        "doc_ndcg": 0.7643,
+        "dochit3": 0.8333,
+        "n": 66,
+        "ndcg": 0.2385
+      },
+      "search_mode_reported": [
+        "hybrid"
+      ]
+    },
+    "keyword": {
+      "by_class": {
+        "concept": {
+          "doc_ndcg": 0.2618,
+          "dochit3": 0.3,
+          "n": 10,
+          "ndcg": 0.0
+        },
+        "needle": {
+          "doc_ndcg": 0.7525,
+          "dochit3": 0.92,
+          "n": 25,
+          "ndcg": 0.3218
+        },
+        "route": {
+          "doc_ndcg": 0.8673,
+          "dochit3": 1.0,
+          "n": 21,
+          "ndcg": null
+        },
+        "trap": {
+          "doc_ndcg": 0.6024,
+          "dochit3": 0.8,
+          "n": 10,
+          "ndcg": 0.1356
+        }
+      },
+      "cjk_subset": {
+        "doc_ndcg": 0.0,
+        "dochit3": 0.0,
+        "n": 0,
+        "ndcg": 0.0
+      },
+      "mean_query_seconds": 0.426,
+      "non_cjk": {
+        "doc_ndcg": 0.6919,
+        "dochit3": 0.8333,
         "n": 66,
         "ndcg": 0.2089
       },
       "overall": {
-        "doc_ndcg": 0.6331,
-        "dochit3": 0.7576,
+        "doc_ndcg": 0.6919,
+        "dochit3": 0.8333,
         "n": 66,
         "ndcg": 0.2089
       },
@@ -1711,28 +1698,28 @@
     "semantic": {
       "by_class": {
         "concept": {
-          "doc_ndcg": 0.488,
+          "doc_ndcg": 0.4954,
           "dochit3": 0.6,
           "n": 10,
           "ndcg": 0.1631
         },
         "needle": {
-          "doc_ndcg": 0.7671,
-          "dochit3": 0.8,
+          "doc_ndcg": 0.7967,
+          "dochit3": 0.84,
           "n": 25,
-          "ndcg": 0.2076
+          "ndcg": 0.1975
         },
         "route": {
-          "doc_ndcg": 0.9368,
+          "doc_ndcg": 0.9321,
           "dochit3": 1.0,
           "n": 21,
           "ndcg": null
         },
         "trap": {
-          "doc_ndcg": 0.6393,
+          "doc_ndcg": 0.6024,
           "dochit3": 0.7,
           "n": 10,
-          "ndcg": 0.0931
+          "ndcg": 0.1
         }
       },
       "cjk_subset": {
@@ -1741,18 +1728,18 @@
         "n": 0,
         "ndcg": 0.0
       },
-      "mean_query_seconds": 0.122,
+      "mean_query_seconds": 0.142,
       "non_cjk": {
-        "doc_ndcg": 0.7595,
-        "dochit3": 0.8182,
+        "doc_ndcg": 0.7647,
+        "dochit3": 0.8333,
         "n": 66,
-        "ndcg": 0.1723
+        "ndcg": 0.1682
       },
       "overall": {
-        "doc_ndcg": 0.7595,
-        "dochit3": 0.8182,
+        "doc_ndcg": 0.7647,
+        "dochit3": 0.8333,
         "n": 66,
-        "ndcg": 0.1723
+        "ndcg": 0.1682
       },
       "search_mode_reported": [
         "semantic"

@@ -222,6 +222,45 @@ class TestUpload:
             count = upload(s3, "bkt", [f1, f2], tmp_path)
         assert count == 2
 
+    def test_symlinked_subdir_keys_off_unresolved_path(self, tmp_path):
+        # benchmark_data/.reading_order_pdfs is a symlink into another
+        # checkout; resolving a file under it walks the key clean out of
+        # base_dir even though the un-resolved path is genuinely under it.
+        real_dir = tmp_path / "elsewhere"
+        real_dir.mkdir()
+        real_file = real_dir / "doc.pdf"
+        real_file.write_bytes(b"one")
+
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "corpus").symlink_to(real_dir)
+        linked_file = base / "corpus" / "doc.pdf"
+
+        s3 = _client("s3")
+        with Stubber(s3) as st:
+            st.add_response(
+                "put_object",
+                {},
+                {"Bucket": "bkt", "Key": "corpus/doc.pdf", "Body": ANY},
+            )
+            st.add_response(
+                "list_objects_v2",
+                {"Contents": [{"Key": "corpus/doc.pdf"}], "IsTruncated": False},
+                {"Bucket": "bkt"},
+            )
+            count = upload(s3, "bkt", [linked_file], base)
+        assert count == 1
+
+    def test_file_outside_base_dir_raises_clear_error(self, tmp_path):
+        outside = tmp_path / "outside.pdf"
+        outside.write_bytes(b"one")
+        base = tmp_path / "base"
+        base.mkdir()
+
+        s3 = _client("s3")
+        with pytest.raises(ValueError, match="is not under base_dir"):
+            upload(s3, "bkt", [outside], base)
+
     def test_raises_when_confirmed_count_is_short(self, tmp_path):
         f1 = tmp_path / "doc.pdf"
         f1.write_bytes(b"one")

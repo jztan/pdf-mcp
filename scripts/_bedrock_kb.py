@@ -81,16 +81,31 @@ def upload(s3, bucket: str, files: list[Path], base_dir: Path) -> int:
 
     Keying on the relative path (not just the basename) keeps two manifest
     documents with the same filename in different directories from
-    overwriting each other in the bucket. The upload is then verified
-    against a listing of the bucket rather than trusting the request: if
-    the confirmed count does not match what was requested, raise instead
-    of reporting a corpus that is quietly short.
+    overwriting each other in the bucket. The key is computed from the
+    un-resolved path: several corpus directories (e.g.
+    benchmark_data/.reading_order_pdfs) are symlinks into another checkout,
+    so resolving a file first can walk it clean out of base_dir even though
+    the path handed in is genuinely under base_dir. Only base_dir itself is
+    resolved, since it is never expected to be a symlink.
+
+    The upload is then verified against a listing of the bucket rather than
+    trusting the request: if the confirmed count does not match what was
+    requested, raise instead of reporting a corpus that is quietly short.
     """
     base = Path(base_dir).resolve()
     keys = []
     for f in files:
-        key = f.resolve().relative_to(base).as_posix()
-        s3.put_object(Bucket=bucket, Key=key, Body=f.read_bytes())
+        path = Path(f)
+        try:
+            key = path.relative_to(base).as_posix()
+        except ValueError as e:
+            raise ValueError(
+                f"upload(): {path} is not under base_dir {base}; "
+                "upload() keys off the un-resolved path, so pass a path "
+                "already joined under base_dir rather than one resolved "
+                "through a symlink"
+            ) from e
+        s3.put_object(Bucket=bucket, Key=key, Body=path.read_bytes())
         keys.append(key)
 
     present: set[str] = set()

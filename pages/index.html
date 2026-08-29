@@ -65,649 +65,604 @@
   gtag('config', '__GA_MEASUREMENT_ID__');
 </script>
 
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-behavior: smooth; }
 
   :root {
-    --bg: #fbfbfd;
+    --bg: #f8f9fb;
     --bg-elev: #ffffff;
-    --bg-subtle: #f5f5f7;
-    --bg-section-tint: #f5f5f7;
-    --bg-section-bright: #ffffff;
-    --text: #1d1d1f;
-    --text-secondary: #6e6e73;
-    --text-tertiary: #86868b;
-    --border: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.14);
-    --accent: #0071e3;
-    --accent-hover: #0077ed;
-    --warning: #ff9500;
-    --danger: #ff3b30;
-    --code-bg: #f5f5f7;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08);
+    --bg-subtle: #eef1f5;
+    --text: #0f1420;
+    --text-secondary: #4b5566;
+    --text-tertiary: #8892a0;
+    --border: rgba(15, 20, 32, 0.08);
+    --border-strong: rgba(15, 20, 32, 0.16);
+    --accent: #1f5eff;
+    --accent-soft: rgba(31, 94, 255, 0.1);
+    --warning: #d97706;
+    --danger: #dc2626;
+    --success: #1a9e5c;
+    --pill-bg: #0f1420;
+    --pill-fg: #ffffff;
+    --pill-dim: #7c8595;
+    --code-bg: #f8f9fb;
+    --shadow-sm: 0 1px 2px rgba(20, 40, 90, 0.05);
+    --shadow-md: 0 12px 30px rgba(20, 40, 90, 0.08);
+    --shadow-lg: 0 30px 80px rgba(20, 40, 90, 0.2);
+    --nav-bg: rgba(248, 249, 251, 0.78);
+    --atmo-base: #e9f0fb;
+    --atmo-fade: rgba(248, 249, 251, 0.85);
+    --atmo-1: rgba(120, 190, 255, 0.55);
+    --atmo-2: rgba(160, 225, 255, 0.7);
+    --atmo-3: rgba(214, 232, 252, 0.9);
+    --atmo-4: rgba(110, 170, 255, 0.4);
+    --atmo-top: #d6e6fb;
+    --dark-bg: #0f1420;
+    --dark-elev: #171d2b;
+    --dark-deep: #131826;
+    --dark-text: #a3acbc;
+    --dark-dim: #7c8595;
     --radius-sm: 8px;
     --radius-md: 12px;
-    --radius-lg: 18px;
-    --radius-xl: 24px;
-    --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
-    --font-text: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
-    --font-mono: "SF Mono", ui-monospace, "Menlo", "Monaco", "Cascadia Mono", monospace;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+    --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+    --font-text: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+    --font-mono: "Geist Mono", "SF Mono", ui-monospace, "Menlo", "Monaco", "Cascadia Mono", monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #000000;
-      --bg-elev: #1c1c1e;
-      --bg-subtle: #1c1c1e;
-      --bg-section-tint: #000000;
-      --bg-section-bright: #000000;
-      --text: #f5f5f7;
-      --text-secondary: #a1a1a6;
-      --text-tertiary: #86868b;
+      --bg: #0b0f18;
+      --bg-elev: #131826;
+      --bg-subtle: #171d2b;
+      --text: #eef1f5;
+      --text-secondary: #a3acbc;
+      --text-tertiary: #7c8595;
       --border: rgba(255, 255, 255, 0.1);
-      --border-strong: rgba(255, 255, 255, 0.18);
-      --accent: #2997ff;
-      --accent-hover: #409cff;
-      --code-bg: #1c1c1e;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
-      --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+      --border-strong: rgba(255, 255, 255, 0.2);
+      --accent: #6b95ff;
+      --accent-soft: rgba(107, 149, 255, 0.16);
+      --pill-bg: #eef1f5;
+      --pill-fg: #0f1420;
+      --pill-dim: #5f6775;
+      --code-bg: #171d2b;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+      --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.65);
+      --nav-bg: rgba(11, 15, 24, 0.78);
+      --atmo-base: #10182b;
+      --atmo-fade: rgba(11, 15, 24, 0.85);
+      --atmo-1: rgba(40, 90, 200, 0.45);
+      --atmo-2: rgba(50, 120, 200, 0.4);
+      --atmo-3: rgba(30, 60, 130, 0.6);
+      --atmo-4: rgba(40, 90, 200, 0.35);
+      --atmo-top: #15203a;
+      --dark-bg: #06090f;
+      --dark-elev: #0f1420;
+      --dark-deep: #0b0f18;
     }
   }
   body {
     font-family: var(--font-text);
-    font-size: 17px;
-    line-height: 1.47;
-    color: var(--text);
-    background: var(--bg);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    font-size: 17px; line-height: 1.5;
+    color: var(--text); background: var(--bg);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh; display: flex; flex-direction: column;
   }
   footer { margin-top: auto; }
+  .hidden { display: none !important; }
 
+  /* ── Nav ──────────────────────────────────────────────────── */
   nav.top {
     position: sticky; top: 0; z-index: 100;
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    background: rgba(251, 251, 253, 0.72);
-    border-bottom: 1px solid var(--border);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
   }
-  @media (prefers-color-scheme: dark) { nav.top { background: rgba(0, 0, 0, 0.72); } }
-  nav.top .inner {
-    max-width: 1040px; margin: 0 auto; padding: 0 22px;
-    height: 48px; display: flex; align-items: center; justify-content: space-between;
-  }
-  nav.top .brand { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text); text-decoration: none; }
+  nav.top .inner { max-width: 1160px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  nav.top .brand-wrap { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  nav.top .brand { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text); text-decoration: none; white-space: nowrap; }
   nav.top .brand span { color: var(--text-tertiary); font-weight: 400; margin-left: 4px; }
-  nav.top ul { list-style: none; display: flex; gap: 28px; margin: 0; padding: 0; }
-  nav.top ul a { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s ease; }
+  nav.top ul { list-style: none; display: flex; gap: 26px; margin: 0; padding: 0; align-items: center; }
+  nav.top ul a { font-size: 14px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s ease; white-space: nowrap; }
   nav.top ul a:hover { color: var(--text); }
-  .ledger { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
-            border: 1px solid var(--border); border-radius: 980px; padding: 6px 14px; background: var(--bg-elev); }
+  nav.top ul a.nav-cta { background: var(--pill-bg); color: var(--pill-fg); border-radius: 980px; padding: 9px 18px; font-size: 13px; font-weight: 500; }
+  nav.top ul a.nav-cta:hover { opacity: 0.85; color: var(--pill-fg); }
+  .ledger { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 980px; padding: 6px 14px; background: var(--bg-elev); white-space: nowrap; }
   .ledger b { color: var(--accent); font-weight: 500; }
-  @media (max-width: 820px) { .ledger { display: none; } }
 
-  /* In-card live scoreboard: the savings story is visible from load and
-     ticks with every action — the receipt section below echoes it. */
-  .scoreboard { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 18px; }
-  .sb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .sb-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-tertiary); }
-  .sb-pct { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--accent); }
-  .sb-row { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; gap: 12px; }
-  .sb-row b { color: var(--text); font-weight: 500; white-space: nowrap; }
-  .sb-row.agent b { color: var(--accent); }
-  .sb-bar { position: relative; height: 10px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); overflow: hidden; margin: 4px 0 6px; }
-  .sb-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 6px 0 0 6px; transition: width 0.5s ease; width: 0; }
-  @media (prefers-reduced-motion: reduce) { .sb-bar i { transition: none; } }
-
-  section.hero { background: var(--bg); padding: 88px 22px 32px; text-align: center; }
-  section.hero .inner { max-width: 820px; margin: 0 auto; }
+  /* ── Hero + stage share one atmosphere ─────────────────────── */
+  .atmosphere {
+    background-color: var(--atmo-base);
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,0) 55%, var(--atmo-fade) 88%, var(--bg) 100%),
+      radial-gradient(900px 620px at 18% 8%, var(--atmo-1), rgba(0,0,0,0) 70%),
+      radial-gradient(1100px 700px at 82% 2%, var(--atmo-2), rgba(0,0,0,0) 72%),
+      radial-gradient(1000px 760px at 50% 46%, var(--atmo-3), rgba(0,0,0,0) 75%),
+      radial-gradient(700px 500px at 8% 52%, var(--atmo-4), rgba(0,0,0,0) 70%),
+      linear-gradient(180deg, var(--atmo-top) 0%, var(--atmo-base) 60%, var(--bg) 100%);
+  }
+  section.hero { padding: 96px 24px 28px; text-align: center; }
+  section.hero .inner { max-width: 920px; margin: 0 auto; }
   .hero-title {
     font-family: var(--font-display);
-    font-size: clamp(40px, 7vw, 68px);
-    line-height: 1.05; letter-spacing: -0.025em; font-weight: 600;
-    margin: 0 0 20px;
-    background: linear-gradient(180deg, var(--text) 0%, var(--text-secondary) 140%);
-    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    font-size: clamp(40px, 5vw, 68px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 500;
+    margin: 0 0 22px; color: var(--text); text-wrap: balance;
   }
-  p.hero-sub {
-    font-family: var(--font-display);
-    font-size: clamp(18px, 2.2vw, 22px); line-height: 1.4;
-    color: var(--text-secondary); max-width: 620px; margin: 0 auto 28px; font-weight: 400;
+  p.hero-sub { font-family: var(--font-display); font-size: clamp(18px, 2.2vw, 21px); line-height: 1.45; color: var(--text-secondary); max-width: 660px; margin: 0 auto 34px; font-weight: 400; }
+  p.hero-sub code { font-family: var(--font-mono); font-size: 0.95em; color: var(--text); }
+  .hero-ctas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .install-pill {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: var(--pill-bg); color: var(--pill-fg); border-radius: 980px; padding: 14px 24px;
+    font-family: var(--font-mono); font-size: 15px;
   }
-  p.hero-sub code {
-    font-family: var(--font-mono);
-    font-size: 0.95em;
-    color: var(--text);
+  .install-pill .dollar { color: var(--pill-dim); }
+  .install-pill button {
+    display: inline-flex; align-items: center; background: none; border: none; padding: 2px;
+    color: var(--pill-dim); cursor: pointer; transition: color 0.15s ease;
   }
-  .privacy-pill {
+  .install-pill button:hover { color: var(--pill-fg); }
+  .btn-ghost-pill {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 16px; border-radius: 980px;
-    background: var(--bg-elev); border: 1px solid var(--border);
-    font-size: 13px; color: var(--text-secondary); box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-strong); background: rgba(255, 255, 255, 0.55); border-radius: 980px;
+    padding: 13px 24px; font-size: 15px; font-weight: 500; color: var(--text);
+    text-decoration: none; cursor: pointer; font-family: var(--font-text);
+    transition: background 0.15s ease;
   }
+  @media (prefers-color-scheme: dark) { .btn-ghost-pill { background: rgba(255, 255, 255, 0.06); } }
+  .btn-ghost-pill:hover { background: var(--bg-elev); }
 
-  .hero-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; max-width: 580px; margin: 40px auto 0; }
-  /* Keep the grid compact on small screens: same 24 columns (so it stays ~9
-     rows, not ~18), just a tighter gap. Fewer columns would balloon the cell
-     size and make the grid dominate the viewport. Cells shrink via 1fr. */
+  /* Page field: 216 pages, a scan sweeps them, the found pages land. */
+  .hero-field { width: 100%; max-width: 620px; margin: 56px auto 0; display: flex; flex-direction: column; gap: 18px; }
+  .hero-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; }
   @media (max-width: 640px) { .hero-grid, .lgrid { gap: 3px; } }
-  /* 3:4 page cells via percentage-padding rather than `aspect-ratio`:
-     Safari fails to shrink aspect-ratio grid items back down after the
-     container narrows (it keeps an auto min-size from the wider layout),
-     which left cells oversized and touching the card edge after a resize.
-     Percentage padding is width-relative and reflows reliably everywhere. */
-  .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2.5px;
-            background: var(--text-tertiary); opacity: 0.5;
-            transition: opacity 0.3s ease, background 0.3s ease, box-shadow 0.3s ease; }
-  /* Crisper hero tiles: a hairline edge gives each page definition so the field
-     reads as intentional pages rather than a flat skeleton. */
-  .hero-grid .pgcell { border-radius: 2px;
-            box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--text-tertiary) 26%, transparent); }
-  /* Scan line: as the agent sweeps the document, each column briefly glows
-     accent before settling — the reveal reads as a search, not a fade-in. */
-  .hero-grid .pgcell.scan { opacity: 0.95;
-            background: color-mix(in srgb, var(--accent) 24%, var(--text-tertiary)); }
-  /* Non-matched pages stay faintly visible (a faded document) rather than
-     vanishing — so after a search the grid still reads as the whole doc
-     with matches highlighted, not an empty box with a few dots. */
-  .pgcell.dim { opacity: 0.28; }
-  /* Matched pages stay full size (no scale — enlarging collides with
-     neighbours and the card edge). They read as matches purely by colour:
-     solid accent at full opacity while non-matches fade to 0.13. */
-  .pgcell.hit { background: var(--accent); opacity: 1;
-                box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent); z-index: 2; position: relative; }
-  /* Elevated hero match: a soft accent ring + lift so a found page reads as a
-     crafted highlight, not a flat blue square. */
-  .hero-grid .pgcell.hit { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 22%, transparent),
-                0 3px 9px color-mix(in srgb, var(--accent) 32%, transparent); }
-  /* Found pages ripple once as the agent locates them. */
-  .hero-grid .pgcell.hit::after { content: ""; position: absolute; inset: 0;
-                border-radius: inherit; pointer-events: none; animation: hitRipple 1.1s ease-out; }
+  /* 3:4 page cells via percentage-padding rather than aspect-ratio (Safari
+     fails to shrink aspect-ratio grid items back down after a resize). */
+  .pgcell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 2px;
+            background: var(--text-tertiary); opacity: 0.16;
+            transition: opacity 0.35s ease, background 0.35s ease, box-shadow 0.35s ease; }
+  .hero-grid .pgcell.scan { opacity: 0.7; background: var(--accent); }
+  .pgcell.dim { opacity: 0.1; }
+  .pgcell.hit { background: var(--accent); opacity: 1; position: relative; z-index: 2;
+                box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 25%, transparent), 0 3px 9px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .hero-grid .pgcell.hit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; animation: hitRipple 1.1s ease-out; }
   @keyframes hitRipple {
     from { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); opacity: 1; }
     to   { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); opacity: 0; }
   }
-  .pgcell.scanned { background: var(--warning); opacity: 0.45; }
-  .hero-stat { margin-top: 34px; font-family: var(--font-display); font-size: clamp(20px, 3vw, 28px);
-               font-weight: 600; letter-spacing: -0.02em; opacity: 0; transition: opacity 0.8s ease; }
+  .pgcell.scanned { background: var(--warning); opacity: 0.5; }
+  .hero-stat-row { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .hero-stat { font-family: var(--font-display); font-size: clamp(20px, 3vw, 26px); font-weight: 500; letter-spacing: -0.02em; margin: 0; opacity: 0; transition: opacity 0.8s ease; }
   .hero-stat.on { opacity: 1; }
   .hero-stat span { color: var(--accent); }
-  .hero-ctas { margin-top: 36px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-  .hero-ctas .btn-ghost { padding: 12px 22px; font-size: 15px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); }
-  .btn.btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-  .btn.btn-outline:hover { background: rgba(0, 113, 227, 0.08); }
-  @media (prefers-color-scheme: dark) { .btn.btn-outline:hover { background: rgba(41, 151, 255, 0.12); } }
-  .hero-privacy { margin-top: 26px; }
+  .clients-label { font-size: 13px; color: var(--text-secondary); margin: 48px 0 0; }
+  .clients { display: flex; justify-content: center; align-items: center; gap: 16px 40px; flex-wrap: wrap; margin-top: 16px; font-size: 17px; font-weight: 600; color: var(--text-secondary); }
   @media (prefers-reduced-motion: reduce) {
     .pgcell { transition: none; }
     .hero-stat { transition: none; }
     .hero-grid .pgcell.hit::after { animation: none; display: none; }
   }
 
-  .doc-card { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--bg-elev);
-              padding: 36px 36px 30px; box-shadow: var(--shadow-md); }
-  .doc-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
-  .doc-name { font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  /* ── Demo stage ───────────────────────────────────────────── */
+  section.stage { padding: 28px 24px 56px; }
+  section.stage .inner { max-width: 1120px; margin: 0 auto; }
+  .stage-card { border-radius: var(--radius-lg); background: var(--bg-elev); box-shadow: var(--shadow-lg); overflow: hidden; }
+  .stage-note { font-size: 13px; color: var(--text-tertiary); text-align: center; margin: 22px auto 0; max-width: 720px; }
+  .stage-note code, .k { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+
+  /* Upload state */
+  section.upload { padding: 36px 40px 32px; display: flex; flex-direction: column; gap: 18px; }
+  .dropzone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    padding: 52px 24px; border: 1.5px dashed var(--border-strong); border-radius: 18px;
+    background: var(--bg); text-align: center; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone input { display: none; }
+  .dropzone-icon { width: 36px; height: 36px; color: var(--text-tertiary); }
+  .dropzone-title { display: block; font-family: var(--font-display); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin: 0; color: var(--text); }
+  .dropzone-hint { display: block; font-size: 14px; color: var(--text-tertiary); margin: 0; }
+  .url-row { display: flex; align-items: center; gap: 12px; }
+  .url-or { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+  .url-input {
+    flex: 1; height: 44px; padding: 0 16px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    background: var(--bg-elev); color: var(--text); font-family: var(--font-text); font-size: 14px;
+  }
+  .url-input:focus, .askbar input:focus, .read-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .upload-ctas { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding-top: 4px; }
+  .hero-privacy { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--text-tertiary); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 44px; padding: 0 18px; border: none; border-radius: 980px;
+    background: var(--pill-bg); color: var(--pill-fg);
+    font-family: var(--font-text); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s ease, transform 0.1s ease; white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+  .btn.btn-accent { background: var(--accent); color: #ffffff; }
+  .btn.btn-outline { background: var(--bg-elev); color: var(--text); border: 1px solid var(--border-strong); }
+  .btn.btn-outline:hover { opacity: 1; background: var(--bg-subtle); }
+  .btn-ghost { background: transparent; color: var(--text-secondary); height: 34px; padding: 0 12px; font-size: 13px; border: 1px solid var(--border-strong); }
+  .btn-ghost:hover { opacity: 1; color: var(--text); background: var(--bg-subtle); }
+  .btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
+  .btn-icon { height: auto; padding: 4px; border: none; }
+
+  /* Loader */
+  .loader { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 64px 24px; color: var(--text-secondary); font-size: 14px; font-family: var(--font-mono); }
+  .loader-spinner { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Working state: document/folder on the left, tool-call JSON on the right */
+  .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 24px; border-bottom: 1px solid var(--border); }
+  .act-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); margin: 0; }
+  .stage-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; }
+  .doc-card { padding: 22px 24px 20px; border-right: 1px solid var(--border); min-width: 0; }
+  .doc-card.enter { animation: cardIn 0.5s ease both; }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } }
+  .doc-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .doc-name { font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .doc-name small { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); font-weight: 400; margin-left: 10px; }
   .doc-cost { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
   .doc-cost b { color: var(--text); font-weight: 500; }
-  .lgrid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; }
+  .lgrid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; }
   .lgrid .pgcell { cursor: pointer; }
-  .grid-legend { display: flex; gap: 18px; margin-top: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); flex-wrap: wrap; }
-  .grid-legend i { display: inline-block; width: 8px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-  .tool-tag { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.06em; margin-left: auto; }
-  .act-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-               color: var(--text-tertiary); text-align: center; margin: 0 0 14px; }
+  .lgrid .pgcell:hover { opacity: 0.8; }
+  .lgrid.cascade .pgcell { opacity: 0; animation: cellIn 0.35s ease forwards; }
+  @keyframes cellIn { to { opacity: 0.16; } }
+  .grid-legend { display: flex; gap: 16px; margin-top: 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); flex-wrap: wrap; align-items: center; }
+  .grid-legend i { display: inline-block; width: 7px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .tool-tag { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); letter-spacing: 0.06em; margin-left: auto; }
+  .step-json-toggle {
+    font-family: var(--font-mono); font-size: 11px; color: var(--accent); cursor: pointer;
+    background: none; border: none; padding: 0; border-radius: 6px;
+  }
+  .step-json-toggle:hover { text-decoration: underline; }
 
-  .warm-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .agent-panel { background: var(--bg-subtle); display: flex; flex-direction: column; min-width: 0; }
+  .agent-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .agent-head span { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+  .agent-body { flex: 1; min-height: 0; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .agent-call { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .agent-call-head { display: flex; align-items: center; gap: 8px; }
+  .agent-call-head svg { flex-shrink: 0; color: var(--accent); }
+  .agent-call-head b { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; color: var(--text); }
+  .agent-call-head small { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+  .agent-call .step-json-toggle { align-self: flex-start; }
+  .agent-empty { margin: auto; text-align: center; color: var(--text-tertiary); font-size: 13px; max-width: 260px; line-height: 1.5; padding: 24px 0; }
+  .json-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+  .json-wrap.open { max-height: 600px; }
+  .json-box {
+    margin: 6px 0 2px; padding: 9px 12px; border-left: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    background: var(--code-bg); border-radius: 0 8px 8px 0;
+    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; color: var(--text-secondary);
+    white-space: pre; overflow: auto; max-height: 320px;
+  }
+  .json-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+  .json-key { color: var(--text); }
+  .json-string { color: #0f7b4f; }
+  .json-number { color: var(--accent); }
+  .json-bool { color: #b45309; }
+  .json-null { color: var(--text-tertiary); font-style: italic; }
+  @media (prefers-color-scheme: dark) { .json-string { color: #3fd79d; } .json-bool { color: #f5a35c; } }
+
+  /* Callouts (document warnings orange, demo-limitation notices blue) */
+  .callout {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 14px; border-radius: var(--radius-sm);
+    background: rgba(217, 119, 6, 0.08); border: 1px solid rgba(217, 119, 6, 0.22);
+    font-size: 13px; line-height: 1.5; margin-top: 14px; color: var(--text);
+  }
+  .callout svg { flex-shrink: 0; color: var(--warning); margin-top: 3px; }
+  .callout code { font-family: var(--font-mono); font-size: 12px; background: rgba(217, 119, 6, 0.14); padding: 1px 5px; border-radius: 3px; }
+  .callout.info { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+  .callout.info svg { color: var(--accent); }
+  .callout.info code { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .callout a { color: var(--accent); }
+
+  .coverage-svg { position: relative; width: 100%; padding: 4px 0 0; }
+  .coverage-svg svg { display: block; width: 100%; height: 90px; }
+  .coverage-svg-tip {
+    position: absolute; top: -8px; transform: translate(-50%, -100%);
+    background: var(--text); color: var(--bg); font-family: var(--font-mono); font-size: 11px;
+    padding: 5px 9px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s ease; z-index: 10;
+  }
+  .coverage-svg-tip.show { opacity: 1; }
+  .coverage-svg-tip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: var(--text); }
+
+  /* Search / results */
+  .askbar { display: flex; gap: 8px; margin: 18px 0 8px; }
+  .askbar input {
+    flex: 1; height: 42px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--border-strong);
+    background: var(--bg-elev); color: var(--text); font-size: 14px; font-family: var(--font-text);
+  }
+  .askbar .btn { height: 42px; }
+  .suggested-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .chip {
+    display: inline-block; padding: 4px 11px; border-radius: 980px;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 11.5px; cursor: pointer;
+    transition: all 0.15s ease; font-family: var(--font-mono);
+  }
+  .chip:hover { background: var(--bg-subtle); color: var(--text); border-color: var(--border-strong); }
+  .search-results { margin-top: 6px; }
+  .search-empty { text-align: center; padding: 16px; color: var(--text-tertiary); font-size: 12px; font-family: var(--font-mono); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); }
+  .result-card {
+    border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg);
+    opacity: 0; transform: translateY(6px); transition: all 0.5s ease; cursor: pointer; margin-bottom: 8px;
+  }
+  .result-card.on { opacity: 1; transform: none; }
+  .result-card:hover { border-color: var(--border-strong); }
+  .result-card.reading { border-color: var(--accent); }
+  .match-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+  .match-page { color: var(--accent); font-weight: 500; white-space: nowrap; }
+  .res-doc { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); border-radius: 980px; padding: 2px 9px; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+  .match-excerpt { font-size: 13px; line-height: 1.5; color: var(--text); margin: 0; }
+  .match-excerpt mark { background: color-mix(in srgb, var(--accent) 18%, transparent); color: inherit; padding: 0 2px; border-radius: 2px; }
+  .inline-reader {
+    margin-top: 10px; border-top: 1px solid var(--border); padding: 0;
+    font-size: 11.5px; line-height: 1.6; color: var(--text-secondary); font-family: var(--font-mono);
+    max-height: 0; overflow: hidden; transition: max-height 0.6s ease, padding 0.3s ease;
+  }
+  .inline-reader.open { max-height: 260px; overflow-y: auto; padding-top: 8px; }
+  .inline-reader:empty { display: none; }
+  .inline-reader b { display: block; color: var(--text-tertiary); font-size: 10.5px; font-weight: 400; margin-bottom: 4px; }
+  #corpusAdHocReader { margin: 10px 0 0; }
+
+  /* Scoreboard (in-card) */
+  .scoreboard { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .sb-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .sb-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+  .sb-pct { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--accent); }
+  .sb-row { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; gap: 12px; }
+  .sb-row b { color: var(--text); font-weight: 500; }
+  .sb-bar { position: relative; height: 8px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); overflow: hidden; margin: 4px 0 6px; }
+  .sb-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 6px 0 0 6px; transition: width 0.5s ease; width: 0; }
+
+  /* Read arbitrary pages */
+  details.dev-row { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-tertiary); }
+  details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; list-style: none; }
+  details.dev-row summary::-webkit-details-marker { display: none; }
+  details.dev-row summary::before { content: "+ "; }
+  details.dev-row[open] summary::before { content: "\2212 "; }
+  .read-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+  .read-input-wrap { flex: 1; }
+  .read-input {
+    width: 100%; height: 38px; padding: 0 14px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    background: var(--bg-elev); color: var(--text); font-family: var(--font-mono); font-size: 13px;
+  }
+  .read-row .btn { height: 38px; }
+  .read-hint { font-size: 10.5px; color: var(--text-tertiary); margin-top: 6px; font-family: var(--font-mono); }
+  .page-result { margin-bottom: 10px; padding: 12px 14px; border-radius: var(--radius-md); background: var(--bg); border: 1px solid var(--border); }
+  .page-result-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 12px; flex-wrap: wrap; }
+  .page-result-label { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+  .page-result-meta { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+  .page-result-text { font-size: 13px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-wrap: break-word; margin: 0; max-height: 180px; overflow-y: auto; padding-right: 4px; font-family: var(--font-text); }
+  .empty-fields { display: flex; gap: 14px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); flex-wrap: wrap; }
+  .empty-fields code { color: var(--text-secondary); }
+
+  /* Corpus warm rows, overview cards, per-doc page rows */
+  .warm-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
   .warm-row:last-child { border-bottom: none; }
   .warm-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .warm-pages { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
-  .warm-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; min-width: 120px; text-align: right; }
-  .warm-state.done { color: #34c759; }
+  .warm-state { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; min-width: 110px; text-align: right; }
+  .warm-state.done { color: var(--success); }
   .warm-state.active { color: var(--accent); }
   .warm-state.queued { color: var(--text-tertiary); }
   .warm-state.skip { color: var(--warning); }
   .warm-mini { position: relative; width: 90px; height: 6px; border-radius: 4px; background: var(--bg-subtle); border: 1px solid var(--border); overflow: hidden; }
   .warm-mini i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width 0.2s linear; }
-  .ov-card { opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 14px 0; }
+  .ov-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); padding: 10px 12px; min-width: 0; opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease, transform 0.45s ease; }
   .ov-card.on { opacity: 1; transform: none; }
-  .doc-card.enter { animation: cardIn 0.5s ease both; }
-  @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } }
-  .lgrid.cascade .pgcell { opacity: 0; animation: cellIn 0.35s ease forwards; }
-  /* Land on the cells' resting opacity (0.5) — overshooting to 1 made the
-     whole grid darken, then visibly lighten when the cascade class lifted. */
-  @keyframes cellIn { to { opacity: 0.5; } }
-  .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
-  .ov-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-elev); padding: 16px; }
-  .ov-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
+  .ov-title { font-family: var(--font-display); font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-file { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-tertiary); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ov-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .ov-pill { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; border-radius: 980px; padding: 3px 9px; background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-secondary); }
-  .ov-pill.full { color: #34c759; border-color: rgba(52,199,89,0.35); background: rgba(52,199,89,0.08); }
-  .ov-toc { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--text-secondary); }
+  .ov-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ov-pill { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; border-radius: 980px; padding: 2px 8px; background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-secondary); }
+  .ov-pill.full { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 8%, transparent); }
+  .ov-toc { margin: 0; padding: 0; list-style: none; font-size: 11.5px; color: var(--text-secondary); }
   .ov-toc li { padding: 2.5px 0; border-top: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-toc li:first-child { border-top: none; }
-  .cg-row { display: flex; align-items: flex-start; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-  .cg-row:last-child { border-bottom: none; }
-  .cg-name { flex: 0 0 210px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); padding-top: 2px; }
-  .cg-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
-  .cg-cell { width: 16px; height: 16px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, var(--bg-subtle)); border: 1px solid var(--border-strong); cursor: pointer; transition: background 0.3s ease, opacity 0.3s ease, border-color 0.3s ease; }
-  .cg-cell.dim { opacity: 0.55; }
-  .cg-cell.hit { background: var(--accent); border-color: var(--accent); }
-  .cg-cell.read { background: radial-gradient(circle at center, rgba(255,255,255,0.95) 0 2.5px, var(--accent) 3.5px); border-color: var(--accent); }
-  .res-doc { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); background: rgba(0,113,227,0.08); border: 1px solid rgba(0,113,227,0.2); border-radius: 980px; padding: 2px 9px; margin-right: 8px; }
-  @media (max-width: 640px) { .cg-name { flex-basis: 120px; } .warm-state { min-width: 92px; } }
+  .cg-row { display: flex; align-items: center; gap: 12px; padding: 5px 0; }
+  .cg-name { flex: 0 0 170px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+  .cg-grid { flex: 1; display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); gap: 3px; }
+  .cg-cell { height: 0; padding-bottom: 133%; min-width: 0; border-radius: 1.5px; background: var(--text-tertiary); opacity: 0.32; cursor: pointer; transition: background 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease; }
+  .cg-cell:hover { opacity: 0.8; }
+  .cg-cell.dim { opacity: 0.1; }
+  .cg-cell.hit { background: var(--accent); opacity: 0.45; }
+  .cg-cell.read { background: var(--accent); opacity: 1; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 25%, transparent); }
+  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } .lgrid.cascade .pgcell { animation: none; opacity: 0.16; } }
 
-  section.upload { background: var(--bg); padding: 8px 22px 48px; }
-  section.upload .inner { max-width: 820px; margin: 0 auto; }
-  .dropzone {
-    display: block; width: 100%; position: relative;
-    border: 2px dashed var(--border-strong);
-    border-radius: var(--radius-xl);
-    background: var(--bg-elev);
-    padding: 56px 32px; text-align: center; cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    -webkit-tap-highlight-color: transparent;
-  }
-  .dropzone:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-  .dropzone.dragover { border-color: var(--accent); background: rgba(0, 113, 227, 0.04); }
-  @media (prefers-color-scheme: dark) { .dropzone.dragover { background: rgba(41, 151, 255, 0.06); } }
-  .dropzone input[type="file"] {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-  }
-  .dropzone-icon { display: block; width: 44px; height: 44px; margin: 0 auto 16px; color: var(--text-tertiary); transition: color 0.2s ease; }
-  .dropzone:hover .dropzone-icon { color: var(--accent); }
-  .dropzone-title { display: block; font-family: var(--font-display); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin: 0 0 6px; color: var(--text); }
-  .dropzone-hint { display: block; font-size: 14px; color: var(--text-tertiary); margin: 0; }
-  .or-divider {
-    display: flex; align-items: center; gap: 16px; margin: 22px 0;
-    color: var(--text-tertiary); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
-  }
-  .or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-  .url-row { display: flex; gap: 10px; }
-  .url-input {
-    flex: 1; padding: 14px 18px;
-    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: var(--bg-elev); color: var(--text);
-    font-family: var(--font-text); font-size: 15px;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .url-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); }
-
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 12px 22px; border: none; border-radius: var(--radius-md);
-    background: var(--accent); color: white;
-    font-family: var(--font-text); font-size: 15px; font-weight: 500;
-    cursor: pointer; transition: background 0.15s ease, transform 0.1s ease;
-    white-space: nowrap;
-  }
-  .btn:hover { background: var(--accent-hover); }
-  .btn:active { transform: scale(0.97); }
-  .btn-ghost { background: transparent; color: var(--text-secondary); padding: 8px 12px; font-size: 13px; }
-  .btn-ghost:hover { color: var(--text); background: var(--bg-subtle); }
-  .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 8px; }
-
-  .loader { text-align: center; padding: 36px 0; color: var(--text-secondary); }
-  .loader-spinner {
-    width: 28px; height: 28px;
-    border: 2px solid var(--border); border-top-color: var(--accent);
-    border-radius: 50%; animation: spin 0.7s linear infinite;
-    margin: 0 auto 14px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  section.workflow {
-    background: var(--bg);
-    padding: 48px 22px 56px;
-    animation: fadeUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  section.workflow .inner { max-width: 820px; margin: 0 auto; }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-  .step-json-toggle {
-    font-size: 12px; color: var(--accent); cursor: pointer;
-    background: none; border: none; padding: 8px 10px; border-radius: 6px;
-    font-family: var(--font-mono);
-  }
-  .step-json-toggle:hover { background: var(--bg-subtle); }
-  .callout {
-    display: flex; gap: 10px; padding: 12px 14px;
-    border-radius: var(--radius-sm);
-    background: rgba(255, 149, 0, 0.08);
-    border: 1px solid rgba(255, 149, 0, 0.2);
-    font-size: 13px; line-height: 1.5; margin-top: 14px; color: var(--text);
-  }
-  .callout svg { flex-shrink: 0; color: var(--warning); }
-  .callout code {
-    font-family: var(--font-mono); font-size: 12px;
-    background: rgba(255, 149, 0, 0.15); padding: 1px 5px; border-radius: 3px;
-  }
-  /* Blue "info" variant — demo limitation notices (vs. orange document warnings) */
-  .callout.info { background: rgba(0, 113, 227, 0.07); border-color: rgba(0, 113, 227, 0.22); }
-  .callout.info svg { color: var(--accent); }
-  .callout.info code { background: rgba(0, 113, 227, 0.13); }
-
-  .coverage-svg {
-    position: relative;
-    width: 100%;
-    padding: 4px 0 0;
-  }
-  .coverage-svg svg {
-    display: block;
-    width: 100%;
-    height: 90px;
-  }
-  .coverage-svg-tip {
-    position: absolute;
-    top: -8px;
-    transform: translate(-50%, -100%);
-    background: var(--text);
-    color: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 5px 9px;
-    border-radius: 6px;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    z-index: 10;
-  }
-  .coverage-svg-tip.show { opacity: 1; }
-  .coverage-svg-tip::after {
-    content: "";
-    position: absolute; top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 4px solid transparent;
-    border-top-color: var(--text);
-  }
-  .suggested-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; align-items: center; }
-  .chip {
-    display: inline-block; padding: 5px 12px; border-radius: 980px;
-    background: var(--bg-subtle); border: 1px solid var(--border);
-    color: var(--text-secondary); font-size: 12px; cursor: pointer;
-    transition: all 0.15s ease; font-family: var(--font-mono);
-  }
-  .chip:hover { background: var(--bg-elev); color: var(--text); border-color: var(--border-strong); }
-  .search-results { margin-top: 6px; }
-  .search-empty { text-align: center; padding: 24px; color: var(--text-tertiary); font-size: 13px; font-family: var(--font-mono); }
-  .match-head {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 6px; font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono);
-  }
-  .match-page { color: var(--accent); font-weight: 500; }
-  .match-excerpt { font-size: 13px; line-height: 1.55; color: var(--text); margin: 0; }
-  .match-excerpt mark { background: rgba(255, 204, 0, 0.3); color: inherit; padding: 0 2px; border-radius: 2px; }
-
-  .read-row { display: flex; gap: 10px; margin-bottom: 16px; align-items: flex-start; }
-  .read-input-wrap { flex: 1; }
-  .read-input {
-    width: 100%; padding: 11px 14px;
-    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: var(--bg-elev); color: var(--text);
-    font-family: var(--font-mono); font-size: 14px;
-  }
-  .read-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); }
-  .read-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; font-family: var(--font-mono); }
-
-  .page-result {
-    margin-bottom: 14px; padding: 16px 18px;
-    border-radius: var(--radius-sm); background: var(--bg-subtle); border: 1px solid var(--border);
-  }
-  .page-result-head {
-    display: flex; justify-content: space-between; align-items: baseline;
-    margin-bottom: 8px; gap: 12px; flex-wrap: wrap;
-  }
-  .page-result-label { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
-  .page-result-meta { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
-  .page-result-text {
-    font-size: 13px; line-height: 1.6; color: var(--text);
-    white-space: pre-wrap; word-wrap: break-word; margin: 0;
-    max-height: 180px; overflow-y: auto; padding-right: 4px;
-    font-family: var(--font-text);
-  }
-  .empty-fields {
-    display: flex; gap: 14px; margin-top: 10px; padding-top: 10px;
-    border-top: 1px dashed var(--border);
-    font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); flex-wrap: wrap;
-  }
-  .empty-fields code { color: var(--text-secondary); }
-
-  .askbar { display: flex; gap: 10px; margin: 26px 0 10px; }
-  .askbar input { flex: 1; padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-strong);
-                  background: var(--bg); color: var(--text); font-size: 15px; font-family: var(--font-text); }
-  .askbar input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0,113,227,0.15); }
-  .result-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; background: var(--bg);
-                 opacity: 0; transform: translateY(6px); transition: all 0.5s ease; cursor: pointer; margin-bottom: 8px; }
-  .result-card.on { opacity: 1; transform: none; }
-  .result-card.reading { border-color: var(--accent); }
-  .inline-reader { margin-top: 10px; border-left: 2px solid var(--accent); padding: 4px 0 4px 14px;
-                   font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
-                   max-height: 0; overflow: hidden; transition: max-height 0.6s ease; }
-  .inline-reader.open { max-height: 260px; overflow-y: auto; }
-  .inline-reader:empty { display: none; }
-  .inline-reader b { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
-  details.dev-row { margin-top: 16px; font-size: 12px; color: var(--text-tertiary); }
-  details.dev-row summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .result-card, .inline-reader, .ov-card, .warm-mini i { transition: none; } .doc-card.enter { animation: none; } .lgrid.cascade .pgcell { animation: none; opacity: 0.5; } }
-
-  .json-wrap { margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-  .json-wrap.open { max-height: 600px; }
-  .json-box {
-    background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 16px 18px;
-    font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
-    white-space: pre; overflow-x: auto;
-    max-height: 420px; overflow-y: auto;
-    margin: 0; color: var(--text);
-  }
-  .json-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
-  .receipt { text-align: center; padding: 60px 22px 30px; max-width: 820px; margin: 0 auto; }
-  .receipt h2 { font-family: var(--font-display); font-size: clamp(24px, 4vw, 38px); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
+  /* ── Receipt ──────────────────────────────────────────────── */
+  section.receipt { padding: 56px 24px 0; text-align: center; }
+  .receipt-inner { max-width: 820px; margin: 0 auto; }
+  .receipt h2 { font-family: var(--font-display); font-size: clamp(26px, 4vw, 40px); font-weight: 500; letter-spacing: -0.025em; margin: 0 0 10px; }
   .receipt h2 span { color: var(--accent); }
-  .receipt > p { color: var(--text-secondary); font-size: 16px; margin: 0 0 30px; }
-  .receipt-row { display: flex; gap: 26px; justify-content: center; font-family: var(--font-mono); font-size: 12px;
-                 color: var(--text-secondary); margin-bottom: 34px; flex-wrap: wrap; }
-  .receipt-row b { display: block; font-family: var(--font-display); font-size: 26px; color: var(--text);
-                   letter-spacing: -0.01em; margin-bottom: 2px; }
+  .receipt-inner > p { color: var(--text-secondary); font-size: 16px; margin: 0 0 28px; }
+  .receipt-row { display: flex; gap: 30px; justify-content: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-bottom: 28px; flex-wrap: wrap; }
+  .receipt-row b { display: block; font-family: var(--font-display); font-size: 24px; color: var(--text); letter-spacing: -0.01em; margin-bottom: 2px; }
 
-  .json-key { color: #9d5cff; }
-  @media (prefers-color-scheme: dark) { .json-key { color: #d4a5ff; } }
-  .json-string { color: #038a52; }
-  @media (prefers-color-scheme: dark) { .json-string { color: #3fd79d; } }
-  .json-number { color: #0066cc; }
-  @media (prefers-color-scheme: dark) { .json-number { color: #6cb6ff; } }
-  .json-bool { color: #c7254e; }
-  @media (prefers-color-scheme: dark) { .json-bool { color: #ff6b9d; } }
-  .json-null { color: var(--text-tertiary); font-style: italic; }
+  /* ── Section scaffolding ──────────────────────────────────── */
+  .section-title { font-family: var(--font-display); font-size: clamp(30px, 4.4vw, 56px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.08; text-align: center; margin: 0 0 16px; }
+  .section-title.md { font-size: clamp(26px, 3.4vw, 44px); letter-spacing: -0.025em; }
+  .section-sub { text-align: center; color: var(--text-secondary); font-size: 19px; margin: 0 auto 52px; max-width: 620px; }
 
-  /* Capability grid — surfaces the server-only features the client-side
-     demo can't show (OCR, hybrid semantic, caching, layout handling). */
-  section.features { background: var(--bg-section-tint); padding: 64px 22px; border-top: 1px solid var(--border); }
-  section.features .inner { max-width: 1040px; margin: 0 auto; text-align: center; }
-  .features-title { font-family: var(--font-display); font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 10px; }
-  .features-sub { color: var(--text-secondary); font-size: 16px; margin: 0 auto 44px; max-width: 540px; }
-  /* Flex-wrap (not grid) so any incomplete last row centers instead of
-     leaving a lone card orphaned against the left edge, in case the card
-     count stops being a multiple of 3. flex-basis reproduces 3/2/1 columns. */
-  .feature-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; text-align: left; }
-  .feature-card {
-    flex: 0 1 calc((100% - 36px) / 3);
-    background: var(--bg-elev); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 24px 22px;
-    box-shadow: var(--shadow-sm);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  }
-  @media (max-width: 720px) { .feature-card { flex-basis: calc((100% - 18px) / 2); } }
-  @media (max-width: 640px) { .feature-card { flex-basis: 100%; } }
-  .feature-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
-  @media (prefers-reduced-motion: reduce) { .feature-card { transition: none; } }
-  .feature-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; margin-bottom: 16px; border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
-  }
-  .feature-card h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; color: var(--text); }
-  .feature-card p { font-size: 14px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
-  .feature-card p code {
-    font-family: var(--font-mono); font-size: 12px;
-    background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text-secondary);
-  }
+  /* Skim, search, then read */
+  section.skim { padding: 120px 24px 0; }
+  section.skim .inner { max-width: 1120px; margin: 0 auto; }
+  .skim-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 40px; }
+  .skim-head h2 { font-family: var(--font-display); font-size: clamp(28px, 3.4vw, 44px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; margin: 0; }
+  .skim-head p { font-size: 18px; color: var(--text-secondary); margin: 12px 0 0; max-width: 560px; }
+  .skim-head .tool-tag { margin: 0; white-space: nowrap; font-size: 12px; }
+  .skim-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .skim-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .skim-card-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px; }
+  .skim-card-head b { color: var(--accent); font-weight: 400; }
+  .skim-card-head span { font-size: 12px; color: var(--text-tertiary); }
+  .skim-card h3 { font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .skim-card p { font-size: 15px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
+  .skim-card pre { margin: auto 0 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-secondary); background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; white-space: pre; overflow-x: auto; }
 
-  section.install { background: var(--bg); padding: 32px 22px 16px; text-align: center; }
-  section.install .inner { max-width: 820px; margin: 0 auto; }
-  .install-title { font-family: var(--font-display); font-size: 28px; font-weight: 500; letter-spacing: -0.015em; margin: 0 0 10px; }
-  .install-sub { color: var(--text-secondary); margin: 0 0 24px; font-size: 16px; }
-  .install-cmd {
-    display: flex; align-items: center; gap: 12px;
-    max-width: 420px; margin: 0 auto 20px;
-    padding: 14px 20px; background: var(--code-bg);
-    border: 1px solid var(--border); border-radius: var(--radius-md);
-    font-family: var(--font-mono); font-size: 15px;
-  }
-  .install-cmd-text { flex: 1; text-align: left; color: var(--text); white-space: nowrap; }
-  .install-cmd-text::before { content: "$ "; color: var(--text-tertiary); }
+  /* Capabilities */
+  section.caps { padding: 130px 24px 0; }
+  section.caps .inner { max-width: 1120px; margin: 0 auto; }
+  .caps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .cap-card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 26px; background: var(--bg-elev); display: flex; flex-direction: column; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+  .cap-card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .cap-icon { width: 22px; height: 22px; color: var(--text); margin-bottom: 14px; }
+  .cap-head { font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; margin: 0 0 8px; color: var(--text); }
+  .cap-desc { font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+  .cap-desc code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  @media (prefers-reduced-motion: reduce) { .cap-card { transition: none; } }
 
-  .other-tools { font-size: 13px; color: var(--text-tertiary); margin: 0 auto 28px; max-width: 540px; line-height: 1.6; }
-  .other-tools code {
-    font-family: var(--font-mono); font-size: 12px;
-    background: var(--bg-subtle); padding: 1px 6px; border-radius: 4px; color: var(--text-secondary);
-  }
+  /* Versus */
+  section.versus { padding: 130px 24px 0; }
+  section.versus .inner { max-width: 980px; margin: 0 auto; }
+  .versus-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.versus { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14.5px; }
+  table.versus th, table.versus td { text-align: left; padding: 17px 18px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.55; }
+  table.versus tr:last-child th, table.versus tr:last-child td { border-bottom: none; }
+  table.versus thead th { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--text-tertiary); border-bottom: 1px solid var(--border-strong); }
+  table.versus thead th:last-child { color: var(--text); }
+  table.versus tbody th { font-weight: 500; color: var(--text); width: 20%; }
+  table.versus td { color: var(--text-tertiary); width: 40%; }
+  table.versus td.ours { color: var(--text-secondary); }
+  table.versus code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
 
-  .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .link-btn {
-    padding: 10px 20px; border: 1px solid var(--border-strong);
-    border-radius: 980px; background: transparent; color: var(--text);
-    text-decoration: none; font-size: 14px; font-weight: 500;
-    transition: all 0.15s ease;
-  }
-  .link-btn:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+  /* Trust */
+  section.trust { padding: 130px 24px 0; }
+  section.trust .inner { max-width: 1120px; margin: 0 auto; }
+  .trust-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 42px 48px; }
+  .trust-head { font-family: var(--font-display); font-size: 16.5px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; color: var(--text); }
+  .trust-desc { font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+  .trust-desc code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
 
-  details.seo-content {
-    max-width: 680px;
-    margin: 16px auto 0;
-    padding: 0 22px;
+  /* Connect */
+  section.connect { padding: 130px 24px 0; }
+  section.connect .inner { max-width: 1160px; margin: 0 auto; text-align: center; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; text-align: left; }
+  .step { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 26px; display: flex; flex-direction: column; gap: 14px; background: var(--bg-elev); min-width: 0; }
+  .step-n { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
+  .step-label { font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: var(--text); }
+  .step p { font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+  .step p code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+  .codebox { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; cursor: pointer; }
+  .codebox pre { flex: 1; min-width: 0; margin: 0; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+  .codebox small { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab {
+    padding: 6px 13px; border-radius: 980px; border: 1px solid var(--border-strong); background: transparent;
+    color: var(--text-secondary); font-family: var(--font-text); font-size: 12.5px; cursor: pointer;
+    transition: all 0.15s ease; white-space: nowrap;
   }
-  details.seo-content > summary {
-    list-style: none;
-    cursor: pointer;
-    text-align: center;
-    font-size: 13px;
-    color: var(--text-tertiary);
-    padding: 8px 16px;
-    border-radius: 980px;
-    display: inline-block;
-    margin: 0 auto;
-    transition: color 0.15s ease, background 0.15s ease;
-    user-select: none;
-  }
+  .tab:hover { color: var(--text); background: var(--bg-subtle); }
+  .tab.active { background: var(--pill-bg); color: var(--pill-fg); border-color: var(--pill-bg); }
+  .prompt-bubble { background: var(--pill-bg); color: var(--pill-fg); border-radius: 14px 14px 4px 14px; padding: 12px 14px; font-size: 13px; line-height: 1.5; }
+
+  /* FAQ */
+  section.faq { padding: 130px 24px 0; }
+  section.faq .inner { max-width: 760px; margin: 0 auto; }
+  details.qa { border-bottom: 1px solid var(--border); }
+  details.qa > summary { list-style: none; cursor: pointer; padding: 19px 34px 19px 0; position: relative; font-family: var(--font-display); font-size: 17px; font-weight: 500; color: var(--text); user-select: none; }
+  details.qa > summary::-webkit-details-marker { display: none; }
+  details.qa > summary::after { content: "+"; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 19px; color: var(--text-tertiary); line-height: 1; }
+  details.qa[open] > summary::after { content: "\2212"; }
+  details.qa > summary:hover { color: var(--accent); }
+  details.qa p { margin: 0 0 18px; font-size: 15px; line-height: 1.6; color: var(--text-secondary); }
+  details.qa code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+
+  /* Closing band + footer */
+  section.closing { margin-top: 130px; padding: 96px 24px; background: var(--dark-bg); color: #ffffff; }
+  section.closing .inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 72px; align-items: center; }
+  .closing-copy { display: flex; flex-direction: column; gap: 16px; }
+  .closing-copy h2 { font-family: var(--font-display); font-size: clamp(30px, 4vw, 48px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.08; margin: 0; color: #ffffff; }
+  .closing-copy p { font-size: 18px; line-height: 1.5; color: var(--dark-text); margin: 0; max-width: 520px; }
+  .closing-links { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .closing-links a { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; border-radius: 980px; font-size: 15px; font-weight: 500; text-decoration: none; transition: opacity 0.15s ease; }
+  .closing-links a:hover { opacity: 0.85; }
+  .closing-links a.primary { background: #ffffff; color: #0f1420; }
+  .closing-links a.outline { border: 1px solid rgba(255,255,255,0.2); color: #ffffff; }
+  .closing-code { display: flex; flex-direction: column; gap: 12px; }
+  .closing-code .cmd { display: flex; align-items: center; justify-content: space-between; background: var(--dark-elev); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-md); padding: 16px 18px; font-family: var(--font-mono); font-size: 15px; color: #ffffff; cursor: pointer; }
+  .closing-code .cmd span { color: var(--dark-dim); }
+  .closing-code .cmd small { font-size: 12px; color: var(--dark-dim); }
+  .closing-code pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; color: var(--dark-text); background: var(--dark-deep); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-md); padding: 16px 18px; white-space: pre; overflow-x: auto; }
+  .other-tools { font-size: 13px; color: var(--dark-dim); margin: 0; line-height: 1.7; }
+  .other-tools code { font-family: var(--font-mono); font-size: 12px; color: var(--dark-text); }
+
+  details.seo-content { max-width: 680px; margin: 0 auto; padding: 28px 22px 0; }
+  details.seo-content > summary { list-style: none; cursor: pointer; text-align: center; font-size: 13px; color: var(--text-tertiary); padding: 8px 16px; border-radius: 980px; width: fit-content; margin: 0 auto; transition: color 0.15s ease, background 0.15s ease; user-select: none; }
   details.seo-content > summary::-webkit-details-marker { display: none; }
-  details.seo-content > summary::before {
-    content: "↓ ";
-    display: inline;
-    margin-right: 4px;
-    transition: transform 0.2s ease;
-  }
+  details.seo-content > summary::before { content: "↓ "; margin-right: 4px; }
   details.seo-content[open] > summary::before { content: "↑ "; }
   details.seo-content > summary:hover { color: var(--text-secondary); background: var(--bg-subtle); }
-  details.seo-content > summary {
-    width: fit-content;
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .seo-content-body {
-    padding-top: 32px;
-    color: var(--text-secondary);
-    font-size: 15px;
-    line-height: 1.65;
-  }
-  .seo-content-body h1 {
-    font-family: var(--font-display);
-    font-size: 22px;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    color: var(--text);
-    margin: 0 0 14px;
-  }
-  .seo-content-body h2 {
-    font-family: var(--font-display);
-    font-size: 17px;
-    font-weight: 500;
-    letter-spacing: -0.005em;
-    color: var(--text);
-    margin: 32px 0 10px;
-  }
+  .seo-content-body { padding-top: 32px; color: var(--text-secondary); font-size: 15px; line-height: 1.65; }
+  .seo-content-body h1 { font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); margin: 0 0 14px; }
+  .seo-content-body h2 { font-family: var(--font-display); font-size: 17px; font-weight: 500; letter-spacing: -0.005em; color: var(--text); margin: 32px 0 10px; }
   .seo-content-body p { margin: 0 0 14px; }
-  .seo-content-body .seo-lede {
-    font-size: 16px;
-    margin-bottom: 20px;
-  }
-  .seo-content-body code {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    background: var(--bg-subtle);
-    padding: 1px 6px;
-    border-radius: 4px;
-    color: var(--text);
-  }
-  .seo-content-body a {
-    color: var(--accent);
-    text-decoration: none;
-  }
+  .seo-content-body .seo-lede { font-size: 16px; margin-bottom: 20px; }
+  .seo-content-body code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-subtle); padding: 1px 6px; border-radius: 4px; color: var(--text); }
+  .seo-content-body a { color: var(--accent); text-decoration: none; }
   .seo-content-body a:hover { text-decoration: underline; }
-  @media (max-width: 640px) {
-    details.seo-content { padding: 24px 20px 12px; }
-    .seo-content-body { font-size: 14px; }
-    .seo-content-body h1 { font-size: 20px; }
-    .seo-content-body h2 { font-size: 16px; margin-top: 28px; }
-  }
 
-  footer { border-top: 1px solid var(--border); padding: 24px 22px; text-align: center; font-size: 12px; color: var(--text-tertiary); }
+  footer { border-top: 1px solid var(--border); background: var(--bg); padding: 26px 24px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+  footer p { margin: 0; }
   footer a { color: var(--text-secondary); text-decoration: none; }
   footer a:hover { color: var(--text); }
 
   .toast {
-    position: fixed; bottom: 32px; left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    padding: 12px 22px; background: var(--text); color: var(--bg);
-    border-radius: 980px; font-size: 14px; font-weight: 500;
-    box-shadow: var(--shadow-lg); opacity: 0;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none; z-index: 200;
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px);
+    padding: 12px 22px; background: var(--pill-bg); color: var(--pill-fg);
+    border-radius: 980px; font-size: 14px; font-weight: 500; box-shadow: var(--shadow-lg); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 200;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  .hidden { display: none !important; }
-
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 960px) {
+    .stage-grid { grid-template-columns: 1fr; }
+    .doc-card { border-right: none; border-bottom: 1px solid var(--border); }
+    .skim-grid, .caps-grid, .trust-grid, .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    section.closing .inner { grid-template-columns: 1fr; gap: 40px; }
+  }
   @media (max-width: 640px) {
     nav.top .inner { padding: 0 16px; }
-    nav.top ul { gap: 18px; }
+    nav.top ul { gap: 14px; }
     nav.top ul a { font-size: 12px; }
-    section.hero { padding: 44px 20px 28px; }
-    .hero-title { font-size: 40px; line-height: 1.08; }
+    nav.top ul li.hide-sm { display: none; }
+    .ledger { display: none; }
+    section.hero { padding: 56px 20px 20px; }
+    .hero-title { font-size: 38px; line-height: 1.08; }
     p.hero-sub { font-size: 17px; }
-    section.upload { padding: 0 16px 24px; }
-    .dropzone { padding: 44px 20px; }
-    .url-row { flex-direction: column; }
-    .btn:not(.btn-icon) { width: 100%; }
-    section.workflow { padding: 8px 16px 40px; }
-    .doc-card { padding: 22px 20px; }
-    .step-json-toggle { padding: 6px 8px; font-size: 11px; }
+    .install-pill { font-size: 13px; padding: 12px 18px; gap: 8px; max-width: 100%; }
+    .clients { gap: 10px 22px; font-size: 14px; }
+    section.stage { padding: 20px 12px 40px; }
+    section.upload { padding: 24px 18px; }
+    .dropzone { padding: 36px 16px; }
+    .url-row { flex-direction: column; align-items: stretch; }
+    .url-or { display: none; }
+    .upload-ctas .btn { width: 100%; }
+    .doc-card { padding: 18px 16px; }
     .askbar, .read-row { flex-direction: column; }
-    section.features { padding: 48px 20px; }
-    section.install { padding: 36px 20px 24px; }
-    .install-title { font-size: 24px; }
-    .json-box { font-size: 11px; padding: 12px 14px; }
+    .askbar .btn, .read-row .btn { width: 100%; }
+    .cg-name { flex-basis: 110px; }
+    .skim-grid, .caps-grid, .trust-grid, .steps { grid-template-columns: 1fr; }
+    .skim-head { flex-direction: column; align-items: flex-start; }
+    section.skim, section.caps, section.versus, section.trust, section.connect, section.faq { padding-top: 80px; }
+    section.closing { margin-top: 80px; padding: 64px 20px; }
+    .json-box { font-size: 11px; }
   }
 </style>
 </head>
@@ -715,337 +670,546 @@
 
 <nav class="top">
   <div class="inner">
-    <a href="https://github.com/jztan/pdf-mcp" class="brand">pdf-mcp<span>/demo</span></a>
-    <div class="ledger hidden" id="ledger">agent context used&nbsp;<b id="ledgerVal">0</b>&nbsp;/&nbsp;<span id="ledgerMax"></span> tokens</div>
+    <div class="brand-wrap">
+      <a href="https://github.com/jztan/pdf-mcp" class="brand">pdf-mcp<span>/demo</span></a>
+      <div class="ledger hidden" id="ledger">context used <b id="ledgerVal">0</b> / <span id="ledgerMax"></span> tokens</div>
+    </div>
     <ul>
+      <li class="hide-sm"><a href="#security">Security</a></li>
+      <li class="hide-sm"><a href="#connect">Install</a></li>
       <li><a href="https://github.com/jztan/pdf-mcp">GitHub</a></li>
-      <li><a href="https://pypi.org/project/pdf-mcp/">PyPI</a></li>
-      <li><a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=nav">Blog</a></li>
+      <li class="hide-sm"><a href="https://pypi.org/project/pdf-mcp/">PyPI</a></li>
+      <li class="hide-sm"><a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=nav">Blog</a></li>
+      <li><a href="#connect" class="nav-cta">Get started</a></li>
     </ul>
   </div>
 </nav>
 
+<div class="atmosphere">
 <section class="hero">
   <div class="inner">
-    <p class="hero-title">Your agent doesn’t need<br />the whole document.</p>
-    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents the tools to skim, search, and read only the pages that matter, from one PDF or a whole folder of them.</p>
-    <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
-    <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
+    <h1 class="hero-title">Your agent doesn&#8217;t need the whole document. It needs the right pages.</h1>
+    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents 13 tools to skim, search, and read PDFs the way a person does: structure first, then the pages that matter. One file or a whole folder.</p>
     <div class="hero-ctas">
-      <button class="btn" id="ctaOwn">Try it on your PDF</button>
-      <button class="btn btn-outline" id="ctaCorpus">Search a folder, 6-PDF sample corpus</button>
-      <button class="btn btn-ghost" id="ctaSample">Use the sample — a 216-page contract</button>
+      <div class="install-pill">
+        <span class="dollar">$</span><span class="install-cmd-text" id="installCmd">pip install pdf-mcp</span>
+        <button id="installCopyBtn" data-copy-install aria-label="Copy install command" title="Copy">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <button class="btn-ghost-pill" id="ctaOwn">Try it on your PDF</button>
+      <a class="btn-ghost-pill" href="https://github.com/jztan/pdf-mcp">View on GitHub</a>
     </div>
-    <div class="hero-privacy">
-      <div class="privacy-pill">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        100% client-side. Your PDFs never leave this tab.
+
+    <div class="hero-field">
+      <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
+      <div class="hero-stat-row">
+        <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
       </div>
     </div>
+
+    <p class="clients-label">Works with any MCP client</p>
+    <div class="clients">
+      <span>Claude Code</span><span>Claude Desktop</span><span>VS Code</span><span>Cursor</span><span>Codex CLI</span><span>Kiro</span>
+    </div>
   </div>
 </section>
 
-<section class="upload" id="uploadSection">
+<section class="stage" id="demo">
   <div class="inner">
-    <label class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple />
-      <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="12" y1="18" x2="12" y2="12"/>
-        <polyline points="9 15 12 12 15 15"/>
-      </svg>
-      <span class="dropzone-title">Drop a PDF, or a handful of them</span>
-      <span class="dropzone-hint">1 file opens the document, 2+ files open the corpus view. Never leaves your browser.</span>
-    </label>
-    <div class="or-divider">or</div>
-    <div class="url-row">
-      <input type="url" class="url-input" id="urlInput" placeholder="Paste a PDF URL..." />
-      <button class="btn" id="urlBtn">Fetch</button>
-    </div>
-  </div>
-</section>
+    <div class="stage-card">
 
-<section id="loaderSection" class="hidden">
-  <div class="loader">
-    <div class="loader-spinner"></div>
-    <div id="loaderText">Loading PDF...</div>
-  </div>
-</section>
-
-<section class="workflow hidden" id="workflow">
-  <div class="inner">
-  <p class="act-label">your document</p>
-  <div class="doc-card" id="docCard">
-    <div class="doc-head">
-      <div class="doc-name" id="docName"></div>
-      <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
-    </div>
-    <div id="scriptWarning"></div>
-    <div class="lgrid" id="liveGrid"></div>
-    <div class="coverage-svg hidden" id="coverageSvg"></div>
-    <div class="grid-legend">
-      <span><i style="background:var(--text-tertiary)"></i>text page</span>
-      <span><i style="background:var(--warning)"></i>scanned — OCR available server-side</span>
-      <span><i style="background:var(--accent)"></i>match</span>
-      <span class="tool-tag">pdf_info · <button class="step-json-toggle" data-target="json1" style="padding:0">{ JSON }</button></span>
-    </div>
-    <div class="askbar">
-      <input type="text" id="searchInput" placeholder="Ask this document for something…" />
-      <button class="btn" id="searchBtn">Search</button>
-    </div>
-    <div class="suggested-chips" id="suggestedChips"></div>
-    <div class="search-results" id="searchResults"></div>
-    <div class="callout" id="kwCallout" style="display:none">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span><strong>Keyword mode</strong> shown here. The installed server also runs a semantic arm (on by default in v2) and fuses both with RRF. Images, tables, and hidden-text detection are server-side only (PyMuPDF), so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
-    </div>
-    <div class="scoreboard" id="scoreboardBlock">
-      <div class="sb-head"><span class="sb-title">what your agent has cost so far</span><span class="sb-pct" id="sbPct">0%</span></div>
-      <div class="sb-row agent"><span id="sbAgentLabel">your agent</span><b><span id="sbVal">0</span> tokens</b></div>
-      <div class="sb-bar"><i id="sbBarFill"></i></div>
-      <div class="sb-row"><span id="sbMaxLabel">pasting the whole document</span><b id="sbMax"></b></div>
-    </div>
-    <details class="dev-row">
-      <summary>For developers: read arbitrary pages · raw JSON</summary>
-      <div class="read-row" style="margin-top:12px">
-        <div class="read-input-wrap">
-          <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
-          <div class="read-hint">Ranges and lists supported · max 50 pages in this demo · <span class="tool-tag" style="margin-left:0">pdf_read_pages</span> <button class="step-json-toggle" data-target="json3" style="padding:0">{ JSON }</button> · <span class="tool-tag" style="margin-left:0">pdf_search</span> <button class="step-json-toggle" data-target="json2" style="padding:0">{ JSON }</button></div>
+      <section class="upload" id="uploadSection">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple />
+          <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <polyline points="9 15 12 12 15 15"/>
+          </svg>
+          <span class="dropzone-title">Drop a PDF, or a handful of them</span>
+          <span class="dropzone-hint">1 file opens the document, 2+ files open the folder view. Never leaves your browser.</span>
+        </label>
+        <div class="url-row">
+          <span class="url-or">or</span>
+          <input type="url" class="url-input" id="urlInput" placeholder="Paste a PDF URL..." />
+          <button class="btn" id="urlBtn">Fetch</button>
         </div>
-        <button class="btn" id="readBtn">Read</button>
-      </div>
-      <div class="search-results" id="readResults"></div>
-      <div class="json-wrap" id="json2"><pre class="json-box" id="json2-content"></pre>
-        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div></div>
-      <div class="json-wrap" id="json3"><pre class="json-box" id="json3-content"></pre>
-        <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div></div>
-    </details>
-    <div id="infoCallouts"></div>
-    <div class="json-wrap" id="json1">
-      <pre class="json-box" id="json1-content"></pre>
-      <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="1">Copy</button></div>
-    </div>
-  </div>
+        <div class="upload-ctas">
+          <button class="btn btn-accent" id="ctaSample">Use the sample, a 216-page contract</button>
+          <button class="btn btn-outline" id="ctaCorpus">Search a folder, 6-PDF sample corpus</button>
+        </div>
+        <div class="hero-privacy">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          100% client-side. Your PDFs never leave this tab.
+        </div>
+      </section>
 
-  <div style="text-align:center; margin-top: 24px;">
-    <button class="btn btn-ghost" id="resetBtn">↺ Try another PDF</button>
-  </div>
+      <section id="loaderSection" class="hidden">
+        <div class="loader">
+          <div class="loader-spinner"></div>
+          <div id="loaderText">Loading PDF...</div>
+        </div>
+      </section>
+
+      <section class="workflow hidden" id="workflow">
+        <div class="stage-head">
+          <p class="act-label">your document</p>
+          <button class="btn-ghost" id="resetBtn">&#8635; Try another PDF</button>
+        </div>
+        <div class="stage-grid">
+          <div class="doc-card" id="docCard">
+            <div class="doc-head">
+              <div class="doc-name" id="docName"></div>
+              <div class="doc-cost">pasted whole: <b id="docCost"></b></div>
+            </div>
+            <div id="scriptWarning"></div>
+            <div class="lgrid" id="liveGrid"></div>
+            <div class="coverage-svg hidden" id="coverageSvg"></div>
+            <div class="grid-legend">
+              <span><i style="background:var(--accent)"></i>match</span>
+              <span><i style="background:var(--text-tertiary)"></i>text page</span>
+              <span><i style="background:var(--warning)"></i>scanned, OCR runs server-side</span>
+              <span class="tool-tag">pdf_info · <button class="step-json-toggle" data-target="json1">{ JSON }</button></span>
+            </div>
+            <div class="askbar">
+              <input type="text" id="searchInput" placeholder="Ask this document for something…" />
+              <button class="btn" id="searchBtn">Search</button>
+            </div>
+            <div class="suggested-chips" id="suggestedChips"></div>
+            <div class="search-results" id="searchResults"></div>
+            <div class="callout info" id="kwCallout" style="display:none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span><strong>Keyword mode</strong> shown here. The installed server also runs a semantic arm (on by default) and fuses both with RRF. Images, tables, and hidden-text detection are server-side only, so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
+            </div>
+            <div class="scoreboard" id="scoreboardBlock">
+              <div class="sb-head"><span class="sb-title">what your agent has cost so far</span><span class="sb-pct" id="sbPct">0%</span></div>
+              <div class="sb-row agent"><span id="sbAgentLabel">your agent</span><b><span id="sbVal">0</span> tokens</b></div>
+              <div class="sb-bar"><i id="sbBarFill"></i></div>
+              <div class="sb-row"><span id="sbMaxLabel">pasting the whole document</span><b id="sbMax"></b></div>
+            </div>
+            <details class="dev-row">
+              <summary>Or read pages directly</summary>
+              <div class="read-row" style="margin-top:12px">
+                <div class="read-input-wrap">
+                  <input type="text" class="read-input" id="readInput" placeholder='e.g. "1-3" or "1,3,5"' />
+                  <div class="read-hint">Ranges and lists supported · max 50 pages in this demo · <span class="tool-tag" style="margin-left:0">pdf_read_pages</span> <button class="step-json-toggle" data-target="json3">{ JSON }</button></div>
+                </div>
+                <button class="btn" id="readBtn">Read</button>
+              </div>
+              <div class="search-results" id="readResults"></div>
+            </details>
+            <div id="infoCallouts"></div>
+          </div>
+
+          <aside class="agent-panel" aria-label="Tool call JSON">
+            <div class="agent-head">What your agent would see <span>field-for-field JSON</span></div>
+            <div class="agent-body">
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <b>pdf_info</b><small>structure, coverage, token cost</small>
+                </div>
+                <button class="step-json-toggle" data-target="json1">[show JSON]</button>
+                <div class="json-wrap" id="json1">
+                  <pre class="json-box" id="json1-content"></pre>
+                  <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="1">Copy</button></div>
+                </div>
+              </div>
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <b>pdf_search</b><small>ranked matches with excerpts</small>
+                </div>
+                <button class="step-json-toggle" data-target="json2">[show JSON]</button>
+                <div class="json-wrap" id="json2">
+                  <pre class="json-box" id="json2-content"></pre>
+                  <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="2">Copy</button></div>
+                </div>
+              </div>
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                  <b>pdf_read_pages</b><small>full text of the pages you read</small>
+                </div>
+                <button class="step-json-toggle" data-target="json3">[show JSON]</button>
+                <div class="json-wrap" id="json3">
+                  <pre class="json-box" id="json3-content"></pre>
+                  <div class="json-actions"><button class="btn btn-ghost btn-sm" data-copy="3">Copy</button></div>
+                </div>
+              </div>
+              <p class="agent-empty">Search or read a page and the JSON the server would hand your agent appears here.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workflow hidden" id="corpusWorkflow">
+        <div class="stage-head">
+          <p class="act-label">your folder</p>
+          <button class="btn-ghost" id="corpusResetBtn">&#8635; Try another PDF</button>
+        </div>
+        <div class="stage-grid">
+          <div class="doc-card" id="corpusCard">
+            <div class="doc-head">
+              <div class="doc-name" id="corpusName"></div>
+              <div class="doc-cost">pasted whole: <b id="corpusCost"></b></div>
+            </div>
+            <div class="tool-tag" style="margin:0 0 4px">pdf_corpus_warm · <button class="step-json-toggle" data-target="cjson1">{ JSON }</button></div>
+            <div id="corpusWarmPanel"></div>
+            <div class="hidden" id="corpusOverviewTag" style="margin-top:14px"><span class="tool-tag" style="margin-left:0">pdf_corpus_overview · <button class="step-json-toggle" data-target="cjson2">{ JSON }</button></span></div>
+            <div id="corpusOverviewPanel" class="hidden"></div>
+            <div id="corpusSearchPanel" class="hidden">
+              <div class="askbar">
+                <input type="text" id="corpusSearchInput" placeholder="Ask these documents for something…" />
+                <button class="btn" id="corpusSearchBtn">Search</button>
+              </div>
+              <div class="suggested-chips" id="corpusChips"></div>
+              <div class="grid-legend" style="margin:0 0 8px">
+                <span><i style="background:var(--accent)"></i>match, click to read</span>
+                <span><i style="background:var(--text-tertiary)"></i>warmed into cache</span>
+                <span class="tool-tag">pdf_corpus_search · <button class="step-json-toggle" data-target="cjson3">{ JSON }</button></span>
+              </div>
+              <div id="corpusGrids"></div>
+              <div class="inline-reader" id="corpusAdHocReader"></div>
+              <div class="search-results" id="corpusResults"></div>
+              <div class="callout info" id="corpusCallout" style="display:none"></div>
+            </div>
+          </div>
+
+          <aside class="agent-panel" aria-label="Tool call JSON">
+            <div class="agent-head">What your agent would see <span>field-for-field JSON</span></div>
+            <div class="agent-body">
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <b>pdf_corpus_warm</b><small>extract every PDF into the cache</small>
+                </div>
+                <button class="step-json-toggle" data-target="cjson1">[show JSON]</button>
+                <div class="json-wrap" id="cjson1"><pre class="json-box" id="cjson1-content"></pre></div>
+              </div>
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                  <b>pdf_corpus_overview</b><small>one triage card per document</small>
+                </div>
+                <button class="step-json-toggle" data-target="cjson2">[show JSON]</button>
+                <div class="json-wrap hidden" id="cjson2"><pre class="json-box" id="cjson2-content"></pre></div>
+              </div>
+              <div class="agent-call">
+                <div class="agent-call-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <b>pdf_corpus_search</b><small>one ranked list across every document</small>
+                </div>
+                <button class="step-json-toggle" data-target="cjson3">[show JSON]</button>
+                <div class="json-wrap hidden" id="cjson3"><pre class="json-box" id="cjson3-content"></pre></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+    </div>
+    <p class="stage-note">Six of pdf-mcp&#8217;s tools run here in your browser with PDF.js. The JSON each returns matches the real server field for field, including the <code>content_warning</code> that marks extracted text as untrusted. Nothing leaves this tab.</p>
   </div>
 </section>
-
-<section class="workflow hidden" id="corpusWorkflow">
-  <div class="inner">
-  <p class="act-label">your corpus</p>
-  <div class="doc-card" id="corpusCard">
-    <div class="doc-head">
-      <div class="doc-name" id="corpusName"></div>
-      <div class="doc-cost">pasted whole: <b id="corpusCost"></b></div>
-    </div>
-    <div style="margin-top:10px"><span class="tool-tag">pdf_corpus_warm · <button class="step-json-toggle" data-target="cjson1" style="padding:0">{ JSON }</button></span></div>
-    <div id="corpusWarmPanel"></div>
-    <div class="json-wrap" id="cjson1"><pre class="json-box" id="cjson1-content"></pre></div>
-    <div class="hidden" id="corpusOverviewTag" style="margin-top:14px"><span class="tool-tag">pdf_corpus_overview · <button class="step-json-toggle" data-target="cjson2" style="padding:0">{ JSON }</button></span></div>
-    <div id="corpusOverviewPanel" class="hidden"></div>
-    <div class="json-wrap hidden" id="cjson2"><pre class="json-box" id="cjson2-content"></pre></div>
-    <div id="corpusSearchPanel" class="hidden">
-      <div class="askbar">
-        <input type="text" id="corpusSearchInput" placeholder="Ask these documents for something…" />
-        <button class="btn" id="corpusSearchBtn">Search</button>
-      </div>
-      <div class="suggested-chips" id="corpusChips"></div>
-      <div style="margin-bottom:10px"><span class="tool-tag" style="margin-left:0">pdf_corpus_search · <button class="step-json-toggle" data-target="cjson3" style="padding:0">{ JSON }</button></span></div>
-      <div id="corpusGrids"></div>
-      <div class="inline-reader" id="corpusAdHocReader"></div>
-      <div class="search-results" id="corpusResults"></div>
-      <div class="callout info" id="corpusCallout" style="display:none"></div>
-      <div class="json-wrap hidden" id="cjson3"><pre class="json-box" id="cjson3-content"></pre></div>
-    </div>
-    <button class="btn btn-ghost" id="corpusResetBtn">↺ Try another PDF</button>
-  </div>
-  </div>
-</section>
+</div>
 
 <section class="receipt hidden" id="receipt">
-  <p class="act-label">what just happened</p>
-  <h2 id="receiptHead"></h2>
-  <p>That&#x2019;s the whole point. An agent with pdf-mcp finds the answer &#x2014; it doesn&#x2019;t eat the document.</p>
-  <div class="receipt-row">
-    <span><b id="rTotal"></b>tokens, pasted whole</span>
-    <span><b id="rUsed"></b>tokens, with pdf-mcp</span>
-    <span><b id="rRatio"></b>of what pasting the whole document would cost</span>
+  <div class="receipt-inner">
+    <p class="act-label" style="margin-bottom:14px">what just happened</p>
+    <h2 id="receiptHead"></h2>
+    <p>That is the whole point. An agent with pdf-mcp finds the answer. It does not eat the document.</p>
+    <div class="receipt-row">
+      <span><b id="rTotal"></b>tokens, pasted whole</span>
+      <span><b id="rUsed"></b>tokens, with pdf-mcp</span>
+      <span><b id="rRatio"></b>of what pasting it whole would cost</span>
+    </div>
+    <button class="btn btn-outline" id="copyLinkBtn">Copy a link to this demo</button>
   </div>
-  <button class="btn btn-ghost" id="copyLinkBtn" style="border:1px solid var(--border-strong);border-radius:980px;">Copy a link to this demo</button>
 </section>
 
-<section class="features">
+<section class="skim">
   <div class="inner">
-    <h2 class="features-title">Far more than the demo shows.</h2>
-    <p class="features-sub">The demo runs 6 tools client-side. The installed server does all of this.</p>
-    <div class="feature-grid">
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </span>
-        <h3>Hybrid search, any language</h3>
-        <p>Keyword and semantic ranking fused with reciprocal rank fusion, matching by wording or meaning, in any language including Japanese, Chinese, and Korean.</p>
+    <div class="skim-head">
+      <div>
+        <h2>Skim, search, then read.</h2>
+        <p>Three calls replace one paste of the whole file. That is the whole idea, and it is what you just did in the demo above.</p>
       </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-        </span>
-        <h3>Tables &amp; images</h3>
-        <p>Tables and embedded images come back as structured data, not flattened text soup.</p>
+      <span class="tool-tag">cost shown for the 216-page sample contract</span>
+    </div>
+    <div class="skim-grid">
+      <div class="skim-card">
+        <div class="skim-card-head"><b>1 · pdf_info</b><span>~140 tokens</span></div>
+        <h3>Learn the shape</h3>
+        <p>Page count, table of contents, text coverage, and an estimated token cost before the agent commits to reading anything.</p>
+        <pre>page_count: 216
+estimated_tokens: 172800
+ocr_candidate_pages: [41, 42, 43, 131]</pre>
       </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-        </span>
-        <h3>OCR for scanned pages</h3>
-        <p>Tesseract reads image-only PDFs, parallelized across pages for ~2–3× faster extraction.</p>
+      <div class="skim-card">
+        <div class="skim-card-head"><b>2 · pdf_search</b><span>~520 tokens</span></div>
+        <h3>Find the pages</h3>
+        <p>Hybrid keyword and semantic ranking returns the paragraph that matched, with page and bounding box. Often enough to answer outright.</p>
+        <pre>matches: p.3, p.90, p.7
+search_mode: hybrid
+low_confidence: false</pre>
       </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        </span>
-        <h3>Render for vision models</h3>
-        <p>Turn any page into a PNG so a vision model can read diagrams, handwriting, or scans directly.</p>
+      <div class="skim-card">
+        <div class="skim-card-head"><b>3 · pdf_read_pages</b><span>~1,740 tokens</span></div>
+        <h3>Read only those</h3>
+        <p>Full text, tables, and images for the two pages that matter. The other 214 stay on disk.</p>
+        <pre>pages: "3,7"
+from_cache: true
+estimated_tokens: 1740</pre>
       </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg>
-        </span>
-        <h3>Bounding-box evidence</h3>
-        <p>Search hits, tables, and images carry bbox coordinates that drop straight into <code>pdf_render_pages</code>.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg>
-        </span>
-        <h3>Multi-column &amp; vertical layouts</h3>
-        <p>Column-aware reading order keeps two-column papers and vertical Japanese (tategaki) text in sequence.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </span>
-        <h3>Hidden-text detection</h3>
-        <p>Invisible text (white-on-white, off-page, hidden render mode) is flagged so your agent treats it as untrusted.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        </span>
-        <h3>Persistent SQLite cache</h3>
-        <p>Extractions survive server restarts, keyed on file path and modification time.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 8l-5 5-3-3-4 4"/></svg>
-        </span>
-        <h3>Chart data extraction</h3>
-        <p>Reads exact <code>(x, y)</code> tables from a vector chart's drawing geometry, not estimated. Unclear charts return a rendered image instead of a guess.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        </span>
-        <h3>Whole-folder triage</h3>
-        <p>Warms a whole folder into the cache on a time budget and returns a triage card per document: title, pages, TOC, text coverage.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-        </span>
-        <h3>Cross-document search</h3>
-        <p>One query across a folder of PDFs, fused into a single ranked hit list with document and page provenance on every hit.</p>
-      </div>
-
-      <div class="feature-card">
-        <span class="feature-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </span>
-        <h3>Fetch PDFs by URL</h3>
-        <p>Downloads remote PDFs over HTTPS with SSRF protection built in; private and local network ranges are blocked.</p>
-      </div>
-
     </div>
   </div>
 </section>
 
-<section class="install">
+<section class="caps">
   <div class="inner">
-  <h2 class="install-title">Wire it into your agent.</h2>
-  <p class="install-sub">One command. Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro.</p>
-  <div class="install-cmd">
-    <span class="install-cmd-text" id="installCmd">pip install pdf-mcp</span>
-    <button class="btn btn-ghost btn-icon" id="installCopyBtn" aria-label="Copy install command">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    </button>
+    <h2 class="section-title">Far more than search.</h2>
+    <p class="section-sub">The demo shows one workflow. The same 13 tools cover the rest of what agents do with PDFs.</p>
+    <div class="caps-grid">
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <h3 class="cap-head">Hybrid search, <b>any language</b></h3>
+        <p class="cap-desc">Keyword and semantic ranking fused with reciprocal rank fusion. Japanese, Chinese, and Korean get their own character-level index. <code>pdf_search</code></p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <h3 class="cap-head">Search a <b>whole folder</b> at once</h3>
+        <p class="cap-desc">Warm a directory on a time budget, get a triage card per document, then one ranked hit list across all of them with document and page on every hit. <code>pdf_corpus_search</code></p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        <h3 class="cap-head"><b>Tables</b> as rows, not soup</h3>
+        <p class="cap-desc">Structured rows with a per-table reliability flag; datasheet cells packed under a ruled header are split back into columns. <code>pdf_read_pages</code></p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 8l-5 5-3-3-4 4"/></svg>
+        <h3 class="cap-head">Read the <b>chart data</b>, not the pixels</h3>
+        <p class="cap-desc">Exact (x, y) series from a vector chart&#8217;s drawing geometry, calibrated against its tick labels. An ambiguous chart returns a render instead of a guess. <code>pdf_extract_chart</code></p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <h3 class="cap-head"><b>OCR</b> for scanned pages</h3>
+        <p class="cap-desc">Image-only pages go through Tesseract, parallelized across pages, in the language you ask for. <code>pdf_info</code> tells the agent which pages need it first.</p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <h3 class="cap-head"><b>Render</b> a page for a vision model</h3>
+        <p class="cap-desc">Any page as a PNG at the DPI you choose, and any search hit or table carries a bounding box that drops straight into the render call. <code>pdf_render_pages</code></p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18"/></svg>
+        <h3 class="cap-head"><b>Reading order</b> that holds</h3>
+        <p class="cap-desc">With the <code>[multicolumn]</code> extra, two-column papers stay in sequence instead of interleaving; vertical Japanese text reads as written. Text comes back as plain text, in order.</p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <h3 class="cap-head">A cache that <b>survives restarts</b></h3>
+        <p class="cap-desc">Every extraction, embedding, and render lands in a local SQLite file keyed on path and modification time. The second question about a document is free.</p>
+      </div>
+      <div class="cap-card">
+        <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <h3 class="cap-head">Fetch <b>by URL</b></h3>
+        <p class="cap-desc">Hand any tool an HTTPS URL and the PDF is downloaded, validated by magic bytes, and cached. Private and local network ranges are blocked.</p>
+      </div>
+    </div>
   </div>
-  <p class="other-tools">
-    The demo shows 6 of pdf-mcp's 13 tools. The server also includes
-    <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>,
-    <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>,
-    <code>pdf_cache_clear</code>, and
-    <code>server_info</code>, plus OCR, SQLite caching, and RRF hybrid search.
+</section>
+
+<section class="versus">
+  <div class="inner">
+    <h2 class="section-title md">Why not just paste the PDF into the chat?</h2>
+    <p class="section-sub" style="font-size:18px;margin-bottom:48px">Most clients will take the file. What happens next is the part that goes wrong.</p>
+    <div class="versus-wrap">
+      <table class="versus">
+        <thead>
+          <tr><th></th><th>Pasting the PDF</th><th>pdf-mcp</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Context cost</th>
+            <td>The whole document lands in the window. A 216-page contract is 172,800 tokens before the first question.</td>
+            <td class="ours">The agent reads structure first, searches, then reads pages. Two pages of the sample contract cost about 2,400 tokens.</td>
+          </tr>
+          <tr>
+            <th>Size limits</th>
+            <td>Claude Code refuses PDFs over about 100 pages or 30 MB. Other clients silently truncate.</td>
+            <td class="ours">No page limit. Every response is bounded: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
+          </tr>
+          <tr>
+            <th>Layout</th>
+            <td>Two-column papers interleave, tables flatten into word soup, and a scanned page is a blank.</td>
+            <td class="ours">Column-aware reading order (with the <code>[multicolumn]</code> extra), tables as rows, OCR for image-only pages, and a render when the model needs to look.</td>
+          </tr>
+          <tr>
+            <th>Untrusted text</th>
+            <td>A PDF&#8217;s text, including white-on-white instructions, arrives as prose indistinguishable from yours.</td>
+            <td class="ours">Hidden text is detected and flagged, and every response carries a <code>content_warning</code> so the model reads extracted text as data.</td>
+          </tr>
+          <tr>
+            <th>Many documents</th>
+            <td>One file at a time, re-uploaded every conversation.</td>
+            <td class="ours">Point it at a folder. One query returns a ranked list across every PDF, and the cache persists between sessions.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="trust" id="security">
+  <div class="inner">
+    <h2 class="section-title">Your PDFs stay yours.</h2>
+    <p class="section-sub">A server that reads your contracts and filings needs boundaries, not good intentions. Every one of these is in the server today.</p>
+    <div class="trust-grid">
+      <div><h3 class="trust-head">Runs on your machine</h3><p class="trust-desc">STDIO transport, spawned by your MCP client. No hosted service, no telemetry, no vendor in the middle. MIT licensed, source on GitHub.</p></div>
+      <div><h3 class="trust-head">Paths and URLs you allow</h3><p class="trust-desc">An optional <code>config.toml</code> holds allow and deny rules for local paths and remote hosts. A malformed config aborts startup rather than falling open.</p></div>
+      <div><h3 class="trust-head">Extracted text is marked untrusted</h3><p class="trust-desc">Every response carries a <code>content_warning</code>, and <code>pdf_info</code> can scan for hidden text (white-on-white, zero opacity, off-page) so a document cannot smuggle instructions into your agent.</p></div>
+      <div><h3 class="trust-head">SSRF-checked URL fetches</h3><p class="trust-desc">Remote PDFs download over HTTPS only. Private, loopback, and link-local ranges are refused, and the file is validated as a PDF before anything reads it.</p></div>
+      <div><h3 class="trust-head">Bounded responses</h3><p class="trust-desc">Search results, section lists, and per-page arrays are capped or opt-in, so a 3,000-page document cannot flood the context window in one call.</p></div>
+      <div><h3 class="trust-head">Errors are data, not crashes</h3><p class="trust-desc">A missing file, blocked URL, or bad page range comes back as an inline <code>error</code> field the agent can read and recover from, instead of a dead server.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="connect" id="connect">
+  <div class="inner">
+    <h2 class="section-title">Connected in about a minute.</h2>
+    <p class="section-sub" style="margin-bottom:48px">Install it, register it with your agent, ask about a PDF.</p>
+    <div class="steps">
+      <div class="step">
+        <span class="step-n">01</span>
+        <h3 class="step-label">Install from PyPI.</h3>
+        <div class="codebox" data-copy-install role="button" tabindex="0"><pre>pip install pdf-mcp</pre><small>copy</small></div>
+        <p>Python 3.10+. Add <code>pdf-mcp[ocr]</code> for scanned pages (needs Tesseract) and <code>[multicolumn]</code> for column-aware reading order.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">02</span>
+        <h3 class="step-label">Register it with your agent.</h3>
+        <div class="tabs" id="clientTabs">
+          <button class="tab active" data-client="claude-code">Claude Code</button>
+          <button class="tab" data-client="claude-desktop">Claude Desktop</button>
+          <button class="tab" data-client="vscode">VS Code</button>
+          <button class="tab" data-client="codex">Codex CLI</button>
+          <button class="tab" data-client="other">Cursor, Kiro, others</button>
+        </div>
+        <div class="codebox" id="clientCodeBox" role="button" tabindex="0"><pre id="clientCode">claude mcp add pdf-mcp -- pdf-mcp</pre><small>copy</small></div>
+        <p id="clientNote">Or add the same server block to <code>~/.claude.json</code> by hand.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">03</span>
+        <h3 class="step-label">Ask about a PDF.</h3>
+        <div class="prompt-bubble">What does the MSA in ~/contracts say about termination, and how much notice do we owe?</div>
+        <p>The agent calls <code>pdf_info</code>, then <code>pdf_search</code>, then reads the pages it needs. Point it at a folder and it uses the corpus tools instead.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq">
+  <div class="inner">
+    <h2 class="section-title md" style="margin-bottom:34px">Questions people ask first.</h2>
+    <details class="qa" open>
+      <summary>How is this different from the PDF support built into my client?</summary>
+      <p>Built-in support pastes the whole file into context and hits a size ceiling (Claude Code stops at about 100 pages or 30 MB). pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages it needs, with no page limit and a persistent cache.</p>
+    </details>
+    <details class="qa">
+      <summary>Does my document leave my machine?</summary>
+      <p>Not through this server. It runs locally over STDIO and talks only to your MCP client. There is no hosted service and no telemetry. What your client then sends to its model provider is between you and that client, the same as for any tool it runs.</p>
+    </details>
+    <details class="qa">
+      <summary>What about scanned PDFs and non-English documents?</summary>
+      <p><code>pdf_info</code> reports which pages have no text layer. With the <code>[ocr]</code> extra and Tesseract installed, <code>pdf_read_pages</code> OCRs those pages in the language you specify. Search works in any language; Japanese, Chinese, and Korean use a dedicated character-level index.</p>
+    </details>
+    <details class="qa">
+      <summary>Is semantic search a separate service?</summary>
+      <p>No. Embeddings run locally on CPU with fastembed (<code>BAAI/bge-small-en-v1.5</code> by default, configurable). The first search on a document embeds its pages once and caches them; later searches reuse the cache.</p>
+    </details>
+    <details class="qa">
+      <summary>Which AI clients does it work with?</summary>
+      <p>Any client that speaks MCP. Claude Code, Claude Desktop, VS Code with Copilot, Codex CLI, and Kiro have step-by-step setup in the docs, and Cursor and others use the standard <code>mcpServers</code> block.</p>
+    </details>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="inner">
+    <div class="closing-copy">
+      <h2>Give your agent the right pages.</h2>
+      <p>Open source, MIT licensed, one command to install. Works with Claude Code, Claude Desktop, Cursor, VS Code, Codex CLI, Kiro, and any MCP client.</p>
+      <p class="other-tools">The demo shows 6 of 13 tools. The server also has <code>pdf_get_toc</code>, <code>pdf_read_all</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code>.</p>
+      <div class="closing-links">
+        <a class="primary" href="https://github.com/jztan/pdf-mcp#readme">Read the docs</a>
+        <a class="outline" href="https://github.com/jztan/pdf-mcp">GitHub</a>
+        <a class="outline" href="https://pypi.org/project/pdf-mcp/">PyPI</a>
+        <a class="outline" href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=install-cta">Blog</a>
+      </div>
+    </div>
+    <div class="closing-code">
+      <div class="cmd" data-copy-install role="button" tabindex="0"><div><span>$ </span>pip install pdf-mcp</div><small>copy</small></div>
+      <pre>claude mcp add pdf-mcp -- pdf-mcp</pre>
+    </div>
+  </div>
+</section>
+
+<details class="seo-content">
+  <summary>About pdf-mcp</summary>
+  <div class="seo-content-body">
+  <h1>pdf-mcp: PDF extraction for AI agents</h1>
+  <p class="seo-lede">
+    pdf-mcp is an open-source MCP (Model Context Protocol) server that lets AI agents read, search, and analyze PDF files without loading the whole document into context. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
   </p>
-  <div class="links">
-    <a class="link-btn" href="https://github.com/jztan/pdf-mcp">GitHub</a>
-    <a class="link-btn" href="https://pypi.org/project/pdf-mcp/">PyPI</a>
-    <a class="link-btn" href="https://github.com/jztan/pdf-mcp#readme">Docs</a>
-    <a class="link-btn" href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=install-cta">Blog</a>
+  <h2>What pdf-mcp solves</h2>
+  <p>
+    Large PDFs break most AI coding assistants. Claude Code, for example, refuses PDFs over roughly 30&nbsp;MB or 100 pages because loading the entire document into context exhausts the token budget. Dumping 100 pages into a model's context is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
+  </p>
+  <h2>How agents use pdf-mcp</h2>
+  <p>
+    The server exposes thirteen tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata: page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs hybrid semantic + BM25 search by default (keyword-only and semantic-only modes are one argument away) and returns structural paragraph excerpts, the bullet, paragraph, or heading that matched rather than a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other ten tools (<code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>, <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code>) cover full-document reads, visual inspection of scanned pages, chart-data extraction, whole-folder triage and cross-document search, cache management, and discovery of which optional features are installed.
+  </p>
+  <h2>What the browser demo shows</h2>
+  <p>
+    This page is a faithful in-browser simulation of six of pdf-mcp's tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js: no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
+  </p>
+  <h2>Install</h2>
+  <p>
+    pdf-mcp is MIT-licensed and published on PyPI. Install with <code>pip install pdf-mcp</code>, then add it to your MCP client's config. Full instructions for Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro, and generic MCP clients are in the <a href="https://github.com/jztan/pdf-mcp#readme">README</a>. The source code is on <a href="https://github.com/jztan/pdf-mcp">GitHub</a>, and the Python package is on <a href="https://pypi.org/project/pdf-mcp/">PyPI</a>. For a detailed write-up of the design decisions, see the <a href="https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=seo-body">blog post on how it was built</a>.
+  </p>
   </div>
-
-  <details class="seo-content">
-    <summary>About pdf-mcp</summary>
-    <div class="seo-content-body">
-    <h1>pdf-mcp: PDF extraction for AI agents</h1>
-    <p class="seo-lede">
-      pdf-mcp is an open-source MCP (Model Context Protocol) server that lets AI agents read, search, and analyze PDF files without loading the whole document into context. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
-    </p>
-
-    <h2>What pdf-mcp solves</h2>
-    <p>
-      Large PDFs break most AI coding assistants. Claude Code, for example, refuses PDFs over roughly 30&nbsp;MB or 100 pages because loading the entire document into context exhausts the token budget. Dumping 100 pages into a model's context is also wasteful — the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
-    </p>
-
-    <h2>How agents use pdf-mcp</h2>
-    <p>
-      The server exposes thirteen tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata — page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs hybrid semantic + BM25 search by default (keyword-only and semantic-only modes are one argument away) and returns structural paragraph excerpts — the bullet, paragraph, or heading that matched, not a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other ten tools — <code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>, <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code> — cover full-document reads, visual inspection of scanned pages, chart-data extraction, whole-folder triage and cross-document search, cache management, and discovery of which optional features are installed.
-    </p>
-
-    <h2>What the browser demo shows</h2>
-    <p>
-      This page is a faithful in-browser simulation of six of pdf-mcp's tools, presented as a single live document view. The JSON returned by each tool matches the real server's response shape field-for-field, so developers can see exactly what the server would wire into their agent. Everything runs client-side using PDF.js — no backend, no uploads, no data leaving the tab. Features the browser cannot replicate honestly (SQLite caching, Tesseract OCR for scanned PDFs, hybrid semantic search, image extraction, structured table parsing) are stubbed with empty fields and clearly labeled as server-only. The point of the demo is to show the agent workflow, not to be a hosted PDF service.
-    </p>
-
-    <h2>Install</h2>
-    <p>
-      pdf-mcp is MIT-licensed and published on PyPI. Install with <code>pip install pdf-mcp</code>, then add it to your MCP client's config. Full instructions for Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro, and generic MCP clients are in the <a href="https://github.com/jztan/pdf-mcp#readme">README</a>. The source code is on <a href="https://github.com/jztan/pdf-mcp">GitHub</a>, and the Python package is on <a href="https://pypi.org/project/pdf-mcp/">PyPI</a>. For a detailed write-up of the design decisions, see the <a href="https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=seo-body">blog post on how it was built</a>.
-    </p>
-    </div>
-  </details>
-  </div>
-</section>
+</details>
 
 <footer>
-  <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a></p>
-  <p style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;text-decoration:none;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v2.0.0</p>
+  <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a> · sibling of <a href="https://redmine-mcp-server.jztan.com">redmine-mcp-server</a></p>
+  <p style="margin-top:4px;font-size:11px"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v3.0.0</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>
+
+<script>
+  // Client tabs in the connect step (static content, no module dependency).
+  (function () {
+    const CLIENTS = {
+      "claude-code": { code: "claude mcp add pdf-mcp -- pdf-mcp", note: "Or add the same server block to <code>~/.claude.json</code> by hand." },
+      "claude-desktop": { code: "{\n  \"mcpServers\": {\n    \"pdf-mcp\": { \"command\": \"pdf-mcp\" }\n  }\n}", note: "In <code>claude_desktop_config.json</code>, then restart Claude Desktop." },
+      "vscode": { code: "code --add-mcp '{\"name\":\"pdf-mcp\",\"command\":\"pdf-mcp\"}'", note: "VS Code 1.101+ with GitHub Copilot. Or add a <code>servers</code> block to <code>.vscode/mcp.json</code>." },
+      "codex": { code: "codex mcp add pdf-mcp -- pdf-mcp", note: "Or in <code>~/.codex/config.toml</code>: <code>[mcp_servers.pdf-mcp] command = \"pdf-mcp\"</code>." },
+      "other": { code: "{\n  \"mcpServers\": {\n    \"pdf-mcp\": { \"command\": \"pdf-mcp\" }\n  }\n}", note: "The standard <code>mcpServers</code> block works for most clients; Kiro reads it from <code>.kiro/settings/mcp.json</code>." }
+    };
+    const tabs = document.querySelectorAll("#clientTabs .tab");
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.classList.toggle("active", x === t));
+      const c = CLIENTS[t.dataset.client];
+      document.getElementById("clientCode").textContent = c.code;
+      document.getElementById("clientNote").innerHTML = c.note;
+    }));
+  })();
+</script>
 
 <script type="module">
   import * as pdfjs from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.mjs";
@@ -2428,7 +2592,16 @@
   }
 
   document.querySelectorAll(".step-json-toggle").forEach(btn => {
-    btn.addEventListener("click", () => { $(btn.dataset.target).classList.toggle("open"); });
+    btn.addEventListener("click", () => {
+      const wrap = $(btn.dataset.target);
+      wrap.classList.remove("hidden");
+      const open = wrap.classList.toggle("open");
+      // Bracketed labels live in the agent panel and flip with the state;
+      // the in-card "{ JSON }" tags stay as they are.
+      document.querySelectorAll(`.step-json-toggle[data-target="${btn.dataset.target}"]`).forEach(b => {
+        if (b.textContent.trim().startsWith("[")) b.textContent = open ? "[hide JSON]" : "[show JSON]";
+      });
+    });
   });
 
   document.querySelectorAll("[data-copy]").forEach(btn => {
@@ -2479,10 +2652,15 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  $("installCopyBtn").addEventListener("click", () => {
+  document.querySelectorAll("[data-copy-install]").forEach(el => onActivate(el, () => {
     navigator.clipboard.writeText($("installCmd").textContent);
     showToast("Copied");
     track("install_copy");
+  }));
+  onActivate($("clientCodeBox"), () => {
+    navigator.clipboard.writeText($("clientCode").textContent);
+    showToast("Copied");
+    track("install_copy", { client: document.querySelector("#clientTabs .tab.active")?.dataset.client });
   });
 
   $("copyLinkBtn").addEventListener("click", () => {

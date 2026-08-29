@@ -1,8 +1,14 @@
 # Bedrock KB anchor benchmark: runbook
 
-Compares pdf-mcp corpus search (arm P) against Amazon Bedrock Knowledge Bases
-(arms B0 and B1) on the existing 100-document `corpus_search` benchmark, scored by
-evidence-span containment at an equal token budget, reported per query class.
+Compares pdf-mcp corpus search against Amazon Bedrock Knowledge Bases on the
+existing 100-document `corpus_search` benchmark, scored by evidence-span
+containment at an equal token budget, reported per query class.
+
+Four arms: `P` (pdf-mcp, `excerpt_style="paragraph"`, the tool default),
+`P-snippet` (identical retrieval, `excerpt_style="snippet"`), `B0` (Bedrock
+default parser and chunking), `B1` (Bedrock fixed-1000 chunks plus Cohere
+Rerank 3.5). `P` is the reference arm; every other arm is compared against
+it with a paired bootstrap CI.
 
 **Bedrock is an anchor, not a subject.** Every pdf-mcp number so far is pdf-mcp
 compared to itself; this gives those numbers an outside reference point. Any
@@ -47,7 +53,7 @@ aws sts get-caller-identity        # confirm the right account
 aws configure get region           # must be us-east-1
 ```
 
-Run the tests to confirm the tree is sound (76 tests, no AWS, no spend):
+Run the tests to confirm the tree is sound (82 tests, no AWS, no spend):
 
 ```bash
 uv run pytest tests/test_benchmark_bedrock_kb.py tests/test_bedrock_kb_infra.py \
@@ -63,7 +69,7 @@ benchmark CLI, not `deploy`/`upload`/`ingest` again:
 uv run python scripts/benchmark_bedrock_kb.py
 ```
 
-This runs arm P live, retrieves from both Bedrock arms, and overwrites
+This runs both local arms live, retrieves from both Bedrock arms, and overwrites
 `results.json` and `RESULTS.md` in this directory (never `ANALYSIS.md`,
 which is hand-written; see its top-of-file note). The drift guard in
 `main()` refuses to run if either stack's config tag or ingest stamp no
@@ -103,6 +109,19 @@ manifest count, 0 failed): a silently skipped document would exist in arm
 P but not in this index, and the gap would read as a retrieval failure
 rather than an ingest failure. If it refuses, read `failureReasons` from
 its printed output.
+
+## Result
+
+| class | P-para | P-snip | B0 | B1 | verdict |
+|---|---|---|---|---|---|
+| described | 0.120 | 0.000 | 0.360 | 0.400 | Bedrock ahead, CI excludes zero |
+| needle | 0.429 | 0.643 | 0.714 | 0.714 | tie, every CI includes zero |
+| spread | 0.640 | 0.880 | 0.600 | 0.680 | snippet beats paragraph, CI excludes zero |
+| trap | 0.520 | 0.560 | 0.840 | 0.880 | Bedrock ahead, CI excludes zero |
+
+Span recall, all 89 queries. See [ANALYSIS.md](ANALYSIS.md) for what these
+mean, what does not survive the noise, and why span recall is not a retrieval
+verdict.
 
 ## Cost
 

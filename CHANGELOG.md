@@ -30,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keyword recall 1.000; corpus search doc-NDCG 0.845 vs 0.840; financial
   10-K fidelity 95/100 with 0 document misses and one question improved;
   coherence (LLM-judged) 20/20 pages at baseline verdicts. Reading order
-  on two-column documents is 0.798 vs 0.806, within the benchmark's
-  noise; one-column improved to 0.856 vs 0.826.
+  on two-column documents is 0.795 vs 0.815, within the benchmark's
+  noise; one-column improved to 0.857 vs 0.836.
 
 - Column-aware reading order is now built in and no longer needs the
   `[multicolumn]` extra, which removes `pymupdf4llm` and its transitive
@@ -41,8 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still works and is now a no-op, so existing instructions keep working.
 
   Reading-order quality is close to, but not yet at, the previous path.
-  Against READoc ground truth over 44 arXiv documents: two-column 0.806
-  versus 0.815, one-column 0.826 versus 0.836. The mean cost is about 0.01
+  Against READoc ground truth over 44 arXiv documents: two-column 0.795
+  versus 0.815, one-column 0.857 versus 0.836. The two-column cost is about 0.02
   and it is not evenly spread: several documents improve substantially
   (up to +0.17) while a few regress, currently because some single-column
   pages are split in error.

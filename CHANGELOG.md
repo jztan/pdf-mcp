@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first search, so existing caches need no re-warm.
 - **`pdf_corpus_overview` cards carry `about`**: up to eight of the
   document's most distinctive terms relative to the corpus.
+- **`warm_complete` and `unwarmed` on every corpus tool**
+  (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`).
+  `warm_complete` is true only when every file in the corpus is verified
+  present in the cache, and `unwarmed` counts the files that are not.
+  This is the field to loop on when warming a corpus across several
+  calls: an empty `unprocessed` answers only "did the budget run out",
+  never "is the corpus ready".
 
 ### Changed
 
@@ -46,6 +53,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes on load (to api.github.com); PDFs still never leave the tab.
 
 ### Fixed
+
+- **`pdf_corpus_warm` could report a complete warm while documents were
+  missing from the cache.** Each document's reported status said which
+  code path had run, never what had actually been written, so a warm
+  whose write did not become visible was invisible to the caller too. A
+  500-document corpus came back with `unprocessed: []` while 21
+  documents held no cache entry, and a benchmark run against that corpus
+  produced uniformly wrong numbers with no sign anything was amiss.
+  Every row is now re-read from the cache before the response is built
+  (about 0.9ms per document, against seconds per document to warm one).
+  A document that will not read back is reported in `skipped` with the
+  reason `warmed but not readable back from cache`; one that was cached
+  when the call started but was invalidated during it moves to
+  `unprocessed` for retry. A `docs` row now means the cache holds that
+  document.
 
 - Closing a document could raise `RuntimeError: Set changed size during
   iteration` from inside pypdfium2 when Python's cyclic garbage collector

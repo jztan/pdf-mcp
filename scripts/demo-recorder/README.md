@@ -24,7 +24,9 @@ npm run record                    # writes ../../docs/images/demo.gif
 ```
 
 The script serves `pages/` itself (no separate server needed) and tears it down
-when finished.
+when finished. It loads the page once to warm web fonts and pdf.js, reloads, and
+trims the recording to the moment `document.fonts.ready` resolves, so the GIF
+opens on a settled page instead of a font swap.
 
 ## Pipeline
 

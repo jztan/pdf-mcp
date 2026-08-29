@@ -70,8 +70,17 @@ const context = await browser.newContext({
   recordVideo: { dir: videoDir, size: { width: CW, height: CH } },
 });
 const page = await context.newPage();
+const videoStart = Date.now();
+// Warm the caches (web fonts, pdf.js) on a throwaway load, then reload so the
+// take begins on a fully settled page. Video capture runs from page creation,
+// so record when the settled page is ready and trim the webm there.
+await page.goto(URL, { waitUntil: "networkidle" });
+await page.evaluate(() => document.fonts.ready);
 await page.goto(URL, { waitUntil: "load" });
-mark("loaded");
+await page.evaluate(() => document.fonts.ready);
+await page.waitForTimeout(120);
+const trimMs = Date.now() - videoStart;
+mark(`loaded (trimming first ${(trimMs / 1000).toFixed(2)}s)`);
 
 // Pan the viewport to an element with an eased animation (instead of an instant
 // jump or the browser's quick native smooth-scroll) so section-to-section
@@ -171,7 +180,7 @@ mark(`video: ${webm}`);
 // ── Encode: palette-quantized GIF, then lossy LZW optimization ──────────────
 const rawGif = join(videoDir, "raw.gif");
 const vf = `fps=${FPS},scale=${OUT_W}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=diff:max_colors=${MAXCOLORS}[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`;
-execFileSync("ffmpeg", ["-y", "-i", webm, "-vf", vf, "-loop", "0", rawGif], { stdio: "inherit" });
+execFileSync("ffmpeg", ["-y", "-ss", (trimMs / 1000).toFixed(3), "-i", webm, "-vf", vf, "-loop", "0", rawGif], { stdio: "inherit" });
 execFileSync(gifsicle, ["-O3", `--lossy=${LOSSY}`, rawGif, "-o", OUT], { stdio: "inherit" });
 mark(`gif: ${OUT} (${(statSync(OUT).size / 1e6).toFixed(2)} MB)`);
 console.log("done");

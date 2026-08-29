@@ -42,7 +42,6 @@ _Nothing queued._
 
 ### P1: high-value, well-scoped
 
-- [ ] **Fix the silent partial warm**: `pdf_corpus_warm` once reported `unprocessed: []` with 21 of 500 documents unwarmed; must be closed before any cap raise
 - [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985, 3 s/query); 1,000 waits on the 900-distractor rung
 - [ ] **`pdf_corpus_warm`: commit embeddings in page batches**, so a giant document can finish inside a client timeout
 - [ ] **Teach keyword-mode query shape in the tool descriptions**, since AND-joined terms silently return nothing

@@ -4367,6 +4367,8 @@ CORPUS_ENVELOPE_KEYS = {
     "corpus_size",
     "warmed_this_call",
     "budget_exhausted",
+    "warm_complete",
+    "unwarmed",
 }
 
 
@@ -4399,15 +4401,49 @@ class TestPdfCorpusOverview:
     def test_envelope_parity_with_warm(self, corpus_dir, isolated_server):
         warm = pdf_corpus_warm(str(corpus_dir))
         overview = pdf_corpus_overview(str(corpus_dir))
+        search = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
         assert CORPUS_ENVELOPE_KEYS <= set(warm.keys())
         assert CORPUS_ENVELOPE_KEYS <= set(overview.keys())
+        # search returns `matches`, not `docs`; the rest of the envelope
+        # is shared.
+        assert (CORPUS_ENVELOPE_KEYS - {"docs"}) <= set(search.keys())
+
+    def test_completeness_is_reported_by_every_corpus_tool(
+        self, corpus_dir, isolated_server
+    ):
+        """A file the corpus could not deliver keeps every corpus tool's
+        `warm_complete` false. Search matters most: its ranking is
+        computed over whatever is warm, so a silent hole reads as a
+        clean, wrong result rather than as an error."""
+        (corpus_dir / "corrupt.pdf").write_bytes(b"not a real pdf")
+        for result in (
+            pdf_corpus_warm(str(corpus_dir)),
+            pdf_corpus_overview(str(corpus_dir)),
+            pdf_corpus_search(str(corpus_dir), "budget", mode="keyword"),
+        ):
+            assert result["warm_complete"] is False
+            assert result["unwarmed"] == 1
+
+        (corpus_dir / "corrupt.pdf").unlink()
+        for result in (
+            pdf_corpus_warm(str(corpus_dir)),
+            pdf_corpus_overview(str(corpus_dir)),
+            pdf_corpus_search(str(corpus_dir), "budget", mode="keyword"),
+        ):
+            assert result["warm_complete"] is True
+            assert result["unwarmed"] == 0
 
     def test_metadata_invalidated_during_call_is_skipped_not_raised(
         self, corpus_dir, isolated_server
     ):
         """cache.get_metadata(path) can return None if the file's mtime
         changes between warm_docs validating it and the card build. The
-        tool must route that doc to `skipped` instead of crashing."""
+        tool must route that doc to `skipped` instead of crashing.
+
+        warm_docs' own verification pass now catches this first (it
+        re-reads every row it is about to report), so the reason comes
+        from there; the card loop keeps its own guard for the narrower
+        window between that check and the card build."""
         test_cache, _ = isolated_server
         pdf_corpus_overview(str(corpus_dir))
 
@@ -4425,10 +4461,16 @@ class TestPdfCorpusOverview:
 
         assert "error" not in result
         skipped_paths = {s["path"]: s["reason"] for s in result["skipped"]}
-        assert skipped_paths[target_path] == "cache invalidated during call"
+        assert skipped_paths[target_path] in (
+            "warmed but not readable back from cache",
+            "cache invalidated during call",
+        )
         card_paths = [c["path"] for c in result["docs"]]
         assert target_path not in card_paths
         assert len(result["docs"]) == 2
+        # And the caller is told the corpus is not fully warm.
+        assert result["warm_complete"] is False
+        assert result["unwarmed"] == 1
 
     def test_cards_carry_about(self, corpus_dir, isolated_server, monkeypatch):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)

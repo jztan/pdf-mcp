@@ -1046,3 +1046,92 @@ class TestWarmDocumentIsAtomic:
         assert (
             cache.get_page_text(str(pdf), 0) is None
         ), "page text was committed even though the document failed partway"
+
+
+class TestWarmReportIsVerified:
+    """A warm report is checked against the cache before it is returned.
+
+    Every doc row's status used to be a claim about which code path ran,
+    never about what landed in SQLite, so any write that did not become
+    visible was invisible to the caller too. A 500-doc field warm
+    returned `unprocessed: []` with 21 documents (6 of them gold) holding
+    no `pdf_metadata` row, and the benchmark built on that cache read
+    doc-NDCG 0.929 on every arm before anyone noticed. `warm_complete`
+    is the signal a resume loop should read; an empty `unprocessed` is
+    not proof the corpus is warm.
+    """
+
+    def test_complete_warm_reports_complete(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
+        assert out["warm_complete"] is True
+        assert out["unwarmed"] == 0
+
+    def test_budget_exhaustion_is_an_incomplete_warm(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
+        assert out["budget_exhausted"] is True
+        assert out["warm_complete"] is False
+        assert out["unwarmed"] == 2
+
+    def test_a_corrupt_doc_is_an_incomplete_warm(self, corpus_dir, cache):
+        (corpus_dir / "corrupt.pdf").write_bytes(b"not a real pdf")
+        out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))
+        assert out["warm_complete"] is False
+        assert out["unwarmed"] == 1
+
+    def test_a_warm_that_did_not_persist_is_not_reported_as_warmed(
+        self, corpus_dir, cache
+    ):
+        """The defect itself: the write path returns success but the row
+        is not readable back. The doc must leave `docs`, land in
+        `skipped` with a distinct reason, and flip `warm_complete`."""
+        files = _files(corpus_dir)
+        victim = [f for f in files if f.endswith("bravo.pdf")][0]
+        real_save = cache.save_metadata
+
+        def drop_bravo(path, *args, **kwargs):
+            if path == victim:
+                return  # silently writes nothing, exactly like the field case
+            return real_save(path, *args, **kwargs)
+
+        cache.save_metadata = drop_bravo
+        try:
+            out = corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        finally:
+            cache.save_metadata = real_save
+
+        assert out["warm_complete"] is False
+        assert out["unwarmed"] == 1
+        assert victim not in [d["path"] for d in out["docs"]]
+        assert [s["path"] for s in out["skipped"]] == [victim]
+        assert "not readable back" in out["skipped"][0]["reason"]
+        # The other two are unaffected and still reported warmed.
+        assert out["warmed_this_call"] == 2
+
+    def test_a_doc_invalidated_mid_call_is_offered_for_retry(self, corpus_dir, cache):
+        """A doc the pre-scan read as cached, but whose cache entry is
+        gone by the time the report is built, is retryable: it belongs
+        in `unprocessed`, not in `skipped`."""
+        files = _files(corpus_dir)
+        corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        victim = [f for f in files if f.endswith("alpha.pdf")][0]
+
+        real_cached_pages = corpus._cached_pages
+        seen: dict[str, int] = {}
+
+        def stale_on_recheck(path, *args, **kwargs):
+            seen[path] = seen.get(path, 0) + 1
+            if path == victim and seen[path] > 1:
+                return None  # invalidated between pre-scan and report
+            return real_cached_pages(path, *args, **kwargs)
+
+        corpus._cached_pages = stale_on_recheck
+        try:
+            out = corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        finally:
+            corpus._cached_pages = real_cached_pages
+
+        assert out["warm_complete"] is False
+        assert out["unwarmed"] == 1
+        assert out["unprocessed"] == [victim]
+        assert victim not in [d["path"] for d in out["docs"]]
+        assert out["skipped"] == []

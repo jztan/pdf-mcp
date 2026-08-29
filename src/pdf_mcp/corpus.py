@@ -602,6 +602,11 @@ def warm_docs(
     list is sorted by path so successive envelopes (first warm vs
     resume) diff cleanly.
 
+    Every reported row is re-read from the cache before the envelope is
+    returned, and ``warm_complete``/``unwarmed`` report that verified
+    state. A ``docs`` row therefore means the cache holds the document,
+    not merely that a write was attempted.
+
     Each doc row carries ``embeddings_cached``: actual embeddings cache
     state for ``model_name`` (not an echo of the ``embeddings`` request
     flag), so a text-only call still answers whether an embeddings pass
@@ -681,12 +686,50 @@ def warm_docs(
             _emb_cached,
         )
 
+    # Verification pass. Every row above is a claim about which branch
+    # ran, not about what landed in SQLite, so a write that never became
+    # visible was invisible to the caller too: a 500-doc field warm
+    # returned `unprocessed: []` while 21 documents held no metadata row,
+    # and the benchmark built on that cache read a uniform doc-NDCG 0.929
+    # on every arm before anyone checked. Re-reading cache state here is
+    # the only way the envelope can be trusted. Measured at ~0.9ms per
+    # doc (88ms per 100, 490ms per 500), which about doubles an
+    # all-cached resume call and is noise against any call that actually
+    # warms something. A doc that fails the re-read is routed by what it
+    # claimed: a doc just *warmed* whose row will not read back has a
+    # real problem that a retry under the same conditions repeats, so it
+    # is reported skipped and the loop is allowed to end; a doc the
+    # pre-scan read as *cached* was invalidated mid-call (file touched,
+    # TTL sweep) and is genuinely retryable, so it joins `unprocessed`.
+    verified: list[dict[str, Any]] = []
+    for row in docs:
+        row_path = str(row["path"])
+        if _cached_pages(row_path, cache, embeddings, model_name) is not None:
+            verified.append(row)
+            continue
+        if row["status"] == "warmed":
+            warmed -= 1
+            skipped.append(
+                {
+                    "path": row_path,
+                    "reason": "warmed but not readable back from cache",
+                }
+            )
+        else:
+            unprocessed.append(row_path)
+
+    unwarmed = len(unprocessed) + len(skipped)
     return {
-        "docs": sorted(docs, key=lambda d: str(d["path"])),
+        "docs": sorted(verified, key=lambda d: str(d["path"])),
         "unprocessed": unprocessed,
         "skipped": skipped,
         "warmed_this_call": warmed,
         "budget_exhausted": budget_exhausted,
+        # Authoritative "is this corpus usable now" signal, read from the
+        # cache rather than inferred. `unprocessed` alone answers only
+        # "did the budget run out".
+        "warm_complete": unwarmed == 0,
+        "unwarmed": unwarmed,
     }
 
 

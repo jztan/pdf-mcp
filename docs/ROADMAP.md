@@ -9,7 +9,7 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 - **MCP Registry:** published (v3.0.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release
-- **Tests:** 1687, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
+- **Tests:** 1761, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
 
 ---
 
@@ -42,6 +42,8 @@ _Nothing queued._
 
 ### P1: high-value, well-scoped
 
+- [ ] **Fix the silent partial warm**: `pdf_corpus_warm` once reported `unprocessed: []` with 21 of 500 documents unwarmed; must be closed before any cap raise
+- [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985, 3 s/query); 1,000 waits on the 900-distractor rung
 - [ ] **`pdf_corpus_warm`: commit embeddings in page batches**, so a giant document can finish inside a client timeout
 - [ ] **Teach keyword-mode query shape in the tool descriptions**, since AND-joined terms silently return nothing
 - [ ] **Calibrate the semantic confidence threshold**; 0.5 is a guess and gibberish scores 0.54

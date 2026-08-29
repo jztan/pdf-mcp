@@ -406,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
     queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))
     classes = class_names(queries)
     subset_ids = nonlatin_ids(manifest)
-    id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
+    id_by_path = {str((REPO / d["path"]).resolve()): d["id"] for d in manifest["docs"]}
 
     if args.validate:
         import pymupdf

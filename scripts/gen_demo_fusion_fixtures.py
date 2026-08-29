@@ -24,6 +24,16 @@ from pdf_mcp.server import _corpus_query_terms  # noqa: E402
 TERM_RE = re.compile(r"[a-z0-9]+")
 
 
+class _TermsCache:
+    """Minimal cache stand-in: about_terms only calls get_doc_terms."""
+
+    def __init__(self, terms_by_path):
+        self._t = terms_by_path
+
+    def get_doc_terms(self, paths):
+        return {p: self._t[p] for p in paths if p in self._t}
+
+
 def covered_terms(texts: list[str], terms: set[str]) -> set[str]:
     found: set[str] = set()
     for text in texts:
@@ -129,6 +139,20 @@ def main() -> None:
     fixtures["coverage_scores"] = {
         "covered": {p: sorted(t) for p, t in cov.items()},
         "expected": _corpus_coverage_scores(cov),
+    }
+
+    docs_terms = {
+        "/a.pdf": {0: "the cat budget budget alpha", 1: "Alpha REPORT"},
+        "/b.pdf": {0: "bravo budget report report"},
+        "/c.pdf": {0: "charlie budget"},
+    }
+    fixtures["about_terms"] = {
+        "docs": {p: {str(k): v for k, v in t.items()} for p, t in docs_terms.items()},
+        "expected_terms": {p: corpus.profile_terms(t) for p, t in docs_terms.items()},
+        "expected_about": corpus.about_terms(
+            _TermsCache({p: corpus.profile_terms(t) for p, t in docs_terms.items()}),
+            list(docs_terms),
+        ),
     }
 
     docs = {

@@ -4383,6 +4383,7 @@ class TestPdfCorpusOverview:
             "toc_top",
             "has_toc",
             "text_coverage",
+            "about",
             "size_bytes",
             "from_cache",
         }
@@ -4428,6 +4429,17 @@ class TestPdfCorpusOverview:
         card_paths = [c["path"] for c in result["docs"]]
         assert target_path not in card_paths
         assert len(result["docs"]) == 2
+
+    def test_cards_carry_about(self, corpus_dir, isolated_server, monkeypatch):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert all(isinstance(c["about"], list) for c in result["docs"])
+        assert any("budget" in c["about"] for c in result["docs"])
+
+    def test_about_is_empty_list_without_profiles(self, corpus_dir, isolated_server):
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert all(c["about"] == [] for c in result["docs"])
 
 
 class TestPdfCorpusSearchKeyword:
@@ -4620,6 +4632,150 @@ class TestPdfCorpusSearchSemanticAuto:
         monkeypatch.setattr(emb, "check_available", boom)
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
         assert "error" in result
+
+    def test_hybrid_carries_doc_arm_fields(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["search_mode"] == "hybrid"
+        cov = result["doc_profile_coverage"]
+        assert cov == {"profiled": 3, "searched": 3}
+        for m in result["matches"]:
+            assert "doc_score" in m
+            assert m["doc_score"] is None or isinstance(m["doc_score"], float)
+        assert any(m["doc_score"] is not None for m in result["matches"])
+
+    def test_hybrid_backfills_profiles_on_a_pre_existing_cache(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        # Warm with embeddings, then delete the profiles to simulate a cache
+        # written before profiles existed.
+        pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        import sqlite3
+
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("DELETE FROM doc_profiles")
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert result["doc_profile_coverage"]["profiled"] == 3
+
+    def test_doc_score_is_null_for_an_unprofiled_doc(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        alpha = str(corpus_dir / "alpha.pdf")
+        # A valid row with a NULL vector means "page 1 had no text": the
+        # backfill must not re-encode it, and its matches score null.
+        cache.save_doc_profile(alpha, 1500, None, {}, server.pdf_config.embedding_model)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
+        assert result["doc_profile_coverage"] == {"profiled": 2, "searched": 3}
+        alpha_hits = [m for m in result["matches"] if m["path"] == alpha]
+        assert alpha_hits and all(m["doc_score"] is None for m in alpha_hits)
+
+    def test_doc_arm_docs_appear_in_doc_match_counts(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        for m in result["matches"]:
+            assert result["doc_match_counts"].get(m["path"], 0) >= 1
+
+    def test_keyword_and_semantic_responses_have_no_doc_arm_fields(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        for mode in ("keyword", "semantic"):
+            result = pdf_corpus_search(str(corpus_dir), "budget", mode=mode)
+            assert "doc_profile_coverage" not in result
+            assert not any("doc_score" in m for m in result["matches"])
+
+    def test_single_doc_pdf_search_hybrid_unchanged(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        single = pdf_search(str(corpus_dir / "alpha.pdf"), "budget", mode="auto")
+        assert "doc_profile_coverage" not in single
+        assert not any("doc_score" in m for m in single["matches"])
+
+    def test_hybrid_wires_doc_arm_into_rrf_fusion(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """Pins the call site at server.py: three arms, in order, at
+        weights (1.0, 1.0, CORPUS_DOC_ARM_WEIGHT); a substituted weight
+        or a swapped list here would slip past every other test."""
+        self._fake_embedder(monkeypatch)
+        cache, _ = isolated_server
+        top_k = 10
+
+        real_fuse = server.corpus.rrf_fuse_rankings_scored
+        captured: dict[str, Any] = {}
+
+        def spy(rankings, k=server.corpus.CORPUS_RRF_K, top_k=None):
+            captured["rankings"] = rankings
+            return real_fuse(rankings, k=k, top_k=top_k)
+
+        monkeypatch.setattr(server.corpus, "rrf_fuse_rankings_scored", spy)
+
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=top_k)
+        assert result["search_mode"] == "hybrid"
+
+        rankings = captured["rankings"]
+        assert len(rankings) == 3
+        weights = tuple(w for _list, w in rankings)
+        assert weights == (1.0, 1.0, server.corpus.CORPUS_DOC_ARM_WEIGHT)
+        kw_list, sem_list, doc_list = (r for r, _w in rankings)
+
+        # Third arm: one best page per profiled doc, no duplicate docs.
+        assert doc_list
+        assert all(isinstance(page, int) and page >= 1 for _p, page in doc_list)
+        assert len(doc_list) == len({p for p, _pg in doc_list})
+        profiled = cache.get_doc_profiles(
+            [p for p, _pg in doc_list], server.pdf_config.embedding_model
+        )
+        assert all(profiled.get(p) is not None for p, _pg in doc_list)
+
+        # First arm: byte-identical to the keyword-only fused ranking a
+        # plain keyword search produces for the same query and top_k.
+        kw_result = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="keyword", top_k=top_k
+        )
+        kw_order = [(m["path"], m["page"]) for m in kw_result["matches"]]
+        assert kw_list == kw_order
+
+        # Second arm: a page-level shortlist, strictly larger than the
+        # doc-level one (distinguishes it from the doc arm at a glance).
+        assert len(sem_list) > len(doc_list)
+        assert all(isinstance(page, int) and page >= 1 for _p, page in sem_list)
+
+    def test_doc_arm_changes_the_fused_order(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """corpus_dir's three docs carry identical per-page 'budget'
+        counts, so keyword+semantic alone tie every page and the RRF
+        tie-break (alphabetical path) always puts alpha.pdf first. A
+        document arm that favours charlie.pdf (alphabetically last)
+        must be able to overturn that tie; an arm that never runs
+        (empty doc_cos) must not."""
+        self._fake_embedder(monkeypatch)
+        charlie = str(corpus_dir / "charlie.pdf")
+
+        def favor_charlie(paths, model_name, query_vec):
+            return {charlie: 5.0}
+
+        monkeypatch.setattr(server, "_corpus_doc_scores", favor_charlie)
+        favored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
+        assert favored["matches"][0]["path"] == charlie
+
+        def no_doc_arm(paths, model_name, query_vec):
+            return {}
+
+        monkeypatch.setattr(server, "_corpus_doc_scores", no_doc_arm)
+        unfavored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
+        assert unfavored["matches"][0]["path"] != charlie
 
 
 class TestPdfCorpusSearchSourceLabel:

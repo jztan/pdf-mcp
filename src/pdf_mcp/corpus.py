@@ -10,7 +10,10 @@ caller; this module owns no storage of its own.
 
 from __future__ import annotations
 
+import logging
+import math
 import multiprocessing
+import re
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
@@ -26,14 +29,25 @@ from .parallel import resolve_workers
 __all__ = [
     "CORPUS_MAX_FILES",
     "CORPUS_RRF_K",
+    "CORPUS_DOC_ARM_WEIGHT",
+    "PROFILE_HEAD_CHARS",
+    "PROFILE_TERM_LIMIT",
+    "CORPUS_TERM_RE",
     "resolve_corpus",
     "warm_docs",
     "text_coverage_label",
+    "about_terms",
     "build_overview_card",
     "rrf_fuse_doc_rankings",
+    "rrf_fuse_rankings_scored",
     "rrf_fuse_two_rankings",
     "rrf_fuse_two_rankings_scored",
+    "profile_terms",
+    "build_doc_profile",
+    "backfill_doc_profiles",
 ]
+
+logger = logging.getLogger(__name__)
 
 # Hard ceiling on corpus size: the tens-of-docs design boundary made
 # explicit. Beyond this, corpus tools return an inline error instead
@@ -44,6 +58,21 @@ CORPUS_MAX_FILES = 100
 # fusion and single-doc hybrid fusion share one k. Design decided by the
 # stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
 CORPUS_RRF_K = 60
+
+# Weight of the document arm in hybrid corpus fusion. Measured on the 500-doc
+# distractor rung (spike 2026-08-26, race 2): head vector at 0.25 and 0.5 are
+# indistinguishable (described hit@3 0.68, needle 1.000, trap 0.985); 0.25 is
+# the lighter touch and keeps 100-doc doc-NDCG flat. An equal-weight (1.0)
+# third list dilutes needles the page arms had already nailed. Not a tool
+# parameter: re-measure, never tune.
+CORPUS_DOC_ARM_WEIGHT = 0.25
+# Head text = page 1's first N characters: title, authors and abstract on
+# arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
+PROFILE_HEAD_CHARS = 1500
+PROFILE_TERM_LIMIT = 200
+# Latin word tokens. Shared with server._corpus_query_terms so profile terms
+# and query terms agree on what a term is; 4+ chars filters function words.
+CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 
 # Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
 # Below the gate, sequential is faster (spawn/IPC overhead outweighs the
@@ -190,6 +219,78 @@ def _cached_pages(
     return pages
 
 
+def profile_terms(texts: dict[int, str]) -> dict[str, int]:
+    """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
+    all pages. Ties break by term so the result is deterministic."""
+    counts: dict[str, int] = {}
+    for text in texts.values():
+        for tok in CORPUS_TERM_RE.findall(text.lower()):
+            if len(tok) > 3:
+                counts[tok] = counts.get(tok, 0) + 1
+    top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return dict(top[:PROFILE_TERM_LIMIT])
+
+
+def build_doc_profile(
+    texts: dict[int, str],
+    embed: Callable[[list[str]], list[bytes]],
+) -> "tuple[bytes | None, dict[str, int]]":
+    """The per-document profile: (head vector or None, term counts).
+
+    The head vector embeds page 1's first PROFILE_HEAD_CHARS characters
+    with the same callable used for pages, so it lives in the same space
+    as the page embeddings and the query. No text on page 1 means no
+    vector (None), never a vector of an empty string.
+    """
+    head = (texts.get(0) or "")[:PROFILE_HEAD_CHARS]
+    vec: bytes | None = None
+    if head.strip():
+        vec = embed([head])[0]
+    return vec, profile_terms(texts)
+
+
+def backfill_doc_profiles(
+    paths: list[str],
+    cache: Any,
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+) -> int:
+    """Write profiles for warm docs that lack a valid one, from cached text.
+
+    Covers caches warmed before profiles existed, and model changes. Reads
+    only page_text (no PDF open, no page re-embed); one encode per doc
+    (batching measured no faster); all new rows in one transaction.
+    Returns how many rows were written. A doc whose encode raises is
+    logged and skipped so the rest still land.
+    """
+    have = cache.get_doc_profiles(paths, model_name)
+    pending = [p for p in paths if p not in have]
+    if not pending:
+        return 0
+    built: list[tuple[str, "bytes | None", dict[str, int]]] = []
+    for path in pending:
+        meta = cache.get_metadata(path)
+        if meta is None:
+            continue
+        texts = cache.get_pages_text(path, list(range(meta["page_count"])))
+        if not texts:
+            continue
+        try:
+            vec, terms = build_doc_profile(texts, embed)
+        except Exception as exc:  # noqa: BLE001 - never a search/warm error
+            logger.warning("doc profile backfill skipped %s: %s", path, exc)
+            continue
+        built.append((path, vec, terms))
+    if not built:
+        return 0
+    with cache.write_transaction() as conn:
+        for path, vec, terms in built:
+            cache.save_doc_profile(
+                path, PROFILE_HEAD_CHARS, vec, terms, model_name, conn=conn
+            )
+    return len(built)
+
+
 def _finalize_doc(
     path: str,
     page_count: int,
@@ -239,6 +340,13 @@ def _finalize_doc(
 
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
 
+    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    if embeddings and embed is not None and model_name is not None:
+        try:
+            profile = build_doc_profile(texts, embed)
+        except Exception as exc:  # noqa: BLE001 - profile is optional
+            logger.warning("doc profile skipped for %s: %s", path, exc)
+
     # ONE transaction for the whole document. Each of these writes used to
     # open its own connection, and leaving that block commits, which is an
     # fsync. Measured on same-spec CI runners, warming a 6-document corpus
@@ -256,6 +364,10 @@ def _finalize_doc(
         cache.save_pages_text(path, to_save, conn=conn)
         if blobs and model_name is not None:
             cache.save_page_embeddings(path, blobs, model_name, conn=conn)
+        if profile is not None and model_name is not None:
+            cache.save_doc_profile(
+                path, PROFILE_HEAD_CHARS, profile[0], profile[1], model_name, conn=conn
+            )
         if layout:
             # Written AFTER page_text: the hidden flag lives on page_text
             # rows, and blocks are keyed independently by mtime.
@@ -525,6 +637,18 @@ def warm_docs(
         except Exception as e:
             skipped.append({"path": path, "reason": f"unreadable: {e}"})
 
+    # Profiles are new relative to existing caches: an explicit embeddings
+    # warm repairs coverage on docs that are otherwise fully cached, so a
+    # caller who warms gets the document arm without a search. Cheap
+    # (~17ms per doc) and never charged against the budget, like cached
+    # docs themselves.
+    if embeddings and embed is not None and model_name is not None:
+        cached_paths = [d["path"] for d in docs if d["status"] == "cached"]
+        try:
+            backfill_doc_profiles(cached_paths, cache, model_name, embed)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("doc profile backfill failed: %s", exc)
+
     uncached.sort(key=lambda item: item[1])
     workers = _warm_worker_count(len(uncached), embeddings)
     if workers <= 1:
@@ -580,6 +704,34 @@ def text_coverage_label(coverage: list[dict[str, int]]) -> str:
     return "partial"
 
 
+def about_terms(cache: Any, paths: list[str], limit: int = 8) -> dict[str, list[str]]:
+    """Each document's most distinctive stored terms relative to the corpus.
+
+    tf * log(1 + N / df) over the cached term lists only (no page text
+    read). A readability aid on overview cards, validated by inspection;
+    it makes no retrieval claim. Latin tokens only: CJK documents get an
+    empty list (documented limitation).
+    """
+    terms_by_doc = cache.get_doc_terms(paths)
+    n_docs = len(paths)
+    df: dict[str, int] = {}
+    for terms in terms_by_doc.values():
+        for t in terms:
+            df[t] = df.get(t, 0) + 1
+    out: dict[str, list[str]] = {}
+    for path in paths:
+        terms = terms_by_doc.get(path)
+        if not terms:
+            out[path] = []
+            continue
+        ranked = sorted(
+            terms.items(),
+            key=lambda kv: (-kv[1] * math.log(1.0 + n_docs / df[kv[0]]), kv[0]),
+        )
+        out[path] = [t for t, _c in ranked[:limit]]
+    return out
+
+
 # Exporter boilerplate that reads as "no title" for triage purposes.
 # Matched case-insensitively; "untitled" is a prefix match (iWork
 # exports produce e.g. "Untitled 3.pages").
@@ -607,7 +759,12 @@ def _clean_title(title: Any) -> str | None:
     return stripped
 
 
-def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, Any]:
+def build_overview_card(
+    path: str,
+    cache: Any,
+    from_cache: bool,
+    about: list[str] | None = None,
+) -> dict[str, Any]:
     """Build one triage card from cached data only (doc must be warm).
 
     Junk metadata is filtered rather than passed through: whitespace-only
@@ -632,6 +789,7 @@ def build_overview_card(path: str, cache: Any, from_cache: bool) -> dict[str, An
         # as no TOC. Any level counts, not just the level-1 preview.
         "has_toc": any((e.get("title") or "").strip() for e in toc),
         "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
+        "about": list(about or []),
         "size_bytes": meta["file_size"],
         "from_cache": from_cache,
     }
@@ -680,24 +838,38 @@ def rrf_fuse_doc_rankings(
     return fused[:top_k] if top_k is not None else fused
 
 
+def rrf_fuse_rankings_scored(
+    rankings: list[tuple[list[tuple[str, int]], float]],
+    k: int = CORPUS_RRF_K,
+    top_k: int | None = None,
+) -> list[tuple[tuple[str, int], float]]:
+    """Weighted RRF across N global rankings, returning fused scores.
+
+    Each entry is (ranking, weight); an item's score is the sum of
+    weight / (k + rank) over every list it appears in (Cormack et al.
+    2009, with the per-list weight extension). Hybrid corpus search
+    passes [(keyword, 1.0), (semantic, 1.0), (doc_arm,
+    CORPUS_DOC_ARM_WEIGHT)]. Ties break by (doc_path, page), so a
+    document rename never reorders results except at exact ties.
+    """
+    scores: dict[tuple[str, int], float] = {}
+    for ranking, weight in rankings:
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + weight / (k + rank)
+    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
+    return ordered[:top_k] if top_k is not None else ordered
+
+
 def rrf_fuse_two_rankings_scored(
     a: list[tuple[str, int]],
     b: list[tuple[str, int]],
     k: int = CORPUS_RRF_K,
     top_k: int | None = None,
 ) -> list[tuple[tuple[str, int], float]]:
-    """RRF across two global rankings (auto mode: keyword + semantic),
-    returning each item's fused score alongside it.
-
-    The same (doc_path, page) may appear in both lists; its RRF
-    contributions add. Ties break deterministically by (doc_path, page).
-    """
-    scores: dict[tuple[str, int], float] = {}
-    for ranking in (a, b):
-        for rank, item in enumerate(ranking):
-            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
-    ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))
-    return ordered[:top_k] if top_k is not None else ordered
+    """Two-list RRF at weight 1.0 each (single-doc hybrid and the keyword
+    paths). A wrapper over rrf_fuse_rankings_scored so both stay
+    byte-identical to the pre-document-arm fusion."""
+    return rrf_fuse_rankings_scored([(a, 1.0), (b, 1.0)], k=k, top_k=top_k)
 
 
 def rrf_fuse_two_rankings(

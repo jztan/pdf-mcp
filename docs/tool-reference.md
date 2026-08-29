@@ -765,6 +765,7 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 **Returns:**
 - `docs` (array, sorted by path): `[{path, status: "warmed" | "cached", pages, embeddings_cached}, ...]`. `embeddings_cached` reports actual per-doc cache state for the configured embedding model (not an echo of the `embeddings` request flag), so a cheap text-only call answers "do I need an embeddings pass before semantic search?".
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
+- With `embeddings=True`, already-cached documents also get their document profile (used by `pdf_corpus_search` hybrid mode and `pdf_corpus_overview.about`) backfilled at no budget cost.
 
 **Limitations:**
 - The 100-file cap, budget clamp, and URL rejection described above apply.
@@ -807,6 +808,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
   - `title`: PDF metadata title, falling back to the filename stem when absent or a known placeholder — never `null` (same contract as `pdf_corpus_search`'s `doc_title`). **Untrusted content from the PDF** when it comes from metadata.
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.
+  - `about` (array): up to 8 of the document's most distinctive terms relative to the corpus, by tf-idf over cached term lists; `[]` until the document has a profile. A profile is written by `pdf_corpus_warm(paths, embeddings=True)` or by a hybrid `pdf_corpus_search`; a text-only warm, including the one this tool runs by default, leaves it `[]`.
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
 
 **Limitations:**
@@ -858,7 +860,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
   - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." and scanner artifacts carrying a `___` marker filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
   - Keyword-mode hits also carry `score` (per-doc BM25; comparable only within that hit's own document, since RRF governs cross-document order, not the raw score).
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
-  - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits.
+  - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page absent from the keyword arm's hits AND `semantic_score` below `confidence_threshold`), matching single-doc `pdf_search(mode="auto")`'s hybrid hits, and `doc_score` (head-vector cosine of the match's document, 4 dp; `null` when the document has no profile).
 - `total_matches` (int): `len(matches)`.
 - `doc_match_counts` (object): per-doc hit count keyed by path — **which documents hold content for this query, including documents whose pages did not win a slot in `matches`**. For a question spanning several documents ("compare A with B", "the trend across three years"), re-ask every document listed here with `pdf_search`, not just the top matches: measured on both benchmark corpora, stopping after the top few documents recovers only about half of a multi-document answer (~65% at 5 documents vs ~87% checking everything named, each extra search ~0.5s on a warmed corpus). In keyword mode it is the keyword arm's per-doc FTS hit count, capped at `top_k` per document; in hybrid mode it merges both arms (max per document, since the arms are two views of the same pages), so a question-shaped query the keyword arm cannot match still reports the documents the semantic arm found; in pure semantic mode it's how many of that doc's pages landed in the global `top_k`. Counts are independent of which pages the fused ranking selects.
 - `search_mode` (string): `"keyword"`, `"semantic"`, or `"hybrid"`, the mode actually run (`"auto"` resolves to `"hybrid"` when embeddings are available, else `"keyword"`).
@@ -867,6 +869,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - `hidden_text_detected` (bool): `true` if any returned hit's page carries text invisible to a human reader.
 - `unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`: same shared envelope as `pdf_corpus_warm`/`pdf_corpus_overview`.
 - `semantic_unprocessed` (array, semantic/hybrid only): paths that were warmed/cached but had no cached embeddings (e.g. warming raced the embeddings budget); additive to `unprocessed`.
+- `doc_profile_coverage` (object, hybrid only): `{"profiled": n, "searched": m}`. Hybrid mode fuses a third, document-level arm: each document's cached head vector (page 1, first 1,500 characters, same embedding model as pages) ranks documents by cosine at a fixed weight of 0.25 against the two page arms, so a document the page arms never surfaced can still reach `matches` and `doc_match_counts`. Profiles are written at warm and backfilled from cached text on first search; `profiled < searched` means the arm ran over a subset (backfill pending, or page 1 has no text). `pdf_corpus_warm(paths, embeddings=True)` closes the gap. `profiled` counts documents holding a head vector, which can exceed the documents the arm actually ranked: a document can have a profile but no page embeddings to anchor it to a result page.
 - `all_results_low_confidence`, `confidence_threshold` (semantic and hybrid modes only).
 - `model_name` (semantic mode only): the embedding model used.
 - `semantic_unavailable`, `semantic_unavailable_reason` (auto mode only): present when embeddings are unavailable and the search degraded to keyword.
@@ -880,6 +883,9 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - The 100-file cap, budget clamp, and URL rejection shared with `pdf_corpus_warm`/`pdf_corpus_overview` apply.
 - Keyword terms are AND-matched independently per document (FTS5); use short, specific terms and drop rare extra words, since a full question or one uncommon word can return nothing even when a document is otherwise relevant.
 - Semantic and hybrid modes require fastembed (included in the default install) and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
+- The document arm reads page 1 only; a document whose first page is a blank cover or an image gets no profile and is ranked by the page arms alone.
+- `about` terms and the document arm's term lists tokenise Latin words only; CJK documents get an empty `about`.
+- The document arm judges a document by its first page, so a paper whose abstract is about one thing but which *uses* the queried method deep inside can lose its top-3 slot to a paper whose abstract mentions the method. Measured cost across corpus sizes 50 to 500: one spread query at 100 documents or fewer, none above; described queries improve at every size (`benchmark_data/corpus_search/doc_arm_size_sweep.md`).
 
 **Example:**
 

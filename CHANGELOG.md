@@ -14,8 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the document (or folder) on the left and a "What your agent would
   see" panel on the right showing every tool call's JSON. Below it: a
   skim / search / read explainer, nine capability cards, a "why not just
-  paste the PDF" comparison, a security section, per-client install
-  steps, and an FAQ. All six in-browser tools, the corpus fusion port, and
+  paste the PDF" comparison, per-client install steps, and an FAQ. All six in-browser tools, the corpus fusion port, and
   the token ledger are unchanged; the JSON stays field-for-field with the
   server.
 

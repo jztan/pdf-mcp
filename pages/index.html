@@ -547,14 +547,6 @@
   table.versus td.ours { color: var(--text-secondary); }
   table.versus code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
 
-  /* Trust */
-  section.trust { padding: 130px 24px 0; }
-  section.trust .inner { max-width: 1120px; margin: 0 auto; }
-  .trust-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 42px 48px; }
-  .trust-head { font-family: var(--font-display); font-size: 16.5px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; color: var(--text); }
-  .trust-desc { font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
-  .trust-desc code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
-
   /* Connect */
   section.connect { padding: 130px 24px 0; }
   section.connect .inner { max-width: 1160px; margin: 0 auto; text-align: center; }
@@ -640,7 +632,7 @@
   @media (max-width: 960px) {
     .stage-grid { grid-template-columns: 1fr; }
     .doc-card { border-right: none; border-bottom: 1px solid var(--border); }
-    .skim-grid, .caps-grid, .trust-grid, .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .skim-grid, .caps-grid, .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     section.closing .inner { grid-template-columns: 1fr; gap: 40px; }
   }
   @media (max-width: 640px) {
@@ -664,7 +656,7 @@
     .askbar, .read-row { flex-direction: column; }
     .askbar .btn, .read-row .btn { width: 100%; }
     .cg-name { flex-basis: 110px; }
-    .skim-grid, .caps-grid, .trust-grid, .steps { grid-template-columns: 1fr; }
+    .skim-grid, .caps-grid, .steps { grid-template-columns: 1fr; }
     .skim-head { flex-direction: column; align-items: flex-start; }
     section.skim, section.caps, section.versus, section.trust, section.connect, section.faq { padding-top: 80px; }
     section.closing { margin-top: 80px; padding: 64px 20px; }
@@ -681,7 +673,6 @@
       <div class="ledger hidden" id="ledger">context used <b id="ledgerVal">0</b> / <span id="ledgerMax"></span> tokens</div>
     </div>
     <ul>
-      <li class="hide-sm"><a href="#security">Security</a></li>
       <li class="hide-sm"><a href="#connect">Install</a></li>
       <li><a href="https://github.com/jztan/pdf-mcp">GitHub</a></li>
       <li class="hide-sm"><a href="https://pypi.org/project/pdf-mcp/">PyPI</a></li>
@@ -1065,21 +1056,6 @@ estimated_tokens: 1740</pre>
           </tr>
         </tbody>
       </table>
-    </div>
-  </div>
-</section>
-
-<section class="trust" id="security">
-  <div class="inner">
-    <h2 class="section-title">Your PDFs stay yours.</h2>
-    <p class="section-sub">A server that reads your contracts and filings needs boundaries, not good intentions. Every one of these is in the server today.</p>
-    <div class="trust-grid">
-      <div><h3 class="trust-head">Runs on your machine</h3><p class="trust-desc">STDIO transport, spawned by your MCP client. No hosted service, no telemetry, no vendor in the middle. MIT licensed, source on GitHub.</p></div>
-      <div><h3 class="trust-head">Paths and URLs you allow</h3><p class="trust-desc">An optional <code>config.toml</code> holds allow and deny rules for local paths and remote hosts. A malformed config aborts startup rather than falling open.</p></div>
-      <div><h3 class="trust-head">Extracted text is marked untrusted</h3><p class="trust-desc">Every response carries a <code>content_warning</code>, and <code>pdf_info</code> can scan for hidden text (white-on-white, zero opacity, off-page) so a document cannot smuggle instructions into your agent.</p></div>
-      <div><h3 class="trust-head">SSRF-checked URL fetches</h3><p class="trust-desc">Remote PDFs download over HTTPS only. Private, loopback, and link-local ranges are refused, and the file is validated as a PDF before anything reads it.</p></div>
-      <div><h3 class="trust-head">Bounded responses</h3><p class="trust-desc">Search results, section lists, and per-page arrays are capped or opt-in, so a 3,000-page document cannot flood the context window in one call.</p></div>
-      <div><h3 class="trust-head">Errors are data, not crashes</h3><p class="trust-desc">A missing file, blocked URL, or bad page range comes back as an inline <code>error</code> field the agent can read and recover from, instead of a dead server.</p></div>
     </div>
   </div>
 </section>

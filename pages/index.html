@@ -695,9 +695,9 @@
         </button>
       </div>
       <button class="btn-ghost-pill" id="ctaOwn">Try it on your PDF</button>
-      <a class="btn-ghost-pill" href="https://github.com/jztan/pdf-mcp">
+      <a class="btn-ghost-pill" id="heroGithubBtn" href="https://github.com/jztan/pdf-mcp">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        Star on GitHub
+        <span id="heroGithubLabel">Star on GitHub</span>
       </a>
     </div>
 
@@ -2647,6 +2647,20 @@ estimated_tokens: 1740</pre>
     showToast("Copied");
     track("install_copy", { client: document.querySelector("#clientTabs .tab.active")?.dataset.client });
   });
+
+  // Live star count on the hero's GitHub pill, only if GitHub answers. Never
+  // blocks render; the pill keeps reading "Star on GitHub" if the request fails.
+  (function () {
+    const el = $("heroGithubLabel");
+    if (!el) return;
+    fetch("https://api.github.com/repos/jztan/pdf-mcp", { headers: { Accept: "application/vnd.github+json" } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        const n = d && d.stargazers_count;
+        if (typeof n === "number" && n > 0) el.textContent = `${n.toLocaleString()} stars on GitHub`;
+      })
+      .catch(() => {});
+  })();
 
   $("copyLinkBtn").addEventListener("click", () => {
     navigator.clipboard.writeText(location.href);

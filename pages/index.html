@@ -292,7 +292,13 @@
   .btn.btn-accent { background: var(--accent); color: #ffffff; }
   .btn.btn-outline { background: var(--bg-elev); color: var(--text); border: 1px solid var(--border-strong); }
   .btn.btn-outline:hover { opacity: 1; background: var(--bg-subtle); }
-  .btn-ghost { background: transparent; color: var(--text-secondary); height: 34px; padding: 0 12px; font-size: 13px; border: 1px solid var(--border-strong); }
+  .btn-ghost {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 34px; padding: 0 14px; border-radius: 980px; border: 1px solid var(--border-strong);
+    background: var(--bg-elev); color: var(--text-secondary);
+    font-family: var(--font-text); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
   .btn-ghost:hover { opacity: 1; color: var(--text); background: var(--bg-subtle); }
   .btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
   .btn-icon { height: auto; padding: 4px; border: none; }

@@ -75,3 +75,11 @@ optional per-document diversity cap for `pdf_corpus_search`.
 **Route rows show `n/a` for page-level NDCG,** not 0.000: those labels
 carry no page, so a page-level score does not exist for them. They are
 excluded from the page-level means rather than counted as zeros.
+
+**Single-doc arm not re-run for the document-arm pass.** The document-arm
+work (`feat/doc-profile-routing`) re-ran this corpus's corpus-wide
+figures pre-arm vs. post-arm (see `benchmark_data/corpus_search/modes_results_500.md`,
+"Held-out 10-K corpus"), but did not pass `--single-doc-arm` here, so the
+single-doc `pdf_search` figures above were not regenerated in that pass.
+They stand unchanged: `pdf_search` is untouched by the document-arm work
+on this branch.

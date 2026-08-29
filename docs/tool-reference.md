@@ -808,7 +808,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
   - `title`: PDF metadata title, falling back to the filename stem when absent or a known placeholder — never `null` (same contract as `pdf_corpus_search`'s `doc_title`). **Untrusted content from the PDF** when it comes from metadata.
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.
-  - `about` (array): up to 8 of the document's most distinctive terms relative to the corpus, by tf-idf over cached term lists; `[]` until the document has a profile.
+  - `about` (array): up to 8 of the document's most distinctive terms relative to the corpus, by tf-idf over cached term lists; `[]` until the document has a profile. A profile is written by `pdf_corpus_warm(paths, embeddings=True)` or by a hybrid `pdf_corpus_search`; a text-only warm, including the one this tool runs by default, leaves it `[]`.
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`).
 
 **Limitations:**
@@ -869,7 +869,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - `hidden_text_detected` (bool): `true` if any returned hit's page carries text invisible to a human reader.
 - `unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`: same shared envelope as `pdf_corpus_warm`/`pdf_corpus_overview`.
 - `semantic_unprocessed` (array, semantic/hybrid only): paths that were warmed/cached but had no cached embeddings (e.g. warming raced the embeddings budget); additive to `unprocessed`.
-- `doc_profile_coverage` (object, hybrid only): `{"profiled": n, "searched": m}`. Hybrid mode fuses a third, document-level arm: each document's cached head vector (page 1, first 1,500 characters, same embedding model as pages) ranks documents by cosine at a fixed weight of 0.25 against the two page arms, so a document the page arms never surfaced can still reach `matches` and `doc_match_counts`. Profiles are written at warm and backfilled from cached text on first search; `profiled < searched` means the arm ran over a subset (backfill pending, or page 1 has no text). `pdf_corpus_warm(paths, embeddings=True)` closes the gap.
+- `doc_profile_coverage` (object, hybrid only): `{"profiled": n, "searched": m}`. Hybrid mode fuses a third, document-level arm: each document's cached head vector (page 1, first 1,500 characters, same embedding model as pages) ranks documents by cosine at a fixed weight of 0.25 against the two page arms, so a document the page arms never surfaced can still reach `matches` and `doc_match_counts`. Profiles are written at warm and backfilled from cached text on first search; `profiled < searched` means the arm ran over a subset (backfill pending, or page 1 has no text). `pdf_corpus_warm(paths, embeddings=True)` closes the gap. `profiled` counts documents holding a head vector, which can exceed the documents the arm actually ranked: a document can have a profile but no page embeddings to anchor it to a result page.
 - `all_results_low_confidence`, `confidence_threshold` (semantic and hybrid modes only).
 - `model_name` (semantic mode only): the embedding model used.
 - `semantic_unavailable`, `semantic_unavailable_reason` (auto mode only): present when embeddings are unavailable and the search degraded to keyword.

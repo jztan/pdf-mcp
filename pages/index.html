@@ -879,6 +879,7 @@
             <div id="corpusWarmPanel"></div>
             <div class="hidden" id="corpusOverviewTag" style="margin-top:14px"><span class="tool-tag" style="margin-left:0">pdf_corpus_overview · <button class="step-json-toggle" data-target="cjson2">{ JSON }</button></span></div>
             <div id="corpusOverviewPanel" class="hidden"></div>
+            <div class="callout info" id="corpusOverviewCallout" style="display:none"></div>
             <div id="corpusSearchPanel" class="hidden">
               <div class="askbar">
                 <input type="text" id="corpusSearchInput" placeholder="Ask these documents for something…" />
@@ -1512,6 +1513,8 @@ estimated_tokens: 1740</pre>
     $("corpusResults").innerHTML = "";
     $("corpusCallout").style.display = "none";
     $("corpusCallout").innerHTML = "";
+    $("corpusOverviewCallout").style.display = "none";
+    $("corpusOverviewCallout").innerHTML = "";
     $("corpusOverviewTag").classList.add("hidden");
     $("cjson1").classList.remove("open"); $("cjson1-content").innerHTML = "";
     $("cjson2").classList.add("hidden"); $("cjson2").classList.remove("open"); $("cjson2-content").innerHTML = "";
@@ -1733,6 +1736,9 @@ estimated_tokens: 1740</pre>
     document.getElementById("corpusSearchPanel").classList.remove("hidden");
     renderCorpusGrids();
     renderCorpusChips();
+    const ovco = document.getElementById("corpusOverviewCallout");
+    ovco.style.display = "";
+    ovco.innerHTML = "<span>This demo computes <code>about</code> in-browser from the corpus you just gave it. The installed server fills it the same way, but only after an embeddings warm (<code>pdf_corpus_warm(paths, embeddings=True)</code>), so a text-only warm shows an empty list until then.</span>";
   }
 
   const CORPUS_TOP_K = 10;

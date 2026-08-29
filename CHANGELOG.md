@@ -15,13 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never made the page shortlist can still reach `matches` and
   `doc_match_counts`. On a 500-document corpus (100 graded arXiv papers
   plus 400 distractors) described-query doc-hit@3 went from 0.48 to
-  0.68, with needle and trap unchanged at 1.000 and 0.985; at 100
-  documents described doc-hit@3 went from 0.64 to 0.72 (spread eased
-  back from 0.92 to 0.88 on one query, as predicted). Hybrid matches
-  carry `doc_score`, and the response carries `doc_profile_coverage`.
-  Profiles are written by `pdf_corpus_warm(embeddings=True)` and
-  backfilled from cached text on first search, so existing caches need
-  no re-warm.
+  0.68 and spread from 0.64 to 0.72, with needle and trap unchanged at
+  1.000 and 0.985; the keyword and semantic arms scored identically,
+  query for query, between the pre-arm and post-arm runs, which is the
+  control that makes the gain credible. At 100 documents, described
+  doc-hit@3 sits in a two-query band across same-day re-runs (0.64 to
+  0.72); spread eased from 0.92 to 0.88 on one query, and needle and
+  trap were unchanged. Hybrid matches carry `doc_score`, and the
+  response carries `doc_profile_coverage`. Profiles are written by
+  `pdf_corpus_warm(embeddings=True)` and backfilled from cached text on
+  first search, so existing caches need no re-warm.
 - **`pdf_corpus_overview` cards carry `about`**: up to eight of the
   document's most distinctive terms relative to the corpus.
 

@@ -28,62 +28,33 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 | semantic | 0.524 | 0.437 |
 | auto | 0.890 | 0.428 |
 
-Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.
-## Interpretation (89-query run; cite the tables above, not this prose)
+## Interpretation (500-doc run, document arm live; cite the tables above, not this prose)
 
-Hybrid is the strongest mode on every cut: page NDCG@10 0.541,
-doc-NDCG@10 0.838, doc-hit@3 0.899, needle 0.996. The arms complement as
-designed: semantic is near-immune to lexical traps (0.785 vs keyword's
-0.596) and keyword anchors literal precision (needle 0.968). Every mode
-runs in under half a second per query on a warmed 100-doc corpus.
+Hybrid is the strongest mode on every page-level cut: overall NDCG@10
+0.454, described 0.146, needle 0.934, trap 0.676, at 3.02 s/query over
+a warmed 500-doc corpus (100 graded arXiv papers plus 400 distractors).
+At the doc level it also leads: overall 0.751, described 0.587, needle
+1.000, trap 0.985.
 
-`described` is the binding constraint, not corpus size. Every mode scores
-0.24 or below on it (hybrid 0.241, keyword 0.134) and it is a quarter of
-the query set, so it sets the page-level overall almost by itself.
-Doc-level holds at 0.838, which is the label-sparsity gap the doc-level
-table exists to separate: the right document is being found, the graded
-page inside it often is not.
+**The document arm's effect, isolated.** Against the Aug-24 pre-arm
+500-doc run preserved at commit `2119f57` (described doc-hit@3 0.480,
+spread 0.640, needle 1.000, trap 0.985), this post-arm run reads
+described doc-hit@3 0.680 (+0.20, 12/25 -> 17/25) and spread doc-hit@3
+0.720 (+0.08, 16/25 -> 18/25), with needle and trap unchanged at 1.000.
+`described` and `spread` are the classes with real distractor pressure
+at 500 docs; needle and trap stay pinned near 1.000 regardless of
+corpus size because they are lexically distinctive or unambiguous by
+construction.
 
-### Do not cite 0.674 / doc-hit@3 1.000
-
-Those are the superseded 64-query run (commit `040df8b`), not comparable
-to the tables above. The 25 `described` queries were added afterwards and
-are the weakest class for every mode, so the overall mean drops on query
-mix alone. Two keyword-arm fixes also landed in between: the OR-joined
-retry (`2820061`) and term-coverage ranking (`086c84e`).
-
-Held to the same 64 non-`described` queries, this run against that one:
-
-| mode | overall NDCG@10 | doc-hit@3 |
-|---|---|---|
-| keyword | 0.547 -> 0.586 (+0.039) | 0.859 -> 0.953 |
-| semantic | 0.579 -> 0.579 (unchanged) | 0.875 -> 0.875 |
-| auto | 0.674 -> 0.658 (-0.016) | 1.000 -> 0.969 |
-
-Two cells carry all of it. Keyword `trap` 0.476 -> 0.596 with doc-hit@3
-0.72 -> 0.96: term-coverage ranking working as designed, traps were being
-won on file order. Hybrid `spread` 0.392 -> 0.350 with doc-hit@3
-1.000 -> 0.92: two of 25 spread queries lost their gold document from the
-top three, and that is the whole of the lost 1.000. Semantic is identical
-across every class, the expected control for two keyword-arm changes.
-
-Working hypothesis, unverified: rarity-weighted coverage concentrates
-rank mass on fewer documents, which is right for `trap` and wrong for
-`spread`, where gold is deliberately scattered. Two queries is inside
-noise, so this is recorded rather than acted on; revisit if a second
-corpus reproduces it.
-
-### Sanity cross-check
-
-The stage-2 arm-B reference (~0.547) was matched by the 64-query run's
-keyword overall. It is not comparable to the 89-query keyword overall
-(0.459), which includes `described` at 0.134. On the 64-query subset this
-run's keyword overall is 0.586, above the reference, as expected after
-the two keyword fixes.
-
-History: the pre-fix CJK record and that bug's narrative are in this
-file's git history (commit `07cbff2`); the 64-query numbers are in
-`040df8b`.
+**The control that makes this a real effect, not corpus noise.** The
+keyword and semantic arms' per-class doc-hit@3 are identical, query for
+query, between the Aug-24 pre-arm run and this one: keyword described
+0.20, needle 1.000, spread 0.36, trap 0.92 (both runs); semantic
+described 0.48, needle 0.929, spread 0.68, trap 1.000 (both runs).
+Neither arm's code changed on this branch, so an unchanged score is
+exactly what should happen; only hybrid moved, and only on the classes
+the document arm targets. See "Task 8 gate results" below for the full
+per-class doc-hit@3 and doc-NDCG@10 table.
 
 ## Task 8 gate results: document arm at 500 docs (2026-08-29, this machine, this branch)
 
@@ -186,5 +157,12 @@ grepping it for `doc_profile_coverage` is not a usable pre/post signal
 `scripts/benchmark_excerpt_quality.py`: exit=0, GATE VERDICT PASS.
 excerpt_containment=0.800, bbox_containment=0.800, 0 regressions, 0 stale
 known_fail rows.
+
+### Single-doc arm not re-run
+
+This benchmark's `--single-doc-arm` flag was not passed on this pass, so
+no single-doc `pdf_search` figures were regenerated here. The
+previously published single-doc numbers stand: `pdf_search` is untouched
+by the document-arm work on this branch.
 
 ### Overall verdict: all Task 8 gates PASS.

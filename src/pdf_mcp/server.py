@@ -2962,7 +2962,11 @@ def pdf_corpus_overview(
         - docs: triage cards sorted by path {path, title, pages,
           toc_top (depth-1 titles, max 8), has_toc, text_coverage
           ("full"|"partial"|"none"), about (up to 8 distinctive terms,
-          [] when the doc has no profile yet), size_bytes, from_cache}
+          [] when the doc has no profile yet), size_bytes, from_cache}.
+          `about` is filled once the document has a profile, which is
+          written by `pdf_corpus_warm(paths, embeddings=True)` or by a
+          hybrid `pdf_corpus_search`; a text-only warm (the default
+          this tool itself calls) leaves it `[]`
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted (same envelope as pdf_corpus_warm)
 
@@ -3450,7 +3454,10 @@ def pdf_corpus_search(
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
           profiled < searched means the document arm ran partially
           (profiles still backfilling, or page 1 has no text); a
-          pdf_corpus_warm(embeddings=True) closes it
+          pdf_corpus_warm(embeddings=True) closes it. `profiled` counts
+          documents holding a head vector, which can exceed the
+          documents the arm actually ranked, since a doc can have a
+          profile but no page embeddings to anchor it to a result page
         - doc_score: (hybrid matches only) head-vector cosine of the
           match's document, 4 dp, null when the doc has no profile
         - all_results_low_confidence, confidence_threshold: semantic

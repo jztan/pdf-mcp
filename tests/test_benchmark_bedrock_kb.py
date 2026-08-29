@@ -300,3 +300,117 @@ class TestBedrockResultsToUnits:
         res = [self._r("0705.4297.pdf", "AAA", 3.0), self._r("x.pdf", "BBB")]
         units = bedrock_results_to_units(res, {"0705.4297": "0705.4297"})
         assert units == [("0705.4297", 3, "AAA"), ("x", None, "BBB")]
+
+
+import math  # noqa: E402
+
+import pytest  # noqa: E402
+
+from scripts.benchmark_bedrock_kb import run_arm_bedrock  # noqa: E402
+
+
+class _FakeRuntime:
+    """Stand-in for a bedrock-agent-runtime client. No AWS calls.
+
+    retrieve() returns a fixed retrievalResults list; rerank() returns a
+    fixed reordering (by result index) regardless of the actual sources
+    passed in, which is all these tests need.
+    """
+
+    def __init__(self, retrieval_results, rerank_order=None):
+        self._retrieval_results = retrieval_results
+        self._rerank_order = rerank_order or []
+
+    def retrieve(self, **kwargs):
+        return {"retrievalResults": self._retrieval_results}
+
+    def rerank(self, **kwargs):
+        return {
+            "results": [{"index": i, "relevanceScore": 1.0} for i in self._rerank_order]
+        }
+
+
+def _result(stem, page, text):
+    return {
+        "content": {"text": text},
+        "location": {"type": "S3", "s3Location": {"uri": f"s3://b/{stem}.pdf"}},
+        "metadata": {"x-amz-bedrock-kb-document-page-number": page},
+    }
+
+
+class TestRunArmBedrockDedupWindow:
+    def test_doc_ndcg_dedupes_over_the_full_window_not_a_10_item_slice(self):
+        # First 10 raw chunks are all the SAME (non-gold) document; the gold
+        # document appears only at raw position 11. A correct dedup-before-
+        # trim (mirroring run_arm_p) still finds the gold doc at rank 2 of
+        # the deduped list. A buggy pre-slice to units[:10] would never see
+        # it and score doc_ndcg 0.0.
+        results = [_result("A", i + 1, "x" * 4) for i in range(10)]
+        results.append(_result("B", 5, "y" * 4))
+        runtime = _FakeRuntime(results)
+        query = {
+            "id": "q1",
+            "class": "needle",
+            "query": "test query",
+            "labels": [{"doc": "B", "page": 5, "gain": 2}],
+        }
+        rows = run_arm_bedrock(
+            runtime,
+            "KB1234567890",
+            [query],
+            {"A": "A", "B": "B"},
+            budget_tokens=100_000,
+            rerank_model=None,
+        )
+        # doc_ranked_gains after full-window dedup: [A -> 0.0, B -> 2.0].
+        # idcg = 2.0 / log2(2) = 2.0; dcg = 0/log2(2) + 2/log2(3).
+        expected = (2.0 / math.log2(3)) / 2.0
+        assert rows["q1"]["doc_ndcg"] == pytest.approx(expected)
+        assert rows["q1"]["doc_ndcg"] > 0.0
+
+
+class TestRunArmBedrockRerankOrdering:
+    def test_rerank_reorders_before_cap_to_budget(self):
+        # Two units, retrieved in order [X, Y]. The stub rerank puts Y
+        # first. Each unit alone fills the whole budget (cap_to_budget
+        # always keeps the first unit and stops before the second), so
+        # which document is kept proves whether reordering happened before
+        # capping.
+        results = [_result("X", 1, "a" * 4000), _result("Y", 1, "b" * 4000)]
+        runtime = _FakeRuntime(results, rerank_order=[1, 0])
+        query = {"id": "q1", "class": "needle", "query": "q", "labels": []}
+        rows = run_arm_bedrock(
+            runtime,
+            "KB1234567890",
+            [query],
+            {"X": "X", "Y": "Y"},
+            budget_tokens=1000,
+            rerank_model="cohere.rerank-v3-5:0",
+        )
+        assert rows["q1"]["kept"] == [("Y", 1)]
+        assert rows["q1"]["realized_k"] == 1
+
+
+class TestRunArmBedrockRowShapeParity:
+    def test_row_keys_match_run_arm_p_shape(self):
+        # run_arm_p's documented row shape (see _row() above and
+        # run_arm_p's docstring): summarize() consumes both arms
+        # interchangeably, so a silent key divergence would corrupt every
+        # number rather than failing loudly.
+        p_shaped_row = _row("needle", "exact")
+        runtime = _FakeRuntime([_result("A", 1, "z" * 4)])
+        query = {
+            "id": "q1",
+            "class": "needle",
+            "query": "q",
+            "labels": [{"doc": "A", "page": 1, "gain": 2}],
+        }
+        rows = run_arm_bedrock(
+            runtime,
+            "KB1234567890",
+            [query],
+            {"A": "A"},
+            budget_tokens=100_000,
+            rerank_model=None,
+        )
+        assert set(rows["q1"].keys()) == set(p_shaped_row.keys())

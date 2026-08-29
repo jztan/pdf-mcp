@@ -269,8 +269,14 @@ def run_arm_bedrock(
         kept, k = cap_to_budget(units, budget_tokens)
         # doc-level grading needs (doc_id, page); page may be None for a
         # chunk with no page metadata, and grade_query only uses page for
-        # page-level labels, so -1 is a safe non-matching placeholder.
-        ranked = [(d, p if p is not None else -1) for d, p, _t in units[:10]]
+        # page-level labels, so -1 is a safe non-matching placeholder. Pass
+        # the full retrieved (and, where applicable, reranked) list, not a
+        # pre-sliced window: grade_query dedups by document before trimming
+        # to top_k, mirroring run_arm_p exactly. Slicing to units[:10] here
+        # would dedup across fewer raw chunks than arm P's up-to-25, letting
+        # duplicate chunks from one document crowd out documents a wider
+        # window would have surfaced, a systematic penalty to doc_ndcg.
+        ranked = [(d, p if p is not None else -1) for d, p, _t in units]
         graded = grade_query(q, ranked, 10)
         rows[q["id"]] = {
             "class": q["class"],

@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Pin fastembed's model directory so actions/cache can restore it.
-      # Without the pin it lands under the OS temp dir, which differs per
-      # runner image and is never cached.
-      FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed_cache
+      # Without the pin it lands under the OS temp dir, outside the workspace
+      # and never cached. (runner.temp is not usable in job-level env.)
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
     strategy:
       matrix:
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
@@ -60,7 +60,7 @@ jobs:
         # when the key misses, roughly once per model or fastembed bump.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/fastembed_cache
+          path: ${{ github.workspace }}/.fastembed_cache
           key: fastembed-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             fastembed-model-${{ runner.os }}-
@@ -100,9 +100,9 @@ jobs:
     runs-on: windows-latest
     env:
       # Pin fastembed's model directory so actions/cache can restore it.
-      # Without the pin it lands under the OS temp dir, which differs per
-      # runner image and is never cached.
-      FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed_cache
+      # Without the pin it lands under the OS temp dir, outside the workspace
+      # and never cached. (runner.temp is not usable in job-level env.)
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
     # Windows has no default job timeout worth relying on (GitHub's is 6
     # hours), and the failure mode this job exists to catch -- spawn-only
     # multiprocessing -- deadlocks rather than errors.
@@ -146,7 +146,7 @@ jobs:
         # when the key misses, roughly once per model or fastembed bump.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/fastembed_cache
+          path: ${{ github.workspace }}/.fastembed_cache
           key: fastembed-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             fastembed-model-${{ runner.os }}-

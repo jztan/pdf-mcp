@@ -1318,7 +1318,36 @@ estimated_tokens: 1740</pre>
     return topK !== null ? fused.slice(0, topK) : fused;
   }
 
-  const corpusFusion = { CORPUS_RRF_K, corpusQueryTerms, docCoveredTerms, corpusCoverageScores, rrfFuseDocRankings };
+  const PROFILE_TERM_LIMIT = 200;
+  // Mirrors corpus.profile_terms: 4+ char tokens across all pages, top 200
+  // by count, ties by term. Insertion order of the returned Map is the
+  // ranked order.
+  function profileTerms(pageTexts) {
+    const counts = new Map();
+    for (const text of pageTexts)
+      for (const t of (text.toLowerCase().match(/[a-z0-9]+/g) || []))
+        if (t.length > 3) counts.set(t, (counts.get(t) || 0) + 1);
+    const top = [...counts].sort((a, b) => (b[1] - a[1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return new Map(top.slice(0, PROFILE_TERM_LIMIT));
+  }
+  // Mirrors corpus.about_terms: tf * log(1 + N / df), top `limit`, ties by term.
+  function aboutTerms(termsByPath, nDocs, limit = 8) {
+    const df = new Map();
+    for (const terms of termsByPath.values())
+      for (const t of terms.keys()) df.set(t, (df.get(t) || 0) + 1);
+    const out = new Map();
+    for (const [path, terms] of termsByPath) {
+      const ranked = [...terms].sort((a, b) => {
+        const sa = a[1] * Math.log(1 + nDocs / df.get(a[0]));
+        const sb = b[1] * Math.log(1 + nDocs / df.get(b[0]));
+        return (sb - sa) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+      });
+      out.set(path, ranked.slice(0, limit).map(([t]) => t));
+    }
+    return out;
+  }
+
+  const corpusFusion = { CORPUS_RRF_K, corpusQueryTerms, docCoveredTerms, corpusCoverageScores, rrfFuseDocRankings, profileTerms, aboutTerms };
   /* __PDF_MCP_CORPUS_FUSION_END__ */
 
   // Port of corpus._clean_title: filters generic/empty PDF titles.
@@ -1651,6 +1680,8 @@ estimated_tokens: 1740</pre>
   }
 
   function buildCorpusOverviewJson() {
+    const termsByPath = new Map(corpusState.docs.map((d) => [d.path, corpusFusion.profileTerms(d.pageTexts)]));
+    const about = corpusFusion.aboutTerms(termsByPath, corpusState.docs.length);
     return {
       docs: corpusState.docs.map((d) => ({
         path: d.path,
@@ -1659,6 +1690,7 @@ estimated_tokens: 1740</pre>
         toc_top: d.tocTop,
         has_toc: d.hasToc,
         text_coverage: textCoverageLabel(d.pageTexts),
+        about: about.get(d.path) || [],
         size_bytes: d.sizeBytes,
         from_cache: false,
       })),

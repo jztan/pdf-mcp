@@ -58,5 +58,19 @@ for (const name of ["rrf_no_scores", "rrf_scores_tiebreak", "rrf_topk"]) {
   }
 }
 
+{
+  const c = fx.about_terms;
+  const termsByPath = new Map();
+  for (const [path, pages] of Object.entries(c.docs)) {
+    const got = F.profileTerms(Object.keys(pages).sort((a, b) => a - b).map((k) => pages[k]));
+    if (!eqJson(Object.fromEntries(got), c.expected_terms[path])) fail(`profileTerms(${path})`, Object.fromEntries(got), c.expected_terms[path]);
+    termsByPath.set(path, got);
+  }
+  const about = F.aboutTerms(termsByPath, Object.keys(c.docs).length);
+  for (const [path, want] of Object.entries(c.expected_about)) {
+    if (!eqJson(about.get(path), want)) fail(`aboutTerms(${path})`, about.get(path), want);
+  }
+}
+
 if (fails) { console.error(`${fails} failure(s)`); process.exit(1); }
 console.log("parity OK");

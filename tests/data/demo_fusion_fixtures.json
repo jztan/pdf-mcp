@@ -222,7 +222,53 @@
     "expected": {
       "x.pdf": 1.6094379124341005,
       "y.pdf": 0.6931471805599453,
-      "z.pdf": 2.9957322735539913
+      "z.pdf": 2.995732273553991
+    }
+  },
+  "about_terms": {
+    "docs": {
+      "/a.pdf": {
+        "0": "the cat budget budget alpha",
+        "1": "Alpha REPORT"
+      },
+      "/b.pdf": {
+        "0": "bravo budget report report"
+      },
+      "/c.pdf": {
+        "0": "charlie budget"
+      }
+    },
+    "expected_terms": {
+      "/a.pdf": {
+        "alpha": 2,
+        "budget": 2,
+        "report": 1
+      },
+      "/b.pdf": {
+        "report": 2,
+        "bravo": 1,
+        "budget": 1
+      },
+      "/c.pdf": {
+        "budget": 1,
+        "charlie": 1
+      }
+    },
+    "expected_about": {
+      "/a.pdf": [
+        "alpha",
+        "budget",
+        "report"
+      ],
+      "/b.pdf": [
+        "report",
+        "bravo",
+        "budget"
+      ],
+      "/c.pdf": [
+        "charlie",
+        "budget"
+      ]
     }
   },
   "end_to_end": {

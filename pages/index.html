@@ -694,7 +694,6 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
       </div>
-      <button class="btn-ghost-pill" id="ctaOwn">Try it on your PDF</button>
       <a class="btn-ghost-pill" id="heroGithubBtn" href="https://github.com/jztan/pdf-mcp">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         <span id="heroGithubLabel">Star on GitHub</span>
@@ -1374,7 +1373,6 @@ estimated_tokens: 1740</pre>
     setInterval(heroLoop, 8500);
   }
 
-  $("ctaOwn").addEventListener("click", () => $("uploadSection").scrollIntoView({ behavior: "smooth" }));
   $("ctaSample").addEventListener("click", () => { track("sample_loaded"); handleUrl("sample.pdf"); });
 
   const SAMPLE_CORPUS = ["corpus/nist-zero-trust.pdf", "corpus/nist-router-security.pdf", "corpus/gao-cloud.pdf", "corpus/nasa-artemis.pdf", "corpus/fed-consumer-context.pdf", "corpus/usda-agri-policy.pdf"];

@@ -14,6 +14,7 @@ from __future__ import annotations
 import random
 import re
 import sys
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -169,3 +170,49 @@ def no_arm_found(status_by_arm: dict[str, dict[str, str]]) -> list[str]:
     return sorted(
         q for q in ids if all(s[q] == "missing" for s in status_by_arm.values())
     )
+
+
+def matches_to_units(matches: list[dict], id_by_path: dict[str, str]) -> list[Unit]:
+    return [
+        (id_by_path.get(m["path"], m["path"]), m["page"], m.get("excerpt", ""))
+        for m in matches
+    ]
+
+
+def run_arm_p(
+    paths: list[str],
+    queries: list[dict],
+    id_by_path: dict[str, str],
+    budget_tokens: int,
+    top_k: int = 25,
+) -> dict[str, dict]:
+    """pdf-mcp corpus search, hybrid mode, run in-session.
+
+    Never lift these numbers from modes_results.md: runs from different
+    cache warms are not comparable number for number.
+    """
+    from benchmark_corpus_modes import build_ranked, grade_query
+    from pdf_mcp.server import pdf_corpus_search
+
+    rows: dict[str, dict] = {}
+    for q in queries:
+        t0 = time.perf_counter()
+        res = pdf_corpus_search(paths, q["query"], mode="auto", top_k=top_k)
+        secs = time.perf_counter() - t0
+        if "error" in res:
+            raise RuntimeError(f"arm P {q['id']}: {res['error']}")
+        if res["coverage"]["searched"] != len(paths):
+            raise RuntimeError(f"arm P {q['id']}: partial coverage {res['coverage']}")
+        units = matches_to_units(res["matches"], id_by_path)
+        kept, k = cap_to_budget(units, budget_tokens)
+        graded = grade_query(q, build_ranked(res["matches"], id_by_path), 10)
+        rows[q["id"]] = {
+            "class": q["class"],
+            "kept": [(d, p) for d, p, _t in kept],
+            "realized_k": k,
+            "containment": grade_containment(q, kept),
+            "doc_ndcg": graded["doc_ndcg"],
+            "dochit3": graded["dochit3"],
+            "seconds": round(secs, 3),
+        }
+    return rows

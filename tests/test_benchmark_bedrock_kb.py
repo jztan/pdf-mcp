@@ -171,3 +171,20 @@ class TestNoArmFound:
 
     def test_empty(self):
         assert no_arm_found({}) == []
+
+
+from scripts.benchmark_bedrock_kb import matches_to_units  # noqa: E402
+
+
+class TestMatchesToUnits:
+    def test_maps_path_to_doc_id_and_keeps_rank_order(self):
+        matches = [
+            {"path": "/abs/a.pdf", "page": 3, "excerpt": "AAA"},
+            {"path": "/abs/b.pdf", "page": 1, "excerpt": "BBB"},
+        ]
+        units = matches_to_units(matches, {"/abs/a.pdf": "a", "/abs/b.pdf": "b"})
+        assert units == [("a", 3, "AAA"), ("b", 1, "BBB")]
+
+    def test_unknown_path_keeps_path_as_id(self):
+        units = matches_to_units([{"path": "/x.pdf", "page": 1, "excerpt": ""}], {})
+        assert units == [("/x.pdf", 1, "")]

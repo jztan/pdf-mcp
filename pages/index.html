@@ -516,7 +516,7 @@
   .skim-head p { font-size: 18px; color: var(--text-secondary); margin: 12px 0 0; max-width: 560px; }
   .skim-head .tool-tag { margin: 0; white-space: nowrap; font-size: 12px; }
   .skim-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-  .skim-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .skim-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .skim-card-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px; }
   .skim-card-head b { color: var(--accent); font-weight: 400; }
   .skim-card-head span { font-size: 12px; color: var(--text-tertiary); }
@@ -661,6 +661,19 @@
     .cg-name { flex-basis: 110px; }
     .skim-grid, .caps-grid, .steps { grid-template-columns: 1fr; }
     .skim-head { flex-direction: column; align-items: flex-start; }
+    .skim-head .tool-tag { white-space: normal; }
+    /* Stack the comparison table: one block per row, each cell labelled with its column. */
+    .versus-wrap { overflow: visible; }
+    table.versus, table.versus tbody, table.versus tr, table.versus th, table.versus td { display: block; width: auto; min-width: 0; }
+    table.versus thead { display: none; }
+    table.versus tr { padding: 20px 0; border-bottom: 1px solid var(--border); }
+    table.versus tr:last-child { border-bottom: none; }
+    table.versus th, table.versus td { padding: 0; border-bottom: none; }
+    table.versus tbody th, table.versus td { width: auto; }
+    table.versus tbody th { font-size: 16px; margin-bottom: 12px; }
+    table.versus td + td { margin-top: 12px; }
+    table.versus td::before { content: "Pasting the PDF"; display: block; font-family: var(--font-display); font-size: 12px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 3px; }
+    table.versus td.ours::before { content: "pdf-mcp"; color: var(--text); }
     section.skim, section.caps, section.versus, section.connect, section.faq { padding-top: 80px; }
     section.closing { margin-top: 80px; padding: 64px 20px; }
     .json-box { font-size: 11px; }

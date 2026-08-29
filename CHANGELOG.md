@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **`pdf_corpus_search` hybrid mode now ranks documents, not only pages.**
+  A cached per-document head vector (page 1, first 1,500 characters,
+  same embedding model as pages) is fused as a third, lower-weight arm
+  beside the keyword and semantic page arms, so a document whose pages
+  never made the page shortlist can still reach `matches` and
+  `doc_match_counts`. On a 500-document corpus (100 graded arXiv papers
+  plus 400 distractors) described-query doc-hit@3 went from 0.48 to
+  0.68, with needle and trap unchanged at 1.000 and 0.985; at 100
+  documents described doc-hit@3 went from 0.64 to 0.72 (spread eased
+  back from 0.92 to 0.88 on one query, as predicted). Hybrid matches
+  carry `doc_score`, and the response carries `doc_profile_coverage`.
+  Profiles are written by `pdf_corpus_warm(embeddings=True)` and
+  backfilled from cached text on first search, so existing caches need
+  no re-warm.
+- **`pdf_corpus_overview` cards carry `about`**: up to eight of the
+  document's most distinctive terms relative to the corpus.
+
 ### Changed
 
 - **Browser demo redesigned** (pdf-mcp.jztan.com). New layout and visual

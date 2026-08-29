@@ -2,6 +2,8 @@
 
 Corpus: 500 docs. Queries: 89 (graded ground truth, stage-2). top_k=10. The tool itself is called per query on a warmed isolated cache, so numbers measure the agent-facing contract end to end.
 
+The Aug-24 pre-arm run (Stage 0 verdict: cap raise HELD at described doc-hit@3 0.48) is preserved in git at commit 2119f57.
+
 | mode | overall NDCG@10 | described | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
 | keyword (keyword) | 0.351 | 0.064 | 0.944 | 0.145 | 0.513 | 0.573 | 3.02 |

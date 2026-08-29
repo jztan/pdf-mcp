@@ -99,6 +99,47 @@ the metric, not a defect in it: it was chosen because it is unit-agnostic
 across arms with very different chunking, and this asymmetry is the cost
 of that choice.
 
+## Excerpt style: the largest lever measured here
+
+Arm P ran with `excerpt_style="paragraph"`, the tool default. pdf-mcp also
+offers `excerpt_style="snippet"`, which returns a window around the actual
+match rather than a selected block. Since the diagnosis above shows P's
+misses on needle and trap are the picker returning the wrong block of a page
+it already retrieved, excerpt style is the obvious variable to test.
+
+Arm P was rerun over all 89 queries with `snippet`, same 2,000-token budget,
+same containment scorer, local only. `scripts/benchmark_excerpt_style_arm.py`
+reproduces it; per-query output is in `snippet_arm_results.json`.
+
+Span recall, all 89 queries (flagged included, so directly comparable to the
+primary table):
+
+| class | n | P paragraph | P snippet | delta | B0 | B1 |
+|---|---|---|---|---|---|---|
+| described | 25 | 0.120 | 0.000 | -0.120 | 0.360 | 0.400 |
+| needle | 14 | 0.429 | 0.643 | +0.214 | 0.714 | 0.714 |
+| spread | 25 | 0.640 | 0.880 | +0.240 | 0.600 | 0.680 |
+| trap | 25 | 0.520 | 0.560 | +0.040 | 0.840 | 0.880 |
+
+Three readings:
+
+1. **On `spread`, pdf-mcp with snippet beats both Bedrock arms** (0.880
+   against 0.600 and 0.680), and on `needle` it closes most of the gap
+   (0.643 against 0.714). Both were losses under the default.
+2. **On `trap` the style barely helps** (+0.040, still 0.560 against 0.880),
+   and on `described` it collapses to zero. Paraphrase queries carry no
+   keyword hit for a snippet window to anchor on, so the arm returns windows
+   built around nothing; `paragraph` at least returns a coherent block that
+   sometimes contains the span.
+3. **No single excerpt style wins across classes, and the default is the
+   wrong one on three of four.** This is a larger effect than anything
+   architectural measured here, and it is a per-query routing decision the
+   tool could make rather than a fixed default.
+
+Caveat: this arm was not run through the full harness, so it carries no
+bootstrap CI and no doc-level metrics. It is a directional result on the
+same queries and the same scorer, not a fourth arm of equal standing.
+
 ## Flagged-inclusion sensitivity check
 
 The conclusions above are unchanged whichever table is read as primary.

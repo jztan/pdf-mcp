@@ -1,3 +1,4 @@
+import sys
 import pymupdf
 import pytest
 
@@ -102,6 +103,10 @@ class TestCloseSurvivesGcRace:
     finalizer only when the cyclic GC runs, which can land mid-iteration
     ("RuntimeError: Set changed size during iteration", seen on CI's
     3.14 leg). The guard below must make close() immune to that timing.
+
+    The race needs the collector to fire inside that loop, which CPython
+    only does from 3.12 on (measured: 3.10 0/1000 trials; 3.12 and 3.13
+    200/200; 3.14 ~5% per trial, so it needs many trials to show up).
     """
 
     @staticmethod
@@ -135,10 +140,15 @@ class TestCloseSurvivesGcRace:
             del live
         return failures
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 12),
+        reason="CPython < 3.12 never runs the GC inside close()'s kids loop",
+    )
     def test_upstream_close_is_racy(self):
         """Documents the defect the guard exists for; if this stops
-        failing, pypdfium2 fixed it upstream and the guard can go."""
-        failures = self._close_under_gc_pressure(lambda pdf: pdf.close())
+        failing on 3.12+, pypdfium2 fixed it upstream and the guard can
+        go. 2000 trials: at 3.14's ~5% hit rate a clean run is ~e^-100."""
+        failures = self._close_under_gc_pressure(lambda pdf: pdf.close(), trials=2000)
         assert failures > 0
 
     def test_close_pdfium_is_race_free(self):

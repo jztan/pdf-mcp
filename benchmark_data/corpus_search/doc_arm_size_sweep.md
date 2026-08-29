@@ -28,6 +28,11 @@ the arm starts paying or whether the one-query spread loss at 100 recurs.
   there and starts paying at 350 (+1) and 400 (+1), +2 at 500.
 - Needle never moves. Trap is identical in both rows at every size (the
   0.985 at 500 is a corpus effect, present with and without the arm).
+- Below 100 (three 50-doc subsets of the gold docs, only fully covered
+  queries graded, n per class 6 to 14): described +4, +3, +2 queries with
+  no loss; spread flat in two subsets and -1 (spread-08 again) in the
+  third; needle flat; trap hit@3 flat. The arm helps described at every
+  size measured, and spread-08 is the one recurring casualty below 150.
 - Described gain by size: +2, +2, 0, +2, +4, +4, +5 queries at 100, 150,
   200, 300, 350, 400, 500. Not perfectly monotone (0 at 200): n=25, one
   query is 4 points; read the trend, not single cells.
@@ -107,6 +112,63 @@ Both match. Full numbers in `sweep.json`.
 
 needle and trap: no query flips hit@3 at any size (both classes hold
 1.00 h@3 identically for control and shipped at every size).
+
+## size 50 (gold subsets)
+
+Three fixed-seed 50-doc draws from the 100 gold docs (seeds 20260829,
+20260830, 20260831; deterministic shuffle of manifest order, first 50),
+run on cache100, no re-warming. A query is graded only when every one of
+its gold documents is inside the subset; a query with any gold doc
+missing from the subset is skipped entirely, so n varies per subset and
+per class and is smaller than the full 25/25/14/25 counts used at sizes
+100 and up.
+
+### seed 20260829 (37/89 queries eligible)
+
+| class | n | control h@3 | shipped h@3 | delta (queries) | control dNDCG | shipped dNDCG |
+|---|---|---|---|---|---|---|
+| described | 14 | 0.571 | 0.857 | +4 | 0.699 | 0.724 |
+| spread | 6 | 1.000 | 1.000 | 0 | 0.914 | 0.797 |
+| needle | 6 | 1.000 | 1.000 | 0 | 1.000 | 1.000 |
+| trap | 11 | 1.000 | 1.000 | 0 | 1.000 | 1.000 |
+
+Flipped: described gained described-16, described-18, described-21,
+described-24; nothing lost in any class.
+
+### seed 20260830 (36/89 queries eligible)
+
+| class | n | control h@3 | shipped h@3 | delta (queries) | control dNDCG | shipped dNDCG |
+|---|---|---|---|---|---|---|
+| described | 14 | 0.643 | 0.857 | +3 | 0.758 | 0.791 |
+| spread | 7 | 1.000 | 1.000 | 0 | 0.808 | 0.896 |
+| needle | 5 | 1.000 | 1.000 | 0 | 1.000 | 1.000 |
+| trap | 10 | 1.000 | 1.000 | 0 | 1.000 | 0.963 |
+
+Flipped: described gained described-07, described-10, described-18;
+nothing lost in any class.
+
+### seed 20260831 (32/89 queries eligible)
+
+| class | n | control h@3 | shipped h@3 | delta (queries) | control dNDCG | shipped dNDCG |
+|---|---|---|---|---|---|---|
+| described | 8 | 0.750 | 1.000 | +2 | 0.799 | 0.816 |
+| spread | 6 | 1.000 | 0.833 | -1 | 0.642 | 0.694 |
+| needle | 6 | 1.000 | 1.000 | 0 | 1.000 | 1.000 |
+| trap | 12 | 1.000 | 1.000 | 0 | 1.000 | 1.000 |
+
+Flipped: described gained described-13, described-17; spread lost
+spread-08, the same query the 100-doc corpus loses.
+
+### Reading
+
+The arm loses a query at 50 docs only in one of three subsets (seed
+20260831, spread-08, the same gold document the 100-doc corpus also
+loses to the arm); the other two seeds show described-only gains and no
+losses anywhere. Needle is flat (h@3 1.000, dNDCG 1.000) in all three
+subsets. Trap h@3 is flat at 1.000 in all three, but trap dNDCG dips for
+the shipped row at seed 20260830 (1.000 control vs 0.963 shipped, n=10)
+with no hit@3 change, so the arm reorders a trap result there without
+demoting the correct top pick.
 
 ## What spread-03 and spread-08 actually do across the sweep
 

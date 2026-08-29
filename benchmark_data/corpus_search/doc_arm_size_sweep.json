@@ -6827,5 +6827,1383 @@
     "described-12"
    ]
   }
+ },
+ "size50": {
+  "20260829": {
+   "n_eligible": 37,
+   "eligible_ids": [
+    "needle-02",
+    "needle-05",
+    "needle-07",
+    "needle-09",
+    "needle-10",
+    "needle-11",
+    "spread-05",
+    "trap-04",
+    "trap-05",
+    "trap-06",
+    "trap-07",
+    "trap-11",
+    "spread-12",
+    "spread-16",
+    "spread-17",
+    "spread-19",
+    "spread-22",
+    "trap-13",
+    "trap-15",
+    "trap-22",
+    "trap-23",
+    "trap-24",
+    "trap-25",
+    "described-01",
+    "described-02",
+    "described-03",
+    "described-05",
+    "described-07",
+    "described-08",
+    "described-09",
+    "described-13",
+    "described-16",
+    "described-17",
+    "described-18",
+    "described-21",
+    "described-22",
+    "described-24"
+   ],
+   "per_query": {
+    "control_no_arm": {
+     "needle-02": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-07": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-09": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-10": {
+      "ndcg": 0.9502344167898356,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-11": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-05": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-04": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-05": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-06": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-11": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-12": {
+      "ndcg": 0.45560514958746035,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-16": {
+      "ndcg": 0.4796249331362629,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-17": {
+      "ndcg": 0.20151514190050246,
+      "doc_ndcg": 0.9638614719361266,
+      "dochit3": 1
+     },
+     "spread-19": {
+      "ndcg": 0.38009376671593426,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-22": {
+      "ndcg": 0.6131471927654584,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-13": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-15": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-24": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-01": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-02": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-03": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-05": {
+      "ndcg": 0.2890648263178879,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-08": {
+      "ndcg": 0.3562071871080222,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-09": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-13": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "dochit3": 0
+     },
+     "described-16": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 0
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.0,
+      "dochit3": 0
+     },
+     "described-18": {
+      "ndcg": 0.2890648263178879,
+      "doc_ndcg": 0.5,
+      "dochit3": 0
+     },
+     "described-21": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 0
+     },
+     "described-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-24": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 0
+     }
+    },
+    "shipped_arm_w0.25": {
+     "needle-02": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-07": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-09": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-10": {
+      "ndcg": 0.9502344167898356,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-11": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-05": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.8175295903539445,
+      "dochit3": 1
+     },
+     "trap-04": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-05": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-06": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.38685280723454163,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-11": {
+      "ndcg": 0.5,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-12": {
+      "ndcg": 0.45560514958746035,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-16": {
+      "ndcg": 0.4796249331362629,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-17": {
+      "ndcg": 0.2129292954931993,
+      "doc_ndcg": 0.7224242270408039,
+      "dochit3": 1
+     },
+     "spread-19": {
+      "ndcg": 0.3273949503887395,
+      "doc_ndcg": 0.4796249331362629,
+      "dochit3": 1
+     },
+     "spread-22": {
+      "ndcg": 0.6131471927654584,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-13": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-15": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-24": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-01": {
+      "ndcg": 0.3333333333333333,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-02": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-03": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-05": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-08": {
+      "ndcg": 0.2890648263178879,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-09": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-13": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "dochit3": 0
+     },
+     "described-16": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.3562071871080222,
+      "dochit3": 0
+     },
+     "described-18": {
+      "ndcg": 0.5,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     },
+     "described-21": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-24": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     }
+    }
+   },
+   "flips": {
+    "gained": [
+     "described-16",
+     "described-18",
+     "described-21",
+     "described-24"
+    ],
+    "lost": []
+   },
+   "table": {
+    "control_no_arm": {
+     "described": {
+      "ndcg": 0.1832,
+      "doc_ndcg": 0.6985,
+      "dochit3": 0.5714,
+      "n": 14
+     },
+     "needle": {
+      "ndcg": 0.9084,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "spread": {
+      "ndcg": 0.355,
+      "doc_ndcg": 0.914,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "trap": {
+      "ndcg": 0.8238,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 11
+     }
+    },
+    "shipped_arm_w0.25": {
+     "described": {
+      "ndcg": 0.1516,
+      "doc_ndcg": 0.724,
+      "dochit3": 0.8571,
+      "n": 14
+     },
+     "needle": {
+      "ndcg": 0.9084,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "spread": {
+      "ndcg": 0.3481,
+      "doc_ndcg": 0.7966,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "trap": {
+      "ndcg": 0.8016,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 11
+     }
+    }
+   }
+  },
+  "20260830": {
+   "n_eligible": 36,
+   "eligible_ids": [
+    "needle-01",
+    "needle-05",
+    "needle-12",
+    "needle-13",
+    "needle-14",
+    "spread-04",
+    "trap-01",
+    "trap-03",
+    "trap-06",
+    "trap-07",
+    "trap-08",
+    "spread-12",
+    "spread-18",
+    "spread-20",
+    "spread-23",
+    "spread-24",
+    "spread-25",
+    "trap-14",
+    "trap-17",
+    "trap-21",
+    "trap-22",
+    "trap-25",
+    "described-01",
+    "described-06",
+    "described-07",
+    "described-08",
+    "described-10",
+    "described-11",
+    "described-12",
+    "described-14",
+    "described-16",
+    "described-17",
+    "described-18",
+    "described-19",
+    "described-20",
+    "described-23"
+   ],
+   "per_query": {
+    "control_no_arm": {
+     "needle-01": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-12": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-13": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-14": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-04": {
+      "ndcg": 0.23719771276929622,
+      "doc_ndcg": 0.6131471927654584,
+      "dochit3": 1
+     },
+     "trap-01": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-03": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-06": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-08": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-12": {
+      "ndcg": 0.45560514958746035,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-18": {
+      "ndcg": 0.6916951540553927,
+      "doc_ndcg": 0.7606220037494031,
+      "dochit3": 1
+     },
+     "spread-20": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-23": {
+      "ndcg": 0.3175786993670768,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-24": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-25": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "trap-14": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-17": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-21": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-01": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-06": {
+      "ndcg": 0.2890648263178879,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 0
+     },
+     "described-08": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-10": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 0
+     },
+     "described-11": {
+      "ndcg": 0.38685280723454163,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-12": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-14": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-16": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.3562071871080222,
+      "dochit3": 0
+     },
+     "described-18": {
+      "ndcg": 0.3333333333333333,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 0
+     },
+     "described-19": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.0,
+      "dochit3": 0
+     },
+     "described-20": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     }
+    },
+    "shipped_arm_w0.25": {
+     "needle-01": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-12": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-13": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-14": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-04": {
+      "ndcg": 0.23719771276929622,
+      "doc_ndcg": 0.8772153153380493,
+      "dochit3": 1
+     },
+     "trap-01": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-03": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "trap-06": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-08": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-12": {
+      "ndcg": 0.45560514958746035,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-18": {
+      "ndcg": 0.5316519652587917,
+      "doc_ndcg": 0.7606220037494031,
+      "dochit3": 1
+     },
+     "spread-20": {
+      "ndcg": 0.4796249331362629,
+      "doc_ndcg": 0.9238850086262381,
+      "dochit3": 1
+     },
+     "spread-23": {
+      "ndcg": 0.39668756020386675,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-24": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.9502344167898356,
+      "dochit3": 1
+     },
+     "spread-25": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "trap-14": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-17": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-21": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-22": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-01": {
+      "ndcg": 0.3333333333333333,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-06": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     },
+     "described-08": {
+      "ndcg": 0.31546487678572877,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-10": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-11": {
+      "ndcg": 0.3333333333333333,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-12": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-14": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-16": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 1
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "dochit3": 0
+     },
+     "described-18": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-19": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "dochit3": 0
+     },
+     "described-20": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     }
+    }
+   },
+   "flips": {
+    "gained": [
+     "described-07",
+     "described-10",
+     "described-18"
+    ],
+    "lost": []
+   },
+   "table": {
+    "control_no_arm": {
+     "described": {
+      "ndcg": 0.3622,
+      "doc_ndcg": 0.7584,
+      "dochit3": 0.6429,
+      "n": 14
+     },
+     "needle": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 5
+     },
+     "spread": {
+      "ndcg": 0.5689,
+      "doc_ndcg": 0.8078,
+      "dochit3": 1.0,
+      "n": 7
+     },
+     "trap": {
+      "ndcg": 0.8323,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 10
+     }
+    },
+    "shipped_arm_w0.25": {
+     "described": {
+      "ndcg": 0.3295,
+      "doc_ndcg": 0.7914,
+      "dochit3": 0.8571,
+      "n": 14
+     },
+     "needle": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 5
+     },
+     "spread": {
+      "ndcg": 0.5173,
+      "doc_ndcg": 0.896,
+      "dochit3": 1.0,
+      "n": 7
+     },
+     "trap": {
+      "ndcg": 0.7385,
+      "doc_ndcg": 0.9631,
+      "dochit3": 1.0,
+      "n": 10
+     }
+    }
+   }
+  },
+  "20260831": {
+   "n_eligible": 32,
+   "eligible_ids": [
+    "needle-01",
+    "needle-03",
+    "needle-04",
+    "needle-05",
+    "needle-06",
+    "needle-08",
+    "spread-04",
+    "spread-07",
+    "spread-08",
+    "trap-02",
+    "trap-03",
+    "trap-07",
+    "trap-08",
+    "trap-10",
+    "trap-12",
+    "spread-15",
+    "spread-16",
+    "spread-24",
+    "trap-15",
+    "trap-16",
+    "trap-17",
+    "trap-20",
+    "trap-24",
+    "trap-25",
+    "described-07",
+    "described-09",
+    "described-11",
+    "described-13",
+    "described-17",
+    "described-20",
+    "described-21",
+    "described-23"
+   ],
+   "per_query": {
+    "control_no_arm": {
+     "needle-01": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-03": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-04": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-06": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-08": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-04": {
+      "ndcg": 0.23719771276929622,
+      "doc_ndcg": 0.6131471927654584,
+      "dochit3": 1
+     },
+     "spread-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "dochit3": 1
+     },
+     "spread-08": {
+      "ndcg": 0.3065735963827292,
+      "doc_ndcg": 0.3065735963827292,
+      "dochit3": 1
+     },
+     "trap-02": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-03": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-08": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-10": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-12": {
+      "ndcg": 0.3562071871080222,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-15": {
+      "ndcg": 0.39668756020386675,
+      "doc_ndcg": 0.7974779478881874,
+      "dochit3": 1
+     },
+     "spread-16": {
+      "ndcg": 0.4796249331362629,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-24": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "trap-15": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-16": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-17": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-20": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-24": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-09": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-11": {
+      "ndcg": 0.38685280723454163,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-13": {
+      "ndcg": 0.31546487678572877,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 0
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.5,
+      "dochit3": 0
+     },
+     "described-20": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-21": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     }
+    },
+    "shipped_arm_w0.25": {
+     "needle-01": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-03": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-04": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-05": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-06": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "needle-08": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-04": {
+      "ndcg": 0.23719771276929622,
+      "doc_ndcg": 0.9197207891481876,
+      "dochit3": 1
+     },
+     "spread-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "dochit3": 1
+     },
+     "spread-08": {
+      "ndcg": 0.21840743681816419,
+      "doc_ndcg": 0.21840743681816419,
+      "dochit3": 0
+     },
+     "trap-02": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-03": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-07": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-08": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-10": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-12": {
+      "ndcg": 0.31546487678572877,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "spread-15": {
+      "ndcg": 0.3430601340643824,
+      "doc_ndcg": 0.8935349950641011,
+      "dochit3": 1
+     },
+     "spread-16": {
+      "ndcg": 0.4796249331362629,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "spread-24": {
+      "ndcg": 0.7601875334318685,
+      "doc_ndcg": 0.7601875334318685,
+      "dochit3": 1
+     },
+     "trap-15": {
+      "ndcg": 0.43067655807339306,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-16": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-17": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-20": {
+      "ndcg": 0.6309297535714575,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-24": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "trap-25": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-07": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-09": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-11": {
+      "ndcg": 0.3562071871080222,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-13": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-17": {
+      "ndcg": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "dochit3": 1
+     },
+     "described-20": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-21": {
+      "ndcg": 0.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     },
+     "described-23": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1
+     }
+    }
+   },
+   "flips": {
+    "gained": [
+     "described-13",
+     "described-17"
+    ],
+    "lost": [
+     "spread-08"
+    ]
+   },
+   "table": {
+    "control_no_arm": {
+     "described": {
+      "ndcg": 0.3378,
+      "doc_ndcg": 0.7991,
+      "dochit3": 0.75,
+      "n": 8
+     },
+     "needle": {
+      "ndcg": 1.0,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "spread": {
+      "ndcg": 0.3634,
+      "doc_ndcg": 0.6418,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "trap": {
+      "ndcg": 0.7592,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 12
+     }
+    },
+    "shipped_arm_w0.25": {
+     "described": {
+      "ndcg": 0.2945,
+      "doc_ndcg": 0.8155,
+      "dochit3": 1.0,
+      "n": 8
+     },
+     "needle": {
+      "ndcg": 0.9385,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 6
+     },
+     "spread": {
+      "ndcg": 0.3397,
+      "doc_ndcg": 0.6942,
+      "dochit3": 0.8333,
+      "n": 6
+     },
+     "trap": {
+      "ndcg": 0.6776,
+      "doc_ndcg": 1.0,
+      "dochit3": 1.0,
+      "n": 12
+     }
+    }
+   }
+  }
  }
 }

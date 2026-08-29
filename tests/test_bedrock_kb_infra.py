@@ -54,6 +54,23 @@ class TestBedrockArmStack:
             {"DataType": "float32", "Dimension": 1024, "DistanceMetric": "cosine"},
         )
 
+    def test_index_non_filterable_keys_include_both_managed_keys(self):
+        # Non-filterable designation is immutable after index creation.
+        # Missing AMAZON_BEDROCK_METADATA means Bedrock's own managed
+        # metadata counts against the filterable budget and 35-key limit,
+        # and ingestion throws once that is exceeded.
+        t = _synth("B0-default-v1", {"strategy": "NONE_OVERRIDE_DEFAULT"})
+        t.has_resource_properties(
+            "AWS::S3Vectors::Index",
+            {
+                "MetadataConfiguration": {
+                    "NonFilterableMetadataKeys": Match.array_with(
+                        ["AMAZON_BEDROCK_METADATA", "AMAZON_BEDROCK_TEXT"]
+                    )
+                }
+            },
+        )
+
     def test_default_chunking_sets_no_chunking_configuration(self):
         t = _synth("B0-default-v1", {"strategy": "NONE_OVERRIDE_DEFAULT"})
         t.has_resource_properties(
@@ -110,14 +127,39 @@ class TestBedrockArmStack:
             t.has_output(key, {})
 
     def test_explicit_names_carry_the_stack_prefix(self):
+        # self.account is an unresolved CDK token at synth time, so these
+        # render as Fn::Join rather than a literal string. Keep the join
+        # shape but still assert the literal prefix segment inside it.
         t = _synth("B0-default-v1", {"strategy": "NONE_OVERRIDE_DEFAULT"})
         t.has_resource_properties(
             "AWS::S3::Bucket",
-            {"BucketName": Match.object_like({"Fn::Join": Match.any_value()})},
+            {
+                "BucketName": Match.object_like(
+                    {
+                        "Fn::Join": Match.array_with(
+                            [
+                                "",
+                                Match.array_with(["pdfmcp-anchor-b0-default-v1-src-"]),
+                            ]
+                        )
+                    }
+                )
+            },
         )
         t.has_resource_properties(
             "AWS::S3Vectors::VectorBucket",
-            {"VectorBucketName": Match.object_like({"Fn::Join": Match.any_value()})},
+            {
+                "VectorBucketName": Match.object_like(
+                    {
+                        "Fn::Join": Match.array_with(
+                            [
+                                "",
+                                Match.array_with(["pdfmcp-anchor-b0-default-v1-vec-"]),
+                            ]
+                        )
+                    }
+                )
+            },
         )
         t.has_resource_properties(
             "AWS::IAM::Role", {"RoleName": "pdfmcp-anchor-b0-default-v1-kb-role"}
@@ -146,3 +188,53 @@ class TestBedrockArmStack:
             },
         )
         t.resource_count_is("AWS::IAM::Policy", 1)
+
+        policies = t.find_resources("AWS::IAM::Policy")
+        assert len(policies) == 1
+        statements = list(policies.values())[0]["Properties"]["PolicyDocument"][
+            "Statement"
+        ]
+
+        def _resources(stmt):
+            r = stmt["Resource"]
+            return r if isinstance(r, list) else [r]
+
+        # No statement is left wildcard-scoped.
+        for stmt in statements:
+            for resource in _resources(stmt):
+                assert resource != "*", stmt
+
+        embed_arn = (
+            "arn:aws:bedrock:us-east-1::foundation-model/"
+            "amazon.titan-embed-text-v2:0"
+        )
+        invoke_model = [s for s in statements if s["Action"] == "bedrock:InvokeModel"]
+        assert len(invoke_model) == 1
+        assert _resources(invoke_model[0]) == [embed_arn]
+
+        s3vectors_statements = [
+            s
+            for s in statements
+            if isinstance(s["Action"], list)
+            and any(a.startswith("s3vectors:") for a in s["Action"])
+        ]
+        assert len(s3vectors_statements) == 1
+        assert _resources(s3vectors_statements[0]) == [
+            {"Fn::GetAtt": ["Index", "IndexArn"]}
+        ]
+
+    def test_kb_depends_on_role_policy_and_index(self):
+        # Holds today only because CDK expands a construct-level
+        # node.add_dependency(role) over the role's whole subtree,
+        # including its inline DefaultPolicy. Switching to
+        # attach_inline_policy or a managed policy would silently drop
+        # this and produce an intermittent role-validation failure at KB
+        # creation, so assert the expansion directly rather than trust it.
+        t = _synth("B0-default-v1", {"strategy": "NONE_OVERRIDE_DEFAULT"})
+        kbs = t.find_resources("AWS::Bedrock::KnowledgeBase")
+        assert len(kbs) == 1
+        depends_on = list(kbs.values())[0].get("DependsOn", [])
+        if isinstance(depends_on, str):
+            depends_on = [depends_on]
+        assert any("DefaultPolicy" in d for d in depends_on), depends_on
+        assert any(d.startswith("Index") for d in depends_on), depends_on

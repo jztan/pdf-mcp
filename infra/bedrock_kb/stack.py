@@ -101,7 +101,10 @@ class BedrockArmStack(cdk.Stack):
             dimension=EMBED_DIM,
             distance_metric="cosine",
             metadata_configuration=s3vectors.CfnIndex.MetadataConfigurationProperty(
-                non_filterable_metadata_keys=["AMAZON_BEDROCK_TEXT"]
+                non_filterable_metadata_keys=[
+                    "AMAZON_BEDROCK_METADATA",
+                    "AMAZON_BEDROCK_TEXT",
+                ]
             ),
         )
         index.add_dependency(vbucket)

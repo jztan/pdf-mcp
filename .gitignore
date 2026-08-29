@@ -125,3 +125,6 @@ scripts/demo-recorder/package-lock.json
 documents/
 
 benchmark_data/bedrock_kb/.stack.json
+
+# CDK synth output (multi-megabyte, regenerable via `cdk synth`)
+infra/bedrock_kb/cdk.out/

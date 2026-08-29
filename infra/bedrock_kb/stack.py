@@ -89,13 +89,16 @@ class BedrockArmStack(cdk.Stack):
             enforce_ssl=True,
         )
 
+        vector_bucket_name = f"{name}-vec-{self.account}"
         vbucket = s3vectors.CfnVectorBucket(
-            self, "VectorBucket", vector_bucket_name=f"{name}-vec-{self.account}"
+            self, "VectorBucket", vector_bucket_name=vector_bucket_name
         )
         index = s3vectors.CfnIndex(
             self,
             "Index",
-            vector_bucket_name=vbucket.ref,
+            # CfnVectorBucket.ref is the ARN (92 chars), and VectorBucketName
+            # caps at 63, so pass the literal name we assigned above.
+            vector_bucket_name=vector_bucket_name,
             index_name="chunks",
             data_type="float32",
             dimension=EMBED_DIM,

@@ -1,5 +1,7 @@
 """Synth-time tests for the Bedrock KB arm stack. No AWS calls."""
 
+import json
+
 import pytest
 
 cdk = pytest.importorskip("aws_cdk")
@@ -53,6 +55,17 @@ class TestBedrockArmStack:
             "AWS::S3Vectors::Index",
             {"DataType": "float32", "Dimension": 1024, "DistanceMetric": "cosine"},
         )
+
+    def test_index_vector_bucket_name_is_the_name_not_the_arn(self):
+        """CfnVectorBucket.ref is the ARN (92 chars); VectorBucketName caps at
+        63, so passing .ref fails CloudFormation validation at deploy time.
+        Synth alone cannot catch it, so assert the rendered value is a Join of
+        the literal name segments and never contains an arn prefix."""
+        t = _synth("B0-default-v1", {"strategy": "NONE_OVERRIDE_DEFAULT"})
+        index = list(t.find_resources("AWS::S3Vectors::Index").values())[0]
+        rendered = json.dumps(index["Properties"]["VectorBucketName"])
+        assert "arn:" not in rendered
+        assert "pdfmcp-anchor-b0-default-v1-vec-" in rendered
 
     def test_index_non_filterable_keys_include_both_managed_keys(self):
         # Non-filterable designation is immutable after index creation.

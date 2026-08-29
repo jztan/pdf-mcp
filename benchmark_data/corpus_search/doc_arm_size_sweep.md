@@ -135,38 +135,49 @@ a persistent two-query tax.
 **Described gain first exceeds one query at size 100**, the smallest
 corpus tested: 2 net gains (described-07, described-21) with zero losses.
 The gain is present at every size in the sweep, ranging +2 (100, 150,
-300) to +5 (500), and never negative.
+300) to +5 (350, 500), and never negative.
 
 **The spread loss is not the same two queries at every size.** spread-03
 and spread-08 are lost to the arm only at size 100; from 150 onward
 control already misses both regardless of the arm (buried by
 distractors), so there is no incremental arm-caused loss on them past
-100. From 400 onward the arm nets a spread gain instead (spread-11 at
-400, plus spread-18 at 500), so the net spread effect flips sign across
-the sweep: -1 query at 100, 0 at 150-300, +1 at 400, +2 at 500.
+100. From 350 onward the arm nets a spread gain instead: spread-07 at
+350, spread-11 at 400, spread-11 and spread-18 at 500. These are three
+different queries across three sizes, not one query recurring, so the
+net spread effect flips sign across the sweep and keeps changing which
+query it is made of: -1 query at 100, 0 at 150-300, +1 at 350 and 400
+(different query each time), +2 at 500.
 
 **Needle never moves.** Doc-hit@3 and doc-NDCG are 1.00/1.000 for both
-rows at every size; the arm has zero measurable effect on this class
-anywhere in the sweep.
+rows at every size, including 350; the arm has zero measurable effect on
+this class anywhere in the sweep.
 
 **Trap moves only with corpus size, never with the arm.** hit@3 stays
-1.00 throughout. dNDCG stays 1.000 for both rows through size 400 and
-drops to 0.985 for both rows at size 500, identically, meaning the drop
-comes from distractor dilution at 500 docs, not from the doc-profile arm
-(control and shipped are equal at every size).
+1.00 throughout. dNDCG stays 1.000 for both rows through size 400
+(350 included) and drops to 0.985 for both rows at size 500, identically,
+meaning the drop comes from distractor dilution at 500 docs, not from the
+doc-profile arm (control and shipped are equal at every size).
 
-**Neither curve is cleanly monotone.** Control described h@3 is
-non-increasing (0.64, 0.64, 0.64, 0.56, 0.52, 0.48) but shipped described
-h@3 is not: 0.72, 0.72, 0.64, 0.72, 0.68, 0.68, so from a pure hit@3 point
-of view it dips into a rest a hit-count away from its own value at 200. Once
-converted to a query count out of 25 this is 18, 18, 16, 16, 17, 17. Spread
-h@3 is non-increasing for control (0.92 down to 0.64) and for shipped
-(0.88 down to, then flat at, 0.72 from 300 on). doc-NDCG for both classes
-is not monotone at all: e.g. shipped spread dNDCG rises from 0.690 (100)
-to 0.667 (150) to 0.642 (200) then falls back toward 0.543 (500),
-non-monotone in both directions across the sweep. Described dNDCG for
-control falls 0.730 -> 0.678 -> 0.663 -> 0.635 -> 0.615 -> 0.610
-(monotone decreasing); shipped described dNDCG is roughly flat to
-declining (0.755, 0.711, 0.644, 0.607, 0.607, 0.587) with one local
-recovery pattern in the middle (0.644 at 200 close to the 300 value) but
-overall non-increasing across the six points.
+**Hit@3 curves are not cleanly monotone; doc-NDCG curves mostly are, once
+350 is in.** Control described h@3 is non-increasing across all seven
+points (0.64, 0.64, 0.64, 0.56, 0.52, 0.52, 0.48 at 100/150/200/300/350/
+400/500). Shipped described h@3 is not: 0.72, 0.72, 0.64, 0.64, 0.68,
+0.68, 0.68, a dip to 16/25 queries at 200-300 followed by a rise to 17/25
+that holds from 350 through 500. Control spread h@3 is non-increasing
+(0.92 down to 0.64, flat at 300-350). Shipped spread h@3 is not: 0.88,
+0.84, 0.80, 0.72, 0.76, 0.72, 0.72, a one-point bump at 350 (spread-07,
+the query that is gained only at that size) sitting between two 0.72
+plateaus.
+
+Doc-NDCG is cleaner: both spread curves (control 0.722, 0.658, 0.582,
+0.556, 0.546, 0.521, 0.508; shipped 0.690, 0.667, 0.642, 0.594, 0.587,
+0.572, 0.543) are monotone decreasing across all seven sizes, including
+350, correcting an earlier read of this data before 350 was added that
+called the shipped spread dNDCG curve non-monotone. Control described
+dNDCG is also monotone decreasing (0.730, 0.678, 0.663, 0.635, 0.618,
+0.615, 0.610). Shipped described dNDCG is the one doc-NDCG series that is
+not monotone: 0.755, 0.711, 0.644, 0.607, 0.615, 0.607, 0.587, a small
+bump at 350 (0.607 -> 0.615) before falling back to 0.607 at 400. So the
+only two non-monotone series in the sweep, shipped described h@3 and
+shipped spread h@3, are both hit@3 metrics on the shipped row, and 350 is
+where the spread one shows its bump.

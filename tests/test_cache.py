@@ -1619,10 +1619,14 @@ class TestChunkedEmbeddings:
         cache.save_page_embeddings(sample_pdf, {0: []}, self.MODEL)
         assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL) == {}
 
-    def test_extraction_version_is_nine(self):
+    def test_extraction_version_is_eleven(self):
+        """11: spanning rows (a two-column paper's full-width title, author
+        or abstract line) are no longer split at the gutter; cached text
+        from earlier versions holds the right half of such lines displaced
+        after the whole left column and must be re-extracted."""
         from pdf_mcp.cache import _EXTRACTION_VERSION
 
-        assert _EXTRACTION_VERSION == 10
+        assert _EXTRACTION_VERSION == 11
 
     def test_stats_counts_pages_not_chunks(self, temp_cache_dir, sample_pdf):
         """pdf_cache_stats is user-facing. A page with three chunks must not

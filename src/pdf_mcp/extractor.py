@@ -992,19 +992,67 @@ def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
                 )
             )
 
+    # A spanning item (a title, author line, abstract or full-width
+    # caption that runs across a gutter) is its own horizontal band, not
+    # a member of the column it happens to overlap most: dealing such
+    # lines to columns by overlap scattered a multi-line abstract between
+    # the two columns. Bands are emitted top to bottom; between two
+    # spanning items the columns are emitted left to right, each in
+    # y order, which is the XY-cut reading order.
+    spanning = [
+        item
+        for item in items
+        if item[2] is not None and _spans_columns(item[1], rboxes)
+    ]
+    spanning.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
+    spanning_ids = {id(item) for item in spanning}
+    column_items = [
+        item for item in items if item[2] is not None and id(item) not in spanning_ids
+    ]
+    cuts = [r(tb[1][1]) for tb in spanning] + [float("inf")]
     parts: list[str] = []
-    for j in range(len(boxes)):
-        col = [item for item in items if item[2] == j]
-        col.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
-        joined = "\n\n".join(text for text, _bbox, _j in col)
-        if joined.strip():
-            parts.append(joined)
+    lo = float("-inf")
+    for band_idx, hi in enumerate(cuts):
+        for j in range(len(boxes)):
+            col = [
+                item
+                for item in column_items
+                if item[2] == j and lo <= r(item[1][1]) < hi
+            ]
+            col.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
+            joined = "\n\n".join(text for text, _bbox, _j in col)
+            if joined.strip():
+                parts.append(joined)
+        if band_idx < len(spanning):
+            parts.append(spanning[band_idx][0])
+            lo = hi
     orphans = [item for item in items if item[2] is None]
     orphans.sort(key=lambda tb: (r(tb[1][1]), r(tb[1][0])))
     orphan_text = "\n\n".join(text for text, _bbox, _j in orphans)
     if orphan_text.strip():
         parts.append(orphan_text)
     return "\n\n".join(parts)
+
+
+_SPAN_MIN_REACH = 6.0  # points of ink required inside EACH adjacent column
+
+
+def _spans_columns(
+    bbox: tuple[float, float, float, float],
+    rboxes: list[tuple[float, float, float, float]],
+) -> bool:
+    """True when a line has ink inside BOTH of two adjacent column boxes
+    (at least _SPAN_MIN_REACH points in each). An overfull equation that
+    pokes into the gutter never enters the other column's x-range, so it
+    does not qualify; a centred title, even a short second title line, an
+    abstract line or a full-width caption does."""
+    x0, x1 = bbox[0], bbox[2]
+    for a, b in zip(rboxes, rboxes[1:]):
+        in_a = min(a[2], x1) - max(a[0], x0)
+        in_b = min(b[2], x1) - max(b[0], x0)
+        if in_a >= _SPAN_MIN_REACH and in_b >= _SPAN_MIN_REACH:
+            return True
+    return False
 
 
 def extract_text_from_page(page: Any, sort_by_position: bool = True) -> str:

@@ -55,6 +55,35 @@ signal is described itself. Chunking and snippet excerpts do not stack: snippet'
 from -0.240 (excludes zero) to -0.080 (includes zero). Full gate record in
 `docs_internal/chunking-results.md`.
 
+## Addendum, 2026-08-30 (later): 9 graded spans were an extraction defect
+
+Sweeping all 127 labels against the cached page text and against raw
+pdfium text found 9 labels present in the PDF but absent from pdf-mcp's
+extraction (needle-06, needle-09, spread-18, spread-25, trap-11, trap-17,
+trap-19, trap-23, trap-25): full-width title, author or abstract lines on
+two-column papers, cut at the gutter by `backend/text.py` and emitted as
+two displaced halves. So "P returned the page and the span was present on
+it" in the diagnosis above was true of the PDF but not of the text P
+searches and excerpts from. Fixed (spanning rows stay whole, emitted as
+their own band; `_EXTRACTION_VERSION` 11) and re-run with B0/B1 rows
+reused:
+
+| class | P-para before | P-para after | P-snip before | P-snip after | B0 |
+|---|---|---|---|---|---|
+| described | 0.240 | 0.240 | 0.000 | 0.000 | 0.360 |
+| needle | 0.429 | 0.500 | 0.643 | 0.786 | 0.714 |
+| spread | 0.760 | 0.760 | 0.840 | 0.840 | 0.600 |
+| trap | 0.520 | 0.520 | 0.560 | 0.720 | 0.840 |
+
+P minus B0 on needle moved from -0.286 to -0.214 (CI still includes zero,
+n=14); trap is unchanged at -0.320 (excludes zero). The recovered titles
+are reachable by snippet excerpts but not by paragraph excerpts, whose
+80-character block floor still excludes a title block, so on paragraph
+mode the remaining needle and trap gap is the excerpt unit, not the text.
+Document-level metrics did not move on needle or trap (1.000 throughout);
+described doc-hit@3 0.800 to 0.840 and doc-NDCG 0.831 to 0.813 are
+warm-to-warm movement on re-embedded pages, not a finding.
+
 ## Flagged-query disclosure
 
 21 of the 89 queries had their evidence span found by no arm (P, B0, or B1).

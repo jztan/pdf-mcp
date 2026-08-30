@@ -492,23 +492,63 @@ def _split_rows_at_bands(
     """
     if not bands or len(bands) < 2:
         return rows
-    edges = [(bands[i][1] + bands[i + 1][0]) / 2 for i in range(len(bands) - 1)]
+    gutters = [(bands[i][1], bands[i + 1][0]) for i in range(len(bands) - 1)]
+    edges = [(g0 + g1) / 2 for g0, g1 in gutters]
 
-    def band_of(char: _Char) -> int:
+    def band_of(char: _Char, active: list[float]) -> int:
         centre = (char.x0 + char.x1) / 2
-        for i, edge in enumerate(edges):
+        for i, edge in enumerate(active):
             if centre < edge:
                 return i
-        return len(edges)
+        return len(active)
 
     out: list[list[_Char]] = []
     for row in rows:
+        # Split at an edge only where this row actually has a gap. A
+        # full-width title, author line or abstract on a two-column page
+        # runs straight across the gutter; splitting it by glyph centre
+        # cut it mid-word ("Macroeconom" / "ic Risks from Maritime") and
+        # emitted the right half after the entire left column, which
+        # broke 9 of 127 graded spans in the Bedrock anchor benchmark.
+        # A row that has glyphs on both sides of an edge with no glyph
+        # straddling it and a gap at least half the gutter (and wider
+        # than a word space at the row's own size) is two column lines
+        # sharing a baseline and must split; anything else is a spanning
+        # line and stays whole.
+        active = [
+            edge
+            for edge, (g0, g1) in zip(edges, gutters)
+            if _row_has_gap_at(row, edge, g1 - g0)
+        ]
+        if not active:
+            out.append(row)
+            continue
         pieces: dict[int, list[_Char]] = {}
         for char in row:
-            pieces.setdefault(band_of(char), []).append(char)
+            pieces.setdefault(band_of(char, active), []).append(char)
         for _, piece in sorted(pieces.items()):
             out.append(piece)
     return out
+
+
+def _row_has_gap_at(row: list[_Char], edge: float, gutter_width: float) -> bool:
+    """True when `row` is separable at x=edge: glyphs on both sides, none
+    straddling, and clear space around the edge of at least half the
+    gutter and more than twice the row's median glyph width (so a word
+    space in a large-font heading never counts as a gutter)."""
+    inked = [c for c in row if c.ch.strip()]
+    if not inked:
+        return True
+    left = [c for c in inked if c.x1 <= edge]
+    right = [c for c in inked if c.x0 >= edge]
+    if not left or not right:
+        return False
+    if len(left) + len(right) != len(inked):
+        return False  # a glyph straddles the edge
+    gap = min(c.x0 for c in right) - max(c.x1 for c in left)
+    widths = sorted(c.x1 - c.x0 for c in inked)
+    med_w = widths[len(widths) // 2]
+    return gap >= 0.5 * gutter_width and gap > 2.0 * med_w
 
 
 def _index_runs(row: list[_Char]) -> list[tuple[int, int]]:

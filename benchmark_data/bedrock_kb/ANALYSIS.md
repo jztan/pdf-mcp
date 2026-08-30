@@ -6,7 +6,7 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
-## Headline, current run (after sub-page embedding chunking)
+## Headline, current run (after sub-page embedding chunking and the spanning-line extraction fix, 2026-08-30)
 
 One table per metric, all four arms, all 89 queries (flagged included; see
 the sensitivity tables in RESULTS.md). P-para is pdf-mcp with paragraph
@@ -19,43 +19,23 @@ Span recall (evidence verbatim inside the 2,000-token budget):
 | class | P-para | P-snip | B0 | B1 |
 |---|---|---|---|---|
 | described | 0.240 | 0.000 | 0.360 | 0.400 |
-| needle | 0.429 | 0.643 | 0.714 | 0.714 |
+| needle | 0.500 | 0.786 | 0.714 | 0.714 |
 | spread | 0.760 | 0.840 | 0.600 | 0.680 |
-| trap | 0.520 | 0.560 | 0.840 | 0.880 |
+| trap | 0.520 | 0.720 | 0.840 | 0.880 |
+
+(Before the extraction fix, same day: needle P-para 0.429 / P-snip 0.643,
+trap P-snip 0.560; see "Latest run" directly below.)
 
 doc-hit@3 (the right document in the top 3):
 
 | class | P-para | P-snip | B0 | B1 |
 |---|---|---|---|---|
-| described | 0.800 | 0.800 | 0.840 | 0.920 |
+| described | 0.840 | 0.840 | 0.840 | 0.920 |
 | needle | 1.000 | 1.000 | 1.000 | 1.000 |
-| spread | 0.760 | 0.760 | 0.800 | 0.800 |
+| spread | 0.800 | 0.800 | 0.800 | 0.800 |
 | trap | 1.000 | 1.000 | 1.000 | 1.000 |
 
-## Addendum, 2026-08-30: re-run after sub-page embedding chunking
-
-The narrative below describes the page-level baseline (arm P embedding one
-vector per page), the state at commit e58b43d. `RESULTS.md` and `results.json`
-in this directory now hold the re-run after sub-page embedding chunking
-(`feat/sub-page-embedding-chunking`), with the Bedrock arms re-queried. B0 and
-B1 came back byte-identical (Bedrock noise floor 0.000), so every change below
-is arm P.
-
-| class | P before | P after | P minus B0 before | P minus B0 after |
-|---|---|---|---|---|
-| described | 0.120 | **0.240** | -0.240 excludes zero | **-0.120 includes zero** |
-| needle | 0.429 | 0.429 | -0.286 includes zero | unchanged |
-| spread | 0.640 | 0.760 (CI includes zero, unconfirmed) | +0.040 includes zero | +0.160 includes zero |
-| trap | 0.520 | 0.520 | -0.320 excludes zero | unchanged |
-
-On described, pdf-mcp remains behind Bedrock in point estimate (-0.120 vs B0,
--0.160 vs B1) but the gap is no longer confirmed: the CI includes zero. The
-spread gain (+0.120) is likewise unconfirmed. The one chunking effect with a
-signal is described itself. Chunking and snippet excerpts do not stack: snippet's edge over paragraph on spread shrank
-from -0.240 (excludes zero) to -0.080 (includes zero). Full gate record in
-`docs_internal/chunking-results.md`.
-
-## Addendum, 2026-08-30 (later): 9 graded spans were an extraction defect
+## Latest run, 2026-08-30 (later): 9 graded spans were an extraction defect
 
 Sweeping all 127 labels against the cached page text and against raw
 pdfium text found 9 labels present in the PDF but absent from pdf-mcp's
@@ -83,6 +63,29 @@ mode the remaining needle and trap gap is the excerpt unit, not the text.
 Document-level metrics did not move on needle or trap (1.000 throughout);
 described doc-hit@3 0.800 to 0.840 and doc-NDCG 0.831 to 0.813 are
 warm-to-warm movement on re-embedded pages, not a finding.
+
+## Earlier run, 2026-08-30: after sub-page embedding chunking
+
+The narrative below describes the page-level baseline (arm P embedding one
+vector per page), the state at commit e58b43d. `RESULTS.md` and `results.json`
+in this directory now hold the re-run after sub-page embedding chunking
+(`feat/sub-page-embedding-chunking`), with the Bedrock arms re-queried. B0 and
+B1 came back byte-identical (Bedrock noise floor 0.000), so every change below
+is arm P.
+
+| class | P before | P after | P minus B0 before | P minus B0 after |
+|---|---|---|---|---|
+| described | 0.120 | **0.240** | -0.240 excludes zero | **-0.120 includes zero** |
+| needle | 0.429 | 0.429 | -0.286 includes zero | unchanged |
+| spread | 0.640 | 0.760 (CI includes zero, unconfirmed) | +0.040 includes zero | +0.160 includes zero |
+| trap | 0.520 | 0.520 | -0.320 excludes zero | unchanged |
+
+On described, pdf-mcp remains behind Bedrock in point estimate (-0.120 vs B0,
+-0.160 vs B1) but the gap is no longer confirmed: the CI includes zero. The
+spread gain (+0.120) is likewise unconfirmed. The one chunking effect with a
+signal is described itself. Chunking and snippet excerpts do not stack: snippet's edge over paragraph on spread shrank
+from -0.240 (excludes zero) to -0.080 (includes zero). Full gate record in
+`docs_internal/chunking-results.md`.
 
 ## Flagged-query disclosure
 
@@ -121,6 +124,10 @@ That 22/8 split is not evenly spread across classes:
 | trap | 10 | 10 | 0 |
 | spread | 5 | 3 | 2 |
 | described | 10 | 4 | 6 |
+
+**Correction (later on 2026-08-30):** 9 of these "picker" misses were an
+extraction defect, not the picker; the span was on the PDF page but not in
+the text P had extracted from it. See "Latest run" near the top for the fix and the re-run.
 
 P's document-level metrics corroborate the picker story cleanly for
 `needle` and `trap`: doc-hit@3 and doc-NDCG@10 are both 1.000 in every
@@ -298,8 +305,8 @@ defect).
 
 ## Provenance
 
-- pdf-mcp commit: e19f19f
-- `_EXTRACTION_VERSION`: 8
+- pdf-mcp commit: e19f19f for the original run; the headline tables above are from the 2026-08-30 re-run at 9b1f9cb (spanning-line fix merged), B0/B1 rows reused
+- `_EXTRACTION_VERSION`: 8 for the original run, 11 for the headline re-run
 - Corpus: `benchmark_data/corpus_search` manifest, 100 docs, 2,238 pages,
   235 MB of PDFs, warmed and re-confirmed in this session (2026-08-29);
   `pdf_mcp.cache.db` mtime updated during arm P's run, confirming a live

@@ -6,6 +6,8 @@ a classifier (line dir, span flags) are compared exactly, because drift
 there changes behaviour rather than wording.
 """
 
+from pathlib import Path
+
 import pymupdf
 import pytest
 
@@ -243,3 +245,145 @@ def test_block_bbox_recovers_height_when_font_size_is_also_zero():
     x0, y0, x1, y1 = _block_bbox(block)
     assert y1 > y0, "height must be recovered even with no font size"
     assert y1 - y0 == 14.0
+
+
+# --- rows that span the column gutter -------------------------------------
+
+_REAL = Path(__file__).parent.parent.parent / "benchmark_data" / ".reading_order_pdfs"
+
+
+def _row(text: str, x0: float, size: float, gap_after: dict[int, float] | None = None):
+    """A single visual row of glyphs starting at x0, one glyph per char,
+    `size` wide each; gap_after[i] inserts extra horizontal space after
+    glyph i (a word space is already ~0.3 * size)."""
+    from pdf_mcp.backend.text import _Char
+
+    chars = []
+    x = x0
+    for i, ch in enumerate(text):
+        w = size * (0.3 if ch == " " else 0.6)
+        chars.append(_Char(i, ch, x, 100.0, x + w, 100.0 + size, "F", size, 0))
+        x += w + (gap_after or {}).get(i, 0.0)
+    return chars
+
+
+def test_split_rows_at_bands_keeps_a_spanning_title_whole():
+    """A full-width title on a two-column page runs straight across the
+    gutter. Splitting it by glyph centre cut it mid-word and emitted the
+    right half after the whole left column ("Macroeconom" ... "ic Risks
+    from Maritime Trade Disruptions"), which broke 9 of 127 graded spans
+    in the Bedrock anchor benchmark. A row with no glyph gap at the
+    gutter is a spanning line and must stay one row."""
+    from pdf_mcp.backend.text import _split_rows_at_bands
+
+    bands = [(50.0, 290.0), (310.0, 550.0)]  # gutter 290..310, edge at 300
+    title = _row("Web-based Interface in Public Cluster", 120.0, 17.0)
+    assert min(c.x0 for c in title) < 300.0 < max(c.x1 for c in title)
+    out = _split_rows_at_bands([title], bands)
+    assert len(out) == 1
+    assert "".join(c.ch for c in out[0]) == "Web-based Interface in Public Cluster"
+
+
+def test_split_rows_at_bands_still_splits_a_genuine_two_column_row():
+    """One body line per column on the same baseline: the gap at the
+    gutter is the whole gutter, and the row must split or reading order
+    collapses (the case the split exists for)."""
+    from pdf_mcp.backend.text import _split_rows_at_bands
+
+    bands = [(50.0, 290.0), (310.0, 550.0)]
+    left = _row("left column text", 50.0, 10.0)
+    right = _row("right column text", 310.0, 10.0)
+    out = _split_rows_at_bands([left + right], bands)
+    assert len(out) == 2
+    assert "".join(c.ch for c in out[0]) == "left column text"
+    assert "".join(c.ch for c in out[1]) == "right column text"
+
+
+def test_split_rows_at_bands_word_space_at_the_gutter_is_not_a_split():
+    """A spanning title whose word space happens to sit on the gutter edge
+    is still one line: a word space is far narrower than a gutter."""
+    from pdf_mcp.backend.text import _split_rows_at_bands
+
+    bands = [(50.0, 290.0), (310.0, 550.0)]
+    # place the row so that the space in "Signals and" straddles x=300
+    row = _row("Wake-up Radio Signals and OFDM Waveforms", 96.0, 17.0)
+    space = [c for c in row if c.ch == " "]
+    assert any(c.x0 < 300.0 < c.x1 for c in space) or any(
+        a.x1 <= 300.0 <= b.x0 for a, b in zip(row, row[1:])
+    ), "fixture must put a word gap on the edge"
+    out = _split_rows_at_bands([row], bands)
+    assert len(out) == 1
+
+
+@pytest.mark.parametrize(
+    "pdf, phrase",
+    [
+        ("0711.0528.pdf", "Web-based Interface in Public Cluster"),
+        ("1808.03354.pdf", "Wake-up Radio Signals and OFDM Waveforms"),
+        ("2607.09951.pdf", "Macroeconomic Risks from Maritime Trade Disruptions"),
+        ("0710.2265.pdf", "spiral turbulence in excitable media"),
+    ],
+)
+def test_spanning_header_lines_survive_on_real_two_column_papers(pdf, phrase):
+    import re
+
+    if not (_REAL / pdf).exists():
+        pytest.skip("real corpus not fetched")
+    from pdf_mcp.backend.page import open_document
+    from pdf_mcp.extractor import extract_text_from_page
+
+    text = extract_text_from_page(open_document(str(_REAL / pdf))[0])
+    norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()  # noqa: E731
+    assert norm(phrase) in norm(text), text[:300]
+
+
+@pytest.mark.parametrize(
+    "pdf, before, after",
+    [
+        # abstract's first line must precede its second (was dealt to the
+        # other column by overlap and emitted after the whole abstract)
+        (
+            "0710.2265.pdf",
+            "models used to simulate a wide variety of natural systems",
+            "including cardiac tissue. Propagation of excitation waves",
+        ),
+        # title precedes authors precedes abstract
+        ("0710.2265.pdf", "A review", "Sitabhra Sinha"),
+        ("0710.2265.pdf", "Sitabhra Sinha", "Excitable media are a generic class"),
+        # a full-width figure caption reads line after line, not alternating
+        # between columns
+        (
+            "0710.2265.pdf",
+            "Luo-Rudy I model with L = 90",
+            "mm. Pseudo-gray-scale plots of the transmembrane potential V",
+        ),
+        (
+            "0710.2265.pdf",
+            "mm. Pseudo-gray-scale plots of the transmembrane potential V",
+            "ms, 150 ms and 210 ms. Control is achieved",
+        ),
+    ],
+)
+def test_spanning_lines_keep_their_vertical_order(pdf, before, after):
+    """A spanning line is its own band: everything above it in both columns
+    comes first, then the line, then the columns below. Spanning lines
+    that follow each other (title, authors, abstract; a multi-line
+    caption) therefore stay consecutive and in y order."""
+    import re
+
+    if not (_REAL / pdf).exists():
+        pytest.skip("real corpus not fetched")
+    from pdf_mcp.backend.page import open_document
+    from pdf_mcp.extractor import extract_text_from_page
+
+    doc = open_document(str(_REAL / pdf))
+    text = "\n".join(
+        extract_text_from_page(doc[k]) for k in range(min(8, doc.page_count))
+    )
+    norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()  # noqa: E731
+    n = norm(text)
+    i, j = n.find(norm(before)), n.find(norm(after))
+    assert i >= 0 and j >= 0, (i, j)
+    assert i < j, f"{before!r} at {i} should precede {after!r} at {j}"
+    if before.startswith(("Luo-Rudy", "mm. Pseudo", "models used")):
+        assert j - i < len(before) + 160, "consecutive lines are not adjacent"

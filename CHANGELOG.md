@@ -64,6 +64,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Full-width lines on two-column pages are no longer cut at the gutter.**
+  A title, author line, abstract or figure caption that runs straight
+  across both columns was split by glyph position and its right half
+  emitted after the entire left column, so `pdf_read_pages` returned
+  `Macroeconom` on one line and `ic Risks from Maritime Trade Disruptions`
+  hundreds of characters later, and `pdf_search` could not match the
+  title at all. Text is now split at a column boundary only where the
+  line has a real gap there, and spanning lines are emitted as their own
+  band in reading order (everything above them in both columns, the line,
+  then the columns below), so a multi-line abstract or caption reads line
+  after line instead of alternating between columns. On the 100-paper
+  corpus benchmark, 9 of 127 graded evidence spans that were present in
+  the PDF but absent from the extracted text are now extracted; snippet
+  span recall rose from 0.643 to 0.786 on needle queries and 0.560 to
+  0.720 on trap queries, paragraph-excerpt needle recall from 0.429 to
+  0.500, with document-level ranking unchanged. Reading-order fidelity on
+  the 44-document READoc set is unchanged (two-column 0.806 to 0.808, paired
+  run, no document down). Cached text is re-extracted on first use
+  (extraction version 11).
+
 - **`pdf_corpus_warm` could report a complete warm while documents were
   missing from the cache.** Each document's reported status said which
   code path had run, never what had actually been written, so a warm

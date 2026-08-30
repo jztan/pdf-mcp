@@ -1,12 +1,12 @@
 # pdf_corpus_search mode benchmark (production tool, real embeddings)
 
-Corpus: 100 docs. Queries: 89 (graded ground truth, stage-2). top_k=10. The tool itself is called per query on a warmed isolated cache, so numbers measure the agent-facing contract end to end.
+Corpus: 100 docs. Queries: 184 (graded ground truth, stage-2). top_k=10. The tool itself is called per query on a warmed isolated cache, so numbers measure the agent-facing contract end to end.
 
 | mode | overall NDCG@10 | described | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
-| keyword (keyword) | 0.460 | 0.136 | 0.944 | 0.361 | 0.612 | 0.854 | 0.71 |
-| semantic (semantic) | 0.487 | 0.335 | 0.751 | 0.230 | 0.750 | 0.854 | 1.34 |
-| auto (hybrid) | 0.505 | 0.277 | 0.934 | 0.310 | 0.688 | 0.899 | 1.58 |
+| keyword (keyword) | 0.348 | 0.070 | 0.841 | 0.365 | 0.629 | 0.745 | 0.60 |
+| semantic (semantic) | 0.353 | 0.228 | 0.541 | 0.242 | 0.731 | 0.772 | 1.10 |
+| auto (hybrid) | 0.389 | 0.178 | 0.782 | 0.333 | 0.701 | 0.848 | 1.34 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
@@ -14,17 +14,17 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 
 | mode | overall | described | needle | spread | trap |
 |---|---|---|---|---|---|
-| keyword | 0.784 | 0.496 | 1.000 | 0.735 | 1.000 |
-| semantic | 0.815 | 0.766 | 0.974 | 0.607 | 0.985 |
-| auto | 0.871 | 0.815 | 1.000 | 0.727 | 1.000 |
+| keyword | 0.697 | 0.474 | 0.988 | 0.741 | 1.000 |
+| semantic | 0.738 | 0.683 | 0.850 | 0.623 | 0.985 |
+| auto | 0.804 | 0.720 | 0.988 | 0.726 | 1.000 |
 
 ## CJK subset (5 needle queries on Japanese docs; embedding model is English bge-small, so the semantic arm is expected to be weak there)
 
 | mode | CJK NDCG@10 (n=5) | non-CJK NDCG@10 |
 |---|---|---|
-| keyword | 0.916 | 0.433 |
-| semantic | 0.524 | 0.485 |
-| auto | 0.890 | 0.482 |
+| keyword | 0.916 | 0.332 |
+| semantic | 0.524 | 0.348 |
+| auto | 0.890 | 0.375 |
 
 Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.
 ## Interpretation (89-query run, document arm live; cite the tables above, not this prose)

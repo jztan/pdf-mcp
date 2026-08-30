@@ -49,6 +49,34 @@ those 41, pdf-mcp returned the gold document for 32 and the gold page for
 page ranking, not at routing; this is the open deficiency the expanded
 set was built to expose.
 
+### Trap under revised labels (2026-08-30, late evening)
+
+Every trap gold span was the page-1 title. `scripts/author_trap_passages.py`
+added, for 16 of the 25, a second label: one verbatim body sentence (pages
+1 to 3) where the query's terms are meaningful, drafted blind from raw
+text; the title label is kept and the harness credits a query when ANY
+label is found. The other 9 documents emit control characters for
+ligatures, so no body span there can match any arm; they stay title-only.
+Bedrock rows for the 25 trap ids were re-queried live once and now carry
+unit texts, so further label revisions are offline.
+
+| arm | title-only | title-or-passage |
+|---|---|---|
+| paragraph (default) | 0.520 | 0.760 |
+| snippet | 0.720 | 0.760 |
+| window 600 | 0.640 | 0.760 |
+| B0 | 0.840 | 0.840 |
+| B1 | 0.880 | 0.880 |
+
+Default minus B0: -0.320 [-0.520, -0.120] excludes zero under title-only;
+-0.080 [-0.280, +0.080] includes zero under title-or-passage. On the 16
+queries with a passage label, paragraph and B0 are both 0.875 (B1 0.938).
+The labels changed, not the system: under "return the passage where the
+terms are meaningful" the confirmed trap loss is gone; under "return the
+title" it stands. Both readings are kept. The headline table above still
+shows the title-only trap column for the shipped default (0.520); the
+title-or-passage figure is 0.760.
+
 Earlier sections below are the 89-query record and are kept as written.
 
 ## Earlier run (89 queries), 2026-08-30 evening: the window excerpt arm

@@ -112,35 +112,35 @@ Generated 2026-08-30. Token budget 2000 per query per arm. Bedrock is an anchor,
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 25 | 25 | 0.520 | 0.160 | 1.000 | 1.000 | 14.520 |
-| P-snip | 25 | 25 | 0.720 | 0.160 | 1.000 | 1.000 | 25.000 |
-| P-win | 25 | 25 | 0.640 | 0.120 | 1.000 | 1.000 | 3.280 |
-| P-win300 | 25 | 25 | 0.560 | 0.080 | 1.000 | 1.000 | 5.640 |
-| B0 | 25 | 25 | 0.840 | 0.200 | 1.000 | 1.000 | 6.800 |
-| B1 | 25 | 25 | 0.880 | 0.160 | 1.000 | 1.000 | 1.640 |
+| P-para | 25 | 25 | 0.760 | 0.320 | 1.000 | 1.000 | 14.520 |
+| P-snip | 25 | 25 | 0.760 | 0.200 | 1.000 | 1.000 | 25.000 |
+| P-win | 25 | 25 | 0.760 | 0.240 | 1.000 | 1.000 | 3.280 |
+| P-win300 | 25 | 25 | 0.680 | 0.200 | 1.000 | 1.000 | 5.640 |
+| B0 | 25 | 25 | 0.840 | 0.160 | 1.000 | 1.000 | 6.800 |
+| B1 | 25 | 25 | 0.880 | 0.120 | 1.000 | 1.000 | 1.640 |
 
-- P minus P-snip, span recall: -0.200 [-0.440, +0.040] (includes zero, n=25)
-- P minus P-win, span recall: -0.120 [-0.360, +0.120] (includes zero, n=25)
-- P minus P-win300, span recall: -0.040 [-0.240, +0.160] (includes zero, n=25)
-- P minus B0, span recall: -0.320 [-0.520, -0.120] (excludes zero, n=25)
-- P minus B1, span recall: -0.360 [-0.600, -0.160] (excludes zero, n=25)
+- P minus P-snip, span recall: +0.000 [-0.200, +0.200] (includes zero, n=25)
+- P minus P-win, span recall: +0.000 [-0.200, +0.200] (includes zero, n=25)
+- P minus P-win300, span recall: +0.080 [-0.120, +0.280] (includes zero, n=25)
+- P minus B0, span recall: -0.080 [-0.280, +0.080] (includes zero, n=25)
+- P minus B1, span recall: -0.120 [-0.280, +0.040] (includes zero, n=25)
 
 ### trap, sensitivity (flagged queries excluded)
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 23 | 25 | 0.565 | 0.174 | 1.000 | 1.000 | 14.696 |
-| P-snip | 23 | 25 | 0.783 | 0.174 | 1.000 | 1.000 | 25.000 |
-| P-win | 23 | 25 | 0.696 | 0.130 | 1.000 | 1.000 | 3.304 |
-| P-win300 | 23 | 25 | 0.609 | 0.087 | 1.000 | 1.000 | 5.652 |
-| B0 | 23 | 25 | 0.913 | 0.217 | 1.000 | 1.000 | 6.783 |
-| B1 | 23 | 25 | 0.957 | 0.174 | 1.000 | 1.000 | 1.609 |
+| P-para | 23 | 25 | 0.826 | 0.348 | 1.000 | 1.000 | 14.696 |
+| P-snip | 23 | 25 | 0.826 | 0.217 | 1.000 | 1.000 | 25.000 |
+| P-win | 23 | 25 | 0.826 | 0.261 | 1.000 | 1.000 | 3.304 |
+| P-win300 | 23 | 25 | 0.739 | 0.217 | 1.000 | 1.000 | 5.652 |
+| B0 | 23 | 25 | 0.913 | 0.174 | 1.000 | 1.000 | 6.783 |
+| B1 | 23 | 25 | 0.957 | 0.130 | 1.000 | 1.000 | 1.609 |
 
-- P minus P-snip, span recall: -0.217 [-0.478, +0.043] (includes zero, n=23)
-- P minus P-win, span recall: -0.130 [-0.391, +0.130] (includes zero, n=23)
-- P minus P-win300, span recall: -0.043 [-0.261, +0.174] (includes zero, n=23)
-- P minus B0, span recall: -0.348 [-0.565, -0.130] (excludes zero, n=23)
-- P minus B1, span recall: -0.391 [-0.609, -0.174] (excludes zero, n=23)
+- P minus P-snip, span recall: +0.000 [-0.174, +0.217] (includes zero, n=23)
+- P minus P-win, span recall: +0.000 [-0.217, +0.217] (includes zero, n=23)
+- P minus P-win300, span recall: +0.087 [-0.130, +0.304] (includes zero, n=23)
+- P minus B0, span recall: -0.087 [-0.304, +0.130] (includes zero, n=23)
+- P minus B1, span recall: -0.130 [-0.304, +0.043] (includes zero, n=23)
 
 ## Flagged for manual page-image review
 

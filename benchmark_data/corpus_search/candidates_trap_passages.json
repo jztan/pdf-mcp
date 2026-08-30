@@ -1,0 +1,268 @@
+{
+  "accepted": [
+    {
+      "id": "trap-01",
+      "query": "model software reliability",
+      "label": {
+        "doc": "0710.2740",
+        "page": 1,
+        "gain": 2,
+        "evidence": "We have derived the expression of the reliability of a system using the Markovian model for the transfer of control between modules in order.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-02",
+      "query": "results anti-chain separable sets",
+      "label": {
+        "doc": "0707.0311",
+        "page": 3,
+        "gain": 2,
+        "evidence": "Because of the condition on L and P, none of these linearly separable sets may contain another.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-04",
+      "query": "data conjugated polymers absorption",
+      "label": {
+        "doc": "0802.0539",
+        "page": 1,
+        "gain": 2,
+        "evidence": "Optical absorption spectra of poly(thiophene vinylene) (PTV) conjugated polymers have been studied at room temperature in the spectral range of 450 to 800 nm.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-05",
+      "query": "simulation IRA codes",
+      "label": {
+        "doc": "0709.4466",
+        "page": 3,
+        "gain": 2,
+        "evidence": "The Monte Carlo simulation results for the proposed concatenated IRA code structure on the binary-input AWGN channel are shown in Fig. 4.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-06",
+      "query": "model confidence interval regression",
+      "label": {
+        "doc": "0711.3236",
+        "page": 1,
+        "gain": 2,
+        "evidence": "We present a new frequentist 1−α confidence interval for θ that utilizes this prior information.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-08",
+      "query": "results measure-preserving mixing",
+      "label": {
+        "doc": "0706.0954",
+        "page": 2,
+        "gain": 2,
+        "evidence": "Furthermore the bound be\romes better provided\r\nthe rate of mixing is de\raying su\u001e\riently fast",
+        "role": "passage"
+      },
+      "match": "folded"
+    },
+    {
+      "id": "trap-10",
+      "query": "stochastic strong stationary duality",
+      "label": {
+        "doc": "0707.4042",
+        "page": 1,
+        "gain": 2,
+        "evidence": "In this paper we use the theory of strong stationary duality to give a stochastic proof",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-13",
+      "query": "model lottery ticket hypothesis",
+      "label": {
+        "doc": "1803.03635",
+        "page": 1,
+        "gain": 2,
+        "evidence": "We consistently find winning tickets that are less than 10-20% of the size of several fully-connected and convolutional feed-forward architectures",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-14",
+      "query": "model compound scaling network",
+      "label": {
+        "doc": "1905.11946",
+        "page": 1,
+        "gain": 2,
+        "evidence": "Based on this observation, we\npropose a simple yet effective compound scaling method.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-17",
+      "query": "signal wake-up radio waveform",
+      "label": {
+        "doc": "1808.03354",
+        "page": 1,
+        "gain": 2,
+        "evidence": "The proposed method enables orthogonal multiplexing of wake-up signals (WUSs) and orthogonal frequency division multiplexing (OFDM) waveforms.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-18",
+      "query": "analysis boron nitride layers",
+      "label": {
+        "doc": "0904.1520",
+        "page": 3,
+        "gain": 2,
+        "evidence": "This Chapter deals with single layers of carbon (graphene) and hexagonal boron nitride on transition metal surfaces.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-19",
+      "query": "model maritime trade disruption",
+      "label": {
+        "doc": "2607.09951",
+        "page": 1,
+        "gain": 2,
+        "evidence": "They stem from disruptions in the flow of intermediate goods that are complementary in downstream production.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-20",
+      "query": "model index tracking rebalancing",
+      "label": {
+        "doc": "2607.09556",
+        "page": 1,
+        "gain": 2,
+        "evidence": "Index tracking endeavors to reproduce the performance of an index with smaller sets of assets.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-21",
+      "query": "results vacuum birefringence magnetar",
+      "label": {
+        "doc": "2607.06422",
+        "page": 1,
+        "gain": 2,
+        "evidence": "These results identify vacuum-resonance observables as the most sensitive channel for testing finite-field QED in magnetars.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-22",
+      "query": "model hierarchical topic nested",
+      "label": {
+        "doc": "1301.3570",
+        "page": 1,
+        "gain": 2,
+        "evidence": "We develop a nested hierarchical Dirichlet process (nHDP) for hierarchical topic modeling.",
+        "role": "passage"
+      },
+      "match": "exact"
+    },
+    {
+      "id": "trap-24",
+      "query": "data ancient DNA selection coefficient",
+      "label": {
+        "doc": "1606.06090",
+        "page": 2,
+        "gain": 2,
+        "evidence": "One of the tasks ahead of the analysis of DNA time-series is thus the extrapolation of the underlying selection coefficient.",
+        "role": "passage"
+      },
+      "match": "exact"
+    }
+  ],
+  "rejected": [
+    {
+      "id": "trap-03",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "We study the suppression of electron localization due to the screening of disorder in a Hubbard-Anderson model.",
+      "page": 1
+    },
+    {
+      "id": "trap-07",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "We show that Py-Calabi quasi-morphism on the group of Hamiltonian diffeomorphisms of surfaces of higher genus gives rise to a quasi-state.",
+      "page": 1
+    },
+    {
+      "id": "trap-09",
+      "why": [
+        "drafter skip: Every body sentence containing a query word ('attractors') exceeds 160 characters; 'knotted'/'numerical' appear only in the title/keywords, not a body sentence."
+      ],
+      "raw": "{\"skip\": \"Every body sentence containing a query word ('attractors') exceeds 160 characters; 'knotted'/'numerical' appear only in the title/keywords, not a body sentence.\"}"
+    },
+    {
+      "id": "trap-11",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "A web-based interface dedicated for cluster computer which is publicly accessible for free is introduced.",
+      "page": 1
+    },
+    {
+      "id": "trap-12",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "The interior of cells is crowded thus making it important to assess the effects of macromolecules on the folding of proteins.",
+      "page": 1
+    },
+    {
+      "id": "trap-15",
+      "why": [
+        "drafter skip: no body prose shown; only title, table of contents and list of figures are present in the given pages"
+      ],
+      "raw": "{\"skip\": \"no body prose shown; only title, table of contents and list of figures are present in the given pages\"}"
+    },
+    {
+      "id": "trap-16",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "Harris's results have recently been confirmed by Jean-Charles Meyrignac.",
+      "page": 3
+    },
+    {
+      "id": "trap-23",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "In summary, we studied electrical properties of unannealed crystalline LAO/STO heterostructures fabricated at different conditions.",
+      "page": 3
+    },
+    {
+      "id": "trap-25",
+      "why": [
+        "evidence not on pages 1-3"
+      ],
+      "evidence": "we test the proposed network on the MNIST dataset, represented using binary features, and show that BNNs result in competitive performance while offering dramatic computational savings.",
+      "page": 1
+    }
+  ]
+}

@@ -419,8 +419,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "reliability of a system using the Markovian model"
+        },
+        {
+          "doc": "0710.2740",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We have derived the expression of the reliability of a system using the Markovian model for the transfer of control between modules in order.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-02",
@@ -432,8 +440,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "anti-chain of linearly\nseparable sets"
+        },
+        {
+          "doc": "0707.0311",
+          "page": 3,
+          "gain": 2,
+          "evidence": "Because of the condition on L and P, none of these linearly separable sets may contain another.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-03",
@@ -458,8 +474,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Conjugated Polymers"
+        },
+        {
+          "doc": "0802.0539",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Optical absorption spectra of poly(thiophene vinylene) (PTV) conjugated polymers have been studied at room temperature in the spectral range of 450 to 800 nm.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-05",
@@ -471,8 +495,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "(IRA) component codes"
+        },
+        {
+          "doc": "0709.4466",
+          "page": 3,
+          "gain": 2,
+          "evidence": "The Monte Carlo simulation results for the proposed concatenated IRA code structure on the binary-input AWGN channel are shown in Fig. 4.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-06",
@@ -484,8 +516,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "utilizes this\nprior information"
+        },
+        {
+          "doc": "0711.3236",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We present a new frequentist 1−α confidence interval for θ that utilizes this prior information.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-07",
@@ -510,8 +550,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "measure-preserving homeomorphism"
+        },
+        {
+          "doc": "0706.0954",
+          "page": 2,
+          "gain": 2,
+          "evidence": "Furthermore the bound be\romes better provided\r\nthe rate of mixing is de\raying su\u001e\riently fast",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-09",
@@ -536,8 +584,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Strong stationary duality gives a"
+        },
+        {
+          "doc": "0707.4042",
+          "page": 1,
+          "gain": 2,
+          "evidence": "In this paper we use the theory of strong stationary duality to give a stochastic proof",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-11",
@@ -902,8 +958,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "THE LOTTERY TICKET HYPOTHESIS"
+        },
+        {
+          "doc": "1803.03635",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We consistently find winning tickets that are less than 10-20% of the size of several fully-connected and convolutional feed-forward architectures",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-14",
@@ -915,8 +979,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "simple yet effective compound scaling method"
+        },
+        {
+          "doc": "1905.11946",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Based on this observation, we\npropose a simple yet effective compound scaling method.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-15",
@@ -954,8 +1026,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Wake-up Radio Signals and OFDM Waveforms"
+        },
+        {
+          "doc": "1808.03354",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The proposed method enables orthogonal multiplexing of wake-up signals (WUSs) and orthogonal frequency division multiplexing (OFDM) waveforms.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-18",
@@ -967,8 +1047,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Graphene and Boron Nitride Single Layers"
+        },
+        {
+          "doc": "0904.1520",
+          "page": 3,
+          "gain": 2,
+          "evidence": "This Chapter deals with single layers of carbon (graphene) and hexagonal boron nitride on transition metal surfaces.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-19",
@@ -980,8 +1068,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Maritime Trade Disruptions"
+        },
+        {
+          "doc": "2607.09951",
+          "page": 1,
+          "gain": 2,
+          "evidence": "They stem from disruptions in the flow of intermediate goods that are complementary in downstream production.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-20",
@@ -993,8 +1089,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Index tracking endeavors to reproduce"
+        },
+        {
+          "doc": "2607.09556",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Index tracking endeavors to reproduce the performance of an index with smaller sets of assets.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-21",
@@ -1006,8 +1110,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Vacuum Birefringence and Magnetar Polarization"
+        },
+        {
+          "doc": "2607.06422",
+          "page": 1,
+          "gain": 2,
+          "evidence": "These results identify vacuum-resonance observables as the most sensitive channel for testing finite-field QED in magnetars.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-22",
@@ -1019,8 +1131,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "Nested HDP for Hierarchical Topic Models"
+        },
+        {
+          "doc": "1301.3570",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We develop a nested hierarchical Dirichlet process (nHDP) for hierarchical topic modeling.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-23",
@@ -1045,8 +1165,16 @@
           "page": 1,
           "gain": 2,
           "evidence": "in ancient DNA"
+        },
+        {
+          "doc": "1606.06090",
+          "page": 2,
+          "gain": 2,
+          "evidence": "One of the tasks ahead of the analysis of DNA time-series is thus the extrapolation of the underlying selection coefficient.",
+          "role": "passage"
         }
-      ]
+      ],
+      "trap_labels": "v2-2026-08-30-passage"
     },
     {
       "id": "trap-25",

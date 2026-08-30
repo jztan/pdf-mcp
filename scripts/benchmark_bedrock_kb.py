@@ -259,6 +259,7 @@ def run_arm_p(
         rows[q["id"]] = {
             "class": q["class"],
             "kept": [(d, p) for d, p, _t in kept],
+            "kept_text": [_t for _d, _p, _t in kept],
             "realized_k": k,
             "containment": grade_containment(q, kept),
             "doc_ndcg": graded["doc_ndcg"],
@@ -328,6 +329,7 @@ def run_arm_bedrock(
         rows[q["id"]] = {
             "class": q["class"],
             "kept": [(d, p) for d, p, _t in kept],
+            "kept_text": [_t for _d, _p, _t in kept],
             "realized_k": k,
             "containment": grade_containment(q, kept),
             "doc_ndcg": graded["doc_ndcg"],
@@ -569,6 +571,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     ap.add_argument(
+        "--live-classes",
+        default="",
+        help=(
+            "with --live: re-query Bedrock only for these comma-separated query "
+            "classes and take every other id from the stored rows (label "
+            "revisions on one class cost cents, not the whole run)"
+        ),
+    )
+    ap.add_argument(
         "--live",
         action="store_true",
         help=(
@@ -653,10 +664,17 @@ def main(argv: list[str] | None = None) -> int:
                 "--reuse-bedrock-from PATH to point at a prior results.json."
             )
             return 2
-    if bedrock_arms and reuse_path:
+    live_classes = {c.strip() for c in args.live_classes.split(",") if c.strip()}
+    if live_classes and not args.live:
+        print("ERROR: --live-classes needs --live")
+        return 2
+    query_by_id = {q["id"]: q for q in queries}
+    if bedrock_arms and (reuse_path or live_classes):
         # Bedrock retrieval measured byte-identical across runs, so its rows
         # only ever needed re-querying for the paired-CI mechanics. Load them
         # instead. Four offline refusals stand in for the live drift guard.
+        if reuse_path is None:
+            reuse_path = OUT_DIR / "results.json"
         prior = json.loads(reuse_path.read_text(encoding="utf-8"))
         prior_cfg = prior.get("config", {})
         manifest_sha = hashlib.sha256(
@@ -696,15 +714,29 @@ def main(argv: list[str] | None = None) -> int:
                     "Re-run live."
                 )
                 return 2
+            # Rows that carry the kept unit texts are re-graded against the
+            # CURRENT labels, so a label revision never needs Bedrock again.
+            # Older rows (no texts) keep their stored containment.
+            regraded = 0
+            for qid, row in rows.items():
+                if "kept_text" in row and qid in query_by_id:
+                    units = [
+                        (d, p, t) for (d, p), t in zip(row["kept"], row["kept_text"])
+                    ]
+                    row["containment"] = grade_containment(query_by_id[qid], units)
+                    regraded += 1
             rows_by_arm[arm] = rows
             index_stamps_by_arm[arm] = {
                 **stamp,
                 "reused_from": provenance_path(reuse_path),
             }
-            print(f"{arm}: reused {len(rows)} stored rows (offline)")
+            print(
+                f"{arm}: reused {len(rows)} stored rows (offline), "
+                f"{regraded} re-graded against current labels"
+            )
         config["bedrock_rows_reused_from"] = provenance_path(reuse_path)
         config["bedrock_live_check"] = False
-    elif bedrock_arms:
+    if bedrock_arms and args.live:
         import boto3
 
         from _bedrock_kb import (
@@ -752,16 +784,26 @@ def main(argv: list[str] | None = None) -> int:
                 "arm_config_sha256": out.get("tags", {}).get(TAG_KEY),
                 **st.get("stamp", {}),
             }
-            rows_by_arm[arm] = run_arm_bedrock(
+            live_queries = (
+                [q for q in queries if q["class"] in live_classes]
+                if live_classes
+                else queries
+            )
+            live_rows = run_arm_bedrock(
                 runtime,
                 out["KnowledgeBaseId"],
-                queries,
+                live_queries,
                 id_by_stem,
                 args.budget,
                 rerank_model=config["arms"][arm]["rerank"],
             )
-            print(f"{arm}: done")
+            # under --live-classes the other ids come from the stored rows
+            # loaded above; a plain --live replaces everything.
+            rows_by_arm[arm] = {**rows_by_arm.get(arm, {}), **live_rows}
+            print(f"{arm}: done ({len(live_rows)} live, {len(rows_by_arm[arm])} total)")
         config["bedrock_live_check"] = True
+        if live_classes:
+            config["bedrock_live_classes"] = sorted(live_classes)
 
     # Result tables use the short label (B0, B1); the immutable arm id and its
     # stamp go into provenance so a reader can tell which index produced a row.

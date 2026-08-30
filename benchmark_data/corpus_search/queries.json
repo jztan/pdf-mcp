@@ -2960,12 +2960,552 @@
         "model": "claude-opus-4-8",
         "blind": "drafted from raw pdfium page text before any arm ran"
       }
+    },
+    {
+      "id": "spread-26",
+      "class": "spread",
+      "query": "power-law scaling laws",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 20,
+          "gain": 2,
+          "evidence": "We identified\ncommon scaling laws for the loss achieved on all data modalities as a function of both model size and\ncompute budget."
+        },
+        {
+          "doc": "1712.00409",
+          "page": 3,
+          "gain": 2,
+          "evidence": "All of\nthese bounds show power-law relationships under certain assumptions, such as the hypothesis space\nmust contain at least one model that can correctly fit the data"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 2,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-27",
+      "class": "spread",
+      "query": "power-law loss scaling",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 3,
+          "gain": 2,
+          "evidence": "the loss scales with each of these quantities as a simple power-law"
+        },
+        {
+          "doc": "1712.00409",
+          "page": 10,
+          "gain": 2,
+          "evidence": "most models experience power-law generalization improvements until the data size approaches their effective capacity"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 3,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-28",
+      "class": "spread",
+      "query": "bootstrap resampling",
+      "labels": [
+        {
+          "doc": "2607.06690",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The time series bootstrap restores validity under dependence, and conformal calibration supplies the finite-sample coverage guarantee."
+        },
+        {
+          "doc": "2607.06373",
+          "page": 27,
+          "gain": 2,
+          "evidence": "a parametric bootstrap covers the cases the analytic null does not."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 12,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-29",
+      "class": "spread",
+      "query": "dropout neural network",
+      "labels": [
+        {
+          "doc": "1811.03679",
+          "page": 4,
+          "gain": 2,
+          "evidence": "present our method and compare to BBB, MC DROPOUT"
+        },
+        {
+          "doc": "1608.03983",
+          "page": 6,
+          "gain": 2,
+          "evidence": "with dropout 28-10 36.5M 1 run n/a 20.04"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 14,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-30",
+      "class": "spread",
+      "query": "Wright-Fisher model",
+      "labels": [
+        {
+          "doc": "1406.4582",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Generating samples under a Wright–Fisher neutral model of genetic variation."
+        },
+        {
+          "doc": "1606.06090",
+          "page": 2,
+          "gain": 2,
+          "evidence": "such as the Moran and the Wright-Fisher models [3, 4]."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 16,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-31",
+      "class": "spread",
+      "query": "packet routing",
+      "labels": [
+        {
+          "doc": "1307.7059",
+          "page": 4,
+          "gain": 2,
+          "evidence": "A base station receiving more data packets confirms the efficiency of routing protocol."
+        },
+        {
+          "doc": "1302.3440",
+          "page": 5,
+          "gain": 2,
+          "evidence": "the packet generation rate R for the algorithms SPR and EPR"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 19,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-33",
+      "class": "spread",
+      "query": "multipath ranging",
+      "labels": [
+        {
+          "doc": "1406.6799",
+          "page": 6,
+          "gain": 2,
+          "evidence": "J.-Y. Lee and R. Scholtz, “Ranging in a dense multipath environment"
+        },
+        {
+          "doc": "1207.2761",
+          "page": 5,
+          "gain": 2,
+          "evidence": "if there is severe multipath, the performance of our algorithm would be close"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 24,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-34",
+      "class": "spread",
+      "query": "BERT pretraining",
+      "labels": [
+        {
+          "doc": "1910.03474",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Google researchers published BERT (Bidirectional Encoder\nRepresentations from Transformers) [4], a deep bidirectional\nlanguage model"
+        },
+        {
+          "doc": "2005.14165",
+          "page": 71,
+          "gain": 2,
+          "evidence": "RoBERTa: A robustly optimized BERT pretraining approach.\narXiv preprint arXiv:1907.11692, 2019."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 25,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-35",
+      "class": "spread",
+      "query": "generalization weight decay regularization",
+      "labels": [
+        {
+          "doc": "2201.02177",
+          "page": 4,
+          "gain": 2,
+          "evidence": "improvements to generalization from interventions like\nweight decay can be striking"
+        },
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Regularization may also be implicit as is the case with early stopping."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 26,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-36",
+      "class": "spread",
+      "query": "generalization measures",
+      "labels": [
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "complexity measures that are capable of controlling generalization error"
+        },
+        {
+          "doc": "2201.02177",
+          "page": 10,
+          "gain": 2,
+          "evidence": "how predictive common generalization measures are of generalization"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 27,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-37",
+      "class": "spread",
+      "query": "cross-border intermediate inputs",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 64,
+          "gain": 2,
+          "evidence": "the Japan–Korea intermediates of the Korea Strait"
+        },
+        {
+          "doc": "2607.09990",
+          "page": 47,
+          "gain": 2,
+          "evidence": "defined whenever buyer country c has positive cross-border intermediate purchases"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 30,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-38",
+      "class": "spread",
+      "query": "market-wide factors",
+      "labels": [
+        {
+          "doc": "2607.08500",
+          "page": 1,
+          "gain": 2,
+          "evidence": "encoding essential information regarding market-wide risk aversion and eco"
+        },
+        {
+          "doc": "2607.10297",
+          "page": 21,
+          "gain": 2,
+          "evidence": "core assets are strongly exposed to common market wide factors"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 31,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-39",
+      "class": "spread",
+      "query": "return time series",
+      "labels": [
+        {
+          "doc": "2607.10297",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Empirical correlation matrices estimated from financial return time series are"
+        },
+        {
+          "doc": "0709.2178",
+          "page": 7,
+          "gain": 2,
+          "evidence": "it can capture the uncertainty and disorder of the time series without imposing any constraints"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 35,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-40",
+      "class": "spread",
+      "query": "anisotropic dispersion relation",
+      "labels": [
+        {
+          "doc": "2607.06422",
+          "page": 3,
+          "gain": 2,
+          "evidence": "appears as a special case of the general anisotropic\ndispersion. The goal is not to claim a qualitatively"
+        },
+        {
+          "doc": "2607.03471",
+          "page": 9,
+          "gain": 2,
+          "evidence": "we analyze the dispersion equation det K(ω, k) =\n0 in the large-k limit"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 37,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-41",
+      "class": "spread",
+      "query": "reallocation input mix",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 6,
+          "gain": 2,
+          "evidence": "Importers lose because reallocation cannot fully reconstitute the input mix their technologies were built around"
+        },
+        {
+          "doc": "2607.09990",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The reallocation is a RAS balancing of the disrupted matrix that lets both sides adjust together."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 39,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-42",
+      "class": "spread",
+      "query": "high dimensional statistics",
+      "labels": [
+        {
+          "doc": "2607.06690",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Mammen, E. (1993). Bootstrap and wild bootstrap for high dimensional linear models."
+        },
+        {
+          "doc": "2607.06373",
+          "page": 39,
+          "gain": 2,
+          "evidence": "high dimensional probabilistic principal component analysis. Journal of the Royal Statistical"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 41,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-43",
+      "class": "spread",
+      "query": "pretrained language models",
+      "labels": [
+        {
+          "doc": "1910.03474",
+          "page": 3,
+          "gain": 2,
+          "evidence": "a softmax classifier layers on top of pretrained BERT layer to demonstrate that BERT can produce great re"
+        },
+        {
+          "doc": "2005.14165",
+          "page": 34,
+          "gain": 2,
+          "evidence": "large pretrained language models are not grounded in other domains of experience, such as video or real-world physical interaction"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 42,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-44",
+      "class": "spread",
+      "query": "wall-clock run time",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 4,
+          "gain": 2,
+          "evidence": "show percentage reduction of F(·) as a function of time and iteration for each algorithm."
+        },
+        {
+          "doc": "2607.06373",
+          "page": 26,
+          "gain": 2,
+          "evidence": "Table 9 reports mean wall-clock time per window for the covariance fit and one monitor step."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 43,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-45",
+      "class": "spread",
+      "query": "dynamical systems",
+      "labels": [
+        {
+          "doc": "2607.10439",
+          "page": 16,
+          "gain": 2,
+          "evidence": "Model-independent dynamical invariants measured on EEGMMIDB (n = 60"
+        },
+        {
+          "doc": "2607.10430",
+          "page": 9,
+          "gain": 2,
+          "evidence": "We simulated 6 different three-dimensional dynamical systems (xt) using RK4 integration."
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 47,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-46",
+      "class": "spread",
+      "query": "model architecture",
+      "labels": [
+        {
+          "doc": "1712.00409",
+          "page": 11,
+          "gain": 2,
+          "evidence": "improve model accuracy by changing model architectures trained on a given data set"
+        },
+        {
+          "doc": "1611.03530",
+          "page": 13,
+          "gain": 2,
+          "evidence": "we use the Inception V3 (Szegedy et al., 2016) architecture and reuse the data preprocessing"
+        }
+      ],
+      "set": "v2-2026-08-30",
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 48,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
     }
   ],
   "sets": {
     "v2-2026-08-30": {
       "added": "2026-08-30",
-      "count": 75,
+      "count": 20,
       "authoring": "scripts/author_corpus_queries.py, blind to all arms; merged by scripts/merge_query_candidates.py after raw-text validation"
     }
   }

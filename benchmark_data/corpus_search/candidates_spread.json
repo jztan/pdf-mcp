@@ -1,0 +1,768 @@
+{
+  "description": "Candidate spread queries drafted blind by author_corpus_queries.py (seed 20260830, model claude-opus-4-8); pending human veto; not yet merged into queries.json.",
+  "accepted": [
+    {
+      "id": "spread-26",
+      "class": "spread",
+      "query": "power-law scaling laws",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 20,
+          "gain": 2,
+          "evidence": "We identified\ncommon scaling laws for the loss achieved on all data modalities as a function of both model size and\ncompute budget.",
+          "match": "exact"
+        },
+        {
+          "doc": "1712.00409",
+          "page": 3,
+          "gain": 2,
+          "evidence": "All of\nthese bounds show power-law relationships under certain assumptions, such as the hypothesis space\nmust contain at least one model that can correctly fit the data",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 2,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-27",
+      "class": "spread",
+      "query": "power-law loss scaling",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 3,
+          "gain": 2,
+          "evidence": "the loss scales with each of these quantities as a simple power-law",
+          "match": "exact"
+        },
+        {
+          "doc": "1712.00409",
+          "page": 10,
+          "gain": 2,
+          "evidence": "most models experience power-law generalization improvements until the data size approaches their effective capacity",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 3,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-28",
+      "class": "spread",
+      "query": "bootstrap resampling",
+      "labels": [
+        {
+          "doc": "2607.06690",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The time series bootstrap restores validity under dependence, and conformal calibration supplies the finite-sample coverage guarantee.",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.06373",
+          "page": 27,
+          "gain": 2,
+          "evidence": "a parametric bootstrap covers the cases the analytic null does not.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 12,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-29",
+      "class": "spread",
+      "query": "dropout neural network",
+      "labels": [
+        {
+          "doc": "1811.03679",
+          "page": 4,
+          "gain": 2,
+          "evidence": "present our method and compare to BBB, MC DROPOUT",
+          "match": "exact"
+        },
+        {
+          "doc": "1608.03983",
+          "page": 6,
+          "gain": 2,
+          "evidence": "with dropout 28-10 36.5M 1 run n/a 20.04",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 14,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-30",
+      "class": "spread",
+      "query": "Wright-Fisher model",
+      "labels": [
+        {
+          "doc": "1406.4582",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Generating samples under a Wright–Fisher neutral model of genetic variation.",
+          "match": "exact"
+        },
+        {
+          "doc": "1606.06090",
+          "page": 2,
+          "gain": 2,
+          "evidence": "such as the Moran and the Wright-Fisher models [3, 4].",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 16,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-31",
+      "class": "spread",
+      "query": "packet routing",
+      "labels": [
+        {
+          "doc": "1307.7059",
+          "page": 4,
+          "gain": 2,
+          "evidence": "A base station receiving more data packets confirms the efficiency of routing protocol.",
+          "match": "exact"
+        },
+        {
+          "doc": "1302.3440",
+          "page": 5,
+          "gain": 2,
+          "evidence": "the packet generation rate R for the algorithms SPR and EPR",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 19,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-32",
+      "class": "spread",
+      "query": "collider experiments physics",
+      "labels": [
+        {
+          "doc": "2607.08175",
+          "page": 1,
+          "gain": 2,
+          "evidence": "for reconstructing and se￾lecting both Standard Model (SM) and potential beyond the SM physics events at high￾energy particle colliders",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.08169",
+          "page": 1,
+          "gain": 2,
+          "evidence": "particle interactions probed\nat collider experiments are described by Quantum Field Theory (QFT)",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 22,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-33",
+      "class": "spread",
+      "query": "multipath ranging",
+      "labels": [
+        {
+          "doc": "1406.6799",
+          "page": 6,
+          "gain": 2,
+          "evidence": "J.-Y. Lee and R. Scholtz, “Ranging in a dense multipath environment",
+          "match": "exact"
+        },
+        {
+          "doc": "1207.2761",
+          "page": 5,
+          "gain": 2,
+          "evidence": "if there is severe multipath, the performance of our algorithm would be close",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 24,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-34",
+      "class": "spread",
+      "query": "BERT pretraining",
+      "labels": [
+        {
+          "doc": "1910.03474",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Google researchers published BERT (Bidirectional Encoder\nRepresentations from Transformers) [4], a deep bidirectional\nlanguage model",
+          "match": "exact"
+        },
+        {
+          "doc": "2005.14165",
+          "page": 71,
+          "gain": 2,
+          "evidence": "RoBERTa: A robustly optimized BERT pretraining approach.\narXiv preprint arXiv:1907.11692, 2019.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 25,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-35",
+      "class": "spread",
+      "query": "generalization weight decay regularization",
+      "labels": [
+        {
+          "doc": "2201.02177",
+          "page": 4,
+          "gain": 2,
+          "evidence": "improvements to generalization from interventions like\nweight decay can be striking",
+          "match": "exact"
+        },
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Regularization may also be implicit as is the case with early stopping.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 26,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-36",
+      "class": "spread",
+      "query": "generalization measures",
+      "labels": [
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "complexity measures that are capable of controlling generalization error",
+          "match": "exact"
+        },
+        {
+          "doc": "2201.02177",
+          "page": 10,
+          "gain": 2,
+          "evidence": "how predictive common generalization measures are of generalization",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 27,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-37",
+      "class": "spread",
+      "query": "cross-border intermediate inputs",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 64,
+          "gain": 2,
+          "evidence": "the Japan–Korea intermediates of the Korea Strait",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.09990",
+          "page": 47,
+          "gain": 2,
+          "evidence": "defined whenever buyer country c has positive cross-border intermediate purchases",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 30,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-38",
+      "class": "spread",
+      "query": "market-wide factors",
+      "labels": [
+        {
+          "doc": "2607.08500",
+          "page": 1,
+          "gain": 2,
+          "evidence": "encoding essential information regarding market-wide risk aversion and eco",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.10297",
+          "page": 21,
+          "gain": 2,
+          "evidence": "core assets are strongly exposed to common market wide factors",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 31,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-39",
+      "class": "spread",
+      "query": "return time series",
+      "labels": [
+        {
+          "doc": "2607.10297",
+          "page": 1,
+          "gain": 2,
+          "evidence": "Empirical correlation matrices estimated from financial return time series are",
+          "match": "exact"
+        },
+        {
+          "doc": "0709.2178",
+          "page": 7,
+          "gain": 2,
+          "evidence": "it can capture the uncertainty and disorder of the time series without imposing any constraints",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 35,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-40",
+      "class": "spread",
+      "query": "anisotropic dispersion relation",
+      "labels": [
+        {
+          "doc": "2607.06422",
+          "page": 3,
+          "gain": 2,
+          "evidence": "appears as a special case of the general anisotropic\ndispersion. The goal is not to claim a qualitatively",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.03471",
+          "page": 9,
+          "gain": 2,
+          "evidence": "we analyze the dispersion equation det K(ω, k) =\n0 in the large-k limit",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 37,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-41",
+      "class": "spread",
+      "query": "reallocation input mix",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 6,
+          "gain": 2,
+          "evidence": "Importers lose because reallocation cannot fully reconstitute the input mix their technologies were built around",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.09990",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The reallocation is a RAS balancing of the disrupted matrix that lets both sides adjust together.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 39,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-42",
+      "class": "spread",
+      "query": "high dimensional statistics",
+      "labels": [
+        {
+          "doc": "2607.06690",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Mammen, E. (1993). Bootstrap and wild bootstrap for high dimensional linear models.",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.06373",
+          "page": 39,
+          "gain": 2,
+          "evidence": "high dimensional probabilistic principal component analysis. Journal of the Royal Statistical",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 41,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-43",
+      "class": "spread",
+      "query": "pretrained language models",
+      "labels": [
+        {
+          "doc": "1910.03474",
+          "page": 3,
+          "gain": 2,
+          "evidence": "a softmax classifier layers on top of pretrained BERT layer to demonstrate that BERT can produce great re",
+          "match": "exact"
+        },
+        {
+          "doc": "2005.14165",
+          "page": 34,
+          "gain": 2,
+          "evidence": "large pretrained language models are not grounded in other domains of experience, such as video or real-world physical interaction",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 42,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-44",
+      "class": "spread",
+      "query": "wall-clock run time",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 4,
+          "gain": 2,
+          "evidence": "show percentage reduction of F(·) as a function of time and iteration for each algorithm.",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.06373",
+          "page": 26,
+          "gain": 2,
+          "evidence": "Table 9 reports mean wall-clock time per window for the covariance fit and one monitor step.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 43,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-45",
+      "class": "spread",
+      "query": "dynamical systems",
+      "labels": [
+        {
+          "doc": "2607.10439",
+          "page": 16,
+          "gain": 2,
+          "evidence": "Model-independent dynamical invariants measured on EEGMMIDB (n = 60",
+          "match": "exact"
+        },
+        {
+          "doc": "2607.10430",
+          "page": 9,
+          "gain": 2,
+          "evidence": "We simulated 6 different three-dimensional dynamical systems (xt) using RK4 integration.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 47,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "spread-46",
+      "class": "spread",
+      "query": "model architecture",
+      "labels": [
+        {
+          "doc": "1712.00409",
+          "page": 11,
+          "gain": 2,
+          "evidence": "improve model accuracy by changing model architectures trained on a given data set",
+          "match": "exact"
+        },
+        {
+          "doc": "1611.03530",
+          "page": 13,
+          "gain": 2,
+          "evidence": "we use the Inception V3 (Szegedy et al., 2016) architecture and reuse the data preprocessing",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 48,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "spread-45",
+      "class": "spread",
+      "query": "op-like base",
+      "labels": [
+        {
+          "doc": "0707.0311",
+          "page": 10,
+          "gain": 2,
+          "evidence": "an anti-chain of convex pseudo-discs of P. This\r\ncollection consists of \r\nn+1\r\n2\r\n\u0001\r\nsets",
+          "match": "folded"
+        },
+        {
+          "doc": "0705.4297",
+          "page": 14,
+          "gain": 2,
+          "evidence": "the least infinite κ such that Q\ni∈I Xi has a κ\nop-like base of open boxes.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 46,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "no query token in evidence_a"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "doc": "0707.3690",
+      "page": 3,
+      "why": "drafter: Page A is about the geometry of virus capsids (Euler characteristic, pentagon/hexagon tiling of a sphere, curvature); Page B is about diphoton invariant-mass reconstruction and mass resolution of ALPs via a Transformer in particle physics. No shared technical topic."
+    },
+    {
+      "doc": "2607.03471",
+      "page": 3,
+      "why": "drafter: Page A is about non-Hermitian electromagnetic metamaterials (exceptional points, Lifshitz/topological transitions, energy-metric singularity); Page B is about relativistic Bessel-beam spin textures and Bloch-type Skyrmion topology. Their only overlap is generic wave-physics vocabulary (eigenstates, topology, modes), with no shared specific method, quantity, or concept."
+    },
+    {
+      "doc": "0905.3502",
+      "page": 19,
+      "why": "drafter: Page A is about noise-induced bistability/bifurcation in lac-operon TMG metabolism; Page B is about fitting a Port-Hamiltonian neural model with PLV/PAC priors and criticality diagnostics. The only overlap is the generic term 'standard deviation (σ)', used for unrelated purposes — no shared specific technical topic, method, or quantity."
+    },
+    {
+      "doc": "2607.03471",
+      "page": 18,
+      "why": "drafter: Page A is about pinch-off Lifshitz transitions, Hessians, and exceptional-point rings in a band-structure model; Page B is about polarization and non-diffractive Skyrmion-like spin textures of twisted fermion LG beams. No shared technical topic, method, or quantity."
+    },
+    {
+      "doc": "1912.02292",
+      "page": 20,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0902.1533",
+      "page": 3,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0902.1533",
+      "page": 7,
+      "why": "drafter: Page A is an X-ray source-detection survey (PSF, flux limit, soft/hard bands, sky coverage); Page B is host-galaxy SED fitting (CIGALE, stellar mass, SFR, AGN/nebular/dust emission). They share only generic astronomy vocabulary (e.g. 'flux'), no specific common method or quantity."
+    },
+    {
+      "doc": "0709.2178",
+      "page": 8,
+      "why": "partner thin"
+    },
+    {
+      "doc": "2607.02171",
+      "page": 1,
+      "why": "drafter: Page A is a kinetic theory of collective learning in populations of active agents (policies, rewards, swarm robotics); Page B is representation learning / neural manifolds and memorisation-to-generalisation in recurrent neural networks and neuroscience. Their only overlap is the generic notion of 'learning'/'population'; no specific shared technical topic, method, or quantity is genuinely discussed by both."
+    },
+    {
+      "doc": "2607.10439",
+      "page": 30,
+      "why": "partner thin"
+    },
+    {
+      "doc": "1207.2761",
+      "page": 4,
+      "why": "drafter: Page A covers GPS pseudorange double-difference ranging (CNR thresholds, satellite bitmap, weighted least squares); Page B covers UWB time-delay/clock-offset estimation via maximum-likelihood. They share only the generic notion of parameter estimation from noisy signals — no non-generic technical term appears verbatim on both pages (A uses CNR/pseudorange/least-squares; B uses SNR/time-delay/MLE)."
+    },
+    {
+      "doc": "2206.07682",
+      "page": 1,
+      "why": "drafter: Page A (emergent abilities intro: scaling, language models, downstream tasks) and Page B (a Chinchilla vs Gopher BIG-bench accuracy table) share no specific technical term verbatim — the only overlap is the generic notion of LLM task performance, and no non-stopword topic term appears in both pages."
+    },
+    {
+      "doc": "0802.0733",
+      "page": 1,
+      "why": "drafter: no shared technical topic: page A is about airline passenger boarding optimization via MCMC; page B is about convex pseudo-discs and linearly separable point sets in combinatorial geometry"
+    },
+    {
+      "doc": "0705.4297",
+      "page": 11,
+      "why": "drafter: Page A is set-theoretic topology (splitters, cardinal invariants, ultrafilters on κ); Page B is combinatorial geometry (lines, slopes, points strongly separating lines, monotone paths in arrangements). They share no real technical topic — only the generic notion of set 'cardinality'."
+    },
+    {
+      "doc": "0711.0528",
+      "page": 11,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.09951",
+      "page": 69,
+      "why": "partner thin"
+    },
+    {
+      "doc": "2607.06338",
+      "page": 26,
+      "why": "thin or references"
+    },
+    {
+      "doc": "1302.3440",
+      "page": 8,
+      "why": "partner thin"
+    },
+    {
+      "doc": "2607.06338",
+      "page": 21,
+      "why": "drafter: Page A is an optical supernova photometry table (MJD, B/V/g/r/i/z magnitudes, telescope codes); Page B describes an X-ray wavelet source-detection algorithm (energy bands, WT scales, PSF, Monte Carlo thresholds). They share no specific technical topic, method, or quantity beyond both being astronomy."
+    },
+    {
+      "doc": "1301.3570",
+      "page": 3,
+      "why": "drafter: Page A is an unlabeled dump of topic-cluster word lists (news vocabulary) with no sentences or technical concepts; Page B is the GPT-3 abstract. They share no genuine technical topic, method, or quantity that both pages actually discuss."
+    },
+    {
+      "doc": "0706.0028",
+      "page": 1,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0904.1520",
+      "page": 28,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0706.0028",
+      "page": 13,
+      "why": "drafter: Page A is combinatorial graph theory (degree-1/3 graphs, Euler characteristic, deformation retract); Page B is dynamical systems on genus-p surfaces (knotted attractors, automorphic functions, homeomorphism). No shared specific technical term appears verbatim on both."
+    },
+    {
+      "doc": "2607.08291",
+      "page": 13,
+      "why": "drafter: Page A is on robust RL via Sinkhorn optimal-transport duality; Page B is on behavioral-economics model fit (MSE, completeness/restrictiveness measures). No shared technical topic beyond generic terms like 'expectation'/'deterministic'."
+    },
+    {
+      "doc": "2607.08291",
+      "page": 29,
+      "why": "drafter: Page A is about robust reinforcement learning for trading (Sharpe ratio, P&L, drawdown, liquidity); Page B is about behavioral-economics model classification by lowest MSE (completeness–restrictiveness frontier, hierarchical types). They share only the generic word 'model', no genuine common technical topic, quantity, or method."
+    },
+    {
+      "doc": "2607.08082",
+      "page": 1,
+      "why": "drafter: Page A is about Z' portal dark matter, Dirac right-handed neutrinos and ΔNeff; Page B is about exotic hadron states (DD* system, X(3872), CMR/Green's function). No shared technical topic, method, or quantity beyond generic 'particle physics'."
+    },
+    {
+      "doc": "1807.03386",
+      "page": 8,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2605.06546",
+      "page": 12,
+      "why": "thin or references"
+    }
+  ]
+}

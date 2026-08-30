@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- **`excerpt_style="window"` on `pdf_search` and `pdf_corpus_search`.**
+  Returns the anchor block plus its contiguous neighbours up to
+  `window_tokens` (default 600), instead of one selected block. The
+  anchor is the keyword-hit block; else the block covered by the page's
+  best-scoring sub-page embedding chunk; else the most query-dense block;
+  else the page top. Entries carry `window_blocks`, `anchor` and the
+  same `bbox`/`page_rect`/`clip` geometry as paragraph excerpts. Use it
+  when one call has to carry the evidence in context: the title above
+  a matching abstract, the later lines of a caption, a value beside its
+  label. On the 100-paper corpus benchmark at a fixed 2,000-token
+  budget, window excerpts recovered the graded span on 0.929 of needle
+  queries (paragraph 0.500, snippet 0.786, Bedrock 0.714) and 0.680 of
+  trap queries (paragraph 0.520, Bedrock 0.840), with about 3 to 4 hits
+  fitting the budget instead of 11 to 19; on cross-document `spread`
+  queries that coverage cost shows (0.600 against paragraph 0.760,
+  confidence interval includes zero), so paragraph stays the default.
+  Document ranking is identical across excerpt styles.
+
 - **`pdf_corpus_search` hybrid mode now ranks documents, not only pages.**
   A cached per-document head vector (page 1, first 1,500 characters,
   same embedding model as pages) is fused as a third, lower-weight arm
@@ -81,8 +99,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0.720 on trap queries, paragraph-excerpt needle recall from 0.429 to
   0.500, with document-level ranking unchanged. Reading-order fidelity on
   the 44-document READoc set is unchanged (two-column 0.806 to 0.808, paired
-  run, no document down). Cached text is re-extracted on first use
-  (extraction version 11).
+  run, no document down). A spanning line must also be wide (at least 30%
+  of the span across the columns): a narrow table cell straddling a
+  column boundary the detector drew through a table's internal gap was
+  briefly treated as a band and emitted ahead of its row label. Cached
+  text is re-extracted on first use (extraction version 12).
 
 - **`pdf_corpus_warm` could report a complete warm while documents were
   missing from the cache.** Each document's reported status said which

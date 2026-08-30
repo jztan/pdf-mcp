@@ -4,9 +4,9 @@ Corpus: 100 docs. Queries: 89 (graded ground truth, stage-2). top_k=10. The tool
 
 | mode | overall NDCG@10 | described | needle | spread | trap | doc-hit@3 | s/query |
 |---|---|---|---|---|---|---|---|
-| keyword (keyword) | 0.460 | 0.136 | 0.944 | 0.361 | 0.612 | 0.854 | 0.64 |
-| semantic (semantic) | 0.486 | 0.330 | 0.751 | 0.230 | 0.751 | 0.854 | 0.54 |
-| auto (hybrid) | 0.503 | 0.277 | 0.934 | 0.304 | 0.688 | 0.899 | 0.87 |
+| keyword (keyword) | 0.460 | 0.136 | 0.944 | 0.361 | 0.612 | 0.854 | 0.71 |
+| semantic (semantic) | 0.487 | 0.335 | 0.751 | 0.230 | 0.750 | 0.854 | 1.34 |
+| auto (hybrid) | 0.505 | 0.277 | 0.934 | 0.310 | 0.688 | 0.899 | 1.58 |
 
 ## Doc-level NDCG@10 (ranked docs deduped, gain = doc's best label)
 
@@ -16,15 +16,15 @@ Separates "wrong doc" from "right doc, unlabeled page": sparse page labels grade
 |---|---|---|---|---|---|
 | keyword | 0.784 | 0.496 | 1.000 | 0.735 | 1.000 |
 | semantic | 0.815 | 0.766 | 0.974 | 0.607 | 0.985 |
-| auto | 0.869 | 0.815 | 1.000 | 0.719 | 1.000 |
+| auto | 0.871 | 0.815 | 1.000 | 0.727 | 1.000 |
 
 ## CJK subset (5 needle queries on Japanese docs; embedding model is English bge-small, so the semantic arm is expected to be weak there)
 
 | mode | CJK NDCG@10 (n=5) | non-CJK NDCG@10 |
 |---|---|---|
 | keyword | 0.916 | 0.433 |
-| semantic | 0.524 | 0.484 |
-| auto | 0.890 | 0.480 |
+| semantic | 0.524 | 0.485 |
+| auto | 0.890 | 0.482 |
 
 Sanity cross-check: compare keyword overall against the stage-2 arm-B reference (~0.547) only on the 64 non-`described` queries. The 89-query overall includes `described`, where keyword scores ~0.13, so it lands well below the reference on query mix alone. Interpretation is appended by hand after the run.
 ## Interpretation (89-query run, document arm live; cite the tables above, not this prose)

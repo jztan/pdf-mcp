@@ -37,6 +37,21 @@
         "overlapPercentage": 20
       },
       "rerank": "cohere.rerank-v3-5:0"
+    },
+    "P-window": {
+      "label": "P-win",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "window",
+      "note": "Same retrieval as P; excerpt is a ~600-token contiguous block window around the anchor (keyword hit, best sub-page chunk, or page top). Fewer, larger units at the same token budget."
+    },
+    "P-window300": {
+      "label": "P-win300",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "window",
+      "window_tokens": 300,
+      "note": "Window arm at half the default budget per excerpt (~6 hits fit 2,000 tokens instead of ~3), to separate the unit-shape effect from the coverage cost on spread."
     }
   },
   "revision_rule": "An arm id names one immutable index. To change a config, add a new id with a bumped -vN suffix and provision it; never edit an existing id in place. `label` is the short name used in result tables.",

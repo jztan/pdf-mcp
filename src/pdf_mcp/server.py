@@ -2103,6 +2103,169 @@ def _upgrade_excerpts_to_paragraphs(
     return upgraded
 
 
+_WINDOW_TOKENS_DEFAULT = 600
+
+
+def _expand_block_window(sizes: list[int], anchor: int, budget: int) -> tuple[int, int]:
+    """Widest contiguous block range around `anchor` whose token cost stays
+    within `budget`, growing alternately forward and backward. The anchor
+    block is always included, even over budget."""
+    lo = hi = anchor
+    used = sizes[anchor]
+    forward = True
+    while True:
+        moved = False
+        for _ in range(2):
+            if forward:
+                if hi + 1 < len(sizes) and used + sizes[hi + 1] <= budget:
+                    hi += 1
+                    used += sizes[hi]
+                    moved = True
+            else:
+                if lo - 1 >= 0 and used + sizes[lo - 1] <= budget:
+                    lo -= 1
+                    used += sizes[lo]
+                    moved = True
+            forward = not forward
+        if not moved:
+            return lo, hi
+
+
+def _block_best_covering(texts: list[str], fragment: str) -> int | None:
+    """Index of the block that shares the most whitespace-normalised
+    text with `fragment` (a sub-page embedding chunk), or None when no
+    block overlaps it at all."""
+    frag = " ".join(fragment.split())
+    if not frag:
+        return None
+    best: int | None = None
+    best_len = 0
+    for idx, t in enumerate(texts):
+        norm = " ".join(t.split())
+        if not norm:
+            continue
+        if norm in frag:
+            covered = len(norm)
+        elif frag in norm:
+            covered = len(frag)
+        else:
+            # partial overlap at either end of the chunk
+            covered = 0
+            for k in range(min(len(norm), len(frag)), 39, -1):
+                if norm[:k] == frag[-k:] or norm[-k:] == frag[:k]:
+                    covered = k
+                    break
+        if covered > best_len:
+            best_len, best = covered, idx
+    return best
+
+
+def _expand_excerpts_to_windows(
+    matches: list[dict[str, Any]],
+    doc: Any,
+    query: str,
+    keyword_excerpts: dict[int, str] | None = None,
+    window_tokens: int = _WINDOW_TOKENS_DEFAULT,
+) -> list[dict[str, Any]]:
+    """Replace each match's excerpt with a contiguous window of text
+    blocks around an anchor, up to `window_tokens` (~4 chars per token).
+
+    Anchor, in priority order: the block containing the FTS keyword
+    excerpt (`anchor: "keyword"`); the block best covered by the page's
+    best-scoring sub-page embedding chunk, carried on the match as
+    `_best_chunk` (`"semantic"`); the block with the most query-token
+    hits (`"query_terms"`); else the first block (`"page_top"`).
+
+    Why a window and not a picked block: at a fixed token budget, one
+    contiguous span of raw page text is far more likely to hold a
+    specific sentence than one selected block. On the Bedrock anchor
+    benchmark every paragraph-mode miss where the page was returned and
+    the text intact sat inside a ~600-token window around the anchor or
+    the page top (16 of 16), while the 80-char block floor kept
+    paragraph mode from ever returning a title. The floor is untouched
+    here: the window includes short blocks as neighbours, never as the
+    thing selected.
+
+    Deduplicates matches whose windows start at the same (page, lo).
+    """
+    from .extractor import count_query_tokens, get_best_paragraph_for_query
+
+    seen: dict[tuple[int, int], int] = {}
+    out: list[dict[str, Any]] = []
+    for m in matches:
+        best_chunk = m.pop("_best_chunk", None)
+        page_num_0 = m["page"] - 1
+        page = _layout_page(doc, page_num_0)
+        blocks = page.get_text("blocks", sort=True)
+        text_blocks = [b for b in blocks if b[6] == 0]
+        texts = [b[4] for b in text_blocks]
+        if not texts:
+            out.append(m)
+            continue
+        anchor: int | None = None
+        how = "page_top"
+        if keyword_excerpts is not None and page_num_0 in keyword_excerpts:
+            fragment = keyword_excerpts[page_num_0].replace("...", "").strip()
+            fragment_norm = " ".join(fragment.split())
+            if fragment_norm:
+                for idx, bt in enumerate(texts):
+                    if fragment_norm in " ".join(bt.split()):
+                        anchor, how = idx, "keyword"
+                        break
+                if anchor is None:
+                    # A snippet that spans several blocks (short page,
+                    # or a window across a block join): the block it
+                    # covers most.
+                    cov = _block_best_covering(texts, fragment_norm)
+                    if cov is not None:
+                        anchor = cov
+                        how = "keyword"
+        if anchor is None and best_chunk:
+            cov = _block_best_covering(texts, best_chunk)
+            if cov is not None:
+                anchor = cov
+                how = "semantic"
+        if anchor is None:
+            _t, term_idx = get_best_paragraph_for_query(page, query)
+            if term_idx is not None and count_query_tokens(texts[term_idx], query):
+                anchor = term_idx
+                how = "query_terms"
+        if anchor is None:
+            anchor, how = 0, "page_top"
+        sizes = [max(1, len(t) // 4) for t in texts]
+        lo, hi = _expand_block_window(sizes, anchor, window_tokens)
+        window_text = "\n\n".join(t.strip() for t in texts[lo : hi + 1])
+        geom: dict[str, Any] = {}
+        x0 = min(b[0] for b in text_blocks[lo : hi + 1])
+        y0 = min(b[1] for b in text_blocks[lo : hi + 1])
+        x1 = max(b[2] for b in text_blocks[lo : hi + 1])
+        y1 = max(b[3] for b in text_blocks[lo : hi + 1])
+        r = page.rect
+        page_rect = [round(r.x0, 1), round(r.y0, 1), round(r.x1, 1), round(r.y1, 1)]
+        bbox = [round(x0, 1), round(y0, 1), round(x1, 1), round(y1, 1)]
+        geom = {
+            "bbox": bbox,
+            "page_rect": page_rect,
+            "clip": _bbox_to_clip(bbox, page_rect),
+        }
+        key = (m["page"], lo)
+        payload = {
+            **m,
+            "excerpt": window_text,
+            "window_blocks": [lo, hi],
+            "anchor": how,
+            **geom,
+        }
+        if key in seen:
+            existing = seen[key]
+            if m.get("score", 0) > out[existing].get("score", 0):
+                out[existing] = payload
+            continue
+        seen[key] = len(out)
+        out.append(payload)
+    return out
+
+
 def _pdf_search_section_mode(
     local_path: str, query: str, max_results: int
 ) -> dict[str, Any]:
@@ -2194,6 +2357,7 @@ def pdf_search(
     context_chars: int = 200,
     granularity: str = "page",
     excerpt_style: str = "paragraph",
+    window_tokens: int = _WINDOW_TOKENS_DEFAULT,
 ) -> dict[str, Any]:
     """
     Search for text within a PDF document.
@@ -2239,6 +2403,17 @@ def pdf_search(
               by context_chars).
 
     Returns:
+            'window': the anchor block plus contiguous neighbouring
+              blocks up to `window_tokens`. The anchor is the keyword hit
+              block, else the block covered by the page's best-scoring
+              sub-page embedding chunk, else the most query-dense block,
+              else the page top. Use when one call must carry the
+              evidence in context (a title above the matching abstract,
+              a caption's later lines, a value beside its label); at a
+              fixed token budget a contiguous span holds a specific
+              sentence far more often than one selected block does.
+        window_tokens: Token budget for excerpt_style='window' (about 4
+              characters per token, default 600). Ignored otherwise.
         Page mode (granularity='page'):
             - matches: List of {page, excerpt, position, score, source}.
               Semantic mode matches also carry `low_confidence` (cosine
@@ -2263,8 +2438,10 @@ def pdf_search(
               loaded; the response then degrades to
               search_mode='keyword' and carries a
               `semantic_unavailable_reason` string).
-            - excerpt_style: 'paragraph' (default) or 'snippet' if
-              explicitly requested.
+            - excerpt_style: 'paragraph' (default), 'snippet' or
+              'window' as requested. 'window' entries also carry
+              `window_blocks` [first, last] and `anchor`
+              ('keyword' | 'semantic' | 'query_terms' | 'page_top').
         Section mode (granularity='section'):
             - sections: List of {section_id, title, title_source,
                         start_page, end_page, score} sorted by descending
@@ -2316,11 +2493,11 @@ def pdf_search(
         }
 
     # 1c. Validate excerpt_style
-    if excerpt_style not in ("snippet", "paragraph"):
+    if excerpt_style not in ("snippet", "paragraph", "window"):
         return {
             "error": (
                 f"Invalid excerpt_style '{excerpt_style}'. "
-                "Must be 'snippet' or 'paragraph'."
+                "Must be 'snippet', 'paragraph' or 'window'."
             ),
             "query": query,
         }
@@ -2486,6 +2663,14 @@ def pdf_search(
             if excerpt_style == "paragraph":
                 matches = _upgrade_excerpts_to_paragraphs(matches, doc, query)
                 matches = _attach_table_context(matches, local_path, cache, doc)
+            elif excerpt_style == "window":
+                for m in matches:
+                    m["_best_chunk"] = _best_subchunk_text(
+                        local_path, m["page"] - 1, cached_embeddings, query_vec
+                    )
+                matches = _expand_excerpts_to_windows(
+                    matches, doc, query, window_tokens=window_tokens
+                )
 
             hidden_detected = _attach_hidden(matches)
             sem_page_counts = {str(m["page"]): 1 for m in matches}
@@ -2571,6 +2756,16 @@ def pdf_search(
             if excerpt_style == "paragraph":
                 kw_matches = _upgrade_excerpts_to_paragraphs(kw_matches, doc, query)
                 kw_matches = _attach_table_context(kw_matches, local_path, cache, doc)
+            elif excerpt_style == "window":
+                kw_matches = _expand_excerpts_to_windows(
+                    kw_matches,
+                    doc,
+                    query,
+                    keyword_excerpts={
+                        m["page"] - 1: m.get("excerpt", "") for m in kw_matches
+                    },
+                    window_tokens=window_tokens,
+                )
 
             hidden_detected = _attach_hidden(kw_matches)
 
@@ -2607,6 +2802,16 @@ def pdf_search(
             if excerpt_style == "paragraph":
                 auto_kw = _upgrade_excerpts_to_paragraphs(auto_kw, doc, query)
                 auto_kw = _attach_table_context(auto_kw, local_path, cache, doc)
+            elif excerpt_style == "window":
+                auto_kw = _expand_excerpts_to_windows(
+                    auto_kw,
+                    doc,
+                    query,
+                    keyword_excerpts={
+                        m["page"] - 1: m.get("excerpt", "") for m in auto_kw
+                    },
+                    window_tokens=window_tokens,
+                )
             hidden_detected = _attach_hidden(auto_kw)
             response: dict[str, Any] = {
                 "content_warning": (
@@ -2763,6 +2968,19 @@ def pdf_search(
             )
             hybrid_matches = _attach_table_context(
                 hybrid_matches, local_path, cache, doc
+            )
+        elif excerpt_style == "window":
+            if cached_embeddings:
+                for m in hybrid_matches:
+                    m["_best_chunk"] = _best_subchunk_text(
+                        local_path, m["page"] - 1, cached_embeddings, query_vec
+                    )
+            hybrid_matches = _expand_excerpts_to_windows(
+                hybrid_matches,
+                doc,
+                query,
+                keyword_excerpts=keyword_excerpts,
+                window_tokens=window_tokens,
             )
 
         hidden_detected = _attach_hidden(hybrid_matches)
@@ -3289,10 +3507,30 @@ def _merge_doc_match_counts(
     return merged
 
 
+def _best_subchunk_text(
+    path: str, page_num_0: int, vecs_by_page: dict[int, Any], query_vec: Any
+) -> str | None:
+    """Text of the page's best-scoring sub-page embedding unit (unit 0 is
+    the whole page and is skipped), or None when the page has a single
+    unit or no cached vectors."""
+    from .extractor import page_embedding_units
+
+    vecs = vecs_by_page.get(page_num_0)
+    if vecs is None or len(vecs) < 2:
+        return None
+    text = cache.get_page_text(path, page_num_0) or ""
+    units = page_embedding_units(text)
+    if len(units) != len(vecs):
+        return None
+    scores = [float(v @ query_vec) for v in vecs[1:]]
+    return units[1 + max(range(len(scores)), key=scores.__getitem__)]
+
+
 def _corpus_semantic_scores(
     files: list[str],
     model_name: str,
     query_vec: Any,
+    best_chunks: dict[tuple[str, int], str] | None = None,
 ) -> tuple[list[tuple[str, int, float]], list[str]]:
     """Compute per-page cosine similarity to `query_vec` across a
     warmed corpus's cached embeddings.
@@ -3303,8 +3541,14 @@ def _corpus_semantic_scores(
     product is cosine). `semantic_unprocessed` lists ready docs with
     zero cached embeddings (e.g. warm raced the embeddings budget) so
     callers can surface them additively alongside `unprocessed`.
+
+    When `best_chunks` is given it is filled with the text of each
+    page's best-scoring sub-page unit (whole-page unit 0 excluded), for
+    the window excerpt anchor.
     """
     import numpy as np
+
+    from .extractor import page_embedding_units
 
     scored: list[tuple[str, int, float]] = []
     semantic_unprocessed: list[str] = []
@@ -3323,11 +3567,18 @@ def _corpus_semantic_scores(
                 continue
             # Page score is its best chunk. Averaging would re-introduce the
             # page-level dilution this change exists to remove.
-            best = max(
+            sims = [
                 float(np.frombuffer(b, dtype=np.float32).copy() @ query_vec)
                 for b in blobs
-            )
-            scored.append((path, page_num + 1, best))
+            ]
+            scored.append((path, page_num + 1, max(sims)))
+            if best_chunks is not None and len(sims) > 1:
+                units = page_embedding_units(cache.get_page_text(path, page_num) or "")
+                if len(units) == len(sims):
+                    sub = sims[1:]
+                    best_chunks[(path, page_num + 1)] = units[
+                        1 + max(range(len(sub)), key=sub.__getitem__)
+                    ]
     return scored, semantic_unprocessed
 
 
@@ -3371,6 +3622,8 @@ def _finalize_corpus_matches(
     excerpt_style: str,
     query: str,
     keyword_excerpts_by_doc: dict[str, dict[int, str]] | None = None,
+    window_tokens: int = _WINDOW_TOKENS_DEFAULT,
+    best_chunks: dict[tuple[str, int], str] | None = None,
 ) -> list[dict[str, Any]]:
     """Shared per-doc finalize step for every `pdf_corpus_search` mode:
     attach hidden-text flags and per-page text provenance (`source`,
@@ -3398,12 +3651,23 @@ def _finalize_corpus_matches(
             for h in doc_hits:
                 h["hidden_text"] = hidden.get(h["page"] - 1, False)
                 h["source"] = sources.get(h["page"] - 1, "extracted")
+            kw_excerpts = None
+            if keyword_excerpts_by_doc is not None:
+                kw_excerpts = keyword_excerpts_by_doc.get(path)
             if excerpt_style == "paragraph":
-                kw_excerpts = None
-                if keyword_excerpts_by_doc is not None:
-                    kw_excerpts = keyword_excerpts_by_doc.get(path)
                 doc_hits = _upgrade_excerpts_to_paragraphs(
                     doc_hits, doc, query, keyword_excerpts=kw_excerpts
+                )
+            elif excerpt_style == "window":
+                if best_chunks:
+                    for h in doc_hits:
+                        h["_best_chunk"] = best_chunks.get((path, h["page"]))
+                doc_hits = _expand_excerpts_to_windows(
+                    doc_hits,
+                    doc,
+                    query,
+                    keyword_excerpts=kw_excerpts,
+                    window_tokens=window_tokens,
                 )
         finally:
             doc.close()
@@ -3446,6 +3710,7 @@ def pdf_corpus_search(
     context_chars: int = 200,
     budget_seconds: int = 45,
     recursive: bool = False,
+    window_tokens: int = _WINDOW_TOKENS_DEFAULT,
 ) -> dict[str, Any]:
     """
     Search a corpus of local PDFs and fuse per-doc results into one
@@ -3467,7 +3732,12 @@ def pdf_corpus_search(
         excerpt_style: 'paragraph' (default) returns the enclosing text
             block -- the sentence or bullet that matched -- and adds
             `bbox`/`page_rect`/`clip`; 'snippet' is the legacy
-            fixed-width context window. Matches single-doc pdf_search.
+            fixed-width context window; 'window' is the anchor block
+            plus contiguous neighbours up to `window_tokens` (adds
+            `window_blocks`, `anchor` and the geometry fields). Matches
+            single-doc pdf_search.
+        window_tokens: Token budget for excerpt_style='window' (about 4
+            characters per token, default 600). Ignored otherwise.
         context_chars: Characters of context around each match
             (clamped to 50-2000).
         budget_seconds: Wall-clock budget for warming uncached docs
@@ -3477,7 +3747,8 @@ def pdf_corpus_search(
     Returns:
         - matches: cross-document hits in fused order, each {path,
           doc_title, page, excerpt, position, source, hidden_text},
-          plus geometry fields when excerpt_style is 'paragraph'.
+          plus geometry fields when excerpt_style is 'paragraph' or
+          'window' ('window' adds `window_blocks` and `anchor` too).
           Keyword-mode hits also carry `score` (per-doc BM25,
           comparable only within that hit's own document). Semantic-
           mode hits carry `score` (cosine, rounded 4dp) and
@@ -3557,11 +3828,11 @@ def pdf_corpus_search(
             ),
             "query": query,
         }
-    if excerpt_style not in ("snippet", "paragraph"):
+    if excerpt_style not in ("snippet", "paragraph", "window"):
         return {
             "error": (
                 f"Invalid excerpt_style '{excerpt_style}'. "
-                "Must be 'snippet' or 'paragraph'."
+                "Must be 'snippet', 'paragraph' or 'window'."
             ),
             "query": query,
         }
@@ -3641,8 +3912,9 @@ def pdf_corpus_search(
     if mode == "semantic":
         assert embed_model is not None  # guaranteed by check_available above
         query_vec = _embedder.encode_query(query, embed_model)
+        best_chunks: dict[tuple[str, int], str] = {}
         scored, semantic_unprocessed = _corpus_semantic_scores(
-            ready_paths, embed_model, query_vec
+            ready_paths, embed_model, query_vec, best_chunks
         )
         scored.sort(key=lambda t: (-t[2], t[0], t[1]))
         top = scored[:top_k]
@@ -3667,7 +3939,14 @@ def pdf_corpus_search(
                 "_fused_pos": idx,
             }
 
-        matches = _finalize_corpus_matches(fused, _sem_build, excerpt_style, query)
+        matches = _finalize_corpus_matches(
+            fused,
+            _sem_build,
+            excerpt_style,
+            query,
+            window_tokens=window_tokens,
+            best_chunks=best_chunks,
+        )
         hidden_text_detected = any(m.get("hidden_text") for m in matches)
         all_results_low_confidence = bool(matches) and all(
             m["low_confidence"] for m in matches
@@ -3733,7 +4012,12 @@ def pdf_corpus_search(
             }
 
         matches = _finalize_corpus_matches(
-            kw_fused, _kw_build, excerpt_style, query, kw_excerpts_by_doc
+            kw_fused,
+            _kw_build,
+            excerpt_style,
+            query,
+            kw_excerpts_by_doc,
+            window_tokens=window_tokens,
         )
         hidden_text_detected = any(m.get("hidden_text") for m in matches)
 
@@ -3766,8 +4050,9 @@ def pdf_corpus_search(
         # can narrow embed_fn to non-None without an assert here.
         raise RuntimeError("embed_fn unset despite embeddings_needed")
     query_vec = _embedder.encode_query(query, embed_model)
+    hybrid_best_chunks: dict[tuple[str, int], str] = {}
     scored, semantic_unprocessed = _corpus_semantic_scores(
-        ready_paths, embed_model, query_vec
+        ready_paths, embed_model, query_vec, hybrid_best_chunks
     )
     sem_score_map = {(path, page): s for path, page, s in scored}
     scored.sort(key=lambda t: (-t[2], t[0], t[1]))
@@ -3836,7 +4121,13 @@ def pdf_corpus_search(
         }
 
     matches = _finalize_corpus_matches(
-        fused, _hybrid_build, excerpt_style, query, kw_excerpts_by_doc
+        fused,
+        _hybrid_build,
+        excerpt_style,
+        query,
+        kw_excerpts_by_doc,
+        window_tokens=window_tokens,
+        best_chunks=hybrid_best_chunks,
     )
     hidden_text_detected = any(m.get("hidden_text") for m in matches)
     all_results_low_confidence = bool(matches) and all(

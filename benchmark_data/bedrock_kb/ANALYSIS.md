@@ -6,7 +6,7 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
-## Headline, current run (after sub-page embedding chunking and the spanning-line extraction fix, 2026-08-30)
+## Headline, current run (chunking, spanning-line fix, and the window excerpt arm, 2026-08-30)
 
 One table per metric, all four arms, all 89 queries (flagged included; see
 the sensitivity tables in RESULTS.md). P-para is pdf-mcp with paragraph
@@ -16,26 +16,62 @@ average across classes.
 
 Span recall (evidence verbatim inside the 2,000-token budget):
 
-| class | P-para | P-snip | B0 | B1 |
-|---|---|---|---|---|
-| described | 0.240 | 0.000 | 0.360 | 0.400 |
-| needle | 0.500 | 0.786 | 0.714 | 0.714 |
-| spread | 0.760 | 0.840 | 0.600 | 0.680 |
-| trap | 0.520 | 0.720 | 0.840 | 0.880 |
+| class | P-para | P-snip | P-win | B0 | B1 |
+|---|---|---|---|---|---|
+| described | 0.240 | 0.000 | 0.200 | 0.360 | 0.400 |
+| needle | 0.500 | 0.786 | **0.929** | 0.714 | 0.714 |
+| spread | 0.760 | 0.840 | 0.600 | 0.600 | 0.680 |
+| trap | 0.520 | 0.720 | 0.680 | 0.840 | 0.880 |
 
-(Before the extraction fix, same day: needle P-para 0.429 / P-snip 0.643,
-trap P-snip 0.560; see "Latest run" directly below.)
+P-win is `excerpt_style="window"` (600-token contiguous block window around
+the anchor), same retrieval as P-para; realized k 3.2 to 4.1 against 11 to
+19 for P-para. (Before the extraction fix, same day: needle P-para 0.429 /
+P-snip 0.643, trap P-snip 0.560; see the run sections below.)
 
 doc-hit@3 (the right document in the top 3):
 
-| class | P-para | P-snip | B0 | B1 |
-|---|---|---|---|---|
-| described | 0.840 | 0.840 | 0.840 | 0.920 |
-| needle | 1.000 | 1.000 | 1.000 | 1.000 |
-| spread | 0.800 | 0.800 | 0.800 | 0.800 |
-| trap | 1.000 | 1.000 | 1.000 | 1.000 |
+| class | P-para | P-snip | P-win | B0 | B1 |
+|---|---|---|---|---|---|
+| described | 0.840 | 0.840 | 0.840 | 0.840 | 0.920 |
+| needle | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| spread | 0.800 | 0.800 | 0.800 | 0.800 | 0.800 |
+| trap | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
 
-## Latest run, 2026-08-30 (later): 9 graded spans were an extraction defect
+## Latest run, 2026-08-30 (evening): the window excerpt arm
+
+`excerpt_style="window"` returns the anchor block (keyword hit, else the
+block covered by the best sub-page embedding chunk, else the most
+query-dense block, else the page top) plus contiguous neighbours up to a
+token budget. Two arms at the same 2,000-token query budget, B0/B1 rows
+reused, retrieval identical to P-para (doc-level metrics byte-identical):
+
+| class | P-para | P-win (600) | P-win300 | B0 | P-para minus P-win |
+|---|---|---|---|---|---|
+| described | 0.240 | 0.200 | 0.160 | 0.360 | +0.040 [-0.160, +0.240] includes zero |
+| needle | 0.500 | **0.929** | 0.929 | 0.714 | **-0.429 [-0.643, -0.143] excludes zero** |
+| spread | 0.760 | 0.600 | 0.600 | 0.600 | +0.160 [-0.080, +0.400] includes zero |
+| trap | 0.520 | 0.680 | 0.600 | 0.840 | -0.160 [-0.360, +0.040] includes zero |
+
+Realized k: P-win 3.2 to 4.1, P-win300 5.6 to 6.6, P-para 11 to 19.
+
+What the numbers support: on needle the window is a confirmed gain over
+paragraph and sits above both Bedrock arms in point estimate (the span
+is a sentence on a page P already ranks first; a contiguous window around
+the hit holds it, a single picked block often does not). On trap the gap
+to B0 goes from -0.320 (excludes zero) to -0.160 (includes zero); the
+title is now inside the window without touching the 80-char block floor.
+On spread the window costs 0.160 in point estimate (includes zero) and
+halving the window to 300 tokens does not recover it at k=6.4: the second
+document's graded page sits deeper in the ranking than six windows reach,
+where paragraph's 13 hits get to it. That is a property of the unit, not
+of the budget, and it is why paragraph stays the default. Described is
+flat within noise at either size.
+
+Extraction version 12 in this run: a spanning band must also be wide
+(30% of the column span); see CHANGELOG. P-para and P-snip are unchanged
+to three decimals from the version 11 run.
+
+## Earlier run, 2026-08-30 (later): 9 graded spans were an extraction defect
 
 Sweeping all 127 labels against the cached page text and against raw
 pdfium text found 9 labels present in the PDF but absent from pdf-mcp's
@@ -305,8 +341,8 @@ defect).
 
 ## Provenance
 
-- pdf-mcp commit: e19f19f for the original run; the headline tables above are from the 2026-08-30 re-run at 9b1f9cb (spanning-line fix merged), B0/B1 rows reused
-- `_EXTRACTION_VERSION`: 8 for the original run, 11 for the headline re-run
+- pdf-mcp commit: e19f19f for the original run; the headline tables above are from the 2026-08-30 evening run on `feat/excerpt-window` (spanning-line fix plus width rule, window arm), B0/B1 rows reused
+- `_EXTRACTION_VERSION`: 8 for the original run, 12 for the headline run
 - Corpus: `benchmark_data/corpus_search` manifest, 100 docs, 2,238 pages,
   235 MB of PDFs, warmed and re-confirmed in this session (2026-08-29);
   `pdf_mcp.cache.db` mtime updated during arm P's run, confirming a live

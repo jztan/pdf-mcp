@@ -222,6 +222,7 @@ def run_arm_p(
     budget_tokens: int,
     top_k: int = 25,
     excerpt_style: str = "paragraph",
+    window_tokens: int | None = None,
 ) -> dict[str, dict]:
     """pdf-mcp corpus search, hybrid mode, run in-session.
 
@@ -238,8 +239,14 @@ def run_arm_p(
     rows: dict[str, dict] = {}
     for q in queries:
         t0 = time.perf_counter()
+        extra = {} if window_tokens is None else {"window_tokens": window_tokens}
         res = pdf_corpus_search(
-            paths, q["query"], mode="auto", top_k=top_k, excerpt_style=excerpt_style
+            paths,
+            q["query"],
+            mode="auto",
+            top_k=top_k,
+            excerpt_style=excerpt_style,
+            **extra,
         )
         secs = time.perf_counter() - t0
         if "error" in res:
@@ -624,6 +631,7 @@ def main(argv: list[str] | None = None) -> int:
             id_by_path,
             args.budget,
             excerpt_style=config["arms"][arm].get("excerpt_style", "paragraph"),
+            window_tokens=config["arms"][arm].get("window_tokens"),
         )
         print(f"{arm}: done ({len(rows_by_arm[arm])} queries)")
 

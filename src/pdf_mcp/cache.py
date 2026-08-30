@@ -73,9 +73,10 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
+# 12: spanning bands must be wide, not just two-sided (table cells)
 # 11: spanning rows no longer split at the gutter
 # 10: layout-checked chunked embeddings (9 was interim)
-_EXTRACTION_VERSION = 11
+_EXTRACTION_VERSION = 12
 
 # Per-connection pragmas. Both reset on every open, unlike journal_mode which
 # is persistent in the database file (see _connect / _init_db).

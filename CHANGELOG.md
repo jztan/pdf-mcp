@@ -82,6 +82,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`ff` and `ffi` ligatures no longer lose a letter.** The PDF text
+  engine expands a ligature into single letters that share one glyph
+  box, and the filter that drops faux-bold duplicates (the same glyph
+  drawn twice at one position) removed the second letter, so extracted
+  text read `diferent`, `efective`, `suf icient`, `ofset`, and keyword
+  search for `different` or `effective` missed those pages. On the
+  100-paper benchmark corpus 853 of 2,211 pages in 59 documents carried
+  at least one such word (`different` alone 814 times). A duplicate is
+  now kept when it is adjacent to the previous glyph in the text stream
+  (a ligature half); faux-bold repeats arrive later from another text
+  object and are still dropped. Cached text is re-extracted on first use
+  (extraction version 13).
+
 - **Full-width lines on two-column pages are no longer cut at the gutter.**
   A title, author line, abstract or figure caption that runs straight
   across both columns was split by glyph position and its right half

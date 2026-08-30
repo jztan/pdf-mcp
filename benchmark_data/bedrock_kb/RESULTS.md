@@ -4,39 +4,39 @@
 
 Generated 2026-08-30. Token budget 2000 per query per arm. Bedrock is an anchor, not a subject; any result is acceptable. Never average across classes. See [ANALYSIS.md](ANALYSIS.md) for the interpretation.
 
-18 of the queries below had their evidence span found by no arm. Each was reviewed against the page image and confirmed a genuine miss, not a label defect (see ANALYSIS.md), so the tables below include them as legitimate 0-0 observations. A flagged-excluded sensitivity table follows each primary table.
+15 of the queries below had their evidence span found by no arm. Each was reviewed against the page image and confirmed a genuine miss, not a label defect (see ANALYSIS.md), so the tables below include them as legitimate 0-0 observations. A flagged-excluded sensitivity table follows each primary table.
 
 ## described
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 25 | 25 | 0.120 | 0.040 | 0.778 | 0.720 | 13.280 |
-| P-snip | 25 | 25 | 0.000 | 0.000 | 0.778 | 0.720 | 25.000 |
+| P-para | 25 | 25 | 0.240 | 0.160 | 0.831 | 0.800 | 11.240 |
+| P-snip | 25 | 25 | 0.000 | 0.000 | 0.831 | 0.800 | 25.000 |
 | B0 | 25 | 25 | 0.360 | 0.000 | 0.849 | 0.840 | 6.840 |
 | B1 | 25 | 25 | 0.400 | 0.000 | 0.940 | 0.920 | 1.520 |
 
-- P minus P-snip, span recall: +0.120 [+0.000, +0.280] (includes zero, n=25)
-- P minus B0, span recall: -0.240 [-0.440, -0.040] (excludes zero, n=25)
-- P minus B1, span recall: -0.280 [-0.480, -0.120] (excludes zero, n=25)
+- P minus P-snip, span recall: +0.240 [+0.080, +0.400] (excludes zero, n=25)
+- P minus B0, span recall: -0.120 [-0.360, +0.120] (includes zero, n=25)
+- P minus B1, span recall: -0.160 [-0.400, +0.080] (includes zero, n=25)
 
 ### described, sensitivity (flagged queries excluded)
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 13 | 25 | 0.231 | 0.077 | 0.780 | 0.692 | 13.539 |
-| P-snip | 13 | 25 | 0.000 | 0.000 | 0.780 | 0.692 | 25.000 |
-| B0 | 13 | 25 | 0.692 | 0.000 | 0.886 | 1.000 | 6.615 |
-| B1 | 13 | 25 | 0.769 | 0.000 | 1.000 | 1.000 | 1.462 |
+| P-para | 16 | 25 | 0.375 | 0.250 | 0.833 | 0.812 | 11.000 |
+| P-snip | 16 | 25 | 0.000 | 0.000 | 0.833 | 0.812 | 25.000 |
+| B0 | 16 | 25 | 0.562 | 0.000 | 0.908 | 1.000 | 6.438 |
+| B1 | 16 | 25 | 0.625 | 0.000 | 1.000 | 1.000 | 1.375 |
 
-- P minus P-snip, span recall: +0.231 [+0.000, +0.462] (includes zero, n=13)
-- P minus B0, span recall: -0.462 [-0.769, -0.077] (excludes zero, n=13)
-- P minus B1, span recall: -0.538 [-0.769, -0.231] (excludes zero, n=13)
+- P minus P-snip, span recall: +0.375 [+0.125, +0.625] (excludes zero, n=16)
+- P minus B0, span recall: -0.188 [-0.562, +0.188] (includes zero, n=16)
+- P minus B1, span recall: -0.250 [-0.625, +0.125] (includes zero, n=16)
 
 ## needle
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 14 | 14 | 0.429 | 0.071 | 1.000 | 1.000 | 19.500 |
+| P-para | 14 | 14 | 0.429 | 0.071 | 1.000 | 1.000 | 18.571 |
 | P-snip | 14 | 14 | 0.643 | 0.000 | 1.000 | 1.000 | 25.000 |
 | B0 | 14 | 14 | 0.714 | 0.000 | 1.000 | 1.000 | 12.857 |
 | B1 | 14 | 14 | 0.714 | 0.000 | 1.000 | 1.000 | 3.571 |
@@ -49,7 +49,7 @@ Generated 2026-08-30. Token budget 2000 per query per arm. Bedrock is an anchor,
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 11 | 14 | 0.545 | 0.091 | 1.000 | 1.000 | 18.000 |
+| P-para | 11 | 14 | 0.545 | 0.091 | 1.000 | 1.000 | 16.818 |
 | P-snip | 11 | 14 | 0.818 | 0.000 | 1.000 | 1.000 | 25.000 |
 | B0 | 11 | 14 | 0.909 | 0.000 | 1.000 | 1.000 | 9.546 |
 | B1 | 11 | 14 | 0.909 | 0.000 | 1.000 | 1.000 | 2.364 |
@@ -62,33 +62,33 @@ Generated 2026-08-30. Token budget 2000 per query per arm. Bedrock is an anchor,
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 25 | 25 | 0.640 | 0.080 | 0.725 | 0.840 | 13.840 |
-| P-snip | 25 | 25 | 0.880 | 0.080 | 0.725 | 0.840 | 25.000 |
+| P-para | 25 | 25 | 0.760 | 0.120 | 0.763 | 0.760 | 12.840 |
+| P-snip | 25 | 25 | 0.840 | 0.040 | 0.763 | 0.760 | 25.000 |
 | B0 | 25 | 25 | 0.600 | 0.040 | 0.673 | 0.800 | 7.240 |
 | B1 | 25 | 25 | 0.680 | 0.040 | 0.695 | 0.800 | 1.640 |
 
-- P minus P-snip, span recall: -0.240 [-0.440, -0.040] (excludes zero, n=25)
-- P minus B0, span recall: +0.040 [-0.240, +0.280] (includes zero, n=25)
-- P minus B1, span recall: -0.040 [-0.280, +0.200] (includes zero, n=25)
+- P minus P-snip, span recall: -0.080 [-0.280, +0.160] (includes zero, n=25)
+- P minus B0, span recall: +0.160 [-0.080, +0.400] (includes zero, n=25)
+- P minus B1, span recall: +0.080 [-0.120, +0.320] (includes zero, n=25)
 
 ### spread, sensitivity (flagged queries excluded)
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 24 | 25 | 0.667 | 0.083 | 0.730 | 0.833 | 13.833 |
-| P-snip | 24 | 25 | 0.917 | 0.083 | 0.730 | 0.833 | 25.000 |
+| P-para | 24 | 25 | 0.792 | 0.125 | 0.753 | 0.750 | 12.833 |
+| P-snip | 24 | 25 | 0.875 | 0.042 | 0.753 | 0.750 | 25.000 |
 | B0 | 24 | 25 | 0.625 | 0.042 | 0.693 | 0.833 | 7.167 |
 | B1 | 24 | 25 | 0.708 | 0.042 | 0.711 | 0.833 | 1.583 |
 
-- P minus P-snip, span recall: -0.250 [-0.458, -0.042] (excludes zero, n=24)
-- P minus B0, span recall: +0.042 [-0.208, +0.333] (includes zero, n=24)
-- P minus B1, span recall: -0.042 [-0.292, +0.208] (includes zero, n=24)
+- P minus P-snip, span recall: -0.083 [-0.292, +0.125] (includes zero, n=24)
+- P minus B0, span recall: +0.167 [-0.083, +0.417] (includes zero, n=24)
+- P minus B1, span recall: +0.083 [-0.167, +0.292] (includes zero, n=24)
 
 ## trap
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 25 | 25 | 0.520 | 0.160 | 1.000 | 1.000 | 15.480 |
+| P-para | 25 | 25 | 0.520 | 0.160 | 1.000 | 1.000 | 14.920 |
 | P-snip | 25 | 25 | 0.560 | 0.120 | 1.000 | 1.000 | 25.000 |
 | B0 | 25 | 25 | 0.840 | 0.200 | 1.000 | 1.000 | 6.800 |
 | B1 | 25 | 25 | 0.880 | 0.160 | 1.000 | 1.000 | 1.640 |
@@ -101,7 +101,7 @@ Generated 2026-08-30. Token budget 2000 per query per arm. Bedrock is an anchor,
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 23 | 25 | 0.565 | 0.174 | 1.000 | 1.000 | 15.870 |
+| P-para | 23 | 25 | 0.565 | 0.174 | 1.000 | 1.000 | 15.217 |
 | P-snip | 23 | 25 | 0.609 | 0.130 | 1.000 | 1.000 | 25.000 |
 | B0 | 23 | 25 | 0.913 | 0.217 | 1.000 | 1.000 | 6.783 |
 | B1 | 23 | 25 | 0.957 | 0.174 | 1.000 | 1.000 | 1.609 |
@@ -116,15 +116,12 @@ Evidence span found by no arm. Included in the primary tables above (reviewed an
 
 - described-02
 - described-03
-- described-04
 - described-06
-- described-08
 - described-09
 - described-10
 - described-15
 - described-16
 - described-19
-- described-21
 - described-25
 - needle-10
 - needle-12

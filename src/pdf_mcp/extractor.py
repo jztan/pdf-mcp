@@ -2062,3 +2062,59 @@ def chunk_text(
         start = end - overlap_chars if end < len(text) else end
 
     return chunks
+
+
+_CHUNK_MAX_TOKENS = 300
+_CHUNK_OVERLAP_RATIO = 0.2
+_CHUNK_CHARS_PER_TOKEN = 4  # repo convention, matches estimate_tokens
+
+
+def chunk_page_text(
+    text: str,
+    max_tokens: int = _CHUNK_MAX_TOKENS,
+    overlap_ratio: float = _CHUNK_OVERLAP_RATIO,
+) -> list[str]:
+    """Split page text into overlapping windows for embedding.
+
+    One vector per page dilutes a single answer sentence into a page-level
+    average, which is why paraphrase queries miss (see the sub-page
+    embedding chunking design doc). This is a thin wrapper over the
+    existing ``chunk_text`` sentence-aware splitter, reused rather than
+    duplicated; it converts the overlap ratio to the absolute token count
+    ``chunk_text`` expects and returns bare strings.
+
+    Returns [] for empty or whitespace-only text, [text] when the text
+    fits in one window, and otherwise a list of overlapping chunks that
+    together cover the whole input. Never returns an empty chunk.
+    Deterministic for identical input.
+    """
+    if not text or not text.strip():
+        return []
+    if len(text) <= max_tokens * _CHUNK_CHARS_PER_TOKEN:
+        return [text]
+    overlap_tokens = int(max_tokens * overlap_ratio)
+    raw = chunk_text(text, max_tokens=max_tokens, overlap_tokens=overlap_tokens)
+    chunks = [c["text"].strip() for c in raw]
+    chunks = [c for c in chunks if c]
+    return chunks or [text.strip()]
+
+
+def page_embedding_units(text: str) -> list[str]:
+    """Embedding units for one page: the whole page, then its sub-page windows.
+
+    Chunks-only scoring regressed needle and trap, because a single sharp
+    window loses the whole-page context that let the page vector discriminate
+    boilerplate or match an already-precise needle. Emitting the full page as
+    the first unit floors a page's max-pooled score at its whole-page vector,
+    so needle and trap keep their signal while paraphrase queries still gain
+    from a sharper window. Costs one extra vector per multi-window page.
+
+    Returns [] for empty text, [page] for a page that fits in one window, and
+    [page, window0, window1, ...] otherwise.
+    """
+    if not text or not text.strip():
+        return []
+    windows = chunk_page_text(text)
+    if len(windows) <= 1:
+        return windows
+    return [text.strip()] + windows

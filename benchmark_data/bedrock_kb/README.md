@@ -112,12 +112,15 @@ its printed output.
 
 ## Result
 
-| class | P-para | P-snip | B0 | B1 | verdict |
-|---|---|---|---|---|---|
-| described | 0.120 | 0.000 | 0.360 | 0.400 | Bedrock ahead, CI excludes zero |
-| needle | 0.429 | 0.643 | 0.714 | 0.714 | tie, every CI includes zero |
-| spread | 0.640 | 0.880 | 0.600 | 0.680 | snippet beats paragraph, CI excludes zero |
-| trap | 0.520 | 0.560 | 0.840 | 0.880 | Bedrock ahead, CI excludes zero |
+| class | P-para (page-level) | P-para (chunked) | P-snip | B0 | B1 | verdict, chunked |
+|---|---|---|---|---|---|---|
+| described | 0.120 | **0.240** | 0.000 | 0.360 | 0.400 | inside the noise vs Bedrock (was a significant loss) |
+| needle | 0.429 | 0.429 | 0.643 | 0.714 | 0.714 | tie, every CI includes zero |
+| spread | 0.640 | **0.760** | 0.840 | 0.600 | 0.680 | P ahead in point estimate, inside the noise |
+| trap | 0.520 | 0.520 | 0.560 | 0.840 | 0.880 | Bedrock ahead, CI excludes zero |
+
+"P-para (chunked)" is the re-run after sub-page embedding chunking; B0 and B1
+were byte-identical across the two runs. See ANALYSIS.md for the addendum.
 
 Span recall, all 89 queries. See [ANALYSIS.md](ANALYSIS.md) for what these
 mean, what does not survive the noise, and why span recall is not a retrieval

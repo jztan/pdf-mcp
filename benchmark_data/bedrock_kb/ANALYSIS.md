@@ -38,9 +38,11 @@ minus paragraph: needle +0.161 [+0.000, +0.323], spread +0.111 [-0.022,
 +0.244], trap +0.080 [-0.080, +0.240], described 0, all include zero
 individually. Routing: described went to paragraph 82/83, needle to
 window 27/31 (0.852 there), spread to snippet 43/45 (0.698), trap split
-window 17 (0.941) / snippet 4 (0.250) / paragraph 4 (1.000). It is a
-harness arm; the product form is an evidence-budget parameter, not yet
-built.
+window 17 (0.941) / snippet 4 (0.250) / paragraph 4 (1.000). The
+product form is `pdf_corpus_search(evidence_budget=600)` (opt-in,
+2026-08-31); the `P-eb600` arm calls that parameter and the harness
+exits 2 unless its kept units are identical to `P-auto` on every query
+(they are, 184/184), so a drift in the shipped rule shows up here.
 
 Trap is scored against the revised labels (2026-08-30, late): 16 of 25
 queries also credit the body sentence where the query's terms are

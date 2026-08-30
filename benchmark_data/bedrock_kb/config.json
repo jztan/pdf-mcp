@@ -59,6 +59,13 @@
       "mode": "auto",
       "excerpt_style": "auto",
       "note": "Per-query excerpt shape chosen from the number of documents with an AND keyword match (0 paragraph, 1 window, 2+ snippet). Same retrieval as P; only the returned unit differs. Candidate for a single configuration that concedes no class."
+    },
+    "P-eb600": {
+      "label": "P-eb600",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "evidence_budget": 600,
+      "note": "The shipped product form of P-auto: pdf_corpus_search(evidence_budget=600) routes the unit server-side. The harness asserts it is identical to P-auto query for query; it exists so a server-side drift in the rule shows up here."
     }
   },
   "revision_rule": "An arm id names one immutable index. To change a config, add a new id with a bumped -vN suffix and provision it; never edit an existing id in place. `label` is the short name used in result tables.",

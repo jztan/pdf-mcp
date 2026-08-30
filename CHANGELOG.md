@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- **`evidence_budget` on `pdf_corpus_search`** (opt-in, `mode="auto"`).
+  The server chooses the excerpt unit per query from how many documents
+  hold an AND keyword match: none returns paragraph excerpts, one returns
+  a single window of `evidence_budget` tokens per hit, two or more
+  returns snippets so more documents fit a fixed context budget. Ranking
+  is unchanged; the response carries `allocation` (`rule`,
+  `keyword_docs`, `unit`, `tokens`), every match carries `unit`, and
+  `excerpt_style` reports the unit actually used. Snippet-routed hits
+  carry no geometry fields. Paragraph stays the default. On the
+  184-query corpus benchmark at a fixed 2,000-token budget,
+  `evidence_budget=600` is the one configuration ahead of the Bedrock
+  Knowledge Base anchor with confirmed margins (needle +0.355, spread
+  +0.289, both CIs exclude zero) and no confirmed loss; against the
+  paragraph default its per-class gains (needle 0.839 vs 0.677, spread
+  0.711 vs 0.600, trap 0.840 vs 0.760) are not individually confirmed,
+  and described is unchanged.
 - **`excerpt_style="window"` on `pdf_search` and `pdf_corpus_search`.**
   Returns the anchor block plus its contiguous neighbours up to
   `window_tokens` (default 600), instead of one selected block. The

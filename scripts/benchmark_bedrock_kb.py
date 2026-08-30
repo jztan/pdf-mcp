@@ -234,18 +234,36 @@ def run_arm_p(
     that record.
     """
     from benchmark_corpus_modes import build_ranked, grade_query
-    from pdf_mcp.server import pdf_corpus_search
+    from pdf_mcp.server import _corpus_keyword_rankings, pdf_corpus_search
 
     rows: dict[str, dict] = {}
     for q in queries:
         t0 = time.perf_counter()
+        style = excerpt_style
+        chosen_by = None
+        if excerpt_style == "auto":
+            # Per-query excerpt shape from the signals the hybrid path
+            # already computes: the number of documents with an AND
+            # keyword match (no OR fallback, same as hybrid mode). 0 means a
+            # paraphrase (paragraph is its best style); 1 means a single-
+            # document keyword question (a contiguous window covers it);
+            # 2+ means the answer is spread (many small units cover more
+            # documents at the same budget).
+            _lists, kw_docs, _payload = _corpus_keyword_rankings(
+                paths, q["query"], top_k, 200, allow_or_fallback=False
+            )
+            n_docs = len(kw_docs)
+            style = (
+                "paragraph" if n_docs == 0 else ("window" if n_docs == 1 else "snippet")
+            )
+            chosen_by = {"keyword_docs": n_docs, "style": style}
         extra = {} if window_tokens is None else {"window_tokens": window_tokens}
         res = pdf_corpus_search(
             paths,
             q["query"],
             mode="auto",
             top_k=top_k,
-            excerpt_style=excerpt_style,
+            excerpt_style=style,
             **extra,
         )
         secs = time.perf_counter() - t0
@@ -265,6 +283,7 @@ def run_arm_p(
             "doc_ndcg": graded["doc_ndcg"],
             "dochit3": graded["dochit3"],
             "seconds": round(secs, 3),
+            **({"auto": chosen_by} if chosen_by else {}),
         }
     return rows
 

@@ -52,6 +52,13 @@
       "excerpt_style": "window",
       "window_tokens": 300,
       "note": "Window arm at half the default budget per excerpt (~6 hits fit 2,000 tokens instead of ~3), to separate the unit-shape effect from the coverage cost on spread."
+    },
+    "P-auto": {
+      "label": "P-auto",
+      "tool": "pdf_corpus_search",
+      "mode": "auto",
+      "excerpt_style": "auto",
+      "note": "Per-query excerpt shape chosen from the number of documents with an AND keyword match (0 paragraph, 1 window, 2+ snippet). Same retrieval as P; only the returned unit differs. Candidate for a single configuration that concedes no class."
     }
   },
   "revision_rule": "An arm id names one immutable index. To change a config, add a new id with a bumped -vN suffix and provision it; never edit an existing id in place. `label` is the short name used in result tables.",

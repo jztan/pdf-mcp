@@ -464,10 +464,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             raw = ask(draft_prompt(args.klass, text), args.model)
+        if key not in cache:
+            # cache every fresh call, whichever branch made it (the spread
+            # branch once skipped this and re-drafted on every run)
             rec = {
                 "key": key,
                 "raw": raw,
                 "model": args.model,
+                "partner": list(partner[:2]) if partner else None,
                 "at": dt.datetime.now(dt.timezone.utc).isoformat(),
             }
             with cache_path.open("a", encoding="utf-8") as fh:

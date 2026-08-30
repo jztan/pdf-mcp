@@ -18,20 +18,29 @@ column, a caller gets one row.
 
 Span recall (evidence verbatim inside the 2,000-token budget):
 
-| configuration | described (83) | needle (31) | spread (45) | trap (25) |
-|---|---|---|---|---|
-| pdf-mcp paragraph (default) | 0.217 | 0.677 | 0.600 | 0.520 |
-| pdf-mcp snippet | 0.000 | 0.742 | 0.711 | 0.720 |
-| pdf-mcp window 600 | 0.108 | 0.774 | 0.556 | 0.640 |
-| pdf-mcp window 300 | 0.108 | 0.774 | 0.578 | 0.560 |
-| B0 (Bedrock default chunking) | 0.301 | 0.484 | 0.422 | 0.840 |
-| B1 (fixed 1000 + rerank) | 0.253 | 0.645 | 0.511 | 0.880 |
+| configuration | described (83) | needle (31) | spread (45) | trap (25), title-or-passage | trap (25), title-only |
+|---|---|---|---|---|---|
+| pdf-mcp paragraph (default) | 0.217 | 0.677 | 0.600 | 0.760 | 0.520 |
+| pdf-mcp snippet | 0.000 | 0.742 | 0.711 | 0.760 | 0.720 |
+| pdf-mcp window 600 | 0.108 | 0.774 | 0.556 | 0.760 | 0.640 |
+| pdf-mcp window 300 | 0.108 | 0.774 | 0.578 | 0.680 | 0.560 |
+| B0 (Bedrock default chunking) | 0.301 | 0.484 | 0.422 | 0.840 | 0.840 |
+| B1 (fixed 1000 + rerank) | 0.253 | 0.645 | 0.511 | 0.880 | 0.880 |
+
+Trap carries two columns because its labels were revised late on
+2026-08-30 (see "Trap under revised labels" below): title-or-passage is
+the current label set (16 of 25 queries also credit the body sentence
+where the query's terms are meaningful), title-only is the original set.
+Both are from the same run; the labels changed, not the code.
 
 Default minus B0, paired bootstrap: described -0.084 [-0.205, +0.036]
 includes zero; needle +0.194 [-0.032, +0.419] includes zero; spread
-+0.178 [+0.022, +0.333] excludes zero; trap -0.320 [-0.520, -0.120]
-excludes zero. So the shipped default loses trap (confirmed), is ahead on
-spread (confirmed), and is unresolved on described and needle.
++0.178 [+0.022, +0.333] excludes zero; trap -0.080 [-0.280, +0.080]
+includes zero under title-or-passage (-0.320 [-0.520, -0.120] excludes
+zero under title-only). So the shipped default is ahead on spread
+(confirmed), unresolved on described, needle and trap under the current
+labels, and behind on trap only when the title itself is the required
+answer.
 
 Window against paragraph on this set: needle +0.097 [-0.097, +0.290]
 includes zero (the +0.429 "excludes zero" reported on the 89-set below
@@ -73,9 +82,7 @@ Default minus B0: -0.320 [-0.520, -0.120] excludes zero under title-only;
 queries with a passage label, paragraph and B0 are both 0.875 (B1 0.938).
 The labels changed, not the system: under "return the passage where the
 terms are meaningful" the confirmed trap loss is gone; under "return the
-title" it stands. Both readings are kept. The headline table above still
-shows the title-only trap column for the shipped default (0.520); the
-title-or-passage figure is 0.760.
+title" it stands. Both readings are kept, as two trap columns in the headline table.
 
 Earlier sections below are the 89-query record and are kept as written.
 

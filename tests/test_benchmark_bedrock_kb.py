@@ -653,6 +653,11 @@ class TestReuseBedrockRows:
         monkeypatch.setattr(
             bm, "run_arm_p", lambda *a, **k: {q: self._row("needle") for q in qids}
         )
+        monkeypatch.setattr(
+            bm,
+            "warm_corpus",
+            lambda paths: {"warm_complete": True, "unprocessed": [], "skipped": []},
+        )
         real_arm_hash = bm._sha256_json(arm_cfg)
         real_manifest_hash = hashlib.sha256(
             (data_dir / "manifest.json").read_bytes()
@@ -778,3 +783,109 @@ def test_local_sha256_json_matches_bedrock_kb_helper():
 
     for obj in ({"a": 1, "b": [2, 3]}, {"label": "B0", "rerank": None}, {"z": "é"}):
         assert bm._sha256_json(obj) == _bedrock_kb.sha256_json(obj)
+
+
+class TestWarmCorpus:
+    def test_loops_until_nothing_unprocessed_and_requests_embeddings(self, monkeypatch):
+        import pdf_mcp.server as srv
+
+        calls = []
+        seq = [
+            {"unprocessed": ["a"], "warm_complete": False},
+            {"unprocessed": [], "warm_complete": True, "skipped": []},
+        ]
+
+        def fake(paths, budget_seconds, embeddings):
+            calls.append((tuple(paths), budget_seconds, embeddings))
+            return seq[len(calls) - 1]
+
+        monkeypatch.setattr(srv, "pdf_corpus_warm", fake)
+        out = bm.warm_corpus(["p1", "p2"])
+        assert out["warm_complete"] is True
+        assert len(calls) == 2
+        assert calls[0][2] is True
+
+
+class TestMainWarmGate:
+    def _setup(self, tmp_path, monkeypatch):
+        out_dir = tmp_path / "canonical_out"
+        out_dir.mkdir()
+        _write_json(
+            out_dir / "config.json",
+            {"region": "us-east-1", "arms": {"P": {"tool": "pdf_corpus_search"}}},
+        )
+        monkeypatch.setattr(bm, "OUT_DIR", out_dir)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        _write_json(data_dir / "manifest.json", {"docs": []})
+        _write_json(
+            data_dir / "queries.json",
+            {"queries": [{"id": "q1", "class": "needle", "labels": []}]},
+        )
+        return data_dir, out_dir
+
+    def _argv(self, d, o):
+        return ["--arms", "P", "--data-dir", str(d), "--out-dir", str(o / "run")]
+
+    def test_incomplete_warm_exits_2_before_scoring(self, tmp_path, monkeypatch):
+        d, o = self._setup(tmp_path, monkeypatch)
+        scored = []
+        monkeypatch.setattr(bm, "run_arm_p", lambda *a, **k: scored.append(1) or {})
+        monkeypatch.setattr(
+            bm,
+            "warm_corpus",
+            lambda paths: {"warm_complete": False, "unprocessed": ["x"], "skipped": []},
+        )
+        assert bm.main(self._argv(d, o)) == 2
+        assert scored == []
+
+    def test_complete_warm_proceeds(self, tmp_path, monkeypatch):
+        d, o = self._setup(tmp_path, monkeypatch)
+        row = {
+            "class": "needle",
+            "kept": [],
+            "realized_k": 1,
+            "containment": {"span_recall": 1.0, "fidelity_gap": 0.0, "status": "exact"},
+            "doc_ndcg": 1.0,
+            "dochit3": 1,
+            "seconds": 0.1,
+        }
+        monkeypatch.setattr(bm, "run_arm_p", lambda *a, **k: {"q1": row})
+        monkeypatch.setattr(
+            bm,
+            "warm_corpus",
+            lambda paths: {"warm_complete": True, "unprocessed": [], "skipped": []},
+        )
+        assert bm.main(self._argv(d, o)) == 0
+        assert (o / "run" / "results.json").exists()
+
+    def test_no_local_arms_never_warms(self, tmp_path, monkeypatch):
+        """Bedrock-only runs must not touch the local cache. warm_corpus is made
+        to raise; a clean exit 2 (no stored rows) proves it was never called."""
+        d, o = self._setup(tmp_path, monkeypatch)
+        _write_json(
+            o / "config.json",
+            {
+                "region": "us-east-1",
+                "arms": {
+                    "P": {"tool": "pdf_corpus_search"},
+                    "B0-default-v1": {"label": "B0", "rerank": None},
+                },
+            },
+        )
+
+        def boom(paths):
+            raise AssertionError("warm_corpus must not run for Bedrock-only arms")
+
+        monkeypatch.setattr(bm, "warm_corpus", boom)
+        rc = bm.main(
+            [
+                "--arms",
+                "B0-default-v1",
+                "--data-dir",
+                str(d),
+                "--out-dir",
+                str(o / "run"),
+            ]
+        )
+        assert rc == 2

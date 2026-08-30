@@ -16,6 +16,10 @@ rows exist yet.
 
     python scripts/benchmark_bedrock_kb.py --out-dir /tmp/rerun
 
+The script warms the corpus into the active cache first (idempotent: seconds
+when already warm, minutes once when cold) and refuses to score a partial
+corpus.
+
 Pass --live to re-query Bedrock (about $0.20, needs AWS credentials); only
 needed after a Bedrock-side change. --reuse-bedrock-from PATH reuses rows
 from a different results.json.
@@ -508,6 +512,21 @@ def _sha256_json(obj: Any) -> str:
     ).hexdigest()
 
 
+def warm_corpus(paths: list[str]) -> dict:
+    """Warm the corpus into the ACTIVE cache (default or PDF_MCP_CACHE_DIR) so
+    arm P scores the same cache the tool serves from. Idempotent: already-warm
+    docs cost a per-page SQLite check (seconds); a cold cache takes minutes,
+    once. Loops until nothing is unprocessed. The caller must check
+    warm_complete: scoring a partially warmed corpus is the silent-partial-warm
+    trap, and pdf_corpus_search would report partial coverage anyway."""
+    from pdf_mcp.server import pdf_corpus_warm
+
+    warm = pdf_corpus_warm(paths, budget_seconds=900, embeddings=True)
+    while warm.get("unprocessed"):
+        warm = pdf_corpus_warm(paths, budget_seconds=900, embeddings=True)
+    return warm
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -567,7 +586,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     rows_by_arm: dict[str, dict] = {}
 
-    for arm in [a for a in arms if config["arms"].get(a, {}).get("tool")]:
+    local_arms = [a for a in arms if config["arms"].get(a, {}).get("tool")]
+    if local_arms:
+        # The script owns the warm, so a plain invocation works from a cold or
+        # half-warm cache. Refuse to score a partial corpus.
+        t0 = time.perf_counter()
+        warm = warm_corpus(list(id_by_path))
+        if not warm.get("warm_complete") or warm.get("unprocessed"):
+            print(
+                "ERROR: corpus warm incomplete: "
+                f"unprocessed={warm.get('unprocessed')} skipped={warm.get('skipped')}. "
+                "Refusing to score a partial corpus."
+            )
+            return 2
+        print(
+            f"warmed {len(id_by_path)} docs (text+embeddings) in "
+            f"{time.perf_counter() - t0:.0f}s ({len(warm.get('skipped', []))} skipped)"
+        )
+    for arm in local_arms:
         rows_by_arm[arm] = run_arm_p(
             list(id_by_path),
             queries,

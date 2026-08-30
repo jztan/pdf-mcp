@@ -657,6 +657,8 @@ hits measurably lowers result quality.
 - `excerpt_style` (string, optional, default `"paragraph"`):
   - `"paragraph"` — returns the text block containing the hit instead of a fixed-width window. On structured documents (bullets, numbered lists, headings), the result is typically more focused than snippet — just the unit that matched, without adjacent content. On long-form prose, the result may be longer than snippet, capped at 2000 chars with snippet fallback. Short blocks under 80 chars (headings, figure captions) are skipped in favor of substantive body blocks when one matches the query at least as well; when every longer block matches worse (e.g. the hit is a table cell), the short matching block is kept so the excerpt and its geometry stay on the true hit. On prose pages with prominent figure captions, the caption may be preferred over the body paragraph when both contain the query terms. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`. Best results with `mode="keyword"` or `mode="auto"` where the FTS5 keyword excerpt anchors block selection; pure `mode="semantic"` uses token overlap only, which may pick a topically related but not optimal block.
   - `"snippet"` — fixed-width context window around each hit (controlled by `context_chars`).
+  - `"window"`: the anchor block plus contiguous neighbouring blocks, up to `window_tokens`. The anchor is the keyword-hit block; else the block covered by the page's best-scoring sub-page embedding chunk; else the most query-dense block; else the page top. Entries carry `window_blocks` (`[first, last]` block indices), `anchor` (`"keyword"` / `"semantic"` / `"query_terms"` / `"page_top"`) and the same `bbox`/`page_rect`/`clip` geometry as `"paragraph"` (union of the window's blocks). Short blocks (titles, captions) are included as neighbours, so a title above a matching abstract arrives in the same excerpt. Fewer hits fit a given token budget: prefer it when one call must carry the evidence in context, `"paragraph"` when you want the single most relevant block per hit.
+- `window_tokens` (int, optional, default `600`): token budget per excerpt for `excerpt_style="window"` (about 4 characters per token). Ignored for other styles.
 
 **Returns (page mode, `granularity="page"`):**
 - `matches` (array) — Each entry has `{page, excerpt, position, score, source, hidden_text}`. `hidden_text` (bool) is `true` when the hit's page contains text invisible to a human reader (page-level signal, same as `pdf_read_pages`). Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
@@ -666,7 +668,7 @@ hits measurably lowers result quality.
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
 - `hidden_text_detected` (bool) — `true` if any returned hit's page contained hidden text. Always present in page mode (`false` when there are no matches). Treat flagged excerpts as especially untrusted; the text is not removed (flag-only). Not present in section mode. For the per-signal breakdown, call `pdf_info(content_trust=true, detail=true)`.
-- `excerpt_style` (string) — `"paragraph"` (default) or `"snippet"` if explicitly requested. Reflects which excerpt mode produced the results.
+- `excerpt_style` (string): `"paragraph"` (default), `"snippet"` or `"window"` as requested. Reflects which excerpt mode produced the results.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
 - `confidence_threshold` (float, conditional).
 - `semantic_unavailable` (bool, conditional) — set in `auto` mode when fastembed is not installed or the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason` (with an install hint when fastembed is missing).
@@ -856,13 +858,14 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - `query` (string, required): Search text. In keyword mode terms are AND-matched independently per document (FTS5); prefer short, specific terms (1-3 words, e.g. entity names or technical terms) over a full question, since one rare extra word can return nothing.
 - `mode` (string, optional, default `"auto"`): `"auto"` (hybrid keyword+semantic when embeddings are available, else degrades to keyword), `"keyword"`, or `"semantic"`.
 - `top_k` (int, optional, default `10`): Maximum fused matches to return, clamped to 1-100.
-- `excerpt_style` (string, optional, default `"snippet"`): `"snippet"` for a fixed-width context window, or `"paragraph"` to upgrade to the enclosing text block (adds `bbox`/`page_rect`/`clip`) where one can be located.
+- `excerpt_style` (string, optional, default `"snippet"`): `"snippet"` for a fixed-width context window, or `"paragraph"` to upgrade to the enclosing text block (adds `bbox`/`page_rect`/`clip`) where one can be located. `"window"` returns the anchor block plus contiguous neighbours up to `window_tokens` and adds `window_blocks` and `anchor`, as in `pdf_search`.
+- `window_tokens` (int, optional, default `600`): token budget per excerpt for `excerpt_style="window"`.
 - `context_chars` (int, optional, default `200`): Characters of context around each match, clamped to 50-2000.
 - `budget_seconds` (int, optional, default `45`): Wall-clock budget for warming uncached docs (and embeddings, when needed), clamped to 1-300.
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `matches` (array): cross-document hits in fused order, each `{path, doc_title, page, excerpt, position, source, hidden_text}`, plus `bbox`/`page_rect`/`clip` when `excerpt_style` is `"paragraph"`.
+- `matches` (array): cross-document hits in fused order, each `{path, doc_title, page, excerpt, position, source, hidden_text}`, plus `bbox`/`page_rect`/`clip` when `excerpt_style` is `"paragraph"` or `"window"` (`"window"` also carries `window_blocks` and `anchor`).
   - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." and scanner artifacts carrying a `___` marker filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
   - Keyword-mode hits also carry `score` (per-doc BM25; comparable only within that hit's own document, since RRF governs cross-document order, not the raw score).
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.

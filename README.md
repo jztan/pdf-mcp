@@ -75,7 +75,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | Tool | What it does |
 |------|--------------|
 | `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
-| `pdf_search` | Hybrid search (keyword + semantic), page or section granularity, paragraph excerpts with source coordinates |
+| `pdf_search` | Hybrid search (keyword + semantic), page or section granularity, paragraph or context-window excerpts with source coordinates |
 | `pdf_read_pages` | Read specific pages or ranges, with OCR on demand, tables, and embedded images |
 | `pdf_read_all` | Read a whole document in one call, byte-capped |
 | `pdf_get_toc` | Full table of contents for documents with many bookmarks |

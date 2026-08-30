@@ -5515,3 +5515,111 @@ class TestOcrLangCacheThrash:
         assert kh["pages"][0]["text"] == "text produced by khm+eng"
         assert en["pages"][0]["text"] == "text produced by eng+khm"
         assert calls == ["khm+eng", "eng+khm"]
+
+
+class TestExcerptWindow:
+    """excerpt_style="window": the anchor block plus contiguous neighbours
+    up to a token budget. Built from the Bedrock anchor spike (2026-08-30):
+    on every picker miss where the page was returned and the text intact,
+    a ~600-token contiguous window around the best-scoring unit or the
+    page top held the graded span, while a single selected block did not."""
+
+    def _three_block_pdf(self):
+        import tempfile
+        from pathlib import Path
+
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 50), "Nested Processes for Layered Topic Models")
+        page.insert_text((50, 120), "Alice Author and Bob Writer, Some University")
+        page.insert_text(
+            (50, 200),
+            "We develop a nested hierarchical process for topic models where "
+            "each document follows its own path through a shared tree.",
+        )
+        page.insert_text((50, 400), "Unrelated closing remark about weather.")
+        f = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        f.close()
+        doc.save(f.name)
+        doc.close()
+        return str(Path(f.name).resolve())
+
+    def test_window_style_is_accepted(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="window")
+        assert "error" not in result
+        assert result["excerpt_style"] == "window"
+
+    def test_invalid_style_error_names_window(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="bogus")
+        assert "window" in result["error"]
+
+    def test_window_includes_title_above_keyword_anchor(self, isolated_server):
+        """The keyword hit is in the abstract (block 2); the window must
+        reach back to the title in block 0, which paragraph mode cannot
+        return because it is under the 80-char floor."""
+        path = self._three_block_pdf()
+        try:
+            result = pdf_search(
+                path,
+                "nested hierarchical topic",
+                mode="keyword",
+                excerpt_style="window",
+            )
+            assert "error" not in result
+            m = result["matches"][0]
+            assert "Nested Processes for Layered Topic Models" in m["excerpt"]
+            assert "nested hierarchical process" in m["excerpt"]
+            assert m["window_blocks"] == [0, 2] or m["window_blocks"] == [0, 3]
+            assert m["anchor"] == "keyword"
+            assert "bbox" in m and "clip" in m
+        finally:
+            unlink_quietly(path)
+
+    def test_window_respects_token_budget(self, isolated_server):
+        path = self._three_block_pdf()
+        try:
+            result = pdf_search(
+                path,
+                "nested hierarchical topic",
+                mode="keyword",
+                excerpt_style="window",
+                window_tokens=30,
+            )
+            m = result["matches"][0]
+            # the anchor block alone is ~30 tokens; nothing else fits
+            assert m["window_blocks"] == [2, 2]
+            assert "Nested Processes" not in m["excerpt"]
+        finally:
+            unlink_quietly(path)
+
+    def test_expand_window_helper(self):
+        from pdf_mcp.server import _expand_block_window
+
+        sizes = [10, 10, 10, 10, 10]  # token cost per block
+        assert _expand_block_window(sizes, anchor=0, budget=25) == (0, 1)
+        assert _expand_block_window(sizes, anchor=2, budget=35) == (1, 3)
+        assert _expand_block_window(sizes, anchor=4, budget=100) == (0, 4)
+        # anchor always kept even when over budget
+        assert _expand_block_window(sizes, anchor=2, budget=5) == (2, 2)
+
+    def test_window_real_paper_title_reachable(self, isolated_server):
+        """trap-22 from the Bedrock anchor: query hits the abstract, the
+        graded span is the title on the same page."""
+        from pathlib import Path
+
+        real = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
+        pdf = real / "1301.3570.pdf"
+        if not pdf.exists():
+            pytest.skip("real corpus not fetched")
+        result = pdf_search(
+            str(pdf),
+            "model hierarchical topic nested",
+            mode="keyword",
+            excerpt_style="window",
+        )
+        assert "error" not in result
+        first_page = [m for m in result["matches"] if m["page"] == 1]
+        assert first_page, result["matches"][:2]
+        assert "Nested HDP for Hierarchical Topic Models" in first_page[0]["excerpt"]

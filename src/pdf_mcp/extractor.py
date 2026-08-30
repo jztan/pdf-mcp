@@ -1035,6 +1035,7 @@ def _assemble_columns_from_rawdict(page: Any, boxes: list[Any]) -> str:
 
 
 _SPAN_MIN_REACH = 6.0  # points of ink required inside EACH adjacent column
+_SPAN_MIN_WIDTH = 0.3  # of the span across the column boxes
 
 
 def _spans_columns(
@@ -1042,11 +1043,18 @@ def _spans_columns(
     rboxes: list[tuple[float, float, float, float]],
 ) -> bool:
     """True when a line has ink inside BOTH of two adjacent column boxes
-    (at least _SPAN_MIN_REACH points in each). An overfull equation that
-    pokes into the gutter never enters the other column's x-range, so it
-    does not qualify; a centred title, even a short second title line, an
-    abstract line or a full-width caption does."""
+    (at least _SPAN_MIN_REACH points in each) AND is wide: at least
+    _SPAN_MIN_WIDTH of the span from the leftmost box to the rightmost.
+    An overfull equation that pokes into the gutter never enters the
+    other column's x-range; a table cell that happens to straddle a
+    gutter the detector drew through a table's internal gap (fed
+    consumer-context p7, a 74pt cell over a 526pt page) is two-sided
+    but narrow. A centred title, even a short second title line, an
+    abstract line or a full-width caption is both."""
     x0, x1 = bbox[0], bbox[2]
+    span = max(b[2] for b in rboxes) - min(b[0] for b in rboxes)
+    if span <= 0 or (x1 - x0) < _SPAN_MIN_WIDTH * span:
+        return False
     for a, b in zip(rboxes, rboxes[1:]):
         in_a = min(a[2], x1) - max(a[0], x0)
         in_b = min(b[2], x1) - max(b[0], x0)

@@ -387,3 +387,23 @@ def test_spanning_lines_keep_their_vertical_order(pdf, before, after):
     assert i < j, f"{before!r} at {i} should precede {after!r} at {j}"
     if before.startswith(("Luo-Rudy", "mm. Pseudo", "models used")):
         assert j - i < len(before) + 160, "consecutive lines are not adjacent"
+
+
+def test_spans_columns_needs_width_not_just_reach():
+    """fed-consumer-context p7: the column detector splits a one-column
+    page at a table's internal gap, and a 74pt table cell straddling that
+    bogus gutter must NOT become a spanning band (it was emitted ahead of
+    its row label, which flipped the excerpt gate's clause 2). A spanning
+    line is wide as well as two-sided: at least 30% of the span across the
+    column boxes."""
+    from pdf_mcp.extractor import _spans_columns
+
+    rboxes = [(36.0, 61.0, 289.0, 690.0), (294.0, 61.0, 562.0, 690.0)]
+    assert not _spans_columns((269.0, 499.0, 343.0, 505.0), rboxes)  # 70% APR cell
+    assert not _spans_columns((278.0, 481.0, 363.0, 488.0), rboxes)  # header cell
+    assert _spans_columns((37.0, 178.0, 363.0, 187.0), rboxes)  # prose line
+    # a short centred second title line (2607.09951 "Trade Disruptions")
+    assert _spans_columns(
+        (201.0, 147.0, 408.0, 171.0),
+        [(22.0, 117.0, 217.0, 750.0), (293.0, 117.0, 516.0, 750.0)],
+    )

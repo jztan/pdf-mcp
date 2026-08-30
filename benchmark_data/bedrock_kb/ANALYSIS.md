@@ -24,8 +24,23 @@ Span recall (evidence verbatim inside the 2,000-token budget):
 | pdf-mcp snippet | 0.000 | 0.742 | 0.711 | 0.760 |
 | pdf-mcp window 600 | 0.108 | 0.774 | 0.556 | 0.760 |
 | pdf-mcp window 300 | 0.108 | 0.774 | 0.578 | 0.680 |
+| pdf-mcp auto (per-query style; benchmark arm, not shipped) | 0.217 | 0.839 | 0.711 | 0.840 |
 | B0 (Bedrock default chunking) | 0.301 | 0.484 | 0.422 | 0.840 |
 | B1 (fixed 1000 + rerank) | 0.253 | 0.645 | 0.511 | 0.880 |
+
+`auto` chooses the excerpt shape per query from the number of documents
+with an AND keyword match, the count the hybrid path already computes
+(0: paragraph, 1: window 600, 2+: snippet); retrieval is identical to
+every other P row. Auto minus B0, paired bootstrap: needle +0.355
+[+0.194, +0.548] excludes zero; spread +0.289 [+0.111, +0.467] excludes
+zero; trap +0.000 includes zero; described -0.084 includes zero. Auto
+minus paragraph: needle +0.161 [+0.000, +0.323], spread +0.111 [-0.022,
++0.244], trap +0.080 [-0.080, +0.240], described 0, all include zero
+individually. Routing: described went to paragraph 82/83, needle to
+window 27/31 (0.852 there), spread to snippet 43/45 (0.698), trap split
+window 17 (0.941) / snippet 4 (0.250) / paragraph 4 (1.000). It is a
+harness arm; the product form is an evidence-budget parameter, not yet
+built.
 
 Trap is scored against the revised labels (2026-08-30, late): 16 of 25
 queries also credit the body sentence where the query's terms are

@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from .docopen import open_pdf
 
-from .extractor import _warm_extract_worker, page_embedding_units
+from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
 from .parallel import resolve_workers
 
 __all__ = [
@@ -215,6 +215,10 @@ def _cached_pages(
         non_empty = [pn for pn, t in texts.items() if t.strip()]
         embs = cache.get_page_embeddings(path, non_empty, model_name)
         if len(embs) < len(non_empty):
+            return None
+        # Presence is not completeness: a page-level row written by an older
+        # server into this newer cache must count as uncached, not as done.
+        if stale_layout_pages(texts, embs):
             return None
     return pages
 
@@ -627,7 +631,9 @@ def warm_docs(
     def _emb_cached(path: str) -> bool:
         if model_name is None:
             return False
-        return bool(cache.embeddings_complete(path, model_name))
+        # Same gate warm uses to skip a doc, so the envelope cannot report a
+        # doc as embedded that warm would still re-embed (layout included).
+        return _cached_pages(path, cache, True, model_name) is not None
 
     start = clock()
     docs: list[dict[str, Any]] = []

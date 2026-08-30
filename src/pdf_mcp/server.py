@@ -49,6 +49,7 @@ from .extractor import (
     ocr_page,
     page_embedding_units,
     page_text_chars,
+    stale_layout_pages,
     parse_page_range,
     render_page_as_image,
     render_page_as_png,
@@ -2387,6 +2388,12 @@ def pdf_search(
                 for k, v in raw_cached.items()
                 if v
             }
+            # A page-level row left by an older server is present but stale;
+            # re-embed it rather than score it.
+            for pn in stale_layout_pages(
+                cache.get_pages_text(local_path, list(cached_embeddings)), raw_cached
+            ):
+                cached_embeddings.pop(pn, None)
 
             uncached_nums = [p for p in all_page_nums if p not in cached_embeddings]
             if uncached_nums:
@@ -2642,6 +2649,10 @@ def pdf_search(
             for k, v in raw_cached.items()
             if v
         }
+        for pn in stale_layout_pages(
+            cache.get_pages_text(local_path, list(cached_embeddings)), raw_cached
+        ):
+            cached_embeddings.pop(pn, None)
 
         uncached_nums = [p for p in all_page_nums if p not in cached_embeddings]
         if uncached_nums:

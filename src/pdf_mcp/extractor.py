@@ -2099,6 +2099,24 @@ def chunk_page_text(
     return chunks or [text.strip()]
 
 
+def stale_layout_pages(
+    texts: dict[int, str], stored: dict[int, list[bytes]]
+) -> list[int]:
+    """Pages whose stored embedding unit count is not what current code would
+    write for their text. Presence is not completeness: an older server
+    sharing the cache writes one page-level row that a newer one would
+    otherwise accept as done and score with a stale vector. Only pages with
+    non-empty text and at least one stored row are judged."""
+    stale: list[int] = []
+    for pn, blobs in stored.items():
+        text = texts.get(pn, "")
+        if not text.strip() or not blobs:
+            continue
+        if len(blobs) != len(page_embedding_units(text)):
+            stale.append(pn)
+    return sorted(stale)
+
+
 def page_embedding_units(text: str) -> list[str]:
     """Embedding units for one page: the whole page, then its sub-page windows.
 

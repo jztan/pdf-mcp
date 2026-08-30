@@ -44,6 +44,20 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 DEFAULT_DATA = REPO / "benchmark_data" / "corpus_search"
 OUT_DIR = REPO / "benchmark_data" / "bedrock_kb"
+
+
+def provenance_path(path: Path) -> str:
+    """Path recorded in results.json for a reused-rows source.
+
+    Repo-relative when the file lies inside the repo, so the committed
+    artifact never carries a machine-local checkout path; absolute otherwise.
+    """
+    try:
+        return str(Path(path).resolve().relative_to(REPO.resolve()))
+    except ValueError:
+        return str(path)
+
+
 BUDGET_TOKENS = 2000
 TOKEN_CHARS = 4  # repo convention: ~4 chars per token
 BEDROCK_FILE_LIMIT = 50 * 1024 * 1024  # Bedrock KB per-document quota
@@ -677,10 +691,10 @@ def main(argv: list[str] | None = None) -> int:
             rows_by_arm[arm] = rows
             index_stamps_by_arm[arm] = {
                 **stamp,
-                "reused_from": str(reuse_path),
+                "reused_from": provenance_path(reuse_path),
             }
             print(f"{arm}: reused {len(rows)} stored rows (offline)")
-        config["bedrock_rows_reused_from"] = str(reuse_path)
+        config["bedrock_rows_reused_from"] = provenance_path(reuse_path)
         config["bedrock_live_check"] = False
     elif bedrock_arms:
         import boto3

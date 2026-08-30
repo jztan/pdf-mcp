@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-30T02:44:16.530611+00:00",
+  "generated": "2026-08-30T04:42:37.305912+00:00",
   "config": {
     "description": "Arm configurations for the Bedrock KB anchor benchmark. Committed before any run so the configs are on record. Bedrock is an anchor, not a subject; no sweep.",
     "region": "us-east-1",
@@ -49,6 +49,8 @@
       "bedrock_data_automation": "$0.010/page, ~$22 per corpus; not needed for an anchor"
     },
     "n_queries": 89,
+    "bedrock_rows_reused_from": "benchmark_data/bedrock_kb/results.json",
+    "bedrock_live_check": false,
     "arm_ids": {
       "P-para": "P",
       "P-snip": "P-snippet",
@@ -60,13 +62,15 @@
         "stack": "pdfmcp-anchor-b0-default-v1",
         "arm_config_sha256": "94477893747d43463278ac92eba5ee5b4248925bf8a70ac1c669833372f31c60",
         "manifest_sha256": "7ff4f98594f477cab0fee483e8f12f978306ef5a8e37c3d9db62f2f7ecaf1219",
-        "ingested_at": "2026-08-29T15:20:39.604436+00:00"
+        "ingested_at": "2026-08-29T15:20:39.604436+00:00",
+        "reused_from": "benchmark_data/bedrock_kb/results.json"
       },
       "B1": {
         "stack": "pdfmcp-anchor-b1-fixed1000-v1",
         "arm_config_sha256": "ee64b4ae74ced25a0025093323b03eed8d7d4b7faccc0affba42a5c4a9265170",
         "manifest_sha256": "7ff4f98594f477cab0fee483e8f12f978306ef5a8e37c3d9db62f2f7ecaf1219",
-        "ingested_at": "2026-08-29T15:59:52.141411+00:00"
+        "ingested_at": "2026-08-29T15:59:52.141411+00:00",
+        "reused_from": "benchmark_data/bedrock_kb/results.json"
       }
     }
   },
@@ -718,7 +722,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.727
+        "seconds": 0.879
       },
       "needle-02": {
         "class": "needle",
@@ -800,7 +804,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.667
+        "seconds": 0.769
       },
       "needle-03": {
         "class": "needle",
@@ -842,7 +846,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.647
+        "seconds": 0.773
       },
       "needle-04": {
         "class": "needle",
@@ -904,7 +908,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.763
       },
       "needle-05": {
         "class": "needle",
@@ -1010,7 +1014,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.649
+        "seconds": 0.771
       },
       "needle-06": {
         "class": "needle",
@@ -1044,7 +1048,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.768
       },
       "needle-07": {
         "class": "needle",
@@ -1114,7 +1118,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.778
       },
       "needle-08": {
         "class": "needle",
@@ -1204,7 +1208,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.768
       },
       "needle-09": {
         "class": "needle",
@@ -1270,7 +1274,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.643
+        "seconds": 0.765
       },
       "needle-10": {
         "class": "needle",
@@ -1384,7 +1388,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.479
+        "seconds": 2.566
       },
       "needle-11": {
         "class": "needle",
@@ -1498,7 +1502,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.473
+        "seconds": 2.584
       },
       "needle-12": {
         "class": "needle",
@@ -1612,7 +1616,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.532
+        "seconds": 2.593
       },
       "needle-13": {
         "class": "needle",
@@ -1726,7 +1730,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.513
+        "seconds": 2.578
       },
       "needle-14": {
         "class": "needle",
@@ -1840,7 +1844,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.46
+        "seconds": 2.661
       },
       "spread-01": {
         "class": "spread",
@@ -1902,7 +1906,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.645
+        "seconds": 0.823
       },
       "spread-02": {
         "class": "spread",
@@ -1976,7 +1980,7 @@
         },
         "doc_ndcg": 0.34337431936037655,
         "dochit3": 0,
-        "seconds": 0.659
+        "seconds": 0.831
       },
       "spread-03": {
         "class": "spread",
@@ -2034,7 +2038,7 @@
         },
         "doc_ndcg": 0.16004318879660112,
         "dochit3": 0,
-        "seconds": 0.673
+        "seconds": 0.834
       },
       "spread-04": {
         "class": "spread",
@@ -2144,7 +2148,7 @@
         },
         "doc_ndcg": 0.8772153153380493,
         "dochit3": 1,
-        "seconds": 0.647
+        "seconds": 0.789
       },
       "spread-05": {
         "class": "spread",
@@ -2210,7 +2214,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.649
+        "seconds": 0.812
       },
       "spread-06": {
         "class": "spread",
@@ -2264,7 +2268,7 @@
         },
         "doc_ndcg": 0.37800210039683896,
         "dochit3": 0,
-        "seconds": 0.649
+        "seconds": 0.782
       },
       "spread-07": {
         "class": "spread",
@@ -2326,7 +2330,7 @@
         },
         "doc_ndcg": 0.6131471927654584,
         "dochit3": 1,
-        "seconds": 0.661
+        "seconds": 0.813
       },
       "spread-08": {
         "class": "spread",
@@ -2368,7 +2372,7 @@
         },
         "doc_ndcg": 0.18457569677956817,
         "dochit3": 0,
-        "seconds": 0.657
+        "seconds": 0.842
       },
       "spread-09": {
         "class": "spread",
@@ -2426,7 +2430,7 @@
         },
         "doc_ndcg": 0.812653045383133,
         "dochit3": 1,
-        "seconds": 0.646
+        "seconds": 0.824
       },
       "spread-10": {
         "class": "spread",
@@ -2492,7 +2496,7 @@
         },
         "doc_ndcg": 0.0,
         "dochit3": 0,
-        "seconds": 0.666
+        "seconds": 0.838
       },
       "trap-01": {
         "class": "trap",
@@ -2554,7 +2558,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.662
+        "seconds": 0.812
       },
       "trap-02": {
         "class": "trap",
@@ -2624,7 +2628,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.651
+        "seconds": 0.798
       },
       "trap-03": {
         "class": "trap",
@@ -2694,7 +2698,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.67
+        "seconds": 0.793
       },
       "trap-04": {
         "class": "trap",
@@ -2752,7 +2756,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.653
+        "seconds": 0.789
       },
       "trap-05": {
         "class": "trap",
@@ -2866,7 +2870,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.655
+        "seconds": 0.819
       },
       "trap-06": {
         "class": "trap",
@@ -2920,7 +2924,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.67
+        "seconds": 0.794
       },
       "trap-07": {
         "class": "trap",
@@ -3034,7 +3038,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.838
       },
       "trap-08": {
         "class": "trap",
@@ -3144,7 +3148,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.656
+        "seconds": 0.793
       },
       "trap-09": {
         "class": "trap",
@@ -3222,7 +3226,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.661
+        "seconds": 0.796
       },
       "trap-10": {
         "class": "trap",
@@ -3268,7 +3272,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.652
+        "seconds": 0.8
       },
       "trap-11": {
         "class": "trap",
@@ -3342,7 +3346,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.66
+        "seconds": 0.783
       },
       "trap-12": {
         "class": "trap",
@@ -3392,7 +3396,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.826
       },
       "spread-11": {
         "class": "spread",
@@ -3478,7 +3482,7 @@
         },
         "doc_ndcg": 0.9119629671334931,
         "dochit3": 1,
-        "seconds": 0.658
+        "seconds": 0.846
       },
       "spread-12": {
         "class": "spread",
@@ -3544,7 +3548,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.682
+        "seconds": 0.809
       },
       "spread-13": {
         "class": "spread",
@@ -3598,7 +3602,7 @@
         },
         "doc_ndcg": 0.8670870086853021,
         "dochit3": 1,
-        "seconds": 0.705
+        "seconds": 0.793
       },
       "spread-14": {
         "class": "spread",
@@ -3664,7 +3668,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.673
+        "seconds": 0.829
       },
       "spread-15": {
         "class": "spread",
@@ -3722,7 +3726,7 @@
         },
         "doc_ndcg": 0.8634575313654654,
         "dochit3": 1,
-        "seconds": 0.658
+        "seconds": 0.784
       },
       "spread-16": {
         "class": "spread",
@@ -3768,7 +3772,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.654
+        "seconds": 0.78
       },
       "spread-17": {
         "class": "spread",
@@ -3814,7 +3818,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.652
+        "seconds": 0.773
       },
       "spread-18": {
         "class": "spread",
@@ -3864,7 +3868,7 @@
         },
         "doc_ndcg": 0.9050405422041714,
         "dochit3": 1,
-        "seconds": 0.66
+        "seconds": 0.79
       },
       "spread-19": {
         "class": "spread",
@@ -3942,7 +3946,7 @@
         },
         "doc_ndcg": 0.8868854556705132,
         "dochit3": 1,
-        "seconds": 0.655
+        "seconds": 0.799
       },
       "spread-20": {
         "class": "spread",
@@ -4028,7 +4032,7 @@
         },
         "doc_ndcg": 0.9072278740982787,
         "dochit3": 1,
-        "seconds": 0.675
+        "seconds": 0.852
       },
       "spread-21": {
         "class": "spread",
@@ -4098,7 +4102,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.653
+        "seconds": 0.819
       },
       "spread-22": {
         "class": "spread",
@@ -4184,7 +4188,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.658
+        "seconds": 0.808
       },
       "spread-23": {
         "class": "spread",
@@ -4242,7 +4246,7 @@
         },
         "doc_ndcg": 0.6023586154359912,
         "dochit3": 0,
-        "seconds": 0.688
+        "seconds": 0.791
       },
       "spread-24": {
         "class": "spread",
@@ -4300,7 +4304,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.664
+        "seconds": 0.788
       },
       "spread-25": {
         "class": "spread",
@@ -4374,7 +4378,7 @@
         },
         "doc_ndcg": 0.7601875334318685,
         "dochit3": 1,
-        "seconds": 0.684
+        "seconds": 0.791
       },
       "trap-13": {
         "class": "trap",
@@ -4468,7 +4472,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.671
+        "seconds": 0.784
       },
       "trap-14": {
         "class": "trap",
@@ -4542,7 +4546,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.665
+        "seconds": 0.787
       },
       "trap-15": {
         "class": "trap",
@@ -4616,7 +4620,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.659
+        "seconds": 0.787
       },
       "trap-16": {
         "class": "trap",
@@ -4714,7 +4718,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.655
+        "seconds": 0.787
       },
       "trap-17": {
         "class": "trap",
@@ -4772,7 +4776,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.661
+        "seconds": 0.79
       },
       "trap-18": {
         "class": "trap",
@@ -4838,7 +4842,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.651
+        "seconds": 0.783
       },
       "trap-19": {
         "class": "trap",
@@ -4884,7 +4888,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.782
       },
       "trap-20": {
         "class": "trap",
@@ -4946,7 +4950,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.679
+        "seconds": 0.795
       },
       "trap-21": {
         "class": "trap",
@@ -5004,7 +5008,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.796
       },
       "trap-22": {
         "class": "trap",
@@ -5086,7 +5090,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.79
       },
       "trap-23": {
         "class": "trap",
@@ -5188,7 +5192,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.652
+        "seconds": 0.786
       },
       "trap-24": {
         "class": "trap",
@@ -5254,7 +5258,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.642
+        "seconds": 0.804
       },
       "trap-25": {
         "class": "trap",
@@ -5316,7 +5320,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.648
+        "seconds": 0.797
       },
       "described-01": {
         "class": "described",
@@ -5366,7 +5370,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.646
+        "seconds": 0.797
       },
       "described-02": {
         "class": "described",
@@ -5436,7 +5440,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.791
       },
       "described-03": {
         "class": "described",
@@ -5494,7 +5498,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.648
+        "seconds": 0.795
       },
       "described-04": {
         "class": "described",
@@ -5560,7 +5564,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.783
       },
       "described-05": {
         "class": "described",
@@ -5618,7 +5622,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.642
+        "seconds": 0.793
       },
       "described-06": {
         "class": "described",
@@ -5672,7 +5676,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.648
+        "seconds": 0.802
       },
       "described-07": {
         "class": "described",
@@ -5730,7 +5734,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.645
+        "seconds": 0.797
       },
       "described-08": {
         "class": "described",
@@ -5784,7 +5788,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.655
+        "seconds": 0.794
       },
       "described-09": {
         "class": "described",
@@ -5842,7 +5846,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.651
+        "seconds": 0.8
       },
       "described-10": {
         "class": "described",
@@ -5896,7 +5900,7 @@
         },
         "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
-        "seconds": 0.646
+        "seconds": 0.799
       },
       "described-11": {
         "class": "described",
@@ -5946,7 +5950,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.647
+        "seconds": 0.787
       },
       "described-12": {
         "class": "described",
@@ -6000,7 +6004,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.647
+        "seconds": 0.812
       },
       "described-13": {
         "class": "described",
@@ -6054,7 +6058,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.648
+        "seconds": 0.819
       },
       "described-14": {
         "class": "described",
@@ -6112,7 +6116,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.646
+        "seconds": 0.788
       },
       "described-15": {
         "class": "described",
@@ -6174,7 +6178,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.789
       },
       "described-16": {
         "class": "described",
@@ -6228,7 +6232,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.646
+        "seconds": 0.786
       },
       "described-17": {
         "class": "described",
@@ -6286,7 +6290,7 @@
         },
         "doc_ndcg": 0.3333333333333333,
         "dochit3": 0,
-        "seconds": 0.644
+        "seconds": 0.783
       },
       "described-18": {
         "class": "described",
@@ -6356,7 +6360,7 @@
         },
         "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
-        "seconds": 0.639
+        "seconds": 0.785
       },
       "described-19": {
         "class": "described",
@@ -6426,7 +6430,7 @@
         },
         "doc_ndcg": 0.38685280723454163,
         "dochit3": 0,
-        "seconds": 0.652
+        "seconds": 0.797
       },
       "described-20": {
         "class": "described",
@@ -6484,7 +6488,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.855
       },
       "described-21": {
         "class": "described",
@@ -6550,7 +6554,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.847
       },
       "described-22": {
         "class": "described",
@@ -6600,7 +6604,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.651
+        "seconds": 0.868
       },
       "described-23": {
         "class": "described",
@@ -6658,7 +6662,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.642
+        "seconds": 0.882
       },
       "described-24": {
         "class": "described",
@@ -6724,7 +6728,7 @@
         },
         "doc_ndcg": 0.3010299956639812,
         "dochit3": 0,
-        "seconds": 0.675
+        "seconds": 0.824
       },
       "described-25": {
         "class": "described",
@@ -6790,7 +6794,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.719
+        "seconds": 0.79
       }
     },
     "P-snip": {
@@ -6906,7 +6910,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.642
+        "seconds": 0.787
       },
       "needle-02": {
         "class": "needle",
@@ -7020,7 +7024,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.79
       },
       "needle-03": {
         "class": "needle",
@@ -7134,7 +7138,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.69
+        "seconds": 0.765
       },
       "needle-04": {
         "class": "needle",
@@ -7248,7 +7252,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.73
+        "seconds": 0.775
       },
       "needle-05": {
         "class": "needle",
@@ -7362,7 +7366,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.658
+        "seconds": 0.763
       },
       "needle-06": {
         "class": "needle",
@@ -7476,7 +7480,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.639
+        "seconds": 0.778
       },
       "needle-07": {
         "class": "needle",
@@ -7590,7 +7594,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.649
+        "seconds": 0.774
       },
       "needle-08": {
         "class": "needle",
@@ -7704,7 +7708,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.82
       },
       "needle-09": {
         "class": "needle",
@@ -7818,7 +7822,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.636
+        "seconds": 0.814
       },
       "needle-10": {
         "class": "needle",
@@ -7932,7 +7936,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.644
+        "seconds": 2.574
       },
       "needle-11": {
         "class": "needle",
@@ -8046,7 +8050,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.492
+        "seconds": 2.587
       },
       "needle-12": {
         "class": "needle",
@@ -8160,7 +8164,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.422
+        "seconds": 2.612
       },
       "needle-13": {
         "class": "needle",
@@ -8274,7 +8278,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.415
+        "seconds": 2.585
       },
       "needle-14": {
         "class": "needle",
@@ -8388,7 +8392,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 2.427
+        "seconds": 2.611
       },
       "spread-01": {
         "class": "spread",
@@ -8502,7 +8506,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.623
+        "seconds": 0.827
       },
       "spread-02": {
         "class": "spread",
@@ -8616,7 +8620,7 @@
         },
         "doc_ndcg": 0.34337431936037655,
         "dochit3": 0,
-        "seconds": 0.638
+        "seconds": 0.818
       },
       "spread-03": {
         "class": "spread",
@@ -8730,7 +8734,7 @@
         },
         "doc_ndcg": 0.16004318879660112,
         "dochit3": 0,
-        "seconds": 0.644
+        "seconds": 0.792
       },
       "spread-04": {
         "class": "spread",
@@ -8844,7 +8848,7 @@
         },
         "doc_ndcg": 0.8772153153380493,
         "dochit3": 1,
-        "seconds": 0.623
+        "seconds": 0.77
       },
       "spread-05": {
         "class": "spread",
@@ -8958,7 +8962,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.776
       },
       "spread-06": {
         "class": "spread",
@@ -9072,7 +9076,7 @@
         },
         "doc_ndcg": 0.37800210039683896,
         "dochit3": 0,
-        "seconds": 0.625
+        "seconds": 0.785
       },
       "spread-07": {
         "class": "spread",
@@ -9186,7 +9190,7 @@
         },
         "doc_ndcg": 0.6131471927654584,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.807
       },
       "spread-08": {
         "class": "spread",
@@ -9300,7 +9304,7 @@
         },
         "doc_ndcg": 0.18457569677956817,
         "dochit3": 0,
-        "seconds": 0.638
+        "seconds": 0.796
       },
       "spread-09": {
         "class": "spread",
@@ -9414,7 +9418,7 @@
         },
         "doc_ndcg": 0.812653045383133,
         "dochit3": 1,
-        "seconds": 0.624
+        "seconds": 0.771
       },
       "spread-10": {
         "class": "spread",
@@ -9528,7 +9532,7 @@
         },
         "doc_ndcg": 0.0,
         "dochit3": 0,
-        "seconds": 0.643
+        "seconds": 0.834
       },
       "trap-01": {
         "class": "trap",
@@ -9642,7 +9646,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.826
       },
       "trap-02": {
         "class": "trap",
@@ -9756,7 +9760,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.644
+        "seconds": 0.84
       },
       "trap-03": {
         "class": "trap",
@@ -9870,7 +9874,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.791
       },
       "trap-04": {
         "class": "trap",
@@ -9984,7 +9988,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.626
+        "seconds": 0.801
       },
       "trap-05": {
         "class": "trap",
@@ -10098,7 +10102,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.637
+        "seconds": 0.809
       },
       "trap-06": {
         "class": "trap",
@@ -10212,7 +10216,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.639
+        "seconds": 0.821
       },
       "trap-07": {
         "class": "trap",
@@ -10326,7 +10330,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.637
+        "seconds": 0.838
       },
       "trap-08": {
         "class": "trap",
@@ -10440,7 +10444,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.806
       },
       "trap-09": {
         "class": "trap",
@@ -10554,7 +10558,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.638
+        "seconds": 0.765
       },
       "trap-10": {
         "class": "trap",
@@ -10668,7 +10672,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.802
       },
       "trap-11": {
         "class": "trap",
@@ -10782,7 +10786,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.64
+        "seconds": 0.857
       },
       "trap-12": {
         "class": "trap",
@@ -10896,7 +10900,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.64
+        "seconds": 0.847
       },
       "spread-11": {
         "class": "spread",
@@ -11010,7 +11014,7 @@
         },
         "doc_ndcg": 0.9119629671334931,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.81
       },
       "spread-12": {
         "class": "spread",
@@ -11124,7 +11128,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.636
+        "seconds": 0.785
       },
       "spread-13": {
         "class": "spread",
@@ -11238,7 +11242,7 @@
         },
         "doc_ndcg": 0.8670870086853021,
         "dochit3": 1,
-        "seconds": 0.632
+        "seconds": 0.779
       },
       "spread-14": {
         "class": "spread",
@@ -11352,7 +11356,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.627
+        "seconds": 0.782
       },
       "spread-15": {
         "class": "spread",
@@ -11466,7 +11470,7 @@
         },
         "doc_ndcg": 0.8634575313654654,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.798
       },
       "spread-16": {
         "class": "spread",
@@ -11580,7 +11584,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.621
+        "seconds": 0.775
       },
       "spread-17": {
         "class": "spread",
@@ -11694,7 +11698,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.628
+        "seconds": 0.776
       },
       "spread-18": {
         "class": "spread",
@@ -11808,7 +11812,7 @@
         },
         "doc_ndcg": 0.9050405422041714,
         "dochit3": 1,
-        "seconds": 0.63
+        "seconds": 0.815
       },
       "spread-19": {
         "class": "spread",
@@ -11922,7 +11926,7 @@
         },
         "doc_ndcg": 0.8868854556705132,
         "dochit3": 1,
-        "seconds": 0.624
+        "seconds": 0.798
       },
       "spread-20": {
         "class": "spread",
@@ -12036,7 +12040,7 @@
         },
         "doc_ndcg": 0.9072278740982787,
         "dochit3": 1,
-        "seconds": 0.636
+        "seconds": 0.832
       },
       "spread-21": {
         "class": "spread",
@@ -12150,7 +12154,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.615
+        "seconds": 0.795
       },
       "spread-22": {
         "class": "spread",
@@ -12264,7 +12268,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.628
+        "seconds": 0.776
       },
       "spread-23": {
         "class": "spread",
@@ -12378,7 +12382,7 @@
         },
         "doc_ndcg": 0.6023586154359912,
         "dochit3": 0,
-        "seconds": 0.636
+        "seconds": 0.77
       },
       "spread-24": {
         "class": "spread",
@@ -12492,7 +12496,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.627
+        "seconds": 0.772
       },
       "spread-25": {
         "class": "spread",
@@ -12606,7 +12610,7 @@
         },
         "doc_ndcg": 0.7601875334318685,
         "dochit3": 1,
-        "seconds": 0.639
+        "seconds": 0.769
       },
       "trap-13": {
         "class": "trap",
@@ -12720,7 +12724,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.63
+        "seconds": 0.772
       },
       "trap-14": {
         "class": "trap",
@@ -12834,7 +12838,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.778
       },
       "trap-15": {
         "class": "trap",
@@ -12948,7 +12952,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.636
+        "seconds": 0.775
       },
       "trap-16": {
         "class": "trap",
@@ -13062,7 +13066,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.63
+        "seconds": 0.774
       },
       "trap-17": {
         "class": "trap",
@@ -13176,7 +13180,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.632
+        "seconds": 0.774
       },
       "trap-18": {
         "class": "trap",
@@ -13290,7 +13294,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.629
+        "seconds": 0.776
       },
       "trap-19": {
         "class": "trap",
@@ -13404,7 +13408,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.755
       },
       "trap-20": {
         "class": "trap",
@@ -13518,7 +13522,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.635
+        "seconds": 0.775
       },
       "trap-21": {
         "class": "trap",
@@ -13632,7 +13636,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.63
+        "seconds": 0.764
       },
       "trap-22": {
         "class": "trap",
@@ -13746,7 +13750,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.631
+        "seconds": 0.77
       },
       "trap-23": {
         "class": "trap",
@@ -13860,7 +13864,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.637
+        "seconds": 0.776
       },
       "trap-24": {
         "class": "trap",
@@ -13974,7 +13978,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.629
+        "seconds": 0.766
       },
       "trap-25": {
         "class": "trap",
@@ -14088,7 +14092,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.77
       },
       "described-01": {
         "class": "described",
@@ -14202,7 +14206,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.637
+        "seconds": 0.776
       },
       "described-02": {
         "class": "described",
@@ -14316,7 +14320,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.63
+        "seconds": 0.773
       },
       "described-03": {
         "class": "described",
@@ -14430,7 +14434,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.639
+        "seconds": 0.773
       },
       "described-04": {
         "class": "described",
@@ -14544,7 +14548,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.643
+        "seconds": 0.766
       },
       "described-05": {
         "class": "described",
@@ -14658,7 +14662,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.633
+        "seconds": 0.804
       },
       "described-06": {
         "class": "described",
@@ -14772,7 +14776,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.825
+        "seconds": 0.771
       },
       "described-07": {
         "class": "described",
@@ -14886,7 +14890,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.723
+        "seconds": 0.771
       },
       "described-08": {
         "class": "described",
@@ -15000,7 +15004,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.726
+        "seconds": 0.77
       },
       "described-09": {
         "class": "described",
@@ -15114,7 +15118,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.718
+        "seconds": 0.77
       },
       "described-10": {
         "class": "described",
@@ -15228,7 +15232,7 @@
         },
         "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
-        "seconds": 0.77
+        "seconds": 0.766
       },
       "described-11": {
         "class": "described",
@@ -15342,7 +15346,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.778
+        "seconds": 0.77
       },
       "described-12": {
         "class": "described",
@@ -15456,7 +15460,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.768
+        "seconds": 0.792
       },
       "described-13": {
         "class": "described",
@@ -15570,7 +15574,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.758
+        "seconds": 0.777
       },
       "described-14": {
         "class": "described",
@@ -15684,7 +15688,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.705
+        "seconds": 0.768
       },
       "described-15": {
         "class": "described",
@@ -15798,7 +15802,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.645
+        "seconds": 0.772
       },
       "described-16": {
         "class": "described",
@@ -15912,7 +15916,7 @@
         },
         "doc_ndcg": 0.6309297535714575,
         "dochit3": 1,
-        "seconds": 0.64
+        "seconds": 0.768
       },
       "described-17": {
         "class": "described",
@@ -16026,7 +16030,7 @@
         },
         "doc_ndcg": 0.3333333333333333,
         "dochit3": 0,
-        "seconds": 0.637
+        "seconds": 0.785
       },
       "described-18": {
         "class": "described",
@@ -16140,7 +16144,7 @@
         },
         "doc_ndcg": 0.43067655807339306,
         "dochit3": 0,
-        "seconds": 0.642
+        "seconds": 0.782
       },
       "described-19": {
         "class": "described",
@@ -16254,7 +16258,7 @@
         },
         "doc_ndcg": 0.38685280723454163,
         "dochit3": 0,
-        "seconds": 0.663
+        "seconds": 0.778
       },
       "described-20": {
         "class": "described",
@@ -16368,7 +16372,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.682
+        "seconds": 0.797
       },
       "described-21": {
         "class": "described",
@@ -16482,7 +16486,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.676
+        "seconds": 0.782
       },
       "described-22": {
         "class": "described",
@@ -16596,7 +16600,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.65
+        "seconds": 0.809
       },
       "described-23": {
         "class": "described",
@@ -16710,7 +16714,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.641
+        "seconds": 0.782
       },
       "described-24": {
         "class": "described",
@@ -16824,7 +16828,7 @@
         },
         "doc_ndcg": 0.3010299956639812,
         "dochit3": 0,
-        "seconds": 0.653
+        "seconds": 0.787
       },
       "described-25": {
         "class": "described",
@@ -16938,7 +16942,7 @@
         },
         "doc_ndcg": 1.0,
         "dochit3": 1,
-        "seconds": 0.636
+        "seconds": 0.783
       }
     },
     "B0": {

@@ -89,3 +89,32 @@ class TestPageEmbeddingUnits:
         assert units[0] == text.strip()  # whole page first, floors the score
         assert units[1:] == windows
         assert len(units) == len(windows) + 1
+
+
+class TestStaleLayoutPages:
+    def _long(self):
+        return ". ".join(f"sentence number {i} here" for i in range(400))
+
+    def test_page_level_row_on_a_long_page_is_stale(self):
+        from pdf_mcp.extractor import page_embedding_units, stale_layout_pages
+
+        text = self._long()
+        assert len(page_embedding_units(text)) > 1
+        assert stale_layout_pages({0: text}, {0: [b"x"]}) == [0]
+
+    def test_matching_unit_count_is_not_stale(self):
+        from pdf_mcp.extractor import page_embedding_units, stale_layout_pages
+
+        text = self._long()
+        n = len(page_embedding_units(text))
+        assert stale_layout_pages({0: text}, {0: [b"x"] * n}) == []
+
+    def test_short_page_single_row_is_fine(self):
+        from pdf_mcp.extractor import stale_layout_pages
+
+        assert stale_layout_pages({0: "short page"}, {0: [b"x"]}) == []
+
+    def test_empty_text_and_missing_rows_are_ignored(self):
+        from pdf_mcp.extractor import stale_layout_pages
+
+        assert stale_layout_pages({0: "   ", 1: self._long()}, {0: [b"x"], 1: []}) == []

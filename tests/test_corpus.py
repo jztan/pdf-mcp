@@ -615,7 +615,7 @@ class TestWarmDocs:
             ],
         )
         cache.save_pages_text(path, {0: "Real content on the first page.", 1: "\n  \n"})
-        cache.save_page_embeddings(path, {0: b"\x00\x01"}, "fake-model")
+        cache.save_page_embeddings(path, {0: [b"\x00\x01"]}, "fake-model")
 
         def _boom(texts):
             raise AssertionError("embed called on an embeddings-warm doc")
@@ -1153,3 +1153,36 @@ class TestMaxOverChunks:
         score = max(float(c @ query) for c in chunks)
         assert score == 1.0
         assert score != sum(float(c @ query) for c in chunks) / len(chunks)
+
+
+class TestCachedPagesLayoutGate:
+    """Warm must not skip a doc whose long pages carry a single page-level row
+    written by an older server into this newer cache."""
+
+    class _Cache:
+        def __init__(self, text, blobs):
+            self._t, self._b = text, blobs
+
+        def get_metadata(self, path):
+            return {"page_count": 1, "text_coverage": [{"text_chars": 1}]}
+
+        def get_pages_text(self, path, nums):
+            return {0: self._t}
+
+        def get_page_embeddings(self, path, nums, model):
+            return {0: self._b} if self._b else {}
+
+    def test_stale_page_level_row_means_not_cached(self):
+        from pdf_mcp.extractor import page_embedding_units
+
+        text = ". ".join(f"sentence {i}" for i in range(400))
+        assert len(page_embedding_units(text)) > 1
+        c = self._Cache(text, [b"x"])
+        assert corpus._cached_pages("p.pdf", c, True, "m") is None
+
+    def test_matching_layout_is_cached(self):
+        from pdf_mcp.extractor import page_embedding_units
+
+        text = ". ".join(f"sentence {i}" for i in range(400))
+        c = self._Cache(text, [b"x"] * len(page_embedding_units(text)))
+        assert corpus._cached_pages("p.pdf", c, True, "m") == 1

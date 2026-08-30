@@ -1622,7 +1622,7 @@ class TestChunkedEmbeddings:
     def test_extraction_version_is_nine(self):
         from pdf_mcp.cache import _EXTRACTION_VERSION
 
-        assert _EXTRACTION_VERSION == 9
+        assert _EXTRACTION_VERSION == 10
 
     def test_stats_counts_pages_not_chunks(self, temp_cache_dir, sample_pdf):
         """pdf_cache_stats is user-facing. A page with three chunks must not

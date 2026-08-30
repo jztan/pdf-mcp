@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
+from typing import Any
 import json
 import random
 import re
@@ -484,6 +486,15 @@ def write_results(
     )
 
 
+def _sha256_json(obj: Any) -> str:
+    """Byte-identical to scripts/_bedrock_kb.sha256_json. Duplicated here so the
+    offline --reuse-bedrock-from path never imports _bedrock_kb (which pulls in
+    botocore at module top). tests assert the two stay in sync."""
+    return hashlib.sha256(
+        json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -495,6 +506,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, default=None, help="pilot: first N queries")
     ap.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    ap.add_argument(
+        "--reuse-bedrock-from",
+        type=Path,
+        default=None,
+        help=(
+            "reuse stored Bedrock rows from a prior results.json instead of "
+            "querying AWS; the local arms still run live. Fully offline."
+        ),
+    )
     args = ap.parse_args(argv)
 
     from benchmark_corpus_modes import class_names
@@ -537,7 +557,59 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{arm}: done ({len(rows_by_arm[arm])} queries)")
 
     bedrock_arms = [a for a in arms if not config["arms"].get(a, {}).get("tool")]
-    if bedrock_arms:
+    index_stamps_by_arm: dict[str, dict] = {}
+    if bedrock_arms and args.reuse_bedrock_from:
+        # Bedrock retrieval measured byte-identical across runs, so its rows
+        # only ever needed re-querying for the paired-CI mechanics. Load them
+        # instead. Four offline refusals stand in for the live drift guard.
+        prior = json.loads(args.reuse_bedrock_from.read_text(encoding="utf-8"))
+        prior_cfg = prior.get("config", {})
+        manifest_sha = hashlib.sha256(
+            (args.data_dir / "manifest.json").read_bytes()
+        ).hexdigest()
+        current_qids = {q["id"] for q in queries}
+        if prior_cfg.get("budget_tokens") != args.budget:
+            print(
+                f"ERROR: stored Bedrock rows were scored at budget "
+                f"{prior_cfg.get('budget_tokens')}, this run uses {args.budget}. "
+                "kept and containment are budget-dependent; match the budget or "
+                "re-run live."
+            )
+            return 2
+        for arm in bedrock_arms:
+            label = config["arms"][arm].get("label", arm)
+            rows = prior.get("per_query", {}).get(label)
+            stamp = prior_cfg.get("index_stamps", {}).get(label, {})
+            if rows is None:
+                print(f"ERROR: {args.reuse_bedrock_from} has no rows for {arm}")
+                return 2
+            drift = []
+            if stamp.get("arm_config_sha256") != _sha256_json(config["arms"][arm]):
+                drift.append("arm_config")
+            if stamp.get("manifest_sha256") != manifest_sha:
+                drift.append("manifest")
+            if drift:
+                print(
+                    f"ERROR: stored rows for {arm} came from a different "
+                    f"{' and '.join(drift)}; re-run live."
+                )
+                return 2
+            if set(rows) != current_qids:
+                print(
+                    f"ERROR: stored rows for {arm} cover {len(rows)} query ids, "
+                    f"this run has {len(current_qids)}; paired CIs would misalign. "
+                    "Re-run live."
+                )
+                return 2
+            rows_by_arm[arm] = rows
+            index_stamps_by_arm[arm] = {
+                **stamp,
+                "reused_from": str(args.reuse_bedrock_from),
+            }
+            print(f"{arm}: reused {len(rows)} stored rows (offline)")
+        config["bedrock_rows_reused_from"] = str(args.reuse_bedrock_from)
+        config["bedrock_live_check"] = False
+    elif bedrock_arms:
         import boto3
 
         from _bedrock_kb import (
@@ -580,6 +652,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return 2
             deployed[arm] = out
+            index_stamps_by_arm[arm] = {
+                "stack": stack_name(arm),
+                "arm_config_sha256": out.get("tags", {}).get(TAG_KEY),
+                **st.get("stamp", {}),
+            }
             rows_by_arm[arm] = run_arm_bedrock(
                 runtime,
                 out["KnowledgeBaseId"],
@@ -589,25 +666,16 @@ def main(argv: list[str] | None = None) -> int:
                 rerank_model=config["arms"][arm]["rerank"],
             )
             print(f"{arm}: done")
+        config["bedrock_live_check"] = True
 
     # Result tables use the short label (B0, B1); the immutable arm id and its
     # stamp go into provenance so a reader can tell which index produced a row.
     label_of = {a: config["arms"].get(a, {}).get("label", a) for a in rows_by_arm}
     rows_by_label = {label_of[a]: r for a, r in rows_by_arm.items()}
     config["arm_ids"] = {label_of[a]: a for a in rows_by_arm}
-    config["index_stamps"] = (
-        {
-            label_of[a]: {
-                "stack": stack_name(a),
-                "arm_config_sha256": deployed[a]["tags"].get(TAG_KEY),
-                **state[a].get("stamp", {}),
-            }
-            for a in bedrock_arms
-            if a in rows_by_arm
-        }
-        if bedrock_arms
-        else {}
-    )
+    config["index_stamps"] = {
+        label_of[a]: index_stamps_by_arm[a] for a in bedrock_arms if a in rows_by_arm
+    }
     rows_by_arm = rows_by_label
     ref_label = label_of.get("P", "P")
     # Every arm except the reference is compared against it, including other

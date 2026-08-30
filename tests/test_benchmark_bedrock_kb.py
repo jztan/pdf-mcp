@@ -889,3 +889,17 @@ class TestMainWarmGate:
             ]
         )
         assert rc == 2
+
+
+class TestProvenancePath:
+    def test_in_repo_path_is_repo_relative(self):
+        from scripts import benchmark_bedrock_kb as bk
+
+        inside = bk.REPO / "benchmark_data" / "bedrock_kb" / "results.json"
+        assert bk.provenance_path(inside) == "benchmark_data/bedrock_kb/results.json"
+
+    def test_outside_repo_path_is_kept_absolute(self, tmp_path):
+        from scripts import benchmark_bedrock_kb as bk
+
+        outside = tmp_path / "results.json"
+        assert bk.provenance_path(outside) == str(outside)

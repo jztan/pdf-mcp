@@ -6,6 +6,32 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
+## Headline, current run (after sub-page embedding chunking)
+
+One table per metric, all four arms, all 89 queries (flagged included; see
+the sensitivity tables in RESULTS.md). P-para is pdf-mcp with paragraph
+excerpts, P-snip the same retrieval with snippet excerpts, B0 Bedrock default
+chunking, B1 Bedrock fixed-1000. Read down a column within a class; never
+average across classes.
+
+Span recall (evidence verbatim inside the 2,000-token budget):
+
+| class | P-para | P-snip | B0 | B1 |
+|---|---|---|---|---|
+| described | 0.240 | 0.000 | 0.360 | 0.400 |
+| needle | 0.429 | 0.643 | 0.714 | 0.714 |
+| spread | 0.760 | 0.840 | 0.600 | 0.680 |
+| trap | 0.520 | 0.560 | 0.840 | 0.880 |
+
+doc-hit@3 (the right document in the top 3):
+
+| class | P-para | P-snip | B0 | B1 |
+|---|---|---|---|---|
+| described | 0.800 | 0.800 | 0.840 | 0.920 |
+| needle | 1.000 | 1.000 | 1.000 | 1.000 |
+| spread | 0.760 | 0.760 | 0.800 | 0.800 |
+| trap | 1.000 | 1.000 | 1.000 | 1.000 |
+
 ## Addendum, 2026-08-30: re-run after sub-page embedding chunking
 
 The narrative below describes the page-level baseline (arm P embedding one
@@ -126,7 +152,9 @@ of that choice.
 only in `excerpt_style`. It therefore carries bootstrap CIs and doc-level
 metrics, which the earlier standalone version could not.
 
-Span recall, all 89 queries, with the paired CI against `P-para`:
+Span recall, all 89 queries, with the paired CI against `P-para`.
+**Pre-chunking snapshot** (P-para described 0.120); the current numbers are
+in the headline table at the top of this file:
 
 | class | P-para | P-snip | B0 | B1 | P-para minus P-snip |
 |---|---|---|---|---|---|

@@ -6,38 +6,52 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
-## Headline, current run (chunking, spanning-line fix, and the window excerpt arm, 2026-08-30)
+## Headline, current run (184 queries, merged develop, extraction version 13, 2026-08-30 evening)
 
-One table per metric, all four arms, all 89 queries (flagged included; see
-the sensitivity tables in RESULTS.md). P-para is pdf-mcp with paragraph
-excerpts, P-snip the same retrieval with snippet excerpts, B0 Bedrock default
-chunking, B1 Bedrock fixed-1000. Read down a column within a class; never
-average across classes.
+The graded set grew from 89 to 184 queries on 2026-08-30 (described 25 to
+83, needle 14 to 31, spread 25 to 45, trap 25; about 80 percent of the new
+gold labels sit below page 1; authoring protocol in
+`scripts/author_corpus_queries.py`). Bedrock rows were fetched live for
+every id once and are reused. Every pdf-mcp row below is ONE fixed
+configuration run on all four classes; never read the best row per
+column, a caller gets one row.
 
 Span recall (evidence verbatim inside the 2,000-token budget):
 
-| class | P-para | P-snip | P-win | B0 | B1 |
-|---|---|---|---|---|---|
-| described | 0.240 | 0.000 | 0.200 | 0.360 | 0.400 |
-| needle | 0.500 | 0.786 | **0.929** | 0.714 | 0.714 |
-| spread | 0.760 | 0.840 | 0.600 | 0.600 | 0.680 |
-| trap | 0.520 | 0.720 | 0.680 | 0.840 | 0.880 |
+| configuration | described (83) | needle (31) | spread (45) | trap (25) |
+|---|---|---|---|---|
+| pdf-mcp paragraph (default) | 0.217 | 0.677 | 0.600 | 0.520 |
+| pdf-mcp snippet | 0.000 | 0.742 | 0.711 | 0.720 |
+| pdf-mcp window 600 | 0.108 | 0.774 | 0.556 | 0.640 |
+| pdf-mcp window 300 | 0.108 | 0.774 | 0.578 | 0.560 |
+| B0 (Bedrock default chunking) | 0.301 | 0.484 | 0.422 | 0.840 |
+| B1 (fixed 1000 + rerank) | 0.253 | 0.645 | 0.511 | 0.880 |
 
-P-win is `excerpt_style="window"` (600-token contiguous block window around
-the anchor), same retrieval as P-para; realized k 3.2 to 4.1 against 11 to
-19 for P-para. (Before the extraction fix, same day: needle P-para 0.429 /
-P-snip 0.643, trap P-snip 0.560; see the run sections below.)
+Default minus B0, paired bootstrap: described -0.084 [-0.205, +0.036]
+includes zero; needle +0.194 [-0.032, +0.419] includes zero; spread
++0.178 [+0.022, +0.333] excludes zero; trap -0.320 [-0.520, -0.120]
+excludes zero. So the shipped default loses trap (confirmed), is ahead on
+spread (confirmed), and is unresolved on described and needle.
 
-doc-hit@3 (the right document in the top 3):
+Window against paragraph on this set: needle +0.097 [-0.097, +0.290]
+includes zero (the +0.429 "excludes zero" reported on the 89-set below
+was n=14 and did not hold at n=31); described -0.108 [-0.193, -0.024]
+excludes zero, a confirmed loss. Window is a trade for single-document
+evidence-in-context, not an improvement, and paragraph stays the default.
 
-| class | P-para | P-snip | P-win | B0 | B1 |
-|---|---|---|---|---|---|
-| described | 0.840 | 0.840 | 0.840 | 0.840 | 0.920 |
-| needle | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
-| spread | 0.800 | 0.800 | 0.800 | 0.800 | 0.800 |
-| trap | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+doc-hit@3 (the right document in the top 3), default / B0: described
+0.747 / 0.675, needle 1.000 / 0.903, spread 0.844 / 0.822, trap 1.000 /
+1.000.
 
-## Latest run, 2026-08-30 (evening): the window excerpt arm
+Flagged (no arm finds the span): 54 of 184, of which 41 are described. For
+those 41, pdf-mcp returned the gold document for 32 and the gold page for
+1 (B0: page for 7). Deep-page paraphrase queries fail at within-document
+page ranking, not at routing; this is the open deficiency the expanded
+set was built to expose.
+
+Earlier sections below are the 89-query record and are kept as written.
+
+## Earlier run (89 queries), 2026-08-30 evening: the window excerpt arm
 
 `excerpt_style="window"` returns the anchor block (keyword hit, else the
 block covered by the best sub-page embedding chunk, else the most

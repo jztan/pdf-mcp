@@ -17,15 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same `bbox`/`page_rect`/`clip` geometry as paragraph excerpts. Use it
   when one call has to carry the evidence in context: the title above
   a matching abstract, the later lines of a caption, a value beside its
-  label. On the 100-paper corpus benchmark at a fixed 2,000-token
-  budget, window excerpts recovered the graded span on 0.929 of needle
-  queries (paragraph 0.500, snippet 0.786, Bedrock 0.714) and 0.680 of
-  trap queries (paragraph 0.520, Bedrock 0.840), with about 3 to 4 hits
-  fitting the budget instead of 11 to 19; on cross-document `spread`
-  queries that coverage cost shows (0.600 against paragraph 0.760,
-  confidence interval includes zero), so paragraph stays the default.
-  Document ranking is identical across excerpt styles.
-
+  label. It is a trade, not an upgrade, and paragraph stays the default:
+  on the 184-query corpus benchmark at a fixed 2,000-token budget it
+  recovers the graded span on 0.774 of needle queries against
+  paragraph's 0.677 (difference not confirmed, n=31) and 0.640 of trap
+  queries against 0.520, but only 0.108 of paraphrase (described)
+  queries against paragraph's 0.217 (confirmed loss, n=83) and 0.556 of
+  cross-document queries against 0.600, because about 3 windows fit the
+  budget where 11 to 18 paragraphs do. Document ranking is identical
+  across excerpt styles.
 - **`pdf_corpus_search` hybrid mode now ranks documents, not only pages.**
   A cached per-document head vector (page 1, first 1,500 characters,
   same embedding model as pages) is fused as a third, lower-weight arm

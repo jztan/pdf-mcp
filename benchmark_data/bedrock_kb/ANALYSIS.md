@@ -6,6 +6,27 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
+## Addendum, 2026-08-30: re-run after sub-page embedding chunking
+
+The narrative below describes the page-level baseline (arm P embedding one
+vector per page), the state at commit e58b43d. `RESULTS.md` and `results.json`
+in this directory now hold the re-run after sub-page embedding chunking
+(`feat/sub-page-embedding-chunking`), with the Bedrock arms re-queried. B0 and
+B1 came back byte-identical (Bedrock noise floor 0.000), so every change below
+is arm P.
+
+| class | P before | P after | P minus B0 before | P minus B0 after |
+|---|---|---|---|---|
+| described | 0.120 | **0.240** | -0.240 excludes zero | **-0.120 includes zero** |
+| needle | 0.429 | 0.429 | -0.286 includes zero | unchanged |
+| spread | 0.640 | **0.760** | +0.040 includes zero | +0.160 includes zero |
+| trap | 0.520 | 0.520 | -0.320 excludes zero | unchanged |
+
+pdf-mcp is no longer significantly behind Bedrock on described. Chunking and
+snippet excerpts do not stack: snippet's edge over paragraph on spread shrank
+from -0.240 (excludes zero) to -0.080 (includes zero). Full gate record in
+`docs_internal/chunking-results.md`.
+
 ## Flagged-query disclosure
 
 21 of the 89 queries had their evidence span found by no arm (P, B0, or B1).

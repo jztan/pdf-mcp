@@ -74,6 +74,11 @@ only the local arms. It never imports boto3.
 uv run python scripts/benchmark_bedrock_kb.py --out-dir /tmp/rerun
 ```
 
+The script warms the corpus into the active cache first (`~/.cache/pdf-mcp` or
+`PDF_MCP_CACHE_DIR`). That is idempotent: seconds when the cache is already
+warm, several minutes once when it is cold. It refuses to score a partial
+corpus rather than silently reporting on the docs that happened to be cached.
+
 It refuses (exit 2) if the stored arm-config hash, manifest hash, query-id set,
 or scoring budget differ from the current run, since a mismatch would either
 compare against a stale index or silently misalign the paired CIs. It also

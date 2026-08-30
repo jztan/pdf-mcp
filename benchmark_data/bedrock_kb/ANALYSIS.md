@@ -43,6 +43,11 @@ product form is `pdf_corpus_search(evidence_budget=600)` (opt-in,
 2026-08-31); the `P-eb600` arm calls that parameter and the harness
 exits 2 unless its kept units are identical to `P-auto` on every query
 (they are, 184/184), so a drift in the shipped rule shows up here.
+RESULTS.md carries every local arm's own paired CIs against both
+anchors since 2026-08-31; against B1 (the stronger anchor) the
+evidence-budget row keeps confirmed margins on needle +0.194 [+0.065,
++0.355] and spread +0.200 [+0.022, +0.378], with described -0.036 and
+trap -0.040 including zero: no confirmed loss to either anchor.
 
 Trap is scored against the revised labels (2026-08-30, late): 16 of 25
 queries also credit the body sentence where the query's terms are

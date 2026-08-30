@@ -45,11 +45,13 @@ is arm P.
 |---|---|---|---|---|
 | described | 0.120 | **0.240** | -0.240 excludes zero | **-0.120 includes zero** |
 | needle | 0.429 | 0.429 | -0.286 includes zero | unchanged |
-| spread | 0.640 | **0.760** | +0.040 includes zero | +0.160 includes zero |
+| spread | 0.640 | 0.760 (CI includes zero, unconfirmed) | +0.040 includes zero | +0.160 includes zero |
 | trap | 0.520 | 0.520 | -0.320 excludes zero | unchanged |
 
-pdf-mcp is no longer significantly behind Bedrock on described. Chunking and
-snippet excerpts do not stack: snippet's edge over paragraph on spread shrank
+On described, pdf-mcp remains behind Bedrock in point estimate (-0.120 vs B0,
+-0.160 vs B1) but the gap is no longer confirmed: the CI includes zero. The
+spread gain (+0.120) is likewise unconfirmed. The one chunking effect with a
+signal is described itself. Chunking and snippet excerpts do not stack: snippet's edge over paragraph on spread shrank
 from -0.240 (excludes zero) to -0.080 (includes zero). Full gate record in
 `docs_internal/chunking-results.md`.
 

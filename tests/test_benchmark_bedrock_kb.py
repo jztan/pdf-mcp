@@ -527,6 +527,7 @@ class TestMainDriftGuard:
 
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -552,6 +553,7 @@ class TestMainDriftGuard:
 
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -580,6 +582,7 @@ class TestMainDriftGuard:
         pilot_dir = tmp_path / "pilot"
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -592,3 +595,186 @@ class TestMainDriftGuard:
         assert seen_paths == [out_dir / ".stack.json"]
         assert (pilot_dir / "results.json").exists()
         assert not (out_dir / "results.json").exists()
+
+
+class TestReuseBedrockRows:
+    """`--reuse-bedrock-from PATH` loads stored Bedrock rows instead of
+    querying AWS. The happy path must work with boto3 AND botocore made
+    unimportable, proving the offline claim rather than asserting it."""
+
+    def _row(self, cls, status="exact"):
+        return {
+            "class": cls,
+            "kept": [],
+            "realized_k": 3,
+            "containment": {
+                "span_recall": 0.0 if status == "missing" else 1.0,
+                "fidelity_gap": 0.0,
+                "status": status,
+            },
+            "doc_ndcg": 1.0,
+            "dochit3": 1,
+            "seconds": 0.1,
+        }
+
+    def _setup(
+        self,
+        tmp_path,
+        monkeypatch,
+        *,
+        budget=2000,
+        prior_qids=None,
+        arm_hash=None,
+        manifest_hash=None,
+        canonical=False,
+        write_prior=True,
+    ):
+        import hashlib
+
+        out_dir = tmp_path / "canonical_out"
+        out_dir.mkdir()
+        arm_cfg = {"label": "B0", "rerank": None}
+        config = {
+            "region": "us-east-1",
+            "arms": {"P": {"tool": "pdf_corpus_search"}, "B0-default-v1": arm_cfg},
+        }
+        _write_json(out_dir / "config.json", config)
+        monkeypatch.setattr(bm, "OUT_DIR", out_dir)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        _write_json(data_dir / "manifest.json", {"docs": []})
+        qids = ["q1", "q2"]
+        _write_json(
+            data_dir / "queries.json",
+            {"queries": [{"id": q, "class": "needle", "labels": []} for q in qids]},
+        )
+        # arm P stubbed: no corpus, no cache
+        monkeypatch.setattr(
+            bm, "run_arm_p", lambda *a, **k: {q: self._row("needle") for q in qids}
+        )
+        real_arm_hash = bm._sha256_json(arm_cfg)
+        real_manifest_hash = hashlib.sha256(
+            (data_dir / "manifest.json").read_bytes()
+        ).hexdigest()
+        prior = {
+            "config": {
+                "budget_tokens": budget,
+                "arm_ids": {"B0": "B0-default-v1"},
+                "index_stamps": {
+                    "B0": {
+                        "arm_config_sha256": arm_hash or real_arm_hash,
+                        "manifest_sha256": manifest_hash or real_manifest_hash,
+                    }
+                },
+            },
+            "per_query": {
+                "B0": {q: self._row("needle", "missing") for q in (prior_qids or qids)}
+            },
+        }
+        prior_path = (
+            (out_dir / "results.json") if canonical else (tmp_path / "prior.json")
+        )
+        if write_prior:
+            _write_json(prior_path, prior)
+        return data_dir, out_dir, prior_path
+
+    def _argv(self, data_dir, out_dir, prior_path, budget=2000):
+        return [
+            "--arms",
+            "P,B0-default-v1",
+            "--data-dir",
+            str(data_dir),
+            "--out-dir",
+            str(out_dir / "run"),
+            "--budget",
+            str(budget),
+            "--reuse-bedrock-from",
+            str(prior_path),
+        ]
+
+    def test_happy_path_is_fully_offline(self, tmp_path, monkeypatch):
+        data_dir, out_dir, prior = self._setup(tmp_path, monkeypatch)
+        # make any `import boto3` / `import botocore` raise ImportError
+        monkeypatch.setitem(sys.modules, "boto3", None)
+        monkeypatch.setitem(sys.modules, "botocore", None)
+
+        rc = bm.main(self._argv(data_dir, out_dir, prior))
+        assert rc == 0
+        res = json.loads((out_dir / "run" / "results.json").read_text())
+        assert "B0" in res["per_query"] and "P" in res["per_query"]
+        assert "B0" in res["summary"]["diffs"]["needle"]
+        # P exact vs B0 missing on both queries -> P minus B0 = +1.0
+        assert res["summary"]["diffs"]["needle"]["B0"]["mean_diff"] == 1.0
+        assert res["config"]["bedrock_live_check"] is False
+        assert res["config"]["bedrock_rows_reused_from"] == str(prior)
+        assert "arm_config_sha256" in res["config"]["index_stamps"]["B0"]
+
+    def test_refuses_arm_config_drift(self, tmp_path, monkeypatch):
+        d, o, p = self._setup(tmp_path, monkeypatch, arm_hash="stale")
+        assert bm.main(self._argv(d, o, p)) == 2
+
+    def test_refuses_manifest_drift(self, tmp_path, monkeypatch):
+        d, o, p = self._setup(tmp_path, monkeypatch, manifest_hash="stale")
+        assert bm.main(self._argv(d, o, p)) == 2
+
+    def test_refuses_query_set_mismatch(self, tmp_path, monkeypatch):
+        d, o, p = self._setup(tmp_path, monkeypatch, prior_qids=["q1"])
+        assert bm.main(self._argv(d, o, p)) == 2
+
+    def test_refuses_budget_mismatch(self, tmp_path, monkeypatch):
+        d, o, p = self._setup(tmp_path, monkeypatch, budget=1000)
+        assert bm.main(self._argv(d, o, p, budget=2000)) == 2
+
+    def test_default_reuses_canonical_results_offline(self, tmp_path, monkeypatch):
+        """No flag at all: rows come from OUT_DIR/results.json, boto3 untouched."""
+        d, o, prior = self._setup(tmp_path, monkeypatch, canonical=True)
+        monkeypatch.setitem(sys.modules, "boto3", None)
+        monkeypatch.setitem(sys.modules, "botocore", None)
+        rc = bm.main(
+            [
+                "--arms",
+                "P,B0-default-v1",
+                "--data-dir",
+                str(d),
+                "--out-dir",
+                str(o / "run"),
+            ]
+        )
+        assert rc == 0
+        res = json.loads((o / "run" / "results.json").read_text())
+        assert res["config"]["bedrock_live_check"] is False
+        assert res["config"]["bedrock_rows_reused_from"] == str(prior)
+
+    def test_default_with_no_stored_rows_exits_2_and_hints_live(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        d, o, _ = self._setup(tmp_path, monkeypatch, canonical=True, write_prior=False)
+        rc = bm.main(
+            [
+                "--arms",
+                "P,B0-default-v1",
+                "--data-dir",
+                str(d),
+                "--out-dir",
+                str(o / "run"),
+            ]
+        )
+        assert rc == 2
+        assert "--live" in capsys.readouterr().out
+
+    def test_live_and_reuse_from_are_mutually_exclusive(self, tmp_path, monkeypatch):
+        d, o, prior = self._setup(tmp_path, monkeypatch)
+        rc = bm.main(self._argv(d, o, prior) + ["--live"])
+        assert rc == 2
+
+
+def test_local_sha256_json_matches_bedrock_kb_helper():
+    """The offline reuse path hashes locally to avoid importing _bedrock_kb
+    (botocore at module top). A divergence would make every stored stamp
+    look drifted, so the two implementations are pinned together here."""
+    sys.path.insert(0, str(bm.REPO / "scripts"))
+    import _bedrock_kb
+
+    for obj in ({"a": 1, "b": [2, 3]}, {"label": "B0", "rerank": None}, {"z": "é"}):
+        assert bm._sha256_json(obj) == _bedrock_kb.sha256_json(obj)

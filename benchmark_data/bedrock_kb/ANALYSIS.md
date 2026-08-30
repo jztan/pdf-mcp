@@ -6,7 +6,7 @@ for the run recorded in [`RESULTS.md`](RESULTS.md). `RESULTS.md` and
 are overwritten on every run; this file is not regenerated and is safe to
 edit by hand.
 
-## Headline, current run (after sub-page embedding chunking)
+## Headline, current run (after sub-page embedding chunking and the spanning-line extraction fix, 2026-08-30)
 
 One table per metric, all four arms, all 89 queries (flagged included; see
 the sensitivity tables in RESULTS.md). P-para is pdf-mcp with paragraph
@@ -19,17 +19,20 @@ Span recall (evidence verbatim inside the 2,000-token budget):
 | class | P-para | P-snip | B0 | B1 |
 |---|---|---|---|---|
 | described | 0.240 | 0.000 | 0.360 | 0.400 |
-| needle | 0.429 | 0.643 | 0.714 | 0.714 |
+| needle | 0.500 | 0.786 | 0.714 | 0.714 |
 | spread | 0.760 | 0.840 | 0.600 | 0.680 |
-| trap | 0.520 | 0.560 | 0.840 | 0.880 |
+| trap | 0.520 | 0.720 | 0.840 | 0.880 |
+
+(Before the extraction fix, same day: needle P-para 0.429 / P-snip 0.643,
+trap P-snip 0.560; see the second addendum below.)
 
 doc-hit@3 (the right document in the top 3):
 
 | class | P-para | P-snip | B0 | B1 |
 |---|---|---|---|---|
-| described | 0.800 | 0.800 | 0.840 | 0.920 |
+| described | 0.840 | 0.840 | 0.840 | 0.920 |
 | needle | 1.000 | 1.000 | 1.000 | 1.000 |
-| spread | 0.760 | 0.760 | 0.800 | 0.800 |
+| spread | 0.800 | 0.800 | 0.800 | 0.800 |
 | trap | 1.000 | 1.000 | 1.000 | 1.000 |
 
 ## Addendum, 2026-08-30: re-run after sub-page embedding chunking
@@ -121,6 +124,11 @@ That 22/8 split is not evenly spread across classes:
 | trap | 10 | 10 | 0 |
 | spread | 5 | 3 | 2 |
 | described | 10 | 4 | 6 |
+
+**Correction (later on 2026-08-30):** 9 of these "picker" misses were an
+extraction defect, not the picker; the span was on the PDF page but not in
+the text P had extracted from it. See "Addendum: 9 graded spans were an
+extraction defect" below for the fix and the re-run.
 
 P's document-level metrics corroborate the picker story cleanly for
 `needle` and `trap`: doc-hit@3 and doc-NDCG@10 are both 1.000 in every
@@ -298,8 +306,8 @@ defect).
 
 ## Provenance
 
-- pdf-mcp commit: e19f19f
-- `_EXTRACTION_VERSION`: 8
+- pdf-mcp commit: e19f19f for the original run; the headline tables above are from the 2026-08-30 re-run at 9b1f9cb (spanning-line fix merged), B0/B1 rows reused
+- `_EXTRACTION_VERSION`: 8 for the original run, 11 for the headline re-run
 - Corpus: `benchmark_data/corpus_search` manifest, 100 docs, 2,238 pages,
   235 MB of PDFs, warmed and re-confirmed in this session (2026-08-29);
   `pdf_mcp.cache.db` mtime updated during arm P's run, confirming a live

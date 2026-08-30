@@ -527,6 +527,7 @@ class TestMainDriftGuard:
 
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -552,6 +553,7 @@ class TestMainDriftGuard:
 
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -580,6 +582,7 @@ class TestMainDriftGuard:
         pilot_dir = tmp_path / "pilot"
         rc = bm.main(
             [
+                "--live",
                 "--arms",
                 "B0-default-v1",
                 "--data-dir",
@@ -623,6 +626,8 @@ class TestReuseBedrockRows:
         prior_qids=None,
         arm_hash=None,
         manifest_hash=None,
+        canonical=False,
+        write_prior=True,
     ):
         import hashlib
 
@@ -667,8 +672,11 @@ class TestReuseBedrockRows:
                 "B0": {q: self._row("needle", "missing") for q in (prior_qids or qids)}
             },
         }
-        prior_path = tmp_path / "prior.json"
-        _write_json(prior_path, prior)
+        prior_path = (
+            (out_dir / "results.json") if canonical else (tmp_path / "prior.json")
+        )
+        if write_prior:
+            _write_json(prior_path, prior)
         return data_dir, out_dir, prior_path
 
     def _argv(self, data_dir, out_dir, prior_path, budget=2000):
@@ -717,6 +725,48 @@ class TestReuseBedrockRows:
     def test_refuses_budget_mismatch(self, tmp_path, monkeypatch):
         d, o, p = self._setup(tmp_path, monkeypatch, budget=1000)
         assert bm.main(self._argv(d, o, p, budget=2000)) == 2
+
+    def test_default_reuses_canonical_results_offline(self, tmp_path, monkeypatch):
+        """No flag at all: rows come from OUT_DIR/results.json, boto3 untouched."""
+        d, o, prior = self._setup(tmp_path, monkeypatch, canonical=True)
+        monkeypatch.setitem(sys.modules, "boto3", None)
+        monkeypatch.setitem(sys.modules, "botocore", None)
+        rc = bm.main(
+            [
+                "--arms",
+                "P,B0-default-v1",
+                "--data-dir",
+                str(d),
+                "--out-dir",
+                str(o / "run"),
+            ]
+        )
+        assert rc == 0
+        res = json.loads((o / "run" / "results.json").read_text())
+        assert res["config"]["bedrock_live_check"] is False
+        assert res["config"]["bedrock_rows_reused_from"] == str(prior)
+
+    def test_default_with_no_stored_rows_exits_2_and_hints_live(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        d, o, _ = self._setup(tmp_path, monkeypatch, canonical=True, write_prior=False)
+        rc = bm.main(
+            [
+                "--arms",
+                "P,B0-default-v1",
+                "--data-dir",
+                str(d),
+                "--out-dir",
+                str(o / "run"),
+            ]
+        )
+        assert rc == 2
+        assert "--live" in capsys.readouterr().out
+
+    def test_live_and_reuse_from_are_mutually_exclusive(self, tmp_path, monkeypatch):
+        d, o, prior = self._setup(tmp_path, monkeypatch)
+        rc = bm.main(self._argv(d, o, prior) + ["--live"])
+        assert rc == 2
 
 
 def test_local_sha256_json_matches_bedrock_kb_helper():

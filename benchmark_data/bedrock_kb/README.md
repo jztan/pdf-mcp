@@ -65,33 +65,29 @@ uv run pytest tests/test_benchmark_bedrock_kb.py tests/test_bedrock_kb_infra.py 
 Both stacks are already deployed and ingested; a re-run only needs the
 benchmark CLI, not `deploy`/`upload`/`ingest` again.
 
-**Preferred, offline, free:** reuse the stored Bedrock rows and re-run only the
-local arms. Bedrock retrieval measured byte-identical across runs, so its rows
-never need re-querying; only the paired-CI mechanics ever forced it.
+**The default run is offline and free.** It reuses the stored B0/B1 rows from
+`benchmark_data/bedrock_kb/results.json` (Bedrock retrieval measured
+byte-identical across runs, so its rows never need re-querying) and re-runs
+only the local arms. It never imports boto3.
 
 ```bash
-uv run python scripts/benchmark_bedrock_kb.py \
-  --reuse-bedrock-from benchmark_data/bedrock_kb/results.json \
-  --out-dir /tmp/rerun
+uv run python scripts/benchmark_bedrock_kb.py --out-dir /tmp/rerun
 ```
 
-This refuses (exit 2) if the stored arm-config hash, manifest hash, query-id
-set, or scoring budget differ from the current run, since a mismatch would
-either compare against a stale index or silently misalign the paired CIs. It
-never imports boto3. Point `--out-dir` somewhere other than this directory
-unless you mean to overwrite the committed results.
+It refuses (exit 2) if the stored arm-config hash, manifest hash, query-id set,
+or scoring budget differ from the current run, since a mismatch would either
+compare against a stale index or silently misalign the paired CIs. It also
+refuses if no stored rows exist yet and tells you to pass `--live`. Point
+`--out-dir` somewhere other than this directory unless you mean to overwrite
+the committed results. `--reuse-bedrock-from PATH` reuses rows from a
+different results.json.
 
-**Live, re-queries Bedrock (~$0.20):** only needed after a Bedrock-side change.
+**`--live` re-queries Bedrock (~$0.20, needs AWS credentials).** Only needed
+after a Bedrock-side change, or for the very first run before any rows exist.
 
 ```bash
-uv run python scripts/benchmark_bedrock_kb.py
+uv run python scripts/benchmark_bedrock_kb.py --live
 ```
-
-This runs both local arms live, retrieves from both Bedrock arms, and overwrites
-`results.json` and `RESULTS.md` in this directory (never `ANALYSIS.md`,
-which is hand-written; see its top-of-file note). The drift guard in
-`main()` refuses to run if either stack's config tag or ingest stamp no
-longer matches `config.json` or the corpus manifest.
 
 To check a single arm's live status without querying it:
 

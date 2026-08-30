@@ -7,17 +7,18 @@ any result is acceptable.
 Arms: P (pdf_corpus_search, hybrid), B0 (Bedrock default), B1 (Bedrock
 fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
 
-Re-running after a pdf-mcp change (the common case) should be offline:
+The default run is offline: it reuses the stored B0/B1 rows from
+benchmark_data/bedrock_kb/results.json (Bedrock retrieval measured
+byte-identical across runs) and re-runs only the local arms, never importing
+boto3. It refuses with exit 2 if the stored arm-config hash, manifest hash,
+query-id set or scoring budget differ from the current run, or if no stored
+rows exist yet.
 
-    python scripts/benchmark_bedrock_kb.py \
-        --reuse-bedrock-from benchmark_data/bedrock_kb/results.json \
-        --out-dir /tmp/rerun
+    python scripts/benchmark_bedrock_kb.py --out-dir /tmp/rerun
 
-That reuses the stored B0/B1 rows (Bedrock retrieval measured byte-identical
-across runs) and re-runs only the local arms; it never imports boto3. It
-refuses with exit 2 if the stored arm-config hash, manifest hash, query-id set
-or scoring budget differ from the current run. Omit the flag to re-query
-Bedrock live (about $0.20), only needed after a Bedrock-side change.
+Pass --live to re-query Bedrock (about $0.20, needs AWS credentials); only
+needed after a Bedrock-side change. --reuse-bedrock-from PATH reuses rows
+from a different results.json.
 """
 
 from __future__ import annotations
@@ -523,8 +524,16 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help=(
-            "reuse stored Bedrock rows from a prior results.json instead of "
-            "querying AWS; the local arms still run live. Fully offline."
+            "reuse stored Bedrock rows from this results.json (default: the "
+            "canonical benchmark_data/bedrock_kb/results.json). Offline."
+        ),
+    )
+    ap.add_argument(
+        "--live",
+        action="store_true",
+        help=(
+            "re-query Bedrock instead of reusing stored rows (about $0.20, needs "
+            "AWS credentials). Only needed after a Bedrock-side change."
         ),
     )
     args = ap.parse_args(argv)
@@ -570,11 +579,27 @@ def main(argv: list[str] | None = None) -> int:
 
     bedrock_arms = [a for a in arms if not config["arms"].get(a, {}).get("tool")]
     index_stamps_by_arm: dict[str, dict] = {}
-    if bedrock_arms and args.reuse_bedrock_from:
+    # Offline reuse is the default: Bedrock retrieval measured byte-identical
+    # across runs, so re-querying it is pure cost and needs credentials.
+    # --live is the explicit opt-in for the paid path.
+    reuse_path: Path | None = None
+    if args.live and args.reuse_bedrock_from:
+        print("ERROR: --live and --reuse-bedrock-from are mutually exclusive.")
+        return 2
+    if bedrock_arms and not args.live:
+        reuse_path = args.reuse_bedrock_from or (OUT_DIR / "results.json")
+        if not reuse_path.exists():
+            print(
+                f"ERROR: no stored Bedrock rows at {reuse_path}. Pass --live to "
+                "query Bedrock (about $0.20, needs AWS credentials), or "
+                "--reuse-bedrock-from PATH to point at a prior results.json."
+            )
+            return 2
+    if bedrock_arms and reuse_path:
         # Bedrock retrieval measured byte-identical across runs, so its rows
         # only ever needed re-querying for the paired-CI mechanics. Load them
         # instead. Four offline refusals stand in for the live drift guard.
-        prior = json.loads(args.reuse_bedrock_from.read_text(encoding="utf-8"))
+        prior = json.loads(reuse_path.read_text(encoding="utf-8"))
         prior_cfg = prior.get("config", {})
         manifest_sha = hashlib.sha256(
             (args.data_dir / "manifest.json").read_bytes()
@@ -593,7 +618,7 @@ def main(argv: list[str] | None = None) -> int:
             rows = prior.get("per_query", {}).get(label)
             stamp = prior_cfg.get("index_stamps", {}).get(label, {})
             if rows is None:
-                print(f"ERROR: {args.reuse_bedrock_from} has no rows for {arm}")
+                print(f"ERROR: {reuse_path} has no rows for {arm}")
                 return 2
             drift = []
             if stamp.get("arm_config_sha256") != _sha256_json(config["arms"][arm]):
@@ -616,10 +641,10 @@ def main(argv: list[str] | None = None) -> int:
             rows_by_arm[arm] = rows
             index_stamps_by_arm[arm] = {
                 **stamp,
-                "reused_from": str(args.reuse_bedrock_from),
+                "reused_from": str(reuse_path),
             }
             print(f"{arm}: reused {len(rows)} stored rows (offline)")
-        config["bedrock_rows_reused_from"] = str(args.reuse_bedrock_from)
+        config["bedrock_rows_reused_from"] = str(reuse_path)
         config["bedrock_live_check"] = False
     elif bedrock_arms:
         import boto3

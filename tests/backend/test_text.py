@@ -387,3 +387,44 @@ def test_spanning_lines_keep_their_vertical_order(pdf, before, after):
     assert i < j, f"{before!r} at {i} should precede {after!r} at {j}"
     if before.startswith(("Luo-Rudy", "mm. Pseudo", "models used")):
         assert j - i < len(before) + 160, "consecutive lines are not adjacent"
+
+
+@pytest.mark.parametrize(
+    "pdf, page, word",
+    [
+        ("2607.06908.pdf", 8, "effective"),
+        ("0802.0733.pdf", 8, "different"),
+        ("2607.09566.pdf", 14, "sufficient"),
+    ],
+)
+def test_ff_ligatures_keep_both_letters(pdf, page, word):
+    """pdfium expands the ff / ffi ligatures into two `f` glyphs with the
+    identical box. The faux-bold duplicate filter (same char, same box)
+    dropped the second, so 39% of the benchmark corpus pages read
+    "diferent", "efective", "suf icient", and keyword search for those
+    words missed them. Ligature halves are ADJACENT in the char stream
+    and share a text object; a faux-bold repeat (iwaki) comes at least 6
+    chars later from another object. Adjacent duplicates are kept."""
+    if not (_REAL / pdf).exists():
+        pytest.skip("real corpus not fetched")
+    text = get_text(str(_REAL / pdf), page - 1, "text")
+    assert word in text.lower(), text[:200]
+
+
+def test_faux_bold_duplicates_are_still_deduped():
+    """The iwaki bulletin draws every glyph twice (non-adjacent). The
+    ligature fix must not let those back in."""
+    pdf = Path("/Users/jztan/src/pdf-mcp/docs_internal/sample_pdfs/vertical-jp")
+    pdf = pdf / "iwaki_koho_2025-12_vertical-jp.pdf"
+    if not pdf.exists():
+        pytest.skip("local-only sample absent")
+    import pypdfium2 as pdfium
+
+    from pdf_mcp.backend.text import _collect_chars
+
+    doc = pdfium.PdfDocument(str(pdf))
+    page = doc[0]
+    tp = page.get_textpage()
+    chars = _collect_chars(page, tp)
+    keys = [(c.ch, round(c.x0, 1), round(c.y0, 1)) for c in chars if c.ch.strip()]
+    assert len(keys) == len(set(keys)), "faux-bold duplicates leaked"

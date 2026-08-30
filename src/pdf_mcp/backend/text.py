@@ -246,7 +246,14 @@ def _collect_chars(page: Any, textpage: Any) -> list[_Char]:
         if right < left or top < bottom:
             continue
         key = (ch, round(left, 1), round(top, 1))
-        if key in seen:
+        if key in seen and not (out and out[-1].idx == i - 1 and out[-1].ch == ch):
+            # A faux-bold repeat is the same glyph drawn again later
+            # from another text object (iwaki: index gap >= 6). An
+            # ADJACENT exact duplicate is pdfium expanding a ligature
+            # (ff, ffi, ffl) into single letters that share the
+            # ligature's box, and must be kept: dropping it turned
+            # "different" into "diferent" on 39% of the benchmark
+            # corpus pages and made those words unsearchable.
             continue
         seen.add(key)
         font, size, flags = style_of(i)

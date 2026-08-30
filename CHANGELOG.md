@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Semantic and hybrid search score sub-page windows, not only whole
+  pages.** Each page now stores its whole-page vector plus about 300-token
+  windows with 20% overlap, and a page scores as the best of them. This
+  sharpens paraphrase queries: on the 100-document corpus benchmark,
+  `described` span recall doubled (0.12 to 0.24) and hybrid doc-NDCG@10
+  rose from 0.844 to 0.872, with needle and trap unchanged. Existing caches
+  re-embed once on first use after upgrading (extraction version 10); a
+  cold warm with embeddings takes roughly twice as long as before. Response
+  shapes are unchanged.
+
 - **Browser demo redesigned** (pdf-mcp.jztan.com). New layout and visual
   language: a page-field animation in the hero, a single demo stage that
   takes your PDF, a URL, the 216-page sample, or the 6-PDF sample folder,

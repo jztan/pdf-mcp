@@ -6,6 +6,18 @@ any result is acceptable.
 
 Arms: P (pdf_corpus_search, hybrid), B0 (Bedrock default), B1 (Bedrock
 fixed-1000 + Cohere Rerank 3.5). B2 and N are optional and not built here.
+
+Re-running after a pdf-mcp change (the common case) should be offline:
+
+    python scripts/benchmark_bedrock_kb.py \
+        --reuse-bedrock-from benchmark_data/bedrock_kb/results.json \
+        --out-dir /tmp/rerun
+
+That reuses the stored B0/B1 rows (Bedrock retrieval measured byte-identical
+across runs) and re-runs only the local arms; it never imports boto3. It
+refuses with exit 2 if the stored arm-config hash, manifest hash, query-id set
+or scoring budget differ from the current run. Omit the flag to re-query
+Bedrock live (about $0.20), only needed after a Bedrock-side change.
 """
 
 from __future__ import annotations

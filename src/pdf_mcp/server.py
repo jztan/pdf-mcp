@@ -38,6 +38,7 @@ from .extractor import (
     _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
+    chunk_page_text,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -2382,8 +2383,9 @@ def pdf_search(
                 local_path, all_page_nums, _model_name
             )
             cached_embeddings: dict[int, Any] = {
-                k: np.frombuffer(v, dtype=np.float32).copy()
+                k: [np.frombuffer(b, dtype=np.float32).copy() for b in v]
                 for k, v in raw_cached.items()
+                if v
             }
 
             uncached_nums = [p for p in all_page_nums if p not in cached_embeddings]
@@ -2407,15 +2409,20 @@ def pdf_search(
                 non_empty = {pn: t for pn, t in page_texts_sem.items() if t.strip()}
                 if non_empty:
                     sorted_nums = sorted(non_empty.keys())
-                    texts_list = [non_empty[pn] for pn in sorted_nums]
-                    vecs: Any = _embedder.encode(texts_list, _model_name)
-                    raw_new = {
-                        sorted_nums[i]: vecs[i].tobytes()
-                        for i in range(len(sorted_nums))
+                    per_page = {
+                        pn: chunk_page_text(non_empty[pn]) for pn in sorted_nums
                     }
+                    flat = [c for pn in sorted_nums for c in per_page[pn]]
+                    vecs: Any = _embedder.encode(flat, _model_name) if flat else []
+                    raw_new = {}
+                    cursor = 0
+                    for pn in sorted_nums:
+                        count = len(per_page[pn])
+                        page_vecs = [vecs[cursor + j] for j in range(count)]
+                        cursor += count
+                        raw_new[pn] = [v.tobytes() for v in page_vecs]
+                        cached_embeddings[pn] = page_vecs
                     cache.save_page_embeddings(local_path, raw_new, _model_name)
-                    for i, pn in enumerate(sorted_nums):
-                        cached_embeddings[pn] = vecs[i]
 
             if not cached_embeddings:
                 return {
@@ -2435,8 +2442,14 @@ def pdf_search(
 
             query_vec: Any = _embedder.encode_query(query, _model_name)
             page_nums_list = sorted(cached_embeddings.keys())
-            matrix: Any = np.stack([cached_embeddings[p] for p in page_nums_list])
-            sem_scores: Any = matrix @ query_vec
+            # Page score is its best chunk. Averaging would re-introduce the
+            # page-level dilution this change exists to remove.
+            sem_scores: Any = np.array(
+                [
+                    max(float(v @ query_vec) for v in cached_embeddings[p])
+                    for p in page_nums_list
+                ]
+            )
 
             top_k = min(max_results, len(page_nums_list))
             top_idx: Any = np.argpartition(sem_scores, -top_k)[-top_k:]
@@ -2625,7 +2638,9 @@ def pdf_search(
         all_page_nums = list(range(doc_pages))
         raw_cached = cache.get_page_embeddings(local_path, all_page_nums, _model_name)
         cached_embeddings = {
-            k: np.frombuffer(v, dtype=np.float32).copy() for k, v in raw_cached.items()
+            k: [np.frombuffer(b, dtype=np.float32).copy() for b in v]
+            for k, v in raw_cached.items()
+            if v
         }
 
         uncached_nums = [p for p in all_page_nums if p not in cached_embeddings]
@@ -2646,19 +2661,23 @@ def pdf_search(
             non_empty = {pn: t for pn, t in page_texts_hyb.items() if t.strip()}
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())
-                texts_list = [non_empty[pn] for pn in sorted_nums]
+                per_page = {pn: chunk_page_text(non_empty[pn]) for pn in sorted_nums}
+                flat = [c for pn in sorted_nums for c in per_page[pn]]
                 try:
-                    vecs = _embedder.encode(texts_list, _model_name)
+                    vecs = _embedder.encode(flat, _model_name) if flat else []
                 except Exception as exc:
                     return _auto_keyword_fallback(
                         f"embedding model load/encode failed: {exc}"
                     )
-                raw_new = {
-                    sorted_nums[i]: vecs[i].tobytes() for i in range(len(sorted_nums))
-                }
+                raw_new = {}
+                cursor = 0
+                for pn in sorted_nums:
+                    count = len(per_page[pn])
+                    page_vecs = [vecs[cursor + j] for j in range(count)]
+                    cursor += count
+                    raw_new[pn] = [v.tobytes() for v in page_vecs]
+                    cached_embeddings[pn] = page_vecs
                 cache.save_page_embeddings(local_path, raw_new, _model_name)
-                for i, pn in enumerate(sorted_nums):
-                    cached_embeddings[pn] = vecs[i]
 
         page_sem_score: dict[int, float] = {}
         if cached_embeddings:
@@ -2669,8 +2688,12 @@ def pdf_search(
                     f"embedding model load/encode failed: {exc}"
                 )
             page_nums_list = sorted(cached_embeddings.keys())
-            matrix = np.stack([cached_embeddings[p] for p in page_nums_list])
-            sem_scores = matrix @ query_vec
+            sem_scores = np.array(
+                [
+                    max(float(v @ query_vec) for v in cached_embeddings[p])
+                    for p in page_nums_list
+                ]
+            )
             page_sem_score = {
                 page_nums_list[i]: float(sem_scores[i])
                 for i in range(len(page_nums_list))
@@ -3282,9 +3305,16 @@ def _corpus_semantic_scores(
         if not raw:
             semantic_unprocessed.append(path)
             continue
-        for page_num, blob in raw.items():
-            vec = np.frombuffer(blob, dtype=np.float32).copy()
-            scored.append((path, page_num + 1, float(vec @ query_vec)))
+        for page_num, blobs in raw.items():
+            if not blobs:
+                continue
+            # Page score is its best chunk. Averaging would re-introduce the
+            # page-level dilution this change exists to remove.
+            best = max(
+                float(np.frombuffer(b, dtype=np.float32).copy() @ query_vec)
+                for b in blobs
+            )
+            scored.append((path, page_num + 1, best))
     return scored, semantic_unprocessed
 
 

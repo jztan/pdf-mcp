@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from .docopen import open_pdf
 
-from .extractor import _warm_extract_worker
+from .extractor import _warm_extract_worker, chunk_page_text
 from .parallel import resolve_workers
 
 __all__ = [
@@ -329,14 +329,24 @@ def _finalize_doc(
                 texts[pn] = cached_text
                 preserved.add(pn)
 
-    blobs: dict[int, bytes] = {}
+    blobs: dict[int, list[bytes]] = {}
     if embeddings:
         assert embed is not None and model_name is not None
         non_empty = {pn: t for pn, t in texts.items() if t.strip()}
         if non_empty:
             nums = sorted(non_empty)
-            vecs = embed([non_empty[pn] for pn in nums])
-            blobs = dict(zip(nums, vecs))
+            # One vector per page dilutes a single answer sentence into a
+            # page average. Embed sub-page windows instead and keep them
+            # ordered; chunk_idx is list position downstream. All chunks go
+            # through one embed call so the expensive step keeps its count.
+            per_page = {pn: chunk_page_text(non_empty[pn]) for pn in nums}
+            flat = [c for pn in nums for c in per_page[pn]]
+            vecs = embed(flat) if flat else []
+            cursor = 0
+            for pn in nums:
+                count = len(per_page[pn])
+                blobs[pn] = vecs[cursor : cursor + count]
+                cursor += count
 
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
 

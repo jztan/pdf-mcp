@@ -73,7 +73,7 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
-_EXTRACTION_VERSION = 8  # 8: permissive-backend cutover (pdfium text pipeline)
+_EXTRACTION_VERSION = 9  # 9: sub-page embedding chunking (page_embeddings.chunk_idx)
 
 # Per-connection pragmas. Both reset on every open, unlike journal_mode which
 # is persistent in the database file (see _connect / _init_db).
@@ -602,11 +602,12 @@ class PDFCache:
                 CREATE TABLE IF NOT EXISTS page_embeddings (
                     file_path   TEXT    NOT NULL,
                     page_num    INTEGER NOT NULL,
+                    chunk_idx   INTEGER NOT NULL DEFAULT 0,
                     file_mtime  REAL    NOT NULL,
                     embedding   BLOB    NOT NULL,
                     model       TEXT    NOT NULL DEFAULT 'BAAI/bge-small-en-v1.5',
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (file_path, page_num)
+                    PRIMARY KEY (file_path, page_num, chunk_idx)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
@@ -1555,16 +1556,17 @@ class PDFCache:
 
     def get_page_embeddings(
         self, path: str, page_nums: list[int], model_name: str
-    ) -> dict[int, bytes]:
+    ) -> dict[int, list[bytes]]:
         """
         Get cached raw embedding bytes for multiple pages.
 
         Deletes any rows stored under a different model before querying,
         so the caller always gets embeddings consistent with model_name.
 
-        Returns a dict mapping 0-indexed page_num to the raw float32 bytes
-        for each page whose mtime is still valid. Pages not in cache or with
-        a stale mtime are omitted.
+        Returns a dict mapping 0-indexed page_num to an ORDERED list of raw
+        float32 blobs, one per sub-page chunk (ascending chunk_idx), for each
+        page whose mtime is still valid. Pages not in cache or with a stale
+        mtime are omitted.
 
         The caller is responsible for converting bytes to a numpy array:
             np.frombuffer(blob, dtype=np.float32).copy()
@@ -1581,48 +1583,62 @@ class PDFCache:
                 (path, model_name),
             )
             rows = conn.execute(
-                f"SELECT page_num, embedding, file_mtime"
+                f"SELECT page_num, chunk_idx, embedding, file_mtime"
                 f" FROM page_embeddings"
                 f" WHERE file_path = ? AND page_num IN ({placeholders})"
-                f" AND model = ?",
+                f" AND model = ?"
+                f" ORDER BY page_num, chunk_idx",
                 (path, *page_nums, model_name),
             ).fetchall()
 
-        result: dict[int, bytes] = {}
-        for page_num, blob, mtime in rows:
+        result: dict[int, list[bytes]] = {}
+        for page_num, _chunk_idx, blob, mtime in rows:
             if self._is_cache_valid(path, mtime):
-                result[int(page_num)] = bytes(blob)
+                result.setdefault(int(page_num), []).append(bytes(blob))
         return result
 
     def save_page_embeddings(
         self,
         path: str,
-        embeddings: dict[int, bytes],
+        embeddings: dict[int, list[bytes]],
         model_name: str,
         conn: "sqlite3.Connection | None" = None,
     ) -> None:
         """
-        Save raw embedding bytes to cache.
+        Save raw embedding bytes to cache, one row per sub-page chunk.
 
         Args:
             path: Path to PDF file.
-            embeddings: Dict mapping 0-indexed page_num to raw float32 bytes.
-                        Use ndarray.tobytes() to convert from numpy.
+            embeddings: Dict mapping 0-indexed page_num to an ORDERED list of
+                        raw float32 blobs, one per chunk. List position is
+                        chunk_idx. An empty list stores nothing for that page.
             model_name: fastembed model identifier (stored alongside the blob).
         """
         if not embeddings:
             return
 
         mtime, _ = self._get_file_info(path)
+        rows = [
+            (path, page_num, idx, mtime, blob, model_name)
+            for page_num, blobs in embeddings.items()
+            for idx, blob in enumerate(blobs)
+        ]
+        if not rows:
+            return
         with self._write_conn(conn) as conn:
+            # Clear the page's existing chunks first: a page that shrinks from
+            # three chunks to two would otherwise strand the third, because
+            # INSERT OR REPLACE keys on (path, page, chunk_idx).
+            conn.executemany(
+                "DELETE FROM page_embeddings"
+                " WHERE file_path = ? AND page_num = ? AND model = ?",
+                [(path, page_num, model_name) for page_num in embeddings],
+            )
             conn.executemany(
                 "INSERT OR REPLACE INTO page_embeddings"
-                " (file_path, page_num, file_mtime, embedding, model)"
-                " VALUES (?, ?, ?, ?, ?)",
-                [
-                    (path, page_num, mtime, blob, model_name)
-                    for page_num, blob in embeddings.items()
-                ],
+                " (file_path, page_num, chunk_idx, file_mtime, embedding, model)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
             )
 
     def embeddings_complete(self, path: str, model_name: str) -> bool:
@@ -2172,7 +2188,8 @@ class PDFCache:
             ).fetchone()[0]
 
             stats["embedding_pages"] = conn.execute(
-                "SELECT COUNT(*) FROM page_embeddings"
+                "SELECT COUNT(DISTINCT file_path || ':' || page_num)"
+                " FROM page_embeddings"
             ).fetchone()[0]
 
             stats["total_renders"] = conn.execute(

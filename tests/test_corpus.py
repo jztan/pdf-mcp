@@ -1135,3 +1135,21 @@ class TestWarmReportIsVerified:
         assert out["unprocessed"] == [victim]
         assert victim not in [d["path"] for d in out["docs"]]
         assert out["skipped"] == []
+
+
+class TestMaxOverChunks:
+    def test_page_score_is_the_best_chunk_not_the_average(self):
+        """The whole point of chunking: a page whose one relevant chunk
+        scores high must take that score, not have it averaged away by
+        the rest of the page."""
+        import numpy as np
+
+        query = np.array([1.0, 0.0], dtype=np.float32)
+        chunks = [
+            np.array([0.0, 1.0], dtype=np.float32),  # cosine 0.0
+            np.array([1.0, 0.0], dtype=np.float32),  # cosine 1.0
+            np.array([0.0, 1.0], dtype=np.float32),  # cosine 0.0
+        ]
+        score = max(float(c @ query) for c in chunks)
+        assert score == 1.0
+        assert score != sum(float(c @ query) for c in chunks) / len(chunks)

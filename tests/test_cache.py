@@ -34,7 +34,7 @@ class TestEmbeddingsComplete:
         cache.save_pages_text(sample_pdf, {0: "alpha", 1: "beta", 2: ""})
         assert cache.embeddings_complete(sample_pdf, model) is False
         # Every non-empty page embedded; the empty page needs none.
-        cache.save_page_embeddings(sample_pdf, {0: b"\x00\x01", 1: b"\x02"}, model)
+        cache.save_page_embeddings(sample_pdf, {0: [b"\x00\x01"], 1: [b"\x02"]}, model)
         assert cache.embeddings_complete(sample_pdf, model) is True
         # A different model reads as not-cached.
         assert cache.embeddings_complete(sample_pdf, "other-model") is False
@@ -51,7 +51,7 @@ class TestEmbeddingsComplete:
         forever)."""
         model = "test-model"
         cache.save_pages_text(sample_pdf, {0: "alpha", 1: "\n  \n"})
-        cache.save_page_embeddings(sample_pdf, {0: b"\x00\x01"}, model)
+        cache.save_page_embeddings(sample_pdf, {0: [b"\x00\x01"]}, model)
         assert cache.embeddings_complete(sample_pdf, model) is True
 
 
@@ -908,7 +908,7 @@ class TestPageEmbeddingsLifecycle:
         """_invalidate_file() deletes all embeddings for the given file."""
         cache = PDFCache(cache_dir=temp_cache_dir)
         cache.save_page_embeddings(
-            sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5"
+            sample_pdf, {0: [b"\x00" * 1536]}, "BAAI/bge-small-en-v1.5"
         )
 
         cache._invalidate_file(sample_pdf)
@@ -922,7 +922,7 @@ class TestPageEmbeddingsLifecycle:
         cache = PDFCache(cache_dir=temp_cache_dir)
         cache.save_metadata(sample_pdf, 5, {}, [])
         cache.save_page_embeddings(
-            sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5"
+            sample_pdf, {0: [b"\x00" * 1536]}, "BAAI/bge-small-en-v1.5"
         )
 
         cache.clear_all()
@@ -938,7 +938,9 @@ class TestPageEmbeddingsLifecycle:
         """get_stats() counts all cached embedding rows."""
         cache = PDFCache(cache_dir=temp_cache_dir)
         cache.save_page_embeddings(
-            sample_pdf, {0: b"\x00" * 1536, 1: b"\x01" * 1536}, "BAAI/bge-small-en-v1.5"
+            sample_pdf,
+            {0: [b"\x00" * 1536], 1: [b"\x01" * 1536]},
+            "BAAI/bge-small-en-v1.5",
         )
         assert cache.get_stats()["embedding_pages"] == 2
 
@@ -947,7 +949,7 @@ class TestPageEmbeddingsLifecycle:
         cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=24)
         cache.save_metadata(sample_pdf, 5, {}, [])
         cache.save_page_embeddings(
-            sample_pdf, {0: b"\x00" * 1536}, "BAAI/bge-small-en-v1.5"
+            sample_pdf, {0: [b"\x00" * 1536]}, "BAAI/bge-small-en-v1.5"
         )
         # Backdate access well beyond the TTL so the entry is unambiguously
         # expired — avoids the same-second boundary where accessed_at == now.
@@ -1572,3 +1574,61 @@ class TestSavePagesTextCjkMirror:
         ], "the CJK page must be mirrored, and only the CJK page"
         hits = cache.search_fts(str(pdf), "厚木基地", 10, 100)
         assert hits, "CJK keyword search must find batch-saved text"
+
+
+class TestChunkedEmbeddings:
+    """Sub-page embedding chunking: one page holds several ordered rows."""
+
+    MODEL = "BAAI/bge-small-en-v1.5"
+
+    def test_round_trip_multiple_chunks_per_page(self, temp_cache_dir, sample_pdf):
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        blobs = {0: [b"\x00" * 4, b"\x01" * 4], 1: [b"\x02" * 4]}
+        cache.save_page_embeddings(sample_pdf, blobs, self.MODEL)
+        assert cache.get_page_embeddings(sample_pdf, [0, 1], self.MODEL) == blobs
+
+    def test_chunks_come_back_in_chunk_idx_order(self, temp_cache_dir, sample_pdf):
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        ordered = [b"a" * 4, b"b" * 4, b"c" * 4]
+        cache.save_page_embeddings(sample_pdf, {0: ordered}, self.MODEL)
+        assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL)[0] == ordered
+
+    def test_single_chunk_page_round_trips_as_a_one_item_list(
+        self, temp_cache_dir, sample_pdf
+    ):
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: [b"z" * 4]}, self.MODEL)
+        assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL) == {0: [b"z" * 4]}
+
+    def test_resaving_a_page_replaces_all_its_chunks(self, temp_cache_dir, sample_pdf):
+        """Three chunks then two must leave two, not three. INSERT OR REPLACE
+        keys on (path, page, chunk_idx), so a shrinking page would strand the
+        tail without an explicit delete."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(
+            sample_pdf, {0: [b"1" * 4, b"2" * 4, b"3" * 4]}, self.MODEL
+        )
+        cache.save_page_embeddings(sample_pdf, {0: [b"4" * 4, b"5" * 4]}, self.MODEL)
+        assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL)[0] == [
+            b"4" * 4,
+            b"5" * 4,
+        ]
+
+    def test_empty_chunk_list_is_ignored(self, temp_cache_dir, sample_pdf):
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(sample_pdf, {0: []}, self.MODEL)
+        assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL) == {}
+
+    def test_extraction_version_is_nine(self):
+        from pdf_mcp.cache import _EXTRACTION_VERSION
+
+        assert _EXTRACTION_VERSION == 9
+
+    def test_stats_counts_pages_not_chunks(self, temp_cache_dir, sample_pdf):
+        """pdf_cache_stats is user-facing. A page with three chunks must not
+        make the embedding count jump 3x and silently change meaning."""
+        cache = PDFCache(cache_dir=temp_cache_dir)
+        cache.save_page_embeddings(
+            sample_pdf, {0: [b"a" * 4, b"b" * 4, b"c" * 4]}, self.MODEL
+        )
+        assert cache.get_stats()["embedding_pages"] == 1

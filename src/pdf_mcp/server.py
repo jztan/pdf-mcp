@@ -38,7 +38,6 @@ from .extractor import (
     _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
-    chunk_page_text,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -47,8 +46,9 @@ from .extractor import (
     extract_toc,
     get_best_paragraph_for_query,
     native_render_dpi_cap,
-    page_text_chars,
     ocr_page,
+    page_embedding_units,
+    page_text_chars,
     parse_page_range,
     render_page_as_image,
     render_page_as_png,
@@ -2410,7 +2410,7 @@ def pdf_search(
                 if non_empty:
                     sorted_nums = sorted(non_empty.keys())
                     per_page = {
-                        pn: chunk_page_text(non_empty[pn]) for pn in sorted_nums
+                        pn: page_embedding_units(non_empty[pn]) for pn in sorted_nums
                     }
                     flat = [c for pn in sorted_nums for c in per_page[pn]]
                     vecs: Any = _embedder.encode(flat, _model_name) if flat else []
@@ -2661,7 +2661,9 @@ def pdf_search(
             non_empty = {pn: t for pn, t in page_texts_hyb.items() if t.strip()}
             if non_empty:
                 sorted_nums = sorted(non_empty.keys())
-                per_page = {pn: chunk_page_text(non_empty[pn]) for pn in sorted_nums}
+                per_page = {
+                    pn: page_embedding_units(non_empty[pn]) for pn in sorted_nums
+                }
                 flat = [c for pn in sorted_nums for c in per_page[pn]]
                 try:
                     vecs = _embedder.encode(flat, _model_name) if flat else []

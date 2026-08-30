@@ -2097,3 +2097,24 @@ def chunk_page_text(
     chunks = [c["text"].strip() for c in raw]
     chunks = [c for c in chunks if c]
     return chunks or [text.strip()]
+
+
+def page_embedding_units(text: str) -> list[str]:
+    """Embedding units for one page: the whole page, then its sub-page windows.
+
+    Chunks-only scoring regressed needle and trap, because a single sharp
+    window loses the whole-page context that let the page vector discriminate
+    boilerplate or match an already-precise needle. Emitting the full page as
+    the first unit floors a page's max-pooled score at its whole-page vector,
+    so needle and trap keep their signal while paraphrase queries still gain
+    from a sharper window. Costs one extra vector per multi-window page.
+
+    Returns [] for empty text, [page] for a page that fits in one window, and
+    [page, window0, window1, ...] otherwise.
+    """
+    if not text or not text.strip():
+        return []
+    windows = chunk_page_text(text)
+    if len(windows) <= 1:
+        return windows
+    return [text.strip()] + windows

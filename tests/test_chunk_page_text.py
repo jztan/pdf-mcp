@@ -64,3 +64,28 @@ class TestChunkPageText:
         joined = " ".join(chunks)
         for i in (0, 150, 299):
             assert f"unique marker {i}" in joined
+
+
+class TestPageEmbeddingUnits:
+    def test_empty_returns_nothing(self):
+        from pdf_mcp.extractor import page_embedding_units
+
+        assert page_embedding_units("") == []
+        assert page_embedding_units("   ") == []
+
+    def test_short_page_is_just_the_page(self):
+        from pdf_mcp.extractor import page_embedding_units
+
+        text = "One short paragraph under the window."
+        assert page_embedding_units(text) == [text]
+
+    def test_long_page_leads_with_the_whole_page_then_windows(self):
+        from pdf_mcp.extractor import chunk_page_text, page_embedding_units
+
+        text = ". ".join(f"sentence number {i} here" for i in range(400))
+        units = page_embedding_units(text)
+        windows = chunk_page_text(text)
+        assert len(windows) > 1
+        assert units[0] == text.strip()  # whole page first, floors the score
+        assert units[1:] == windows
+        assert len(units) == len(windows) + 1

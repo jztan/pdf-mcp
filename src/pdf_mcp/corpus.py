@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from .docopen import open_pdf
 
-from .extractor import _warm_extract_worker, chunk_page_text
+from .extractor import _warm_extract_worker, page_embedding_units
 from .parallel import resolve_workers
 
 __all__ = [
@@ -339,7 +339,7 @@ def _finalize_doc(
             # page average. Embed sub-page windows instead and keep them
             # ordered; chunk_idx is list position downstream. All chunks go
             # through one embed call so the expensive step keeps its count.
-            per_page = {pn: chunk_page_text(non_empty[pn]) for pn in nums}
+            per_page = {pn: page_embedding_units(non_empty[pn]) for pn in nums}
             flat = [c for pn in nums for c in per_page[pn]]
             vecs = embed(flat) if flat else []
             cursor = 0

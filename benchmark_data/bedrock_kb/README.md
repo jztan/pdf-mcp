@@ -63,7 +63,25 @@ uv run pytest tests/test_benchmark_bedrock_kb.py tests/test_bedrock_kb_infra.py 
 ## How to re-run
 
 Both stacks are already deployed and ingested; a re-run only needs the
-benchmark CLI, not `deploy`/`upload`/`ingest` again:
+benchmark CLI, not `deploy`/`upload`/`ingest` again.
+
+**Preferred, offline, free:** reuse the stored Bedrock rows and re-run only the
+local arms. Bedrock retrieval measured byte-identical across runs, so its rows
+never need re-querying; only the paired-CI mechanics ever forced it.
+
+```bash
+uv run python scripts/benchmark_bedrock_kb.py \
+  --reuse-bedrock-from benchmark_data/bedrock_kb/results.json \
+  --out-dir /tmp/rerun
+```
+
+This refuses (exit 2) if the stored arm-config hash, manifest hash, query-id
+set, or scoring budget differ from the current run, since a mismatch would
+either compare against a stale index or silently misalign the paired CIs. It
+never imports boto3. Point `--out-dir` somewhere other than this directory
+unless you mean to overwrite the committed results.
+
+**Live, re-queries Bedrock (~$0.20):** only needed after a Bedrock-side change.
 
 ```bash
 uv run python scripts/benchmark_bedrock_kb.py

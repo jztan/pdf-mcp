@@ -1,0 +1,1846 @@
+{
+  "description": "Candidate described queries drafted blind by author_corpus_queries.py (seed 20260830, model claude-opus-4-8); pending human veto; not yet merged into queries.json.",
+  "accepted": [
+    {
+      "id": "described-26",
+      "class": "described",
+      "query": "Why does the standard clustering model fail to capture lasting volatility effects?",
+      "labels": [
+        {
+          "doc": "0709.2178",
+          "page": 3,
+          "gain": 2,
+          "evidence": "shocks decay at a fast geometric rate allowing only for short term persistence",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 0,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-27",
+      "class": "described",
+      "query": "Why does energy fall off sharply at the smallest scales?",
+      "labels": [
+        {
+          "doc": "2607.06346",
+          "page": 3,
+          "gain": 2,
+          "evidence": "the power decreases rapidly due to viscous and kinetic dissipation processes",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 1,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-28",
+      "class": "described",
+      "query": "How are burst events in brain activity identified for criticality analysis?",
+      "labels": [
+        {
+          "doc": "2607.10439",
+          "page": 12,
+          "gain": 2,
+          "evidence": "the multichannel signal is thresholded at 2.5 standard deviations to define neuronal avalanches",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 3,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-29",
+      "class": "described",
+      "query": "Does converting variance structure to a scaled version keep the dominant signal shape?",
+      "labels": [
+        {
+          "doc": "2607.06908",
+          "page": 8,
+          "gain": 2,
+          "evidence": "the spike-like structure of the BH model is approximately preserved after transforming the covariance matrix into a correlation matrix",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 4,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-30",
+      "class": "described",
+      "query": "How does the tiled method's speed compare against the conventional approach?",
+      "labels": [
+        {
+          "doc": "2205.14135",
+          "page": 22,
+          "gain": 2,
+          "evidence": "As a result, FlashAttention is faster than standard attention (2-4×) while Rabe and Staats [66]\nis around the same speed or slightly slower than standard attention",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 5,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-31",
+      "class": "described",
+      "query": "How was the underlying starlight signal isolated from the combined light source?",
+      "labels": [
+        {
+          "doc": "2607.06844",
+          "page": 20,
+          "gain": 2,
+          "evidence": "Right: pPXF fit to the host galaxy spectrum from the PyQSOFit-decomposed DESI offset-AGN spectrum.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 6,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-32",
+      "class": "described",
+      "query": "How can differences between noisy and ideal equilibria be visualized?",
+      "labels": [
+        {
+          "doc": "0905.3502",
+          "page": 6,
+          "gain": 2,
+          "evidence": "the steady states di\u001ber from the deterministi\r ones.\r\nThis di\u001beren\re \ran be graphi\rally shown as the shift of the graph",
+          "match": "folded"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 7,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-33",
+      "class": "described",
+      "query": "What minimum film thickness lets the electron gas form at the interface?",
+      "labels": [
+        {
+          "doc": "1401.4991",
+          "page": 2,
+          "gain": 2,
+          "evidence": "the critical thickness for the 2DEG-V formation in 10−4 Torr oxygen pressure was found to be 1 nm",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 9,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-34",
+      "class": "described",
+      "query": "How much can this method cut the iterations needed to reach comparable model quality?",
+      "labels": [
+        {
+          "doc": "1502.03167",
+          "page": 2,
+          "gain": 2,
+          "evidence": "we can match its performance using only 7% of the training steps, and can further exceed its accuracy by a substantial margin",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 10,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-35",
+      "class": "described",
+      "query": "How is the rate of exchanges between individuals set in this model?",
+      "labels": [
+        {
+          "doc": "2607.02171",
+          "page": 26,
+          "gain": 2,
+          "evidence": "the interaction frequency is a microscopically given parameter",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 11,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-36",
+      "class": "described",
+      "query": "Roughly how wide is a typical luminosity spike in the signal?",
+      "labels": [
+        {
+          "doc": "0905.2570",
+          "page": 18,
+          "gain": 2,
+          "evidence": "the average half-width of a central brightness peak was found to be approximately 70\ndays",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 12,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-37",
+      "class": "described",
+      "query": "How closely can the tuning element match resonance for both polarizations across every channel?",
+      "labels": [
+        {
+          "doc": "2607.03437",
+          "page": 1,
+          "gain": 2,
+          "evidence": "reducing the remaining mismatch to only 0.286 optical linewidths across all nine frequency channels",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 14,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-38",
+      "class": "described",
+      "query": "How large were the model's forecast deviations when predicting share values?",
+      "labels": [
+        {
+          "doc": "1501.05624",
+          "page": 9,
+          "gain": 2,
+          "evidence": "the prediction errors of the stock prices are small, on the order of 10",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 15,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-39",
+      "class": "described",
+      "query": "What shape do the flattened dense clumps become as they contract?",
+      "labels": [
+        {
+          "doc": "0903.1810",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The oblate cores all collapse to form rings that might be susceptible to fragmentation into multiple systems.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 16,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-40",
+      "class": "described",
+      "query": "Is any partial order almost like its own size in that structural sense?",
+      "labels": [
+        {
+          "doc": "0705.4297",
+          "page": 11,
+          "gain": 2,
+          "evidence": "Every poset P is almost |P|\nop-like.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 17,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-41",
+      "class": "described",
+      "query": "Which optimization methods finished faster than the monotone variant during testing?",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 4,
+          "gain": 2,
+          "evidence": "MIST, FISTA and ISTA outperformed M-FISTA in terms of\nrun time",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 18,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-42",
+      "class": "described",
+      "query": "In heavily disordered systems, why does a trapped particle rarely move away?",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 3,
+          "gain": 2,
+          "evidence": "for strong disorder, an electron, once located at any site i, will stay at that site with high probability",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 21,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-43",
+      "class": "described",
+      "query": "Why does the memory's conditional spread take a bell-shaped functional form?",
+      "labels": [
+        {
+          "doc": "2607.02171",
+          "page": 11,
+          "gain": 2,
+          "evidence": "we assume based on the Central Limit Theorem that Q(M|P) takes a Gaussian form",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 24,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-44",
+      "class": "described",
+      "query": "Does the adapted offset stay fixed for every audio segment and sentence?",
+      "labels": [
+        {
+          "doc": "1807.11632",
+          "page": 1,
+          "gain": 2,
+          "evidence": "this bias term is typically constant across all frames of all utterances",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 25,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-45",
+      "class": "described",
+      "query": "Why can a big consistent distortion not change the measure but a tiny lopsided one does?",
+      "labels": [
+        {
+          "doc": "2607.06373",
+          "page": 15,
+          "gain": 2,
+          "evidence": "a large but proportional error leaves the ratio untouched while a small error split unevenly across the cut does not",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 27,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-46",
+      "class": "described",
+      "query": "What shape results from slicing a double-holed doughnut along a tangled path?",
+      "labels": [
+        {
+          "doc": "0706.2397",
+          "page": 10,
+          "gain": 2,
+          "evidence": "if we cut a 2-hole torus along a knotted trajectory, topologically the surface will turn into a torus but with 2 boundary circles",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 29,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-47",
+      "class": "described",
+      "query": "How does the confinement scale of electrons vary with repulsion strength?",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the localization length ξ is a nonmonotonic function of the Hubbard interaction energy U, with a maximum for some intermediate value of U",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 30,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-48",
+      "class": "described",
+      "query": "Why does mapped separation stay bounded when a map's stretching is limited?",
+      "labels": [
+        {
+          "doc": "0706.0954",
+          "page": 22,
+          "gain": 2,
+          "evidence": "Then ρ2(f(a), f(ai)) < ǫ/8 and ρ2(g(a), g(ai)) < ǫ/8 sin\re\r\nthe Lips\rhitz \ronstant of f and g is ≤ R",
+          "match": "folded"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 33,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-49",
+      "class": "described",
+      "query": "Which structural form emerges when defects arrange with a certain symmetric pattern?",
+      "labels": [
+        {
+          "doc": "0707.3690",
+          "page": 8,
+          "gain": 2,
+          "evidence": "for a particular symmetry of formation of scars we shall naturally obtain the spherocylindrical shape",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 35,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-50",
+      "class": "described",
+      "query": "How much can imperfection grow before entanglement stops surviving the device?",
+      "labels": [
+        {
+          "doc": "2607.03437",
+          "page": 8,
+          "gain": 2,
+          "evidence": "The Bell inequality remained violated until the leakage amplitudes were increased by approximately 8.33×",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 38,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-51",
+      "class": "described",
+      "query": "What extra depth appears when one boundary defect joins an otherwise uniform layered array?",
+      "labels": [
+        {
+          "doc": "2607.02093",
+          "page": 31,
+          "gain": 2,
+          "evidence": "if we start from a brickwork-type circuit and add a new site at position one with inhomogeneity ρ, the resulting circuit has an effective depth of de = 2",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 40,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-52",
+      "class": "described",
+      "query": "How was the reference labeling created for evaluating the classifiers?",
+      "labels": [
+        {
+          "doc": "1712.00712",
+          "page": 3,
+          "gain": 2,
+          "evidence": "we chose a polynomial network with degree 2 to classify the original image and generate a ground truth image",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 41,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-53",
+      "class": "described",
+      "query": "Which factor shapes cautious decisions more strongly than how much doubt is permitted?",
+      "labels": [
+        {
+          "doc": "2607.08291",
+          "page": 1,
+          "gain": 2,
+          "evidence": "action robustness has a substantially larger impact than uncertainty tolerance",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 42,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-54",
+      "class": "described",
+      "query": "Could this proposed structural variation be verified through laboratory experiments?",
+      "labels": [
+        {
+          "doc": "0707.3690",
+          "page": 10,
+          "gain": 2,
+          "evidence": "This is an instance that could be experimentally tested.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 44,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-55",
+      "class": "described",
+      "query": "How does resting with shut eyes affect cortical dynamics versus resting alert?",
+      "labels": [
+        {
+          "doc": "2607.10439",
+          "page": 16,
+          "gain": 2,
+          "evidence": "eyes-closed rest shows a modest reduction in branching and long-range temporal correlation relative to eyes-open rest",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 45,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-56",
+      "class": "described",
+      "query": "How does richer multipath affect the improvement from an irregular antenna layout?",
+      "labels": [
+        {
+          "doc": "1808.08321",
+          "page": 4,
+          "gain": 2,
+          "evidence": "the aperiodic array offers the largest gain (SINRG=3dB), while it progressively reduces for increasing scattering",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 46,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-57",
+      "class": "described",
+      "query": "Which regularization method most helps a model extend beyond memorized training examples?",
+      "labels": [
+        {
+          "doc": "2201.02177",
+          "page": 2,
+          "gain": 2,
+          "evidence": "weight decay is particularly effective at improving generalization on the tasks we study",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 48,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-58",
+      "class": "described",
+      "query": "How can cooperative methods cut ranging error below a set threshold?",
+      "labels": [
+        {
+          "doc": "1207.2761",
+          "page": 5,
+          "gain": 2,
+          "evidence": "the distance errors are dramatically\ndecreased to less than 7 meters for the other cooperative\nalgorithms where the raw pseudorange measurements are used",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 51,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-59",
+      "class": "described",
+      "query": "What signal quality cutoff values were chosen for the two thresholds?",
+      "labels": [
+        {
+          "doc": "1207.2761",
+          "page": 4,
+          "gain": 2,
+          "evidence": "The CNRmin threshold is set to\n30dBHz, and the CNRref threshold is set to 47dBHz.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 52,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-60",
+      "class": "described",
+      "query": "How accurate and fast is the receiver's spectral reconstruction across bands?",
+      "labels": [
+        {
+          "doc": "2607.03442",
+          "page": 1,
+          "gain": 2,
+          "evidence": "carrier-frequency errors below 3 MHz, scan speeds up to 25 THz/s, and a displayed average noise level below −104 dBm/Hz",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 53,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-61",
+      "class": "described",
+      "query": "Does gravitational lensing brightening happen faster and weaker than slow brightness changes?",
+      "labels": [
+        {
+          "doc": "0905.2570",
+          "page": 8,
+          "gain": 2,
+          "evidence": "microlensing occurs on much shorter timescales and at much lower luminosity amplitudes than these long-term variations",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 54,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-62",
+      "class": "described",
+      "query": "Does adding training examples raise voice resemblance yet leave naturalness unchanged?",
+      "labels": [
+        {
+          "doc": "1807.11632",
+          "page": 6,
+          "gain": 2,
+          "evidence": "more data seems to slightly improve speaker similarity of synthetic speech in general but does not improve the perception of quality",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 55,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-63",
+      "class": "described",
+      "query": "How many paired samples were processed together in each training update?",
+      "labels": [
+        {
+          "doc": "2010.14701",
+          "page": 35,
+          "gain": 2,
+          "evidence": "These models were all trained with a batch size of 128 text/image pairs, or 409600 tokens per batch.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 56,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-64",
+      "class": "described",
+      "query": "When does a model capability count as unexpectedly arising from scale?",
+      "labels": [
+        {
+          "doc": "2206.07682",
+          "page": 1,
+          "gain": 2,
+          "evidence": "We consider an ability to be emergent if it is not present in smaller models but is present in larger models.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 59,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-65",
+      "class": "described",
+      "query": "How long until metabolism turns off when starting at a stability boundary with slight randomness?",
+      "labels": [
+        {
+          "doc": "0905.3502",
+          "page": 19,
+          "gain": 2,
+          "evidence": "when the initial state of the system is the left bifur\ration point (indu\red state),\r\nthen the unindu\rtion time \rhanges from in\u001cnity (at zero noise) to ∼100 hours",
+          "match": "folded"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 60,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-66",
+      "class": "described",
+      "query": "What happens when mended candidates cannot meet the desired reproduction quota?",
+      "labels": [
+        {
+          "doc": "2607.09566",
+          "page": 14,
+          "gain": 2,
+          "evidence": "if the repaired solutions are not sufficient to promote a predetermined rate of offspring generation, then random individuals will be chosen to fill the gap",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 62,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-67",
+      "class": "described",
+      "query": "How does perturbing a subnetwork's starting weights affect its performance?",
+      "labels": [
+        {
+          "doc": "1803.03635",
+          "page": 23,
+          "gain": 2,
+          "evidence": "Adding Gaussian noise reduces the test accuracy of a winning ticket and slows its ability to learn",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 63,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-68",
+      "class": "described",
+      "query": "What happens to the two spectral pairs as tuning crosses the merging threshold?",
+      "labels": [
+        {
+          "doc": "2607.03471",
+          "page": 12,
+          "gain": 2,
+          "evidence": "the two real-frequency band pairs coalesce on the equatorial critical ring; beyond the boundary they split into complex",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 64,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-69",
+      "class": "described",
+      "query": "What values are set for the reconstruction lag and unfolding size?",
+      "labels": [
+        {
+          "doc": "1612.09007",
+          "page": 3,
+          "gain": 2,
+          "evidence": "In our application, the delay parameter τ is\nfixed to 10 and embedding dimension n to 8.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 65,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-70",
+      "class": "described",
+      "query": "Which classifier stays reliable while the other degrades quickly as interference grows?",
+      "labels": [
+        {
+          "doc": "1712.00712",
+          "page": 4,
+          "gain": 2,
+          "evidence": "the KO method is\nmore robust than the MLP classification. The index κ of the\nMLP method rapidly decays as the maximum level of noise\nincreases",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 66,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-71",
+      "class": "described",
+      "query": "What single factor mainly determines how long filling all seats takes?",
+      "labels": [
+        {
+          "doc": "0802.0733",
+          "page": 8,
+          "gain": 2,
+          "evidence": "the time required to load the entire plane is not affected by these different distributions; it depends primarily upon the mean luggage loading time",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 69,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-72",
+      "class": "described",
+      "query": "Beyond neural nets, what other model families show the same curve?",
+      "labels": [
+        {
+          "doc": "1912.02292",
+          "page": 16,
+          "gain": 2,
+          "evidence": "double-descent is a general phenomenon observed also in linear regression with random features and random forests",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 70,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-73",
+      "class": "described",
+      "query": "How does richer multipath affect the improvement from an irregular antenna layout?",
+      "labels": [
+        {
+          "doc": "1808.08321",
+          "page": 4,
+          "gain": 2,
+          "evidence": "the aperiodic array offers the largest gain (SINRG=3dB), while it progressively reduces for increasing scattering",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 71,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-74",
+      "class": "described",
+      "query": "When does exactly one shared boundary touch of a certain type exist between two shapes?",
+      "labels": [
+        {
+          "doc": "0707.0311",
+          "page": 9,
+          "gain": 2,
+          "evidence": "the line through xjA and xiB is the only\ncommon tangent of the first kind with respect to (A, B)",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 73,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-75",
+      "class": "described",
+      "query": "Which measures remain unaffected by tail heaviness to leading order?",
+      "labels": [
+        {
+          "doc": "2607.06373",
+          "page": 16,
+          "gain": 2,
+          "evidence": "First-order kurtosis immunity holds only for scale-invariant functionals.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 74,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-76",
+      "class": "described",
+      "query": "How does the method turn similarity measures into compact vector representations?",
+      "labels": [
+        {
+          "doc": "1612.09007",
+          "page": 1,
+          "gain": 2,
+          "evidence": "we propose an alternative approach that creates dense embeddings for data using the kernel similarities",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 75,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-77",
+      "class": "described",
+      "query": "When a trade route is cut, which side usually bears the greater cost?",
+      "labels": [
+        {
+          "doc": "2607.09951",
+          "page": 79,
+          "gain": 2,
+          "evidence": "At all but one of the twelve gates, the supplier-side economy loses more than the buyer-side economy.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 78,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-78",
+      "class": "described",
+      "query": "What lets the method handle very large collections without keeping past estimates?",
+      "labels": [
+        {
+          "doc": "1501.05624",
+          "page": 3,
+          "gain": 2,
+          "evidence": "Our approach does not require Kalman smoothing.\nTherefore, we do not store the sequence of state vectors,\nwhich allows for our model to scale to massive data\nsets.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 82,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-79",
+      "class": "described",
+      "query": "When can diffusively linked simple oscillator units start behaving unpredictably?",
+      "labels": [
+        {
+          "doc": "0710.2265",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the resulting high-dimensional dynamical system can display chaotic behavior",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 84,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-80",
+      "class": "described",
+      "query": "How many of the surfaced clips did the system match accurately?",
+      "labels": [
+        {
+          "doc": "2607.09876",
+          "page": 26,
+          "gain": 2,
+          "evidence": "Out of the 25 videos returned to the user, 20 were correctly retrieved by our model",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 85,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-81",
+      "class": "described",
+      "query": "When does a certain top self-intersection become strictly positive for these varieties?",
+      "labels": [
+        {
+          "doc": "0709.2857",
+          "page": 8,
+          "gain": 2,
+          "evidence": "For four-folds with ample canonical bundle one has c\n4\n1 > 0",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 87,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-82",
+      "class": "described",
+      "query": "How does a wireless standard tie a link to nearby location using ranging?",
+      "labels": [
+        {
+          "doc": "2607.10451",
+          "page": 16,
+          "gain": 2,
+          "evidence": "Channel sounding, introduced in Bluetooth 6.0, adds a complementary primitive that binds communication to physical proximity through encrypted phase-based ranging",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 88,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-83",
+      "class": "described",
+      "query": "Does the volatility-adjusted pricing kernel forecast future market returns better than rivals?",
+      "labels": [
+        {
+          "doc": "2607.08500",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The equity premium derived from the time-varying volatility scaled SDF demonstrates superior out-of-sample predictive performance",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 90,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-84",
+      "class": "described",
+      "query": "How does the polarization direction change as radial distance grows outward?",
+      "labels": [
+        {
+          "doc": "2607.03474",
+          "page": 4,
+          "gain": 2,
+          "evidence": "The spin flips its sign with increasing ρ while remaining perpendicular to the vector ⃗ρ",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 91,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-85",
+      "class": "described",
+      "query": "How strong was the excess found against the modeled fake population?",
+      "labels": [
+        {
+          "doc": "2607.06360",
+          "page": 10,
+          "gain": 2,
+          "evidence": "we find a significant deviation from the expectation of the synthetic sample with test-statistic (T S ) of 13.6, which translates to over 3.7σ deviation",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 92,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-86",
+      "class": "described",
+      "query": "What does one constraint guarantee about how funds must be allocated?",
+      "labels": [
+        {
+          "doc": "2607.09566",
+          "page": 5,
+          "gain": 2,
+          "evidence": "Equation (3) ensures that all the budget has to be invested.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 93,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "described-87",
+      "class": "described",
+      "query": "How does owning both segments let a firm's tied network expand beyond a rival's?",
+      "labels": [
+        {
+          "doc": "2607.10385",
+          "page": 3,
+          "gain": 2,
+          "evidence": "even when the two launchers have identical costs, vertical integration enables the captive constellation to grow larger than the independent constellation",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 94,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "described-28",
+      "class": "described",
+      "query": "When an energy operator stays fixed, why does the driving perform nothing?",
+      "labels": [
+        {
+          "doc": "2607.02157",
+          "page": 27,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 2,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-33",
+      "class": "described",
+      "query": "When were bent-jet cluster galaxies first spotted by sky surveys?",
+      "labels": [
+        {
+          "doc": "2607.06346",
+          "page": 11,
+          "gain": 2,
+          "evidence": "Head-tail radio galaxies were identified in the late 1960s through early radio surveys",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 8,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['galaxi', 'survey'] with evidence",
+        "proper noun(s) ['cluster']"
+      ]
+    },
+    {
+      "id": "described-42",
+      "class": "described",
+      "query": "How rapidly does the routing method reach a good solution?",
+      "labels": [
+        {
+          "doc": "1302.3440",
+          "page": 3,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 20,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-43",
+      "class": "described",
+      "query": "How can a tiny amount of corrupted training samples install lasting hidden triggers?",
+      "labels": [
+        {
+          "doc": "2607.10451",
+          "page": 12,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 22,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-45",
+      "class": "described",
+      "query": "Why might the minimizing operator fail to return a single unique point?",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 2,
+          "gain": 2,
+          "evidence": "Since (3) is non-convex there may exist multiple minimizers of Qµ(z, ·) so that Pµ(·) may not be unique.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 26,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['minimi', 'unique'] with evidence",
+        "proper noun(s) ['operator']"
+      ]
+    },
+    {
+      "id": "described-48",
+      "class": "described",
+      "query": "How does eliminating stacked markups affect the size of an in-house satellite fleet?",
+      "labels": [
+        {
+          "doc": "2607.10385",
+          "page": 1,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 32,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-49",
+      "class": "described",
+      "query": "How can a handful of components recreate the full statistical spread of the data?",
+      "labels": [
+        {
+          "doc": "2607.10297",
+          "page": 20,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 34,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-50",
+      "class": "described",
+      "query": "What optimality property does the proposed prior-informed interval achieve for its width?",
+      "labels": [
+        {
+          "doc": "0711.3236",
+          "page": 1,
+          "gain": 2,
+          "evidence": "This interval is optimal in the sense that it has minimum weighted average expected length",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 36,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['interv', 'optima'] with evidence"
+      ]
+    },
+    {
+      "id": "described-54",
+      "class": "described",
+      "query": "How does the scoring approach handle a completion under differing preceding passages?",
+      "labels": [
+        {
+          "doc": "2005.14165",
+          "page": 53,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 43,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)",
+        "proper noun(s) ['completion']"
+      ]
+    },
+    {
+      "id": "described-57",
+      "class": "described",
+      "query": "How much power do the extension modules output in each waveguide band?",
+      "labels": [
+        {
+          "doc": "2607.03442",
+          "page": 12,
+          "gain": 2,
+          "evidence": "The modules performed 9× or 27× frequency multiplication, delivering up to 100 mW in the WR 9.0 band and up to 5 mW in the WR 2.8 band.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 47,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['band', 'module'] with evidence"
+      ]
+    },
+    {
+      "id": "described-58",
+      "class": "described",
+      "query": "Which topological quantity alone stays unchanged under smooth deformations in high dimensions?",
+      "labels": [
+        {
+          "doc": "0709.2857",
+          "page": 6,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 50,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-64",
+      "class": "described",
+      "query": "Can image recognition models memorize arbitrarily shuffled category assignments during optimization?",
+      "labels": [
+        {
+          "doc": "1611.03530",
+          "page": 1,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 57,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-66",
+      "class": "described",
+      "query": "When an energy operator stays fixed, why does the driving perform nothing?",
+      "labels": [
+        {
+          "doc": "2607.02157",
+          "page": 27,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 61,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-74",
+      "class": "described",
+      "query": "When does the peak estimator become efficient and normally distributed for arrival timing?",
+      "labels": [
+        {
+          "doc": "1406.6799",
+          "page": 2,
+          "gain": 2,
+          "evidence": "the MLE of the TOA is unbiased at\nsufficiently high signal-to-noise ratios (SNR), follows a normal\ndistribution and achieves the CRLB",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 72,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['distri', 'normal'] with evidence"
+      ]
+    },
+    {
+      "id": "described-77",
+      "class": "described",
+      "query": "What does the first shortfall component measure when a firm's efficiency drops?",
+      "labels": [
+        {
+          "doc": "2607.09990",
+          "page": 28,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 76,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-77",
+      "class": "described",
+      "query": "Does a higher rate of genetic mixing produce more topological structures?",
+      "labels": [
+        {
+          "doc": "1406.4582",
+          "page": 3,
+          "gain": 2,
+          "evidence": "higher ρ increases the number\nof features, consistent with the intuition that recombina￾tion generates nontrivial topology",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 77,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['higher', 'topolo'] with evidence"
+      ]
+    },
+    {
+      "id": "described-78",
+      "class": "described",
+      "query": "When can this non-Hermitian degeneracy appear despite a nonzero directional derivative?",
+      "labels": [
+        {
+          "doc": "2607.03471",
+          "page": 2,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 81,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)"
+      ]
+    },
+    {
+      "id": "described-83",
+      "class": "described",
+      "query": "What lets one build the mutually commuting charges of a solvable lattice model?",
+      "labels": [
+        {
+          "doc": "2607.02093",
+          "page": 6,
+          "gain": 2,
+          "evidence": "Integrable spin chains are discrete systems whose commuting conserved charges can be constructed from fundamental building blocks known as R-matrices",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 89,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "shares ['charge', 'commut'] with evidence"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "doc": "2206.07682",
+      "page": 13,
+      "why": "drafter: references section only"
+    },
+    {
+      "doc": "0811.0781",
+      "page": 20,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0706.0028",
+      "page": 1,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.06844",
+      "page": 11,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0903.1810",
+      "page": 15,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.06744",
+      "page": 1,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.06828",
+      "page": 9,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.06908",
+      "page": 30,
+      "why": "thin or references"
+    },
+    {
+      "doc": "1807.03386",
+      "page": 9,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.08291",
+      "page": 43,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.09876",
+      "page": 14,
+      "why": "drafter: references page only"
+    },
+    {
+      "doc": "1807.03386",
+      "page": 8,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2312.00752",
+      "page": 26,
+      "why": "thin or references"
+    },
+    {
+      "doc": "1912.02292",
+      "page": 12,
+      "why": "drafter: references page only"
+    },
+    {
+      "doc": "2607.06828",
+      "page": 6,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0711.3236",
+      "page": 7,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.10460",
+      "page": 54,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0706.0028",
+      "page": 20,
+      "why": "thin or references"
+    },
+    {
+      "doc": "1302.3440",
+      "page": 8,
+      "why": "thin or references"
+    },
+    {
+      "doc": "1712.00409",
+      "page": 14,
+      "why": "drafter: references section only"
+    }
+  ]
+}

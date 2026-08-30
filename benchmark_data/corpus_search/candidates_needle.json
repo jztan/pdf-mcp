@@ -1,0 +1,708 @@
+{
+  "description": "Candidate needle queries drafted blind by author_corpus_queries.py (seed 20260830, model claude-opus-4-8); pending human veto; not yet merged into queries.json.",
+  "accepted": [
+    {
+      "id": "needle-15",
+      "class": "needle",
+      "query": "MHD turbulence anisotropic",
+      "labels": [
+        {
+          "doc": "2607.06346",
+          "page": 3,
+          "gain": 2,
+          "evidence": "In the regime of magnetohydrodynamics (MHD), turbulence becomes anisotropic with respect to the local magnetic field direction",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 1,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-16",
+      "class": "needle",
+      "query": "recalibrating effective noise",
+      "labels": [
+        {
+          "doc": "2607.06908",
+          "page": 8,
+          "gain": 2,
+          "evidence": "we introduce\nan iterative criterion for detecting signals by recalibrating the effective noise level at each\nstep.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 4,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-17",
+      "class": "needle",
+      "query": "FlashAttention faster standard attention",
+      "labels": [
+        {
+          "doc": "2205.14135",
+          "page": 22,
+          "gain": 2,
+          "evidence": "As a result, FlashAttention is faster than standard attention (2-4×) while Rabe and Staats [66]",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 5,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-18",
+      "class": "needle",
+      "query": "pPXF PyQSOFit offset-AGN",
+      "labels": [
+        {
+          "doc": "2607.06844",
+          "page": 20,
+          "gain": 2,
+          "evidence": "pPXF fit to the host galaxy spectrum from the PyQSOFit-decomposed DESI offset-AGN spectrum",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 6,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-19",
+      "class": "needle",
+      "query": "head-tail radio galaxies",
+      "labels": [
+        {
+          "doc": "2607.06346",
+          "page": 11,
+          "gain": 2,
+          "evidence": "Head-tail radio galaxies were identified in the late 1960s through early radio surveys (e.g., Ryle and",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 8,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-20",
+      "class": "needle",
+      "query": "critical thickness 2DEG-V",
+      "labels": [
+        {
+          "doc": "1401.4991",
+          "page": 2,
+          "gain": 2,
+          "evidence": "the critical thickness for the 2DEG-V formation in 10−4 Torr oxygen pressure was found to be 1 nm",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 9,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-21",
+      "class": "needle",
+      "query": "7% training steps",
+      "labels": [
+        {
+          "doc": "1502.03167",
+          "page": 2,
+          "gain": 2,
+          "evidence": "we can match its performance using only 7% of the training steps, and can further exceed its accuracy by a substantial margin",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 10,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-22",
+      "class": "needle",
+      "query": "interaction frequency microscopically given",
+      "labels": [
+        {
+          "doc": "2607.02171",
+          "page": 26,
+          "gain": 2,
+          "evidence": "the interaction frequency is a microscopically given parameter",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 11,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-23",
+      "class": "needle",
+      "query": "central brightness peak half-width",
+      "labels": [
+        {
+          "doc": "0905.2570",
+          "page": 18,
+          "gain": 2,
+          "evidence": "the average half-width of a central brightness peak was found to be approximately 70\ndays",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 12,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-24",
+      "class": "needle",
+      "query": "0.286 optical linewidths",
+      "labels": [
+        {
+          "doc": "2607.03437",
+          "page": 1,
+          "gain": 2,
+          "evidence": "reducing the remaining mismatch to only 0.286 optical linewidths across all nine frequency channels",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 14,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-25",
+      "class": "needle",
+      "query": "6,480 stocks degrees freedom",
+      "labels": [
+        {
+          "doc": "1501.05624",
+          "page": 9,
+          "gain": 2,
+          "evidence": "our five dimensional state space representation for ui and w is sufficient to capture all degrees of freedom in time across the 6,480 stocks",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 15,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-26",
+      "class": "needle",
+      "query": "oblate cores rings fragmentation",
+      "labels": [
+        {
+          "doc": "0903.1810",
+          "page": 1,
+          "gain": 2,
+          "evidence": "The oblate cores all collapse to form rings that might be susceptible to fragmentation into multiple systems.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 16,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-27",
+      "class": "needle",
+      "query": "poset almost op-like",
+      "labels": [
+        {
+          "doc": "0705.4297",
+          "page": 11,
+          "gain": 2,
+          "evidence": "Every poset P is almost |P|\nop-like.",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 17,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "Momentumized Iterative Shrinkage Thresholding",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 2,
+          "gain": 2,
+          "evidence": "Our proposed algorithm will be called Momentumized Iterative Shrinkage Thresholding (MIST).",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 26,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-29",
+      "class": "needle",
+      "query": "Poincare characteristic genus-2",
+      "labels": [
+        {
+          "doc": "0706.2397",
+          "page": 10,
+          "gain": 2,
+          "evidence": "Index(m) + Index(m′\n) = −2, which accounts for the\ncorrect P oincare´ characteristic for a genus-2 surface",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 29,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-30",
+      "class": "needle",
+      "query": "localization length nonmonotonic Hubbard",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the localization length ξ is a nonmonotonic function of the Hubbard interaction energy U, with a maximum for some intermediate value of U",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 30,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    },
+    {
+      "id": "needle-31",
+      "class": "needle",
+      "query": "double marginalization captive constellation",
+      "labels": [
+        {
+          "doc": "2607.10385",
+          "page": 1,
+          "gain": 2,
+          "evidence": "the removal of double marginalization raises the captive constellation’s equilibrium size",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 32,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "needle-15",
+      "class": "needle",
+      "query": "fractional difference parameter FIGARCH",
+      "labels": [
+        {
+          "doc": "0709.2178",
+          "page": 3,
+          "gain": 2,
+          "evidence": "0 ≤ d ≤ 1 is the fractional difference parameter. An interesting feature of this model is that it nests both the GARCH model for d = 0 and IGARCH for d = 1",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 0,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['FIGARCH']"
+      ]
+    },
+    {
+      "id": "needle-16",
+      "class": "needle",
+      "query": "instantaneous dissipation entropic penalty",
+      "labels": [
+        {
+          "doc": "2607.02157",
+          "page": 27,
+          "gain": 2,
+          "evidence": "The energetic expectations perfectly cancel the mechanical work, proving that the instantaneous dissipation arises exclusively from the entropic penalty",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 2,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "least rare query word occurs in 5 docs"
+      ]
+    },
+    {
+      "id": "needle-16",
+      "class": "needle",
+      "query": "kinematic reconstruction MSE",
+      "labels": [
+        {
+          "doc": "2607.10439",
+          "page": 12,
+          "gain": 2,
+          "evidence": "on the held-out subjects the model reaches a kinematic reconstruction MSE of 1.30 × 10−4",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 3,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "least rare query word occurs in 4 docs"
+      ]
+    },
+    {
+      "id": "needle-19",
+      "class": "needle",
+      "query": "output noise steady states",
+      "labels": [
+        {
+          "doc": "0905.3502",
+          "page": 6,
+          "gain": 2,
+          "evidence": "If the mean value of\r\nthe output noise di\u001bers from the deterministi\r value of h(P¯), then the steady\r\nstates of",
+          "match": "folded"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 7,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "least rare query word occurs in 11 docs"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "MIST intermediate noise environment",
+      "labels": [
+        {
+          "doc": "1409.7193",
+          "page": 4,
+          "gain": 2,
+          "evidence": "in the intermediate noise environment (σ = 6) the MIST algorithm outperforms the others, both in terms of time and iteration number",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 18,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "least rare query word occurs in 4 docs"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "iterations suffices convergence",
+      "labels": [
+        {
+          "doc": "1302.3440",
+          "page": 3,
+          "gain": 2,
+          "evidence": "when 0 < α ≤ 3, a number of 15 iterations suffices while for 3 < α ≤ 10, we need up to 50 iterations",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 20,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['convergence']",
+        "least rare query word occurs in 8 docs"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "strong disorder electron localized",
+      "labels": [
+        {
+          "doc": "0707.1301",
+          "page": 3,
+          "gain": 2,
+          "evidence": "for strong disorder, an electron, once located at any site i, will stay at that site with high probability",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 21,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['localized']",
+        "least rare query word occurs in 4 docs"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "narrow-period-pulse backdoor key",
+      "labels": [
+        {
+          "doc": "2607.10451",
+          "page": 12,
+          "gain": 2,
+          "evidence": "injecting a small fraction of poisoning trials carrying a narrow-period￾pulse backdoor key has been shown to create persistent backdoors across P300, motor imagery, and SSVEP",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 22,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['narrow-period-pulse']"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "Stein identities covariances",
+      "labels": [
+        {
+          "doc": "2607.02171",
+          "page": 11,
+          "gain": 2,
+          "evidence": "CovM|P (M, R) = σ\n2\nMR′(M) , CovM|P (δM2\n, R) = σ\n4\nMR′′(M) and\nCovM|P (M,⟨G⟩) = σ\n2\nM∂M⟨G⟩",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 24,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['Stein', 'identities', 'covariances']",
+        "least rare query word occurs in 6 docs"
+      ]
+    },
+    {
+      "id": "needle-28",
+      "class": "needle",
+      "query": "scaling bias codes",
+      "labels": [
+        {
+          "doc": "1807.11632",
+          "page": 1,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 25,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)",
+        "least rare query word occurs in 11 docs"
+      ]
+    },
+    {
+      "id": "needle-29",
+      "class": "needle",
+      "query": "proportional errors ratio untouched",
+      "labels": [
+        {
+          "doc": "2607.06373",
+          "page": 15,
+          "gain": 2,
+          "evidence": "The two\r\nterms cancel exactly for proportional errors ei = cλi\r\n, for which uKT = SKv, so a large but\r\nproportional error leaves the ratio untouched",
+          "match": "folded"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 27,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "least rare query word occurs in 5 docs"
+      ]
+    },
+    {
+      "id": "needle-32",
+      "class": "needle",
+      "query": "Kolmogorov-Tihomirov formula balls radius",
+      "labels": [
+        {
+          "doc": "0706.0954",
+          "page": 22,
+          "gain": 2,
+          "evidence": "Cover A by n = Nǫ/(4R)(A) balls A1, . . . , An of radius ǫ/(8R) entered at a1, . . . , an ∈ A",
+          "match": "exact"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 33,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "query words not in evidence ['Kolmogorov-Tihomirov', 'formula']"
+      ]
+    },
+    {
+      "id": "needle-32",
+      "class": "needle",
+      "query": "eigenmodes correlation distribution reproduces",
+      "labels": [
+        {
+          "doc": "2607.10297",
+          "page": 20,
+          "gain": 2,
+          "evidence": "",
+          "match": "missing"
+        }
+      ],
+      "provenance": {
+        "authored": "author_corpus_queries.py",
+        "seed": 20260830,
+        "sample_index": 34,
+        "model": "claude-opus-4-8",
+        "blind": "drafted from raw pdfium page text before any arm ran"
+      },
+      "why": [
+        "evidence not on page (even folded)",
+        "least rare query word occurs in 4 docs"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "doc": "2206.07682",
+      "page": 13,
+      "why": "drafter: references-only page (bibliography), no checkable claim sentence"
+    },
+    {
+      "doc": "0811.0781",
+      "page": 20,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0706.0028",
+      "page": 1,
+      "why": "thin or references"
+    },
+    {
+      "doc": "2607.06844",
+      "page": 11,
+      "why": "thin or references"
+    },
+    {
+      "doc": "0903.1810",
+      "page": 15,
+      "why": "thin or references"
+    }
+  ]
+}

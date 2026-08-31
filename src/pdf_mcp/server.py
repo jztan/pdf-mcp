@@ -2106,6 +2106,52 @@ def _upgrade_excerpts_to_paragraphs(
 _WINDOW_TOKENS_DEFAULT = 600
 
 
+def _route_evidence_unit(keyword_docs: int) -> str:
+    """Per-query excerpt unit for `evidence_budget`, keyed on the number
+    of documents holding an AND keyword match (the count the hybrid path
+    already computes, no OR fallback). 0 means a paraphrase question
+    (paragraph is its best-measured unit); 1 means a single-document
+    keyword question (one contiguous window covers it); 2+ means the
+    answer is spread across documents (many small units cover more of
+    them at the same budget). This is the Bedrock-anchor `P-auto` arm;
+    the mapping and the harness must not drift apart."""
+    if keyword_docs <= 0:
+        return "paragraph"
+    if keyword_docs == 1:
+        return "window"
+    return "snippet"
+
+
+def _apply_evidence_budget(
+    evidence_budget: int | None,
+    keyword_docs: int,
+    excerpt_style: str,
+    window_tokens: int,
+) -> tuple[str, int, dict[str, Any] | None]:
+    """Resolve the effective (excerpt_style, window_tokens, allocation)
+    for one corpus query. With `evidence_budget` unset the caller's
+    values pass through untouched and allocation is None."""
+    if evidence_budget is None:
+        return excerpt_style, window_tokens, None
+    unit = _route_evidence_unit(keyword_docs)
+    allocation = {
+        "rule": "keyword_docs",
+        "keyword_docs": keyword_docs,
+        "unit": unit,
+        "tokens": evidence_budget,
+    }
+    return unit, evidence_budget, allocation
+
+
+def _stamp_evidence_unit(
+    matches: list[dict[str, Any]], allocation: dict[str, Any] | None
+) -> None:
+    if allocation is None:
+        return
+    for m in matches:
+        m["unit"] = allocation["unit"]
+
+
 def _expand_block_window(sizes: list[int], anchor: int, budget: int) -> tuple[int, int]:
     """Widest contiguous block range around `anchor` whose token cost stays
     within `budget`, growing alternately forward and backward. The anchor
@@ -3711,6 +3757,7 @@ def pdf_corpus_search(
     budget_seconds: int = 45,
     recursive: bool = False,
     window_tokens: int = _WINDOW_TOKENS_DEFAULT,
+    evidence_budget: int | None = None,
 ) -> dict[str, Any]:
     """
     Search a corpus of local PDFs and fuse per-doc results into one
@@ -3743,6 +3790,14 @@ def pdf_corpus_search(
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300); unready docs land in `unprocessed`.
         recursive: Directory mode only, recurse into subdirectories.
+        evidence_budget: Opt-in per-query excerpt routing (mode='auto'
+            only). The server picks the excerpt unit from how many
+            documents hold an AND keyword match: none -> 'paragraph',
+            one -> 'window' of `evidence_budget` tokens, two or more ->
+            'snippet'. Overrides `excerpt_style` and `window_tokens`;
+            ranking is unchanged. Adds `unit` to every match and a
+            response-level `allocation`. Snippet-routed hits carry no
+            geometry fields.
 
     Returns:
         - matches: cross-document hits in fused order, each {path,
@@ -3784,7 +3839,11 @@ def pdf_corpus_search(
         - search_mode: 'keyword', 'semantic', or 'hybrid' (echoes the
           mode actually run; 'auto' resolves to 'hybrid' when
           embeddings are available, else 'keyword')
-        - excerpt_style: echoed input
+        - excerpt_style: the effective style (echoed input, or the
+          routed unit when `evidence_budget` is set)
+        - allocation: only with `evidence_budget`: {rule:
+          'keyword_docs', keyword_docs, unit, tokens}; each match then
+          also carries `unit`
         - coverage: {"searched": docs actually queried, "corpus":
           total resolved files}
         - hidden_text_detected: True if any returned hit's page
@@ -3836,6 +3895,32 @@ def pdf_corpus_search(
             ),
             "query": query,
         }
+    if evidence_budget is not None:
+        if isinstance(evidence_budget, bool) or not isinstance(evidence_budget, int):
+            return {
+                "error": (
+                    f"Invalid evidence_budget {evidence_budget!r}. "
+                    "Must be a positive integer token budget."
+                ),
+                "query": query,
+            }
+        if evidence_budget <= 0:
+            return {
+                "error": (
+                    f"Invalid evidence_budget {evidence_budget}. "
+                    "Must be a positive integer token budget."
+                ),
+                "query": query,
+            }
+        if mode != "auto":
+            return {
+                "error": (
+                    "evidence_budget requires mode='auto': the routing rule"
+                    " reads the hybrid path's AND keyword document count,"
+                    f" which mode='{mode}' does not compute."
+                ),
+                "query": query,
+            }
 
     # For mode="semantic"/"auto", resolve embedding availability BEFORE
     # touching the corpus (mirrors pdf_search / pdf_corpus_warm).
@@ -3996,6 +4081,12 @@ def pdf_corpus_search(
     }
     kw_fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k, scores=kw_scores)
     kw_excerpts_by_doc = _group_excerpts_by_doc(kw_payload)
+    # evidence_budget is validated above to mode="auto", where the
+    # keyword arm runs without the OR fallback, so this count is the
+    # AND document count the routing rule was measured on.
+    excerpt_style, window_tokens, allocation = _apply_evidence_budget(
+        evidence_budget, len(kw_doc_match_counts), excerpt_style, window_tokens
+    )
 
     if mode == "keyword" or not embeddings_needed:
 
@@ -4019,6 +4110,7 @@ def pdf_corpus_search(
             kw_excerpts_by_doc,
             window_tokens=window_tokens,
         )
+        _stamp_evidence_unit(matches, allocation)
         hidden_text_detected = any(m.get("hidden_text") for m in matches)
 
         response: dict[str, Any] = {
@@ -4027,6 +4119,7 @@ def pdf_corpus_search(
             "doc_match_counts": kw_doc_match_counts,
             "search_mode": "keyword",
             "excerpt_style": excerpt_style,
+            **({"allocation": allocation} if allocation else {}),
             "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
             "hidden_text_detected": hidden_text_detected,
             "unprocessed": warm["unprocessed"],
@@ -4129,6 +4222,7 @@ def pdf_corpus_search(
         window_tokens=window_tokens,
         best_chunks=hybrid_best_chunks,
     )
+    _stamp_evidence_unit(matches, allocation)
     hidden_text_detected = any(m.get("hidden_text") for m in matches)
     all_results_low_confidence = bool(matches) and all(
         m["low_confidence"] for m in matches
@@ -4146,6 +4240,7 @@ def pdf_corpus_search(
         },
         "search_mode": "hybrid",
         "excerpt_style": excerpt_style,
+        **({"allocation": allocation} if allocation else {}),
         "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
         "hidden_text_detected": hidden_text_detected,
         "all_results_low_confidence": all_results_low_confidence,

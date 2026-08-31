@@ -5623,3 +5623,165 @@ class TestExcerptWindow:
         first_page = [m for m in result["matches"] if m["page"] == 1]
         assert first_page, result["matches"][:2]
         assert "Nested HDP for Hierarchical Topic Models" in first_page[0]["excerpt"]
+
+
+class TestCorpusEvidenceBudget:
+    """`evidence_budget=N` routes the excerpt unit per query from the number
+    of documents holding an AND keyword match (the count the hybrid path
+    already computes): 0 -> paragraph, 1 -> window of N tokens, 2+ ->
+    snippet. This is the `P-auto` harness arm of the Bedrock anchor
+    benchmark (184 queries: needle +0.355 and spread +0.289 vs B0, CIs
+    exclude zero) shipped as an opt-in parameter. Ranking is untouched."""
+
+    @pytest.fixture
+    def routed_corpus(self, tmp_path):
+        d = tmp_path / "routed"
+        d.mkdir()
+        shared = "The quarterly budget increased across every division this year."
+        for name, unique in [
+            ("alpha.pdf", "The zebrafinch colony was relocated in March."),
+            ("bravo.pdf", "Bravo notes cover procurement and staffing plans."),
+            ("charlie.pdf", "Charlie notes cover logistics and vendor reviews."),
+        ]:
+            doc = pymupdf.open()
+            page = doc.new_page()
+            page.insert_text((50, 60), "Annual Report Overview")
+            page.insert_textbox(
+                pymupdf.Rect(50, 100, 550, 200),
+                shared + " Figures are reported in thousands of dollars and "
+                "reconciled against the prior year's audited statements.",
+            )
+            page.insert_textbox(
+                pymupdf.Rect(50, 260, 550, 360),
+                unique + " This block is long enough to clear the paragraph "
+                "floor so the picker can return it as a unit.",
+            )
+            doc.save(str(d / name))
+            doc.close()
+        return d
+
+    def test_rule_mapping_is_the_harness_rule(self):
+        from pdf_mcp.server import _route_evidence_unit
+
+        assert _route_evidence_unit(0) == "paragraph"
+        assert _route_evidence_unit(1) == "window"
+        assert _route_evidence_unit(2) == "snippet"
+        assert _route_evidence_unit(7) == "snippet"
+
+    def test_absent_by_default(self, routed_corpus, isolated_server, monkeypatch):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(routed_corpus), "budget")
+        assert "allocation" not in result
+        assert all("unit" not in m for m in result["matches"])
+        assert result["excerpt_style"] == "paragraph"
+
+    def test_many_docs_route_to_snippet(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=600)
+        assert "error" not in result, result
+        assert result["search_mode"] == "hybrid"
+        assert result["allocation"] == {
+            "rule": "keyword_docs",
+            "keyword_docs": 3,
+            "unit": "snippet",
+            "tokens": 600,
+        }
+        assert result["excerpt_style"] == "snippet"
+        assert result["matches"]
+        assert all(m["unit"] == "snippet" for m in result["matches"])
+        assert not any("bbox" in m for m in result["matches"])
+
+    def test_single_doc_routes_to_window_sized_by_budget(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus), "zebrafinch", evidence_budget=600
+        )
+        assert "error" not in result, result
+        assert result["allocation"]["keyword_docs"] == 1
+        assert result["allocation"]["unit"] == "window"
+        assert result["allocation"]["tokens"] == 600
+        assert result["excerpt_style"] == "window"
+        top = result["matches"][0]
+        assert top["unit"] == "window"
+        assert "window_blocks" in top and "bbox" in top
+        assert "zebrafinch" in top["excerpt"]
+
+    def test_window_budget_is_evidence_budget_not_window_tokens(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        wide = pdf_corpus_search(
+            str(routed_corpus), "zebrafinch", evidence_budget=600, window_tokens=10
+        )
+        narrow = pdf_corpus_search(
+            str(routed_corpus), "zebrafinch", evidence_budget=25, window_tokens=600
+        )
+        assert wide["allocation"]["tokens"] == 600
+        assert narrow["allocation"]["tokens"] == 25
+        # 600 tokens covers the whole page; 25 holds the anchor block only.
+        assert len(wide["matches"][0]["excerpt"]) > len(narrow["matches"][0]["excerpt"])
+
+    def test_no_keyword_docs_route_to_paragraph(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus), "how did spending change", evidence_budget=600
+        )
+        assert "error" not in result, result
+        assert result["allocation"]["keyword_docs"] == 0
+        assert result["allocation"]["unit"] == "paragraph"
+        assert result["excerpt_style"] == "paragraph"
+        assert result["matches"], "semantic arm should still return pages"
+        assert all(m["unit"] == "paragraph" for m in result["matches"])
+
+    def test_overrides_explicit_excerpt_style(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus),
+            "budget",
+            excerpt_style="paragraph",
+            evidence_budget=600,
+        )
+        assert result["excerpt_style"] == "snippet"
+        assert result["allocation"]["unit"] == "snippet"
+
+    def test_degraded_auto_without_embeddings_still_routes(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        import pdf_mcp.embedder as emb
+
+        def unavailable(model):
+            raise ImportError("fastembed missing")
+
+        monkeypatch.setattr(emb, "check_available", unavailable)
+        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=600)
+        assert "error" not in result, result
+        assert result["search_mode"] == "keyword"
+        assert result["semantic_unavailable"] is True
+        assert result["allocation"]["unit"] == "snippet"
+        assert all(m["unit"] == "snippet" for m in result["matches"])
+
+    @pytest.mark.parametrize("mode", ["keyword", "semantic"])
+    def test_requires_auto_mode(
+        self, routed_corpus, isolated_server, monkeypatch, mode
+    ):
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus), "budget", mode=mode, evidence_budget=600
+        )
+        assert "error" in result
+        assert "evidence_budget" in result["error"]
+        assert "auto" in result["error"]
+
+    @pytest.mark.parametrize("bad", [0, -5, 2.5, "600"])
+    def test_rejects_non_positive_or_non_int(self, routed_corpus, isolated_server, bad):
+        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=bad)
+        assert "error" in result
+        assert "evidence_budget" in result["error"]

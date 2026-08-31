@@ -223,8 +223,15 @@ def run_arm_p(
     top_k: int = 25,
     excerpt_style: str = "paragraph",
     window_tokens: int | None = None,
+    evidence_budget: int | None = None,
 ) -> dict[str, dict]:
     """pdf-mcp corpus search, hybrid mode, run in-session.
+
+    `excerpt_style="auto"` applies the per-query routing rule HERE in the
+    harness (the original P-auto measurement). `evidence_budget=N` asks the
+    product parameter to do the same routing server-side; main() asserts
+    the two produce identical kept units so the shipped rule and the
+    measured rule cannot drift apart.
 
     Never lift these numbers from modes_results.md: runs from different
     cache warms are not comparable number for number. excerpt_style is
@@ -258,6 +265,8 @@ def run_arm_p(
             )
             chosen_by = {"keyword_docs": n_docs, "style": style}
         extra = {} if window_tokens is None else {"window_tokens": window_tokens}
+        if evidence_budget is not None:
+            extra["evidence_budget"] = evidence_budget
         res = pdf_corpus_search(
             paths,
             q["query"],
@@ -271,6 +280,9 @@ def run_arm_p(
             raise RuntimeError(f"arm P {q['id']}: {res['error']}")
         if res["coverage"]["searched"] != len(paths):
             raise RuntimeError(f"arm P {q['id']}: partial coverage {res['coverage']}")
+        if evidence_budget is not None:
+            alloc = res["allocation"]
+            chosen_by = {"keyword_docs": alloc["keyword_docs"], "style": alloc["unit"]}
         units = matches_to_units(res["matches"], id_by_path)
         kept, k = cap_to_budget(units, budget_tokens)
         graded = grade_query(q, build_ranked(res["matches"], id_by_path), 10)
@@ -364,8 +376,15 @@ def summarize(
     anchor_arms: tuple[str, ...] = ("B0", "B1"),
     ref_arm: str = "P",
     exclude_flagged: bool = True,
+    bedrock_arms: tuple[str, ...] = ("B0", "B1"),
 ) -> dict:
     """Per-class means and paired diffs.
+
+    `diffs` compares ref_arm against every other arm (local and Bedrock).
+    `diffs_vs_anchors` additionally compares every non-ref LOCAL arm
+    against every Bedrock anchor, so a non-default configuration (e.g.
+    the evidence_budget arm) has its own anchor CIs on record instead of
+    being readable only relative to ref_arm.
 
     A query is flagged when no arm's containment status is anything but
     `missing` (see no_arm_found): the graded span was validated against
@@ -429,7 +448,29 @@ def summarize(
             a = [ref[q]["containment"]["span_recall"] for q in ids]
             b = [rows_by_arm[arm][q]["containment"]["span_recall"] for q in ids]
             diffs[cls][arm] = bootstrap_diff_ci(a, b)
-    return {"per_class": per_class, "diffs": diffs, "flagged": sorted(flagged)}
+    diffs_vs_anchors: dict[str, dict] = {}
+    for cls in classes:
+        diffs_vs_anchors[cls] = {}
+        ids = sorted(
+            q
+            for q, r in rows_by_arm.get(ref_arm, {}).items()
+            if r["class"] == cls and (not exclude_flagged or q not in flagged)
+        )
+        for arm, rows in rows_by_arm.items():
+            if arm == ref_arm or arm in bedrock_arms:
+                continue
+            a = [rows[q]["containment"]["span_recall"] for q in ids]
+            for anchor in bedrock_arms:
+                if anchor not in rows_by_arm:
+                    continue
+                b = [rows_by_arm[anchor][q]["containment"]["span_recall"] for q in ids]
+                diffs_vs_anchors[cls][f"{arm} minus {anchor}"] = bootstrap_diff_ci(a, b)
+    return {
+        "per_class": per_class,
+        "diffs": diffs,
+        "diffs_vs_anchors": diffs_vs_anchors,
+        "flagged": sorted(flagged),
+    }
 
 
 def _cell(v: float | None) -> str:
@@ -451,12 +492,12 @@ def _table(arms: dict) -> list[str]:
     return lines
 
 
-def _diff_lines(diffs: dict) -> list[str]:
+def _diff_lines(diffs: dict, prefix: str = "P minus ") -> list[str]:
     lines = []
     for arm, ci in diffs.items():
         zero = "includes zero" if ci["includes_zero"] else "excludes zero"
         lines.append(
-            f"- P minus {arm}, span recall: {ci['mean_diff']:+.3f} "
+            f"- {prefix}{arm}, span recall: {ci['mean_diff']:+.3f} "
             f"[{ci['lo']:+.3f}, {ci['hi']:+.3f}] ({zero}, n={ci['n']})"
         )
     return lines
@@ -502,12 +543,16 @@ def render_markdown(
         out += _table(arms)
         out.append("")
         out += _diff_lines(summary["diffs"].get(cls, {}))
+        out += _diff_lines(summary.get("diffs_vs_anchors", {}).get(cls, {}), prefix="")
         out.append("")
         if sensitivity is not None:
             out += [f"### {cls}, sensitivity (flagged queries excluded)", ""]
             out += _table(sensitivity["per_class"].get(cls, {}))
             out.append("")
             out += _diff_lines(sensitivity["diffs"].get(cls, {}))
+            out += _diff_lines(
+                sensitivity.get("diffs_vs_anchors", {}).get(cls, {}), prefix=""
+            )
             out.append("")
     out += [
         "## Flagged for manual page-image review",
@@ -662,8 +707,31 @@ def main(argv: list[str] | None = None) -> int:
             args.budget,
             excerpt_style=config["arms"][arm].get("excerpt_style", "paragraph"),
             window_tokens=config["arms"][arm].get("window_tokens"),
+            evidence_budget=config["arms"][arm].get("evidence_budget"),
         )
         print(f"{arm}: done ({len(rows_by_arm[arm])} queries)")
+    # Drift guard: every product arm (evidence_budget) must reproduce the
+    # harness-side routing arm (excerpt_style "auto") unit for unit.
+    harness_auto = [
+        a for a in local_arms if config["arms"][a].get("excerpt_style") == "auto"
+    ]
+    product_arms = [a for a in local_arms if config["arms"][a].get("evidence_budget")]
+    for ref in harness_auto:
+        for arm in product_arms:
+            diverged = [
+                qid
+                for qid in rows_by_arm[ref]
+                if rows_by_arm[ref][qid]["kept_text"]
+                != rows_by_arm[arm][qid]["kept_text"]
+                or rows_by_arm[ref][qid]["auto"] != rows_by_arm[arm][qid]["auto"]
+            ]
+            if diverged:
+                print(
+                    f"ERROR: {arm} (product evidence_budget) diverged from {ref} "
+                    f"(harness rule) on {len(diverged)} queries: {diverged[:5]}"
+                )
+                return 2
+            print(f"{arm}: identical to {ref} on all {len(rows_by_arm[ref])} queries")
 
     bedrock_arms = [a for a in arms if not config["arms"].get(a, {}).get("tool")]
     index_stamps_by_arm: dict[str, dict] = {}
@@ -838,12 +906,14 @@ def main(argv: list[str] | None = None) -> int:
     # local arms such as P-snippet. Comparing only the Bedrock arms would
     # silently drop the excerpt-style comparison from the CI tables.
     anchors = tuple(lbl for a, lbl in label_of.items() if a != "P")
+    bedrock_labels = tuple(label_of[a] for a in label_of if a in bedrock_arms)
     summary = summarize(
         rows_by_arm,
         classes,
         anchor_arms=anchors,
         ref_arm=ref_label,
         exclude_flagged=False,
+        bedrock_arms=bedrock_labels,
     )
     sensitivity = summarize(
         rows_by_arm,
@@ -851,6 +921,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_arms=anchors,
         ref_arm=ref_label,
         exclude_flagged=True,
+        bedrock_arms=bedrock_labels,
     )
     write_results(summary, rows_by_arm, config, args.out_dir, sensitivity=sensitivity)
     print(render_markdown(summary, config, sensitivity=sensitivity))

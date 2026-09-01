@@ -34,18 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trap 0.840 vs 0.760) are not individually confirmed, and described
   is unchanged.
 
-### Fixed
-
-- **Hybrid snippet excerpts for pages without a keyword hit now anchor
-  on the page's best-matching content instead of the top of the page.**
-  Previously a semantically-matched page returned its first
-  `context_chars` characters as the snippet, so the excerpt could have
-  no relation to the query (a page whose relevant passage sits below a
-  preface returned the preface). Such excerpts are now positioned by
-  scoring windows of the page's best sub-page chunk against the query
-  with the same embedding model used for retrieval. Keyword-hit
-  snippets are unchanged.
-
 - **`excerpt_style="window"` on `pdf_search` and `pdf_corpus_search`.**
   Returns the anchor block plus its contiguous neighbours up to
   `window_tokens` (default 600), instead of one selected block. The
@@ -93,6 +81,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   This is the field to loop on when warming a corpus across several
   calls: an empty `unprocessed` answers only "did the budget run out",
   never "is the corpus ready".
+
+### Fixed
+
+- **Hybrid snippet excerpts for pages without a keyword hit now anchor
+  on the page's best-matching content instead of the top of the page.**
+  Previously a semantically-matched page returned its first
+  `context_chars` characters as the snippet, so the excerpt could have
+  no relation to the query (a page whose relevant passage sits below a
+  preface returned the preface). Such excerpts are now positioned by
+  scoring windows of the page's best sub-page chunk against the query
+  with the same embedding model used for retrieval. Keyword-hit
+  snippets are unchanged.
 
 ### Changed
 

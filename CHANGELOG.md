@@ -8,22 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
-- **`evidence_budget` on `pdf_corpus_search`** (opt-in, `mode="auto"`).
-  The server chooses the excerpt unit per query from how many documents
-  hold an AND keyword match: none returns paragraph excerpts, one returns
-  a single window of `evidence_budget` tokens per hit, two or more
-  returns snippets so more documents fit a fixed context budget. Ranking
-  is unchanged; the response carries `allocation` (`rule`,
-  `keyword_docs`, `unit`, `tokens`), every match carries `unit`, and
-  `excerpt_style` reports the unit actually used. Snippet-routed hits
-  carry no geometry fields. Paragraph stays the default. On the
-  184-query corpus benchmark at a fixed 2,000-token budget,
-  `evidence_budget=600` is the one configuration ahead of the Bedrock
-  Knowledge Base anchor with confirmed margins (needle +0.355, spread
-  +0.289, both CIs exclude zero) and no confirmed loss; against the
-  paragraph default its per-class gains (needle 0.839 vs 0.677, spread
-  0.711 vs 0.600, trap 0.840 vs 0.760) are not individually confirmed,
-  and described is unchanged.
+- **`excerpt_style="auto"` on `pdf_corpus_search`** (opt-in, `mode="auto"`
+  only). The server chooses the excerpt unit per query from how many
+  documents hold an AND keyword match: none routes to paragraph
+  excerpts, one routes to a single window of `window_tokens` per hit,
+  two or more routes to snippets so more documents fit a fixed context
+  budget. Ranking is unchanged; the response carries `excerpt_routing`
+  (`unit`, a human-readable `reason`, `keyword_doc_count`,
+  `matching_doc_count`, and `window_tokens_applied`, null unless the
+  window branch fired), and `excerpt_style` reports the unit actually
+  used. Snippet-routed hits carry the same `bbox`/`page_rect`/`clip`
+  geometry as paragraph hits when the excerpt's block can be located
+  (the explicit legacy `"snippet"` style is unchanged and stays
+  geometry-free). Paragraph stays the default. On the 184-query corpus benchmark at a fixed 2,000-token
+  budget this routing is the one configuration ahead of both Bedrock
+  Knowledge Base anchors with confirmed margins (vs B0: needle +0.355,
+  spread +0.289; vs B1: needle +0.194, spread +0.200; all four CIs
+  exclude zero) and no confirmed loss; against the paragraph default
+  its per-class gains (needle 0.839 vs 0.677, spread 0.711 vs 0.600,
+  trap 0.840 vs 0.760) are not individually confirmed, and described
+  is unchanged.
+
+### Fixed
+
+- **Hybrid snippet excerpts for pages without a keyword hit now anchor
+  on the page's best-matching content instead of the top of the page.**
+  Previously a semantically-matched page returned its first
+  `context_chars` characters as the snippet, so the excerpt could have
+  no relation to the query (a page whose relevant passage sits below a
+  preface returned the preface). Such excerpts are now positioned by
+  scoring windows of the page's best sub-page chunk against the query
+  with the same embedding model used for retrieval. Keyword-hit
+  snippets are unchanged.
+
 - **`excerpt_style="window"` on `pdf_search` and `pdf_corpus_search`.**
   Returns the anchor block plus its contiguous neighbours up to
   `window_tokens` (default 600), instead of one selected block. The

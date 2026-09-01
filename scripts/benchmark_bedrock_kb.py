@@ -223,13 +223,13 @@ def run_arm_p(
     top_k: int = 25,
     excerpt_style: str = "paragraph",
     window_tokens: int | None = None,
-    evidence_budget: int | None = None,
+    product_auto: bool = False,
 ) -> dict[str, dict]:
     """pdf-mcp corpus search, hybrid mode, run in-session.
 
     `excerpt_style="auto"` applies the per-query routing rule HERE in the
-    harness (the original P-auto measurement). `evidence_budget=N` asks the
-    product parameter to do the same routing server-side; main() asserts
+    harness (the original P-auto measurement). `product_auto=True` passes
+    excerpt_style="auto" to the tool so the server routes; main() asserts
     the two produce identical kept units so the shipped rule and the
     measured rule cannot drift apart.
 
@@ -265,8 +265,8 @@ def run_arm_p(
             )
             chosen_by = {"keyword_docs": n_docs, "style": style}
         extra = {} if window_tokens is None else {"window_tokens": window_tokens}
-        if evidence_budget is not None:
-            extra["evidence_budget"] = evidence_budget
+        if product_auto:
+            style = "auto"
         res = pdf_corpus_search(
             paths,
             q["query"],
@@ -280,9 +280,9 @@ def run_arm_p(
             raise RuntimeError(f"arm P {q['id']}: {res['error']}")
         if res["coverage"]["searched"] != len(paths):
             raise RuntimeError(f"arm P {q['id']}: partial coverage {res['coverage']}")
-        if evidence_budget is not None:
-            alloc = res["allocation"]
-            chosen_by = {"keyword_docs": alloc["keyword_docs"], "style": alloc["unit"]}
+        if product_auto:
+            r = res["excerpt_routing"]
+            chosen_by = {"keyword_docs": r["keyword_doc_count"], "style": r["unit"]}
         units = matches_to_units(res["matches"], id_by_path)
         kept, k = cap_to_budget(units, budget_tokens)
         graded = grade_query(q, build_ranked(res["matches"], id_by_path), 10)
@@ -707,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
             args.budget,
             excerpt_style=config["arms"][arm].get("excerpt_style", "paragraph"),
             window_tokens=config["arms"][arm].get("window_tokens"),
-            evidence_budget=config["arms"][arm].get("evidence_budget"),
+            product_auto=bool(config["arms"][arm].get("product_auto")),
         )
         print(f"{arm}: done ({len(rows_by_arm[arm])} queries)")
     # Drift guard: every product arm (evidence_budget) must reproduce the
@@ -715,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     harness_auto = [
         a for a in local_arms if config["arms"][a].get("excerpt_style") == "auto"
     ]
-    product_arms = [a for a in local_arms if config["arms"][a].get("evidence_budget")]
+    product_arms = [a for a in local_arms if config["arms"][a].get("product_auto")]
     for ref in harness_auto:
         for arm in product_arms:
             diverged = [
@@ -727,7 +727,7 @@ def main(argv: list[str] | None = None) -> int:
             ]
             if diverged:
                 print(
-                    f"ERROR: {arm} (product evidence_budget) diverged from {ref} "
+                    f"ERROR: {arm} (product excerpt_style=auto) diverged from {ref} "
                     f"(harness rule) on {len(diverged)} queries: {diverged[:5]}"
                 )
                 return 2

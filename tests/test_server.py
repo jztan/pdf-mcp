@@ -5625,13 +5625,16 @@ class TestExcerptWindow:
         assert "Nested HDP for Hierarchical Topic Models" in first_page[0]["excerpt"]
 
 
-class TestCorpusEvidenceBudget:
-    """`evidence_budget=N` routes the excerpt unit per query from the number
-    of documents holding an AND keyword match (the count the hybrid path
-    already computes): 0 -> paragraph, 1 -> window of N tokens, 2+ ->
-    snippet. This is the `P-auto` harness arm of the Bedrock anchor
-    benchmark (184 queries: needle +0.355 and spread +0.289 vs B0, CIs
-    exclude zero) shipped as an opt-in parameter. Ranking is untouched."""
+class TestCorpusExcerptStyleAuto:
+    """`excerpt_style="auto"` (mode="auto" only) routes the excerpt unit per
+    query from the number of documents holding an AND keyword match: 0 ->
+    paragraph, 1 -> window of `window_tokens`, 2+ -> snippet. Shipped form
+    of the Bedrock-anchor `P-auto` arm; ranking is untouched. The response
+    carries `excerpt_routing` (unit, reason, keyword_doc_count,
+    matching_doc_count, window_tokens_applied) and `excerpt_style` echoes
+    the unit actually used. Renamed from the pre-release `evidence_budget`
+    parameter after an LLM consumer tryout (2026-09-01) found the name
+    misleading and the allocation echo dishonest."""
 
     @pytest.fixture
     def routed_corpus(self, tmp_path):
@@ -5671,86 +5674,74 @@ class TestCorpusEvidenceBudget:
     def test_absent_by_default(self, routed_corpus, isolated_server, monkeypatch):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
         result = pdf_corpus_search(str(routed_corpus), "budget")
-        assert "allocation" not in result
-        assert all("unit" not in m for m in result["matches"])
+        assert "excerpt_routing" not in result
         assert result["excerpt_style"] == "paragraph"
 
     def test_many_docs_route_to_snippet(
         self, routed_corpus, isolated_server, monkeypatch
     ):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
-        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=600)
+        result = pdf_corpus_search(str(routed_corpus), "budget", excerpt_style="auto")
         assert "error" not in result, result
         assert result["search_mode"] == "hybrid"
-        assert result["allocation"] == {
-            "rule": "keyword_docs",
-            "keyword_docs": 3,
-            "unit": "snippet",
-            "tokens": 600,
-        }
+        r = result["excerpt_routing"]
+        assert r["unit"] == "snippet"
+        assert r["keyword_doc_count"] == 3
+        assert r["matching_doc_count"] >= 3
+        assert r["window_tokens_applied"] is None
+        assert "3" in r["reason"] and "snippet" in r["reason"]
         assert result["excerpt_style"] == "snippet"
         assert result["matches"]
-        assert all(m["unit"] == "snippet" for m in result["matches"])
+        assert not any("unit" in m for m in result["matches"])
+        # F6 (2026-09-01 tryout): auto-routed snippet hits carry geometry
+        # so render-and-cite works on the multi-document case.
+        top = result["matches"][0]
+        assert "bbox" in top and "page_rect" in top and "clip" in top
+        assert "budget" in top["excerpt"].lower()
+
+    def test_explicit_snippet_style_stays_geometry_free(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        """The legacy explicit style is byte-stable: geometry is attached
+        only when routing chose snippet (excerpt_style='auto')."""
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus), "budget", excerpt_style="snippet"
+        )
+        assert result["matches"]
         assert not any("bbox" in m for m in result["matches"])
 
-    def test_single_doc_routes_to_window_sized_by_budget(
+    def test_single_doc_routes_to_window_sized_by_window_tokens(
         self, routed_corpus, isolated_server, monkeypatch
     ):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
         result = pdf_corpus_search(
-            str(routed_corpus), "zebrafinch", evidence_budget=600
+            str(routed_corpus), "zebrafinch", excerpt_style="auto", window_tokens=25
         )
         assert "error" not in result, result
-        assert result["allocation"]["keyword_docs"] == 1
-        assert result["allocation"]["unit"] == "window"
-        assert result["allocation"]["tokens"] == 600
+        r = result["excerpt_routing"]
+        assert r["unit"] == "window"
+        assert r["keyword_doc_count"] == 1
+        assert r["window_tokens_applied"] == 25
         assert result["excerpt_style"] == "window"
         top = result["matches"][0]
-        assert top["unit"] == "window"
         assert "window_blocks" in top and "bbox" in top
         assert "zebrafinch" in top["excerpt"]
-
-    def test_window_budget_is_evidence_budget_not_window_tokens(
-        self, routed_corpus, isolated_server, monkeypatch
-    ):
-        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
-        wide = pdf_corpus_search(
-            str(routed_corpus), "zebrafinch", evidence_budget=600, window_tokens=10
-        )
-        narrow = pdf_corpus_search(
-            str(routed_corpus), "zebrafinch", evidence_budget=25, window_tokens=600
-        )
-        assert wide["allocation"]["tokens"] == 600
-        assert narrow["allocation"]["tokens"] == 25
-        # 600 tokens covers the whole page; 25 holds the anchor block only.
-        assert len(wide["matches"][0]["excerpt"]) > len(narrow["matches"][0]["excerpt"])
 
     def test_no_keyword_docs_route_to_paragraph(
         self, routed_corpus, isolated_server, monkeypatch
     ):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
         result = pdf_corpus_search(
-            str(routed_corpus), "how did spending change", evidence_budget=600
+            str(routed_corpus), "how did spending change", excerpt_style="auto"
         )
         assert "error" not in result, result
-        assert result["allocation"]["keyword_docs"] == 0
-        assert result["allocation"]["unit"] == "paragraph"
+        r = result["excerpt_routing"]
+        assert r["unit"] == "paragraph"
+        assert r["keyword_doc_count"] == 0
+        assert r["window_tokens_applied"] is None
         assert result["excerpt_style"] == "paragraph"
         assert result["matches"], "semantic arm should still return pages"
-        assert all(m["unit"] == "paragraph" for m in result["matches"])
-
-    def test_overrides_explicit_excerpt_style(
-        self, routed_corpus, isolated_server, monkeypatch
-    ):
-        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
-        result = pdf_corpus_search(
-            str(routed_corpus),
-            "budget",
-            excerpt_style="paragraph",
-            evidence_budget=600,
-        )
-        assert result["excerpt_style"] == "snippet"
-        assert result["allocation"]["unit"] == "snippet"
 
     def test_degraded_auto_without_embeddings_still_routes(
         self, routed_corpus, isolated_server, monkeypatch
@@ -5761,12 +5752,12 @@ class TestCorpusEvidenceBudget:
             raise ImportError("fastembed missing")
 
         monkeypatch.setattr(emb, "check_available", unavailable)
-        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=600)
+        result = pdf_corpus_search(str(routed_corpus), "budget", excerpt_style="auto")
         assert "error" not in result, result
         assert result["search_mode"] == "keyword"
         assert result["semantic_unavailable"] is True
-        assert result["allocation"]["unit"] == "snippet"
-        assert all(m["unit"] == "snippet" for m in result["matches"])
+        assert result["excerpt_routing"]["unit"] == "snippet"
+        assert result["excerpt_routing"]["matching_doc_count"] == 3
 
     @pytest.mark.parametrize("mode", ["keyword", "semantic"])
     def test_requires_auto_mode(
@@ -5774,14 +5765,220 @@ class TestCorpusEvidenceBudget:
     ):
         TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
         result = pdf_corpus_search(
-            str(routed_corpus), "budget", mode=mode, evidence_budget=600
+            str(routed_corpus), "budget", mode=mode, excerpt_style="auto"
         )
         assert "error" in result
-        assert "evidence_budget" in result["error"]
         assert "auto" in result["error"]
 
-    @pytest.mark.parametrize("bad", [0, -5, 2.5, "600"])
-    def test_rejects_non_positive_or_non_int(self, routed_corpus, isolated_server, bad):
-        result = pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=bad)
+    def test_evidence_budget_parameter_is_gone(self, routed_corpus, isolated_server):
+        with pytest.raises(TypeError):
+            pdf_corpus_search(str(routed_corpus), "budget", evidence_budget=600)
+
+    def test_single_doc_pdf_search_rejects_auto(self, sample_pdf, isolated_server):
+        result = pdf_search(sample_pdf, "content", excerpt_style="auto")
         assert "error" in result
-        assert "evidence_budget" in result["error"]
+
+
+class TestCorpusSnippetSemanticAnchoring:
+    """F1 from the 2026-09-01 LLM consumer tryout: hybrid snippet excerpts
+    for pages with no keyword hit were `text[:context_chars]` -- the top of
+    the page -- so a routed snippet could omit the query's subject entirely
+    (3/5 excerpts on the tryout's Q1). Fix: anchor on the page's
+    best-scoring sub-page chunk (already computed for window anchoring)."""
+
+    @pytest.fixture
+    def deep_answer_corpus(self, tmp_path):
+        """Two docs; the semantic target ('zonkey' content) sits far from
+        the page top in a page long enough to split into several chunks."""
+        d = tmp_path / "deep"
+        d.mkdir()
+        filler = (
+            "Routine administrative preface text about formatting, "
+            "circulation lists, and archival numbering. " * 30
+        )
+        answer = (
+            "The zonkey enclosure was rebuilt with reinforced fencing after "
+            "the spring flood, and zonkey feeding schedules moved to dawn. "
+            "Zonkey welfare reports are filed monthly. " * 5
+        )
+        for name, body in [
+            ("target.pdf", filler + answer),
+            ("other.pdf", filler + "Nothing notable happened this quarter. " * 20),
+        ]:
+            doc = pymupdf.open()
+            page = doc.new_page()
+            page.insert_textbox(pymupdf.Rect(40, 40, 560, 800), body[:4000])
+            doc.save(str(d / name))
+            doc.close()
+        return d
+
+    @staticmethod
+    def _zonkey_embedder(monkeypatch):
+        import numpy as np
+        import pdf_mcp.embedder as emb
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(4, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("zonkey")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.05, 0.0, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+
+    def test_semantic_only_snippet_anchors_on_best_chunk(
+        self, deep_answer_corpus, isolated_server, monkeypatch
+    ):
+        self._zonkey_embedder(monkeypatch)
+        # 'quagga' appears nowhere: keyword arm finds nothing, hits are
+        # purely semantic. The excerpt must come from the zonkey chunk,
+        # not the administrative page top.
+        result = pdf_corpus_search(
+            str(deep_answer_corpus), "quagga", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        assert result["matches"], "semantic arm should return pages"
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+
+    def test_term_outside_best_chunk_widens_to_page(
+        self, tmp_path, isolated_server, monkeypatch
+    ):
+        """p34, second form: the best-scoring CHUNK holds no query term
+        (header/bibliography soup) while the term sits elsewhere on the
+        page. The span search must widen to the full page text."""
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+
+        d = tmp_path / "widen"
+        d.mkdir()
+        decoy = "Decoy citation soup robust markov scaling references. " * 24
+        answer = (
+            "The quagga herd count was assessed via repeated field trials "
+            "and quagga migration was tabulated by season. " * 4
+        )
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(40, 40, 560, 800), (decoy + answer)[:3600])
+        doc.save(str(d / "widen.pdf"))
+        doc.close()
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            # Density-based: a PURE decoy chunk outscores the mixed whole
+            # page, so the header/bibliography chunk wins argmax -- the
+            # exact shape of the p34 failure.
+            out = []
+            for t in texts:
+                low = t.lower()
+                v = np.zeros(3, dtype=np.float32)
+                v[0] = 1.0 + 5.0 * low.count("decoy") / (
+                    1.0 + 10.0 * low.count("quagga")
+                )
+                v[1] = 1.0 + low.count("quagga")
+                v[2] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.05, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+        # 'stampede' appears nowhere so the AND keyword arm misses;
+        # 'quagga' exists on the page but not in the decoy-heavy chunk
+        # the fake embedder scores highest.
+        result = pdf_corpus_search(str(d), "quagga stampede", excerpt_style="snippet")
+        assert "error" not in result, result
+        assert result["matches"]
+        assert "quagga" in result["matches"][0]["excerpt"].lower(), result["matches"][
+            0
+        ]["excerpt"]
+
+    def test_keyword_hit_snippet_still_carries_query_term(
+        self, deep_answer_corpus, isolated_server, monkeypatch
+    ):
+        self._zonkey_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(deep_answer_corpus), "zonkey", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        kw_hits = [m for m in result["matches"] if m["path"].endswith("target.pdf")]
+        assert kw_hits, "keyword-matched doc should be in matches"
+        assert all("zonkey" in m["excerpt"].lower() for m in kw_hits)
+
+
+class TestBestSpanLexicalBackoff:
+    """p34 residual from the 2026-09-01 re-verification: pure cosine can
+    prefer a header/bibliography window over the window holding a literal
+    query term (bge scores citation-title soup high). When any candidate
+    window contains a query term, the picker must choose among those."""
+
+    def test_term_window_beats_higher_cosine_decoy(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        decoy = "decoy citation soup robust markov scaling. " * 12  # ~500 chars
+        middle = "neutral filler text about nothing in particular. " * 10
+        answer = (
+            "the quagga herd simulation was assessed via repeated trials "
+            "and the quagga results are tabulated below. "
+        )
+        text = decoy + middle + answer + middle
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(3, dtype=np.float32)
+                v[0] = 1.0 + 5.0 * t.lower().count("decoy")  # decoy scores high
+                v[1] = 1.0 + t.lower().count("quagga")
+                v[2] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.3, 0.0], dtype=np.float32)  # loves decoy windows
+        span = _best_span_in_text(text, qv, "fake-model", 200, query="quagga stampede")
+        assert "quagga" in span.lower(), span
+
+    def test_no_term_anywhere_keeps_pure_cosine(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        a = "alpha section text. " * 15
+        b = "bravo section text. " * 15
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(2, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("bravo")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.05], dtype=np.float32)
+        span = _best_span_in_text(a + b, qv, "fake-model", 200, query="no match here")
+        assert "bravo" in span.lower()

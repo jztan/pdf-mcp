@@ -2124,33 +2124,95 @@ def _attach_snippet_geometry(
         page = _layout_page(doc, m["page"] - 1)
         blocks = page.get_text("blocks", sort=True)
         text_blocks = [b[4] for b in blocks if b[6] == 0]
-        candidates = [" ".join(fragment.split())]
-        if len(fragment) > 80:
+        norm_blocks = [" ".join(bt.split()) for bt in text_blocks]
+
+        def _find(cand: str) -> int | None:
+            for idx, bt in enumerate(norm_blocks):
+                if cand and cand in bt:
+                    return idx
+            return None
+
+        # Round-3 refinement 2: locate the excerpt's head and tail
+        # separately; a spanning excerpt gets the UNION of the located
+        # block range, so a clip crop shows everything the excerpt shows
+        # (measured: 39% of snippet excerpts span blocks; anchor-only
+        # bbox under-covered exactly those).
+        # Head/tail probes must not themselves cross a block boundary:
+        # take the first and last LINE of the excerpt (capped), since
+        # extracted text breaks lines at block edges.
+        lines = [ln for ln in fragment.splitlines() if ln.strip()]
+        head_idx = _find(" ".join(lines[0][:60].split())) if lines else None
+        tail_idx = _find(" ".join(lines[-1][-60:].split())) if lines else None
+        located = [i for i in (head_idx, tail_idx) if i is not None]
+        if not located and len(fragment) > 80:
             mid = len(fragment) // 2
-            candidates.append(" ".join(fragment[mid - 30 : mid + 30].split()))
-        block_idx: int | None = None
-        for cand in candidates:
-            for idx, bt in enumerate(text_blocks):
-                if cand and cand in " ".join(bt.split()):
-                    block_idx = idx
-                    break
-            if block_idx is not None:
-                break
-        if block_idx is None:
-            out.append(m)
+            mid_idx = _find(" ".join(fragment[mid - 30 : mid + 30].split()))
+            if mid_idx is not None:
+                located = [mid_idx]
+        if not located:
+            # Round-3 refinement 3: say so, instead of silent absence.
+            out.append({**m, "geometry": "unlocatable"})
             continue
-        bbox = block_bbox_for_index(page, block_idx)
-        if bbox is None:
-            out.append(m)
+        boxes = [
+            b
+            for i in range(min(located), max(located) + 1)
+            if (b := block_bbox_for_index(page, i)) is not None
+        ]
+        if not boxes:
+            out.append({**m, "geometry": "unlocatable"})
+            continue
+        # Round-4 finding: a line probe can match the WRONG block (the
+        # cached column-aware text stream segments differently from the
+        # layout blocks), yielding a bbox that does not overlap the
+        # quoted text at all. Never emit an unvalidated bbox: crop the
+        # candidate rect, re-extract, and require a fragment of the
+        # excerpt inside. Degrade union -> best single located block
+        # (marked "partial" when it passes but covers less than the
+        # excerpt) -> "unlocatable".
+        mid_i = len(fragment) // 2
+        probes = [
+            " ".join(fragment[mid_i - 30 : mid_i + 30].split()),
+            " ".join(fragment[:50].split()),
+        ]
+
+        raw_page = doc[m["page"] - 1]
+
+        def _validated(rect: list[float]) -> bool:
+            try:
+                crop = " ".join(raw_page.get_text(clip=GeomRect(*rect)).split())
+            except Exception:
+                return False
+            return any(pr and pr in crop for pr in probes)
+
+        union = [
+            min(b[0] for b in boxes),
+            min(b[1] for b in boxes),
+            max(b[2] for b in boxes),
+            max(b[3] for b in boxes),
+        ]
+        chosen: list[float] | None = None
+        partial = False
+        if _validated(union):
+            chosen = union
+        else:
+            for i in located:
+                b = block_bbox_for_index(page, i)
+                if b is not None and _validated(list(b)):
+                    chosen = list(b)
+                    partial = True
+                    break
+        if chosen is None:
+            out.append({**m, "geometry": "unlocatable"})
             continue
         r = page.rect
         page_rect = [round(r.x0, 1), round(r.y0, 1), round(r.x1, 1), round(r.y1, 1)]
         out.append(
             {
                 **m,
-                "bbox": list(bbox),
+                "bbox": list(chosen),
                 "page_rect": page_rect,
-                "clip": _bbox_to_clip(bbox, page_rect),
+                "clip": _bbox_to_clip(chosen, page_rect),
+                **({"geometry": "partial"} if partial else {}),
             }
         )
     return out
@@ -2214,9 +2276,55 @@ def _best_span_in_text(
             sim = float(np.dot(qn, v / (np.linalg.norm(v) or 1.0)))
             if sim > best_s:
                 best_i, best_s = i, sim
-        return windows[best_i]
+        return _snap_window_start(text, windows[best_i], terms, context_chars)
     except Exception:
         return text[:context_chars]
+
+
+# A period preceded by a lone capital ("Appendix A. ...") is an
+# enumerator, not a sentence end; skip it or the snap lands mid-title.
+_SENTENCE_BOUNDARY = re.compile(r"(?:(?<=[^A-Z])\.\s+|\n\n|\n(?=[A-Z0-9]))")
+
+
+def _snap_window_start(
+    text: str, window: str, terms: set[str], context_chars: int
+) -> str:
+    """Round-3 refinement 1 (v2 rule): open the excerpt at the last
+    sentence/paragraph boundary BEFORE the first in-window query term, so
+    it leads with the on-topic sentence instead of the tail of the
+    previous one (p34: opens at "Appendix A. Simulation Details" rather
+    than mid-citation). Termless windows snap to the first boundary in
+    the leading 40% (measured: clean-start 15.8% -> 47.6%, term
+    relevance unchanged). The snap keeps the excerpt length by extending
+    the end, and is skipped rather than ever dropping the last query
+    term. Fail-safe: any surprise returns the window unchanged."""
+    try:
+        start = text.find(window)
+        if start < 0:
+            return window
+        low = window.lower()
+        first_term = min((low.find(t) for t in terms if t in low), default=-1)
+        if first_term > 0:
+            bounds = [
+                m.end() for m in _SENTENCE_BOUNDARY.finditer(window, 0, first_term)
+            ]
+            if not bounds:
+                return window
+            off = bounds[-1]
+        elif first_term == 0:
+            return window
+        else:
+            m = _SENTENCE_BOUNDARY.search(window, 0, int(context_chars * 0.4))
+            if not m:
+                return window
+            off = m.end()
+        cand = text[start + off : start + off + context_chars]
+        if terms and any(t in low for t in terms):
+            if not any(t in cand.lower() for t in terms):
+                return window
+        return cand
+    except Exception:
+        return window
 
 
 def _route_evidence_unit(keyword_docs: int) -> str:

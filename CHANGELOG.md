@@ -17,10 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`unit`, a human-readable `reason`, `keyword_doc_count`,
   `matching_doc_count`, and `window_tokens_applied`, null unless the
   window branch fired), and `excerpt_style` reports the unit actually
-  used. Snippet-routed hits carry the same `bbox`/`page_rect`/`clip`
-  geometry as paragraph hits when the excerpt's block can be located
-  (the explicit legacy `"snippet"` style is unchanged and stays
-  geometry-free). Paragraph stays the default. On the 184-query corpus benchmark at a fixed 2,000-token
+  used. Snippet-routed hits carry `bbox`/`page_rect`/`clip` covering the
+  union of the text blocks the excerpt spans; every emitted bbox is
+  validated by re-extracting the text under it, a partially validated
+  hit carries `geometry: "partial"`, and a hit whose blocks cannot be
+  located carries `geometry: "unlocatable"` instead of a silent absence
+  or a wrong rectangle. Snippet excerpts for pages without a keyword
+  hit open at the sentence or heading boundary nearest their matched
+  content (the explicit legacy `"snippet"` style is unchanged and
+  stays geometry-free). Paragraph stays the default. On the 184-query corpus benchmark at a fixed 2,000-token
   budget this routing is the one configuration ahead of both Bedrock
   Knowledge Base anchors with confirmed margins (vs B0: needle +0.355,
   spread +0.289; vs B1: needle +0.194, spread +0.200; all four CIs

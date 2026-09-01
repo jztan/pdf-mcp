@@ -5693,6 +5693,22 @@ class TestCorpusExcerptStyleAuto:
         assert result["excerpt_style"] == "snippet"
         assert result["matches"]
         assert not any("unit" in m for m in result["matches"])
+        # F6 (2026-09-01 tryout): auto-routed snippet hits carry geometry
+        # so render-and-cite works on the multi-document case.
+        top = result["matches"][0]
+        assert "bbox" in top and "page_rect" in top and "clip" in top
+        assert "budget" in top["excerpt"].lower()
+
+    def test_explicit_snippet_style_stays_geometry_free(
+        self, routed_corpus, isolated_server, monkeypatch
+    ):
+        """The legacy explicit style is byte-stable: geometry is attached
+        only when routing chose snippet (excerpt_style='auto')."""
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(routed_corpus), "budget", excerpt_style="snippet"
+        )
+        assert result["matches"]
         assert not any("bbox" in m for m in result["matches"])
 
     def test_single_doc_routes_to_window_sized_by_window_tokens(
@@ -5836,6 +5852,65 @@ class TestCorpusSnippetSemanticAnchoring:
         top = result["matches"][0]
         assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
         assert "administrative preface" not in top["excerpt"].lower()
+
+    def test_term_outside_best_chunk_widens_to_page(
+        self, tmp_path, isolated_server, monkeypatch
+    ):
+        """p34, second form: the best-scoring CHUNK holds no query term
+        (header/bibliography soup) while the term sits elsewhere on the
+        page. The span search must widen to the full page text."""
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+
+        d = tmp_path / "widen"
+        d.mkdir()
+        decoy = "Decoy citation soup robust markov scaling references. " * 24
+        answer = (
+            "The quagga herd count was assessed via repeated field trials "
+            "and quagga migration was tabulated by season. " * 4
+        )
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(40, 40, 560, 800), (decoy + answer)[:3600])
+        doc.save(str(d / "widen.pdf"))
+        doc.close()
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            # Density-based: a PURE decoy chunk outscores the mixed whole
+            # page, so the header/bibliography chunk wins argmax -- the
+            # exact shape of the p34 failure.
+            out = []
+            for t in texts:
+                low = t.lower()
+                v = np.zeros(3, dtype=np.float32)
+                v[0] = 1.0 + 5.0 * low.count("decoy") / (
+                    1.0 + 10.0 * low.count("quagga")
+                )
+                v[1] = 1.0 + low.count("quagga")
+                v[2] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.05, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+        # 'stampede' appears nowhere so the AND keyword arm misses;
+        # 'quagga' exists on the page but not in the decoy-heavy chunk
+        # the fake embedder scores highest.
+        result = pdf_corpus_search(str(d), "quagga stampede", excerpt_style="snippet")
+        assert "error" not in result, result
+        assert result["matches"]
+        assert "quagga" in result["matches"][0]["excerpt"].lower(), result["matches"][
+            0
+        ]["excerpt"]
 
     def test_keyword_hit_snippet_still_carries_query_term(
         self, deep_answer_corpus, isolated_server, monkeypatch

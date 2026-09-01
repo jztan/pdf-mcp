@@ -11,7 +11,7 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
 | P-para | 83 | 83 | 0.217 | 0.157 | 0.722 | 0.747 | 11.217 |
-| P-snip | 83 | 83 | 0.096 | 0.072 | 0.722 | 0.747 | 25.000 |
+| P-snip | 83 | 83 | 0.084 | 0.060 | 0.722 | 0.747 | 25.000 |
 | P-win | 83 | 83 | 0.108 | 0.072 | 0.722 | 0.747 | 3.229 |
 | P-win300 | 83 | 83 | 0.108 | 0.072 | 0.722 | 0.747 | 5.711 |
 | P-auto | 83 | 83 | 0.217 | 0.157 | 0.722 | 0.747 | 11.120 |
@@ -19,15 +19,15 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | B0 | 83 | 83 | 0.301 | 0.084 | 0.750 | 0.675 | 6.819 |
 | B1 | 83 | 83 | 0.253 | 0.048 | 0.814 | 0.783 | 1.807 |
 
-- P minus P-snip, span recall: +0.120 [+0.024, +0.229] (excludes zero, n=83)
+- P minus P-snip, span recall: +0.133 [+0.048, +0.229] (excludes zero, n=83)
 - P minus P-win, span recall: +0.108 [+0.024, +0.193] (excludes zero, n=83)
 - P minus P-win300, span recall: +0.108 [+0.036, +0.193] (excludes zero, n=83)
 - P minus P-auto, span recall: +0.000 [+0.000, +0.000] (includes zero, n=83)
 - P minus P-autoP, span recall: +0.000 [+0.000, +0.000] (includes zero, n=83)
 - P minus B0, span recall: -0.084 [-0.205, +0.036] (includes zero, n=83)
 - P minus B1, span recall: -0.036 [-0.145, +0.072] (includes zero, n=83)
-- P-snip minus B0, span recall: -0.205 [-0.301, -0.108] (excludes zero, n=83)
-- P-snip minus B1, span recall: -0.157 [-0.253, -0.072] (excludes zero, n=83)
+- P-snip minus B0, span recall: -0.217 [-0.325, -0.108] (excludes zero, n=83)
+- P-snip minus B1, span recall: -0.169 [-0.265, -0.084] (excludes zero, n=83)
 - P-win minus B0, span recall: -0.193 [-0.289, -0.096] (excludes zero, n=83)
 - P-win minus B1, span recall: -0.145 [-0.253, -0.036] (excludes zero, n=83)
 - P-win300 minus B0, span recall: -0.193 [-0.289, -0.096] (excludes zero, n=83)
@@ -42,7 +42,7 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
 | P-para | 42 | 83 | 0.429 | 0.309 | 0.878 | 0.905 | 11.333 |
-| P-snip | 42 | 83 | 0.191 | 0.143 | 0.878 | 0.905 | 25.000 |
+| P-snip | 42 | 83 | 0.167 | 0.119 | 0.878 | 0.905 | 25.000 |
 | P-win | 42 | 83 | 0.214 | 0.143 | 0.878 | 0.905 | 3.238 |
 | P-win300 | 42 | 83 | 0.214 | 0.143 | 0.878 | 0.905 | 5.524 |
 | P-auto | 42 | 83 | 0.429 | 0.309 | 0.878 | 0.905 | 11.333 |
@@ -50,15 +50,15 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | B0 | 42 | 83 | 0.595 | 0.167 | 0.907 | 0.929 | 6.691 |
 | B1 | 42 | 83 | 0.500 | 0.095 | 0.935 | 0.905 | 1.738 |
 
-- P minus P-snip, span recall: +0.238 [+0.024, +0.429] (excludes zero, n=42)
+- P minus P-snip, span recall: +0.262 [+0.095, +0.452] (excludes zero, n=42)
 - P minus P-win, span recall: +0.214 [+0.048, +0.381] (excludes zero, n=42)
 - P minus P-win300, span recall: +0.214 [+0.048, +0.381] (excludes zero, n=42)
 - P minus P-auto, span recall: +0.000 [+0.000, +0.000] (includes zero, n=42)
 - P minus P-autoP, span recall: +0.000 [+0.000, +0.000] (includes zero, n=42)
 - P minus B0, span recall: -0.167 [-0.405, +0.071] (includes zero, n=42)
 - P minus B1, span recall: -0.071 [-0.286, +0.143] (includes zero, n=42)
-- P-snip minus B0, span recall: -0.405 [-0.571, -0.238] (excludes zero, n=42)
-- P-snip minus B1, span recall: -0.309 [-0.476, -0.143] (excludes zero, n=42)
+- P-snip minus B0, span recall: -0.429 [-0.619, -0.238] (excludes zero, n=42)
+- P-snip minus B1, span recall: -0.333 [-0.500, -0.191] (excludes zero, n=42)
 - P-win minus B0, span recall: -0.381 [-0.548, -0.214] (excludes zero, n=42)
 - P-win minus B1, span recall: -0.286 [-0.476, -0.095] (excludes zero, n=42)
 - P-win300 minus B0, span recall: -0.381 [-0.571, -0.191] (excludes zero, n=42)
@@ -197,7 +197,7 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
 | P-para | 25 | 25 | 0.760 | 0.320 | 1.000 | 1.000 | 14.520 |
-| P-snip | 25 | 25 | 0.680 | 0.200 | 1.000 | 1.000 | 25.000 |
+| P-snip | 25 | 25 | 0.640 | 0.200 | 1.000 | 1.000 | 25.000 |
 | P-win | 25 | 25 | 0.760 | 0.240 | 1.000 | 1.000 | 3.280 |
 | P-win300 | 25 | 25 | 0.680 | 0.200 | 1.000 | 1.000 | 5.640 |
 | P-auto | 25 | 25 | 0.840 | 0.280 | 1.000 | 1.000 | 9.160 |
@@ -205,15 +205,15 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | B0 | 25 | 25 | 0.840 | 0.160 | 1.000 | 1.000 | 6.800 |
 | B1 | 25 | 25 | 0.880 | 0.120 | 1.000 | 1.000 | 1.640 |
 
-- P minus P-snip, span recall: +0.080 [-0.120, +0.280] (includes zero, n=25)
+- P minus P-snip, span recall: +0.120 [-0.040, +0.280] (includes zero, n=25)
 - P minus P-win, span recall: +0.000 [-0.200, +0.200] (includes zero, n=25)
 - P minus P-win300, span recall: +0.080 [-0.120, +0.280] (includes zero, n=25)
 - P minus P-auto, span recall: -0.080 [-0.240, +0.080] (includes zero, n=25)
 - P minus P-autoP, span recall: -0.080 [-0.240, +0.080] (includes zero, n=25)
 - P minus B0, span recall: -0.080 [-0.280, +0.080] (includes zero, n=25)
 - P minus B1, span recall: -0.120 [-0.280, +0.040] (includes zero, n=25)
-- P-snip minus B0, span recall: -0.160 [-0.360, +0.040] (includes zero, n=25)
-- P-snip minus B1, span recall: -0.200 [-0.360, -0.040] (excludes zero, n=25)
+- P-snip minus B0, span recall: -0.200 [-0.400, +0.000] (includes zero, n=25)
+- P-snip minus B1, span recall: -0.240 [-0.400, -0.080] (excludes zero, n=25)
 - P-win minus B0, span recall: -0.080 [-0.280, +0.080] (includes zero, n=25)
 - P-win minus B1, span recall: -0.120 [-0.280, +0.040] (includes zero, n=25)
 - P-win300 minus B0, span recall: -0.160 [-0.360, +0.040] (includes zero, n=25)
@@ -228,7 +228,7 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
 | P-para | 23 | 25 | 0.826 | 0.348 | 1.000 | 1.000 | 14.696 |
-| P-snip | 23 | 25 | 0.739 | 0.217 | 1.000 | 1.000 | 25.000 |
+| P-snip | 23 | 25 | 0.696 | 0.217 | 1.000 | 1.000 | 25.000 |
 | P-win | 23 | 25 | 0.826 | 0.261 | 1.000 | 1.000 | 3.304 |
 | P-win300 | 23 | 25 | 0.739 | 0.217 | 1.000 | 1.000 | 5.652 |
 | P-auto | 23 | 25 | 0.913 | 0.304 | 1.000 | 1.000 | 8.739 |
@@ -236,15 +236,15 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 | B0 | 23 | 25 | 0.913 | 0.174 | 1.000 | 1.000 | 6.783 |
 | B1 | 23 | 25 | 0.957 | 0.130 | 1.000 | 1.000 | 1.609 |
 
-- P minus P-snip, span recall: +0.087 [-0.130, +0.304] (includes zero, n=23)
+- P minus P-snip, span recall: +0.130 [-0.043, +0.304] (includes zero, n=23)
 - P minus P-win, span recall: +0.000 [-0.217, +0.217] (includes zero, n=23)
 - P minus P-win300, span recall: +0.087 [-0.130, +0.304] (includes zero, n=23)
 - P minus P-auto, span recall: -0.087 [-0.261, +0.087] (includes zero, n=23)
 - P minus P-autoP, span recall: -0.087 [-0.261, +0.087] (includes zero, n=23)
 - P minus B0, span recall: -0.087 [-0.304, +0.130] (includes zero, n=23)
 - P minus B1, span recall: -0.130 [-0.304, +0.043] (includes zero, n=23)
-- P-snip minus B0, span recall: -0.174 [-0.391, +0.043] (includes zero, n=23)
-- P-snip minus B1, span recall: -0.217 [-0.391, -0.087] (excludes zero, n=23)
+- P-snip minus B0, span recall: -0.217 [-0.435, +0.000] (includes zero, n=23)
+- P-snip minus B1, span recall: -0.261 [-0.435, -0.087] (excludes zero, n=23)
 - P-win minus B0, span recall: -0.087 [-0.304, +0.087] (includes zero, n=23)
 - P-win minus B1, span recall: -0.130 [-0.304, +0.043] (includes zero, n=23)
 - P-win300 minus B0, span recall: -0.174 [-0.435, +0.043] (includes zero, n=23)

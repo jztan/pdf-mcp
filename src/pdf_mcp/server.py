@@ -2103,6 +2103,59 @@ def _upgrade_excerpts_to_paragraphs(
     return upgraded
 
 
+def _attach_snippet_geometry(
+    matches: list[dict[str, Any]], doc: Any
+) -> list[dict[str, Any]]:
+    """Attach bbox/page_rect/clip to snippet hits WITHOUT changing their
+    excerpts (F6, 2026-09-01 consumer tryout: auto-routed snippets carried
+    no geometry, breaking render-and-cite exactly on the multi-document
+    case). The block containing the excerpt is found by whitespace-
+    normalised containment (same trick as the paragraph upgrade); an
+    excerpt spanning block boundaries falls back to its middle fragment.
+    Fields are omitted when no block can be located -- absence is the
+    signal, matching the paragraph contract."""
+    out: list[dict[str, Any]] = []
+    for m in matches:
+        excerpt = m.get("excerpt") or ""
+        fragment = excerpt.replace("...", "").strip()
+        if not fragment:
+            out.append(m)
+            continue
+        page = _layout_page(doc, m["page"] - 1)
+        blocks = page.get_text("blocks", sort=True)
+        text_blocks = [b[4] for b in blocks if b[6] == 0]
+        candidates = [" ".join(fragment.split())]
+        if len(fragment) > 80:
+            mid = len(fragment) // 2
+            candidates.append(" ".join(fragment[mid - 30 : mid + 30].split()))
+        block_idx: int | None = None
+        for cand in candidates:
+            for idx, bt in enumerate(text_blocks):
+                if cand and cand in " ".join(bt.split()):
+                    block_idx = idx
+                    break
+            if block_idx is not None:
+                break
+        if block_idx is None:
+            out.append(m)
+            continue
+        bbox = block_bbox_for_index(page, block_idx)
+        if bbox is None:
+            out.append(m)
+            continue
+        r = page.rect
+        page_rect = [round(r.x0, 1), round(r.y0, 1), round(r.x1, 1), round(r.y1, 1)]
+        out.append(
+            {
+                **m,
+                "bbox": list(bbox),
+                "page_rect": page_rect,
+                "clip": _bbox_to_clip(bbox, page_rect),
+            }
+        )
+    return out
+
+
 _WINDOW_TOKENS_DEFAULT = 600
 
 
@@ -3736,6 +3789,7 @@ def _finalize_corpus_matches(
     keyword_excerpts_by_doc: dict[str, dict[int, str]] | None = None,
     window_tokens: int = _WINDOW_TOKENS_DEFAULT,
     best_chunks: dict[tuple[str, int], str] | None = None,
+    attach_geometry: bool = False,
 ) -> list[dict[str, Any]]:
     """Shared per-doc finalize step for every `pdf_corpus_search` mode:
     attach hidden-text flags and per-page text provenance (`source`,
@@ -3781,6 +3835,8 @@ def _finalize_corpus_matches(
                     keyword_excerpts=kw_excerpts,
                     window_tokens=window_tokens,
                 )
+            elif excerpt_style == "snippet" and attach_geometry:
+                doc_hits = _attach_snippet_geometry(doc_hits, doc)
         finally:
             doc.close()
         matches.extend(doc_hits)
@@ -4157,6 +4213,7 @@ def pdf_corpus_search(
             query,
             kw_excerpts_by_doc,
             window_tokens=window_tokens,
+            attach_geometry=routing is not None,
         )
         hidden_text_detected = any(m.get("hidden_text") for m in matches)
 
@@ -4251,10 +4308,22 @@ def pdf_corpus_search(
             # relation to the query (2026-09-01 consumer tryout, F1) --
             # on prefaced pages the excerpt was boilerplate while the
             # matching content sat further down.
-            text = hybrid_best_chunks.get((path, page)) or (
-                cache.get_page_text(path, page - 1) or ""
+            chunk = hybrid_best_chunks.get((path, page))
+            page_text = cache.get_page_text(path, page - 1) or ""
+            text = chunk or page_text
+            # Lexical rescue (p34, second form): when the best-scoring
+            # chunk holds no literal query term but the page does, widen
+            # the span search to the whole page -- otherwise the term
+            # windows the back-off needs are outside the searched text.
+            if chunk and page_text:
+                _terms = _corpus_query_terms(query)
+                _low_chunk = chunk.lower()
+                if _terms and not any(t in _low_chunk for t in _terms):
+                    if any(t in page_text.lower() for t in _terms):
+                        text = page_text
+            excerpt = _best_span_in_text(
+                text, query_vec, embed_model, context_chars, query=query
             )
-            excerpt = _best_span_in_text(text, query_vec, embed_model, context_chars)
         sem_score = sem_score_map.get((path, page), 0.0)
         # A hybrid match is low-confidence when (a) it has no keyword
         # hit on the page AND (b) the underlying semantic cosine is
@@ -4285,6 +4354,7 @@ def pdf_corpus_search(
         kw_excerpts_by_doc,
         window_tokens=window_tokens,
         best_chunks=hybrid_best_chunks,
+        attach_geometry=routing is not None,
     )
     hidden_text_detected = any(m.get("hidden_text") for m in matches)
     all_results_low_confidence = bool(matches) and all(

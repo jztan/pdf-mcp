@@ -5848,3 +5848,62 @@ class TestCorpusSnippetSemanticAnchoring:
         kw_hits = [m for m in result["matches"] if m["path"].endswith("target.pdf")]
         assert kw_hits, "keyword-matched doc should be in matches"
         assert all("zonkey" in m["excerpt"].lower() for m in kw_hits)
+
+
+class TestBestSpanLexicalBackoff:
+    """p34 residual from the 2026-09-01 re-verification: pure cosine can
+    prefer a header/bibliography window over the window holding a literal
+    query term (bge scores citation-title soup high). When any candidate
+    window contains a query term, the picker must choose among those."""
+
+    def test_term_window_beats_higher_cosine_decoy(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        decoy = "decoy citation soup robust markov scaling. " * 12  # ~500 chars
+        middle = "neutral filler text about nothing in particular. " * 10
+        answer = (
+            "the quagga herd simulation was assessed via repeated trials "
+            "and the quagga results are tabulated below. "
+        )
+        text = decoy + middle + answer + middle
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(3, dtype=np.float32)
+                v[0] = 1.0 + 5.0 * t.lower().count("decoy")  # decoy scores high
+                v[1] = 1.0 + t.lower().count("quagga")
+                v[2] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.3, 0.0], dtype=np.float32)  # loves decoy windows
+        span = _best_span_in_text(text, qv, "fake-model", 200, query="quagga stampede")
+        assert "quagga" in span.lower(), span
+
+    def test_no_term_anywhere_keeps_pure_cosine(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        a = "alpha section text. " * 15
+        b = "bravo section text. " * 15
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(2, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("bravo")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.05], dtype=np.float32)
+        span = _best_span_in_text(a + b, qv, "fake-model", 200, query="no match here")
+        assert "bravo" in span.lower()

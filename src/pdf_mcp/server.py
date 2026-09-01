@@ -2111,14 +2111,20 @@ def _best_span_in_text(
     query_vec: Any,
     embed_model: str,
     context_chars: int,
+    query: str = "",
     max_windows: int = 12,
 ) -> str:
-    """Best `context_chars`-sized window of `text` by cosine against the
-    query vector, scored with the same encoder as retrieval. Used to
-    position a snippet excerpt inside a semantically-matched chunk when
+    """Best `context_chars`-sized window of `text` for the query, used to
+    position a snippet excerpt inside a semantically-matched page when
     there is no keyword hit to anchor on (2026-09-01 consumer tryout,
-    F1: chunk-head excerpts still missed content sitting mid-chunk).
-    Fail-safe: any error returns the head of the text."""
+    F1). Candidates are a stride grid plus a window centred on each
+    literal query-term occurrence; when any candidate contains a query
+    term, only those candidates compete (lexical back-off), ranked by
+    cosine against the query vector with the retrieval encoder. Reason:
+    pure cosine at this granularity can prefer citation/header soup over
+    the window holding the query's own term (re-verification residual,
+    2607.08291 p34). Term-free paraphrase queries are unaffected by
+    construction. Fail-safe: any error returns the head of the text."""
     try:
         if len(text) <= context_chars:
             return text
@@ -2127,7 +2133,21 @@ def _best_span_in_text(
         if len(starts) > max_windows:
             step = len(starts) / max_windows
             starts = [starts[int(i * step)] for i in range(max_windows)]
+        low = text.lower()
+        terms = _corpus_query_terms(query) if query else set()
+        term_starts: list[int] = []
+        for term in terms:
+            pos = low.find(term)
+            while pos != -1 and len(term_starts) < max_windows:
+                st = min(max(pos - context_chars // 2, 0), len(text) - context_chars)
+                term_starts.append(st)
+                pos = low.find(term, pos + len(term))
+        starts = sorted(set(starts) | set(term_starts))
         windows = [text[st : st + context_chars] for st in starts]
+        if terms:
+            with_term = [w for w in windows if any(t in w.lower() for t in terms)]
+            if with_term:
+                windows = with_term
         from . import embedder as _emb
 
         import numpy as np

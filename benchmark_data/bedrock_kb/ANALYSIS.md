@@ -39,13 +39,20 @@ minus paragraph: needle +0.161 [+0.000, +0.323], spread +0.111 [-0.022,
 individually. Routing: described went to paragraph 82/83, needle to
 window 27/31 (0.852 there), spread to snippet 43/45 (0.698), trap split
 window 17 (0.941) / snippet 4 (0.250) / paragraph 4 (1.000). The
-product form is `pdf_corpus_search(evidence_budget=600)` (opt-in,
-2026-08-31); the `P-eb600` arm calls that parameter and the harness
-exits 2 unless its kept units are identical to `P-auto` on every query
-(they are, 184/184), so a drift in the shipped rule shows up here.
+product form is `pdf_corpus_search(excerpt_style="auto")` (opt-in;
+shipped 2026-08-31 as `evidence_budget=600`, renamed 2026-09-01 after a
+consumer tryout; `window_tokens` default 600 is the measured config).
+The `P-auto-product` arm calls that parameter and the harness exits 2
+unless its kept units are identical to `P-auto` on every query (they
+are, 184/184), so a drift in the shipped rule shows up here. The
+2026-09-01 semantic-snippet anchoring fix moved only the explicit
+snippet arm (described 0.000 -> 0.096, trap 0.760 -> 0.680 -- page-top
+excerpts had been accidentally scooping the page-1 title labels, the
+documented trap label artifact); the routed auto configuration is
+unchanged on every class.
 RESULTS.md carries every local arm's own paired CIs against both
 anchors since 2026-08-31; against B1 (the stronger anchor) the
-evidence-budget row keeps confirmed margins on needle +0.194 [+0.065,
+excerpt-auto row keeps confirmed margins on needle +0.194 [+0.065,
 +0.355] and spread +0.200 [+0.022, +0.378], with described -0.036 and
 trap -0.040 including zero: no confirmed loss to either anchor.
 

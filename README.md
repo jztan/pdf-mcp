@@ -83,7 +83,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
 | `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
 | `pdf_corpus_overview` | Per-document triage cards for a folder |
-| `pdf_corpus_search` | Search across a folder, with document and page provenance; optional `evidence_budget` picks the excerpt unit per query |
+| `pdf_corpus_search` | Search across a folder, with document and page provenance; `excerpt_style="auto"` picks the excerpt unit per query |
 | `pdf_cache_stats` | Per-document cache breakdown and total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
 | `server_info` | Which optional features and config are active |

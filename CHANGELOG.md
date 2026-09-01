@@ -82,18 +82,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls: an empty `unprocessed` answers only "did the budget run out",
   never "is the corpus ready".
 
-### Fixed
-
-- **Hybrid snippet excerpts for pages without a keyword hit now anchor
-  on the page's best-matching content instead of the top of the page.**
-  Previously a semantically-matched page returned its first
-  `context_chars` characters as the snippet, so the excerpt could have
-  no relation to the query (a page whose relevant passage sits below a
-  preface returned the preface). Such excerpts are now positioned by
-  scoring windows of the page's best sub-page chunk against the query
-  with the same embedding model used for retrieval. Keyword-hit
-  snippets are unchanged.
-
 ### Changed
 
 - **Semantic and hybrid search score sub-page windows, not only whole
@@ -119,6 +107,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes on load (to api.github.com); PDFs still never leave the tab.
 
 ### Fixed
+
+- **Hybrid snippet excerpts for pages without a keyword hit now anchor
+  on the page's best-matching content instead of the top of the page.**
+  Previously a semantically-matched page returned its first
+  `context_chars` characters as the snippet, so the excerpt could have
+  no relation to the query (a page whose relevant passage sits below a
+  preface returned the preface). Such excerpts are now positioned by
+  scoring windows of the page's best sub-page chunk against the query
+  with the same embedding model used for retrieval. Keyword-hit
+  snippets are unchanged.
 
 - **`ff` and `ffi` ligatures no longer lose a letter.** The PDF text
   engine expands a ligature into single letters that share one glyph

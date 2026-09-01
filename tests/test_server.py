@@ -5982,3 +5982,217 @@ class TestBestSpanLexicalBackoff:
         qv = np.array([1.0, 0.05], dtype=np.float32)
         span = _best_span_in_text(a + b, qv, "fake-model", 200, query="no match here")
         assert "bravo" in span.lower()
+
+
+class TestRound3Refinements:
+    """The three measured refinements from the 2026-09-02 round-3 consumer
+    eval: (1) v2 boundary snap -- the chosen window opens at the last
+    sentence/paragraph boundary BEFORE the first in-window query term, so
+    an excerpt leads with the on-topic sentence instead of the tail of the
+    previous one; (2) snippet geometry is the union of the located blocks
+    covering the excerpt, not just the anchor block; (3) an auto-routed
+    snippet hit whose block cannot be located carries
+    geometry: "unlocatable" instead of silent absence."""
+
+    # -- (1) v2 boundary snap ------------------------------------------
+    def test_snap_opens_at_boundary_before_first_term(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        text = (
+            "Unrelated preamble sentence that runs on for a while here. "
+            "Tail of a citation, Journal of Things, 37(2):288-300, 2012.\n\n"
+            "Appendix A. Quagga Details\n\n"
+            "A.1. Design. We evaluate the quagga methods in a synthetic "
+            "environment with repeated trials and tabulated quagga output."
+        )
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(2, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("quagga")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.05], dtype=np.float32)
+        span = _best_span_in_text(text, qv, "fake", 200, query="quagga stampede")
+        assert span.startswith("Appendix A. Quagga Details"), repr(span[:60])
+
+    def test_snap_never_drops_every_term(self, monkeypatch):
+        import numpy as np
+
+        import pdf_mcp.embedder as emb
+        from pdf_mcp.server import _best_span_in_text
+
+        # Term sits at the very start of the window; any forward snap
+        # would lose it, so the original window must be kept.
+        text = "quagga count rises. " + ("Filler sentence follows here. " * 30)
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(2, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("quagga")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        qv = np.array([1.0, 0.05], dtype=np.float32)
+        span = _best_span_in_text(text, qv, "fake", 120, query="quagga stampede")
+        assert "quagga" in span.lower()
+
+    # -- (2) union-of-blocks bbox --------------------------------------
+    def test_spanning_excerpt_gets_union_bbox(self, isolated_server):
+        from pdf_mcp.server import _attach_snippet_geometry, open_pdf
+        import tempfile
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(
+            pymupdf.Rect(50, 60, 550, 120),
+            "Heading About Quagga Migration Patterns In The Wild",
+        )
+        page.insert_textbox(
+            pymupdf.Rect(50, 300, 550, 380),
+            "Body paragraph: the quagga herd moved north across the plain "
+            "and the count was tabulated for every season of the survey.",
+        )
+        f = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        f.close()
+        doc.save(f.name)
+        doc.close()
+        try:
+            path = str(Path(f.name).resolve())
+            # Excerpt spans both blocks (head in block 0, tail in block 1).
+            excerpt = (
+                "Heading About Quagga Migration Patterns In The Wild\n"
+                "Body paragraph: the quagga herd moved north across the plain"
+            )
+            d = open_pdf(path)
+            try:
+                out = _attach_snippet_geometry(
+                    [{"path": path, "page": 1, "excerpt": excerpt}], d
+                )
+            finally:
+                d.close()
+            m = out[0]
+            assert "bbox" in m, m
+            # Union must cover both blocks: from the heading's top (~60)
+            # down into the body block (>=300).
+            assert m["bbox"][1] < 130 and m["bbox"][3] > 300, m["bbox"]
+            assert "geometry" not in m
+        finally:
+            unlink_quietly(f.name)
+
+    # -- (3) unlocatable flag ------------------------------------------
+    def test_unlocatable_excerpt_carries_marker(self, isolated_server):
+        from pdf_mcp.server import _attach_snippet_geometry, open_pdf
+        import tempfile
+        from pathlib import Path
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 60), "Entirely different page content here.")
+        f = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        f.close()
+        doc.save(f.name)
+        doc.close()
+        try:
+            path = str(Path(f.name).resolve())
+            d = open_pdf(path)
+            try:
+                out = _attach_snippet_geometry(
+                    [
+                        {
+                            "path": path,
+                            "page": 1,
+                            "excerpt": "text not on the page at all",
+                        }
+                    ],
+                    d,
+                )
+            finally:
+                d.close()
+            m = out[0]
+            assert m.get("geometry") == "unlocatable"
+            assert "bbox" not in m
+        finally:
+            unlink_quietly(f.name)
+
+    def test_auto_snippet_response_has_geometry_or_marker(
+        self, isolated_server, monkeypatch, tmp_path
+    ):
+        d = tmp_path / "gm"
+        d.mkdir()
+        for name in ("a.pdf", "b.pdf"):
+            doc = pymupdf.open()
+            page = doc.new_page()
+            page.insert_textbox(
+                pymupdf.Rect(50, 60, 550, 200),
+                f"The quarterly budget increased in file {name} and the "
+                "figures were reconciled against audited statements.",
+            )
+            doc.save(str(d / name))
+            doc.close()
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        result = pdf_corpus_search(str(d), "budget", excerpt_style="auto")
+        assert result["excerpt_routing"]["unit"] == "snippet"
+        for m in result["matches"]:
+            assert ("bbox" in m) or (m.get("geometry") == "unlocatable"), m
+
+    # -- (2b) geometry must be validated against its own crop ----------
+    def test_snippet_bbox_always_contains_its_excerpt(self, isolated_server):
+        """Round-4 finding: an excerpt's head-line probe can match the
+        wrong block (cached column-aware text vs layout blocks), producing
+        a bbox that does not overlap the quoted text at all (1803.03635
+        p26: bbox pointed at a figure region 200pt above the sentence).
+        Invariant: every emitted snippet bbox, cropped, must contain a
+        fragment of its own excerpt; otherwise degrade to a validated
+        single block (geometry: 'partial') or 'unlocatable'."""
+        from pathlib import Path
+
+        real = Path(__file__).parent.parent / "benchmark_data" / ".reading_order_pdfs"
+        docs = [real / "1803.03635.pdf", real / "2205.14135.pdf"]
+        if not all(d.exists() for d in docs):
+            pytest.skip("real corpus not fetched")
+        # Both documents AND-match the query, so auto routes to snippet
+        # even in this two-doc corpus (fast to warm in the isolated cache).
+        result = pdf_corpus_search(
+            [str(d) for d in docs],
+            "lottery ticket pruning",
+            excerpt_style="auto",
+            top_k=10,
+            budget_seconds=120,
+        )
+        assert result["excerpt_routing"]["unit"] == "snippet", result["excerpt_routing"]
+        assert "error" not in result, result
+        checked = 0
+        for m in result["matches"]:
+            if "bbox" not in m:
+                continue
+            checked += 1
+            from pdf_mcp.backend.geometry import Rect as GeomRect
+            from pdf_mcp.server import open_pdf
+
+            doc = open_pdf(m["path"])
+            try:
+                crop = doc[m["page"] - 1].get_text(clip=GeomRect(*m["bbox"]))
+            finally:
+                doc.close()
+            frag = m["excerpt"].replace("...", "").strip()
+            mid = " ".join(frag[len(frag) // 2 - 30 : len(frag) // 2 + 30].split())
+            head = " ".join(frag[:50].split())
+            crop_n = " ".join(crop.split())
+            assert (mid and mid in crop_n) or (head and head in crop_n), (
+                m["page"],
+                m["bbox"],
+                m["excerpt"][:60],
+            )
+        assert checked, "no geometry-carrying hits to validate"

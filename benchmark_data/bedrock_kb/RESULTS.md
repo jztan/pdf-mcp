@@ -2,7 +2,7 @@
 
 # Bedrock KB anchor benchmark
 
-Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor, not a subject; any result is acceptable. Never average across classes. See [ANALYSIS.md](ANALYSIS.md) for the interpretation.
+Generated 2026-09-02. Token budget 2000 per query per arm. Bedrock is an anchor, not a subject; any result is acceptable. Never average across classes. See [ANALYSIS.md](ANALYSIS.md) for the interpretation.
 
 54 of the queries below had their evidence span found by no arm. Each was reviewed against the page image and confirmed a genuine miss, not a label defect (see ANALYSIS.md), so the tables below include them as legitimate 0-0 observations. A flagged-excluded sensitivity table follows each primary table.
 
@@ -10,63 +10,63 @@ Generated 2026-09-01. Token budget 2000 per query per arm. Bedrock is an anchor,
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 83 | 83 | 0.217 | 0.157 | 0.722 | 0.747 | 11.217 |
-| P-snip | 83 | 83 | 0.084 | 0.060 | 0.722 | 0.747 | 25.000 |
+| P-para | 83 | 83 | 0.229 | 0.169 | 0.722 | 0.747 | 11.229 |
+| P-snip | 83 | 83 | 0.108 | 0.084 | 0.722 | 0.747 | 25.000 |
 | P-win | 83 | 83 | 0.108 | 0.072 | 0.722 | 0.747 | 3.229 |
 | P-win300 | 83 | 83 | 0.108 | 0.072 | 0.722 | 0.747 | 5.711 |
-| P-auto | 83 | 83 | 0.217 | 0.157 | 0.722 | 0.747 | 11.120 |
-| P-autoP | 83 | 83 | 0.217 | 0.157 | 0.722 | 0.747 | 11.120 |
+| P-auto | 83 | 83 | 0.229 | 0.169 | 0.722 | 0.747 | 11.133 |
+| P-autoP | 83 | 83 | 0.229 | 0.169 | 0.722 | 0.747 | 11.133 |
 | B0 | 83 | 83 | 0.301 | 0.084 | 0.750 | 0.675 | 6.819 |
 | B1 | 83 | 83 | 0.253 | 0.048 | 0.814 | 0.783 | 1.807 |
 
-- P minus P-snip, span recall: +0.133 [+0.048, +0.229] (excludes zero, n=83)
-- P minus P-win, span recall: +0.108 [+0.024, +0.193] (excludes zero, n=83)
-- P minus P-win300, span recall: +0.108 [+0.036, +0.193] (excludes zero, n=83)
+- P minus P-snip, span recall: +0.120 [+0.024, +0.217] (excludes zero, n=83)
+- P minus P-win, span recall: +0.120 [+0.036, +0.205] (excludes zero, n=83)
+- P minus P-win300, span recall: +0.120 [+0.048, +0.205] (excludes zero, n=83)
 - P minus P-auto, span recall: +0.000 [+0.000, +0.000] (includes zero, n=83)
 - P minus P-autoP, span recall: +0.000 [+0.000, +0.000] (includes zero, n=83)
-- P minus B0, span recall: -0.084 [-0.205, +0.036] (includes zero, n=83)
-- P minus B1, span recall: -0.036 [-0.145, +0.072] (includes zero, n=83)
-- P-snip minus B0, span recall: -0.217 [-0.325, -0.108] (excludes zero, n=83)
-- P-snip minus B1, span recall: -0.169 [-0.265, -0.084] (excludes zero, n=83)
+- P minus B0, span recall: -0.072 [-0.193, +0.048] (includes zero, n=83)
+- P minus B1, span recall: -0.024 [-0.133, +0.084] (includes zero, n=83)
+- P-snip minus B0, span recall: -0.193 [-0.289, -0.096] (excludes zero, n=83)
+- P-snip minus B1, span recall: -0.145 [-0.229, -0.060] (excludes zero, n=83)
 - P-win minus B0, span recall: -0.193 [-0.289, -0.096] (excludes zero, n=83)
 - P-win minus B1, span recall: -0.145 [-0.253, -0.036] (excludes zero, n=83)
 - P-win300 minus B0, span recall: -0.193 [-0.289, -0.096] (excludes zero, n=83)
 - P-win300 minus B1, span recall: -0.145 [-0.241, -0.048] (excludes zero, n=83)
-- P-auto minus B0, span recall: -0.084 [-0.205, +0.036] (includes zero, n=83)
-- P-auto minus B1, span recall: -0.036 [-0.145, +0.072] (includes zero, n=83)
-- P-autoP minus B0, span recall: -0.084 [-0.205, +0.036] (includes zero, n=83)
-- P-autoP minus B1, span recall: -0.036 [-0.145, +0.072] (includes zero, n=83)
+- P-auto minus B0, span recall: -0.072 [-0.193, +0.048] (includes zero, n=83)
+- P-auto minus B1, span recall: -0.024 [-0.133, +0.084] (includes zero, n=83)
+- P-autoP minus B0, span recall: -0.072 [-0.193, +0.048] (includes zero, n=83)
+- P-autoP minus B1, span recall: -0.024 [-0.133, +0.084] (includes zero, n=83)
 
 ### described, sensitivity (flagged queries excluded)
 
 | arm | n | n total | span recall | fidelity gap | doc-NDCG@10 | doc-hit@3 | realized k |
 |---|---|---|---|---|---|---|---|
-| P-para | 42 | 83 | 0.429 | 0.309 | 0.878 | 0.905 | 11.333 |
-| P-snip | 42 | 83 | 0.167 | 0.119 | 0.878 | 0.905 | 25.000 |
+| P-para | 42 | 83 | 0.452 | 0.333 | 0.878 | 0.905 | 11.333 |
+| P-snip | 42 | 83 | 0.214 | 0.167 | 0.878 | 0.905 | 25.000 |
 | P-win | 42 | 83 | 0.214 | 0.143 | 0.878 | 0.905 | 3.238 |
 | P-win300 | 42 | 83 | 0.214 | 0.143 | 0.878 | 0.905 | 5.524 |
-| P-auto | 42 | 83 | 0.429 | 0.309 | 0.878 | 0.905 | 11.333 |
-| P-autoP | 42 | 83 | 0.429 | 0.309 | 0.878 | 0.905 | 11.333 |
+| P-auto | 42 | 83 | 0.452 | 0.333 | 0.878 | 0.905 | 11.333 |
+| P-autoP | 42 | 83 | 0.452 | 0.333 | 0.878 | 0.905 | 11.333 |
 | B0 | 42 | 83 | 0.595 | 0.167 | 0.907 | 0.929 | 6.691 |
 | B1 | 42 | 83 | 0.500 | 0.095 | 0.935 | 0.905 | 1.738 |
 
-- P minus P-snip, span recall: +0.262 [+0.095, +0.452] (excludes zero, n=42)
-- P minus P-win, span recall: +0.214 [+0.048, +0.381] (excludes zero, n=42)
-- P minus P-win300, span recall: +0.214 [+0.048, +0.381] (excludes zero, n=42)
+- P minus P-snip, span recall: +0.238 [+0.048, +0.429] (excludes zero, n=42)
+- P minus P-win, span recall: +0.238 [+0.071, +0.405] (excludes zero, n=42)
+- P minus P-win300, span recall: +0.238 [+0.095, +0.381] (excludes zero, n=42)
 - P minus P-auto, span recall: +0.000 [+0.000, +0.000] (includes zero, n=42)
 - P minus P-autoP, span recall: +0.000 [+0.000, +0.000] (includes zero, n=42)
-- P minus B0, span recall: -0.167 [-0.405, +0.071] (includes zero, n=42)
-- P minus B1, span recall: -0.071 [-0.286, +0.143] (includes zero, n=42)
-- P-snip minus B0, span recall: -0.429 [-0.619, -0.238] (excludes zero, n=42)
-- P-snip minus B1, span recall: -0.333 [-0.500, -0.191] (excludes zero, n=42)
+- P minus B0, span recall: -0.143 [-0.381, +0.095] (includes zero, n=42)
+- P minus B1, span recall: -0.048 [-0.262, +0.167] (includes zero, n=42)
+- P-snip minus B0, span recall: -0.381 [-0.571, -0.191] (excludes zero, n=42)
+- P-snip minus B1, span recall: -0.286 [-0.452, -0.119] (excludes zero, n=42)
 - P-win minus B0, span recall: -0.381 [-0.548, -0.214] (excludes zero, n=42)
 - P-win minus B1, span recall: -0.286 [-0.476, -0.095] (excludes zero, n=42)
 - P-win300 minus B0, span recall: -0.381 [-0.571, -0.191] (excludes zero, n=42)
 - P-win300 minus B1, span recall: -0.286 [-0.452, -0.119] (excludes zero, n=42)
-- P-auto minus B0, span recall: -0.167 [-0.405, +0.071] (includes zero, n=42)
-- P-auto minus B1, span recall: -0.071 [-0.286, +0.143] (includes zero, n=42)
-- P-autoP minus B0, span recall: -0.167 [-0.405, +0.071] (includes zero, n=42)
-- P-autoP minus B1, span recall: -0.071 [-0.286, +0.143] (includes zero, n=42)
+- P-auto minus B0, span recall: -0.143 [-0.381, +0.095] (includes zero, n=42)
+- P-auto minus B1, span recall: -0.048 [-0.262, +0.167] (includes zero, n=42)
+- P-autoP minus B0, span recall: -0.143 [-0.381, +0.095] (includes zero, n=42)
+- P-autoP minus B1, span recall: -0.048 [-0.262, +0.167] (includes zero, n=42)
 
 ## needle
 

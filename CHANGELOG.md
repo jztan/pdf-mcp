@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- **Scanned documents can no longer masquerade as searched.** A search
+  over a document whose pages have no extractable text (a scan that was
+  never OCR'd) used to return a clean empty result, indistinguishable
+  from a true "term not found". Every search response now reports text
+  coverage: `pdf_search` carries `text_coverage`
+  (`"full"`/`"partial"`/`"none"` for the searched document) and
+  `pdf_corpus_search` carries `low_text_coverage` (`{path: label}` for
+  every searched document that is not fully extractable, `{}` when all
+  are). Zero hits alongside a non-`"full"` label mean "unknown", not
+  "absent" — OCR the document with `pdf_read_pages(ocr=True)` or
+  inspect it with `pdf_render_pages`. `pdf_corpus_warm` doc rows gain
+  the same per-doc `text_coverage` label, so a corpus of scans warming
+  to zero searchable characters is visible at warm time; for such a doc
+  `embeddings_cached: true` keeps meaning "everything embeddable was
+  embedded" (which is nothing), and the label is what disambiguates.
+
 - **`excerpt_style="auto"` on `pdf_corpus_search`** (opt-in, `mode="auto"`
   only). The server chooses the excerpt unit per query from how many
   documents hold an AND keyword match: none routes to paragraph
@@ -107,6 +123,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes on load (to api.github.com); PDFs still never leave the tab.
 
 ### Fixed
+
+- **`server_info` no longer claims OCR is automatic.** The
+  `extraction.ocr` description said scanned PDFs "are auto-detected and
+  OCR'd", which has never been true (OCR runs only when
+  `pdf_read_pages` is called with `ocr=true`) and steered callers into
+  trusting empty search results over scanned corpora. The description
+  now states the opt-in contract and points at
+  `pdf_info`'s `ocr_candidate_pages` for detection.
 
 - **Hybrid snippet excerpts for pages without a keyword hit now anchor
   on the page's best-matching content instead of the top of the page.**

@@ -433,8 +433,11 @@ def _detect_features() -> dict[str, Any]:
             "ocr": {
                 "available": ocr_available,
                 "description": (
-                    "Scanned and image-only PDFs are auto-detected and OCR'd "
-                    "via Tesseract."
+                    "Opt-in: pages with no extractable text are OCR'd via "
+                    "Tesseract only when pdf_read_pages is called with "
+                    "ocr=true. pdf_info lists scanned pages in "
+                    "text_coverage.summary.ocr_candidate_pages. Search and "
+                    "corpus warm never run OCR."
                 ),
             },
         },
@@ -2608,6 +2611,21 @@ def _pdf_search_section_mode(
     return result
 
 
+def _searched_text_coverage(local_path: str, doc_pages: int) -> str:
+    """Coverage label for a just-searched doc, from cached page texts.
+
+    Runs after a search pass, which caches text for every page it
+    touched, so this is read-only. A page with no cached row reads as
+    empty (defensive). Zero-hit search + a non-"full" label = "unknown,
+    not absent" — the scanned-document silent-false-negative signal
+    (2026-09-03 spec).
+    """
+    texts = cache.get_pages_text(local_path, list(range(doc_pages)))
+    return corpus.text_coverage_label(
+        [{"text_chars": len(texts.get(pn) or "")} for pn in range(doc_pages)]
+    )
+
+
 @mcp.tool(
     description=_tool_description(
         "Search the PDF using keyword, semantic, or auto (hybrid RRF)"
@@ -2699,6 +2717,13 @@ def pdf_search(
               `confidence_threshold` are present in both semantic and
               hybrid modes.
             - total_matches, page_match_counts, search_mode, searched_pages
+            - text_coverage ('full' | 'partial' | 'none') — how much of the
+              document has extractable text. Page mode only. If this is
+              not 'full' and matches are empty, read the result as
+              "unknown", not "no matches": the missing pages are likely
+              scanned and are invisible to both keyword and semantic
+              search until OCR'd via pdf_read_pages(ocr=True) (or
+              inspected with pdf_render_pages).
             - Per-match `hidden_text` (bool) — true when the hit's page
               carries text invisible to a human reader (page-level, same
               signal as pdf_read_pages). Present on every page-mode hit.
@@ -2890,6 +2915,7 @@ def pdf_search(
                     "query": query,
                     "matches": [],
                     "total_matches": 0,
+                    "text_coverage": _searched_text_coverage(local_path, doc_pages),
                     "page_match_counts": {},
                     "searched_pages": doc_pages,
                     "search_mode": "semantic",
@@ -2959,6 +2985,7 @@ def pdf_search(
                 "query": query,
                 "matches": matches,
                 "total_matches": len(matches),
+                "text_coverage": _searched_text_coverage(local_path, doc_pages),
                 "page_match_counts": sem_page_counts,
                 "all_results_low_confidence": all_results_low_confidence,
                 "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
@@ -3050,6 +3077,7 @@ def pdf_search(
                 "query": query,
                 "matches": kw_matches,
                 "total_matches": len(kw_matches),
+                "text_coverage": _searched_text_coverage(local_path, doc_pages),
                 "page_match_counts": page_match_counts,
                 "searched_pages": doc_pages,
                 "hidden_text_detected": hidden_detected,
@@ -3094,6 +3122,7 @@ def pdf_search(
                 "query": query,
                 "matches": auto_kw,
                 "total_matches": len(auto_kw),
+                "text_coverage": _searched_text_coverage(local_path, doc_pages),
                 "page_match_counts": {
                     str(m["page"]): page_counts.get(m["page"] - 1, 0) for m in auto_kw
                 },
@@ -3270,6 +3299,7 @@ def pdf_search(
             "query": query,
             "matches": hybrid_matches,
             "total_matches": len(hybrid_matches),
+            "text_coverage": _searched_text_coverage(local_path, doc_pages),
             "page_match_counts": hybrid_page_counts,
             "all_results_low_confidence": all_results_low_confidence,
             "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
@@ -3411,10 +3441,17 @@ def pdf_corpus_warm(
 
     Returns:
         - docs: per-doc rows {path, status: "warmed"|"cached", pages,
-          embeddings_cached}. embeddings_cached reports actual cache
-          state for the configured embedding model (not the request
-          flag), so a text-only call answers whether an embeddings
-          pass is needed before semantic search.
+          embeddings_cached, text_coverage}. embeddings_cached reports
+          actual cache state for the configured embedding model (not
+          the request flag), so a text-only call answers whether an
+          embeddings pass is needed before semantic search.
+          text_coverage ('full' | 'partial' | 'none') reports how many
+          pages yielded extractable text: 'none' means the doc warmed
+          to zero searchable characters (typically a scan — warming
+          never runs OCR; use pdf_read_pages(ocr=True) to make it
+          searchable). For such a doc embeddings_cached: true means
+          only that everything embeddable was embedded, which for a
+          'none' doc is nothing.
         - unprocessed: resolved paths not warmed (budget ran out, or
           a cached doc was invalidated mid-call); re-issue to continue
         - skipped: [{path, reason}] for invalid/corrupt/denied files
@@ -4073,6 +4110,12 @@ def pdf_corpus_search(
           (null unless the window branch fired)}
         - coverage: {"searched": docs actually queried, "corpus":
           total resolved files}
+        - low_text_coverage: {path: 'partial' | 'none'} for every
+          searched doc whose pages are not all extractable (empty
+          object when all are). If a doc here shows 'none' (or
+          'partial'), zero hits from it mean "unknown", not "absent":
+          its scanned pages are invisible to keyword and semantic
+          search alike until OCR'd via pdf_read_pages(ocr=True).
         - hidden_text_detected: True if any returned hit's page
           carries text invisible to a human reader
         - unprocessed, skipped, corpus_size, warmed_this_call,
@@ -4187,6 +4230,15 @@ def pdf_corpus_search(
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
 
+    # Scanned-doc signal (2026-09-03 spec): a zero-hit search over docs
+    # with little or no extractable text must read as "unknown", not
+    # "no matches". Labels every searched doc whose coverage isn't full.
+    low_text_coverage = {
+        p: label
+        for p in ready_paths
+        if (label := corpus._doc_coverage_label(p, cache)) != "full"
+    }
+
     titles: dict[str, str] = {}
 
     def _title_for(path: str) -> str:
@@ -4254,6 +4306,7 @@ def pdf_corpus_search(
             "search_mode": "semantic",
             "excerpt_style": excerpt_style,
             "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
+            "low_text_coverage": low_text_coverage,
             "hidden_text_detected": hidden_text_detected,
             "all_results_low_confidence": all_results_low_confidence,
             "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
@@ -4342,6 +4395,7 @@ def pdf_corpus_search(
                 else {}
             ),
             "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
+            "low_text_coverage": low_text_coverage,
             "hidden_text_detected": hidden_text_detected,
             "unprocessed": warm["unprocessed"],
             "skipped": skipped,
@@ -4493,6 +4547,7 @@ def pdf_corpus_search(
             else {}
         ),
         "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
+        "low_text_coverage": low_text_coverage,
         "hidden_text_detected": hidden_text_detected,
         "all_results_low_confidence": all_results_low_confidence,
         "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,

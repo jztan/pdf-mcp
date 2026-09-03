@@ -249,6 +249,83 @@ class TestFinalizeDocSplit:
         assert corpus._cached_pages(path, cache, True, "fake-model") is None
 
 
+class TestWarmPartialSequential:
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?" for _ in texts]
+
+    def test_partial_row_and_unprocessed(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        files = _files(corpus_dir)
+        # budget 2.0 with a 0.3-step clock: charlie (1p) and alpha (2p)
+        # complete, bravo (4p) hits the deadline between batch 3 and 4
+        # and reports partial (each between-batch check advances 0.3).
+        out = corpus.warm_docs(
+            files,
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        partials = [d for d in out["docs"] if d["status"] == "partial"]
+        assert partials, out
+        row = partials[0]
+        assert row["embeddings_cached"] is False
+        assert row["embedded_pages"] >= 1
+        assert row["path"] in out["unprocessed"]
+        assert out["budget_exhausted"] is True
+        assert out["warm_complete"] is False
+        assert row["path"] not in [
+            d["path"] for d in out["docs"] if d["status"] == "warmed"
+        ]
+
+    def test_resume_skips_extraction_and_converges(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        files = _files(corpus_dir)
+        out1 = corpus.warm_docs(
+            files,
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        assert out1["warm_complete"] is False
+        seen = []
+        real_extract = corpus._warm_extract_worker
+
+        def spying_extract(path):
+            seen.append(path)
+            return real_extract(path)
+
+        monkeypatch.setattr(corpus, "_warm_extract_worker", spying_extract)
+        for _ in range(12):
+            out = corpus.warm_docs(
+                files,
+                600,
+                cache,
+                embeddings=True,
+                model_name="fake-model",
+                embed=self._embed,
+                clock=SteppingClock(0),
+            )
+            if out["warm_complete"]:
+                break
+        assert out["warm_complete"] is True
+        # docs whose text was already cached were never re-extracted
+        partial_path = out1["unprocessed"][0]
+        assert partial_path not in seen
+
+    def test_text_only_call_never_reports_partial(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert all(d["status"] in ("warmed", "cached") for d in out["docs"])
+
+
 class TestWarmWorkerCount:
     def test_below_gate_is_sequential(self):
         assert corpus._warm_worker_count(3, embeddings=False) == 1

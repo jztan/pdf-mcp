@@ -237,6 +237,18 @@ def _missing_embed_pages(
     return sorted(missing)
 
 
+def _embedded_pages_count(path: str, cache: Any, model_name: str) -> int | None:
+    """Cache-read count of non-empty pages with valid chunk rows, or
+    None when the doc's text is not (or no longer) fully warm."""
+    pages = _cached_pages(path, cache, False, model_name)
+    if pages is None:
+        return None
+    texts = cache.get_pages_text(path, list(range(pages)))
+    non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+    stored = cache.get_page_embeddings(path, sorted(non_empty), model_name)
+    return len(non_empty) - len(_missing_embed_pages(texts, stored))
+
+
 def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
     all pages. Ties break by term so the result is deterministic."""
@@ -503,22 +515,60 @@ def _warm_sequential(
 ) -> tuple[list[str], bool, int]:
     """Sequential warm loop (today's semantics, verbatim): clock checked
     before each doc; per-doc failure -> skipped; appends to docs/skipped
-    in place. Returns (unprocessed, budget_exhausted, warmed)."""
+    in place. A doc the budget interrupts mid-embedding is reported as a
+    partial row and joins unprocessed; a doc whose text is already
+    cached resumes through the batch loop without re-extraction.
+    Returns (unprocessed, budget_exhausted, warmed)."""
     warmed = 0
     unprocessed: list[str] = []
     budget_exhausted = False
+    deadline = start + budget_seconds
     for i, (path, _pages) in enumerate(pending):
         if clock() - start > budget_seconds:
             unprocessed = [p for p, _ in pending[i:]]
             budget_exhausted = True
             break
         try:
-            page_count, _complete, _embedded = _warm_one_doc(
-                path, cache, embeddings, model_name, embed
+            text_pages = (
+                _cached_pages(path, cache, False, model_name)
+                if embeddings and model_name is not None
+                else None
             )
+            if text_pages is not None:
+                # RESUME: text is warm, embed only the missing pages.
+                assert embed is not None and model_name is not None
+                texts = cache.get_pages_text(path, list(range(text_pages)))
+                complete, embedded = _embed_doc_batched(
+                    path, texts, cache, model_name, embed, deadline, clock
+                )
+                page_count = text_pages
+            else:
+                page_count, complete, embedded = _warm_one_doc(
+                    path,
+                    cache,
+                    embeddings,
+                    model_name,
+                    embed,
+                    deadline=deadline,
+                    clock=clock,
+                )
         except Exception as e:
             skipped.append({"path": path, "reason": f"warm failed: {e}"})
             continue
+        if not complete:
+            docs.append(
+                {
+                    "path": path,
+                    "status": "partial",
+                    "pages": page_count,
+                    "embeddings_cached": False,
+                    "embedded_pages": embedded,
+                    "text_coverage": _doc_coverage_label(path, cache),
+                }
+            )
+            unprocessed = [path] + [p for p, _ in pending[i + 1 :]]
+            budget_exhausted = True
+            break
         warmed += 1
         docs.append(
             {
@@ -780,6 +830,17 @@ def warm_docs(
     verified: list[dict[str, Any]] = []
     for row in docs:
         row_path = str(row["path"])
+        if row["status"] == "partial":
+            # Partial progress is re-read from the cache, never echoed
+            # from the loop; the path is already in unprocessed. A doc
+            # whose text was invalidated mid-call drops its row and
+            # stays retryable via unprocessed.
+            count = _embedded_pages_count(row_path, cache, model_name or "")
+            if count is None:
+                continue
+            row["embedded_pages"] = count
+            verified.append(row)
+            continue
         if _cached_pages(row_path, cache, embeddings, model_name) is not None:
             verified.append(row)
             continue

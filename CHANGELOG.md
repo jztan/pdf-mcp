@@ -8,197 +8,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
-- **Scanned documents can no longer masquerade as searched.** A search
-  over a document whose pages have no extractable text (a scan that was
-  never OCR'd) used to return a clean empty result, indistinguishable
-  from a true "term not found". Every search response now reports text
-  coverage: `pdf_search` carries `text_coverage`
-  (`"full"`/`"partial"`/`"none"` for the searched document) and
-  `pdf_corpus_search` carries `low_text_coverage` (`{path: label}` for
-  every searched document that is not fully extractable, `{}` when all
-  are). Zero hits alongside a non-`"full"` label mean "unknown", not
-  "absent" — OCR the document with `pdf_read_pages(ocr=True)` or
-  inspect it with `pdf_render_pages`. `pdf_corpus_warm` doc rows gain
-  the same per-doc `text_coverage` label, so a corpus of scans warming
-  to zero searchable characters is visible at warm time; for such a doc
-  `embeddings_cached: true` keeps meaning "everything embeddable was
-  embedded" (which is nothing), and the label is what disambiguates.
+- **Search responses now say when a document has no searchable text.** A
+  scanned, never-OCR'd PDF used to search cleanly and return zero hits,
+  indistinguishable from a true "term not found". `pdf_search` now returns
+  `text_coverage` (`"full"`/`"partial"`/`"none"`), `pdf_corpus_search`
+  returns `low_text_coverage` (`{path: label}` for searched documents that
+  are not fully extractable), and `pdf_corpus_warm` doc rows carry the same
+  label. Zero hits alongside a non-`"full"` label mean "unknown — OCR with
+  `pdf_read_pages(ocr=True)` first", not "absent".
 
 - **`excerpt_style="auto"` on `pdf_corpus_search`** (opt-in, `mode="auto"`
-  only). The server chooses the excerpt unit per query from how many
-  documents hold an AND keyword match: none routes to paragraph
-  excerpts, one routes to a single window of `window_tokens` per hit,
-  two or more routes to snippets so more documents fit a fixed context
-  budget. Ranking is unchanged; the response carries `excerpt_routing`
-  (`unit`, a human-readable `reason`, `keyword_doc_count`,
-  `matching_doc_count`, and `window_tokens_applied`, null unless the
-  window branch fired), and `excerpt_style` reports the unit actually
-  used. Snippet-routed hits carry `bbox`/`page_rect`/`clip` covering the
-  union of the text blocks the excerpt spans; every emitted bbox is
-  validated by re-extracting the text under it, a partially validated
-  hit carries `geometry: "partial"`, and a hit whose blocks cannot be
-  located carries `geometry: "unlocatable"` instead of a silent absence
-  or a wrong rectangle. Snippet excerpts for pages without a keyword
-  hit open at the sentence or heading boundary nearest their matched
-  content (the explicit legacy `"snippet"` style is unchanged and
-  stays geometry-free). Paragraph stays the default. On the 184-query corpus benchmark at a fixed 2,000-token
-  budget this routing is the one configuration ahead of both Bedrock
-  Knowledge Base anchors with confirmed margins (vs B0: needle +0.355,
-  spread +0.289; vs B1: needle +0.194, spread +0.200; all four CIs
-  exclude zero) and no confirmed loss; against the paragraph default
-  its per-class gains (needle 0.839 vs 0.677, spread 0.711 vs 0.600,
-  trap 0.840 vs 0.760) are not individually confirmed, and described
-  is unchanged.
+  only). Picks the excerpt unit per query — paragraph, a `window_tokens`
+  window, or snippets — from how many documents match the keywords, so
+  broad questions cover more documents and pinpoint questions carry more
+  context. The response reports the choice in `excerpt_routing`; ranking
+  and the paragraph default are unchanged. On the 184-query corpus
+  benchmark this is the one configuration ahead of both Bedrock Knowledge
+  Base anchors with confirmed margins and no confirmed loss.
 
 - **`excerpt_style="window"` on `pdf_search` and `pdf_corpus_search`.**
   Returns the anchor block plus its contiguous neighbours up to
-  `window_tokens` (default 600), instead of one selected block. The
-  anchor is the keyword-hit block; else the block covered by the page's
-  best-scoring sub-page embedding chunk; else the most query-dense block;
-  else the page top. Entries carry `window_blocks`, `anchor` and the
-  same `bbox`/`page_rect`/`clip` geometry as paragraph excerpts. Use it
-  when one call has to carry the evidence in context: the title above
-  a matching abstract, the later lines of a caption, a value beside its
-  label. It is a trade, not an upgrade, and paragraph stays the default:
-  on the 184-query corpus benchmark at a fixed 2,000-token budget it
-  recovers the graded span on 0.774 of needle queries against
-  paragraph's 0.677 (difference not confirmed, n=31) and 0.640 of trap
-  queries against 0.520, but only 0.108 of paraphrase (described)
-  queries against paragraph's 0.217 (confirmed loss, n=83) and 0.556 of
-  cross-document queries against 0.600, because about 3 windows fit the
-  budget where 11 to 18 paragraphs do. Document ranking is identical
-  across excerpt styles.
+  `window_tokens` (default 600), with the same `bbox`/`clip` geometry as
+  paragraph excerpts — for when one call must carry the evidence in
+  context (a title above a matching abstract, a value beside its label).
+  A trade, not an upgrade: fewer results fit a fixed budget and paraphrase
+  queries do worse, so paragraph stays the default.
+
 - **`pdf_corpus_search` hybrid mode now ranks documents, not only pages.**
-  A cached per-document head vector (page 1, first 1,500 characters,
-  same embedding model as pages) is fused as a third, lower-weight arm
-  beside the keyword and semantic page arms, so a document whose pages
-  never made the page shortlist can still reach `matches` and
-  `doc_match_counts`. On a 500-document corpus (100 graded arXiv papers
-  plus 400 distractors) described-query doc-hit@3 went from 0.48 to
-  0.68 and spread from 0.64 to 0.72, with needle and trap unchanged at
-  1.000 and 0.985; the keyword and semantic arms scored identically,
-  query for query, between the pre-arm and post-arm runs, which is the
-  control that makes the gain credible. A corpus-size sweep from 50 to 500
-  documents (`benchmark_data/corpus_search/doc_arm_size_sweep.md`) shows
-  the same picture at every size: described doc-hit@3 holds at 0.64 to
-  0.72 with the arm where it decays from 0.64 to 0.48 without it, needle
-  and trap never move, and the arm's only recurring cost is one spread
-  query at 100 documents or fewer (a paper found only by a keyword deep
-  inside it, whose abstract is about something else). Hybrid matches carry `doc_score`, and the
-  response carries `doc_profile_coverage`. Profiles are written by
-  `pdf_corpus_warm(embeddings=True)` and backfilled from cached text on
-  first search, so existing caches need no re-warm.
+  A cached per-document head vector joins the keyword and semantic arms,
+  so a relevant document whose pages missed the page shortlist can still
+  surface (described-query doc-hit@3 0.48 → 0.68 on a 500-document
+  corpus; needle and trap unchanged). Hybrid matches carry `doc_score`;
+  profiles backfill from cached text, so existing caches need no re-warm.
+
 - **`pdf_corpus_overview` cards carry `about`**: up to eight of the
   document's most distinctive terms relative to the corpus.
-- **`warm_complete` and `unwarmed` on every corpus tool**
-  (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`).
-  `warm_complete` is true only when every file in the corpus is verified
-  present in the cache, and `unwarmed` counts the files that are not.
-  This is the field to loop on when warming a corpus across several
-  calls: an empty `unprocessed` answers only "did the budget run out",
-  never "is the corpus ready".
+
+- **`warm_complete` and `unwarmed` on every corpus tool.** `warm_complete`
+  is true only when every file is verified present in the cache — the
+  field to loop on when warming a corpus across several calls; an empty
+  `unprocessed` only answers "did the budget run out".
 
 ### Changed
 
 - **Semantic and hybrid search score sub-page windows, not only whole
-  pages.** Each page now stores its whole-page vector plus about 300-token
-  windows with 20% overlap, and a page scores as the best of them. This
-  sharpens paraphrase queries: on the 100-document corpus benchmark,
-  `described` span recall doubled (0.12 to 0.24) and hybrid doc-NDCG@10
-  rose from 0.844 to 0.872, with needle and trap unchanged. Existing caches
-  re-embed once on first use after upgrading (extraction version 10); a
-  cold warm with embeddings takes roughly twice as long as before. Response
-  shapes are unchanged.
+  pages**, sharpening paraphrase queries (span recall on the described
+  class doubled; needle and trap unchanged). Existing caches re-embed once
+  on first use and a cold warm with embeddings takes roughly twice as
+  long; response shapes are unchanged.
 
-- **Browser demo redesigned** (pdf-mcp.jztan.com). New layout and visual
-  language: a page-field animation in the hero, a single demo stage that
-  takes your PDF, a URL, the 216-page sample, or the 6-PDF sample folder,
-  with the document (or folder) on the left and a "What your agent would
-  see" panel on the right showing every tool call's JSON. Below it: a
-  skim / search / read explainer, nine capability cards, a "why not just
-  paste the PDF" comparison, per-client install steps, and an FAQ. All six
-  in-browser tools, the corpus fusion port, and the token ledger are
-  unchanged; the JSON stays field-for-field with the server. The hero's
-  GitHub pill shows the live star count, which is the one request the page
-  makes on load (to api.github.com); PDFs still never leave the tab.
+- **Browser demo redesigned** (pdf-mcp.jztan.com): a single demo stage for
+  your PDF, a URL, or the sample corpus, beside a "What your agent would
+  see" panel whose JSON stays field-for-field with the server. PDFs still
+  never leave the tab.
 
 ### Fixed
 
-- **`server_info` no longer claims OCR is automatic.** The
-  `extraction.ocr` description said scanned PDFs "are auto-detected and
-  OCR'd", which has never been true (OCR runs only when
-  `pdf_read_pages` is called with `ocr=true`) and steered callers into
-  trusting empty search results over scanned corpora. The description
-  now states the opt-in contract and points at
-  `pdf_info`'s `ocr_candidate_pages` for detection.
+- **`server_info` no longer claims OCR is automatic.** OCR runs only when
+  `pdf_read_pages` is called with `ocr=true`; the old "auto-detected and
+  OCR'd" description steered callers into trusting empty search results
+  over scanned corpora.
 
-- **Hybrid snippet excerpts for pages without a keyword hit now anchor
-  on the page's best-matching content instead of the top of the page.**
-  Previously a semantically-matched page returned its first
-  `context_chars` characters as the snippet, so the excerpt could have
-  no relation to the query (a page whose relevant passage sits below a
-  preface returned the preface). Such excerpts are now positioned by
-  scoring windows of the page's best sub-page chunk against the query
-  with the same embedding model used for retrieval. Keyword-hit
-  snippets are unchanged.
+- **Hybrid snippet excerpts for semantically-matched pages now open at the
+  page's best-matching passage** instead of the top of the page, which
+  could have no relation to the query. Keyword-hit snippets are unchanged.
 
-- **`ff` and `ffi` ligatures no longer lose a letter.** The PDF text
-  engine expands a ligature into single letters that share one glyph
-  box, and the filter that drops faux-bold duplicates (the same glyph
-  drawn twice at one position) removed the second letter, so extracted
-  text read `diferent`, `efective`, `suf icient`, `ofset`, and keyword
-  search for `different` or `effective` missed those pages. On the
-  100-paper benchmark corpus 853 of 2,211 pages in 59 documents carried
-  at least one such word (`different` alone 814 times). A duplicate is
-  now kept when it is adjacent to the previous glyph in the text stream
-  (a ligature half); faux-bold repeats arrive later from another text
-  object and are still dropped. Cached text is re-extracted on first use
-  (extraction version 13).
+- **`ff` and `ffi` ligatures no longer lose a letter** (`diferent`,
+  `efective`), which made keyword search miss those words — 853 of 2,211
+  pages on the benchmark corpus carried at least one. Cached text is
+  re-extracted on first use.
 
-- **Full-width lines on two-column pages are no longer cut at the gutter.**
-  A title, author line, abstract or figure caption that runs straight
-  across both columns was split by glyph position and its right half
-  emitted after the entire left column, so `pdf_read_pages` returned
-  `Macroeconom` on one line and `ic Risks from Maritime Trade Disruptions`
-  hundreds of characters later, and `pdf_search` could not match the
-  title at all. Text is now split at a column boundary only where the
-  line has a real gap there, and spanning lines are emitted as their own
-  band in reading order (everything above them in both columns, the line,
-  then the columns below), so a multi-line abstract or caption reads line
-  after line instead of alternating between columns. On the 100-paper
-  corpus benchmark, 9 of 127 graded evidence spans that were present in
-  the PDF but absent from the extracted text are now extracted; snippet
-  span recall rose from 0.643 to 0.786 on needle queries and 0.560 to
-  0.720 on trap queries, paragraph-excerpt needle recall from 0.429 to
-  0.500, with document-level ranking unchanged. Reading-order fidelity on
-  the 44-document READoc set is unchanged (two-column 0.806 to 0.808, paired
-  run, no document down). A spanning line must also be wide (at least 30%
-  of the span across the columns): a narrow table cell straddling a
-  column boundary the detector drew through a table's internal gap was
-  briefly treated as a band and emitted ahead of its row label. Cached
-  text is re-extracted on first use (extraction version 12).
+- **Full-width lines on two-column pages are no longer cut at the
+  gutter.** A title, abstract, or caption spanning both columns now reads
+  as whole lines in order instead of splitting into halves interleaved
+  with the columns, which search could not match. Cached text is
+  re-extracted on first use.
 
 - **`pdf_corpus_warm` could report a complete warm while documents were
-  missing from the cache.** Each document's reported status said which
-  code path had run, never what had actually been written, so a warm
-  whose write did not become visible was invisible to the caller too. A
-  500-document corpus came back with `unprocessed: []` while 21
-  documents held no cache entry, and a benchmark run against that corpus
-  produced uniformly wrong numbers with no sign anything was amiss.
-  Every row is now re-read from the cache before the response is built
-  (about 0.9ms per document, against seconds per document to warm one).
-  A document that will not read back is reported in `skipped` with the
-  reason `warmed but not readable back from cache`; one that was cached
-  when the call started but was invalidated during it moves to
-  `unprocessed` for retry. A `docs` row now means the cache holds that
-  document.
+  missing from the cache.** Every doc row is now verified against the
+  cache before the response is built (~0.9 ms per document); a `docs` row
+  now means the cache actually holds that document.
 
 - Closing a document could raise `RuntimeError: Set changed size during
-  iteration` from inside pypdfium2 when Python's cyclic garbage collector
-  ran mid-close (seen intermittently on Python 3.14, where it turned an
-  otherwise successful `pdf_render_pages` call into a tool error). Every
-  document close now releases live page handles from a snapshot first, so
-  the collector has nothing to interrupt.
+  iteration` from inside pypdfium2 when the garbage collector ran
+  mid-close (intermittent on Python 3.14).
 
 ## [3.0.0] - 2026-08-29
 ### Changed

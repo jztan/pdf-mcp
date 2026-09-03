@@ -133,3 +133,30 @@ class TestKillMidBatch:
             )
         assert complete is True
         assert corpus._cached_pages(path, cache, True, "fake-model") == pc
+
+
+class TestOvershootBound:
+    def test_sequential_overshoot_is_at_most_one_batch(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        path = str(corpus_dir / "bravo.pdf")  # 4 pages
+        embed_calls = []
+
+        def counting_embed(texts):
+            embed_calls.append(len(texts))
+            return [b"\x00\x00\x80?" for _ in texts]
+
+        # Deadline in the past: exactly one batch (the floor) may run.
+        _, complete, embedded = corpus._warm_one_doc(
+            path,
+            cache,
+            True,
+            "fake-model",
+            counting_embed,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )
+        assert complete is False
+        assert embedded == 1
+        assert len(embed_calls) == 1  # one batch, no profile encode

@@ -3440,8 +3440,14 @@ def pdf_corpus_warm(
         recursive: Directory mode only, recurse into subdirectories.
 
     Returns:
-        - docs: per-doc rows {path, status: "warmed"|"cached", pages,
-          embeddings_cached, text_coverage}. embeddings_cached reports
+        - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
+          pages, embeddings_cached, text_coverage}. A very large
+          document may not finish embedding inside one budget: it is
+          reported with status "partial" plus embedded_pages (how many
+          pages hold embeddings so far), stays in `unprocessed`, and
+          continues from committed progress on the next call. Committed
+          progress survives client timeouts and server restarts.
+          embeddings_cached reports
           actual cache state for the configured embedding model (not
           the request flag), so a text-only call answers whether an
           embeddings pass is needed before semantic search.

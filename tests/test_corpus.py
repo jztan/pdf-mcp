@@ -326,6 +326,47 @@ class TestWarmPartialSequential:
         assert all(d["status"] in ("warmed", "cached") for d in out["docs"])
 
 
+class TestWarmPartialVerification:
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?" for _ in texts]
+
+    def test_embedded_pages_is_cache_read_not_echoed(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        row = [d for d in out["docs"] if d["status"] == "partial"][0]
+        assert row["embedded_pages"] == corpus._embedded_pages_count(
+            row["path"], cache, "fake-model"
+        )
+
+    def test_partial_path_listed_once_in_unprocessed(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        partial = [d["path"] for d in out["docs"] if d["status"] == "partial"]
+        assert out["unprocessed"].count(partial[0]) == 1
+        assert out["unwarmed"] == len(out["unprocessed"]) + len(out["skipped"])
+
+
 class TestWarmWorkerCount:
     def test_below_gate_is_sequential(self):
         assert corpus._warm_worker_count(3, embeddings=False) == 1
@@ -665,6 +706,52 @@ class TestConcurrentWarm:
         )
         assert out["warmed_this_call"] == 3
         assert all(d["embeddings_cached"] for d in out["docs"])
+
+    def test_resume_docs_bypass_the_pool(self, corpus_dir, cache, monkeypatch):
+        self._force_pool(monkeypatch)
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+
+        def fake_embed(texts):
+            return [b"\x00\x00\x80?" for _ in texts]
+
+        files = _files(corpus_dir)
+        first = corpus.warm_docs(
+            files,
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=fake_embed,
+            clock=SteppingClock(0.3),
+        )
+        assert first["warm_complete"] is False
+
+        resumable = [
+            p
+            for p in first["unprocessed"]
+            if corpus._cached_pages(p, cache, False, "fake-model") is not None
+        ]
+        assert resumable, first
+
+        def boom(path):
+            raise AssertionError(f"pool extraction for resumable doc {path}")
+
+        # Text-warm docs must not reach the extraction worker again.
+        monkeypatch.setattr(corpus, "_warm_extract_worker", boom)
+        out = None
+        for _ in range(12):
+            out = corpus.warm_docs(
+                list(resumable),
+                600,
+                cache,
+                embeddings=True,
+                model_name="fake-model",
+                embed=fake_embed,
+                clock=SteppingClock(0),
+            )
+            if out["warm_complete"]:
+                break
+        assert out is not None and out["warm_complete"] is True
 
 
 class TestWarmDocs:

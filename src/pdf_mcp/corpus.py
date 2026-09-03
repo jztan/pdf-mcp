@@ -655,6 +655,8 @@ def _warm_concurrent(
                             model_name,
                             embed,
                             layout=layout_w,
+                            deadline=start + budget_seconds,
+                            clock=clock,
                         )
                     except BrokenProcessPool:
                         raise
@@ -671,6 +673,20 @@ def _warm_concurrent(
                         skipped.append({"path": path, "reason": f"warm failed: {e}"})
                         continue
                     handled.add(path)
+                    if not _complete:
+                        docs.append(
+                            {
+                                "path": path,
+                                "status": "partial",
+                                "pages": page_count,
+                                "embeddings_cached": False,
+                                "embedded_pages": _embedded,
+                                "text_coverage": _doc_coverage_label(path, cache),
+                            }
+                        )
+                        unprocessed.append(path)
+                        budget_exhausted = True
+                        continue
                     warmed += 1
                     docs.append(
                         {
@@ -781,10 +797,24 @@ def warm_docs(
             logger.warning("doc profile backfill failed: %s", exc)
 
     uncached.sort(key=lambda item: item[1])
-    workers = _warm_worker_count(len(uncached), embeddings)
-    if workers <= 1:
+    resume = [
+        item
+        for item in uncached
+        if embeddings
+        and model_name is not None
+        and _cached_pages(item[0], cache, False, model_name) is not None
+    ]
+    cold = [item for item in uncached if item not in resume]
+
+    warmed = 0
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    if resume:
+        # Resume docs first: they need no extraction, so they never go
+        # to the pool, and finishing an interrupted giant is the
+        # natural convergence order.
         unprocessed, budget_exhausted, warmed = _warm_sequential(
-            uncached,
+            resume,
             budget_seconds,
             start,
             clock,
@@ -796,21 +826,41 @@ def warm_docs(
             skipped,
             _emb_cached,
         )
-    else:
-        unprocessed, budget_exhausted, warmed = _warm_concurrent(
-            uncached,
-            workers,
-            budget_seconds,
-            start,
-            clock,
-            cache,
-            embeddings,
-            model_name,
-            embed,
-            docs,
-            skipped,
-            _emb_cached,
-        )
+    if cold and not budget_exhausted:
+        workers = _warm_worker_count(len(cold), embeddings)
+        if workers <= 1:
+            more_unproc, budget_exhausted, more_warmed = _warm_sequential(
+                cold,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+            )
+        else:
+            more_unproc, budget_exhausted, more_warmed = _warm_concurrent(
+                cold,
+                workers,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+            )
+        unprocessed += more_unproc
+        warmed += more_warmed
+    elif cold:
+        unprocessed += [p for p, _ in cold]
 
     # Verification pass. Every row above is a claim about which branch
     # ran, not about what landed in SQLite, so a write that never became

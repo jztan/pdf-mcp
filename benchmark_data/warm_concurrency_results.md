@@ -72,3 +72,34 @@ threads.
    multi-column) remains blocked on the upstream `detect_column_boxes` /
    `get_text(clip, sort=True)` nondeterminism, which predates this
    feature and is tracked in the backlog.
+
+## Post batched-commits re-run (2026-09-03)
+
+Re-run of both modes after the warm-batch-commits change (embedding
+progress commits in durable page batches, `WARM_EMBED_BATCH_PAGES` 24,
+clock checked between batches; text extraction untouched). Same harness,
+same corpus shape (100 docs, 2238 pages), cold cache each run.
+
+| mode | config | wall(s) | vs seq | corrupt | txt-diff |
+|---|---|---|---|---|---|
+| text | sequential | 102.8 | 1.00x | | |
+| text | concurrent, 2 workers | 54.2 | 1.90x | 0 | 0 |
+| text | concurrent, 4 workers | 29.5 | 3.49x | 0 | 0 |
+| text | concurrent, 8 workers | 17.1 | 6.01x | 0 | 0 |
+| embeddings | sequential | 445.9 | 1.00x | | |
+| embeddings | concurrent, 2 workers | 334.6 | 1.33x | 0 | 0 |
+| embeddings | concurrent, 4 workers | 342.0 | 1.30x | 0 | 0 |
+
+**Gate verdict: PASS.** Corruption invariant holds with batching active
+(0 corrupt, 0 txt-diff in every arm), which closes the re-validation the
+commit-granularity change re-opened.
+
+Honest deltas vs the pre-batching record: text best 6.01x (was 3.87x at
+8 workers; better run). Embeddings best 1.33x at 2 workers against the
+recorded 1.62x at 4. Sequential embeddings wall (445.9s / 2238 pages =
+0.199s/page) matches the independently measured encode cost (0.197s/page)
+exactly, so the sequential arm is at parity and the difference sits in
+the concurrent arm; candidate causes are per-batch commit overhead
+(pages/24 commits per doc instead of 1) and run-to-run variance. The
+feature's purpose is durability, not throughput; the trade is accepted
+and the corruption gate, not the speedup, is the pass criterion.

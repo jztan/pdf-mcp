@@ -379,11 +379,15 @@ def _finalize_doc(
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
     layout: "dict[int, tuple[list[Any], tuple[float, float], bool]] | None" = None,
-) -> int:
-    """Parent-side tail of warming one doc: OCR preservation, per-doc
-    encode, then the three cache writes together (atomic per doc).
-
-    Always runs in the parent process — every SQLite touch is here.
+    deadline: float = float("inf"),
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[int, bool, int]:
+    """Parent-side tail of warming one doc: OCR preservation, the atomic
+    text transaction, then the durable batched embedding loop (which may
+    stop at the deadline). Returns (page_count, emb_complete,
+    embedded_pages); emb_complete is True when embeddings were not
+    requested. Always runs in the parent process — every SQLite touch
+    is here.
     """
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
@@ -405,33 +409,7 @@ def _finalize_doc(
                 texts[pn] = cached_text
                 preserved.add(pn)
 
-    blobs: dict[int, list[bytes]] = {}
-    if embeddings:
-        assert embed is not None and model_name is not None
-        non_empty = {pn: t for pn, t in texts.items() if t.strip()}
-        if non_empty:
-            nums = sorted(non_empty)
-            # One vector per page dilutes a single answer sentence into a
-            # page average. Embed sub-page windows instead and keep them
-            # ordered; chunk_idx is list position downstream. All chunks go
-            # through one embed call so the expensive step keeps its count.
-            per_page = {pn: page_embedding_units(non_empty[pn]) for pn in nums}
-            flat = [c for pn in nums for c in per_page[pn]]
-            vecs = embed(flat) if flat else []
-            cursor = 0
-            for pn in nums:
-                count = len(per_page[pn])
-                blobs[pn] = vecs[cursor : cursor + count]
-                cursor += count
-
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
-
-    profile: "tuple[bytes | None, dict[str, int]] | None" = None
-    if embeddings and embed is not None and model_name is not None:
-        try:
-            profile = build_doc_profile(texts, embed)
-        except Exception as exc:  # noqa: BLE001 - profile is optional
-            logger.warning("doc profile skipped for %s: %s", path, exc)
 
     # ONE transaction for the whole document. Each of these writes used to
     # open its own connection, and leaving that block commits, which is an
@@ -448,12 +426,6 @@ def _finalize_doc(
             path, page_count, metadata, toc, text_coverage=coverage, conn=conn
         )
         cache.save_pages_text(path, to_save, conn=conn)
-        if blobs and model_name is not None:
-            cache.save_page_embeddings(path, blobs, model_name, conn=conn)
-        if profile is not None and model_name is not None:
-            cache.save_doc_profile(
-                path, PROFILE_HEAD_CHARS, profile[0], profile[1], model_name, conn=conn
-            )
         if layout:
             # Written AFTER page_text: the hidden flag lives on page_text
             # rows, and blocks are keyed independently by mtime.
@@ -467,7 +439,13 @@ def _finalize_doc(
                 {pn: hidden for pn, (_b, _s, hidden) in layout.items()},
                 conn=conn,
             )
-    return page_count
+    emb_complete, embedded = True, 0
+    if embeddings:
+        assert embed is not None and model_name is not None
+        emb_complete, embedded = _embed_doc_batched(
+            path, texts, cache, model_name, embed, deadline, clock
+        )
+    return page_count, emb_complete, embedded
 
 
 def _warm_one_doc(
@@ -476,11 +454,14 @@ def _warm_one_doc(
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
-) -> int:
-    """Extract everything for one doc, then write to cache.
+    deadline: float = float("inf"),
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[int, bool, int]:
+    """Extract everything for one doc, then write: text atomically,
+    embeddings in durable batches (may stop at the deadline).
 
     Extraction completes fully before any write, so a failure leaves
-    the cache untouched (atomic per doc).
+    the cache untouched.
     """
     page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
     return _finalize_doc(
@@ -495,6 +476,8 @@ def _warm_one_doc(
         model_name,
         embed,
         layout=layout,
+        deadline=deadline,
+        clock=clock,
     )
 
 
@@ -530,7 +513,9 @@ def _warm_sequential(
             budget_exhausted = True
             break
         try:
-            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
+            page_count, _complete, _embedded = _warm_one_doc(
+                path, cache, embeddings, model_name, embed
+            )
         except Exception as e:
             skipped.append({"path": path, "reason": f"warm failed: {e}"})
             continue
@@ -608,7 +593,7 @@ def _warm_concurrent(
                             coverage_w,
                             layout_w,
                         ) = fut.result()
-                        page_count = _finalize_doc(
+                        page_count, _complete, _embedded = _finalize_doc(
                             path,
                             page_count_w,
                             metadata_w,

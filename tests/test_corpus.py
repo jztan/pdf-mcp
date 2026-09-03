@@ -214,6 +214,41 @@ class TestEmbedDocBatched:
         assert (complete, done) == (True, 0)
 
 
+class TestFinalizeDocSplit:
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?" for _ in texts]
+
+    def test_text_only_returns_complete_no_profile(self, corpus_dir, cache):
+        path = str(corpus_dir / "alpha.pdf")
+        pc, complete, embedded = corpus._warm_one_doc(
+            path, cache, embeddings=False, model_name=None, embed=None
+        )
+        assert complete is True and embedded == 0
+        assert cache.get_metadata(path) is not None
+        assert cache.get_doc_profiles([path], "fake-model") == {}
+
+    def test_deadline_yields_partial_with_text_committed(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        path = str(corpus_dir / "bravo.pdf")  # 4 pages
+        pc, complete, embedded = corpus._warm_one_doc(
+            path,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )
+        assert complete is False
+        assert embedded >= 1  # progress floor
+        # text landed atomically even though embeddings are partial
+        assert corpus._cached_pages(path, cache, False, "fake-model") == pc
+        assert corpus._cached_pages(path, cache, True, "fake-model") is None
+
+
 class TestWarmWorkerCount:
     def test_below_gate_is_sequential(self):
         assert corpus._warm_worker_count(3, embeddings=False) == 1

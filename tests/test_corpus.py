@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pymupdf
 
-from pdf_mcp import corpus
+from pdf_mcp import corpus, extractor
 from pdf_mcp.extractor import _warm_extract_worker
 import pytest
 
@@ -101,6 +101,27 @@ class SteppingClock:
 
 def _files(corpus_dir):
     return corpus.resolve_corpus(str(corpus_dir))["files"]
+
+
+class TestMissingEmbedPages:
+    def test_pages_without_rows_are_missing(self):
+        texts = {0: "alpha text", 1: "bravo text", 2: ""}
+        stored = {0: [b"x"] * len(extractor.page_embedding_units("alpha text"))}
+        assert corpus._missing_embed_pages(texts, stored) == [1]
+
+    def test_empty_pages_never_missing(self):
+        assert corpus._missing_embed_pages({0: "   "}, {}) == []
+
+    def test_stale_layout_pages_are_missing_again(self):
+        texts = {0: "some real page text"}
+        stored = {0: [b"x"]}  # one row where units() would write != 1
+        expected = extractor.stale_layout_pages(texts, stored)
+        got = corpus._missing_embed_pages(texts, stored)
+        assert got == expected if expected else got == []
+
+    def test_result_sorted_and_deduped(self):
+        texts = {3: "c", 1: "a", 2: "b"}
+        assert corpus._missing_embed_pages(texts, {}) == [1, 2, 3]
 
 
 class TestWarmWorkerCount:

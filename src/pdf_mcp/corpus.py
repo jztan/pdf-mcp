@@ -223,6 +223,16 @@ def _cached_pages(
     return pages
 
 
+def _missing_embed_pages(
+    texts: dict[int, str], stored: dict[int, list[bytes]]
+) -> list[int]:
+    """Non-empty pages needing (re-)embedding: no stored chunk rows, or
+    a stored unit count current code would not write (stale layout)."""
+    missing = {pn for pn, t in texts.items() if t.strip() and not stored.get(pn)}
+    missing.update(stale_layout_pages(texts, stored))
+    return sorted(missing)
+
+
 def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
     all pages. Ties break by term so the result is deterministic."""

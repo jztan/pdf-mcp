@@ -124,6 +124,96 @@ class TestMissingEmbedPages:
         assert corpus._missing_embed_pages(texts, {}) == [1, 2, 3]
 
 
+class TestEmbedDocBatched:
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?" for _ in texts]  # 1.0 float32 LE
+
+    def _texts(self, n):
+        return {i: f"page {i} body text budget report" for i in range(n)}
+
+    def test_completes_and_writes_profile(self, corpus_dir, cache):
+        path = str(corpus_dir / "alpha.pdf")
+        texts = self._texts(3)
+        complete, done = corpus._embed_doc_batched(
+            path,
+            texts,
+            cache,
+            "fake-model",
+            self._embed,
+            deadline=float("inf"),
+        )
+        assert (complete, done) == (True, 3)
+        assert len(cache.get_page_embeddings(path, [0, 1, 2], "fake-model")) == 3
+        assert path in cache.get_doc_profiles([path], "fake-model")
+
+    def test_deadline_stops_between_batches_with_floor(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 2)
+        path = str(corpus_dir / "alpha.pdf")
+        # deadline already passed: the first batch still lands (floor)
+        complete, done = corpus._embed_doc_batched(
+            path,
+            self._texts(5),
+            cache,
+            "fake-model",
+            self._embed,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )
+        assert complete is False
+        assert done == 2
+        assert len(cache.get_page_embeddings(path, list(range(5)), "fake-model")) == 2
+        # no profile before completion
+        assert cache.get_doc_profiles([path], "fake-model") == {}
+
+    def test_resume_embeds_only_missing_pages(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 2)
+        path = str(corpus_dir / "alpha.pdf")
+        texts = self._texts(5)
+        corpus._embed_doc_batched(
+            path,
+            texts,
+            cache,
+            "fake-model",
+            self._embed,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )
+        calls = []
+
+        def counting_embed(chunks):
+            calls.append(len(chunks))
+            return self._embed(chunks)
+
+        complete, done = corpus._embed_doc_batched(
+            path,
+            texts,
+            cache,
+            "fake-model",
+            counting_embed,
+            deadline=float("inf"),
+        )
+        assert (complete, done) == (True, 5)
+        # pages 0-1 were already stored; only 3 pages' chunks re-encoded,
+        # plus one profile encode call at completion
+        per_page = len(extractor.page_embedding_units(texts[2]))
+        assert sum(calls) == 3 * per_page + 1
+
+    def test_all_empty_pages_completes_immediately(self, corpus_dir, cache):
+        path = str(corpus_dir / "alpha.pdf")
+        complete, done = corpus._embed_doc_batched(
+            path,
+            {0: "", 1: "  "},
+            cache,
+            "fake-model",
+            self._embed,
+            deadline=float("inf"),
+        )
+        assert (complete, done) == (True, 0)
+
+
 class TestWarmWorkerCount:
     def test_below_gate_is_sequential(self):
         assert corpus._warm_worker_count(3, embeddings=False) == 1

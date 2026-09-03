@@ -82,6 +82,10 @@ CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 WARM_DOC_GATE = 4
 WARM_TEXT_CAP = 8
 WARM_EMBED_CAP = 4
+# Pages per durable embedding batch: ~5s of encoding on the reference
+# machine (measured 0.197s/page, 5 units/page, bge-small, 2026-09-03).
+# One batch is the overshoot bound and the per-call progress floor.
+WARM_EMBED_BATCH_PAGES = 24
 
 
 def _validate_file(
@@ -303,6 +307,64 @@ def backfill_doc_profiles(
                 path, PROFILE_HEAD_CHARS, vec, terms, model_name, conn=conn
             )
     return len(built)
+
+
+def _embed_doc_batched(
+    path: str,
+    texts: dict[int, str],
+    cache: Any,
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+    deadline: float,
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[bool, int]:
+    """Embed a doc's missing pages in durable batches (contract A).
+
+    Each batch commits in its own transaction; the clock is checked
+    BETWEEN batches, so at least one batch lands per call (progress
+    floor) and overshoot is bounded by one batch. On completion the doc
+    profile is written last, as the completion marker. Returns
+    (complete, embedded_pages) where embedded_pages counts non-empty
+    pages holding valid chunk rows after this call.
+    """
+    non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+    stored = cache.get_page_embeddings(path, sorted(non_empty), model_name)
+    missing = _missing_embed_pages(texts, stored)
+    done = len(non_empty) - len(missing)
+    idx = 0
+    while idx < len(missing):
+        if idx > 0 and clock() > deadline:
+            return False, done
+        batch = missing[idx : idx + WARM_EMBED_BATCH_PAGES]
+        per_page = {pn: page_embedding_units(non_empty[pn]) for pn in batch}
+        flat = [c for pn in batch for c in per_page[pn]]
+        vecs = embed(flat)
+        blobs: dict[int, list[bytes]] = {}
+        cursor = 0
+        for pn in batch:
+            count = len(per_page[pn])
+            blobs[pn] = vecs[cursor : cursor + count]
+            cursor += count
+        with cache.write_transaction() as conn:
+            cache.save_page_embeddings(path, blobs, model_name, conn=conn)
+        done += len(batch)
+        idx += len(batch)
+    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    try:
+        profile = build_doc_profile(texts, embed)
+    except Exception as exc:  # noqa: BLE001 - profile is optional
+        logger.warning("doc profile skipped for %s: %s", path, exc)
+    if profile is not None:
+        with cache.write_transaction() as conn:
+            cache.save_doc_profile(
+                path,
+                PROFILE_HEAD_CHARS,
+                profile[0],
+                profile[1],
+                model_name,
+                conn=conn,
+            )
+    return True, done
 
 
 def _finalize_doc(

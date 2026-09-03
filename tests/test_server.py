@@ -6196,3 +6196,66 @@ class TestRound3Refinements:
                 m["excerpt"][:60],
             )
         assert checked, "no geometry-carrying hits to validate"
+
+
+class TestScannedDocSignals:
+    """Truth-telling signals for scanned/zero-text documents (2026-09-03
+    spec): a zero-hit search over unextractable text must be
+    distinguishable from a true negative."""
+
+    def test_server_info_ocr_description_is_opt_in(self, isolated_server):
+        from pdf_mcp.server import server_info
+
+        desc = server_info()["features"]["extraction"]["ocr"]["description"]
+        assert "auto-detected" not in desc
+        assert "opt-in" in desc.lower()
+        assert "ocr=true" in desc.lower()
+
+    def test_warm_rows_carry_text_coverage(
+        self, corpus_dir, sample_pdf_scanned, isolated_server
+    ):
+        paths = [str(corpus_dir / "alpha.pdf"), sample_pdf_scanned]
+        result = pdf_corpus_warm(paths)
+        by_path = {d["path"]: d for d in result["docs"]}
+        assert by_path[str(corpus_dir / "alpha.pdf")]["text_coverage"] == "full"
+        assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
+
+        # cached rows (second call) carry the label too
+        again = pdf_corpus_warm(paths)
+        by_path = {d["path"]: d for d in again["docs"]}
+        assert {d["status"] for d in again["docs"]} == {"cached"}
+        assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
+
+    def test_corpus_search_flags_low_text_coverage(
+        self, corpus_dir, sample_pdf_scanned, isolated_server
+    ):
+        paths = [str(corpus_dir / "alpha.pdf"), sample_pdf_scanned]
+        pdf_corpus_warm(paths)
+        result = pdf_corpus_search(paths, "budget", mode="keyword")
+        assert result["low_text_coverage"] == {sample_pdf_scanned: "none"}
+
+    def test_corpus_search_low_text_coverage_empty_when_healthy(
+        self, corpus_dir, isolated_server
+    ):
+        pdf_corpus_warm(str(corpus_dir))
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="keyword")
+        assert result["low_text_coverage"] == {}
+
+    def test_pdf_search_reports_text_coverage_none(
+        self, sample_pdf_scanned, isolated_server
+    ):
+        result = pdf_search(sample_pdf_scanned, "budget", mode="keyword")
+        assert "error" not in result
+        assert result["total_matches"] == 0
+        assert result["text_coverage"] == "none"
+
+    def test_pdf_search_reports_text_coverage_full_and_partial(
+        self, sample_pdf, sample_pdf_mixed, isolated_server
+    ):
+        assert (
+            pdf_search(sample_pdf, "budget", mode="keyword")["text_coverage"] == "full"
+        )
+        assert (
+            pdf_search(sample_pdf_mixed, "text", mode="keyword")["text_coverage"]
+            == "partial"
+        )

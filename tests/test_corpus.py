@@ -1186,3 +1186,28 @@ class TestCachedPagesLayoutGate:
         text = ". ".join(f"sentence {i}" for i in range(400))
         c = self._Cache(text, [b"x"] * len(page_embedding_units(text)))
         assert corpus._cached_pages("p.pdf", c, True, "m") == 1
+
+
+class TestScannedDocWarmSignals:
+    """2026-09-03 spec: an all-empty (scanned) doc warms with an honest
+    text_coverage label, while embeddings_cached keeps its gate-tied
+    semantics (vacuously true: everything embeddable was embedded)."""
+
+    def test_empty_doc_labeled_none_embeddings_vacuously_true(
+        self, sample_pdf_scanned, cache
+    ):
+        def fake_embed(texts):
+            return [b"\x00\x00\x80?" for _ in texts]
+
+        out = corpus.warm_docs(
+            [sample_pdf_scanned],
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=fake_embed,
+            clock=SteppingClock(0),
+        )
+        (row,) = out["docs"]
+        assert row["text_coverage"] == "none"
+        assert row["embeddings_cached"] is True

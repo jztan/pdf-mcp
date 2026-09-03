@@ -1666,6 +1666,7 @@ estimated_tokens: 1740</pre>
         status: "warmed",
         pages: d.pages,
         embeddings_cached: false,
+        text_coverage: textCoverageLabel(d.pageTexts),
       })),
       unprocessed: [],
       skipped: corpusState.skipped,
@@ -1874,6 +1875,11 @@ estimated_tokens: 1740</pre>
       search_mode: "keyword",
       excerpt_style: "snippet",
       coverage: { searched: corpusState.docs.length, corpus: corpusState.docs.length },
+      low_text_coverage: Object.fromEntries(
+        corpusState.docs
+          .map((d) => [d.path, textCoverageLabel(d.pageTexts)])
+          .filter(([, label]) => label !== "full")
+      ),
       hidden_text_detected: false,
       unprocessed: [],
       skipped: corpusState.skipped,
@@ -2461,6 +2467,7 @@ estimated_tokens: 1740</pre>
       matches,
       total_matches: totalMatches,
       page_match_counts: pageCounts,
+      text_coverage: textCoverageLabel(pageTexts),
       searched_pages: pageTexts.length,
       hidden_text_detected: false,
       search_mode: "keyword",

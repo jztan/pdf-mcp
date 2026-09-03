@@ -469,6 +469,7 @@ def _warm_sequential(
                 "status": "warmed",
                 "pages": page_count,
                 "embeddings_cached": emb_cached(path),
+                "text_coverage": _doc_coverage_label(path, cache),
             }
         )
     return unprocessed, budget_exhausted, warmed
@@ -570,6 +571,7 @@ def _warm_concurrent(
                             "status": "warmed",
                             "pages": page_count,
                             "embeddings_cached": emb_cached(path),
+                            "text_coverage": _doc_coverage_label(path, cache),
                         }
                     )
     except (BrokenProcessPool, OSError):
@@ -649,6 +651,7 @@ def warm_docs(
                     "status": "cached",
                     "pages": pages,
                     "embeddings_cached": _emb_cached(path),
+                    "text_coverage": _doc_coverage_label(path, cache),
                 }
             )
             continue
@@ -747,6 +750,16 @@ def warm_docs(
         "warm_complete": unwarmed == 0,
         "unwarmed": unwarmed,
     }
+
+
+def _doc_coverage_label(path: str, cache: Any) -> str:
+    """text_coverage_label for a doc already in cache (any warm row site).
+
+    Reads the metadata row's coverage map; a missing row reads "none"
+    (defensive: every caller runs after a successful warm or cache hit).
+    """
+    meta = cache.get_metadata(path) or {}
+    return text_coverage_label(meta.get("text_coverage") or [])
 
 
 def text_coverage_label(coverage: list[dict[str, int]]) -> str:

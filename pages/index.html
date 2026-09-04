@@ -1059,9 +1059,9 @@ estimated_tokens: 925</pre>
             <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens.</td>
           </tr>
           <tr>
-            <th>Size limits</th>
-            <td>Claude Code refuses PDFs over about 100 pages or 30 MB. Other clients silently truncate.</td>
-            <td class="ours">No page limit. Every response is bounded: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
+            <th>Finding the page</th>
+            <td>Claude Code reads a PDF natively, but in windows of up to 20 pages per call, with no way to know which window holds the answer. Other clients silently truncate.</td>
+            <td class="ours">Search names the pages before anything is read, so the range is a result rather than a guess. Every response is bounded too: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
           </tr>
           <tr>
             <th>Layout</th>
@@ -1123,7 +1123,7 @@ estimated_tokens: 925</pre>
     <h2 class="section-title md" style="margin-bottom:34px">Questions people ask first.</h2>
     <details class="qa" open>
       <summary>How is this different from the PDF support built into my client?</summary>
-      <p>Built-in support pastes the whole file into context and hits a size ceiling (Claude Code stops at about 100 pages or 30 MB). pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages it needs, with no page limit and a persistent cache.</p>
+      <p>Built-in support reads the file for you, but it reads blind: Claude Code takes a page range and returns up to 20 pages a call, so a 216-page contract is eleven guesses unless something narrows the range first. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
     </details>
     <details class="qa">
       <summary>Does my document leave my machine?</summary>
@@ -1173,7 +1173,7 @@ estimated_tokens: 925</pre>
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs break most AI coding assistants. Claude Code, for example, refuses PDFs over roughly 30&nbsp;MB or 100 pages because loading the entire document into context exhausts the token budget. Dumping 100 pages into a model's context is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>

@@ -29,15 +29,33 @@ def test_sample_pdf_shape(tmp_path: Path) -> None:
             assert len(page.get_text().strip()) < 40
             assert len(page.get_images()) > 0
 
-        # Text pages carry substantial multi-block prose with repeated
-        # query terms across blocks (project realistic-PDF rule).
+        # Page 1 is the recital and is deliberately short; every other
+        # text page carries substantial multi-block prose.
         text_pages = [i for i in range(doc.page_count) if i not in SCANNED_PAGES]
-        for idx in text_pages[:10]:
+        for idx in text_pages[1:11]:
             text = doc[idx].get_text()
             assert len(text) > 1500
+
+        # Terms still repeat across the blocks of a single page, which is
+        # what the paragraph-block picker needs.
+        for idx in text_pages[1:11]:
+            body = doc[idx].get_text().lower()
+            assert max(body.count(t) for t in ("agreement", "party", "service")) >= 2
+
         full = "".join(doc[i].get_text().lower() for i in text_pages)
         for term in ("termination", "payment", "liability"):
             assert full.count(term) > 20
+
+        # ...but a term must NOT appear on every page. The earlier sample
+        # put an identical recital containing "termination" on all 216
+        # pages, so the demo's search returned the whole document in page
+        # order and read as broken. Each of these terms belongs to one
+        # article and should stay confined to a small slice of the doc.
+        for term in ("termination", "arbitration", "insurance"):
+            hit_pages = [i for i in text_pages if term in doc[i].get_text().lower()]
+            assert (
+                1 <= len(hit_pages) <= 0.15 * doc.page_count
+            ), f"{term!r} on {len(hit_pages)} of {doc.page_count} pages"
     finally:
         doc.close()
 

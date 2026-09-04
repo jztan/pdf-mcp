@@ -719,7 +719,7 @@
     <div class="hero-field">
       <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
       <div class="hero-stat-row">
-        <p class="hero-stat" id="heroStat">2 pages read. <span>98.6% of its tokens</span> never entered the context window.</p>
+        <p class="hero-stat" id="heroStat">2 pages read. <span>98.5% of its tokens</span> never entered the context window.</p>
       </div>
     </div>
 
@@ -801,7 +801,7 @@
             <div class="search-results" id="searchResults"></div>
             <div class="callout info" id="kwCallout" style="display:none">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-              <span><strong>Keyword mode</strong> shown here. The installed server also runs a semantic arm (on by default) and fuses both with RRF. Images, tables, and hidden-text detection are server-side only, so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
+              <span><strong>Keyword mode</strong> shown here, in page order: BM25 relevance scoring is server-side, so hits are listed with their per-page match count rather than a rank. The installed server also runs a semantic arm (on by default) and fuses both with RRF. Images, tables, and hidden-text detection are server-side only, so <code>images: []</code>, <code>tables: []</code>, and <code>hidden_text: false</code> are stubs in this demo.</span>
             </div>
             <div class="scoreboard" id="scoreboardBlock">
               <div class="sb-head"><span class="sb-title">what your agent has cost so far</span><span class="sb-pct" id="sbPct">0%</span></div>
@@ -961,28 +961,29 @@
     </div>
     <div class="skim-grid">
       <div class="skim-card">
-        <div class="skim-card-head"><b>1 · pdf_info</b><span>~140 tokens</span></div>
+        <div class="skim-card-head"><b>1 · pdf_info</b><span>~170 tokens</span></div>
         <h3>Learn the shape</h3>
         <p>Page count, table of contents, text coverage, and an estimated token cost before the agent commits to reading anything.</p>
         <pre>page_count: 216
+total_text_chars: 344281
 estimated_tokens: 172800
 ocr_candidate_pages: [41, 42, 43, 131]</pre>
       </div>
       <div class="skim-card">
-        <div class="skim-card-head"><b>2 · pdf_search</b><span>~520 tokens</span></div>
+        <div class="skim-card-head"><b>2 · pdf_search</b><span>~230 tokens</span></div>
         <h3>Find the pages</h3>
         <p>Hybrid keyword and semantic ranking returns the paragraph that matched, with page and bounding box. Often enough to answer outright.</p>
-        <pre>matches: p.3, p.90, p.7
-search_mode: hybrid
-low_confidence: false</pre>
+        <pre>matches: p.198, p.199, p.201
+total_matches: 6
+search_mode: hybrid</pre>
       </div>
       <div class="skim-card">
-        <div class="skim-card-head"><b>3 · pdf_read_pages</b><span>~1,740 tokens</span></div>
+        <div class="skim-card-head"><b>3 · pdf_read_pages</b><span>~930 tokens</span></div>
         <h3>Read only those</h3>
         <p>Full text, tables, and images for the two pages that matter. The other 214 stay on disk.</p>
-        <pre>pages: "3,7"
+        <pre>pages: "198,199"
 from_cache: true
-estimated_tokens: 1740</pre>
+estimated_tokens: 925</pre>
       </div>
     </div>
   </div>
@@ -1054,13 +1055,13 @@ estimated_tokens: 1740</pre>
         <tbody>
           <tr>
             <th>Context cost</th>
-            <td>The whole document lands in the window. A 216-page contract is 172,800 tokens before the first question.</td>
-            <td class="ours">The agent reads structure first, searches, then reads pages. Two pages of the sample contract cost about 2,400 tokens.</td>
+            <td>The whole document lands in the window. The 216-page sample contract is about 86,000 tokens of extracted text before the first question.</td>
+            <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens.</td>
           </tr>
           <tr>
-            <th>Size limits</th>
-            <td>Claude Code refuses PDFs over about 100 pages or 30 MB. Other clients silently truncate.</td>
-            <td class="ours">No page limit. Every response is bounded: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
+            <th>Finding the page</th>
+            <td>Claude Code reads a PDF natively, but in windows of up to 20 pages per call, with no way to know which window holds the answer. Other clients silently truncate.</td>
+            <td class="ours">Search names the pages before anything is read, so the range is a result rather than a guess. Every response is bounded too: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
           </tr>
           <tr>
             <th>Layout</th>
@@ -1122,7 +1123,7 @@ estimated_tokens: 1740</pre>
     <h2 class="section-title md" style="margin-bottom:34px">Questions people ask first.</h2>
     <details class="qa" open>
       <summary>How is this different from the PDF support built into my client?</summary>
-      <p>Built-in support pastes the whole file into context and hits a size ceiling (Claude Code stops at about 100 pages or 30 MB). pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages it needs, with no page limit and a persistent cache.</p>
+      <p>Built-in support reads the file for you, but it reads blind: Claude Code takes a page range and returns up to 20 pages a call, so a 216-page contract is eleven guesses unless something narrows the range first. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
     </details>
     <details class="qa">
       <summary>Does my document leave my machine?</summary>
@@ -1172,7 +1173,7 @@ estimated_tokens: 1740</pre>
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs break most AI coding assistants. Claude Code, for example, refuses PDFs over roughly 30&nbsp;MB or 100 pages because loading the entire document into context exhausts the token budget. Dumping 100 pages into a model's context is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>
@@ -1229,6 +1230,11 @@ estimated_tokens: 1740</pre>
   let pageRects = [];
   let docTokensTotal = 0;
   let pdfInfo = null, pdfSearch = null, pdfReadPages = null;
+  // Per-page coverage arrays drive the coverage viz. They are deliberately
+  // NOT part of pdfInfo: the real server ships a constant-size summary
+  // unless the caller passes detail=True, and billing the demo's ledger
+  // for 216 per-page entries overstated pdf_info's cost ~4x.
+  let coverageDetail = { text_chars_per_page: [], raster_images_per_page: [] };
   let corpusState = null;
   // In-flight guard: startCorpus's async warm loop reads/mutates the module-
   // level corpusState across many awaits. Two concurrent invocations (a
@@ -2085,6 +2091,11 @@ estimated_tokens: 1740</pre>
     }
     const ocrTruncated = ocrCandidates.length > OCR_CANDIDATES_MAX;
 
+    coverageDetail = {
+      text_chars_per_page: textCharsPerPage,
+      raster_images_per_page: rasterImagesPerPage
+    };
+
     pdfInfo = {
       page_count: pdf.numPages,
       metadata: {
@@ -2108,9 +2119,7 @@ estimated_tokens: 1740</pre>
           ocr_candidate_pages: ocrCandidates.slice(0, OCR_CANDIDATES_MAX),
           ocr_candidate_pages_truncated: ocrTruncated
         },
-        detail_included: true,
-        text_chars_per_page: textCharsPerPage,
-        raster_images_per_page: rasterImagesPerPage
+        detail_included: false
       },
       file_size_bytes: sizeBytes,
       file_size_mb: Math.round(sizeBytes / (1024 * 1024) * 100) / 100,
@@ -2139,7 +2148,7 @@ estimated_tokens: 1740</pre>
 
     // Coverage viz: grid for most PDFs (interactive per-page), SVG area chart for very large PDFs (>500p)
     const COVERAGE_BAR_THRESHOLD = 500;
-    renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD);
+    renderCoverage(info, info.page_count <= COVERAGE_BAR_THRESHOLD, coverageDetail);
 
     // Honest-degradation banner: render on CJK/vertical or undecodable docs,
     // clear otherwise so re-uploading a Latin PDF removes a previously shown one.
@@ -2177,9 +2186,9 @@ estimated_tokens: 1740</pre>
     renderSuggestedChips();
   }
 
-  function renderCoverage(info, useBars) {
-    const textChars = info.text_coverage.text_chars_per_page;
-    const raster = info.text_coverage.raster_images_per_page;
+  function renderCoverage(info, useBars, detail) {
+    const textChars = detail.text_chars_per_page;
+    const raster = detail.raster_images_per_page;
     const n = textChars.length;
     const maxChars = Math.max(...textChars, 1);
 
@@ -2376,21 +2385,39 @@ estimated_tokens: 1740</pre>
       markPageRead(page, tokens);
     } else if (!reader) {
       $("readInput").value = String(page);
-      doReadPages(String(page));
+      doReadPages(String(page));  // bills the ledger itself
       document.querySelector("details.dev-row").open = true;
-      markPageRead(page, tokens);
     }
   }
 
 
   function renderSuggestedChips() {
-    const words = pageTexts.join(" ").toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
-    const freq = {};
+    // Rank by tf-idf, not raw frequency. The most frequent word in a
+    // document is by construction the one that appears on every page, so a
+    // raw-frequency chip produced a search that matched everything and
+    // looked broken. A term that is dense on a few pages is what a reader
+    // actually wants to search for.
+    const freq = {}, docFreq = {};
     // Generic English/boilerplate filler so chips surface real topics, not
     // stopwords. (Kept document-agnostic — no fixture-specific terms.)
     const stop = new Set(["there","which","their","about","would","could","should","these","those","other","where","while","after","before","shall","being","under","above","between","within","including","pursuant","hereunder","herein","thereof","document","section","number","pages"]);
-    words.forEach(w => { if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1; });
-    const top = Object.entries(freq).sort((a,b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+    pageTexts.forEach(text => {
+      const words = text.toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
+      const seen = new Set();
+      words.forEach(w => {
+        if (stop.has(w)) return;
+        freq[w] = (freq[w] || 0) + 1;
+        if (!seen.has(w)) { seen.add(w); docFreq[w] = (docFreq[w] || 0) + 1; }
+      });
+    });
+    const nPages = Math.max(1, pageTexts.length);
+    const top = Object.entries(freq)
+      // Needs enough hits to be worth a click, but must not be everywhere.
+      .filter(([w, f]) => f >= 3 && docFreq[w] <= Math.max(1, nPages * 0.5))
+      .map(([w, f]) => [w, f * Math.log(nPages / docFreq[w])])
+      // Ties break alphabetically so the chips are deterministic.
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 3).map(x => x[0]);
 
     const chipsEl = $("suggestedChips");
     if (top.length === 0) { chipsEl.innerHTML = ""; return; }
@@ -2538,7 +2565,7 @@ estimated_tokens: 1740</pre>
       el.innerHTML = res.matches.map(m => `
         <div class="result-card" data-page="${m.page}" role="button" tabindex="0" aria-label="Read page ${m.page}">
           <div class="match-head"><span class="match-page">page ${m.page}</span>
-            <span>score: ${m.score.toFixed(4)} · ${escapeHtml(res.excerpt_style)} excerpt</span></div>
+            <span>${res.page_match_counts[String(m.page)]} hit${res.page_match_counts[String(m.page)] === 1 ? "" : "s"} on this page · ${escapeHtml(res.excerpt_style)} excerpt</span></div>
           <p class="match-excerpt">${highlightQuery(escapeHtml(m.excerpt), query)}</p>
           <div class="inline-reader" id="reader-${m.page}"></div>
         </div>`).join("");
@@ -2613,6 +2640,10 @@ estimated_tokens: 1740</pre>
       total_tables: 0
     };
 
+    // Bill every page this call returned. markPageRead dedupes, so a page
+    // already opened in the inline reader is not charged twice. Without
+    // this the dev-row pdf_read_pages path was free in the scoreboard.
+    pagesResult.forEach(p => markPageRead(p.page, Math.round(p.chars / 4)));
     renderRead(pdfReadPages);
   }
 

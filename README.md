@@ -21,7 +21,7 @@ An [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and othe
 Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus, search across every document at once, and read only the pages that matter, using a fraction of the tokens. 100% client-side, no install required.
 
 <p align="center">
-  <a href="https://pdf-mcp.jztan.com/"><img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent warms a 6-PDF corpus, triages it, searches across all six documents, and reads only the matching page, with 97.5% of the corpus never entering the context window" width="760"></a>
+  <a href="https://pdf-mcp.jztan.com/"><img src="https://raw.githubusercontent.com/jztan/pdf-mcp/develop/docs/images/demo.gif" alt="pdf-mcp browser demo: an AI agent warms a 6-PDF corpus, triages it, searches across all six documents, and reads only the matching page, with 97.3% of the corpus never entering the context window" width="760"></a>
 </p>
 
 ## Why pdf-mcp?
@@ -216,7 +216,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 **Corpus & multi-document search**
 
 - [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-knowledge-base): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
-- [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 89.9% of 89 queries over a 100-PDF corpus
+- [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 84.8% of 184 graded queries over a 100-PDF corpus
 
 **Search & retrieval**
 

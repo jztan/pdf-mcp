@@ -1,0 +1,3601 @@
+{
+ "generated": "2026-09-05T09:36:57+00:00",
+ "git_head": "c3d74a5",
+ "config": {
+  "mode": "semantic",
+  "styles": [
+   "snippet",
+   "paragraph"
+  ],
+  "corpus_top_k": 25,
+  "corpus_budget_tokens": 2000,
+  "single_max_results": 5,
+  "limit": null
+ },
+ "arms": {
+  "corpus": {
+   "rows": {
+    "snippet": {
+     "needle-01": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "1202e9de1246"
+     },
+     "needle-02": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "40f27664cc2d"
+     },
+     "needle-03": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "eddaa49e1bc9"
+     },
+     "needle-04": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "f4f845193796"
+     },
+     "needle-05": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "b5e471372e58"
+     },
+     "needle-06": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3300d954e831"
+     },
+     "needle-07": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ddc34d06574a"
+     },
+     "needle-08": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "7bc0f2861a9e"
+     },
+     "needle-09": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "62f478594e34"
+     },
+     "needle-10": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "d85068f5360b"
+     },
+     "needle-11": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "02853ce5a314"
+     },
+     "needle-12": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "9319f8362232"
+     },
+     "needle-13": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c582c6cb751d"
+     },
+     "needle-14": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "162f4ea31f28"
+     },
+     "spread-01": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "af1dc9e6cbe6"
+     },
+     "spread-02": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.1480409554829326,
+      "realized_k": 25,
+      "excerpt_digest": "de23b087a1dd"
+     },
+     "spread-03": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "9d19c583d399"
+     },
+     "spread-04": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 25,
+      "excerpt_digest": "5b47f0490863"
+     },
+     "spread-05": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.48247555939075504,
+      "realized_k": 25,
+      "excerpt_digest": "70cd11136061"
+     },
+     "spread-06": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.23719771276929622,
+      "realized_k": 25,
+      "excerpt_digest": "7c2b123944df"
+     },
+     "spread-07": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 25,
+      "excerpt_digest": "22b097368b37"
+     },
+     "spread-08": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "d1cc74a83d2e"
+     },
+     "spread-09": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.23463936301137822,
+      "realized_k": 25,
+      "excerpt_digest": "edf6db36aeb5"
+     },
+     "spread-10": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "a272711fb4c3"
+     },
+     "trap-01": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "0f182f8b341d"
+     },
+     "trap-02": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "832fcdd1485b"
+     },
+     "trap-03": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "2272be79ed0b"
+     },
+     "trap-04": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "751b6bcc53ed"
+     },
+     "trap-05": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "935bd44a875a"
+     },
+     "trap-06": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "bb1501cd74ff"
+     },
+     "trap-07": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "4ca2a76137c0"
+     },
+     "trap-08": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "a62f7143cc44"
+     },
+     "trap-09": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "060790cd421f"
+     },
+     "trap-10": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "cb895d365988"
+     },
+     "trap-11": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "259f5d16422d"
+     },
+     "trap-12": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "bbf99e59e8a7"
+     },
+     "spread-11": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "b4ebf6549c31"
+     },
+     "spread-12": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ec239f14432f"
+     },
+     "spread-13": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8670870086853021,
+      "realized_k": 25,
+      "excerpt_digest": "b5407263c982"
+     },
+     "spread-14": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "0548ba959a94"
+     },
+     "spread-15": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6461369845040973,
+      "realized_k": 25,
+      "excerpt_digest": "f9f2526c148a"
+     },
+     "spread-16": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c053e4603f1f"
+     },
+     "spread-17": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.762346330035624,
+      "realized_k": 25,
+      "excerpt_digest": "edc2d02ecda9"
+     },
+     "spread-18": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8935349950641011,
+      "realized_k": 25,
+      "excerpt_digest": "293576781c58"
+     },
+     "spread-19": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.7601875334318685,
+      "realized_k": 25,
+      "excerpt_digest": "70fac0e7f2ff"
+     },
+     "spread-20": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8800937667159342,
+      "realized_k": 25,
+      "excerpt_digest": "84f0f9b0e7ad"
+     },
+     "spread-21": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "508e4cac0e3e"
+     },
+     "spread-22": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6934264036172708,
+      "realized_k": 25,
+      "excerpt_digest": "5825bfb202e9"
+     },
+     "spread-23": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6344874928748538,
+      "realized_k": 25,
+      "excerpt_digest": "09d1e7a32ffa"
+     },
+     "spread-24": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "299ecd545c19"
+     },
+     "spread-25": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.7601875334318685,
+      "realized_k": 25,
+      "excerpt_digest": "dd2c9e024c54"
+     },
+     "trap-13": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "a216550cc439"
+     },
+     "trap-14": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "870b15285519"
+     },
+     "trap-15": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "8b8fe7a0bf54"
+     },
+     "trap-16": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "7913f4dc396b"
+     },
+     "trap-17": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "fada67c5ddb8"
+     },
+     "trap-18": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "e556e12aa445"
+     },
+     "trap-19": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c2a0177a8070"
+     },
+     "trap-20": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3c2de7e03578"
+     },
+     "trap-21": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "24380733a90b"
+     },
+     "trap-22": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "91a0ccabaf68"
+     },
+     "trap-23": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "f21b101dfa14"
+     },
+     "trap-24": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "5fb43d2d3346"
+     },
+     "trap-25": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "8b4a5a97fc3c"
+     },
+     "described-01": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ba6541ef5ffb"
+     },
+     "described-02": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "dcf28aabe857"
+     },
+     "described-03": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "f2505fdaa036"
+     },
+     "described-04": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "8557e38bdc8b"
+     },
+     "described-05": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3c1f1c32a4d1"
+     },
+     "described-06": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "d450825f09e7"
+     },
+     "described-07": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "916bd42fadf2"
+     },
+     "described-08": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3801c0157981"
+     },
+     "described-09": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ac7b5d627d57"
+     },
+     "described-10": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "e93830ca9eb3"
+     },
+     "described-11": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "5ab85f0d0235"
+     },
+     "described-12": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "f33d0c5ef8ad"
+     },
+     "described-13": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "a2969d075a0c"
+     },
+     "described-14": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "90ab91056c14"
+     },
+     "described-15": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ce6ea4d80534"
+     },
+     "described-16": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "2a4354850fd0"
+     },
+     "described-17": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "72b36869e446"
+     },
+     "described-18": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 25,
+      "excerpt_digest": "0501eb056e38"
+     },
+     "described-19": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 25,
+      "excerpt_digest": "2bc56bc12c88"
+     },
+     "described-20": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "33d7b5857642"
+     },
+     "described-21": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "88fb79df0a5f"
+     },
+     "described-22": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "9977ef001303"
+     },
+     "described-23": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ba78e08f250f"
+     },
+     "described-24": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "eca30ce6e5e2"
+     },
+     "described-25": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3de44e7586d7"
+     },
+     "described-26": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "a6944711a518"
+     },
+     "described-27": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "a38f0a0cb4f5"
+     },
+     "described-28": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "30f939528aca"
+     },
+     "described-29": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.31546487678572877,
+      "realized_k": 25,
+      "excerpt_digest": "940c6e3101cd"
+     },
+     "described-30": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "4107a5e6b707"
+     },
+     "described-31": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 25,
+      "excerpt_digest": "448b364c3db3"
+     },
+     "described-33": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "386a52b452ac"
+     },
+     "described-34": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "6671ec0ee211"
+     },
+     "described-36": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "25f7a6abca27"
+     },
+     "described-37": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "4bca4d76251c"
+     },
+     "described-38": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c1e489901dbc"
+     },
+     "described-39": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 25,
+      "excerpt_digest": "641397d3d3a6"
+     },
+     "described-40": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "a92aa0215bc4"
+     },
+     "described-41": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "97c0300b636c"
+     },
+     "described-42": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "2b86662871e8"
+     },
+     "described-43": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 25,
+      "excerpt_digest": "b0810e2d36a8"
+     },
+     "described-44": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "aa2daf1b5459"
+     },
+     "described-45": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "1aa1fb27a8b8"
+     },
+     "described-46": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c9fcc76f6874"
+     },
+     "described-47": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "74e4cb2f47ea"
+     },
+     "described-48": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "0246c4222e7e"
+     },
+     "described-49": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "a12723e359e4"
+     },
+     "described-50": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "d7b37fb159a3"
+     },
+     "described-51": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "5e2b606cd62a"
+     },
+     "described-52": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "faf8e93b272b"
+     },
+     "described-53": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "71b39a4d0c81"
+     },
+     "described-54": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "ddfaad3ba781"
+     },
+     "described-55": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "2fc35586f151"
+     },
+     "described-56": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "1fdfb72faf27"
+     },
+     "described-57": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "7ba36959d8c6"
+     },
+     "described-58": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "7b6fe5b140af"
+     },
+     "described-59": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "567885e21ead"
+     },
+     "described-60": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "153cbaf132c3"
+     },
+     "described-61": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "f82ca8e27bd6"
+     },
+     "described-62": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "6eab7fa2f547"
+     },
+     "described-63": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "abf094d5d09f"
+     },
+     "described-64": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "392f320f123e"
+     },
+     "described-66": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "bef81fe5d5aa"
+     },
+     "described-67": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "4327486e055c"
+     },
+     "described-68": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "f99e0784fc23"
+     },
+     "described-70": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "25b949b04cb7"
+     },
+     "described-71": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "b737ccdb51ed"
+     },
+     "described-72": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "5aaa20c8856b"
+     },
+     "described-73": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "1fdfb72faf27"
+     },
+     "described-74": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "04fcca664613"
+     },
+     "described-75": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "85ab8a726847"
+     },
+     "described-76": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "6f3c661cbdae"
+     },
+     "described-77": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "8b2afe1c6ef3"
+     },
+     "described-78": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 25,
+      "excerpt_digest": "d8e652ad21e1"
+     },
+     "described-79": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "088a9e657644"
+     },
+     "described-80": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "cbd47c5fd8c9"
+     },
+     "described-81": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 25,
+      "excerpt_digest": "fbbba517c157"
+     },
+     "described-82": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "9e832113d58b"
+     },
+     "described-83": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "e3e83a176d86"
+     },
+     "described-84": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "f2881adb2b11"
+     },
+     "described-85": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "7c6f6e1cf62a"
+     },
+     "described-86": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "5ed29be7a666"
+     },
+     "described-87": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "9f20eebe332b"
+     },
+     "needle-15": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "977bd3b4a930"
+     },
+     "needle-16": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 25,
+      "excerpt_digest": "9570ad009556"
+     },
+     "needle-17": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "d018d46b9284"
+     },
+     "needle-18": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "383128a27a91"
+     },
+     "needle-19": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "f46391e18472"
+     },
+     "needle-20": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "4ae5226578ac"
+     },
+     "needle-21": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 25,
+      "excerpt_digest": "3154846f58d9"
+     },
+     "needle-22": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "e1cd866cde60"
+     },
+     "needle-23": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "8adc36bb8c98"
+     },
+     "needle-24": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "5039e656ee1e"
+     },
+     "needle-25": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3562071871080222,
+      "realized_k": 25,
+      "excerpt_digest": "d0ab64e20c72"
+     },
+     "needle-26": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c567bbb7fffa"
+     },
+     "needle-27": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "fe6b1866c926"
+     },
+     "needle-28": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "6c1fa950a41c"
+     },
+     "needle-29": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "12a17cbe40db"
+     },
+     "needle-30": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "3e051ee322e7"
+     },
+     "needle-31": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "b126d7e4d2ab"
+     },
+     "spread-26": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6934264036172708,
+      "realized_k": 25,
+      "excerpt_digest": "76883ffa871d"
+     },
+     "spread-27": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 25,
+      "excerpt_digest": "b48e7b3e62e2"
+     },
+     "spread-28": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "6f2956487dd9"
+     },
+     "spread-29": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.48247555939075504,
+      "realized_k": 25,
+      "excerpt_digest": "cbbbae90a9cd"
+     },
+     "spread-30": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 25,
+      "excerpt_digest": "4a5eb5dc1779"
+     },
+     "spread-31": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "8943c7b9709c"
+     },
+     "spread-33": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "dc430f9820bc"
+     },
+     "spread-34": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "c394c974a68c"
+     },
+     "spread-35": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 25,
+      "excerpt_digest": "392af0365128"
+     },
+     "spread-36": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 25,
+      "excerpt_digest": "a50df954b0e9"
+     },
+     "spread-37": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.45560514958746035,
+      "realized_k": 25,
+      "excerpt_digest": "54fba6bfbd66"
+     },
+     "spread-38": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6052602440527057,
+      "realized_k": 25,
+      "excerpt_digest": "5f8074c007cf"
+     },
+     "spread-39": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 25,
+      "excerpt_digest": "b9e47650ff51"
+     },
+     "spread-40": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.9197207891481876,
+      "realized_k": 25,
+      "excerpt_digest": "daa3908ac7f9"
+     },
+     "spread-41": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.4911492931622974,
+      "realized_k": 25,
+      "excerpt_digest": "011ecef52f5e"
+     },
+     "spread-42": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 25,
+      "excerpt_digest": "f62db736e8fd"
+     },
+     "spread-43": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 25,
+      "excerpt_digest": "02c734eadd72"
+     },
+     "spread-44": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.23719771276929622,
+      "realized_k": 25,
+      "excerpt_digest": "75037913b4e5"
+     },
+     "spread-45": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8315546295836225,
+      "realized_k": 25,
+      "excerpt_digest": "a5f4c68d322d"
+     },
+     "spread-46": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 25,
+      "excerpt_digest": "cfbdfdded43c"
+     }
+    },
+    "paragraph": {
+     "needle-01": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "899b3a15fbe8"
+     },
+     "needle-02": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 20,
+      "excerpt_digest": "034a985bf76e"
+     },
+     "needle-03": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "c3ed5c2be66d"
+     },
+     "needle-04": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "d27199c1472c"
+     },
+     "needle-05": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "918bc7c0d84c"
+     },
+     "needle-06": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 6,
+      "excerpt_digest": "01c1f9e29324"
+     },
+     "needle-07": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "fcdfdd8d873f"
+     },
+     "needle-08": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 14,
+      "excerpt_digest": "6f9ac1aeb079"
+     },
+     "needle-09": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "5b12a094b178"
+     },
+     "needle-10": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "bea90c1f5039"
+     },
+     "needle-11": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "0c8f5203739a"
+     },
+     "needle-12": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "58705d7d34c1"
+     },
+     "needle-13": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "59152b66a4dc"
+     },
+     "needle-14": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "16ed18b779af"
+     },
+     "spread-01": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "b7d0fe15ebc1"
+     },
+     "spread-02": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.1480409554829326,
+      "realized_k": 11,
+      "excerpt_digest": "50a3a4f7cad6"
+     },
+     "spread-03": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 14,
+      "excerpt_digest": "0aee7344d0bf"
+     },
+     "spread-04": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 25,
+      "excerpt_digest": "9a1aa9974d70"
+     },
+     "spread-05": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.48247555939075504,
+      "realized_k": 11,
+      "excerpt_digest": "ac35c0b50b45"
+     },
+     "spread-06": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.23719771276929622,
+      "realized_k": 15,
+      "excerpt_digest": "32ad65f10ae8"
+     },
+     "spread-07": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 10,
+      "excerpt_digest": "24a214b27b31"
+     },
+     "spread-08": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 11,
+      "excerpt_digest": "2fedd5a183d8"
+     },
+     "spread-09": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.23463936301137822,
+      "realized_k": 13,
+      "excerpt_digest": "e606d758ff4e"
+     },
+     "spread-10": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 16,
+      "excerpt_digest": "eb381bb01989"
+     },
+     "trap-01": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "7f3b8e4c70e5"
+     },
+     "trap-02": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "762f6b61c69e"
+     },
+     "trap-03": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 17,
+      "excerpt_digest": "701ba4df1484"
+     },
+     "trap-04": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "e0cad9baf31a"
+     },
+     "trap-05": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "4d550981ed94"
+     },
+     "trap-06": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "86afbb8c67dd"
+     },
+     "trap-07": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "61dca9d32233"
+     },
+     "trap-08": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 23,
+      "excerpt_digest": "aae5277c0169"
+     },
+     "trap-09": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "c68b9e848193"
+     },
+     "trap-10": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "207770314004"
+     },
+     "trap-11": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "4766058e8ae3"
+     },
+     "trap-12": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 7,
+      "excerpt_digest": "95520c299c4e"
+     },
+     "spread-11": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "4059bfe64ff0"
+     },
+     "spread-12": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "87369908f67f"
+     },
+     "spread-13": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8670870086853021,
+      "realized_k": 9,
+      "excerpt_digest": "1030d29669c4"
+     },
+     "spread-14": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "3a50e5f856d0"
+     },
+     "spread-15": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6461369845040973,
+      "realized_k": 10,
+      "excerpt_digest": "ec32ff9cb4b5"
+     },
+     "spread-16": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "05e8d7111fda"
+     },
+     "spread-17": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.762346330035624,
+      "realized_k": 8,
+      "excerpt_digest": "ee351f739a3e"
+     },
+     "spread-18": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8935349950641011,
+      "realized_k": 9,
+      "excerpt_digest": "6219a3d8886e"
+     },
+     "spread-19": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.7601875334318685,
+      "realized_k": 16,
+      "excerpt_digest": "a80cf3ef2c55"
+     },
+     "spread-20": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8800937667159342,
+      "realized_k": 14,
+      "excerpt_digest": "57a6c7659a85"
+     },
+     "spread-21": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "37a8f20a3665"
+     },
+     "spread-22": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6934264036172708,
+      "realized_k": 14,
+      "excerpt_digest": "358754bac8bd"
+     },
+     "spread-23": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6344874928748538,
+      "realized_k": 8,
+      "excerpt_digest": "22ac352762c6"
+     },
+     "spread-24": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "0e91f5f3eb15"
+     },
+     "spread-25": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.7601875334318685,
+      "realized_k": 15,
+      "excerpt_digest": "693d93723e10"
+     },
+     "trap-13": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 18,
+      "excerpt_digest": "7bb05fce3fcb"
+     },
+     "trap-14": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "f626862a9377"
+     },
+     "trap-15": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "b7384e261003"
+     },
+     "trap-16": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 20,
+      "excerpt_digest": "d6b00fea2691"
+     },
+     "trap-17": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "efcde47aab65"
+     },
+     "trap-18": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "b3f76bfaceef"
+     },
+     "trap-19": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "0296f0c7736d"
+     },
+     "trap-20": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "5ddae1e819d9"
+     },
+     "trap-21": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "3c9eb5b8016a"
+     },
+     "trap-22": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 17,
+      "excerpt_digest": "fcccf901bdee"
+     },
+     "trap-23": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 21,
+      "excerpt_digest": "4624e7bd0e43"
+     },
+     "trap-24": {
+      "class": "trap",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "fc6387b5488a"
+     },
+     "trap-25": {
+      "class": "trap",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "66218a84dcfa"
+     },
+     "described-01": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "a763a46f0fcc"
+     },
+     "described-02": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "d27f34ba8042"
+     },
+     "described-03": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "2efa86624fb0"
+     },
+     "described-04": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "48c682b48ad8"
+     },
+     "described-05": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "87967e9c127c"
+     },
+     "described-06": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "a720ecc4c008"
+     },
+     "described-07": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 13,
+      "excerpt_digest": "80e6ada43c50"
+     },
+     "described-08": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "9a9e03634556"
+     },
+     "described-09": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "c3a231ad5987"
+     },
+     "described-10": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 8,
+      "excerpt_digest": "5286be45c695"
+     },
+     "described-11": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "88523fa5e6c4"
+     },
+     "described-12": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 10,
+      "excerpt_digest": "9f9f49900426"
+     },
+     "described-13": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 11,
+      "excerpt_digest": "9e491b087793"
+     },
+     "described-14": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "cb1d05f56fb9"
+     },
+     "described-15": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "92693d48ff97"
+     },
+     "described-16": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 9,
+      "excerpt_digest": "ab3c53bacfc1"
+     },
+     "described-17": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 13,
+      "excerpt_digest": "00c01a1f6368"
+     },
+     "described-18": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 12,
+      "excerpt_digest": "1d9be1a30848"
+     },
+     "described-19": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 16,
+      "excerpt_digest": "f9dae317ce59"
+     },
+     "described-20": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "966b1581dc7a"
+     },
+     "described-21": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "3050e9a3466d"
+     },
+     "described-22": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "47060cb25888"
+     },
+     "described-23": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "2ce18c337db9"
+     },
+     "described-24": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 13,
+      "excerpt_digest": "ddb6e044e6fb"
+     },
+     "described-25": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "0c5e24b6fe18"
+     },
+     "described-26": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "b50ce0251390"
+     },
+     "described-27": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 14,
+      "excerpt_digest": "ec073367f2c9"
+     },
+     "described-28": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 7,
+      "excerpt_digest": "13d4041bac0a"
+     },
+     "described-29": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.31546487678572877,
+      "realized_k": 9,
+      "excerpt_digest": "7fe12a99a8e1"
+     },
+     "described-30": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 17,
+      "excerpt_digest": "7e8618676994"
+     },
+     "described-31": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 8,
+      "excerpt_digest": "df7fb0eb40de"
+     },
+     "described-33": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "f6e0bf7e16f0"
+     },
+     "described-34": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 9,
+      "excerpt_digest": "0e6144ef5a58"
+     },
+     "described-36": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 13,
+      "excerpt_digest": "61c397b48102"
+     },
+     "described-37": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "cb55e76c8486"
+     },
+     "described-38": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "4cbf07365a06"
+     },
+     "described-39": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 10,
+      "excerpt_digest": "e28785cd0cf8"
+     },
+     "described-40": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 7,
+      "excerpt_digest": "ac65a7799b7a"
+     },
+     "described-41": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "ca1b139c9171"
+     },
+     "described-42": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "c7013a02f415"
+     },
+     "described-43": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 12,
+      "excerpt_digest": "d7911109c2ff"
+     },
+     "described-44": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 16,
+      "excerpt_digest": "4905f1c22bff"
+     },
+     "described-45": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "ba6bea263854"
+     },
+     "described-46": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 15,
+      "excerpt_digest": "0dc3b37eabec"
+     },
+     "described-47": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 7,
+      "excerpt_digest": "2fa63bd60fe6"
+     },
+     "described-48": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 13,
+      "excerpt_digest": "f7ade1d8cf83"
+     },
+     "described-49": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "a214e910d2ac"
+     },
+     "described-50": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "8c5afdb7af7a"
+     },
+     "described-51": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "4ff4e49dea92"
+     },
+     "described-52": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 16,
+      "excerpt_digest": "2498ceb2252d"
+     },
+     "described-53": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "7f2dfbf31608"
+     },
+     "described-54": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 13,
+      "excerpt_digest": "a9133be29f6d"
+     },
+     "described-55": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 7,
+      "excerpt_digest": "3538f09a68ea"
+     },
+     "described-56": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 6,
+      "excerpt_digest": "a2d5658c1e22"
+     },
+     "described-57": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 9,
+      "excerpt_digest": "2ddde6d7975e"
+     },
+     "described-58": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "f486f14e5b74"
+     },
+     "described-59": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 10,
+      "excerpt_digest": "0fea84b3d16a"
+     },
+     "described-60": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "05e68dea4e29"
+     },
+     "described-61": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "04ae24cde984"
+     },
+     "described-62": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "efd8a89d6fef"
+     },
+     "described-63": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 11,
+      "excerpt_digest": "5b96e1a237d6"
+     },
+     "described-64": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 9,
+      "excerpt_digest": "b47d66f01ef3"
+     },
+     "described-66": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 15,
+      "excerpt_digest": "1a2e0e61854c"
+     },
+     "described-67": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "63a8b438a58a"
+     },
+     "described-68": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 9,
+      "excerpt_digest": "c57a78559a8a"
+     },
+     "described-70": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 14,
+      "excerpt_digest": "9947a1f3e865"
+     },
+     "described-71": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "97b25a53dd53"
+     },
+     "described-72": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 13,
+      "excerpt_digest": "ab2b5561c17b"
+     },
+     "described-73": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 6,
+      "excerpt_digest": "a2d5658c1e22"
+     },
+     "described-74": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 8,
+      "excerpt_digest": "1f7c49f8be42"
+     },
+     "described-75": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 7,
+      "excerpt_digest": "479758a0a07f"
+     },
+     "described-76": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 17,
+      "excerpt_digest": "6544bbc3311b"
+     },
+     "described-77": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "df47c0d7291f"
+     },
+     "described-78": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 15,
+      "excerpt_digest": "936e23cd8ea6"
+     },
+     "described-79": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 13,
+      "excerpt_digest": "64bc294bbf55"
+     },
+     "described-80": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 18,
+      "excerpt_digest": "29d02336c669"
+     },
+     "described-81": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.43067655807339306,
+      "realized_k": 8,
+      "excerpt_digest": "40ce2d3e0546"
+     },
+     "described-82": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 8,
+      "excerpt_digest": "c4adde3d1dac"
+     },
+     "described-83": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 16,
+      "excerpt_digest": "790256d23345"
+     },
+     "described-84": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 8,
+      "excerpt_digest": "c9882da02db0"
+     },
+     "described-85": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 8,
+      "excerpt_digest": "4431a1319a85"
+     },
+     "described-86": {
+      "class": "described",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "111479e5c889"
+     },
+     "described-87": {
+      "class": "described",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 11,
+      "excerpt_digest": "4e6d13a681ca"
+     },
+     "needle-15": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 12,
+      "excerpt_digest": "995d076a32b2"
+     },
+     "needle-16": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.5,
+      "realized_k": 15,
+      "excerpt_digest": "b559a7c7ba51"
+     },
+     "needle-17": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "62d052d35bcb"
+     },
+     "needle-18": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "a57f2a060039"
+     },
+     "needle-19": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 18,
+      "excerpt_digest": "b76ce869a874"
+     },
+     "needle-20": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.3333333333333333,
+      "realized_k": 25,
+      "excerpt_digest": "036608494eb0"
+     },
+     "needle-21": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.0,
+      "realized_k": 16,
+      "excerpt_digest": "d662d337db56"
+     },
+     "needle-22": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 10,
+      "excerpt_digest": "581e875263cc"
+     },
+     "needle-23": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 12,
+      "excerpt_digest": "5fb09ebc9def"
+     },
+     "needle-24": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 14,
+      "excerpt_digest": "b72d16875265"
+     },
+     "needle-25": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.3562071871080222,
+      "realized_k": 25,
+      "excerpt_digest": "4bb0013f9b1b"
+     },
+     "needle-26": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 11,
+      "excerpt_digest": "8c99cd9881a6"
+     },
+     "needle-27": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6309297535714575,
+      "realized_k": 25,
+      "excerpt_digest": "703427b977b2"
+     },
+     "needle-28": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "09ae517acbb4"
+     },
+     "needle-29": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 25,
+      "excerpt_digest": "ebf574d2d617"
+     },
+     "needle-30": {
+      "class": "needle",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "f23e64635d7e"
+     },
+     "needle-31": {
+      "class": "needle",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 13,
+      "excerpt_digest": "3108830933b8"
+     },
+     "spread-26": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6934264036172708,
+      "realized_k": 9,
+      "excerpt_digest": "08f15db623c1"
+     },
+     "spread-27": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 12,
+      "excerpt_digest": "fcd727b6f4ec"
+     },
+     "spread-28": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 18,
+      "excerpt_digest": "cd4c44306912"
+     },
+     "spread-29": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.48247555939075504,
+      "realized_k": 14,
+      "excerpt_digest": "064589168c2e"
+     },
+     "spread-30": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 14,
+      "excerpt_digest": "b18aa068de3a"
+     },
+     "spread-31": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 8,
+      "excerpt_digest": "8484b4d26c31"
+     },
+     "spread-33": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 14,
+      "excerpt_digest": "d0c044c8dab6"
+     },
+     "spread-34": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 1.0,
+      "realized_k": 14,
+      "excerpt_digest": "180202017e79"
+     },
+     "spread-35": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 14,
+      "excerpt_digest": "c8e46d99cf08"
+     },
+     "spread-36": {
+      "class": "spread",
+      "span_recall": 1.0,
+      "doc_ndcg": 0.8772153153380493,
+      "realized_k": 10,
+      "excerpt_digest": "7a02363460f1"
+     },
+     "spread-37": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.45560514958746035,
+      "realized_k": 9,
+      "excerpt_digest": "a325115949e2"
+     },
+     "spread-38": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6052602440527057,
+      "realized_k": 15,
+      "excerpt_digest": "2d50969dc314"
+     },
+     "spread-39": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 14,
+      "excerpt_digest": "b4bba081569f"
+     },
+     "spread-40": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.9197207891481876,
+      "realized_k": 10,
+      "excerpt_digest": "6ddc1c60e83b"
+     },
+     "spread-41": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.4911492931622974,
+      "realized_k": 13,
+      "excerpt_digest": "a687446d848b"
+     },
+     "spread-42": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 18,
+      "excerpt_digest": "30fd9c3308e2"
+     },
+     "spread-43": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.38685280723454163,
+      "realized_k": 14,
+      "excerpt_digest": "0f3ce9ca798f"
+     },
+     "spread-44": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.23719771276929622,
+      "realized_k": 13,
+      "excerpt_digest": "7ad6eaa751f5"
+     },
+     "spread-45": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.8315546295836225,
+      "realized_k": 10,
+      "excerpt_digest": "260cef87461a"
+     },
+     "spread-46": {
+      "class": "spread",
+      "span_recall": 0.0,
+      "doc_ndcg": 0.6131471927654584,
+      "realized_k": 13,
+      "excerpt_digest": "56cd35a8eede"
+     }
+    }
+   },
+   "seconds_per_query": {
+    "snippet": 1.871,
+    "paragraph": 1.877
+   }
+  },
+  "single": {
+   "rows": {
+    "snippet": {
+     "t01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "d3ff0e06c65b"
+     },
+     "t02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b280ae758e7b"
+     },
+     "t03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "c4082db835c8"
+     },
+     "t04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a33194a1740a"
+     },
+     "t05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "6469751ea91e"
+     },
+     "t06": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "355095c3d87c"
+     },
+     "t07": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "201c55b9d9f7"
+     },
+     "t08": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "5597c916bbc5"
+     },
+     "t09": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "d93cbb565b2f"
+     },
+     "t10": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "552bc5393675"
+     },
+     "t11": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "30e1fffaf532"
+     },
+     "t12": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c4eeeec92b55"
+     },
+     "t13": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "47df10fc0bd8"
+     },
+     "g01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c50b2f18db8c"
+     },
+     "g02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c50b2f18db8c"
+     },
+     "g03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "cee71a7f523d"
+     },
+     "g04": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "e0b5409dc41b"
+     },
+     "g05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8b38427a9f84"
+     },
+     "n01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "98a126b4c9d8"
+     },
+     "n02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "fde2c1a1d5b4"
+     },
+     "n03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "960a29f69a94"
+     },
+     "n04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "399f5438155e"
+     },
+     "n05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "0e822bef75af"
+     },
+     "l01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "51d6219091f4"
+     },
+     "l02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "e40893bc3274"
+     },
+     "l03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "f644b32814d7"
+     },
+     "l04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "3601151fd2ad"
+     },
+     "l05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "49535636c04a"
+     },
+     "a01": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "72a3e2d40e22"
+     },
+     "a02": {
+      "class": "structured",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "a03": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a2d06cc95dd0"
+     },
+     "a04": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "7e46a8c2f2e3"
+     },
+     "a05": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "5705e67a4e79"
+     },
+     "m01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "e9dfab974857"
+     },
+     "m02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "09d8c31b1442"
+     },
+     "m03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b1a3716bf2e8"
+     },
+     "d01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "0184ea88c844"
+     },
+     "d02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "79b26b2f85e8"
+     },
+     "d03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "c95df8297570"
+     },
+     "d04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8f5a17abe4b8"
+     },
+     "d05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c36a5165859e"
+     },
+     "d06": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "827f8adb72c3"
+     },
+     "v01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c7bc35bab69c"
+     },
+     "v02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a0f9a8f6b023"
+     },
+     "v03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c7bc35bab69c"
+     },
+     "x01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "409a730593fd"
+     },
+     "x02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "db1ad4767a14"
+     },
+     "x03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "84a5329d9ab8"
+     },
+     "e01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "d38715811294"
+     },
+     "e02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "25b89988be18"
+     },
+     "e03": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "c5494b9ec425"
+     },
+     "b02": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b03": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "1f649bf499bb"
+     },
+     "b05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a8b0c4b758ad"
+     },
+     "b06": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "4db372d19651"
+     },
+     "p01": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "p02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "5e118ce50710"
+     },
+     "p03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "5e118ce50710"
+     },
+     "x11": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "38fdf38bcec2"
+     },
+     "x12": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "01a0db7b4622"
+     },
+     "x13": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "x14": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8db254a5461f"
+     },
+     "x15": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8db254a5461f"
+     },
+     "x16": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "e72ab2ee1c0c"
+     },
+     "x17": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "10deb61d812c"
+     },
+     "x18": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "99e45c7e2e3f"
+     },
+     "x19": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "99e45c7e2e3f"
+     },
+     "s01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "f38f59e9a222"
+     },
+     "s02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "d269e063feb5"
+     },
+     "s03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "08ac75c32845"
+     },
+     "c01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "9baed13cb20a"
+     },
+     "c02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "7e285a718d7a"
+     },
+     "c03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "6ef9c78877c1"
+     },
+     "c04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "97d12878f87a"
+     },
+     "c05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "443d94ff3bbb"
+     },
+     "o01": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "o02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a944de588900"
+     },
+     "o03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "6e462e8e8c5b"
+     },
+     "o04": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "o05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "c54a25f8278a"
+     }
+    },
+    "paragraph": {
+     "t01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "be18b3deb335"
+     },
+     "t02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "e18a8d9975f3"
+     },
+     "t03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a5cd6b9740ab"
+     },
+     "t04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b3621df1cda6"
+     },
+     "t05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b9b366556b00"
+     },
+     "t06": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "355095c3d87c"
+     },
+     "t07": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "d8fabeb63ea3"
+     },
+     "t08": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "69bb3909eb5b"
+     },
+     "t09": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b7d297959b56"
+     },
+     "t10": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8b254af81f82"
+     },
+     "t11": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "164dcfaf5f47"
+     },
+     "t12": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "0d090d26f31e"
+     },
+     "t13": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "b3ce7df19c98"
+     },
+     "g01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "91acb671f3b0"
+     },
+     "g02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "91acb671f3b0"
+     },
+     "g03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "f93ecec9534d"
+     },
+     "g04": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "d93cae2ff9c8"
+     },
+     "g05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "86eaaaf8ed16"
+     },
+     "n01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "08401de8ac53"
+     },
+     "n02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "092c0e909848"
+     },
+     "n03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "3d0945fdacca"
+     },
+     "n04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "93a0145831f0"
+     },
+     "n05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "a6c31f5948e9"
+     },
+     "l01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "51d6219091f4"
+     },
+     "l02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "2fb92d215ebc"
+     },
+     "l03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "9525d04ff235"
+     },
+     "l04": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "18b73d8a83ca"
+     },
+     "l05": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "1fbc2f92a5f2"
+     },
+     "a01": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "3fc16bf3afdb"
+     },
+     "a02": {
+      "class": "structured",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "a03": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "3d1be53da466"
+     },
+     "a04": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "7878d0924b3a"
+     },
+     "a05": {
+      "class": "structured",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b4a7cda0c2b9"
+     },
+     "m01": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "784bbc37d404"
+     },
+     "m02": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "67bcb7144a67"
+     },
+     "m03": {
+      "class": "prose",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "fb8b3476654b"
+     },
+     "d01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "277afc5a0649"
+     },
+     "d02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "d03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "d04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "d05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "d06": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "v01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "c01027723693"
+     },
+     "v02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "7225f5ab7bb9"
+     },
+     "v03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "7225f5ab7bb9"
+     },
+     "x01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "a07a39862ea5"
+     },
+     "x02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "2e8d31fb6dec"
+     },
+     "x03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "3b5d2973ce6c"
+     },
+     "e01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "33327f3f6686"
+     },
+     "e02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "33327f3f6686"
+     },
+     "e03": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "f9d8f923c7e5"
+     },
+     "b02": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b03": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "b04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "5f8980eaf762"
+     },
+     "b05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "ff5b61780451"
+     },
+     "b06": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b42d9728cbaa"
+     },
+     "p01": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "p02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "f4d6c0bd6b57"
+     },
+     "p03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "10b944423a1f"
+     },
+     "x11": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "a9f28d2c0c0f"
+     },
+     "x12": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "694ea4b97be0"
+     },
+     "x13": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "x14": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "0b48a4f67265"
+     },
+     "x15": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "0b48a4f67265"
+     },
+     "x16": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "4f8f6b8cca72"
+     },
+     "x17": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "4f8f6b8cca72"
+     },
+     "x18": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "189f966118f2"
+     },
+     "x19": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "189f966118f2"
+     },
+     "s01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "9bf6b4d831e8"
+     },
+     "s02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "97afd007ad55"
+     },
+     "s03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "8010096beb94"
+     },
+     "c01": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "6bfd293932f5"
+     },
+     "c02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "b51609a7846b"
+     },
+     "c03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "5d7c93993c40"
+     },
+     "c04": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "60194b0abb4f"
+     },
+     "c05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "db7838b8d1a6"
+     },
+     "o01": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "o02": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "30a9c12c9f22"
+     },
+     "o03": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "30a9c12c9f22"
+     },
+     "o04": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "o05": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "30a9c12c9f22"
+     }
+    }
+   },
+   "seconds_per_query": {
+    "snippet": 0.177,
+    "paragraph": 0.199
+   }
+  }
+ }
+}

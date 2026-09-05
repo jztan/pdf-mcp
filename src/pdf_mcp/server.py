@@ -3823,6 +3823,40 @@ def _merge_doc_match_counts(
     return merged
 
 
+def _semantic_snippet_excerpt(
+    path: str,
+    page0: int,
+    query: str,
+    query_vec: Any,
+    model: str,
+    context_chars: int,
+    chunk: str | None,
+) -> str:
+    """Snippet excerpt for a page matched semantically (no keyword hit
+    to anchor on): the best `context_chars` span of the page's best
+    sub-page chunk, or of the whole page when there is no chunk.
+
+    `text[:context_chars]` here returned excerpts with no relation to
+    the query (2026-09-01 consumer tryout, F1): on prefaced pages the
+    excerpt was boilerplate while the matching content sat further
+    down. Lexical rescue (p34, second form): when the best-scoring
+    chunk holds no literal query term but the page does, widen the
+    span search to the whole page, otherwise the term windows the
+    back-off in `_best_span_in_text` needs are outside the searched
+    text. Shared by every semantic-only hit in both search tools and
+    every mode, so the rule lives in one place.
+    """
+    page_text = cache.get_page_text(path, page0) or ""
+    text = chunk or page_text
+    if chunk and page_text:
+        terms = _corpus_query_terms(query)
+        low_chunk = chunk.lower()
+        if terms and not any(t in low_chunk for t in terms):
+            if any(t in page_text.lower() for t in terms):
+                text = page_text
+    return _best_span_in_text(text, query_vec, model, context_chars, query=query)
+
+
 def _best_subchunk_text(
     path: str, page_num_0: int, vecs_by_page: dict[int, Any], query_vec: Any
 ) -> str | None:
@@ -4470,27 +4504,14 @@ def pdf_corpus_search(
         if (path, page) in kw_payload:
             excerpt = kw_payload[(path, page)]["excerpt"]
         else:
-            # Semantic-only hit: anchor the snippet on the page's
-            # best-scoring sub-page chunk rather than the top of the
-            # page. text[:context_chars] here returned excerpts with no
-            # relation to the query (2026-09-01 consumer tryout, F1) --
-            # on prefaced pages the excerpt was boilerplate while the
-            # matching content sat further down.
-            chunk = hybrid_best_chunks.get((path, page))
-            page_text = cache.get_page_text(path, page - 1) or ""
-            text = chunk or page_text
-            # Lexical rescue (p34, second form): when the best-scoring
-            # chunk holds no literal query term but the page does, widen
-            # the span search to the whole page -- otherwise the term
-            # windows the back-off needs are outside the searched text.
-            if chunk and page_text:
-                _terms = _corpus_query_terms(query)
-                _low_chunk = chunk.lower()
-                if _terms and not any(t in _low_chunk for t in _terms):
-                    if any(t in page_text.lower() for t in _terms):
-                        text = page_text
-            excerpt = _best_span_in_text(
-                text, query_vec, embed_model, context_chars, query=query
+            excerpt = _semantic_snippet_excerpt(
+                path,
+                page - 1,
+                query,
+                query_vec,
+                embed_model,
+                context_chars,
+                hybrid_best_chunks.get((path, page)),
             )
         sem_score = sem_score_map.get((path, page), 0.0)
         # A hybrid match is low-confidence when (a) it has no keyword

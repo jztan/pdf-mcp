@@ -4336,12 +4336,20 @@ def pdf_corpus_search(
 
         def _sem_build(path: str, page: int, idx: int) -> dict[str, Any]:
             score = round(score_map[(path, page)], 4)
-            text = cache.get_page_text(path, page - 1) or ""
+            excerpt = _semantic_snippet_excerpt(
+                path,
+                page - 1,
+                query,
+                query_vec,
+                embed_model,
+                context_chars,
+                best_chunks.get((path, page)),
+            )
             return {
                 "path": path,
                 "doc_title": _title_for(path),
                 "page": page,
-                "excerpt": text[:context_chars],
+                "excerpt": excerpt,
                 "score": score,
                 "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "position": 0,

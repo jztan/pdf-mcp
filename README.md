@@ -54,33 +54,40 @@ apt install tesseract-ocr     # Ubuntu/Debian
 winget install Tesseract-OCR  # Windows
 ```
 
-GPU embedding is optional and off by default. On a machine with an NVIDIA
-card it makes the embedding pass roughly two orders of magnitude faster,
-which matters when warming a large corpus:
-
-There is no extra for it, deliberately: which CUDA build you need depends on
-your card, and pip cannot see hardware. You build the environment, and
-`PDF_MCP_CUDA=1` tells the server to use it. On Linux and Windows x86_64, with
-a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
+GPU embedding is optional and off by default. On an NVIDIA card it makes the
+embedding pass one to two orders of magnitude faster, on Linux and Windows
+x86_64. For a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
 
 ```bash
-pip uninstall -y onnxruntime && pip install fastembed-gpu
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
 pip install nvidia-cublas nvidia-cuda-runtime nvidia-cufft nvidia-curand \
             nvidia-cudnn-cu13
-export PDF_MCP_CUDA=1
 ```
 
-The uninstall is not optional: `onnxruntime` and `onnxruntime-gpu` claim the
-same import name, and with both present the CPU one usually wins - which looks
-exactly like a working install that is quietly not using the GPU. Maxwell,
-Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) were dropped by
-CUDA 13 and need the CUDA 12 build instead: `onnxruntime-gpu` from NVIDIA's
-CUDA 12 index and the `nvidia-*-cu12` wheels.
+Maxwell, Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) predate
+CUDA 13 and take the CUDA 12 build:
 
-Without `PDF_MCP_CUDA` set, none of this changes anything: the CPU path runs
-exactly as it does today. With it set, the server checks which provider it
-actually got and says what is missing rather than running far slower without
-mentioning it.
+```bash
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
+pip install --force-reinstall --no-deps onnxruntime-gpu --index-url \
+  https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-cufft-cu12 \
+            nvidia-curand-cu12 nvidia-cudnn-cu12
+```
+
+Then, either way:
+
+```bash
+export PDF_MCP_CUDA=1   # Linux, macOS
+set PDF_MCP_CUDA=1      # Windows
+```
+
+The uninstall is needed because `onnxruntime` and `onnxruntime-gpu` install
+into the same directory, so with both present the CPU build wins the import.
+Unset, the CPU path runs exactly as before; set without a usable GPU, the
+server reports which provider it got instead of running slower in silence.
 
 ## Quick Start
 

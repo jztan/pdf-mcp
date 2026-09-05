@@ -159,17 +159,16 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
         return None
     if "CUDAExecutionProvider" in _providers(candidate):
         return candidate
-    # Naming the two requirements rather than saying "install the extra": the
-    # user asking this question has already installed it, and pip cannot check
-    # either of them - dependency resolution sees the OS and the interpreter,
-    # never the card. This is the only place the mismatch is visible.
+    # The likely causes, in the order they happen, because this is the only
+    # place the environment's shape is visible. A resolver cannot check any of
+    # them: two distributions share this import path, and the CUDA series a
+    # machine needs depends on the card.
     warnings.warn(
         "PDF_MCP_CUDA is set but onnxruntime gave CPU, so embedding will be far "
-        "slower. Most often onnxruntime is installed alongside onnxruntime-gpu "
-        "and wins the import, or the CUDA runtime wheels are missing or are the "
-        "wrong series for the card - the CUDA 13 build needs driver r580+ and a "
-        "Turing or newer GPU. See the GPU section of the README; unset "
-        "PDF_MCP_CUDA to choose CPU deliberately.",
+        "slower. Usually onnxruntime is installed alongside onnxruntime-gpu and "
+        "wins the shared import path, or the CUDA runtime is absent or is the "
+        "wrong series for the GPU. Unset PDF_MCP_CUDA to choose CPU "
+        "deliberately.",
         RuntimeWarning,
         stacklevel=3,
     )

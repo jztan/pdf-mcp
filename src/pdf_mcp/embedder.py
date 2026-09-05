@@ -58,35 +58,51 @@ def _cuda_requested() -> bool:
     }
 
 
-def _add_nvidia_dll_dirs() -> None:
-    """Put the nvidia-*-cu12 wheel DLLs where the Windows loader will find them.
+def _preload_cuda_runtime() -> None:
+    """Make the CUDA runtime from the nvidia wheels loadable.
 
     onnxruntime-gpu ships the CUDA provider but not the runtime it links
-    against; the pip wheels put that runtime in site-packages/nvidia/*/bin,
-    which is on nobody's PATH. Without this the provider fails to load and
-    onnxruntime falls back to CPU, which is correct but ~400x slower.
+    against. The pip wheels put that runtime under site-packages/nvidia/, which
+    neither loader searches by default, so the provider fails to resolve its
+    dependencies and onnxruntime falls back to the CPU - correct answers, far
+    slower, and nothing in the output says why.
 
-    Prepending to PATH is what works: os.add_dll_directory alone is not enough,
-    because the dependency chain between the NVIDIA DLLs is resolved by the
-    loader's default search order. Only called when CUDA was asked for.
+    Both platforms need help and they need different help. Windows takes the
+    directories: PATH as well as add_dll_directory, because the NVIDIA DLLs
+    depend on each other and that chain is resolved by the default search
+    order. Linux cannot be helped by a directory at all - LD_LIBRARY_PATH is
+    read by the dynamic loader before the interpreter starts - so the libraries
+    are opened by hand with RTLD_GLOBAL, which puts them in the process where
+    the provider will find them.
+
+    Only called when CUDA was requested, and silent when the wheels are absent.
     """
     import glob
     import os
     import sys
     import sysconfig
 
-    # sys.platform rather than os.name: mypy narrows on it, and os.name leaves
-    # `os.add_dll_directory` looking undefined when the checker runs on Linux -
-    # which is where CI runs it.
-    if sys.platform != "win32":
-        return
     base = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
-    dirs = glob.glob(os.path.join(base, "*", "bin"))
-    if not dirs:
+    if sys.platform == "win32":
+        dirs = glob.glob(os.path.join(base, "*", "bin"))
+        if not dirs:
+            return
+        joined = os.pathsep.join(dirs)
+        os.environ["PATH"] = joined + os.pathsep + os.environ["PATH"]
+        for directory in dirs:
+            os.add_dll_directory(directory)
         return
-    os.environ["PATH"] = os.pathsep.join(dirs) + os.pathsep + os.environ["PATH"]
-    for directory in dirs:
-        os.add_dll_directory(directory)
+
+    import ctypes
+
+    for lib in sorted(glob.glob(os.path.join(base, "*", "lib", "*.so.*"))):
+        try:
+            ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+        except OSError:
+            # One unloadable library is not fatal: the provider needs a subset,
+            # and which subset depends on the build. If it turns out to need
+            # this one, the caller's provider check reports it.
+            continue
 
 
 def _providers(model: Any) -> list[str]:
@@ -110,7 +126,7 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
     """
     import warnings
 
-    _add_nvidia_dll_dirs()
+    _preload_cuda_runtime()
     try:
         candidate = embedding_cls(model_name, cuda=True, device_ids=[0])
     except Exception as exc:  # noqa: BLE001 - reported, never swallowed
@@ -122,9 +138,16 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
         return None
     if "CUDAExecutionProvider" in _providers(candidate):
         return candidate
+    # Naming the two requirements rather than saying "install the extra": the
+    # user asking this question has already installed it, and pip cannot check
+    # either of them - dependency resolution sees the OS and the interpreter,
+    # never the card. This is the only place the mismatch is visible.
     warnings.warn(
-        "PDF_MCP_CUDA is set but onnxruntime gave CPU. Embedding will be far "
-        "slower. Install the GPU extra (pip install 'pdf-mcp[gpu]') or unset "
+        "PDF_MCP_CUDA is set but onnxruntime gave CPU, so embedding will be far "
+        "slower. Most often onnxruntime is installed alongside onnxruntime-gpu "
+        "and wins the import, or the CUDA runtime wheels are missing or are the "
+        "wrong series for the card - the CUDA 13 build needs driver r580+ and a "
+        "Turing or newer GPU. See the GPU section of the README; unset "
         "PDF_MCP_CUDA to choose CPU deliberately.",
         RuntimeWarning,
         stacklevel=3,

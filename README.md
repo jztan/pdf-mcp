@@ -58,15 +58,29 @@ GPU embedding is optional and off by default. On a machine with an NVIDIA
 card it makes the embedding pass roughly two orders of magnitude faster,
 which matters when warming a large corpus:
 
+There is no extra for it, deliberately: which CUDA build you need depends on
+your card, and pip cannot see hardware. You build the environment, and
+`PDF_MCP_CUDA=1` tells the server to use it. On Linux and Windows x86_64, with
+a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
+
 ```bash
-pip install "pdf-mcp[gpu]"
+pip uninstall -y onnxruntime && pip install fastembed-gpu
+pip install nvidia-cublas nvidia-cuda-runtime nvidia-cufft nvidia-curand \
+            nvidia-cudnn-cu13
 export PDF_MCP_CUDA=1
 ```
 
-Linux and Windows x86_64 only. Without `PDF_MCP_CUDA` set, installing the
-extra changes nothing: the CPU path runs exactly as it does today. If the
-variable is set and the CUDA provider cannot load, the server says so and
-falls back to CPU rather than running far slower without mentioning it.
+The uninstall is not optional: `onnxruntime` and `onnxruntime-gpu` claim the
+same import name, and with both present the CPU one usually wins - which looks
+exactly like a working install that is quietly not using the GPU. Maxwell,
+Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) were dropped by
+CUDA 13 and need the CUDA 12 build instead: `onnxruntime-gpu` from NVIDIA's
+CUDA 12 index and the `nvidia-*-cu12` wheels.
+
+Without `PDF_MCP_CUDA` set, none of this changes anything: the CPU path runs
+exactly as it does today. With it set, the server checks which provider it
+actually got and says what is missing rather than running far slower without
+mentioning it.
 
 ## Quick Start
 

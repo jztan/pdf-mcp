@@ -268,5 +268,75 @@ def test_nvidia_dll_dirs_is_a_noop_off_windows(monkeypatch):
 
     monkeypatch.setattr(sys, "platform", "linux")
     before = os.environ.get("PATH")
-    emb._add_nvidia_dll_dirs()
+    emb._preload_cuda_runtime()
     assert os.environ.get("PATH") == before
+
+
+def test_preload_registers_directories_on_windows(monkeypatch):
+    """On Windows the wheel dirs go on PATH and into the DLL search path."""
+    import glob
+    import os
+    import sys
+
+    import pdf_mcp.embedder as emb
+
+    dirs = [os.path.join("x", "nvidia", "cublas", "bin")]
+    registered: list[str] = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(glob, "glob", lambda pattern: dirs)
+    monkeypatch.setattr(os, "add_dll_directory", registered.append, raising=False)
+    monkeypatch.setenv("PATH", "unchanged")
+
+    emb._preload_cuda_runtime()
+
+    assert registered == dirs
+    assert os.environ["PATH"].startswith(dirs[0])
+
+
+def test_preload_opens_libraries_on_linux(monkeypatch):
+    """On Linux the libraries are opened directly - a directory cannot help.
+
+    LD_LIBRARY_PATH is read by the dynamic loader before the interpreter
+    exists, so the only lever left inside the process is loading each library
+    with RTLD_GLOBAL.
+    """
+    import ctypes
+    import glob
+    import sys
+
+    import pdf_mcp.embedder as emb
+
+    libs = ["/x/nvidia/cublas/lib/libcublas.so.13", "/x/nvidia/bad/lib/b.so.1"]
+    opened: list[str] = []
+
+    def fake_cdll(path, mode=0):
+        opened.append(path)
+        if "bad" in path:
+            raise OSError("cannot open")
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(glob, "glob", lambda pattern: libs)
+    monkeypatch.setattr(ctypes, "CDLL", fake_cdll)
+
+    emb._preload_cuda_runtime()
+
+    # Both attempted, and the one that raised did not stop the other: which
+    # libraries the provider needs depends on the build, so an unloadable one
+    # is not fatal.
+    assert opened == sorted(libs)
+
+
+def test_preload_is_silent_when_no_wheels_are_installed(monkeypatch):
+    """No nvidia wheels means nothing to do, on either platform."""
+    import glob
+    import os
+    import sys
+
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setattr(glob, "glob", lambda pattern: [])
+    monkeypatch.setenv("PATH", "unchanged")
+    for platform in ("win32", "linux"):
+        monkeypatch.setattr(sys, "platform", platform)
+        emb._preload_cuda_runtime()
+    assert os.environ["PATH"] == "unchanged"

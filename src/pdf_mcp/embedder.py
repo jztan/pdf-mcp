@@ -82,9 +82,14 @@ def _preload_cuda_runtime() -> None:
     import sys
     import sysconfig
 
+    # Searched recursively because the layout is not stable across CUDA
+    # series: the 12 wheels put DLLs in nvidia/<component>/bin, the 13 ones in
+    # nvidia/cu13/bin/<arch>. Globbing one level found the CUDA 12 files and
+    # silently missed the CUDA 13 ones, which reads as a machine without a GPU.
     base = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
     if sys.platform == "win32":
-        dirs = glob.glob(os.path.join(base, "*", "bin"))
+        found = glob.glob(os.path.join(base, "**", "*.dll"), recursive=True)
+        dirs = sorted({os.path.dirname(dll) for dll in found})
         if not dirs:
             return
         joined = os.pathsep.join(dirs)
@@ -95,7 +100,23 @@ def _preload_cuda_runtime() -> None:
 
     import ctypes
 
-    for lib in sorted(glob.glob(os.path.join(base, "*", "lib", "*.so.*"))):
+    libs = glob.glob(os.path.join(base, "**", "*.so.*"), recursive=True)
+
+    # libcublasLt before libcublas, and both before everything else. Taken from
+    # PyTorch's _preload_cuda_deps, which documents why: libcublas resolves
+    # libcublasLt through its own RUNPATH, so on a host that also has a
+    # system-wide CUDA it can bind to a different version and fail later with
+    # missing symbols. Loading the wheel's copy first settles it. Alphabetical
+    # order puts them the wrong way round.
+    def first(path: str) -> tuple[int, str]:
+        name = os.path.basename(path)
+        if name.startswith("libcublasLt."):
+            return (0, name)
+        if name.startswith("libcublas."):
+            return (1, name)
+        return (2, name)
+
+    for lib in sorted(libs, key=first):
         try:
             ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
         except OSError:

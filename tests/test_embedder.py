@@ -283,7 +283,9 @@ def test_preload_registers_directories_on_windows(monkeypatch):
     dirs = [os.path.join("x", "nvidia", "cublas", "bin")]
     registered: list[str] = []
     monkeypatch.setattr(sys, "platform", "win32")
-    monkeypatch.setattr(glob, "glob", lambda pattern: dirs)
+    monkeypatch.setattr(
+        glob, "glob", lambda pattern, recursive=False: [os.path.join(dirs[0], "a.dll")]
+    )
     monkeypatch.setattr(os, "add_dll_directory", registered.append, raising=False)
     monkeypatch.setenv("PATH", "unchanged")
 
@@ -315,7 +317,7 @@ def test_preload_opens_libraries_on_linux(monkeypatch):
             raise OSError("cannot open")
 
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(glob, "glob", lambda pattern: libs)
+    monkeypatch.setattr(glob, "glob", lambda pattern, recursive=False: libs)
     monkeypatch.setattr(ctypes, "CDLL", fake_cdll)
 
     emb._preload_cuda_runtime()
@@ -323,7 +325,37 @@ def test_preload_opens_libraries_on_linux(monkeypatch):
     # Both attempted, and the one that raised did not stop the other: which
     # libraries the provider needs depends on the build, so an unloadable one
     # is not fatal.
-    assert opened == sorted(libs)
+    assert sorted(opened) == sorted(libs)
+
+
+def test_preload_loads_cublaslt_before_cublas(monkeypatch):
+    """cublasLt goes first, which alphabetical order gets backwards.
+
+    libcublas resolves libcublasLt through its own RUNPATH, so on a host that
+    also has a system-wide CUDA it can bind a different version and fail later
+    with missing symbols. Loading the wheel's copy first settles it - the same
+    ordering, and the same reason, as PyTorch's _preload_cuda_deps.
+    """
+    import ctypes
+    import glob
+    import sys
+
+    import pdf_mcp.embedder as emb
+
+    libs = [
+        "/x/nvidia/cudnn/lib/libcudnn.so.9",
+        "/x/nvidia/cublas/lib/libcublas.so.13",
+        "/x/nvidia/cublas/lib/libcublasLt.so.13",
+    ]
+    opened: list[str] = []
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(glob, "glob", lambda pattern, recursive=False: libs)
+    monkeypatch.setattr(ctypes, "CDLL", lambda path, mode=0: opened.append(path))
+
+    emb._preload_cuda_runtime()
+
+    assert opened[0].endswith("libcublasLt.so.13")
+    assert opened[1].endswith("libcublas.so.13")
 
 
 def test_preload_is_silent_when_no_wheels_are_installed(monkeypatch):
@@ -334,7 +366,7 @@ def test_preload_is_silent_when_no_wheels_are_installed(monkeypatch):
 
     import pdf_mcp.embedder as emb
 
-    monkeypatch.setattr(glob, "glob", lambda pattern: [])
+    monkeypatch.setattr(glob, "glob", lambda pattern, recursive=False: [])
     monkeypatch.setenv("PATH", "unchanged")
     for platform in ("win32", "linux"):
         monkeypatch.setattr(sys, "platform", platform)

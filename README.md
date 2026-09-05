@@ -54,6 +54,20 @@ apt install tesseract-ocr     # Ubuntu/Debian
 winget install Tesseract-OCR  # Windows
 ```
 
+GPU embedding is optional and off by default. On a machine with an NVIDIA
+card it makes the embedding pass roughly two orders of magnitude faster,
+which matters when warming a large corpus:
+
+```bash
+pip install "pdf-mcp[gpu]"
+export PDF_MCP_CUDA=1
+```
+
+Linux and Windows x86_64 only. Without `PDF_MCP_CUDA` set, installing the
+extra changes nothing: the CPU path runs exactly as it does today. If the
+variable is set and the CUDA provider cannot load, the server says so and
+falls back to CPU rather than running far slower without mentioning it.
+
 ## Quick Start
 
 ```bash

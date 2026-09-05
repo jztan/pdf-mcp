@@ -46,8 +46,94 @@ def check_available(model_name: str) -> None:
         )
 
 
+def _cuda_requested() -> bool:
+    """True when PDF_MCP_CUDA asks for the GPU. Unset means CPU, as before."""
+    import os
+
+    return os.environ.get("PDF_MCP_CUDA", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _add_nvidia_dll_dirs() -> None:
+    """Put the nvidia-*-cu12 wheel DLLs where the Windows loader will find them.
+
+    onnxruntime-gpu ships the CUDA provider but not the runtime it links
+    against; the pip wheels put that runtime in site-packages/nvidia/*/bin,
+    which is on nobody's PATH. Without this the provider fails to load and
+    onnxruntime falls back to CPU, which is correct but ~400x slower.
+
+    Prepending to PATH is what works: os.add_dll_directory alone is not enough,
+    because the dependency chain between the NVIDIA DLLs is resolved by the
+    loader's default search order. Only called when CUDA was asked for.
+    """
+    import glob
+    import os
+    import sysconfig
+
+    if os.name != "nt":
+        return
+    base = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
+    dirs = glob.glob(os.path.join(base, "*", "bin"))
+    if not dirs:
+        return
+    os.environ["PATH"] = os.pathsep.join(dirs) + os.pathsep + os.environ["PATH"]
+    for directory in dirs:
+        os.add_dll_directory(directory)
+
+
+def _providers(model: Any) -> list[str]:
+    """Execution providers the loaded session got, or [] if unreadable."""
+    session = getattr(getattr(model, "model", model), "model", None)
+    if session is None:
+        return []
+    try:
+        return list(session.get_providers())
+    except Exception:  # pragma: no cover - defensive
+        return []
+
+
+def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
+    """A CUDA-backed embedder, or None with a warning saying why not.
+
+    The warning is the reason this is not a bare try/except. onnxruntime falls
+    back to CPU by design when the provider cannot load, and the vectors it
+    then produces are correct - so nothing downstream can tell, and the only
+    symptom is a wall clock. A silent 400x is worse than a failure.
+    """
+    import warnings
+
+    _add_nvidia_dll_dirs()
+    try:
+        candidate = embedding_cls(model_name, cuda=True, device_ids=[0])
+    except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+        warnings.warn(
+            f"PDF_MCP_CUDA is set but the CUDA session failed ({exc!r}); using CPU.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        return None
+    if "CUDAExecutionProvider" in _providers(candidate):
+        return candidate
+    warnings.warn(
+        "PDF_MCP_CUDA is set but onnxruntime gave CPU. Embedding will be far "
+        "slower. Install the GPU extra (pip install 'pdf-mcp[gpu]') or unset "
+        "PDF_MCP_CUDA to choose CPU deliberately.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return None
+
+
 def _get_model(model_name: str) -> Any:
-    """Load embedding model on first call; reload if model_name changed."""
+    """Load embedding model on first call; reload if model_name changed.
+
+    Uses the GPU only when PDF_MCP_CUDA is set. Unset - the default - is the
+    CPU path unchanged, so an existing install behaves exactly as before.
+    """
     global _model, _model_name_loaded
     if _model is None or _model_name_loaded != model_name:
         try:
@@ -58,7 +144,8 @@ def _get_model(model_name: str) -> Any:
                 "It ships with the default install; restore it with: "
                 "pip install fastembed"
             ) from exc
-        _model = TextEmbedding(model_name)
+        model = _cuda_model(model_name, TextEmbedding) if _cuda_requested() else None
+        _model = model if model is not None else TextEmbedding(model_name)
         _model_name_loaded = model_name
     return _model
 

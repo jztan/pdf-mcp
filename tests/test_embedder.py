@@ -158,3 +158,114 @@ def test_singleton_model_constructed_once():
             emb._model_name_loaded = None
 
     assert mock_cls.call_count == 1
+
+
+def _session_with(providers: list[str]) -> MagicMock:
+    """Mock whose nested .model.model.get_providers() answers `providers`."""
+    model = MagicMock()
+    model.model.model.get_providers.return_value = providers
+    return model
+
+
+def test_cuda_not_requested_by_default(monkeypatch):
+    """Unset PDF_MCP_CUDA loads the plain CPU model - unchanged behaviour."""
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.delenv("PDF_MCP_CUDA", raising=False)
+    cls = MagicMock(return_value=_session_with(["CPUExecutionProvider"]))
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    cls.assert_called_once_with(DEFAULT)
+
+
+def test_cuda_requested_and_available(monkeypatch):
+    """PDF_MCP_CUDA=1 asks fastembed for CUDA and keeps the session it gets."""
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    gpu = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    cls = MagicMock(return_value=gpu)
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    cls.assert_called_once_with(DEFAULT, cuda=True, device_ids=[0])
+    assert result is gpu
+
+
+def test_cuda_requested_but_cpu_given_warns(monkeypatch):
+    """A CUDA request that silently lands on CPU warns and falls back.
+
+    The failure this covers produces correct vectors, so only the clock shows
+    it - which is why the warning is the behaviour under test.
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    cls = MagicMock(return_value=_session_with(["CPUExecutionProvider"]))
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="gave CPU"):
+                emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert cls.call_count == 2  # the CUDA attempt, then the CPU fallback
+
+
+def test_cuda_session_raising_falls_back(monkeypatch):
+    """A CUDA session that cannot be built warns and still returns a model."""
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    cpu = _session_with(["CPUExecutionProvider"])
+    cls = MagicMock(side_effect=[RuntimeError("no provider"), cpu])
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="CUDA session failed"):
+                result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is cpu
+
+
+def test_cuda_requested_accepts_several_spellings(monkeypatch):
+    """1, true, yes and on all mean yes; anything else means no."""
+    import pdf_mcp.embedder as emb
+
+    for value in ("1", "true", "TRUE", "yes", "on", " on "):
+        monkeypatch.setenv("PDF_MCP_CUDA", value)
+        assert emb._cuda_requested() is True, value
+    for value in ("", "0", "false", "no", "off", "maybe"):
+        monkeypatch.setenv("PDF_MCP_CUDA", value)
+        assert emb._cuda_requested() is False, value
+
+
+def test_providers_of_unreadable_session_is_empty():
+    """A model that exposes no session reports no providers rather than raising."""
+    import pdf_mcp.embedder as emb
+
+    assert emb._providers(object()) == []
+
+
+def test_nvidia_dll_dirs_is_a_noop_off_windows(monkeypatch):
+    """Nothing is touched on a non-Windows host."""
+    import os
+
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setattr(os, "name", "posix")
+    before = os.environ.get("PATH")
+    emb._add_nvidia_dll_dirs()
+    assert os.environ.get("PATH") == before

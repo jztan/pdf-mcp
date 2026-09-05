@@ -142,6 +142,27 @@ bedrock = [
 # PyMuPDF's speed on typical 200dpi scans).
 fast-ocr = ["tesserocr>=2.6"]
 
+# GPU embedding. Nothing here is installed by default and the code path is
+# off unless PDF_MCP_CUDA is set, so a CPU install is unchanged in both
+# dependencies and behaviour.
+#
+# onnxruntime-gpu arrives through fastembed-gpu and is not listed separately.
+# The nvidia-*-cu12 wheels are: onnxruntime-gpu ships the CUDA provider but
+# not the runtime it links against, and without that runtime the provider
+# fails to load its dependencies and onnxruntime falls back to the CPU
+# silently - correct answers, roughly two orders of magnitude slower.
+#
+# Linux and Windows x86_64 only; there are no macOS wheels and asking for this
+# extra there will not resolve.
+gpu = [
+    "fastembed-gpu>=0.7,<1.0",
+    "nvidia-cublas-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+]
+
 # No-op compatibility alias: fastembed is a core dependency now.
 # Kept so existing install instructions ('pdf-mcp[semantic]') keep working.
 semantic = []

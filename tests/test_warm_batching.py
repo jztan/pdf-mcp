@@ -5,8 +5,6 @@ and a SIGKILL between batch commits must lose at most the in-flight
 batch.
 """
 
-import os
-import signal
 import subprocess
 import sys
 import textwrap
@@ -96,7 +94,9 @@ class TestKillMidBatch:
             """)
         proc = subprocess.Popen([sys.executable, "-c", script])
         # Deterministic kill point: wait until at least one batch has
-        # committed, then SIGKILL while batches remain in flight.
+        # committed, then hard-kill while batches remain in flight.
+        # Popen.kill() is SIGKILL on POSIX and TerminateProcess on
+        # Windows (which has no signal.SIGKILL): no cleanup runs either way.
         pc = 4
         watcher = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
         deadline = time.monotonic() + 30
@@ -105,7 +105,7 @@ class TestKillMidBatch:
             if committed >= 1:
                 break
             time.sleep(0.05)
-        os.kill(proc.pid, signal.SIGKILL)
+        proc.kill()
         proc.wait()
 
         cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)

@@ -82,6 +82,10 @@ CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 WARM_DOC_GATE = 4
 WARM_TEXT_CAP = 8
 WARM_EMBED_CAP = 4
+# Pages per durable embedding batch: ~5s of encoding on the reference
+# machine (measured 0.197s/page, 5 units/page, bge-small, 2026-09-03).
+# One batch is the overshoot bound and the per-call progress floor.
+WARM_EMBED_BATCH_PAGES = 24
 
 
 def _validate_file(
@@ -223,6 +227,28 @@ def _cached_pages(
     return pages
 
 
+def _missing_embed_pages(
+    texts: dict[int, str], stored: dict[int, list[bytes]]
+) -> list[int]:
+    """Non-empty pages needing (re-)embedding: no stored chunk rows, or
+    a stored unit count current code would not write (stale layout)."""
+    missing = {pn for pn, t in texts.items() if t.strip() and not stored.get(pn)}
+    missing.update(stale_layout_pages(texts, stored))
+    return sorted(missing)
+
+
+def _embedded_pages_count(path: str, cache: Any, model_name: str) -> int | None:
+    """Cache-read count of non-empty pages with valid chunk rows, or
+    None when the doc's text is not (or no longer) fully warm."""
+    pages = _cached_pages(path, cache, False, model_name)
+    if pages is None:
+        return None
+    texts = cache.get_pages_text(path, list(range(pages)))
+    non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+    stored = cache.get_page_embeddings(path, sorted(non_empty), model_name)
+    return len(non_empty) - len(_missing_embed_pages(texts, stored))
+
+
 def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
     all pages. Ties break by term so the result is deterministic."""
@@ -295,6 +321,64 @@ def backfill_doc_profiles(
     return len(built)
 
 
+def _embed_doc_batched(
+    path: str,
+    texts: dict[int, str],
+    cache: Any,
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+    deadline: float,
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[bool, int]:
+    """Embed a doc's missing pages in durable batches (contract A).
+
+    Each batch commits in its own transaction; the clock is checked
+    BETWEEN batches, so at least one batch lands per call (progress
+    floor) and overshoot is bounded by one batch. On completion the doc
+    profile is written last, as the completion marker. Returns
+    (complete, embedded_pages) where embedded_pages counts non-empty
+    pages holding valid chunk rows after this call.
+    """
+    non_empty = {pn: t for pn, t in texts.items() if t.strip()}
+    stored = cache.get_page_embeddings(path, sorted(non_empty), model_name)
+    missing = _missing_embed_pages(texts, stored)
+    done = len(non_empty) - len(missing)
+    idx = 0
+    while idx < len(missing):
+        if idx > 0 and clock() > deadline:
+            return False, done
+        batch = missing[idx : idx + WARM_EMBED_BATCH_PAGES]
+        per_page = {pn: page_embedding_units(non_empty[pn]) for pn in batch}
+        flat = [c for pn in batch for c in per_page[pn]]
+        vecs = embed(flat)
+        blobs: dict[int, list[bytes]] = {}
+        cursor = 0
+        for pn in batch:
+            count = len(per_page[pn])
+            blobs[pn] = vecs[cursor : cursor + count]
+            cursor += count
+        with cache.write_transaction() as conn:
+            cache.save_page_embeddings(path, blobs, model_name, conn=conn)
+        done += len(batch)
+        idx += len(batch)
+    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    try:
+        profile = build_doc_profile(texts, embed)
+    except Exception as exc:  # noqa: BLE001 - profile is optional
+        logger.warning("doc profile skipped for %s: %s", path, exc)
+    if profile is not None:
+        with cache.write_transaction() as conn:
+            cache.save_doc_profile(
+                path,
+                PROFILE_HEAD_CHARS,
+                profile[0],
+                profile[1],
+                model_name,
+                conn=conn,
+            )
+    return True, done
+
+
 def _finalize_doc(
     path: str,
     page_count: int,
@@ -307,11 +391,15 @@ def _finalize_doc(
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
     layout: "dict[int, tuple[list[Any], tuple[float, float], bool]] | None" = None,
-) -> int:
-    """Parent-side tail of warming one doc: OCR preservation, per-doc
-    encode, then the three cache writes together (atomic per doc).
-
-    Always runs in the parent process — every SQLite touch is here.
+    deadline: float = float("inf"),
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[int, bool, int]:
+    """Parent-side tail of warming one doc: OCR preservation, the atomic
+    text transaction, then the durable batched embedding loop (which may
+    stop at the deadline). Returns (page_count, emb_complete,
+    embedded_pages); emb_complete is True when embeddings were not
+    requested. Always runs in the parent process — every SQLite touch
+    is here.
     """
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
@@ -333,33 +421,7 @@ def _finalize_doc(
                 texts[pn] = cached_text
                 preserved.add(pn)
 
-    blobs: dict[int, list[bytes]] = {}
-    if embeddings:
-        assert embed is not None and model_name is not None
-        non_empty = {pn: t for pn, t in texts.items() if t.strip()}
-        if non_empty:
-            nums = sorted(non_empty)
-            # One vector per page dilutes a single answer sentence into a
-            # page average. Embed sub-page windows instead and keep them
-            # ordered; chunk_idx is list position downstream. All chunks go
-            # through one embed call so the expensive step keeps its count.
-            per_page = {pn: page_embedding_units(non_empty[pn]) for pn in nums}
-            flat = [c for pn in nums for c in per_page[pn]]
-            vecs = embed(flat) if flat else []
-            cursor = 0
-            for pn in nums:
-                count = len(per_page[pn])
-                blobs[pn] = vecs[cursor : cursor + count]
-                cursor += count
-
     to_save = {pn: t for pn, t in texts.items() if pn not in preserved}
-
-    profile: "tuple[bytes | None, dict[str, int]] | None" = None
-    if embeddings and embed is not None and model_name is not None:
-        try:
-            profile = build_doc_profile(texts, embed)
-        except Exception as exc:  # noqa: BLE001 - profile is optional
-            logger.warning("doc profile skipped for %s: %s", path, exc)
 
     # ONE transaction for the whole document. Each of these writes used to
     # open its own connection, and leaving that block commits, which is an
@@ -376,12 +438,6 @@ def _finalize_doc(
             path, page_count, metadata, toc, text_coverage=coverage, conn=conn
         )
         cache.save_pages_text(path, to_save, conn=conn)
-        if blobs and model_name is not None:
-            cache.save_page_embeddings(path, blobs, model_name, conn=conn)
-        if profile is not None and model_name is not None:
-            cache.save_doc_profile(
-                path, PROFILE_HEAD_CHARS, profile[0], profile[1], model_name, conn=conn
-            )
         if layout:
             # Written AFTER page_text: the hidden flag lives on page_text
             # rows, and blocks are keyed independently by mtime.
@@ -395,7 +451,13 @@ def _finalize_doc(
                 {pn: hidden for pn, (_b, _s, hidden) in layout.items()},
                 conn=conn,
             )
-    return page_count
+    emb_complete, embedded = True, 0
+    if embeddings:
+        assert embed is not None and model_name is not None
+        emb_complete, embedded = _embed_doc_batched(
+            path, texts, cache, model_name, embed, deadline, clock
+        )
+    return page_count, emb_complete, embedded
 
 
 def _warm_one_doc(
@@ -404,11 +466,14 @@ def _warm_one_doc(
     embeddings: bool,
     model_name: str | None,
     embed: Callable[[list[str]], list[bytes]] | None,
-) -> int:
-    """Extract everything for one doc, then write to cache.
+    deadline: float = float("inf"),
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[int, bool, int]:
+    """Extract everything for one doc, then write: text atomically,
+    embeddings in durable batches (may stop at the deadline).
 
     Extraction completes fully before any write, so a failure leaves
-    the cache untouched (atomic per doc).
+    the cache untouched.
     """
     page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
     return _finalize_doc(
@@ -423,6 +488,8 @@ def _warm_one_doc(
         model_name,
         embed,
         layout=layout,
+        deadline=deadline,
+        clock=clock,
     )
 
 
@@ -448,20 +515,60 @@ def _warm_sequential(
 ) -> tuple[list[str], bool, int]:
     """Sequential warm loop (today's semantics, verbatim): clock checked
     before each doc; per-doc failure -> skipped; appends to docs/skipped
-    in place. Returns (unprocessed, budget_exhausted, warmed)."""
+    in place. A doc the budget interrupts mid-embedding is reported as a
+    partial row and joins unprocessed; a doc whose text is already
+    cached resumes through the batch loop without re-extraction.
+    Returns (unprocessed, budget_exhausted, warmed)."""
     warmed = 0
     unprocessed: list[str] = []
     budget_exhausted = False
+    deadline = start + budget_seconds
     for i, (path, _pages) in enumerate(pending):
         if clock() - start > budget_seconds:
             unprocessed = [p for p, _ in pending[i:]]
             budget_exhausted = True
             break
         try:
-            page_count = _warm_one_doc(path, cache, embeddings, model_name, embed)
+            text_pages = (
+                _cached_pages(path, cache, False, model_name)
+                if embeddings and model_name is not None
+                else None
+            )
+            if text_pages is not None:
+                # RESUME: text is warm, embed only the missing pages.
+                assert embed is not None and model_name is not None
+                texts = cache.get_pages_text(path, list(range(text_pages)))
+                complete, embedded = _embed_doc_batched(
+                    path, texts, cache, model_name, embed, deadline, clock
+                )
+                page_count = text_pages
+            else:
+                page_count, complete, embedded = _warm_one_doc(
+                    path,
+                    cache,
+                    embeddings,
+                    model_name,
+                    embed,
+                    deadline=deadline,
+                    clock=clock,
+                )
         except Exception as e:
             skipped.append({"path": path, "reason": f"warm failed: {e}"})
             continue
+        if not complete:
+            docs.append(
+                {
+                    "path": path,
+                    "status": "partial",
+                    "pages": page_count,
+                    "embeddings_cached": False,
+                    "embedded_pages": embedded,
+                    "text_coverage": _doc_coverage_label(path, cache),
+                }
+            )
+            unprocessed = [path] + [p for p, _ in pending[i + 1 :]]
+            budget_exhausted = True
+            break
         warmed += 1
         docs.append(
             {
@@ -536,7 +643,7 @@ def _warm_concurrent(
                             coverage_w,
                             layout_w,
                         ) = fut.result()
-                        page_count = _finalize_doc(
+                        page_count, _complete, _embedded = _finalize_doc(
                             path,
                             page_count_w,
                             metadata_w,
@@ -548,6 +655,8 @@ def _warm_concurrent(
                             model_name,
                             embed,
                             layout=layout_w,
+                            deadline=start + budget_seconds,
+                            clock=clock,
                         )
                     except BrokenProcessPool:
                         raise
@@ -564,6 +673,20 @@ def _warm_concurrent(
                         skipped.append({"path": path, "reason": f"warm failed: {e}"})
                         continue
                     handled.add(path)
+                    if not _complete:
+                        docs.append(
+                            {
+                                "path": path,
+                                "status": "partial",
+                                "pages": page_count,
+                                "embeddings_cached": False,
+                                "embedded_pages": _embedded,
+                                "text_coverage": _doc_coverage_label(path, cache),
+                            }
+                        )
+                        unprocessed.append(path)
+                        budget_exhausted = True
+                        continue
                     warmed += 1
                     docs.append(
                         {
@@ -674,10 +797,24 @@ def warm_docs(
             logger.warning("doc profile backfill failed: %s", exc)
 
     uncached.sort(key=lambda item: item[1])
-    workers = _warm_worker_count(len(uncached), embeddings)
-    if workers <= 1:
+    resume = [
+        item
+        for item in uncached
+        if embeddings
+        and model_name is not None
+        and _cached_pages(item[0], cache, False, model_name) is not None
+    ]
+    cold = [item for item in uncached if item not in resume]
+
+    warmed = 0
+    unprocessed: list[str] = []
+    budget_exhausted = False
+    if resume:
+        # Resume docs first: they need no extraction, so they never go
+        # to the pool, and finishing an interrupted giant is the
+        # natural convergence order.
         unprocessed, budget_exhausted, warmed = _warm_sequential(
-            uncached,
+            resume,
             budget_seconds,
             start,
             clock,
@@ -689,21 +826,41 @@ def warm_docs(
             skipped,
             _emb_cached,
         )
-    else:
-        unprocessed, budget_exhausted, warmed = _warm_concurrent(
-            uncached,
-            workers,
-            budget_seconds,
-            start,
-            clock,
-            cache,
-            embeddings,
-            model_name,
-            embed,
-            docs,
-            skipped,
-            _emb_cached,
-        )
+    if cold and not budget_exhausted:
+        workers = _warm_worker_count(len(cold), embeddings)
+        if workers <= 1:
+            more_unproc, budget_exhausted, more_warmed = _warm_sequential(
+                cold,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+            )
+        else:
+            more_unproc, budget_exhausted, more_warmed = _warm_concurrent(
+                cold,
+                workers,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+            )
+        unprocessed += more_unproc
+        warmed += more_warmed
+    elif cold:
+        unprocessed += [p for p, _ in cold]
 
     # Verification pass. Every row above is a claim about which branch
     # ran, not about what landed in SQLite, so a write that never became
@@ -723,6 +880,17 @@ def warm_docs(
     verified: list[dict[str, Any]] = []
     for row in docs:
         row_path = str(row["path"])
+        if row["status"] == "partial":
+            # Partial progress is re-read from the cache, never echoed
+            # from the loop; the path is already in unprocessed. A doc
+            # whose text was invalidated mid-call drops its row and
+            # stays retryable via unprocessed.
+            count = _embedded_pages_count(row_path, cache, model_name or "")
+            if count is None:
+                continue
+            row["embedded_pages"] = count
+            verified.append(row)
+            continue
         if _cached_pages(row_path, cache, embeddings, model_name) is not None:
             verified.append(row)
             continue

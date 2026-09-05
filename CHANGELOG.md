@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`pdf_corpus_warm` embedding progress now commits in durable page
+  batches.** A document too large to embed within one `budget_seconds`
+  reports `status: "partial"` with `embedded_pages`, stays in
+  `unprocessed`, and resumes from committed progress on the next call;
+  previously such a document lost all embedding work every call and could
+  never warm through a timeout-bounded MCP client.
+
 ## [3.1.0] - 2026-09-05
 ### Added
 

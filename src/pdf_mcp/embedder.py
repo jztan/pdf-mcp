@@ -46,8 +46,141 @@ def check_available(model_name: str) -> None:
         )
 
 
+def _cuda_requested() -> bool:
+    """True when PDF_MCP_CUDA asks for the GPU. Unset means CPU, as before."""
+    import os
+
+    return os.environ.get("PDF_MCP_CUDA", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _preload_cuda_runtime() -> None:
+    """Make the CUDA runtime from the nvidia wheels loadable.
+
+    onnxruntime-gpu ships the CUDA provider but not the runtime it links
+    against. The pip wheels put that runtime under site-packages/nvidia/, which
+    neither loader searches by default, so the provider fails to resolve its
+    dependencies and onnxruntime falls back to the CPU - correct answers, far
+    slower, and nothing in the output says why.
+
+    Both platforms need help and they need different help. Windows takes the
+    directories: PATH as well as add_dll_directory, because the NVIDIA DLLs
+    depend on each other and that chain is resolved by the default search
+    order. Linux cannot be helped by a directory at all - LD_LIBRARY_PATH is
+    read by the dynamic loader before the interpreter starts - so the libraries
+    are opened by hand with RTLD_GLOBAL, which puts them in the process where
+    the provider will find them.
+
+    Only called when CUDA was requested, and silent when the wheels are absent.
+    """
+    import glob
+    import os
+    import sys
+    import sysconfig
+
+    # Searched recursively because the layout is not stable across CUDA
+    # series: the 12 wheels put DLLs in nvidia/<component>/bin, the 13 ones in
+    # nvidia/cu13/bin/<arch>. Globbing one level found the CUDA 12 files and
+    # silently missed the CUDA 13 ones, which reads as a machine without a GPU.
+    base = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
+    if sys.platform == "win32":
+        found = glob.glob(os.path.join(base, "**", "*.dll"), recursive=True)
+        dirs = sorted({os.path.dirname(dll) for dll in found})
+        if not dirs:
+            return
+        joined = os.pathsep.join(dirs)
+        os.environ["PATH"] = joined + os.pathsep + os.environ["PATH"]
+        for directory in dirs:
+            os.add_dll_directory(directory)
+        return
+
+    import ctypes
+
+    libs = glob.glob(os.path.join(base, "**", "*.so.*"), recursive=True)
+
+    # libcublasLt before libcublas, and both before everything else. Taken from
+    # PyTorch's _preload_cuda_deps, which documents why: libcublas resolves
+    # libcublasLt through its own RUNPATH, so on a host that also has a
+    # system-wide CUDA it can bind to a different version and fail later with
+    # missing symbols. Loading the wheel's copy first settles it. Alphabetical
+    # order puts them the wrong way round.
+    def first(path: str) -> tuple[int, str]:
+        name = os.path.basename(path)
+        if name.startswith("libcublasLt."):
+            return (0, name)
+        if name.startswith("libcublas."):
+            return (1, name)
+        return (2, name)
+
+    for lib in sorted(libs, key=first):
+        try:
+            ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+        except OSError:
+            # One unloadable library is not fatal: the provider needs a subset,
+            # and which subset depends on the build. If it turns out to need
+            # this one, the caller's provider check reports it.
+            continue
+
+
+def _providers(model: Any) -> list[str]:
+    """Execution providers the loaded session got, or [] if unreadable."""
+    session = getattr(getattr(model, "model", model), "model", None)
+    if session is None:
+        return []
+    try:
+        return list(session.get_providers())
+    except Exception:  # pragma: no cover - defensive
+        return []
+
+
+def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
+    """A CUDA-backed embedder, or None with a warning saying why not.
+
+    The warning is the reason this is not a bare try/except. onnxruntime falls
+    back to CPU by design when the provider cannot load, and the vectors it
+    then produces are correct - so nothing downstream can tell, and the only
+    symptom is a wall clock. A silent 400x is worse than a failure.
+    """
+    import warnings
+
+    _preload_cuda_runtime()
+    try:
+        candidate = embedding_cls(model_name, cuda=True, device_ids=[0])
+    except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+        warnings.warn(
+            f"PDF_MCP_CUDA is set but the CUDA session failed ({exc!r}); using CPU.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        return None
+    if "CUDAExecutionProvider" in _providers(candidate):
+        return candidate
+    # The likely causes, in the order they happen, because this is the only
+    # place the environment's shape is visible. A resolver cannot check any of
+    # them: two distributions share this import path, and the CUDA series a
+    # machine needs depends on the card.
+    warnings.warn(
+        "PDF_MCP_CUDA is set but onnxruntime gave CPU, so embedding will be far "
+        "slower. Usually onnxruntime is installed alongside onnxruntime-gpu and "
+        "wins the shared import path, or the CUDA runtime is absent or is the "
+        "wrong series for the GPU. Unset PDF_MCP_CUDA to choose CPU "
+        "deliberately.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return None
+
+
 def _get_model(model_name: str) -> Any:
-    """Load embedding model on first call; reload if model_name changed."""
+    """Load embedding model on first call; reload if model_name changed.
+
+    Uses the GPU only when PDF_MCP_CUDA is set. Unset - the default - is the
+    CPU path unchanged, so an existing install behaves exactly as before.
+    """
     global _model, _model_name_loaded
     if _model is None or _model_name_loaded != model_name:
         try:
@@ -58,7 +191,8 @@ def _get_model(model_name: str) -> Any:
                 "It ships with the default install; restore it with: "
                 "pip install fastembed"
             ) from exc
-        _model = TextEmbedding(model_name)
+        model = _cuda_model(model_name, TextEmbedding) if _cuda_requested() else None
+        _model = model if model is not None else TextEmbedding(model_name)
         _model_name_loaded = model_name
     return _model
 

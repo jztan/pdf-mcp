@@ -60,6 +60,11 @@ PDF_MCP_CACHE_TTL=48
 # (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
 PDF_MCP_MAX_WORKERS=8
 
+# Use the GPU for embedding (default: unset = CPU). Requires onnxruntime-gpu
+# and a CUDA runtime; see Installation in the README. When the CUDA provider
+# cannot load, the server warns and falls back to CPU.
+PDF_MCP_CUDA=1
+
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
 PDF_MCP_HTTP_HOST=127.0.0.1       # bind address

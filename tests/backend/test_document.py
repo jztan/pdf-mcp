@@ -147,7 +147,22 @@ class TestCloseSurvivesGcRace:
     def test_upstream_close_is_racy(self):
         """Documents the defect the guard exists for; if this stops
         failing on 3.12+, pypdfium2 fixed it upstream and the guard can
-        go. 2000 trials: at 3.14's ~5% hit rate a clean run is ~e^-100."""
+        go. 2000 trials: at 3.14's ~5% hit rate a clean run is ~e^-100.
+
+        The probe needs an uninstrumented interpreter: a sys.settrace
+        hook (coverage's C tracer, the default on <= 3.13) allocates on
+        every line event, so the threshold-1 collector fires before
+        close() enters its kids loop instead of inside it, and the race
+        never lands (measured: 0/2000 on 3.13 under `--cov`, 2000/2000
+        without). That is the failure that stopped the v3.1.0 publish
+        run. coverage's sys.monitoring core (the 3.14 default) installs
+        no trace function and leaves the timing alone, so only a real
+        trace hook disqualifies the run.
+        """
+        if sys.gettrace() is not None:
+            pytest.skip(
+                "a sys.settrace hook (e.g. coverage's C tracer) shifts GC timing"
+            )
         failures = self._close_under_gc_pressure(lambda pdf: pdf.close(), trials=2000)
         assert failures > 0
 

@@ -72,9 +72,13 @@ def _add_nvidia_dll_dirs() -> None:
     """
     import glob
     import os
+    import sys
     import sysconfig
 
-    if os.name != "nt":
+    # sys.platform rather than os.name: mypy narrows on it, and os.name leaves
+    # `os.add_dll_directory` looking undefined when the checker runs on Linux -
+    # which is where CI runs it.
+    if sys.platform != "win32":
         return
     base = os.path.join(sysconfig.get_paths()["purelib"], "nvidia")
     dirs = glob.glob(os.path.join(base, "*", "bin"))

@@ -262,10 +262,11 @@ def test_providers_of_unreadable_session_is_empty():
 def test_nvidia_dll_dirs_is_a_noop_off_windows(monkeypatch):
     """Nothing is touched on a non-Windows host."""
     import os
+    import sys
 
     import pdf_mcp.embedder as emb
 
-    monkeypatch.setattr(os, "name", "posix")
+    monkeypatch.setattr(sys, "platform", "linux")
     before = os.environ.get("PATH")
     emb._add_nvidia_dll_dirs()
     assert os.environ.get("PATH") == before

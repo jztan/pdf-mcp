@@ -5,6 +5,7 @@ import inspect
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -268,3 +269,121 @@ def test_committed_readme_contributors_match_the_changelog():
         )
     )
     assert expected in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+
+# --- release-notes headline -------------------------------------------------
+#
+# The v3.1.0 title ("Honest search over scanned PDFs, smarter excerpts")
+# paraphrased the first changelog bullet because the prompt gave the
+# headline no brief and one draft offered one title. These pin the fix.
+
+
+def test_parse_titles_reads_three_candidates_and_strips_them_from_the_body():
+    output = (
+        "TITLE 1: Sharper corpus search\n"
+        "TITLE 2: Honest results on scanned PDFs\n"
+        "TITLE 3: Smarter excerpts\n"
+        "## Highlights\n\nbody\n"
+    )
+    titles, body = release._parse_titles(output, "v3.1.0")
+    assert titles == [
+        "v3.1.0: Sharper corpus search",
+        "v3.1.0: Honest results on scanned PDFs",
+        "v3.1.0: Smarter excerpts",
+    ]
+    assert body == "## Highlights\n\nbody"
+
+
+def test_parse_titles_accepts_the_old_single_title_line():
+    titles, body = release._parse_titles("TITLE: One headline\nbody", "v1.0.0")
+    assert titles == ["v1.0.0: One headline"]
+    assert body == "body"
+
+
+def test_parse_titles_falls_back_to_the_bare_tag():
+    titles, body = release._parse_titles("## Highlights\nbody", "v1.0.0")
+    assert titles == ["v1.0.0"]
+    assert body == "## Highlights\nbody"
+
+
+def test_titles_never_carry_an_em_dash():
+    # The gh publish hook rejects em dashes; the old contract hardcoded one.
+    assert "—" not in release.RELEASE_NOTES_PROMPT
+    titles, _ = release._parse_titles("TITLE 1: v9 — dashed\nbody", "v9.0.0")
+    assert "—" not in titles[0]
+
+
+def test_prompt_briefs_the_headline_and_asks_for_three():
+    prompt = release.RELEASE_NOTES_PROMPT
+    assert "TITLE 1:" in prompt and "TITLE 3:" in prompt
+    # The brief: weight by size of change, name the surface, plain words.
+    assert "largest" in prompt
+    assert "corpus" in prompt or "surface" in prompt
+
+
+def test_split_headline_hint_reads_and_strips_the_comment():
+    section = "<!-- headline: corpus search vs Bedrock -->\n" "### Added\n- **thing**\n"
+    hint, rest = release.split_headline_hint(section)
+    assert hint == "corpus search vs Bedrock"
+    assert rest == "### Added\n- **thing**"
+    assert release.split_headline_hint(rest) == (None, rest)
+
+
+def test_update_changelog_strips_the_headline_hint(tmp_path):
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n"
+        "<!-- headline: sharper corpus search -->\n"
+        "### Added\n- **thing**\n\n## [1.0.0] - 2026-01-01\n- old\n",
+        encoding="utf-8",
+    )
+    release.update_changelog(tmp_path, "1.1.0", dry_run=False)
+    text = changelog.read_text(encoding="utf-8")
+    assert "headline:" not in text
+    assert "## [1.1.0] - " in text
+    assert "- **thing**" in text
+
+
+def test_generate_release_notes_passes_context_flags_and_hint():
+    seen: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        seen["input"] = kwargs["input"]
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="TITLE 1: a\nTITLE 2: b\nTITLE 3: c\nbody", stderr=""
+        )
+
+    with patch.object(release.subprocess, "run", fake_run):
+        titles, body = release.generate_release_notes(
+            "1.2.0", "### Added\n- x", headline_hint="lead with corpus"
+        )
+    assert titles == ["v1.2.0: a", "v1.2.0: b", "v1.2.0: c"]
+    assert body == "body"
+    for flag in release.NOTES_CONTEXT_FLAGS:
+        assert flag in seen["cmd"]
+    assert "lead with corpus" in seen["input"]
+
+
+def test_notes_context_flags_match_the_judge_flags():
+    # Same lesson, same flags: every `claude -p` here reloads both CLAUDE.md
+    # files and every MCP schema unless told not to.
+    from scripts.eval_financial_answerability import JUDGE_CONTEXT_FLAGS
+
+    assert release.NOTES_CONTEXT_FLAGS == JUDGE_CONTEXT_FLAGS
+
+
+def test_recovery_instructions_say_rerun_only_helps_when_flaky(tmp_path, capsys):
+    release.print_recovery_instructions("1.2.0", "release/v1.2.0", tmp_path)
+    out = capsys.readouterr().out
+    assert "—" not in out
+    assert "flaky" in out
+    assert "git push origin :refs/tags/v1.2.0" in out
+
+
+def test_prompt_forbids_victory_claims_in_headlines():
+    # The context flags drop CLAUDE.md, so the benchmark-wording rule has
+    # to live in the prompt: a hinted draft once offered "ahead of Bedrock".
+    prompt = release.RELEASE_NOTES_PROMPT
+    assert "measured against" in prompt
+    assert '"ahead of"' in prompt

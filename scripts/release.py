@@ -15,7 +15,9 @@ Gitflow:
     1. Start from develop branch
     2. Pre-flight: clean tree, tests pass, dependency audit clean
     3. Create release/vX.Y.Z branch and bump versions
-    4. Draft + approve release notes via claude -p (persisted for recovery)
+    4. Draft + approve release notes via claude -p: three headline candidates
+       (steerable with a `<!-- headline: ... -->` comment atop [Unreleased]),
+       persisted for recovery
     5. Merge to master, push tag (triggers publish-pypi.yml)
     6. Wait for publish-pypi workflow to finish (poll gh run status)
     7. Wait for the version to appear on PyPI
@@ -505,12 +507,30 @@ def update_changelog(project_root: Path, new_version: str, dry_run: bool) -> Non
         count=1,
         flags=re.IGNORECASE,
     )
+    # The headline hint is a drafting aid for the release notes, read by
+    # main() before this stamp; it does not belong in the released block.
+    new_content = HEADLINE_HINT_RE.sub("", new_content, count=1)
 
     if dry_run:
         print(f"  [DRY-RUN] Would update CHANGELOG.md with version {new_version}")
     else:
         changelog.write_text(new_content, encoding="utf-8")
         print("  ✓ Updated CHANGELOG.md")
+
+
+# An optional `<!-- headline: ... -->` comment at the top of [Unreleased]
+# tells the notes draft what the release is about. Invisible when the
+# changelog renders; stripped from the block when the version is stamped.
+HEADLINE_HINT_RE = re.compile(r"^[ \t]*<!--\s*headline:\s*(.*?)\s*-->[ \t]*\n?", re.M)
+
+
+def split_headline_hint(section: str) -> tuple[str | None, str]:
+    """Return (hint or None, section with the hint comment removed)."""
+    match = HEADLINE_HINT_RE.search(section)
+    if not match:
+        return None, section
+    hint = match.group(1).strip() or None
+    return hint, HEADLINE_HINT_RE.sub("", section, count=1).strip()
 
 
 def extract_changelog_section(project_root: Path, version: str) -> str:
@@ -579,6 +599,20 @@ NOTES_GENERATION_TIMEOUT = 120
 # transform needs none). The prompt also instructs it not to use tools.
 NOTES_DENIED_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,TodoWrite"
 
+# Every `claude -p` call reloads both CLAUDE.md files and every configured
+# MCP server's tool schemas on top of the prompt; measured on this project
+# that was 88% of the billed input for the eval judges. Same flags as
+# JUDGE_CONTEXT_FLAGS in scripts/eval_financial_answerability.py (a test
+# asserts they stay equal). No --system-prompt: a custom one busts the
+# shared cache prefix and bills more, not less.
+NOTES_CONTEXT_FLAGS = [
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    '{"mcpServers":{}}',
+]
+
 # .format() template -- must contain no literal braces (a brace-containing
 # example added later would raise KeyError at release time).
 RELEASE_NOTES_PROMPT = """\
@@ -590,7 +624,16 @@ users deciding whether to upgrade. Respond directly with the notes only --
 do not use any tools.
 
 Output contract (follow exactly):
-- First line: `TITLE: {tag} — <short headline, at most 8 words>`
+- First three lines: `TITLE 1: <headline>`, `TITLE 2: <headline>`,
+  `TITLE 3: <headline>`. Each headline is at most 8 words, in plain words,
+  and does not start with the version. Give three different framings, not
+  three wordings of one.
+- Headline brief: name the release's largest change, judged by how much of
+  the changelog it takes up and by which tool surface it touches (corpus
+  search, single-document search, extraction, the demo), not by whichever
+  bullet happens to come first. Prefer naming the surface a user installs
+  this for over a slogan. No colon-then-explainer, no dashes, no
+  superlatives that the changelog does not measure.
 - Then a `## Highlights` section: 2-4 short paragraphs, at most 150 words
   total. Lead with what is new and why a user would care; keep measurable
   wins (speedups, accuracy numbers).
@@ -600,7 +643,7 @@ Output contract (follow exactly):
   no helper function names.
 - If the changelog section has a `### Contributors` block, reproduce it as a
   final `## Contributors` section. Keep every `@handle`, description, and
-  issue/PR link exactly as written — do not drop, rename, or summarize any
+  issue/PR link exactly as written; do not drop, rename, or summarize any
   contributor. Omit the section only when the changelog has no Contributors
   block.
 
@@ -608,6 +651,10 @@ Hard rules:
 - Use only facts present in the changelog section. Never invent features,
   benefits, or numbers.
 - Keep every number exactly as written in the changelog.
+- Benchmark comparisons are reported, never won: say "measured against"
+  or "compared with", never "ahead of", "beats", or "outperforms", in the
+  headlines and the body alike. The changelog records where a comparison
+  is unresolved or lost; keep that wording.
 - Never drop the Contributors block when one is present.
 - Plain markdown only. No H1 headings. Do not add Installation or Links
   sections (they are appended separately).
@@ -618,40 +665,73 @@ Changelog section for {tag}:
 """
 
 
-def _parse_title(output: str, tag: str) -> tuple[str, str]:
-    """Split the TITLE: first-line contract off the draft.
+_TITLE_LINE_RE = re.compile(r"^TITLE(?:\s*\d+)?\s*:\s*(.*)$", re.I)
 
-    Malformed or missing title falls back to the bare tag with the full
-    output as body.
+
+def _render_title(tag: str, headline: str) -> str:
+    """`vX.Y.Z: headline`. A colon, never an em dash: the maintainer's gh
+    hook rejects any publish whose text contains one, so an em-dash title
+    cannot be re-posted from a recovery session. Also strips a version
+    or dash the model may have prepended despite the contract."""
+    headline = headline.strip()
+    headline = re.sub(rf"^{re.escape(tag)}\s*[:—–-]*\s*", "", headline)
+    headline = headline.replace("—", ",").replace("–", "-").strip(" ,")
+    return f"{tag}: {headline}" if headline else tag
+
+
+def _parse_titles(output: str, tag: str) -> tuple[list[str], str]:
+    """Split the leading `TITLE n:` lines off the draft.
+
+    Returns the candidate titles in order (rendered as `tag: headline`) and
+    the body. Accepts the older single `TITLE:` line. No title line at all
+    falls back to the bare tag with the full output as body.
     """
     lines = output.splitlines()
-    first = lines[0].strip() if lines else ""
-    if first.upper().startswith("TITLE:"):
-        title = first[len("TITLE:") :].strip()
-        if title:
-            body = "\n".join(lines[1:]).strip()
-            return title, body
-    return tag, output
+    titles: list[str] = []
+    i = 0
+    while i < len(lines):
+        match = _TITLE_LINE_RE.match(lines[i].strip())
+        if not match:
+            break
+        if match.group(1).strip():
+            titles.append(_render_title(tag, match.group(1)))
+        i += 1
+    if not titles:
+        return [tag], output
+    return titles, "\n".join(lines[i:]).strip()
 
 
 def generate_release_notes(
     new_version: str,
     changelog_section: str,
     steering: str | None = None,
-) -> tuple[str, str]:
-    """Draft release notes with `claude -p`. Returns (title, generated_body).
+    headline_hint: str | None = None,
+) -> tuple[list[str], str]:
+    """Draft release notes with `claude -p`.
 
-    Raises RuntimeError on any failure (missing CLI, timeout, non-zero
-    exit, empty output) so callers can decide between retry and fallback.
+    Returns (candidate titles, generated_body). Raises RuntimeError on any
+    failure (missing CLI, timeout, non-zero exit, empty output) so callers
+    can decide between retry and fallback.
     """
     tag = f"v{new_version}"
     prompt = RELEASE_NOTES_PROMPT.format(tag=tag, changelog_section=changelog_section)
+    if headline_hint:
+        prompt += (
+            "\nThe maintainer says the release is about: "
+            f"{headline_hint}\nEvery headline candidate must convey that.\n"
+        )
     if steering:
         prompt += f"\nAdditional guidance from the maintainer: {steering}\n"
 
     try:
         result = subprocess.run(
-            ["claude", "-p", "--disallowedTools", NOTES_DENIED_TOOLS],
+            [
+                "claude",
+                "-p",
+                "--disallowedTools",
+                NOTES_DENIED_TOOLS,
+                *NOTES_CONTEXT_FLAGS,
+            ],
             input=prompt,
             capture_output=True,
             text=True,
@@ -674,7 +754,7 @@ def generate_release_notes(
     output = result.stdout.strip()
     if not output:
         raise RuntimeError("claude -p returned empty output")
-    return _parse_title(output, tag)
+    return _parse_titles(output, tag)
 
 
 def write_notes_file(path: Path, title: str, body: str) -> None:
@@ -698,15 +778,18 @@ def _edit_notes_in_editor(path: Path) -> None:
 
 
 def approve_release_notes(
-    new_version: str, changelog_section: str, notes_path: Path
+    new_version: str,
+    changelog_section: str,
+    notes_path: Path,
+    headline_hint: str | None = None,
 ) -> None:
     """Generate, approve, and persist release notes to notes_path.
 
-    Interactive (TTY): [y]es / [e]dit in $EDITOR (edit is final) /
-    [r]egenerate with optional steering / [f]allback to raw changelog.
-    Non-TTY: auto-accept the draft. Generation failure: prompt
-    retry/fallback on a TTY, silent fallback otherwise. Never blocks the
-    release on the LLM.
+    Interactive (TTY): [y]es (first headline) or 1-3 to pick a headline /
+    [e]dit in $EDITOR (edit is final) / [r]egenerate with optional
+    steering / [f]allback to raw changelog. Non-TTY: auto-accept the draft
+    with the first headline. Generation failure: prompt retry/fallback on
+    a TTY, silent fallback otherwise. Never blocks the release on the LLM.
     """
     tag = f"v{new_version}"
     interactive = sys.stdin.isatty()
@@ -715,8 +798,8 @@ def approve_release_notes(
     while True:
         print("  Generating release notes draft (claude -p)...")
         try:
-            title, generated = generate_release_notes(
-                new_version, changelog_section, steering
+            titles, generated = generate_release_notes(
+                new_version, changelog_section, steering, headline_hint
             )
         except RuntimeError as exc:
             print(f"  ⚠ Notes generation failed: {exc}")
@@ -742,28 +825,36 @@ def approve_release_notes(
 
         body = build_release_body(generated, new_version)
         print("\n" + "-" * 60)
-        print(f"  Title: {title}")
+        for n, candidate in enumerate(titles, 1):
+            print(f"  Title {n}: {candidate}")
         print("-" * 60)
         print(body)
         print("-" * 60)
 
         if not interactive:
             print("  ⚠ Non-interactive run: auto-accepting generated notes.")
-            write_notes_file(notes_path, title, body)
+            write_notes_file(notes_path, titles[0], body)
             return
 
+        picks = "/".join(str(n) for n in range(1, len(titles) + 1))
         while True:
             choice = (
-                input("  [y]es publish / [e]dit / [r]egenerate / [f]allback? ")
+                input(
+                    f"  [y]es publish (title 1) / [{picks}] pick title / "
+                    "[e]dit / [r]egenerate / [f]allback? "
+                )
                 .strip()
                 .lower()
             )
-            if choice == "y":
+            if choice == "y" or (choice.isdigit() and 1 <= int(choice) <= len(titles)):
+                title = titles[0] if choice == "y" else titles[int(choice) - 1]
                 write_notes_file(notes_path, title, body)
                 return
             if choice == "e":
                 # Saving in the editor IS the approval -- no re-confirm.
-                write_notes_file(notes_path, title, body)
+                # The first line of the file carries the title; the other
+                # candidates are printed above for copy-paste.
+                write_notes_file(notes_path, titles[0], body)
                 try:
                     _edit_notes_in_editor(notes_path)
                 except (ValueError, OSError) as exc:
@@ -782,21 +873,24 @@ def approve_release_notes(
                     build_raw_release_body(changelog_section, new_version),
                 )
                 return
-            print("  Please answer y, e, r, or f.")
+            print(f"  Please answer y, {picks}, e, r, or f.")
 
 
 def preview_release_notes(config: ReleaseConfig, new_version: str) -> None:
     """Dry-run: draft real notes from [Unreleased] and print them."""
     print("\n=== Release Notes (Preview) ===\n")
-    section = extract_unreleased_section(config.project_root)
+    hint, section = split_headline_hint(extract_unreleased_section(config.project_root))
     try:
-        title, generated = generate_release_notes(new_version, section)
+        titles, generated = generate_release_notes(
+            new_version, section, headline_hint=hint
+        )
     except RuntimeError as exc:
         print(f"  ⚠ Notes generation failed: {exc}")
         print("  [DRY-RUN] Release would fall back to raw changelog notes.")
         return
     body = build_release_body(generated, new_version)
-    print(f"  [DRY-RUN] Title: {title}")
+    for n, candidate in enumerate(titles, 1):
+        print(f"  [DRY-RUN] Title {n}: {candidate}")
     print("  [DRY-RUN] Notes preview:\n")
     print(body)
 
@@ -1042,8 +1136,17 @@ def print_recovery_instructions(
     print("    gh run view <run-id> --log-failed")
     print()
     print("  After diagnosing, choose one:")
-    print("    A) Fix the cause on develop, then rerun the existing tag's workflow:")
+    print("    A) If the failure was flaky, rerun the existing tag's workflow:")
     print("         gh run rerun <run-id>")
+    print("       A rerun uses the tag's existing commit, so it only helps when")
+    print("       the failure was flaky. If it is deterministic, fix it on a")
+    print("       branch, merge into the release branch and master, and re-cut")
+    print("       the tag (safe only while nothing references the old tag SHA:")
+    print("       no PyPI upload, GitHub release, or registry entry):")
+    print(f"         git checkout {release_branch} && git merge --no-ff fix/<topic>")
+    print(f"         git checkout master && git merge --no-ff {release_branch}")
+    print(f'         git tag -d {tag} && git tag -a {tag} -m "Release {tag}"')
+    print(f"         git push origin :refs/tags/{tag} && git push origin master --tags")
     print("       On success, finish the remaining steps manually:")
     notes_path = notes_file_path(project_root, new_version)
     if notes_path.exists():
@@ -1060,7 +1163,7 @@ def print_recovery_instructions(
     print(f"         git checkout develop && git merge {release_branch} && git push")
     print(f"         git branch -d {release_branch}")
     print("    B) Burn this version and ship the next patch from develop")
-    print("       (requires deleting tag + reverting the master commit — destructive,")
+    print("       (requires deleting tag + reverting the master commit: destructive,")
     print(f"        only do this if nobody has pulled {tag}).")
     print("=" * 60)
 
@@ -1249,6 +1352,10 @@ Gitflow:
     update_server_json(config.project_root, new_version, config.dry_run)
     update_init_py(config.project_root, new_version, config.dry_run)
     update_roadmap_version(config.project_root, new_version, config.dry_run)
+    # Read the headline hint before the stamp strips it from the block.
+    headline_hint, _ = split_headline_hint(
+        extract_unreleased_section(config.project_root)
+    )
     update_changelog(config.project_root, new_version, config.dry_run)
     update_readme_contributors(config.project_root, config.dry_run)
 
@@ -1263,7 +1370,7 @@ Gitflow:
     else:
         print("\n=== Release Notes ===\n")
         changelog_section = extract_changelog_section(config.project_root, new_version)
-        approve_release_notes(new_version, changelog_section, notes_path)
+        approve_release_notes(new_version, changelog_section, notes_path, headline_hint)
         print(f"  ✓ Approved notes saved to {notes_path}")
 
     # Step 6: Merge to master and tag (this push triggers publish-pypi.yml)

@@ -2061,7 +2061,7 @@ wheels = [
 
 [[package]]
 name = "pdf-mcp"
-version = "3.0.0"
+version = "3.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

@@ -5,7 +5,7 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Project Status
 
-- **Current version:** v3.0.0 (released 2026-08-29). Next cut: unscheduled; candidates are under P1 below.
+- **Current version:** v3.1.0 (released 2026-09-05). Next cut: unscheduled; candidates are under P1 below.
 - **MCP Registry:** published (v3.0.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release

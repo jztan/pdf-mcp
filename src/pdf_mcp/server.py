@@ -3210,6 +3210,7 @@ def pdf_search(
                 cache.save_page_embeddings(local_path, raw_new, _model_name)
 
         page_sem_score: dict[int, float] = {}
+        query_vec = None
         if cached_embeddings:
             try:
                 query_vec = _embedder.encode_query(query, _model_name)
@@ -3246,8 +3247,19 @@ def pdf_search(
             if page_num in keyword_excerpts:
                 excerpt = keyword_excerpts[page_num]
             else:
-                page_text = cache.get_page_text(local_path, page_num) or ""
-                excerpt = page_text[:context_chars]
+                # Semantic-only hit: fused only contains such pages when
+                # the semantic arm ran, so query_vec is bound here.
+                excerpt = _semantic_snippet_excerpt(
+                    local_path,
+                    page_num,
+                    query,
+                    query_vec,
+                    _model_name,
+                    context_chars,
+                    _best_subchunk_text(
+                        local_path, page_num, cached_embeddings, query_vec
+                    ),
+                )
             # A hybrid match is low-confidence when (a) it has no keyword
             # hit on the page AND (b) the underlying semantic cosine is
             # below the confidence threshold. Keyword-hit pages always

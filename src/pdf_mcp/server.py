@@ -2941,12 +2941,22 @@ def pdf_search(
             matches: list[dict[str, Any]] = []
             for idx in top_idx:
                 page_num = page_nums_list[int(idx)]
-                text = cache.get_page_text(local_path, page_num) or ""
                 score = round(float(sem_scores[idx]), 4)
+                excerpt = _semantic_snippet_excerpt(
+                    local_path,
+                    page_num,
+                    query,
+                    query_vec,
+                    _model_name,
+                    context_chars,
+                    _best_subchunk_text(
+                        local_path, page_num, cached_embeddings, query_vec
+                    ),
+                )
                 matches.append(
                     {
                         "page": page_num + 1,
-                        "excerpt": text[:context_chars],
+                        "excerpt": excerpt,
                         "score": score,
                         "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                         "position": 0,

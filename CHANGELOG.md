@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously such a document lost all embedding work every call and could
   never warm through a timeout-bounded MCP client.
 
+### Fixed
+
+- **Semantic snippet excerpts now open at the matching passage in every
+  mode.** `pdf_search(mode="semantic")`, semantic-only hits in
+  `pdf_search(mode="auto")`, and `pdf_corpus_search(mode="semantic")`
+  returned the top of the page as the `excerpt_style="snippet"` excerpt,
+  so a hit on a prefaced page showed boilerplate while the matching text
+  sat further down. All three now anchor on the page's best-scoring
+  passage, as corpus hybrid mode already did.
+
 ## [3.1.0] - 2026-09-05
 ### Added
 

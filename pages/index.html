@@ -1135,7 +1135,7 @@ estimated_tokens: 925</pre>
     </details>
     <details class="qa">
       <summary>Is semantic search a separate service?</summary>
-      <p>No. Embeddings run locally on CPU with fastembed (<code>BAAI/bge-small-en-v1.5</code> by default, configurable). The first search on a document embeds its pages once and caches them; later searches reuse the cache.</p>
+      <p>No. Embeddings run locally with fastembed (<code>BAAI/bge-small-en-v1.5</code> by default, configurable), on CPU out of the box or on an NVIDIA GPU with the optional CUDA build of onnxruntime, about 25x faster when warming a large corpus. The first search on a document embeds its pages once and caches them; later searches reuse the cache. Setup is in the <a href="https://github.com/jztan/pdf-mcp/blob/master/docs/configuration.md#gpu-embedding-nvidia-cuda">configuration guide</a>.</p>
     </details>
     <details class="qa">
       <summary>Which AI clients does it work with?</summary>

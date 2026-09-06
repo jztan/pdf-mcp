@@ -55,39 +55,9 @@ winget install Tesseract-OCR  # Windows
 ```
 
 GPU embedding is optional and off by default. On an NVIDIA card it makes the
-embedding pass one to two orders of magnitude faster, on Linux and Windows
-x86_64. For a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
-
-```bash
-pip uninstall -y onnxruntime
-pip install fastembed-gpu
-pip install nvidia-cublas nvidia-cuda-runtime nvidia-cufft nvidia-curand \
-            nvidia-cudnn-cu13
-```
-
-Maxwell, Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) predate
-CUDA 13 and take the CUDA 12 build:
-
-```bash
-pip uninstall -y onnxruntime
-pip install fastembed-gpu
-pip install --force-reinstall --no-deps onnxruntime-gpu --index-url \
-  https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
-pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-cufft-cu12 \
-            nvidia-curand-cu12 nvidia-cudnn-cu12
-```
-
-Then, either way:
-
-```bash
-export PDF_MCP_CUDA=1   # Linux, macOS
-set PDF_MCP_CUDA=1      # Windows
-```
-
-The uninstall is needed because `onnxruntime` and `onnxruntime-gpu` install
-into the same directory, so with both present the CPU build wins the import.
-Unset, the CPU path runs exactly as before; set without a usable GPU, the
-server reports which provider it got instead of running slower in silence.
+embedding pass one to two orders of magnitude faster; set `PDF_MCP_CUDA=1`
+after installing the CUDA build of onnxruntime. Setup per CUDA series is in
+[docs/configuration.md](docs/configuration.md#gpu-embedding-nvidia-cuda).
 
 ## Quick Start
 
@@ -214,7 +184,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">

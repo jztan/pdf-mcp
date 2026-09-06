@@ -21,7 +21,7 @@ def test_check_available_raises_when_fastembed_missing():
 def _make_mock_model(dim: int = 384) -> MagicMock:
     """Mock fastembed TextEmbedding that yields dim-dimensional unit vectors."""
     mock = MagicMock()
-    mock.embed.side_effect = lambda texts: (
+    mock.embed.side_effect = lambda texts, **_: (
         np.ones(dim, dtype=np.float32) for _ in texts
     )
     return mock
@@ -77,7 +77,7 @@ def test_encode_raises_when_fastembed_missing():
 def _make_unnormalized_mock(vec: list) -> MagicMock:
     """Mock TextEmbedding that yields a fixed UNnormalized vector per text."""
     mock = MagicMock()
-    mock.embed.side_effect = lambda texts: (
+    mock.embed.side_effect = lambda texts, **_: (
         np.array(vec, dtype=np.float32) for _ in texts
     )
     return mock
@@ -412,3 +412,100 @@ def test_preload_is_silent_when_no_wheels_are_installed(monkeypatch):
         monkeypatch.setattr(sys, "platform", platform)
         emb._preload_cuda_runtime()
     assert os.environ["PATH"] == "unchanged"
+
+
+# --- CPU batch composition -------------------------------------------------
+# On a CPU session, encode() sorts texts by length and embeds in small
+# sub-batches so onnxruntime pads each batch to a near neighbour instead of
+# the longest text in the group (measured 2026-09-06: 1.37x, 2.8 GB -> 0.67 GB
+# encode memory, vectors identical). A CUDA session keeps the single large
+# batch, which is what a GPU wants.
+
+
+def _recording_model(providers: list[str]) -> MagicMock:
+    """Mock whose embed() returns a vector encoding each text's length, and
+    records the calls it received, so order and batching are observable."""
+    model = _session_with(providers)
+
+    def embed(texts, **kwargs):
+        model.calls.append((list(texts), kwargs))
+        return (np.array([len(t), 1.0], dtype=np.float32) for t in texts)
+
+    model.calls = []
+    model.embed.side_effect = embed
+    return model
+
+
+def _with_model(model):
+    import pdf_mcp.embedder as emb
+
+    emb._model = model
+    emb._model_name_loaded = DEFAULT
+    return emb
+
+
+def _reset():
+    import pdf_mcp.embedder as emb
+
+    emb._model = None
+    emb._model_name_loaded = None
+
+
+def test_cpu_encode_returns_vectors_in_input_order():
+    """Sorting is internal: row i of the result is text i, whatever its length."""
+    texts = ["a" * 300, "b" * 5, "c" * 120, "d" * 512, "e" * 40]
+    model = _recording_model(["CPUExecutionProvider"])
+    emb = _with_model(model)
+    try:
+        result = emb.encode(texts, DEFAULT)
+    finally:
+        _reset()
+
+    # vector encodes the length; normalisation keeps the ratio between the
+    # two components, so recover the length from it
+    lengths = [round(v[0] / v[1]) for v in result]
+    assert lengths == [len(t) for t in texts]
+
+
+def test_cpu_encode_sorts_by_length_and_uses_small_batches():
+    """The model sees texts shortest-first with the CPU batch size."""
+    texts = ["a" * 300, "b" * 5, "c" * 120, "d" * 512, "e" * 40]
+    model = _recording_model(["CPUExecutionProvider"])
+    emb = _with_model(model)
+    try:
+        emb.encode(texts, DEFAULT)
+    finally:
+        _reset()
+
+    assert len(model.calls) == 1
+    seen, kwargs = model.calls[0]
+    assert [len(t) for t in seen] == sorted(len(t) for t in texts)
+    assert kwargs == {"batch_size": emb.CPU_BATCH_SIZE}
+    assert emb.CPU_BATCH_SIZE == 16
+
+
+def test_cuda_encode_keeps_single_unsorted_batch():
+    """A CUDA session gets the texts as given, no sort, no batch_size: a GPU
+    wants the large batch and this path is unchanged from before."""
+    texts = ["a" * 300, "b" * 5, "c" * 120]
+    model = _recording_model(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    emb = _with_model(model)
+    try:
+        result = emb.encode(texts, DEFAULT)
+    finally:
+        _reset()
+
+    assert model.calls == [(texts, {})]
+    assert [round(v[0] / v[1]) for v in result] == [300, 5, 120]
+
+
+def test_cpu_encode_empty_list():
+    model = _recording_model(["CPUExecutionProvider"])
+    emb = _with_model(model)
+    try:
+        result = emb.encode([], DEFAULT)
+    finally:
+        _reset()
+
+    assert result.size == 0
+    assert model.calls == []

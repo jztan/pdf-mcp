@@ -143,7 +143,14 @@ encode instead; the error names the kernel, and reinstalling the runtime
 wheels for your CUDA series is the fix.
 
 Apple Silicon is not covered: the CoreML provider in the standard wheel
-gives no speedup on the shipped model.
+gives no speedup on the shipped model. What the CPU path does instead is
+keep its batches small: texts are sorted by length and embedded 16 at a
+time, so onnxruntime pads each sub-batch to a near neighbour rather than to
+the longest page in a 24-page warm group. On an M4 Pro that is 1.37x
+faster than one large padded batch and holds about 0.7 GB of transient
+encode memory instead of 2.8 GB, with identical vectors. Thread pinning
+was measured on the same machine and does not help: one intra-op thread
+ran as fast as fourteen, so the encode is memory-bound, not compute-bound.
 
 ### Docker deployment notes
 

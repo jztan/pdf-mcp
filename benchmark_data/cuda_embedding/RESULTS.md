@@ -45,6 +45,14 @@ number a Mac user would see from moving to an A10G is ~25x on the whole
 corpus. The PR's "one to two orders of magnitude" claim holds on both
 readings.
 
+**CPU baseline moved after this run (2026-09-06).** `embedder.encode` now
+sorts a CPU batch by length and embeds 16 texts at a time; on the Mac the
+same workload went from about 26 s to about 19 s (1.37x, encode memory
+2.8 GB to 0.67 GB, vectors identical; `what-we-tried.md` section 5). The
+CPU rows above predate that change, so the Mac-to-A10G ratio is closer to
+18x than 25x now, and this instance's 2-core CPU row would also shrink.
+The GPU rows are unaffected: CUDA sessions keep the single large batch.
+
 Vectors match the CPU path (min cosine 0.999992 over 790 units, mean
 0.999999): the GPU is a speed choice, the cache is shared.
 

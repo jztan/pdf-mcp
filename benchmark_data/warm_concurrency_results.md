@@ -103,3 +103,26 @@ the concurrent arm; candidate causes are per-batch commit overhead
 (pages/24 commits per doc instead of 1) and run-to-run variance. The
 feature's purpose is durability, not throughput; the trade is accepted
 and the corruption gate, not the speedup, is the pass criterion.
+
+## Post length-sorted CPU encode re-run (2026-09-06)
+
+Embeddings mode only, after `embedder.encode` began sorting each CPU batch
+by length and embedding 16 texts at a time (text extraction untouched, so
+text mode was not re-run). Same harness, 40 docs / 566 pages, cold cache
+each run, Apple Silicon M4 Pro, CPU session.
+
+| mode | config | wall(s) | s/page | vs seq | corrupt | txt-diff |
+|---|---|---|---|---|---|---|
+| embeddings | sequential | 87.5 | 0.155 | 1.00x | | |
+| embeddings | concurrent, 2 workers | 65.0 | 0.115 | 1.35x | 0 | 0 |
+| embeddings | concurrent, 4 workers | 64.0 | 0.113 | 1.37x | 0 | 0 |
+
+**Gate verdict: PASS.** 0 corrupt, 0 txt-diff in every arm.
+
+Per-page sequential cost went from 0.199 s (2026-09-03 row above, which
+matched the independently measured encode cost exactly) to 0.155 s, a
+1.29x whole-path gain; the encode-only prototype measured 1.37x, and the
+difference is the extraction share of the warm that the change does not
+touch. Different corpus sizes (100 vs 40 docs), so compare s/page, not
+wall. The concurrent arms sit where they did (1.3x to 1.4x): the encode is
+still the parent's serial step, only cheaper.

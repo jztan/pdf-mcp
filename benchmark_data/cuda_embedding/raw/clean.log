@@ -1,0 +1,89 @@
+=== A. as-is (system CUDA on LD_LIBRARY_PATH), CUDA-12 stack from phase 4/6
+2026-09-06 01:09:16.004445853 [W:onnxruntime:Default, onnxruntime_pybind_state.cc:700 operator()] No registered plugin EP device found for 'CUDAExecutionProvider' with device_id=0
+2026-09-06 01:09:16.212953430 [W:onnxruntime:, session_state.cc:1398 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+2026-09-06 01:09:16.212985861 [W:onnxruntime:, session_state.cc:1400 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.
+providers ['CUDAExecutionProvider', 'CPUExecutionProvider'] gao_s 1.1
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcurand.so.10
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/curand/lib/libcurand.so.10
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcufftw.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cufft/lib/libcufftw.so.11
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcufft.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cufft/lib/libcufft.so.11
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_ops.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_heuristic.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_graph.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_ext.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_engines_tensor_ir.so.9
+MAPPED /usr/local/cuda-13.2/lib/libcudnn_graph.so.9.20.0
+MAPPED /usr/local/cuda-13.2/lib/libcudnn_ops.so.9.20.0
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_adv.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcudart.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublas.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cublas/lib/libcublas.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cublas/lib/libcublasLt.so.12
+=== B. system CUDA hidden: LD_LIBRARY_PATH unset, /usr/local/cuda* moved, ldconfig refreshed
+0
+2026-09-06 01:09:26.636686637 [W:onnxruntime:Default, onnxruntime_pybind_state.cc:700 operator()] No registered plugin EP device found for 'CUDAExecutionProvider' with device_id=0
+2026-09-06 01:09:26.846677143 [W:onnxruntime:, session_state.cc:1398 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+2026-09-06 01:09:26.846710493 [W:onnxruntime:, session_state.cc:1400 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.
+providers ['CUDAExecutionProvider', 'CPUExecutionProvider'] gao_s 1.06
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcurand.so.10
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/curand/lib/libcurand.so.10
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcufftw.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cufft/lib/libcufftw.so.11
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcufft.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cufft/lib/libcufft.so.11
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_heuristic.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_ext.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_engines_tensor_ir.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_engines_runtime_compiled.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_engines_precompiled.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_cnn.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_graph.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_ops.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn_adv.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cudnn/lib/libcudnn.so.9
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcudart.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublas.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cublas/lib/libcublas.so.12
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cu13/lib/libcublasLt.so.13
+MAPPED /home/ubuntu/bench/venv/lib/python3.12/site-packages/nvidia/cublas/lib/libcublasLt.so.12
+=== C. as B, cuDNN wheel removed (true negative)
+2026-09-06 01:09:28.486952134 [W:onnxruntime:Default, onnxruntime_pybind_state.cc:700 operator()] No registered plugin EP device found for 'CUDAExecutionProvider' with device_id=0
+2026-09-06 01:09:28.688903378 [W:onnxruntime:, session_state.cc:1398 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+2026-09-06 01:09:28.688935489 [W:onnxruntime:, session_state.cc:1400 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.
+2026-09-06 01:09:28.909486603 [E:onnxruntime:, sequential_executor.cc:671 ExecuteKernel] Non-zero status code returned while running Attention node. Name:'Attention_0' Status Message: /onnxruntime_src/onnxruntime/core/providers/cuda/cuda_kernel.h:272 static cudnnContext* onnxruntime::cuda::CudaKernel::RequireCudnnHandle(cudnnHandle_t) [ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : cuDNN is unavailable or disabled for CUDA Execution Provider: dlopen failed for libcudnn.so: libcudnn.so: cannot open shared object file: No such file or directory
+
+Traceback (most recent call last):
+  File "/home/ubuntu/libs.py", line 14, in <module>
+    t0 = time.perf_counter(); embedder.encode(units, "BAAI/bge-small-en-v1.5"); dt = time.perf_counter() - t0
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/pdf_mcp/embedder.py", line 213, in encode
+    arr = np.array(list(model.embed(texts)), dtype=np.float32)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/fastembed/text/text_embedding.py", line 187, in embed
+    yield from self.model.embed(documents, batch_size, parallel, **kwargs)
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/fastembed/text/onnx_embedding.py", line 284, in embed
+    yield from self._embed_documents(
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/fastembed/text/onnx_text_model.py", line 133, in _embed_documents
+    self.onnx_embed(batch, **kwargs), **kwargs
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/fastembed/text/onnx_text_model.py", line 96, in onnx_embed
+    model_output = self.model.run(self.ONNX_OUTPUT_NAMES, onnx_input)  # type: ignore[union-attr]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/bench/venv/lib/python3.12/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 326, in run
+    return self._sess.run(output_names, input_feed, run_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+onnxruntime.capi.onnxruntime_pybind11_state.NotImplemented: [ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : Non-zero status code returned while running Attention node. Name:'Attention_0' Status Message: /onnxruntime_src/onnxruntime/core/providers/cuda/cuda_kernel.h:272 static cudnnContext* onnxruntime::cuda::CudaKernel::RequireCudnnHandle(cudnnHandle_t) [ONNXRuntimeError] : 9 : NOT_IMPLEMENTED : cuDNN is unavailable or disabled for CUDA Execution Provider: dlopen failed for libcudnn.so: libcudnn.so: cannot open shared object file: No such file or directory
+
+=== D. as B, cuDNN restored, PDF_MCP_CUDA unset (fastembed AUTO)
+2026-09-06 01:09:37.849255753 [E:onnxruntime:Default, provider_bridge_ort.cc:2395 TryGetProviderInfo_CUDA] /onnxruntime_src/onnxruntime/core/session/provider_bridge_ort.cc:1988 onnxruntime::Provider& onnxruntime::ProviderLibrary::Get() [ONNXRuntimeError] : 1 : FAIL : Failed to load library /home/ubuntu/bench/venv/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime_providers_cuda.so with error: libcublasLt.so.12: cannot open shared object file: No such file or directory
+
+2026-09-06 01:09:37.849293654 [W:onnxruntime:Default, onnxruntime_pybind_state.cc:1139 CreateExecutionProviderFactoryInstance] Failed to create CUDAExecutionProvider. Require cuDNN 9.* and CUDA 12.*. Please install all dependencies as mentioned in the GPU requirements page (https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements), make sure they're in the PATH, and that your GPU is supported.
+/home/ubuntu/bench/venv/lib/python3.12/site-packages/fastembed/common/onnx_model.py:120: RuntimeWarning: Attempt to set CUDAExecutionProvider failed. Current providers: ['CPUExecutionProvider'].If you are using CUDA 12.x, install onnxruntime-gpu via `pip install onnxruntime-gpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/`
+  warnings.warn(
+providers ['CPUExecutionProvider']

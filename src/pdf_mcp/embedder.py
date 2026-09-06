@@ -46,16 +46,33 @@ def check_available(model_name: str) -> None:
         )
 
 
-def _cuda_requested() -> bool:
-    """True when PDF_MCP_CUDA asks for the GPU. Unset means CPU, as before."""
+_CUDA_ON = {"1", "true", "yes", "on"}
+_CUDA_OFF = {"0", "false", "no", "off"}
+
+
+def _cuda_setting() -> str | None:
+    """What PDF_MCP_CUDA asks for: "on", "off", or None when unset/unknown.
+
+    Unset leaves the choice to fastembed, whose default is auto-detect:
+    CPU on a plain install, but the GPU on a machine where onnxruntime-gpu
+    and a CUDA runtime are both reachable (a system-wide CUDA toolkit on
+    the library path is enough; measured on an AWS Deep Learning AMI,
+    benchmark_data/cuda_embedding/RESULTS.md). "off" is the only spelling
+    that guarantees the CPU path on such a machine.
+    """
     import os
 
-    return os.environ.get("PDF_MCP_CUDA", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    value = os.environ.get("PDF_MCP_CUDA", "").strip().lower()
+    if value in _CUDA_ON:
+        return "on"
+    if value in _CUDA_OFF:
+        return "off"
+    return None
+
+
+def _cuda_requested() -> bool:
+    """True when PDF_MCP_CUDA asks for the GPU."""
+    return _cuda_setting() == "on"
 
 
 def _preload_cuda_runtime() -> None:
@@ -178,8 +195,9 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
 def _get_model(model_name: str) -> Any:
     """Load embedding model on first call; reload if model_name changed.
 
-    Uses the GPU only when PDF_MCP_CUDA is set. Unset - the default - is the
-    CPU path unchanged, so an existing install behaves exactly as before.
+    PDF_MCP_CUDA=1 asks for the GPU and warns if it did not get it;
+    PDF_MCP_CUDA=0 pins the CPU; unset lets fastembed auto-detect, which is
+    the CPU on a plain install and the same constructor call as before.
     """
     global _model, _model_name_loaded
     if _model is None or _model_name_loaded != model_name:
@@ -191,8 +209,17 @@ def _get_model(model_name: str) -> Any:
                 "It ships with the default install; restore it with: "
                 "pip install fastembed"
             ) from exc
-        model = _cuda_model(model_name, TextEmbedding) if _cuda_requested() else None
-        _model = model if model is not None else TextEmbedding(model_name)
+        setting = _cuda_setting()
+        model = _cuda_model(model_name, TextEmbedding) if setting == "on" else None
+        if model is None:
+            # cuda=False pins CPUExecutionProvider; the bare constructor
+            # leaves fastembed's auto-detect in charge.
+            model = (
+                TextEmbedding(model_name, cuda=False)
+                if setting == "off"
+                else TextEmbedding(model_name)
+            )
+        _model = model
         _model_name_loaded = model_name
     return _model
 

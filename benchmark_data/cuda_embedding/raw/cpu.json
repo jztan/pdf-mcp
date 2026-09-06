@@ -1,0 +1,1 @@
+{"label": "cpu", "env": null, "providers": ["CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 5.12, "all_s": 630.89, "units_per_s": 1.3, "gao_cloud_s": 34.54, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "nist-router-security.pdf": 40, "nist-zero-trust.pdf": 59, "usda-agri-policy.pdf": 42}}

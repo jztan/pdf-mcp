@@ -12,10 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Optional CUDA acceleration for embedding, off by default.** Set
   `PDF_MCP_CUDA=1` with the CUDA build of onnxruntime installed and the
   embedding pass runs on the GPU (one to two orders of magnitude faster on
-  an NVIDIA card; vectors match the CPU path). Unset, nothing changes. Set
-  without a usable GPU, the server warns with the provider it got and falls
-  back to CPU rather than running slower in silence. No dependency changes;
-  setup per CUDA series is in `docs/configuration.md`
+  an NVIDIA card; vectors match the CPU path). Set without a usable GPU,
+  the server warns with the provider it got and falls back to CPU rather
+  than running slower in silence. `PDF_MCP_CUDA=0` pins the CPU; unset
+  leaves fastembed's auto-detect in charge, which is the CPU on a plain
+  install. No dependency changes; setup per CUDA series and the measured
+  behaviour are in `docs/configuration.md`
   ([#39](https://github.com/jztan/pdf-mcp/pull/39)).
 
 ### Changed

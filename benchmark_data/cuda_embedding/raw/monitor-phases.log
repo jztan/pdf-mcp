@@ -1,0 +1,23 @@
+=== 00:41:42 driver
+=== 00:41:43 clone corpus (pages/corpus)
+=== 00:41:45 fresh venv + install develop
+=== 00:42:12 1. CPU baseline (PDF_MCP_CUDA unset)
+{"label": "cpu", "env": null, "providers": ["CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 5.12, "all_s": 630.89, "units_per_s": 1.3, "gao_cloud_s": 34.54, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "nist-router-security.pdf": 40, "nist-zer
+=== 00:53:24 2. PDF_MCP_CUDA=1 BEFORE the recipe (expect warning, CPU)
+{"label": "cuda_before_recipe", "env": "1", "providers": ["CPUExecutionProvider"], "warnings": ["PDF_MCP_CUDA is set but the CUDA session failed (ValueError(\"Provider CUDAExecutionProvider is not available. Available providers: ['AzureExecutionProvider', 'CPUExecutionProvider']\")); using CPU."], "
+=== 01:04:35 3. recipe, CUDA 13 (verbatim from docs/configuration.md)
+=== 01:05:05 3a. PDF_MCP_CUDA=1 after CUDA 13 recipe
+{"label": "cuda13", "env": "1", "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 12.44, "all_s": 1.0, "units_per_s": 788.9, "gao_cloud_s": 0.05, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "nist-router-se
+=== 01:05:20 3b. PDF_MCP_CUDA unset after recipe (must still be CPU, no warning)
+{"label": "unset_after_recipe", "env": null, "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 15.0, "all_s": 1.07, "units_per_s": 734.9, "gao_cloud_s": 0.05, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "n
+=== 01:05:43 4. recipe, CUDA 12 (verbatim), on top
+=== 01:06:49 4a. PDF_MCP_CUDA=1 after CUDA 12 recipe
+{"label": "cuda12", "env": "1", "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 1.25, "all_s": 1.0, "units_per_s": 790.9, "gao_cloud_s": 0.05, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "nist-router-sec
+=== 01:06:52 5. negative: runtime removed, PDF_MCP_CUDA=1 (expect warning + CPU)
+{"label": "cuda_runtime_removed", "env": "1", "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 1.05, "all_s": 1.0, "units_per_s": 792.7, "gao_cloud_s": 0.05, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "n
+=== 01:06:55 6. warm-clock check: second GPU run, cache-cold model already downloaded
+{"label": "cuda12_rerun", "env": "1", "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "warnings": [], "units": 790, "load_s": 1.0, "all_s": 1.0, "units_per_s": 790.1, "gao_cloud_s": 0.05, "docs": {"fed-consumer-context.pdf": 27, "gao-cloud.pdf": 12, "nasa-artemis.pdf": 9, "nist-route
+=== 01:07:07 DONE
+{"label": "cuda_before_recipe", "env": "1", "providers": ["CPUExecutionProvider"], "warnings": ["PDF_MCP_CUDA is set but the CUDA session failed (ValueError(\"Provider CUDAExecutionProvider is not available. Available providers: ['AzureExecutionProvider', 'CPUExecutionProvider']\")); using CPU."], "
+
+[exited with code 0]

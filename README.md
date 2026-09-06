@@ -31,6 +31,7 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 | Large PDFs | Context overflow | Read only the pages you need |
 | Finding content | Load everything | Hybrid search: BM25 keyword + semantic |
 | Folders of PDFs | One document at a time | Warm, triage, and search a whole folder |
+| Warming a big folder | Minutes of CPU embedding | Optional CUDA embedding, about 25x faster on an NVIDIA card |
 | Tables and charts | Lost in raw text | Structured rows, and `(x, y)` data from vector charts |
 | Multi-column and vertical layouts | Columns interleaved | Correct reading order, including Japanese tategaki |
 | Scanned PDFs | No text at all | OCR via Tesseract, parallel across pages |

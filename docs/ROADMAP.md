@@ -9,7 +9,7 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 - **MCP Registry:** published (v3.1.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release
-- **Tests:** 2019, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
+- **Tests:** 1967, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
 
 ---
 

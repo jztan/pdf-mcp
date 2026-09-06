@@ -2,7 +2,9 @@
 
 ## Summary
 
-<!-- What this changes and why. Link the issue it addresses: Fixes #N -->
+<!-- What this changes and why. Link the issue it addresses: Fixes #N
+     For a new feature or a behaviour change, please open that issue before
+     the PR so scope can be agreed first. Fixes and docs can skip this. -->
 
 ## Changes
 

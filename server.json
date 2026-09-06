@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jztan/pdf-mcp",
-  "description": "Gives an agent RAG over a folder of PDFs: hybrid search, selective page reads, tables, OCR.",
+  "description": "RAG over one PDF or a whole folder of them: hybrid search, selective page reads, tables, OCR.",
   "repository": {
     "url": "https://github.com/jztan/pdf-mcp",
     "source": "github"

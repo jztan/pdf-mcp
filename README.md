@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/jztan/pdf-mcp/graph/badge.svg)](https://codecov.io/gh/jztan/pdf-mcp)
 [![Downloads](https://pepy.tech/badge/pdf-mcp)](https://pepy.tech/project/pdf-mcp)
 
-**RAG over a folder of PDFs, as a single MCP tool.**
+**RAG over your PDFs, one file or a whole folder, as a single MCP tool.**
 
 The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts. It is an [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search one PDF or a whole folder by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text, even from multi-column and Japanese layouts, with optional CUDA acceleration for warming large corpora.
 

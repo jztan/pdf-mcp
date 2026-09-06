@@ -60,9 +60,10 @@ PDF_MCP_CACHE_TTL=48
 # (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
 PDF_MCP_MAX_WORKERS=8
 
-# Use the GPU for embedding (default: unset = CPU). Requires onnxruntime-gpu
-# and a CUDA runtime; see "GPU embedding (NVIDIA CUDA)" below. When the CUDA
-# provider cannot load, the server warns and falls back to CPU.
+# Embedding device. 1 = use the GPU and warn if it is not available;
+# 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
+# Needs onnxruntime-gpu and a CUDA runtime; see "GPU embedding (NVIDIA
+# CUDA)" below.
 PDF_MCP_CUDA=1
 
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
@@ -120,10 +121,29 @@ set PDF_MCP_CUDA=1      # Windows
 
 The uninstall is needed because `onnxruntime` and `onnxruntime-gpu` install
 into the same directory, so with both present the CPU build wins the import.
-Unset, the CPU path runs exactly as before; set without a usable GPU, the
-server warns with the provider it actually got and falls back to CPU instead
-of running slower in silence. Apple Silicon is not covered: the CoreML
-provider in the standard wheel gives no speedup on the shipped model.
+
+What the variable does:
+
+| `PDF_MCP_CUDA` | behaviour |
+|---|---|
+| `1` | GPU. If the CUDA provider cannot load, the server warns with the provider it actually got and falls back to CPU instead of running slower in silence. |
+| `0` | CPU, always. |
+| unset | fastembed decides. On a plain install that is the CPU, exactly as before. On a machine where onnxruntime-gpu is installed and a CUDA runtime is already on the library path (a system-wide CUDA toolkit, for example) it auto-detects the GPU even though nothing asked for it. Set `0` if that is not what you want. |
+
+Two things to expect on the GPU path, both measured on an A10G
+(`benchmark_data/cuda_embedding/RESULTS.md`): the first CUDA session in a
+process takes 12 to 15 s to load the model (later ones about 1 s, CPU about
+5 s), so a session that embeds only a few pages gains nothing; and
+onnxruntime 1.29 prints two warnings on every CUDA session, "No registered
+plugin EP device found for 'CUDAExecutionProvider'" and "Some nodes were
+not assigned to the preferred execution providers", which are benign when
+the pass runs at GPU speed. A runtime that is present but broken (cuDNN
+missing, wrong series) can pass the provider check and fail on the first
+encode instead; the error names the kernel, and reinstalling the runtime
+wheels for your CUDA series is the fix.
+
+Apple Silicon is not covered: the CoreML provider in the standard wheel
+gives no speedup on the shipped model.
 
 ### Docker deployment notes
 

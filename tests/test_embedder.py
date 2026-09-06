@@ -252,6 +252,40 @@ def test_cuda_requested_accepts_several_spellings(monkeypatch):
         assert emb._cuda_requested() is False, value
 
 
+def test_cuda_setting_three_states(monkeypatch):
+    """on / off / None: 0 and off pin the CPU, unknown values mean unset."""
+    import pdf_mcp.embedder as emb
+
+    for value in ("0", "false", "OFF", " no "):
+        monkeypatch.setenv("PDF_MCP_CUDA", value)
+        assert emb._cuda_setting() == "off", value
+    for value in ("", "maybe", "2"):
+        monkeypatch.setenv("PDF_MCP_CUDA", value)
+        assert emb._cuda_setting() is None, value
+    monkeypatch.delenv("PDF_MCP_CUDA", raising=False)
+    assert emb._cuda_setting() is None
+
+
+def test_cuda_off_pins_the_cpu_provider(monkeypatch):
+    """PDF_MCP_CUDA=0 passes cuda=False so fastembed cannot auto-pick the GPU.
+
+    Unset is not enough on a machine with a system CUDA toolkit: fastembed's
+    default is auto-detect and it took the GPU there (RESULTS.md finding 3).
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "0")
+    cls = MagicMock(return_value=_session_with(["CPUExecutionProvider"]))
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    cls.assert_called_once_with(DEFAULT, cuda=False)
+
+
 def test_providers_of_unreadable_session_is_empty():
     """A model that exposes no session reports no providers rather than raising."""
     import pdf_mcp.embedder as emb

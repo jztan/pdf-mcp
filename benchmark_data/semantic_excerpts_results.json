@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-05T13:06:44+00:00",
- "git_head": "34332b7",
+ "generated": "2026-09-06T05:57:50+00:00",
+ "git_head": "ee94871",
  "config": {
   "mode": "semantic",
   "styles": [
@@ -49,7 +49,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "b5e471372e58"
+      "excerpt_digest": "9028e605cb7c"
      },
      "needle-06": {
       "class": "needle",
@@ -224,7 +224,7 @@
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "bb1501cd74ff"
+      "excerpt_digest": "4020c589296d"
      },
      "trap-07": {
       "class": "trap",
@@ -364,7 +364,7 @@
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "da4ddc6292ba"
+      "excerpt_digest": "13346ae49e2d"
      },
      "spread-25": {
       "class": "spread",
@@ -490,7 +490,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "730a2eb48e4d"
+      "excerpt_digest": "8557e38bdc8b"
      },
      "described-05": {
       "class": "described",
@@ -511,7 +511,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
-      "excerpt_digest": "6a0ab4ff9575"
+      "excerpt_digest": "0e1c2dbc60a5"
      },
      "described-08": {
       "class": "described",
@@ -637,7 +637,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "3de44e7586d7"
+      "excerpt_digest": "2f2ecdd5d2ed"
      },
      "described-26": {
       "class": "described",
@@ -1064,7 +1064,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "d018d46b9284"
+      "excerpt_digest": "49e419c5c697"
      },
      "needle-18": {
       "class": "needle",
@@ -1085,7 +1085,7 @@
       "span_recall": 1.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
-      "excerpt_digest": "4ae5226578ac"
+      "excerpt_digest": "ca73804b4340"
      },
      "needle-21": {
       "class": "needle",
@@ -1162,7 +1162,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "b126d7e4d2ab"
+      "excerpt_digest": "aafa55839271"
      },
      "spread-26": {
       "class": "spread",
@@ -1927,7 +1927,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
-      "excerpt_digest": "0c5e24b6fe18"
+      "excerpt_digest": "b0a26eebdd77"
      },
      "described-26": {
       "class": "described",
@@ -2375,7 +2375,7 @@
       "span_recall": 1.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
-      "excerpt_digest": "036608494eb0"
+      "excerpt_digest": "c13351ad0177"
      },
      "needle-21": {
       "class": "needle",
@@ -2597,8 +2597,8 @@
     }
    },
    "seconds_per_query": {
-    "snippet": 1.861,
-    "paragraph": 1.366
+    "snippet": 1.877,
+    "paragraph": 1.393
    }
   },
   "single": {
@@ -3022,13 +3022,13 @@
       "class": "table",
       "page_hit": 1,
       "contains": 1,
-      "excerpt_digest": "f38f59e9a222"
+      "excerpt_digest": "72e4b67c4883"
      },
      "s02": {
       "class": "table",
       "page_hit": 1,
       "contains": 0,
-      "excerpt_digest": "d8606375f854"
+      "excerpt_digest": "d269e063feb5"
      },
      "s03": {
       "class": "table",
@@ -3593,8 +3593,8 @@
     }
    },
    "seconds_per_query": {
-    "snippet": 0.172,
-    "paragraph": 0.05
+    "snippet": 1.821,
+    "paragraph": 0.3
    }
   }
  }

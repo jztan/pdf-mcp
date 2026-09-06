@@ -224,6 +224,33 @@ def _get_model(model_name: str) -> Any:
     return _model
 
 
+# Sub-batch size for CPU sessions. fastembed's default (256) turns a warm
+# group of ~72 units into ONE onnxruntime batch padded to its longest text;
+# with 17% of real units at the 512-token cap, that is 1.88x the real tokens
+# and ~2.8 GB of transient attention buffers. Sorting by length and encoding
+# 16 at a time pads each batch to a near neighbour: measured 2026-09-06 on
+# 778 units, 25.9 s -> 18.9 s and 2.8 GB -> 0.67 GB, vectors identical
+# (what-we-tried.md section 5). A GPU wants the large batch, so CUDA
+# sessions keep fastembed's default.
+CPU_BATCH_SIZE = 16
+
+
+def _is_cuda(model: Any) -> bool:
+    return "CUDAExecutionProvider" in _providers(model)
+
+
+def _embed_length_sorted(model: Any, texts: list[str], batch_size: int) -> list[Any]:
+    """Embed `texts` shortest-first in `batch_size` sub-batches; return the
+    vectors in the caller's order. Character length stands in for token
+    length: the sort only needs neighbours to be alike, not exact."""
+    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+    vecs = list(model.embed([texts[i] for i in order], batch_size=batch_size))
+    out: list[Any] = [None] * len(texts)
+    for i, vec in zip(order, vecs):
+        out[i] = vec
+    return out
+
+
 def encode(texts: list[str], model_name: str) -> Any:
     """
     Encode a list of texts into embedding vectors.
@@ -236,8 +263,14 @@ def encode(texts: list[str], model_name: str) -> Any:
     """
     import numpy as np  # type: ignore[import-untyped]
 
+    if not texts:
+        return np.empty((0,), dtype=np.float32)
     model = _get_model(model_name)
-    arr = np.array(list(model.embed(texts)), dtype=np.float32)
+    if _is_cuda(model):
+        vecs = list(model.embed(texts))
+    else:
+        vecs = _embed_length_sorted(model, texts, CPU_BATCH_SIZE)
+    arr = np.array(vecs, dtype=np.float32)
     if arr.size == 0:
         return arr
     norms = np.linalg.norm(arr, axis=1, keepdims=True)

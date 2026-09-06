@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CPU embedding is faster and uses far less memory.** On a CPU session
+  the encoder now sorts each batch of texts by length and embeds them in
+  small sub-batches, so onnxruntime pads every sub-batch to a near
+  neighbour instead of the longest page in the group. Measured on an
+  M4 Pro over 778 real page units: 25.9 s to 18.9 s (1.37x), transient
+  encode memory 2.8 GB to 0.67 GB, vectors identical. Corpus warm with
+  embeddings and the on-demand re-embed in `pdf_search` both benefit.
+  The CUDA path is unchanged: a GPU wants the large batch.
+
 - **Semantic-mode `excerpt_style="paragraph"` and `"window"` searches are
   faster.** `pdf_search` and `pdf_corpus_search` no longer compute the
   anchored snippet span for every semantic-only hit when a paragraph or

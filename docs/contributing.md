@@ -74,10 +74,11 @@ CI runs the suite on Windows as well as Linux, and it is not a formality: it has
 
 ## Submitting a PR
 
-1. Fork the repo and create a branch from `develop`
-2. Make your changes with tests covering the new behaviour
-3. Ensure all checks pass (`pytest`, `mypy`, `flake8`, `black --check`)
-4. Open a PR against `develop` with a clear description of what changed and why
+1. For a new feature or a change in behaviour, open an issue first (or comment on an existing one) describing the problem and the approach you have in mind. Agreeing on scope before the code exists saves both of us a round trip; several plausible ideas here have already been tried and closed with data (see [investigated-rejected.md](investigated-rejected.md)). Bug fixes, docs and small cleanups can go straight to a PR.
+2. Fork the repo and create a branch from `develop`
+3. Make your changes with tests covering the new behaviour
+4. Ensure all checks pass (`pytest`, `mypy`, `flake8`, `black --check`)
+5. Open a PR against `develop` with a clear description of what changed and why, linking the issue
 
 ## Quality loop
 

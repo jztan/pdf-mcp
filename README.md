@@ -184,7 +184,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">

@@ -61,8 +61,8 @@ PDF_MCP_CACHE_TTL=48
 PDF_MCP_MAX_WORKERS=8
 
 # Use the GPU for embedding (default: unset = CPU). Requires onnxruntime-gpu
-# and a CUDA runtime; see Installation in the README. When the CUDA provider
-# cannot load, the server warns and falls back to CPU.
+# and a CUDA runtime; see "GPU embedding (NVIDIA CUDA)" below. When the CUDA
+# provider cannot load, the server warns and falls back to CPU.
 PDF_MCP_CUDA=1
 
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
@@ -82,6 +82,48 @@ The `PDF_MCP_HTTP_*` and `PDF_MCP_ALLOW_ANY_PATH` variables affect
 For what the auth token protects and the trust boundary it creates, see
 [remote-access.md](remote-access.md). To set the transport up and rotate the
 token, see [HTTP transport setup](#http-transport-setup) below.
+
+### GPU embedding (NVIDIA CUDA)
+
+Optional and off by default. On an NVIDIA card the embedding pass is one to
+two orders of magnitude faster, on Linux and Windows x86_64. Vectors are the
+same as the CPU path produces (cosine 0.999998 measured), so the cache is
+shared and the choice is speed only.
+
+For a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
+
+```bash
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
+pip install nvidia-cublas nvidia-cuda-runtime nvidia-cufft nvidia-curand \
+            nvidia-cudnn-cu13
+```
+
+Maxwell, Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) predate
+CUDA 13 and take the CUDA 12 build:
+
+```bash
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
+pip install --force-reinstall --no-deps onnxruntime-gpu --index-url \
+  https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-cufft-cu12 \
+            nvidia-curand-cu12 nvidia-cudnn-cu12
+```
+
+Then, either way:
+
+```bash
+export PDF_MCP_CUDA=1   # Linux, macOS
+set PDF_MCP_CUDA=1      # Windows
+```
+
+The uninstall is needed because `onnxruntime` and `onnxruntime-gpu` install
+into the same directory, so with both present the CPU build wins the import.
+Unset, the CPU path runs exactly as before; set without a usable GPU, the
+server warns with the provider it actually got and falls back to CPU instead
+of running slower in silence. Apple Silicon is not covered: the CoreML
+provider in the standard wheel gives no speedup on the shipped model.
 
 ### Docker deployment notes
 

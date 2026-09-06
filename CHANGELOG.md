@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Optional CUDA acceleration for embedding, off by default.** Set
+  `PDF_MCP_CUDA=1` with the CUDA build of onnxruntime installed and the
+  embedding pass runs on the GPU (one to two orders of magnitude faster on
+  an NVIDIA card; vectors match the CPU path). Unset, nothing changes. Set
+  without a usable GPU, the server warns with the provider it got and falls
+  back to CPU rather than running slower in silence. No dependency changes;
+  setup per CUDA series is in `docs/configuration.md`
+  ([#39](https://github.com/jztan/pdf-mcp/pull/39)).
+
 ### Changed
 
 - **Semantic-mode `excerpt_style="paragraph"` and `"window"` searches are
@@ -33,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a hit on a prefaced page showed boilerplate while the matching text
   sat further down. All three now anchor on the page's best-scoring
   passage, as corpus hybrid mode already did.
+
+### Contributors
+
+- @TheSOV — optional CUDA acceleration for embedding, benchmarked on Windows and Linux across CUDA 12 and 13 ([#39](https://github.com/jztan/pdf-mcp/pull/39))
 
 ## [3.1.0] - 2026-09-05
 ### Added

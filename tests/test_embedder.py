@@ -259,14 +259,20 @@ def test_providers_of_unreadable_session_is_empty():
     assert emb._providers(object()) == []
 
 
-def test_nvidia_dll_dirs_is_a_noop_off_windows(monkeypatch):
-    """Nothing is touched on a non-Windows host."""
+def test_preload_leaves_path_alone_off_windows(monkeypatch):
+    """PATH is a Windows-only lever; Linux loads libraries instead.
+
+    glob is patched so the test never opens a real library on a host that
+    happens to have the nvidia wheels installed.
+    """
+    import glob
     import os
     import sys
 
     import pdf_mcp.embedder as emb
 
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(glob, "glob", lambda pattern, recursive=False: [])
     before = os.environ.get("PATH")
     emb._preload_cuda_runtime()
     assert os.environ.get("PATH") == before

@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-05T09:36:57+00:00",
- "git_head": "c3d74a5",
+ "generated": "2026-09-05T13:06:44+00:00",
+ "git_head": "34332b7",
  "config": {
   "mode": "semantic",
   "styles": [
@@ -273,7 +273,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "b4ebf6549c31"
+      "excerpt_digest": "efed94850370"
      },
      "spread-12": {
       "class": "spread",
@@ -364,7 +364,7 @@
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "299ecd545c19"
+      "excerpt_digest": "da4ddc6292ba"
      },
      "spread-25": {
       "class": "spread",
@@ -483,14 +483,14 @@
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "f2505fdaa036"
+      "excerpt_digest": "c0abe2852d74"
      },
      "described-04": {
       "class": "described",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
-      "excerpt_digest": "8557e38bdc8b"
+      "excerpt_digest": "730a2eb48e4d"
      },
      "described-05": {
       "class": "described",
@@ -511,7 +511,7 @@
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
-      "excerpt_digest": "916bd42fadf2"
+      "excerpt_digest": "6a0ab4ff9575"
      },
      "described-08": {
       "class": "described",
@@ -2597,8 +2597,8 @@
     }
    },
    "seconds_per_query": {
-    "snippet": 1.871,
-    "paragraph": 1.877
+    "snippet": 1.861,
+    "paragraph": 1.366
    }
   },
   "single": {
@@ -2656,7 +2656,7 @@
       "class": "structured",
       "page_hit": 1,
       "contains": 1,
-      "excerpt_digest": "d93cbb565b2f"
+      "excerpt_digest": "e7b6afc18931"
      },
      "t10": {
       "class": "structured",
@@ -3028,7 +3028,7 @@
       "class": "table",
       "page_hit": 1,
       "contains": 0,
-      "excerpt_digest": "d269e063feb5"
+      "excerpt_digest": "d8606375f854"
      },
      "s03": {
       "class": "table",
@@ -3593,8 +3593,8 @@
     }
    },
    "seconds_per_query": {
-    "snippet": 0.177,
-    "paragraph": 0.199
+    "snippet": 0.172,
+    "paragraph": 0.05
    }
   }
  }

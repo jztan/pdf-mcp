@@ -69,6 +69,11 @@ claude mcp add pdf-mcp -- pdf-mcp
 Then ask Claude to read a PDF. For Claude Desktop, VS Code, Codex CLI,
 Kiro, or any other MCP client, see **[docs/clients.md](docs/clients.md)**.
 
+pdf-mcp's tools are also plain Python functions, so you can import them
+and hand a PDF to the Anthropic SDK without running a server. Two
+runnable scripts, for a question and for a whole document:
+**[examples/](examples/)**.
+
 Why this exists, and what broke along the way: [Claude's 100-page PDF limit and how I got around it](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=quickstart-how-i-built-pdf-mcp-solving-claude-large-pdf-limitations)
 
 ## Tools
@@ -216,6 +221,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 **Getting started**
 
 - [How I Built pdf-mcp](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-i-built-pdf-mcp-solving-claude-large-pdf-limitations): The problem with large PDFs in AI agents and a working solution
+- [How to Send PDFs Over 100 Pages to Claude's API](https://blog.jztan.com/llm-api-pdf-page-limits/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-llm-api-pdf-page-limits): Measuring the real page and token ceilings on the Claude API, and the two ways around them: search the PDF on disk for questions, window the text and render only the picture pages for whole-document tasks
 - [How Claude Code Actually Reads PDFs](https://blog.jztan.com/how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-claude-code-actually-reads-pdfs-lessons-from-building-an-mcp-server): How AI agents use pdf-mcp tools to read and navigate PDF documents
 - [How AI Agents Should Read PDFs: 5 Patterns That Survived Production](https://blog.jztan.com/ai-agent-pdf-reading-patterns/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-reading-patterns): Five production-tested patterns for how agents should navigate PDFs at scale
 

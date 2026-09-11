@@ -1684,6 +1684,7 @@ def _render_page_worker(
 
 def _warm_extract_worker(
     path: str,
+    want_sections: bool = False,
 ) -> tuple[
     int,
     dict[str, Any],
@@ -1691,6 +1692,7 @@ def _warm_extract_worker(
     dict[int, str],
     list[dict[str, int]],
     "dict[int, tuple[list[Any], tuple[float, float], bool]]",
+    "list[Any] | None",
 ]:
     """Picklable whole-doc extraction worker for concurrent corpus warm.
 
@@ -1700,6 +1702,26 @@ def _warm_extract_worker(
     a ``skipped`` entry. Lives in extractor.py so spawn re-imports only
     PyMuPDF, never FastMCP (same rule as the per-page workers above).
     Coverage counts use raw ``get_text()`` chars, matching pdf_info.
+
+    ``want_sections``, when true, also runs ``section_detector.derive_sections``
+    (TOC-first / heuristic-fallback) here in the worker -- pure text/layout
+    work, no embeddings, no rendering, so it parallelizes the same way text
+    extraction does. Section detection is otherwise built lazily on a
+    document's first ``pdf_search(granularity="section")`` call
+    (server.py's ``_pdf_search_section_mode``), which is exactly the gap
+    this closes: a doc whose text and embeddings were prewarmed still paid
+    that cost, in full, serially, on the first section-mode query -- for a
+    heuristic-fallback doc (no TOC) measured at ~32ms/page
+    (benchmark_data/warm_parallelism_strix.md), enough on its own to time
+    out a timeout-bounded MCP client on a large document. Best-effort: a
+    failure here does not fail the whole document's warm, matching the
+    layout block below. Unlike the layout block, a failure is logged
+    (``logger.warning``) and returns ``None``, not ``[]`` -- ``[]`` means
+    detection succeeded and genuinely found nothing, which the caller
+    writes to cache as an authoritative empty index; ``None`` means it
+    could not run, which the caller must NOT write, or a doc whose text
+    just happened to be re-warmed would have a previously-valid section
+    index silently deleted by a transient detection failure.
     """
     doc = open_pdf(path)
     try:
@@ -1739,7 +1761,24 @@ def _warm_extract_worker(
                 pass
     finally:
         doc.close()
-    return page_count, metadata, toc, texts, coverage, layout
+
+    # None (not requested, or detection failed) vs [] (requested, genuinely
+    # no sections found) matter to the caller: _finalize_doc writes [] to
+    # cache.index_sections, which DELETEs any existing rows first. A failed
+    # detection returning [] the same way a section-less doc does would
+    # silently wipe a previously-valid index on a doc whose text just
+    # happened to be re-warmed (e.g. after a TTL sweep or edit) -- the
+    # regression this whole feature exists to avoid, just moved earlier.
+    sections: "list[Any] | None" = None
+    if want_sections:
+        try:
+            from .section_detector import derive_sections
+
+            sections = derive_sections(path)
+        except Exception as exc:  # noqa: BLE001 - best-effort, like layout above
+            logger.warning("section detection failed for %s: %s", path, exc)
+
+    return page_count, metadata, toc, texts, coverage, layout, sections
 
 
 # A detected "table" whose bounding box spans almost the entire page body in

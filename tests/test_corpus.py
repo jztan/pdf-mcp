@@ -1,6 +1,8 @@
 """Tests for corpus resolution and warm orchestration (corpus.py)."""
 
+import os
 import pickle
+import sqlite3
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
@@ -299,9 +301,9 @@ class TestWarmPartialSequential:
         seen = []
         real_extract = corpus._warm_extract_worker
 
-        def spying_extract(path):
+        def spying_extract(path, *a, **k):
             seen.append(path)
-            return real_extract(path)
+            return real_extract(path, *a, **k)
 
         monkeypatch.setattr(corpus, "_warm_extract_worker", spying_extract)
         for _ in range(12):
@@ -733,7 +735,7 @@ class TestConcurrentWarm:
         ]
         assert resumable, first
 
-        def boom(path):
+        def boom(path, *a, **k):
             raise AssertionError(f"pool extraction for resumable doc {path}")
 
         # Text-warm docs must not reach the extraction worker again.
@@ -752,6 +754,189 @@ class TestConcurrentWarm:
             if out["warm_complete"]:
                 break
         assert out is not None and out["warm_complete"] is True
+
+
+class TestSectionWarm:
+    """sections=True: warm_docs also builds the section FTS5 index, closing
+    the gap where a prewarmed corpus still paid derive_sections' cost in
+    full on the first pdf_search(granularity="section") query."""
+
+    def test_sections_false_by_default_leaves_index_unbuilt(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections], 60, cache, clock=SteppingClock(0)
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+    def test_sections_true_indexes_cold_doc(self, sample_pdf_with_toc_sections, cache):
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert out["warmed_this_call"] == 1
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+    def test_sections_true_backfills_already_cached_doc(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        # First call: text only, no sections requested.
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections], 60, cache, clock=SteppingClock(0)
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+        # Second call: doc is already fully cached (status="cached", never
+        # goes through the extraction worker), but sections=True this time.
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert out["docs"][0]["status"] == "cached"
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+    def test_sections_true_backfills_embeddings_resume_doc(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        """A doc resuming for embeddings-only (text already warm) still
+        gets its section index built -- this doc never goes through
+        _warm_one_doc, so it needs its own handling in _warm_sequential's
+        resume branch."""
+
+        def fake_embed(texts):
+            return [b"\x00\x00\x80?" for _ in texts]
+
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections], 60, cache, clock=SteppingClock(0)
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=fake_embed,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+    def test_sections_true_concurrent_pool_indexes_every_doc(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(files, 600, cache, sections=True, clock=SteppingClock(0))
+        assert out["warmed_this_call"] == 3
+        for path in files:
+            # corpus_dir's fixtures carry no TOC and no real heading shapes,
+            # so 0 sections is the correct heuristic-detector answer; the
+            # coverage-ambiguity caveat is documented on backfill_sections.
+            # What matters here is every doc went through indexing at all --
+            # verified via the spy below, not the resulting count.
+            assert cache.get_section_fts_coverage(path) >= 0
+
+    def test_sections_true_calls_index_sections_for_every_doc(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        files = _files(corpus_dir)
+        indexed: list[str] = []
+        real_index = cache.index_sections
+
+        def spy(path, sections):
+            indexed.append(path)
+            return real_index(path, sections)
+
+        monkeypatch.setattr(cache, "index_sections", spy)
+        corpus.warm_docs(files, 600, cache, sections=True, clock=SteppingClock(0))
+        assert set(indexed) == set(files)
+
+    def test_failed_detection_does_not_wipe_existing_index(
+        self, sample_pdf_with_toc_sections, cache, monkeypatch
+    ):
+        """Regression: extractor._warm_extract_worker used to return `[]`
+        on a derive_sections failure, indistinguishable from "genuinely no
+        sections found" -- and _finalize_doc wrote [] unconditionally,
+        which cache.index_sections implements as DELETE-then-INSERT. A
+        doc whose text happens to be re-warmed (e.g. after a file edit)
+        while detection transiently fails would have a previously-valid
+        section index silently deleted."""
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+        # Simulate a file edit: bump mtime so text needs re-extraction.
+        # The section tables carry no mtime (see backfill_sections'
+        # docstring) so the 5 rows above are untouched by this on their
+        # own -- the risk is _this_ re-warm call wiping them via a failed
+        # re-detection, not the mtime bump itself.
+        os.utime(sample_pdf_with_toc_sections, None)
+
+        import pdf_mcp.section_detector as section_detector
+
+        def boom(path):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(section_detector, "derive_sections", boom)
+
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        # Text extraction itself is unaffected by the section failure.
+        assert out["warmed_this_call"] == 1
+        assert out["skipped"] == []
+        # The previously-valid index must survive.
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+    def test_index_sections_write_failure_does_not_fail_the_doc(
+        self, sample_pdf_with_toc_sections, cache, monkeypatch
+    ):
+        """Regression: cache.index_sections() ran outside any try/except in
+        _finalize_doc, after the metadata/text transaction had already
+        committed -- a write failure there (e.g. a locked database, quite
+        plausible since pdf-mcp-warm and a running server can share the
+        same cache file) propagated up and reported an otherwise-fully-
+        warmed document as `skipped: warm failed`, an envelope that lies
+        about real cache state."""
+
+        def boom(path, sections):
+            raise sqlite3.OperationalError("database is locked")
+
+        monkeypatch.setattr(cache, "index_sections", boom)
+
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert out["skipped"] == []
+        assert out["warmed_this_call"] == 1
+        assert out["docs"][0]["status"] == "warmed"
+        # Text actually made it into the cache despite the section-index
+        # write failing.
+        assert cache.get_pages_text(sample_pdf_with_toc_sections, [0])[0]
 
 
 class TestWarmDocs:
@@ -1285,7 +1470,9 @@ class TestCorpusFusion:
 class TestWarmExtractWorker:
     def test_payload_shape(self, corpus_dir):
         path = str(corpus_dir / "alpha.pdf")
-        page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
+        page_count, metadata, toc, texts, coverage, layout, sections = (
+            _warm_extract_worker(path)
+        )
         assert page_count == 2
         assert set(texts) == {0, 1}
         assert all(t.strip() for t in texts.values())
@@ -1297,6 +1484,15 @@ class TestWarmExtractWorker:
         assert set(layout) == {0, 1}
         blocks, size, hidden = layout[0]
         assert blocks and len(size) == 2 and isinstance(hidden, bool)
+        # want_sections defaults to False: no section-detection pass run.
+        # None (not []): a caller must not write this to cache.index_sections
+        # (which would DELETE-then-INSERT-empty, wiping any existing index).
+        assert sections is None
+
+    def test_want_sections_runs_detection(self, corpus_dir):
+        path = str(corpus_dir / "alpha.pdf")
+        *_, sections = _warm_extract_worker(path, want_sections=True)
+        assert isinstance(sections, list)
 
     def test_picklable_for_spawn(self):
         # Module-scope function: pickles by qualified name, spawn-safe.

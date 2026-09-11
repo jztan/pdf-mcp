@@ -1,0 +1,62 @@
+{
+  "manifest_version": "0.4",
+  "name": "pdf-mcp",
+  "display_name": "PDF MCP",
+  "version": "0.0.0",
+  "description": "Read, search, and pull tables out of PDFs, one file or a whole folder, without hitting Claude's page limit.",
+  "long_description": "pdf-mcp gives Claude 13 tools for PDFs: page-level reads, hybrid keyword and semantic search, tables, table of contents, page renders, chart data, and search across a folder of PDFs. Everything runs on your computer. Scanned PDFs need Tesseract for OCR; see the OCR setup link in the documentation.",
+  "author": {
+    "name": "Kevin Tan",
+    "url": "https://github.com/jztan"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jztan/pdf-mcp"
+  },
+  "homepage": "https://github.com/jztan/pdf-mcp",
+  "documentation": "https://github.com/jztan/pdf-mcp/blob/master/docs/clients.md",
+  "license": "MIT",
+  "icon": "icon.png",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "src/server.py"],
+      "env": {
+        "PDF_MCP_UPDATE_CHECK": "${user_config.update_check}"
+      }
+    }
+  },
+  "user_config": {
+    "update_check": {
+      "type": "boolean",
+      "title": "Check for updates",
+      "description": "Once a day, ask PyPI whether a newer pdf-mcp exists, so Claude can tell you. Sends no information about you or your PDFs.",
+      "default": true,
+      "required": false
+    }
+  },
+  "tools": [
+    {"name": "pdf_info", "description": "Page count, metadata, table of contents summary, scanned-page detection."},
+    {"name": "pdf_search", "description": "Hybrid keyword and semantic search inside one PDF, with paragraph excerpts."},
+    {"name": "pdf_read_pages", "description": "Read specific pages, with OCR, tables, and images on demand."},
+    {"name": "pdf_read_all", "description": "Read a whole document in one call, size-capped."},
+    {"name": "pdf_get_toc", "description": "Full table of contents."},
+    {"name": "pdf_render_pages", "description": "Render pages as images for diagrams, handwriting, and scans."},
+    {"name": "pdf_extract_chart", "description": "Chart data as exact (x, y) tables from plot geometry."},
+    {"name": "pdf_corpus_warm", "description": "Index a folder of PDFs within a time budget."},
+    {"name": "pdf_corpus_overview", "description": "One triage card per document in a folder."},
+    {"name": "pdf_corpus_search", "description": "Search across every PDF in a folder, with document and page provenance."},
+    {"name": "pdf_cache_stats", "description": "Cache size and per-document breakdown."},
+    {"name": "pdf_cache_clear", "description": "Clear expired or all cache entries."},
+    {"name": "server_info", "description": "Which optional features, settings, and updates are active."}
+  ],
+  "keywords": ["pdf", "search", "ocr", "tables", "rag"],
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": {
+      "python": ">=3.10,<3.14"
+    }
+  }
+}

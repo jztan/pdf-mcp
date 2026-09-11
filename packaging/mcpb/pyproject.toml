@@ -1,0 +1,11 @@
+# Claude Desktop bundle project. Not the pdf-mcp package: it only pins the
+# released wheel so Claude Desktop's uv can install it. No [build-system],
+# so uv treats this as a virtual project and installs only the dependency.
+[project]
+name = "pdf-mcp-desktop-bundle"
+version = "{version}"
+description = "Claude Desktop bundle for pdf-mcp"
+# Capped below the package's own >=3.10: onnxruntime (via fastembed) ships
+# no Intel macOS wheels for 3.14+, and uv would otherwise pick 3.14.
+requires-python = ">=3.10,<3.14"
+dependencies = ["pdf-mcp=={version}"]

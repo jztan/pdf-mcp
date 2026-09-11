@@ -107,7 +107,29 @@ RENDER_RESULT_BYTE_BUDGET = 900_000
 # cost (~0.5 s/worker) is well-amortized; below that the win is marginal.
 _OCR_PARALLEL_GATE = 2
 _RENDER_PARALLEL_GATE = 16
-_MAX_PARALLEL_WORKERS = 8
+# Cap was a flat 8 (the M4 Pro reference above has 14 CPUs; 8 was never
+# raised past that). Re-measured on a 24-thread Ryzen AI Strix box
+# (benchmark_data/warm_parallelism_strix.md): OCR kept scaling to 8.09x
+# and render to 6.04x at 16 workers, both still climbing, not yet
+# plateaued -- so the flat 8 was leaving real throughput idle on a
+# many-core host. Scale with the host instead, ceilinged at 16 because
+# that is as far as the re-measurement went (raise it again only with new
+# numbers past that). No separate floor needed below 16: the actual
+# worker count is `min(os.cpu_count(), n_pages, this cap)`
+# (parallel.resolve_workers), so on fewer than 16 cores the cpu_count
+# term already governs regardless of what this cap says -- a `max(...,
+# 8)` floor on the cap itself would be inert, not a safety net.
+# `PDF_MCP_MAX_WORKERS` still only clamps this down, same function.
+#
+# os.cpu_count() reads the OS's total logical CPUs, not a cgroup quota or
+# sched affinity mask (parallel.py documents this as an accepted
+# platform-wide choice already) -- so on Linux under a CPU-limited
+# container (e.g. `docker run --cpus=2`) this raise doubles the
+# worst-case oversubscription version-over-version, from 8 workers to 16
+# on a host whose full core count the container never sees. The shipped
+# Docker image sets no CPU limit itself; a deployment that adds one
+# should also set PDF_MCP_MAX_WORKERS.
+_MAX_PARALLEL_WORKERS = min(os.cpu_count() or 8, 16)
 
 # Initialize MCP server. `version` is propagated through the MCP
 # `initialize` handshake as `serverInfo.version`, so clients can tell

@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`_MAX_PARALLEL_WORKERS` (OCR/render process pool) scales with the
+  host's core count instead of a flat 8.** Re-measured on a 24-thread
+  host: OCR and render dispatch were both still gaining at 16 workers
+  (8.09x / 6.04x), not yet plateaued, so the old flat cap left real
+  throughput idle on many-core machines. Now `min(os.cpu_count(), 16)`;
+  below 16 cores this is unchanged from before (worker count was already
+  governed by the core count, not the cap), ceilinged at 16 pending a
+  benchmark past that. `PDF_MCP_MAX_WORKERS` still only clamps this down.
+  Note for CPU-limited containers: `os.cpu_count()` reads the host's
+  total logical CPUs, not a cgroup quota, so this can double
+  oversubscription under `docker run --cpus=N`; set
+  `PDF_MCP_MAX_WORKERS` explicitly there. See
+  [benchmark_data/warm_parallelism_strix.md](benchmark_data/warm_parallelism_strix.md).
+
 - **Optional CUDA acceleration for embedding, off by default.** Set
   `PDF_MCP_CUDA=1` with the CUDA build of onnxruntime installed and the
   embedding pass runs on the GPU (one to two orders of magnitude faster on

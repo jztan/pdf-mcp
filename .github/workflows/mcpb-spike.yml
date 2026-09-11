@@ -1,0 +1,59 @@
+# THROWAWAY: answers the Phase 0 spike questions for the Claude Desktop
+# bundle. Deleted once the permanent smoke steps land in ci.yml.
+name: mcpb spike
+on:
+  push:
+    branches: [feature/mcpb-bundle]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  spike:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+          enable-cache: false
+      - name: Build wheel and bundle
+        shell: pwsh
+        run: |
+          uv build --wheel
+          $whl = (Get-ChildItem dist/pdf_mcp-*.whl).FullName
+          uv run --no-project python scripts/build_mcpb.py --wheel $whl --out spike
+          Expand-Archive (Get-ChildItem spike/*.mcpb).FullName -DestinationPath spike/unpacked
+      - name: Cold-start the bundle (Q2)
+        shell: pwsh
+        run: |
+          uv cache clean
+          uv run --no-project --with mcp python scripts/smoke_mcpb.py spike/unpacked --timeout 900
+      - name: Validate manifest with the official CLI
+        shell: pwsh
+        run: npx -y @anthropic-ai/mcpb@2.1.2 validate spike/unpacked/manifest.json
+      - name: Is winget present?
+        continue-on-error: true
+        shell: pwsh
+        run: winget --version
+      - name: winget name query (Q3a, current docs)
+        continue-on-error: true
+        shell: pwsh
+        run: winget install Tesseract-OCR --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
+      - name: winget exact ID (Q3b)
+        continue-on-error: true
+        shell: pwsh
+        run: winget install -e --id UB-Mannheim.TesseractOCR --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
+      - name: Where did Tesseract land, and is it on PATH? (Q3c)
+        shell: pwsh
+        run: |
+          Get-ChildItem "C:\Program Files\Tesseract-OCR\tesseract.exe","C:\Program Files (x86)\Tesseract-OCR\tesseract.exe","$env:LOCALAPPDATA\Programs\Tesseract-OCR\tesseract.exe" -ErrorAction SilentlyContinue | Select-Object FullName
+          "Machine PATH entries:"; [Environment]::GetEnvironmentVariable('Path','Machine') -split ';' | Select-String -SimpleMatch Tesseract
+          "User PATH entries:"; [Environment]::GetEnvironmentVariable('Path','User') -split ';' | Select-String -SimpleMatch Tesseract
+      - name: Per-user install location (Q3d)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          winget uninstall -e --id UB-Mannheim.TesseractOCR --silent --disable-interactivity
+          winget install -e --id UB-Mannheim.TesseractOCR --scope user --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
+          Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter tesseract.exe -ErrorAction SilentlyContinue -Depth 4 | Select-Object FullName

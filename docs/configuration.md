@@ -291,6 +291,46 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802
 default.
 
+## Offline prewarm (`pdf-mcp-warm`)
+
+`pdf_corpus_warm` (the MCP tool) is built to fit inside one client-side
+tool call: it caps at 100 files and `budget_seconds <= 300` per call (see
+[tool-reference.md](tool-reference.md#pdf_corpus_warm)), so a folder that
+does not fit either limit means re-issuing the same call by hand,
+possibly many times, from inside a chat session — and a query against a
+still-partly-warm corpus just times out in the meantime.
+
+`pdf-mcp-warm` is a separate command installed alongside `pdf-mcp` (same
+`pip install`/`uvx` package, a second entry point) that runs outside any
+MCP client, so neither limit applies. It walks a whole folder and warms
+it to completion in one run, writing to the exact same on-disk cache
+(`PDF_MCP_CACHE_DIR`, this file's `[paths]` allow-list, `[embedding].model`)
+the server reads — run it once before a chat session so `pdf_search` /
+`pdf_corpus_search` hit a warm cache instead of timing out.
+
+```bash
+pdf-mcp-warm /path/to/reports/ --recursive
+pdf-mcp-warm doc1.pdf doc2.pdf --no-embeddings   # text only, skip vectors
+pdf-mcp-warm /path/to/reports/ --model BAAI/bge-small-en-v1.5
+```
+
+Embeddings **and** the section-granularity search index are both warmed
+by default (`--no-embeddings` / `--no-sections` opt out of each). Unlike
+`pdf_corpus_warm`, which leaves `sections` off by default to stay
+budget-conscious, this CLI has no budget to protect — and skipping either
+just moves the cost to query time instead of removing it: a prewarm that
+skips vectors leaves semantic search to time out later, and skipping
+sections leaves a large document's first
+`pdf_search(granularity="section")` call to build that index from
+scratch, on its own, which can by itself exceed a timeout-bounded MCP
+client's budget even on an otherwise fully-warmed corpus. Progress and a
+final summary go to stderr; already-cached documents are free (see
+`pdf_corpus_warm` above), so re-running after an interrupt (Ctrl-C, a
+crash) resumes rather than redoing work. If your corpus is large enough
+to need this, also raise `PDF_MCP_CACHE_TTL` (below) — the default
+24-hour TTL will otherwise
+start expiring a prewarm you're not actively querying.
+
 ## Caching
 
 The server uses SQLite for persistent caching.

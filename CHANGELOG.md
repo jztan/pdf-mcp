@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`pdf-mcp-warm`: an offline entry point that warms a whole corpus to
+  completion, outside any MCP client.** `pdf_corpus_warm` (the tool) caps
+  at 100 files and 300 seconds per call by design, so a folder that does
+  not fit either limit needs the same call re-issued by hand, and a query
+  against a still-partly-warm corpus times out in the meantime. Installed
+  alongside `pdf-mcp` (same package, a second console script), it walks a
+  folder (`--recursive`), warms embeddings *and* the section-granularity
+  search index by default (`--no-embeddings` / `--no-sections` opt out),
+  and writes to the exact cache the server reads — already-cached
+  documents are free, so re-running after an interrupt resumes rather
+  than redoing work. See
+  [docs/configuration.md](docs/configuration.md#offline-prewarm-pdf-mcp-warm).
+
 - **`pdf_corpus_warm(paths, sections=True)`: warm the section-granularity
   search index ahead of query time.** Previously, a corpus warmed with
   `pdf_corpus_warm` (any combination of text/embeddings) still left

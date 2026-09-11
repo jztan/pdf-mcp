@@ -3520,6 +3520,7 @@ def pdf_corpus_warm(
     budget_seconds: int = 45,
     embeddings: bool = False,
     recursive: bool = False,
+    sections: bool = False,
 ) -> dict[str, Any]:
     """
     Warm a corpus of local PDFs into the cache within a time budget.
@@ -3538,6 +3539,15 @@ def pdf_corpus_warm(
         embeddings: Also compute and cache page embeddings (requires
             the embedding extra; needed before semantic corpus search).
         recursive: Directory mode only, recurse into subdirectories.
+        sections: Also build the section-granularity search index (TOC-
+            first with heuristic fallback). Off by default because it adds
+            real per-doc cost on top of text extraction (~32ms/page for a
+            heuristic-fallback doc with no TOC). Without this, a doc's
+            section index is instead built lazily on its first
+            pdf_search(granularity="section") call — which can by itself
+            exceed a timeout-bounded MCP client's budget on a large
+            document, even though the corpus was otherwise fully warmed.
+            Pass this when you know section-granularity search is coming.
 
     Returns:
         - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
@@ -3614,6 +3624,7 @@ def pdf_corpus_warm(
         embeddings=embeddings,
         model_name=model_name,
         embed=embed_fn,
+        sections=sections,
     )
     return {
         "docs": warm["docs"],

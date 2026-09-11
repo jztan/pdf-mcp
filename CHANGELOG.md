@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`pdf_corpus_warm(paths, sections=True)`: warm the section-granularity
+  search index ahead of query time.** Previously, a corpus warmed with
+  `pdf_corpus_warm` (any combination of text/embeddings) still left
+  `pdf_search(granularity="section")` to build that document's section
+  index from scratch, in full, serially, on the first section-mode
+  query — for a heuristic-fallback document with no TOC, measured at
+  ~32ms/page, enough on its own to time out a timeout-bounded MCP client
+  on a large document even though the rest of the corpus was fully warm.
+  `sections=True` (default `False`, to stay budget-conscious like
+  `embeddings`) builds it during warm instead, in the same parallel
+  worker pool that already extracts text — including backfilling it for
+  documents that were already fully cached before this flag was first
+  requested. See
+  [docs/tool-reference.md](docs/tool-reference.md#pdf_corpus_warm) and
+  [benchmark_data/warm_parallelism_strix.md](benchmark_data/warm_parallelism_strix.md).
+
 - **`_MAX_PARALLEL_WORKERS` (OCR/render process pool) scales with the
   host's core count instead of a flat 8.** Re-measured on a 24-thread
   host: OCR and render dispatch were both still gaining at 16 workers

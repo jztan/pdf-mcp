@@ -45,6 +45,7 @@ __all__ = [
     "profile_terms",
     "build_doc_profile",
     "backfill_doc_profiles",
+    "backfill_sections",
 ]
 
 logger = logging.getLogger(__name__)
@@ -321,6 +322,49 @@ def backfill_doc_profiles(
     return len(built)
 
 
+def backfill_sections(paths: list[str], cache: Any) -> int:
+    """Index sections for docs that lack a section index yet.
+
+    Covers a corpus warmed before ``sections=True`` was requested (or
+    before section warming existed): a `pdf_search(granularity="section")`
+    call used to build this on that document's first section-mode query
+    (server.py's ``_pdf_search_section_mode``) regardless of how warm the
+    rest of the cache was, which is the gap this closes. Reads only the
+    PDF itself via ``derive_sections`` (no cache text dependency, no
+    embed callback); a doc whose detection raises is logged and skipped
+    so the rest still land. Returns how many docs were (re-)indexed.
+
+    Like ``get_section_fts_coverage`` everywhere else in this codebase,
+    coverage 0 cannot distinguish "never indexed" from "indexed, no
+    sections found" -- a genuinely section-less doc gets re-derived on
+    every call that requests sections. Pre-existing behaviour (the same
+    ambiguity server.py's lazy path already has), not introduced here.
+
+    A doc with coverage != 0 is skipped even if its underlying file has
+    since changed: the section tables carry no mtime (unlike page_text),
+    so a file edit invalidates and re-extracts text/embeddings on the
+    next warm but leaves a stale section index untouched, serving old
+    sections indefinitely. Same pre-existing gap as above, from the same
+    cause -- listed separately because it is a staleness bug, not just an
+    ambiguous count, and `pdf-mcp-warm` is exactly the tool someone
+    reaches for right after a corpus changes.
+    """
+    from .section_detector import derive_sections
+
+    written = 0
+    for path in paths:
+        if cache.get_section_fts_coverage(path) != 0:
+            continue
+        try:
+            sections = derive_sections(path)
+        except Exception as exc:  # noqa: BLE001 - never a search/warm error
+            logger.warning("section backfill skipped %s: %s", path, exc)
+            continue
+        cache.index_sections(path, sections)
+        written += 1
+    return written
+
+
 def _embed_doc_batched(
     path: str,
     texts: dict[int, str],
@@ -393,6 +437,7 @@ def _finalize_doc(
     layout: "dict[int, tuple[list[Any], tuple[float, float], bool]] | None" = None,
     deadline: float = float("inf"),
     clock: Callable[[], float] = time.monotonic,
+    sections: "list[Any] | None" = None,
 ) -> tuple[int, bool, int]:
     """Parent-side tail of warming one doc: OCR preservation, the atomic
     text transaction, then the durable batched embedding loop (which may
@@ -400,6 +445,19 @@ def _finalize_doc(
     embedded_pages); emb_complete is True when embeddings were not
     requested. Always runs in the parent process — every SQLite touch
     is here.
+
+    ``sections``, when not None, is the worker's already-computed section
+    list (see ``extractor._warm_extract_worker``'s ``want_sections``); it
+    is indexed via ``cache.index_sections`` as its own write, outside the
+    metadata/text transaction above -- matching how the live
+    ``pdf_search(granularity="section")`` path already writes it
+    (server.py's ``_pdf_search_section_mode``), which is a separate,
+    non-atomic call too. None means either sections were not requested
+    for this warm, or they were requested but detection failed -- in
+    both cases nothing is written, so a doc's previously-indexed sections
+    (if any) survive untouched. ``[]`` means detection genuinely ran and
+    found nothing, and IS written, replacing any stale rows with an
+    authoritative empty index.
     """
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
@@ -451,6 +509,19 @@ def _finalize_doc(
                 {pn: hidden for pn, (_b, _s, hidden) in layout.items()},
                 conn=conn,
             )
+    if sections is not None:
+        # Best-effort, like detection itself (extractor.py's want_sections):
+        # the metadata/text transaction above has already committed by this
+        # point, so a write failure here (e.g. a locked database -- this
+        # cache file may be shared with a running server) must not turn an
+        # otherwise-fully-warmed document into a `skipped` "warm failed"
+        # row. Matches backfill_sections and the resume branch's own
+        # try/except around the same call.
+        try:
+            cache.index_sections(path, sections)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("section indexing failed for %s: %s", path, exc)
+
     emb_complete, embedded = True, 0
     if embeddings:
         assert embed is not None and model_name is not None
@@ -468,6 +539,7 @@ def _warm_one_doc(
     embed: Callable[[list[str]], list[bytes]] | None,
     deadline: float = float("inf"),
     clock: Callable[[], float] = time.monotonic,
+    want_sections: bool = False,
 ) -> tuple[int, bool, int]:
     """Extract everything for one doc, then write: text atomically,
     embeddings in durable batches (may stop at the deadline).
@@ -475,7 +547,9 @@ def _warm_one_doc(
     Extraction completes fully before any write, so a failure leaves
     the cache untouched.
     """
-    page_count, metadata, toc, texts, coverage, layout = _warm_extract_worker(path)
+    page_count, metadata, toc, texts, coverage, layout, sections = (
+        _warm_extract_worker(path, want_sections)
+    )
     return _finalize_doc(
         path,
         page_count,
@@ -490,6 +564,7 @@ def _warm_one_doc(
         layout=layout,
         deadline=deadline,
         clock=clock,
+        sections=sections if want_sections else None,
     )
 
 
@@ -512,6 +587,7 @@ def _warm_sequential(
     docs: list[dict[str, Any]],
     skipped: list[dict[str, str]],
     emb_cached: Callable[[str], bool],
+    want_sections: bool = False,
 ) -> tuple[list[str], bool, int]:
     """Sequential warm loop (today's semantics, verbatim): clock checked
     before each doc; per-doc failure -> skipped; appends to docs/skipped
@@ -535,8 +611,23 @@ def _warm_sequential(
                 else None
             )
             if text_pages is not None:
-                # RESUME: text is warm, embed only the missing pages.
+                # RESUME: text is warm, embed only the missing pages. This
+                # doc never goes through _warm_one_doc (no re-extraction),
+                # so it also never gets extractor.py's want_sections pass --
+                # do it here instead, same best-effort/no-cost-if-already-
+                # indexed shape as backfill_sections.
                 assert embed is not None and model_name is not None
+                if want_sections and cache.get_section_fts_coverage(path) == 0:
+                    try:
+                        from .section_detector import derive_sections
+
+                        cache.index_sections(path, derive_sections(path))
+                    except Exception as exc:  # noqa: BLE001 - best-effort
+                        logger.warning(
+                            "section indexing skipped for resume doc %s: %s",
+                            path,
+                            exc,
+                        )
                 texts = cache.get_pages_text(path, list(range(text_pages)))
                 complete, embedded = _embed_doc_batched(
                     path, texts, cache, model_name, embed, deadline, clock
@@ -551,6 +642,7 @@ def _warm_sequential(
                     embed,
                     deadline=deadline,
                     clock=clock,
+                    want_sections=want_sections,
                 )
         except Exception as e:
             skipped.append({"path": path, "reason": f"warm failed: {e}"})
@@ -595,6 +687,7 @@ def _warm_concurrent(
     docs: list[dict[str, Any]],
     skipped: list[dict[str, str]],
     emb_cached: Callable[[str], bool],
+    want_sections: bool = False,
 ) -> tuple[list[str], bool, int]:
     """Pool-scheduled warm: extraction in spawn workers, finalize in parent.
 
@@ -627,7 +720,7 @@ def _warm_concurrent(
                         pending = []
                         break
                     path, _pages = pending.pop(0)
-                    fut = pool.submit(_warm_extract_worker, path)
+                    fut = pool.submit(_warm_extract_worker, path, want_sections)
                     in_flight[fut] = path
                 if not in_flight:
                     break
@@ -642,6 +735,7 @@ def _warm_concurrent(
                             texts_w,
                             coverage_w,
                             layout_w,
+                            sections_w,
                         ) = fut.result()
                         page_count, _complete, _embedded = _finalize_doc(
                             path,
@@ -657,6 +751,7 @@ def _warm_concurrent(
                             layout=layout_w,
                             deadline=start + budget_seconds,
                             clock=clock,
+                            sections=sections_w if want_sections else None,
                         )
                     except BrokenProcessPool:
                         raise
@@ -715,6 +810,7 @@ def _warm_concurrent(
             docs,
             skipped,
             emb_cached,
+            want_sections,
         )
         return unprocessed, budget_exhausted, warmed + seq_warmed
     return unprocessed, budget_exhausted, warmed
@@ -728,8 +824,17 @@ def warm_docs(
     model_name: str | None = None,
     embed: Callable[[list[str]], list[bytes]] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    sections: bool = False,
 ) -> dict[str, Any]:
     """Budgeted warm loop over a resolved corpus.
+
+    ``sections``, when true, also builds the section-granularity FTS5
+    index (see ``backfill_sections`` and ``extractor._warm_extract_worker``'s
+    ``want_sections``) for every doc this call touches -- both newly
+    extracted and already-cached. Off by default: it adds real per-doc
+    cost (~32ms/page for a heuristic-fallback doc with no TOC, measured
+    in benchmark_data/warm_parallelism_strix.md) on top of text
+    extraction, which a budget-constrained caller may not want to spend.
 
     Cached docs are free (never charged against the budget). Uncached
     docs warm smallest-first, atomically per doc; the clock is
@@ -796,6 +901,18 @@ def warm_docs(
         except Exception as exc:  # noqa: BLE001
             logger.warning("doc profile backfill failed: %s", exc)
 
+    # Same idea for the section index: a doc already fully cached (from a
+    # prior call, or from this call's own embeddings-only pass above) may
+    # still lack it if this is the first call to request sections=True for
+    # it. Also cheap relative to extraction/embedding and never charged
+    # against the budget.
+    if sections:
+        cached_paths = [d["path"] for d in docs if d["status"] == "cached"]
+        try:
+            backfill_sections(cached_paths, cache)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("section backfill failed: %s", exc)
+
     uncached.sort(key=lambda item: item[1])
     resume = [
         item
@@ -825,6 +942,7 @@ def warm_docs(
             docs,
             skipped,
             _emb_cached,
+            sections,
         )
     if cold and not budget_exhausted:
         workers = _warm_worker_count(len(cold), embeddings)
@@ -841,6 +959,7 @@ def warm_docs(
                 docs,
                 skipped,
                 _emb_cached,
+                sections,
             )
         else:
             more_unproc, budget_exhausted, more_warmed = _warm_concurrent(
@@ -856,6 +975,7 @@ def warm_docs(
                 docs,
                 skipped,
                 _emb_cached,
+                sections,
             )
         unprocessed += more_unproc
         warmed += more_warmed

@@ -179,3 +179,41 @@ outside any MCP client, so neither ceiling applies, and it warms a whole
 folder to completion in one run — see the CLI's own docstring and
 `docs/configuration.md`.
 
+## Section-granularity search: a second, real gap in "the prewarm never finishes"
+
+Found after the above shipped, from direct use: prewarming text and
+embeddings still left `pdf_search(granularity="section")` timing out on
+the first section-mode query per document, because section detection
+(`section_detector.derive_sections`, TOC-first / heuristic fallback) was
+never part of any warm path — only built lazily by
+`server.py`'s `_pdf_search_section_mode`, regardless of how warm the rest
+of the cache was.
+
+**Cost, measured directly** (`section_detector.derive_sections` over the
+24-doc / 465-page synthetic corpus, no TOC on any doc so every doc hits
+the heavier heuristic-fallback path — the same corpus as the text-warm
+table above):
+
+| | total | per page |
+|---|------:|---------:|
+| `derive_sections` (heuristic fallback) | 14.82s | 31.87ms |
+
+About 8x the cost of plain text extraction (~4ms/page,
+`docs/investigated-rejected.md`). Real, but the same shape of problem as
+text extraction: pure per-doc CPU work, no shared state, no injected
+closure — so it parallelizes the same way in the same worker pool
+(`extractor._warm_extract_worker`'s new `want_sections` flag), with none
+of the spawn-picklability problems that ruled out worker-side embedding
+above. Confirmed directly: warming a 10-doc / ~150-page corpus with
+`--no-embeddings` and sections on by default completed in 3s, alongside
+text extraction in the same worker call, not as a separate serial pass.
+
+**Decision:** `corpus.warm_docs(..., sections=True)` builds the section
+index in the same worker that already extracts text (`_warm_concurrent`)
+or the same sequential pass (`_warm_sequential`/`_warm_one_doc`), plus a
+`backfill_sections` pass (mirroring the existing `backfill_doc_profiles`
+pattern) for documents that were already fully cached before `sections`
+was first requested. Off by default on `pdf_corpus_warm` (the MCP tool,
+budget-constrained, matching `embeddings`'s existing default) but **on**
+by default on `pdf-mcp-warm` (the CLI, no budget to protect, and the
+whole point is warming everything a later query might need).

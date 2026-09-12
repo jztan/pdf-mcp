@@ -651,6 +651,13 @@ hits measurably lowers result quality.
 > tool attaches a `cjk_keyword_warning` advisory and steers you to
 > `mode='semantic'` (`pip install 'pdf-mcp[cjk]'`).
 
+> **German queries:** the default keyword index uses an English (porter)
+> stemmer, so it does not unify German inflection (`kündigen`/`Kündigung`) or
+> the ASCII-transliteration spelling of umlauts/ß (`Kuendigung`/`Kundigung`,
+> `Strasse`/`Straße`). Set `[fts] language = "de"` in `config.toml` to turn on
+> a German-stemmed mirror index instead — see
+> [docs/configuration.md](configuration.md).
+
 - `max_results` (int, optional, default `10`) — Maximum number of matches. Clamped to `[1, 100]`.
 - `context_chars` (int, optional, default `200`) — Characters of context around each match. Clamped to `[10, 2000]`.
 - `granularity` (string, optional, default `"page"`):

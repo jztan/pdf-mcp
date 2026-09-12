@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Turn it off in the extension settings, with `PDF_MCP_UPDATE_CHECK=0`, or
   with `[updates] check = false`. pip and uvx installs never check.
 
+- **German-aware keyword search (opt-in).** `[fts] language = "de"` in
+  `config.toml` turns on a German-stemmed mirror index for keyword and hybrid
+  search, so a query like `kündigen` now also finds pages using `Kündigung`
+  or the common ASCII-transliteration spellings (`Kuendigung`, `Strasse` for
+  `Straße`) — none of which the default English/porter index could match.
+  Off by default; see [docs/configuration.md](docs/configuration.md).
+
 ### Fixed
 
 - **OCR finds Tesseract installed outside `PATH`.** The Windows

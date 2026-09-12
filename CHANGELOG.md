@@ -34,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `embeddings`) builds it during warm instead, in the same parallel
   worker pool that already extracts text — including backfilling it for
   documents that were already fully cached before this flag was first
-  requested. See
+  requested. That backfill is itself budgeted: a doc the deadline cuts
+  off joins `unprocessed` (`warm_complete: false`) instead of running
+  past `budget_seconds`, and finishes on a later call. See
   [docs/tool-reference.md](docs/tool-reference.md#pdf_corpus_warm) and
   [benchmark_data/warm_parallelism_strix.md](benchmark_data/warm_parallelism_strix.md).
 

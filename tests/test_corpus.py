@@ -939,6 +939,97 @@ class TestSectionWarm:
         assert cache.get_pages_text(sample_pdf_with_toc_sections, [0])[0]
 
 
+class TestSectionBackfillBudget:
+    """backfill_sections respects a deadline instead of running the whole
+    already-cached corpus unconditionally: a 24-doc corpus at ~2s/doc for
+    derive_sections on a real 10-K could otherwise add ~50s a caller's
+    budget_seconds never accounts for."""
+
+    def test_deadline_already_passed_defers_everything(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        written, deferred = corpus.backfill_sections(
+            [sample_pdf_with_toc_sections],
+            cache,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )
+        assert written == 0
+        assert deferred == [sample_pdf_with_toc_sections]
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+    def test_default_deadline_is_unbounded(self, sample_pdf_with_toc_sections, cache):
+        written, deferred = corpus.backfill_sections(
+            [sample_pdf_with_toc_sections], cache
+        )
+        assert written == 1
+        assert deferred == []
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+    def test_mid_run_expiry_defers_the_remainder(self, corpus_dir, cache):
+        files = corpus.resolve_corpus(str(corpus_dir))["files"]
+        assert len(files) == 3
+        # Fires past the deadline starting with the second doc checked.
+        clock = SteppingClock(1)
+        written, deferred = corpus.backfill_sections(
+            files, cache, deadline=0.5, clock=clock
+        )
+        assert written == 1
+        assert deferred == files[1:]
+
+    def test_warm_docs_defers_cached_backfill_past_budget(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        # First call: text only, no sections -- doc lands in cache
+        # uncounted against any section budget.
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections], 60, cache, clock=SteppingClock(0)
+        )
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+        # Second call: doc is fully cached (status="cached"), sections=True,
+        # but the clock reports past budget_seconds before the backfill can
+        # even start its first doc.
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            0,
+            cache,
+            sections=True,
+            clock=SteppingClock(1),
+        )
+        assert out["warm_complete"] is False
+        assert out["budget_exhausted"] is True
+        assert sample_pdf_with_toc_sections in out["unprocessed"]
+        assert out["docs"][0]["status"] == "cached"
+        # Never actually ran -- no index was written.
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 0
+
+    def test_warm_docs_converges_on_a_later_call(
+        self, sample_pdf_with_toc_sections, cache
+    ):
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections], 60, cache, clock=SteppingClock(0)
+        )
+        corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            0,
+            cache,
+            sections=True,
+            clock=SteppingClock(1),
+        )
+        # A generous-budget re-call finishes what the exhausted one deferred.
+        out = corpus.warm_docs(
+            [sample_pdf_with_toc_sections],
+            60,
+            cache,
+            sections=True,
+            clock=SteppingClock(0),
+        )
+        assert out["warm_complete"] is True
+        assert out["unprocessed"] == []
+        assert cache.get_section_fts_coverage(sample_pdf_with_toc_sections) == 5
+
+
 class TestWarmDocs:
     def test_warms_all_within_budget(self, corpus_dir, cache):
         out = corpus.warm_docs(_files(corpus_dir), 60, cache, clock=SteppingClock(0))

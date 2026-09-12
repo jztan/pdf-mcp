@@ -322,7 +322,12 @@ def backfill_doc_profiles(
     return len(built)
 
 
-def backfill_sections(paths: list[str], cache: Any) -> int:
+def backfill_sections(
+    paths: list[str],
+    cache: Any,
+    deadline: float = float("inf"),
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[int, list[str]]:
     """Index sections for docs that lack a section index yet.
 
     Covers a corpus warmed before ``sections=True`` was requested (or
@@ -332,7 +337,19 @@ def backfill_sections(paths: list[str], cache: Any) -> int:
     rest of the cache was, which is the gap this closes. Reads only the
     PDF itself via ``derive_sections`` (no cache text dependency, no
     embed callback); a doc whose detection raises is logged and skipped
-    so the rest still land. Returns how many docs were (re-)indexed.
+    so the rest still land. Returns ``(written, deferred)``: how many
+    docs were (re-)indexed, and which of ``paths`` were never attempted
+    because ``deadline`` passed first.
+
+    ``derive_sections`` costs real time -- ~20ms/page measured on a real
+    10-K filing (benchmark_data/warm_parallelism_strix.md) -- so a large
+    already-cached corpus can add tens of seconds here alone. The clock
+    is checked before each doc (same shape as ``_warm_sequential``); once
+    ``deadline`` passes, every remaining path is returned in ``deferred``
+    untouched, for the caller to fold into ``unprocessed`` so
+    ``warm_complete`` reports honestly instead of silently overrunning
+    the budget. With the default ``deadline=inf`` (the CLI's case, which
+    has no budget to protect) nothing is ever deferred.
 
     Like ``get_section_fts_coverage`` everywhere else in this codebase,
     coverage 0 cannot distinguish "never indexed" from "indexed, no
@@ -352,7 +369,9 @@ def backfill_sections(paths: list[str], cache: Any) -> int:
     from .section_detector import derive_sections
 
     written = 0
-    for path in paths:
+    for i, path in enumerate(paths):
+        if clock() > deadline:
+            return written, paths[i:]
         if cache.get_section_fts_coverage(path) != 0:
             continue
         try:
@@ -362,7 +381,7 @@ def backfill_sections(paths: list[str], cache: Any) -> int:
             continue
         cache.index_sections(path, sections)
         written += 1
-    return written
+    return written, []
 
 
 def _embed_doc_batched(
@@ -547,8 +566,8 @@ def _warm_one_doc(
     Extraction completes fully before any write, so a failure leaves
     the cache untouched.
     """
-    page_count, metadata, toc, texts, coverage, layout, sections = (
-        _warm_extract_worker(path, want_sections)
+    page_count, metadata, toc, texts, coverage, layout, sections = _warm_extract_worker(
+        path, want_sections
     )
     return _finalize_doc(
         path,
@@ -835,8 +854,15 @@ def warm_docs(
     cost (~32ms/page for a heuristic-fallback doc with no TOC, measured
     in benchmark_data/warm_parallelism_strix.md) on top of text
     extraction, which a budget-constrained caller may not want to spend.
+    Unlike the newly-extracted case (charged against the budget like the
+    rest of that doc's warm), backfilling an already-cached doc's section
+    index has no other budgeted work to piggyback on -- so it is checked
+    against ``budget_seconds`` on its own (see ``backfill_sections``); a
+    doc the deadline cuts off there joins ``unprocessed`` rather than
+    running unbounded.
 
-    Cached docs are free (never charged against the budget). Uncached
+    Cached docs' text/embeddings are free (never charged against the
+    budget). Uncached
     docs warm smallest-first, atomically per doc; the clock is
     checked between docs (sequential) or before each submission
     (concurrent). When the budget expires mid-pool, extractions already
@@ -901,17 +927,32 @@ def warm_docs(
         except Exception as exc:  # noqa: BLE001
             logger.warning("doc profile backfill failed: %s", exc)
 
+    warmed = 0
+    unprocessed: list[str] = []
+    budget_exhausted = False
+
     # Same idea for the section index: a doc already fully cached (from a
     # prior call, or from this call's own embeddings-only pass above) may
     # still lack it if this is the first call to request sections=True for
-    # it. Also cheap relative to extraction/embedding and never charged
-    # against the budget.
+    # it. Cheap per doc relative to extraction/embedding, but real in
+    # aggregate on a large already-cached corpus (~20ms/page measured,
+    # benchmark_data/warm_parallelism_strix.md) -- so unlike the profile
+    # backfill above, this one respects the budget: a doc the deadline
+    # cuts off joins `unprocessed` instead of running unbounded, so
+    # `warm_complete` stays honest and the next call picks up where this
+    # one stopped.
     if sections:
         cached_paths = [d["path"] for d in docs if d["status"] == "cached"]
         try:
-            backfill_sections(cached_paths, cache)
+            _written, deferred = backfill_sections(
+                cached_paths, cache, deadline=start + budget_seconds, clock=clock
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning("section backfill failed: %s", exc)
+        else:
+            if deferred:
+                unprocessed += deferred
+                budget_exhausted = True
 
     uncached.sort(key=lambda item: item[1])
     resume = [
@@ -923,10 +964,7 @@ def warm_docs(
     ]
     cold = [item for item in uncached if item not in resume]
 
-    warmed = 0
-    unprocessed: list[str] = []
-    budget_exhausted = False
-    if resume:
+    if resume and not budget_exhausted:
         # Resume docs first: they need no extraction, so they never go
         # to the pool, and finishing an interrupted giant is the
         # natural convergence order.
@@ -944,6 +982,8 @@ def warm_docs(
             _emb_cached,
             sections,
         )
+    elif resume:
+        unprocessed += [p for p, _ in resume]
     if cold and not budget_exhausted:
         workers = _warm_worker_count(len(cold), embeddings)
         if workers <= 1:

@@ -5,11 +5,11 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Project Status
 
-- **Current version:** v3.2.0 (released 2026-09-12). Next cut: develop already carries optional CUDA embedding ([#39](https://github.com/jztan/pdf-mcp/pull/39)), page-batched `pdf_corpus_warm` embedding commits, faster semantic paragraph/window excerpts, and semantic snippet anchoring in every mode; see [`CHANGELOG.md`](../CHANGELOG.md) `[Unreleased]`.
-- **MCP Registry:** published (v3.1.0)
+- **Current version:** v3.2.0 (released 2026-09-12): optional CUDA embedding ([#39](https://github.com/jztan/pdf-mcp/pull/39)), faster and leaner CPU embedding, page-batched `pdf_corpus_warm` embedding commits, and semantic snippet excerpts anchored on the matching passage in every mode. Nothing on develop is unreleased.
+- **MCP Registry:** published (v3.2.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release
-- **Tests:** 1967, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
+- **Tests:** 2031, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
 
 ---
 
@@ -42,6 +42,8 @@ _Nothing queued._
 
 ### P1: high-value, well-scoped
 
+- [ ] **Within-document page ranking on deep-page paraphrase queries**: the right document, the wrong page (gold page ranks median 6 inside its own document on the 184-query set); this is the whole `described` gap
+- [ ] **Portable Tesseract for zero-install OCR**, so the one-click bundle covers scanned pages without an admin installer; gated on a static-build spike
 - [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985, 3 s/query); 1,000 waits on the 900-distractor rung. Open precondition: the cap error hint, tool descriptions and tool reference must say that a corpus of hundreds of files warms across several re-issued calls
 - [ ] **Teach keyword-mode query shape in the tool descriptions**, since AND-joined terms silently return nothing
 - [ ] **Calibrate the semantic confidence threshold**; 0.5 is a guess and gibberish scores 0.54
@@ -68,4 +70,4 @@ work.
 
 ---
 
-**Last Updated:** 2026-09-06 (status refresh after v3.1.0; page-batched warm commits shipped to develop)
+**Last Updated:** 2026-09-12 (status refresh after v3.2.0; deep-page ranking and portable Tesseract added from the backlog)

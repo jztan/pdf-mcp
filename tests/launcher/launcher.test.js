@@ -409,3 +409,28 @@ test('early: fail() turns the placeholders into the fallback responder', async (
   assert.match(out.find((m) => m.id === 5).result.content[0].text, /offline, reconnect/);
   assert.ok(out.find((m) => m.id === 6).result.tools.every((t) => t.description.startsWith('UNAVAILABLE:')));
 });
+
+test('uv is started outside the extension folder so an upgrade can replace it', () => {
+  // Measured on Windows: Claude Desktop replaces the extension folder in place
+  // while the server runs, and `uv run --directory <bundle>` made that folder
+  // the working directory of uv and python, so rmdir failed with EBUSY.
+  const { args, cwd } = L.uvRunCommand('/ext/pdf-mcp', '/home/u');
+  assert.ok(!args.includes('--directory'));
+  assert.deepStrictEqual(args.slice(0, 3), ['run', '--project', '/ext/pdf-mcp']);
+  assert.strictEqual(args[3], path.join('/ext/pdf-mcp', 'src', 'server.py'));
+  assert.strictEqual(cwd, '/home/u');
+});
+
+test('runServer passes its cwd to the child', async () => {
+  const dir = tmpdir();
+  const pwd = path.join(tmpdir(), 'pwd.js');
+  fs.writeFileSync(pwd, "process.stdout.write(process.cwd() + '\\n'); process.stdin.resume();");
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
+  const child = L.runServer(process.execPath, [pwd], { env: process.env, cwd: dir, stdin, stdout, stderr, onEarlyExit: () => {}, onExit: () => {} });
+  try {
+    const got = await new Promise((resolve) => stdout.once('data', (d) => resolve(String(d).trim())));
+    assert.strictEqual(fs.realpathSync(got), fs.realpathSync(dir));
+  } finally {
+    child.kill();
+  }
+});

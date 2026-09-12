@@ -188,6 +188,18 @@ function bundleEnv(env, home, version) {
   };
 }
 
+function uvRunCommand(bundleDir, home) {
+  // --project, not --directory: --directory makes the extension folder the
+  // working directory of uv and python, and Windows then refuses to let
+  // Claude Desktop replace that folder on upgrade (EBUSY, measured). The
+  // server runs from the user's home instead, which also gives any relative
+  // path a sensible base.
+  return {
+    args: ['run', '--project', bundleDir, path.join(bundleDir, 'src', 'server.py')],
+    cwd: home,
+  };
+}
+
 function pruneVenvs(root, keep, { rm = fs.rmSync, log = () => {} } = {}) {
   let entries;
   try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
@@ -364,8 +376,8 @@ function fallbackServe(message, { stdin, stdout, tools, version, prefill = '' })
   stdin.on('data', feed);
 }
 
-function runServer(cmd, args, { env, stdin, stdout, stderr, onEarlyExit, onExit = process.exit }) {
-  const child = spawn(cmd, args, { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+function runServer(cmd, args, { env, cwd, stdin, stdout, stderr, onEarlyExit, onExit = process.exit }) {
+  const child = spawn(cmd, args, { env, cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let started = false;
   let forwarded = '';
   let tail = '';
@@ -413,8 +425,10 @@ async function mainEarly(manifest, pins) {
   }
   const venv = venvDir(process.env, os.homedir(), manifest.version);
   pruneVenvs(path.dirname(venv), manifest.version, { log });
-  const child = spawn(uv, ['run', '--directory', BUNDLE_DIR, 'src/server.py'], {
+  const run = uvRunCommand(BUNDLE_DIR, os.homedir());
+  const child = spawn(uv, run.args, {
     env: bundleEnv(process.env, os.homedir(), manifest.version),
+    cwd: run.cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -457,8 +471,10 @@ async function main() {
   }
   const venv = venvDir(process.env, os.homedir(), manifest.version);
   pruneVenvs(path.dirname(venv), manifest.version, { log: (m) => process.stderr.write(`${m}\n`) });
-  runServer(uv, ['run', '--directory', BUNDLE_DIR, 'src/server.py'], {
+  const run = uvRunCommand(BUNDLE_DIR, os.homedir());
+  runServer(uv, run.args, {
     ...io,
+    cwd: run.cwd,
     env: bundleEnv(process.env, os.homedir(), manifest.version),
     onEarlyExit: (prefill, tail) => {
       process.stderr.write(`pdf-mcp launcher: server exited during setup:\n${tail}\n`);
@@ -469,7 +485,7 @@ async function main() {
 
 module.exports = {
   BUNDLE_DIR, SetupError, platformKey, cacheRoot, uvExeName, tarCommand,
-  download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main,
+  download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main, uvRunCommand,
   EARLY_INIT, SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION, negotiateVersion, earlyServe,
 };
 

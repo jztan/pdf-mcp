@@ -4,7 +4,7 @@
   "display_name": "PDF MCP",
   "version": "0.0.0",
   "description": "Read, search, and pull tables out of PDFs, one file or a whole folder, without hitting Claude's page limit.",
-  "long_description": "pdf-mcp gives Claude 13 tools for PDFs: page-level reads, hybrid keyword and semantic search, tables, table of contents, page renders, chart data, and search across a folder of PDFs. Everything runs on your computer. Scanned PDFs need Tesseract for OCR; see the OCR setup link in the documentation.",
+  "long_description": "pdf-mcp gives Claude 13 tools for PDFs: page-level reads, hybrid keyword and semantic search, tables, table of contents, page renders, chart data, and search across a folder of PDFs. Everything runs on your computer. Works in Claude Desktop's Chat. The first start downloads its components and needs an internet connection. Scanned PDFs need Tesseract for OCR; see the OCR setup link in the documentation.",
   "author": {
     "name": "Kevin Tan",
     "url": "https://github.com/jztan"
@@ -18,11 +18,11 @@
   "license": "MIT",
   "icon": "icon.png",
   "server": {
-    "type": "uv",
-    "entry_point": "src/server.py",
+    "type": "node",
+    "entry_point": "server/launcher.js",
     "mcp_config": {
-      "command": "uv",
-      "args": ["run", "--directory", "${__dirname}", "src/server.py"],
+      "command": "node",
+      "args": ["${__dirname}/server/launcher.js"],
       "env": {
         "PDF_MCP_UPDATE_CHECK": "${user_config.update_check}"
       }
@@ -56,7 +56,7 @@
   "compatibility": {
     "platforms": ["win32", "darwin", "linux"],
     "runtimes": {
-      "python": ">=3.10,<3.14"
+      "node": ">=16.0.0"
     }
   }
 }

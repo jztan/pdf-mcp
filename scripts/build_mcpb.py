@@ -1,7 +1,8 @@
 """Build the Claude Desktop bundle (.mcpb) for a pdf-mcp release.
 
-The bundle is a thin uv-type MCP Bundle: a manifest, a one-line shim and a
-pyproject that pins the released pdf-mcp wheel from PyPI. Output is
+The bundle is a node-type MCP Bundle: a manifest, a Node launcher that
+fetches a pinned uv, a one-line Python shim, and a pyproject that pins the
+released pdf-mcp wheel plus every dependency at the uv.lock versions. Output is
 byte-reproducible (sorted entries, fixed timestamps, fixed permissions), so
 the SHA-256 that release.py writes into server.json at version-bump time
 matches the file it uploads after PyPI confirms.
@@ -16,6 +17,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -23,6 +25,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "packaging" / "mcpb"
 _FIXED_DATE = (1980, 1, 1, 0, 0, 0)
+_EXPORT_CMD = [
+    "uv",
+    "export",
+    "--frozen",
+    "--no-dev",
+    "--no-hashes",
+    "--no-emit-project",
+    "--format",
+    "requirements-txt",
+]
 
 
 def project_version(root: Path = ROOT) -> str:
@@ -37,10 +49,29 @@ def bundle_filename(version: str) -> str:
     return f"pdf-mcp-{version}.mcpb"
 
 
-def render_files(version: str, wheel: Path | None = None) -> dict[str, bytes]:
+def export_pins(root: Path = ROOT, run=subprocess.run) -> list[str]:
+    """Every runtime dependency at the version uv.lock resolved (what CI
+    tested), with environment markers, so the bundle does not float to
+    whatever is newest on install day."""
+    result = run(_EXPORT_CMD, cwd=root, capture_output=True, text=True, check=True)
+    pins = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            pins.append(line)
+    return pins
+
+
+def render_files(
+    version: str, wheel: Path | None = None, pins: list[str] | None = None
+) -> dict[str, bytes]:
+    pins = export_pins() if pins is None else pins
     manifest = json.loads((TEMPLATE / "manifest.json").read_text(encoding="utf-8"))
     manifest["version"] = version
+    deps = [f"pdf-mcp=={version}", *pins]
+    dep_lines = ",\n".join(f"    {json.dumps(d)}" for d in deps)
     pyproject = (TEMPLATE / "pyproject.toml").read_text(encoding="utf-8")
+    pyproject = pyproject.replace("{dependencies}", dep_lines)
     pyproject = pyproject.replace("{version}", version)
     if wheel is not None:
         # Smoke tests only: install the locally built wheel instead of PyPI.
@@ -52,6 +83,8 @@ def render_files(version: str, wheel: Path | None = None) -> dict[str, bytes]:
         "manifest.json": (json.dumps(manifest, indent=2) + "\n").encode("utf-8"),
         "pyproject.toml": pyproject.encode("utf-8"),
         "src/server.py": (TEMPLATE / "src" / "server.py").read_bytes(),
+        "server/launcher.js": (TEMPLATE / "server" / "launcher.js").read_bytes(),
+        "server/uv-pins.json": (TEMPLATE / "server" / "uv-pins.json").read_bytes(),
         "icon.png": (TEMPLATE / "icon.png").read_bytes(),
         ".mcpbignore": (TEMPLATE / ".mcpbignore").read_bytes(),
     }
@@ -68,9 +101,14 @@ def write_bundle(files: dict[str, bytes], out_path: Path) -> str:
     return hashlib.sha256(out_path.read_bytes()).hexdigest()
 
 
-def build(version: str, out_dir: Path, wheel: Path | None = None) -> tuple[Path, str]:
+def build(
+    version: str,
+    out_dir: Path,
+    wheel: Path | None = None,
+    pins: list[str] | None = None,
+) -> tuple[Path, str]:
     out_path = out_dir / bundle_filename(version)
-    sha = write_bundle(render_files(version, wheel), out_path)
+    sha = write_bundle(render_files(version, wheel, pins), out_path)
     return out_path, sha
 
 

@@ -4,6 +4,7 @@ manifest's mcp_config) and check the MCP handshake.
     python scripts/smoke_mcpb.py path/to/unpacked --timeout 900
     python scripts/smoke_mcpb.py path/to/unpacked --expect-fallback \
         --extra-env PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/
+    python scripts/smoke_mcpb.py path/to/unpacked --ocr   # no system Tesseract
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -33,6 +35,43 @@ def launch_params(bundle_dir: Path, extra_env: dict[str, str]) -> StdioServerPar
     return StdioServerParameters(command=cfg["command"], args=args, env=env)
 
 
+_OCR_WORDS = "The quick brown fox reads a scanned page"
+_OCR_SETUP_SECONDS = 300.0
+
+
+def scanned_pdf(dest: Path) -> Path:
+    """A one-page PDF holding only a picture of text, so OCR must run."""
+    import pymupdf
+
+    src = pymupdf.open()
+    src.new_page().insert_text((72, 144), _OCR_WORDS, fontsize=24)
+    pix = src[0].get_pixmap(dpi=300)
+    out = pymupdf.open()
+    page = out.new_page(width=src[0].rect.width, height=src[0].rect.height)
+    page.insert_image(page.rect, pixmap=pix)
+    out.save(dest)
+    return dest
+
+
+async def _ocr(session: ClientSession, pdf: Path) -> tuple[float, dict, dict]:
+    """First OCR call on a machine with no Tesseract: retry through the
+    "setting up" reply until the portable copy is in place."""
+    start = time.monotonic()
+    while True:
+        result = await session.call_tool(
+            "pdf_read_pages", {"path": str(pdf), "pages": "1", "ocr": True}
+        )
+        body = json.loads(result.content[0].text)
+        if not str(body.get("error", "")).startswith("Setting up OCR"):
+            break
+        if time.monotonic() - start > _OCR_SETUP_SECONDS:
+            raise TimeoutError("OCR was still being set up")
+        await asyncio.sleep(5.0)
+    info = await session.call_tool("server_info", {})
+    ocr = json.loads(info.content[0].text)["features"]["extraction"]["ocr"]
+    return time.monotonic() - start, body, ocr
+
+
 _STARTING = "STARTING:"
 _UNAVAILABLE = "UNAVAILABLE:"
 
@@ -44,7 +83,10 @@ async def _timed(session: ClientSession, name: str, args: dict):
 
 
 async def _run(
-    params: StdioServerParameters, expect_fallback: bool, pdf: Path | None = None
+    params: StdioServerParameters,
+    expect_fallback: bool,
+    pdf: Path | None = None,
+    ocr_pdf: Path | None = None,
 ):
     started = time.monotonic()
     async with stdio_client(params) as (read, write):
@@ -71,7 +113,8 @@ async def _run(
                 first["search"] = await _timed(
                     session, "pdf_search", {"path": path, "query": "cloud security"}
                 )
-    return init_seconds, time.monotonic() - started, tools, call, first
+            ocr = await _ocr(session, ocr_pdf) if ocr_pdf is not None else None
+    return init_seconds, time.monotonic() - started, tools, call, first, ocr
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,13 +124,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expect-fallback", action="store_true")
     parser.add_argument("--extra-env", action="append", default=[])
     parser.add_argument("--pdf", type=Path, default=None)
+    parser.add_argument(
+        "--ocr",
+        action="store_true",
+        help="OCR a scanned page; expects no system Tesseract on the machine",
+    )
     args = parser.parse_args(argv)
     extra = dict(item.split("=", 1) for item in args.extra_env)
     manifest = json.loads((args.bundle_dir / "manifest.json").read_text("utf-8"))
     expected = sorted(t["name"] for t in manifest["tools"])
-    init_seconds, seconds, tools, call, first = asyncio.run(
+    ocr_pdf = None
+    if args.ocr:
+        ocr_pdf = scanned_pdf(Path(tempfile.mkdtemp()) / "scanned.pdf")
+    init_seconds, seconds, tools, call, first, ocr = asyncio.run(
         asyncio.wait_for(
-            _run(launch_params(args.bundle_dir, extra), args.expect_fallback, args.pdf),
+            _run(
+                launch_params(args.bundle_dir, extra),
+                args.expect_fallback,
+                args.pdf,
+                ocr_pdf,
+            ),
             args.timeout,
         )
     )
@@ -125,6 +181,16 @@ def main(argv: list[str] | None = None) -> int:
             if getattr(result, "isError", False):
                 print(f"{label} failed: {result.content}", file=sys.stderr)
                 return 1
+    if ocr is not None:
+        ocr_seconds, body, feature = ocr
+        text = " ".join(p.get("text", "") for p in body.get("pages", []))
+        print(f"first_ocr_seconds={ocr_seconds:.1f} ocr_source={feature['source']}")
+        if "quick brown fox" not in text.lower():
+            print(f"OCR did not read the page: {body}", file=sys.stderr)
+            return 1
+        if feature["source"] != "portable":
+            print("OCR did not use the downloaded Tesseract", file=sys.stderr)
+            return 1
     return 0
 
 

@@ -205,6 +205,12 @@ See [tool-reference.md](tool-reference.md) for what each tool does.
 Scanned PDFs (pages that are photos, with no selectable text) need
 Tesseract. Everything else works without it.
 
+With the Claude Desktop bundle on Windows or a Mac there is nothing to do:
+the first scanned page you ask about downloads an English-only Tesseract
+(about 14 MB) into pdf-mcp's cache folder. If that first call says OCR is
+being set up, ask again a minute later. To read other languages, or with a
+pip or uvx install, install Tesseract yourself:
+
 - **Windows:** download the 64-bit installer from the
   [UB Mannheim Tesseract page](https://github.com/UB-Mannheim/tesseract/wiki)
   and run it with the default folder. Or, in a terminal:

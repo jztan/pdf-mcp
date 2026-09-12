@@ -33,6 +33,7 @@ from . import __version__
 from . import chart_extractor
 from . import content_trust
 from . import corpus
+from . import portable_tesseract
 from . import updates
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
@@ -203,6 +204,9 @@ url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_con
 # dict-shaped tool result of this process; instructions carry it too for
 # clients that read them.
 _UPDATE_CHECK_ENABLED = updates.check_enabled(pdf_config.update_check)
+# Zero-install OCR (bundle installs, or [ocr] auto_install = true).
+portable_tesseract.configure(cache.cache_dir)
+_OCR_AUTO_INSTALL = portable_tesseract.enabled(pdf_config.ocr_auto_install)
 _BASE_INSTRUCTIONS: str = mcp.instructions or ""
 
 
@@ -915,16 +919,9 @@ def pdf_read_pages(
     handling a raised exception.
     """
     if ocr:
-        try:
-            check_tesseract_available()
-        except RuntimeError as exc:
-            return {
-                "error": str(exc),
-                "install_hint": (
-                    tesseract_install_hint()
-                    + "; or set TESSDATA_PREFIX env var to your tessdata directory"
-                ),
-            }
+        missing = _ocr_unavailable(ocr_lang)
+        if missing is not None:
+            return missing
 
     _res = _resolve_path(path)
     if _res[1] is not None:
@@ -4817,6 +4814,79 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
     return sorted(roots)
 
 
+def _ocr_unavailable(ocr_lang: str) -> dict[str, Any] | None:
+    """None when OCR can run; otherwise the inline error to return.
+
+    With auto-install on and no Tesseract installed, the first call fetches
+    the pinned portable Tesseract, waiting up to
+    portable_tesseract.WAIT_SECONDS before replying "setting up".
+    """
+    try:
+        check_tesseract_available()
+    except RuntimeError as exc:
+        missing: dict[str, Any] = {
+            "error": str(exc),
+            "install_hint": (
+                tesseract_install_hint()
+                + "; or set TESSDATA_PREFIX env var to your tessdata directory"
+            ),
+        }
+        if not _OCR_AUTO_INSTALL:
+            return missing
+        state, detail = portable_tesseract.ensure()
+        if state == "downloading":
+            return {
+                "error": (
+                    "Setting up OCR (a one-time download of about 14 MB). "
+                    "Try again in a minute."
+                ),
+                "hint": (
+                    "Meanwhile pdf_render_pages shows the page as an image you "
+                    "can read directly."
+                ),
+            }
+        if state != "ready":
+            logger.info("portable Tesseract unavailable: %s", detail)
+            return missing
+        from . import extractor as _extractor
+
+        # Re-resolve now that the portable copy exists.
+        _extractor._TESSERACT_EXE = None
+        _extractor._TESSDATA_PATH = None
+        try:
+            check_tesseract_available()
+        except RuntimeError:
+            return missing
+    if not _lang_available(ocr_lang):
+        return {
+            "error": (
+                f"The OCR language '{ocr_lang}' is not installed. The Tesseract "
+                "pdf-mcp set up includes English only; install Tesseract with "
+                "that language to read it."
+            ),
+            "install_hint": tesseract_install_hint(),
+        }
+    return None
+
+
+def _lang_available(ocr_lang: str) -> bool:
+    """True unless the Tesseract in use is pdf-mcp's portable, English-only
+    copy and a language it lacks was asked for."""
+    from . import extractor as _extractor
+
+    exe = find_tesseract()
+    if exe is None or exe != portable_tesseract.installed_binary():
+        return True
+    tessdata = _extractor._TESSDATA_PATH
+    if not tessdata:
+        return True
+    return all(
+        os.path.isfile(os.path.join(tessdata, f"{lang}.traineddata"))
+        for lang in ocr_lang.split("+")
+        if lang
+    )
+
+
 def _live_features() -> dict[str, Any]:
     """Startup feature probe with the OCR flag re-checked per call.
 
@@ -4825,8 +4895,21 @@ def _live_features() -> dict[str, Any]:
     must too.
     """
     features = copy.deepcopy(_SERVER_FEATURES)
-    features["extraction"]["ocr"]["available"] = find_tesseract() is not None
+    source = _ocr_source()
+    features["extraction"]["ocr"]["available"] = source != "none"
+    features["extraction"]["ocr"]["source"] = source
     return features
+
+
+def _ocr_source() -> str:
+    """system | portable | on_first_use (a bundle install that will fetch
+    the portable Tesseract on the first OCR call) | none."""
+    exe = find_tesseract()
+    if exe is not None:
+        return "portable" if exe == portable_tesseract.installed_binary() else "system"
+    if _OCR_AUTO_INSTALL and portable_tesseract.platform_key() is not None:
+        return "on_first_use"
+    return "none"
 
 
 @mcp.tool(
@@ -4860,7 +4943,10 @@ def server_info() -> dict[str, Any]:
     Returns:
         - version: pdf-mcp release version.
         - features: {
-            extraction: {column_aware, ocr} — each {available, description},
+            extraction: {column_aware, ocr} — each {available, description};
+                ocr also has source: "system", "portable", "on_first_use"
+                (a bundle install that downloads Tesseract on the first OCR
+                call) or "none",
             search: {modes_available, default_mode, embedding_model?}
                 (embedding_model present only when semantic search is
                  available),

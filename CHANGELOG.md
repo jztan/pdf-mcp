@@ -28,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Turn it off in the extension settings, with `PDF_MCP_UPDATE_CHECK=0`, or
   with `[updates] check = false`. pip and uvx installs never check.
 
+- **OCR with nothing to install (Claude Desktop bundle).** On Windows and
+  Macs, the first OCR call on a computer with no Tesseract downloads a
+  portable, English-only Tesseract (about 14 MB), checks it against a
+  SHA-256 shipped in pdf-mcp, and uses it. A Tesseract you installed
+  always wins. If the download takes longer than about 20 seconds, Claude
+  is told OCR is being set up and to try again shortly. `server_info`
+  reports where OCR comes from under `ocr.source`. Turn it off with
+  `[ocr] auto_install = false`; pip and uvx installs never download it
+  unless that is set to `true`.
+
 ### Fixed
 
 - **OCR finds Tesseract installed outside `PATH`.** The Windows

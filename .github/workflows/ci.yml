@@ -251,7 +251,7 @@ jobs:
         run: |
           $py = (uv run python -c "import sys; print(sys.executable)").Trim()
           $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_ 'uv.exe')) }) -join ';'
-          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-cold"
+          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --ocr --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-cold"
           & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --expect-fallback --timeout 120 --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-blocked" --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"
 
   # Claude Desktop cannot run in CI, so this proves the bundle's launcher
@@ -296,7 +296,7 @@ jobs:
         run: |
           py="$(uv run python -c 'import sys; print(sys.executable)')"
           cold="$RUNNER_TEMP/pdfmcp-cold"
-          "$py" scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --extra-env "PDF_MCP_CACHE_DIR=$cold"
+          "$py" scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --ocr --extra-env "PDF_MCP_CACHE_DIR=$cold"
           uv_bin="$(ls "$cold"/uv/*/uv)"
           echo "launcher's uv: $uv_bin"
           test -x "$uv_bin"

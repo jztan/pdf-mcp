@@ -31,14 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embeddings and the on-demand re-embed in `pdf_search` both benefit.
   The CUDA path is unchanged: a GPU wants the large batch.
 
-- **Semantic-mode `excerpt_style="paragraph"` and `"window"` searches are
-  faster.** `pdf_search` and `pdf_corpus_search` no longer compute the
-  anchored snippet span for every semantic-only hit when a paragraph or
-  window excerpt is going to replace it; the span is computed only where
-  those styles fall back to it (scanned or block-less pages, or no block
-  holding a query term). Excerpts are unchanged. Measured on the
-  pure-semantic benchmark: corpus paragraph 1.88 s to 1.37 s per query,
-  single-document paragraph 0.20 s to 0.05 s.
 - **`pdf_corpus_warm` embedding progress now commits in durable page
   batches.** A document too large to embed within one `budget_seconds`
   reports `status: "partial"` with `embedded_pages`, stays in
@@ -54,7 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returned the top of the page as the `excerpt_style="snippet"` excerpt,
   so a hit on a prefaced page showed boilerplate while the matching text
   sat further down. All three now anchor on the page's best-scoring
-  passage, as corpus hybrid mode already did.
+  passage, as corpus hybrid mode already did. The span costs an encode,
+  so semantic-mode `excerpt_style="paragraph"` and `"window"` searches
+  are slower than in 3.1.0: corpus semantic paragraph search measured
+  0.81 s to 1.37 s per query on the pure-semantic benchmark. The span is
+  computed only where those styles fall back to it (scanned or
+  block-less pages, or no block holding a query term).
 
 ### Contributors
 

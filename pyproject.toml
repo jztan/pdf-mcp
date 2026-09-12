@@ -72,6 +72,9 @@ dependencies = [
     # Pulled in transitively via fastmcp -> rich; floor to clear PYSEC-2026-2987.
     "pygments>=2.20.0",
     "httpx>=0.27.0",
+    # Version comparison for the bundle's update check. Already installed
+    # transitively; declared because pdf_mcp.updates imports it.
+    "packaging>=23.0",
     "tomli>=2.0; python_version < '3.11'",
     # Permissive PDF backend (src/pdf_mcp/backend/). These replace pymupdf,
     # which is dual-licensed AGPL-3.0 / Artifex Commercial and therefore

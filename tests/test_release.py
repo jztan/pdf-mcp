@@ -5,6 +5,7 @@ import inspect
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -268,3 +269,226 @@ def test_committed_readme_contributors_match_the_changelog():
         )
     )
     assert expected in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+
+# --- release-notes headline -------------------------------------------------
+#
+# The v3.1.0 title ("Honest search over scanned PDFs, smarter excerpts")
+# paraphrased the first changelog bullet because the prompt gave the
+# headline no brief and one draft offered one title. These pin the fix.
+
+
+def test_parse_titles_reads_three_candidates_and_strips_them_from_the_body():
+    output = (
+        "TITLE 1: Sharper corpus search\n"
+        "TITLE 2: Honest results on scanned PDFs\n"
+        "TITLE 3: Smarter excerpts\n"
+        "## Highlights\n\nbody\n"
+    )
+    titles, body = release._parse_titles(output, "v3.1.0")
+    assert titles == [
+        "v3.1.0: Sharper corpus search",
+        "v3.1.0: Honest results on scanned PDFs",
+        "v3.1.0: Smarter excerpts",
+    ]
+    assert body == "## Highlights\n\nbody"
+
+
+def test_parse_titles_accepts_the_old_single_title_line():
+    titles, body = release._parse_titles("TITLE: One headline\nbody", "v1.0.0")
+    assert titles == ["v1.0.0: One headline"]
+    assert body == "body"
+
+
+def test_parse_titles_falls_back_to_the_bare_tag():
+    titles, body = release._parse_titles("## Highlights\nbody", "v1.0.0")
+    assert titles == ["v1.0.0"]
+    assert body == "## Highlights\nbody"
+
+
+def test_titles_never_carry_an_em_dash():
+    # The gh publish hook rejects em dashes; the old contract hardcoded one.
+    assert "—" not in release.RELEASE_NOTES_PROMPT
+    titles, _ = release._parse_titles("TITLE 1: v9 — dashed\nbody", "v9.0.0")
+    assert "—" not in titles[0]
+
+
+def test_prompt_briefs_the_headline_and_asks_for_three():
+    prompt = release.RELEASE_NOTES_PROMPT
+    assert "TITLE 1:" in prompt and "TITLE 3:" in prompt
+    # The brief: weight by size of change, name the surface, plain words.
+    assert "largest" in prompt
+    assert "corpus" in prompt or "surface" in prompt
+
+
+def test_split_headline_hint_reads_and_strips_the_comment():
+    section = "<!-- headline: corpus search vs Bedrock -->\n" "### Added\n- **thing**\n"
+    hint, rest = release.split_headline_hint(section)
+    assert hint == "corpus search vs Bedrock"
+    assert rest == "### Added\n- **thing**"
+    assert release.split_headline_hint(rest) == (None, rest)
+
+
+def test_update_changelog_strips_the_headline_hint(tmp_path):
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n"
+        "<!-- headline: sharper corpus search -->\n"
+        "### Added\n- **thing**\n\n## [1.0.0] - 2026-01-01\n- old\n",
+        encoding="utf-8",
+    )
+    release.update_changelog(tmp_path, "1.1.0", dry_run=False)
+    text = changelog.read_text(encoding="utf-8")
+    assert "headline:" not in text
+    assert "## [1.1.0] - " in text
+    assert "- **thing**" in text
+
+
+def test_generate_release_notes_passes_context_flags_and_hint():
+    seen: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        seen["input"] = kwargs["input"]
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="TITLE 1: a\nTITLE 2: b\nTITLE 3: c\nbody", stderr=""
+        )
+
+    with patch.object(release.subprocess, "run", fake_run):
+        titles, body = release.generate_release_notes(
+            "1.2.0", "### Added\n- x", headline_hint="lead with corpus"
+        )
+    assert titles == ["v1.2.0: a", "v1.2.0: b", "v1.2.0: c"]
+    assert body == "body"
+    for flag in release.NOTES_CONTEXT_FLAGS:
+        assert flag in seen["cmd"]
+    assert "lead with corpus" in seen["input"]
+
+
+def test_notes_context_flags_match_the_judge_flags():
+    # Same lesson, same flags: every `claude -p` here reloads both CLAUDE.md
+    # files and every MCP schema unless told not to.
+    from scripts.eval_financial_answerability import JUDGE_CONTEXT_FLAGS
+
+    assert release.NOTES_CONTEXT_FLAGS == JUDGE_CONTEXT_FLAGS
+
+
+def test_recovery_instructions_say_rerun_only_helps_when_flaky(tmp_path, capsys):
+    release.print_recovery_instructions("1.2.0", "release/v1.2.0", tmp_path)
+    out = capsys.readouterr().out
+    assert "—" not in out
+    assert "flaky" in out
+    assert "git push origin :refs/tags/v1.2.0" in out
+
+
+def test_prompt_forbids_victory_claims_in_headlines():
+    # The context flags drop CLAUDE.md, so the benchmark-wording rule has
+    # to live in the prompt: a hinted draft once offered "ahead of Bedrock".
+    prompt = release.RELEASE_NOTES_PROMPT
+    assert "measured against" in prompt
+    assert '"ahead of"' in prompt
+
+
+# The notes used to be editable only through $EDITOR mid-release (vi when
+# unset), and --dry-run printed its draft without saving it. These pin the
+# draft-then-release flow: the dry run saves a draft, the maintainer edits it
+# in any app, and the real run publishes that file instead of regenerating.
+
+UNRELEASED = (
+    "# Changelog\n\n## [Unreleased]\n"
+    "<!-- headline: corpus search -->\n"
+    "### Added\n- **thing**\n\n"
+    "### Contributors\n- @alice — reported it ([#1](https://x/1))\n\n"
+    "## [1.0.0] - 2026-01-01\n- old\n"
+)
+SECTION = "### Added\n- **thing**\n\n### Contributors\n- @alice — reported it"
+
+
+def _fake_claude(calls):
+    def fake_run(cmd, **kwargs):
+        calls.append(kwargs["input"])
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout="TITLE 1: One\nTITLE 2: Two\nTITLE 3: Three\n"
+            "## Highlights\n\nThanks @alice.",
+            stderr="",
+        )
+
+    return fake_run
+
+
+def _config(tmp_path):
+    (tmp_path / "CHANGELOG.md").write_text(UNRELEASED, encoding="utf-8")
+    return release.ReleaseConfig("minor", dry_run=True, project_root=tmp_path)
+
+
+def test_dry_run_saves_the_draft_with_every_title_candidate(tmp_path):
+    config = _config(tmp_path)
+    path = release.notes_file_path(tmp_path, "1.1.0")
+    calls: list = []
+    with patch.object(release.subprocess, "run", _fake_claude(calls)):
+        release.preview_release_notes(config, "1.1.0", path)
+
+    text = path.read_text(encoding="utf-8")
+    assert "v1.1.0: Two" in text and "v1.1.0: Three" in text
+    assert "corpus search" in calls[0]  # the headline hint still steers it
+    title, body = release.read_notes_file(path)
+    assert title == "v1.1.0: One"
+    # The alternates are a drafting aid; they never reach the published body.
+    assert "v1.1.0: Two" not in body
+    assert body.startswith("## Highlights")
+    assert "pip install pdf-mcp==1.1.0" in body
+
+
+def test_dry_run_never_overwrites_an_existing_draft(tmp_path):
+    config = _config(tmp_path)
+    path = release.notes_file_path(tmp_path, "1.1.0")
+    release.write_notes_file(path, "v1.1.0: Mine", "hand edited")
+    calls: list = []
+    with patch.object(release.subprocess, "run", _fake_claude(calls)):
+        release.preview_release_notes(config, "1.1.0", path)
+    assert calls == []
+    assert release.read_notes_file(path) == ("v1.1.0: Mine", "hand edited")
+
+
+def test_an_edited_title_line_is_the_one_published(tmp_path):
+    path = tmp_path / "notes.md"
+    release.write_notes_file(
+        path, "v1.1.0: One", "body @alice", alternates=["v1.1.0: Two"]
+    )
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace("title: v1.1.0: One", "title: v1.1.0: Two"))
+    assert release.load_approved_notes(path, "1.1.0", SECTION) == (
+        "v1.1.0: Two",
+        "body @alice",
+    )
+
+
+def test_approved_notes_must_name_the_version_being_cut(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.0.9: Old draft", "body @alice")
+    with pytest.raises(release.NotesFileError, match="v1.1.0"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+
+
+def test_approved_notes_must_keep_every_contributor(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.1.0: Fine", "no credits here")
+    with pytest.raises(release.NotesFileError, match="@alice"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+
+
+def test_approved_notes_reject_empty_or_missing_files(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.1.0: Fine", "")
+    with pytest.raises(release.NotesFileError, match="empty"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+    with pytest.raises(release.NotesFileError, match="not found"):
+        release.load_approved_notes(tmp_path / "missing.md", "1.1.0", SECTION)

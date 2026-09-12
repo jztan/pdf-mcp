@@ -5853,6 +5853,25 @@ class TestCorpusSnippetSemanticAnchoring:
         assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
         assert "administrative preface" not in top["excerpt"].lower()
 
+    def test_semantic_mode_snippet_anchors_on_best_chunk(
+        self, deep_answer_corpus, isolated_server, monkeypatch
+    ):
+        # Pure semantic mode had the same page-top excerpt as the hybrid
+        # path before F1; it must anchor the same way.
+        self._zonkey_embedder(monkeypatch)
+        result = pdf_corpus_search(
+            str(deep_answer_corpus),
+            "quagga",
+            mode="semantic",
+            excerpt_style="snippet",
+        )
+        assert "error" not in result, result
+        assert result["search_mode"] == "semantic", result
+        assert result["matches"], result
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+
     def test_term_outside_best_chunk_widens_to_page(
         self, tmp_path, isolated_server, monkeypatch
     ):
@@ -5923,6 +5942,141 @@ class TestCorpusSnippetSemanticAnchoring:
         kw_hits = [m for m in result["matches"] if m["path"].endswith("target.pdf")]
         assert kw_hits, "keyword-matched doc should be in matches"
         assert all("zonkey" in m["excerpt"].lower() for m in kw_hits)
+
+
+class TestSingleDocSnippetSemanticAnchoring:
+    """Parity with the corpus hybrid F1 fix: single-doc pdf_search returned
+    text[:context_chars] (the page top) for every semantic hit in
+    mode='semantic', and for semantic-only hits in mode='auto'. Every
+    semantic-only snippet now goes through _semantic_snippet_excerpt."""
+
+    @pytest.fixture
+    def deep_answer_pdf(self, tmp_path):
+        """One page: a long administrative preface, then the 'zonkey'
+        content, far enough down that the page splits into several
+        embedding chunks."""
+        filler = (
+            "Routine administrative preface text about formatting, "
+            "circulation lists, and archival numbering. " * 30
+        )
+        answer = (
+            "The zonkey enclosure was rebuilt with reinforced fencing after "
+            "the spring flood, and zonkey feeding schedules moved to dawn. "
+            "Zonkey welfare reports are filed monthly. " * 5
+        )
+        path = tmp_path / "target.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_textbox(pymupdf.Rect(40, 40, 560, 800), (filler + answer)[:4000])
+        doc.save(str(path))
+        doc.close()
+        return str(path)
+
+    @staticmethod
+    def _zonkey_embedder(monkeypatch):
+        import numpy as np
+        import pdf_mcp.embedder as emb
+
+        def fake_check(model):
+            return None
+
+        def fake_encode(texts, model):
+            out = []
+            for t in texts:
+                v = np.zeros(4, dtype=np.float32)
+                v[0] = 1.0 + t.lower().count("zonkey")
+                v[1] = 1.0
+                out.append(v / np.linalg.norm(v))
+            return out
+
+        def fake_encode_query(text, model):
+            v = np.array([1.0, 0.05, 0.0, 0.0], dtype=np.float32)
+            return v / np.linalg.norm(v)
+
+        monkeypatch.setattr(emb, "check_available", fake_check)
+        monkeypatch.setattr(emb, "encode", fake_encode)
+        monkeypatch.setattr(emb, "encode_query", fake_encode_query)
+
+    def test_semantic_mode_snippet_anchors_on_best_chunk(
+        self, deep_answer_pdf, isolated_server, monkeypatch
+    ):
+        self._zonkey_embedder(monkeypatch)
+        result = pdf_search(
+            deep_answer_pdf, "quagga", mode="semantic", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        assert result["matches"], "semantic mode should return the page"
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+
+    def test_semantic_mode_paragraph_keeps_anchored_span_on_blockless_page(
+        self, tmp_path, isolated_server, monkeypatch
+    ):
+        """Why there is no encode gate on excerpt_style: on a page with no
+        text blocks (image-only page whose text came from OCR) the
+        paragraph upgrade has nothing to pick and keeps the incoming
+        excerpt, so that excerpt must already be the anchored span."""
+        self._zonkey_embedder(monkeypatch)
+        cache, _ = isolated_server
+        path = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 200, 200), False)
+        pix.clear_with(255)
+        page.insert_image(pymupdf.Rect(40, 40, 240, 240), pixmap=pix)
+        doc.save(str(path))
+        doc.close()
+        filler = (
+            "Routine administrative preface text about formatting, "
+            "circulation lists, and archival numbering. " * 30
+        )
+        answer = (
+            "The zonkey enclosure was rebuilt with reinforced fencing after "
+            "the spring flood, and zonkey feeding schedules moved to dawn. "
+            "Zonkey welfare reports are filed monthly. " * 5
+        )
+        cache.save_page_text(str(path), 0, filler + answer, source="ocr")
+        result = pdf_search(
+            str(path), "quagga", mode="semantic", excerpt_style="paragraph"
+        )
+        assert "error" not in result, result
+        assert result["matches"], result
+        top = result["matches"][0]
+        assert top["source"] == "ocr"
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+
+    def test_auto_mode_semantic_only_snippet_anchors_on_best_chunk(
+        self, deep_answer_pdf, isolated_server, monkeypatch
+    ):
+        # 'quagga' appears nowhere: the keyword arm finds nothing, the
+        # hit is purely semantic, and the excerpt must come from the
+        # zonkey chunk rather than the administrative page top.
+        self._zonkey_embedder(monkeypatch)
+        result = pdf_search(
+            deep_answer_pdf, "quagga", mode="auto", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        assert result["search_mode"] == "hybrid", result
+        assert result["matches"], result
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+
+    def test_auto_mode_keyword_hit_keeps_fts_excerpt(
+        self, deep_answer_pdf, isolated_server, monkeypatch
+    ):
+        # A page with a keyword hit keeps the FTS excerpt: the helper is
+        # only for pages the keyword arm did not reach.
+        self._zonkey_embedder(monkeypatch)
+        result = pdf_search(
+            deep_answer_pdf, "archival", mode="auto", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        assert result["matches"], result
+        top = result["matches"][0]
+        assert "archival" in top["excerpt"].lower(), top["excerpt"]
 
 
 class TestBestSpanLexicalBackoff:
@@ -6259,3 +6413,205 @@ class TestScannedDocSignals:
             pdf_search(sample_pdf_mixed, "text", mode="keyword")["text_coverage"]
             == "partial"
         )
+
+
+class TestLazySemanticSpan:
+    """Paragraph and window styles compute the anchored semantic span
+    only when they fall back to the incoming excerpt (blockless page),
+    never up front for every semantic-only hit: the span search encodes
+    candidate windows and doubled pure-semantic paragraph latency."""
+
+    @pytest.fixture
+    def text_pdf(self, tmp_path):
+        filler = (
+            "Routine administrative preface text about formatting, "
+            "circulation lists, and archival numbering. " * 30
+        )
+        answer = (
+            "The zonkey enclosure was rebuilt with reinforced fencing after "
+            "the spring flood, and zonkey feeding schedules moved to dawn. "
+            "Zonkey welfare reports are filed monthly. " * 5
+        )
+        d = tmp_path / "corpus"
+        d.mkdir()
+        other = "Nothing notable happened this quarter. " * 20
+        # Several blocks per page, each under the paragraph cap, so the
+        # paragraph picker has something to choose; the page as a whole
+        # is long enough to split into several embedding chunks.
+        for name, tail in [("target.pdf", answer), ("other.pdf", other)]:
+            doc = pymupdf.open()
+            page = doc.new_page()
+            y = 40
+            for third in range(3):
+                piece = filler[third * 1000 : (third + 1) * 1000]
+                page.insert_textbox(pymupdf.Rect(40, y, 560, y + 170), piece)
+                y += 185
+            page.insert_textbox(pymupdf.Rect(40, y, 560, y + 200), tail)
+            doc.save(str(d / name))
+            doc.close()
+        return d
+
+    @pytest.fixture
+    def scan_pdf(self, tmp_path, isolated_server):
+        cache, _ = isolated_server
+        path = tmp_path / "scan.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 200, 200), False)
+        pix.clear_with(255)
+        page.insert_image(pymupdf.Rect(40, 40, 240, 240), pixmap=pix)
+        doc.save(str(path))
+        doc.close()
+        filler = (
+            "Routine administrative preface text about formatting, "
+            "circulation lists, and archival numbering. " * 30
+        )
+        answer = (
+            "The zonkey enclosure was rebuilt with reinforced fencing after "
+            "the spring flood, and zonkey feeding schedules moved to dawn. "
+            "Zonkey welfare reports are filed monthly. " * 5
+        )
+        cache.save_page_text(str(path), 0, filler + answer, source="ocr")
+        return str(path)
+
+    @staticmethod
+    def _count_spans(monkeypatch):
+        TestSingleDocSnippetSemanticAnchoring._zonkey_embedder(monkeypatch)
+        real = server._semantic_snippet_excerpt
+        calls: list[int] = []
+
+        def counting(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(server, "_semantic_snippet_excerpt", counting)
+        return calls
+
+    @staticmethod
+    def _assert_clean(matches):
+        assert matches
+        for m in matches:
+            private = [k for k in m if k.startswith("_")]
+            assert not private, private
+            assert isinstance(m["excerpt"], str) and m["excerpt"], m
+
+    # Window anchors on the best embedding chunk, so it never needs the
+    # span on a page with text blocks, whatever the query. Paragraph picks
+    # by query-token overlap, so it only skips the span when a query
+    # token is on the page; in pure semantic mode that page is still a
+    # semantic-only hit (the keyword arm does not run).
+    @pytest.mark.parametrize(
+        "mode, style, query",
+        [
+            ("semantic", "window", "quagga"),
+            ("auto", "window", "quagga"),
+            ("semantic", "paragraph", "zonkey"),
+        ],
+    )
+    def test_single_doc_text_page_skips_span(
+        self, text_pdf, isolated_server, monkeypatch, mode, style, query
+    ):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_search(
+            str(text_pdf / "target.pdf"), query, mode=mode, excerpt_style=style
+        )
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        assert "zonkey" in result["matches"][0]["excerpt"].lower()
+        assert calls == [], f"span computed {len(calls)}x on a text page"
+
+    @pytest.mark.parametrize(
+        "mode, style, query",
+        [
+            ("semantic", "window", "quagga"),
+            ("auto", "window", "quagga"),
+            ("semantic", "paragraph", "zonkey"),
+        ],
+    )
+    def test_corpus_text_page_skips_span(
+        self, text_pdf, isolated_server, monkeypatch, mode, style, query
+    ):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_corpus_search(str(text_pdf), query, mode=mode, excerpt_style=style)
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        # Paragraph falls back (and computes the span) on hits whose page
+        # holds no query token: here that is other.pdf in semantic mode.
+        expected = (
+            sum(1 for m in result["matches"] if not m["path"].endswith("target.pdf"))
+            if style == "paragraph"
+            else 0
+        )
+        assert len(calls) == expected, f"span computed {len(calls)}x, want {expected}"
+
+    @pytest.mark.parametrize("mode", ["semantic", "auto"])
+    def test_paragraph_without_query_token_falls_back_to_span(
+        self, text_pdf, isolated_server, monkeypatch, mode
+    ):
+        # No block holds a query token, so the picker has nothing and the
+        # paragraph step keeps the incoming excerpt: the span is computed
+        # then, once per hit, and it is the anchored zonkey text rather
+        # than the page top.
+        calls = self._count_spans(monkeypatch)
+        result = pdf_search(
+            str(text_pdf / "target.pdf"),
+            "quagga",
+            mode=mode,
+            excerpt_style="paragraph",
+        )
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+        assert len(calls) == len(result["matches"]), calls
+
+    def test_single_doc_snippet_stays_eager(
+        self, text_pdf, isolated_server, monkeypatch
+    ):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_search(
+            str(text_pdf / "target.pdf"),
+            "quagga",
+            mode="semantic",
+            excerpt_style="snippet",
+        )
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        assert calls, "snippet path must compute the anchored span"
+
+    def test_corpus_snippet_stays_eager(self, text_pdf, isolated_server, monkeypatch):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_corpus_search(
+            str(text_pdf), "quagga", mode="semantic", excerpt_style="snippet"
+        )
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        assert calls, "snippet path must compute the anchored span"
+
+    @pytest.mark.parametrize("style", ["paragraph", "window"])
+    def test_blockless_page_resolves_span_on_fallback(
+        self, scan_pdf, isolated_server, monkeypatch, style
+    ):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_search(scan_pdf, "quagga", mode="semantic", excerpt_style=style)
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        top = result["matches"][0]
+        assert top["source"] == "ocr"
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert "administrative preface" not in top["excerpt"].lower()
+        assert len(calls) == 1, calls
+
+    def test_corpus_blockless_page_resolves_span_on_fallback(
+        self, scan_pdf, tmp_path, isolated_server, monkeypatch
+    ):
+        calls = self._count_spans(monkeypatch)
+        result = pdf_corpus_search(
+            [scan_pdf], "quagga", mode="semantic", excerpt_style="paragraph"
+        )
+        assert "error" not in result, result
+        self._assert_clean(result["matches"])
+        top = result["matches"][0]
+        assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
+        assert len(calls) == 1, calls

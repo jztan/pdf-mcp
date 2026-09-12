@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-09-12
+### Added
+
+- **Optional CUDA acceleration for embedding, off by default.** Set
+  `PDF_MCP_CUDA=1` with the CUDA build of onnxruntime installed and the
+  embedding pass runs on the GPU (one to two orders of magnitude faster on
+  an NVIDIA card; vectors match the CPU path). Set without a usable GPU,
+  the server warns with the provider it got and falls back to CPU rather
+  than running slower in silence. `PDF_MCP_CUDA=0` pins the CPU; unset
+  leaves fastembed's auto-detect in charge, which is the CPU on a plain
+  install. No dependency changes; setup per CUDA series and the measured
+  behaviour are in `docs/configuration.md`
+  ([#39](https://github.com/jztan/pdf-mcp/pull/39)).
+
+### Changed
+
+- **CPU embedding is faster and uses far less memory.** On a CPU session
+  the encoder now sorts each batch of texts by length and embeds them in
+  small sub-batches, so onnxruntime pads every sub-batch to a near
+  neighbour instead of the longest page in the group. Measured on an
+  M4 Pro over 778 real page units: 25.9 s to 18.9 s (1.37x), transient
+  encode memory 2.8 GB to 0.67 GB, vectors identical. Corpus warm with
+  embeddings and the on-demand re-embed in `pdf_search` both benefit.
+  The CUDA path is unchanged: a GPU wants the large batch.
+
+- **`pdf_corpus_warm` embedding progress now commits in durable page
+  batches.** A document too large to embed within one `budget_seconds`
+  reports `status: "partial"` with `embedded_pages`, stays in
+  `unprocessed`, and resumes from committed progress on the next call;
+  previously such a document lost all embedding work every call and could
+  never warm through a timeout-bounded MCP client.
+
+### Fixed
+
+- **Semantic snippet excerpts now open at the matching passage in every
+  mode.** `pdf_search(mode="semantic")`, semantic-only hits in
+  `pdf_search(mode="auto")`, and `pdf_corpus_search(mode="semantic")`
+  returned the top of the page as the `excerpt_style="snippet"` excerpt,
+  so a hit on a prefaced page showed boilerplate while the matching text
+  sat further down. All three now anchor on the page's best-scoring
+  passage, as corpus hybrid mode already did. The span costs an encode,
+  so semantic-mode `excerpt_style="paragraph"` and `"window"` searches
+  are slower than in 3.1.0: corpus semantic paragraph search measured
+  0.81 s to 1.37 s per query on the pure-semantic benchmark. The span is
+  computed only where those styles fall back to it (scanned or
+  block-less pages, or no block holding a query term).
+
+### Contributors
+
+- @TheSOV — optional CUDA acceleration for embedding, benchmarked on Windows and Linux across CUDA 12 and 13 ([#39](https://github.com/jztan/pdf-mcp/pull/39))
+
 ## [3.1.0] - 2026-09-05
 ### Added
 

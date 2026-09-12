@@ -17,6 +17,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
+from functools import partial
 from typing import Annotated, Any, Callable
 
 import httpx
@@ -2034,6 +2035,7 @@ def _upgrade_excerpts_to_paragraphs(
     upgraded: list[dict[str, Any]] = []
 
     for m in matches:
+        lazy_excerpt = m.pop("_lazy_excerpt", None)
         page_num_0 = m["page"] - 1
         page = _layout_page(doc, page_num_0)
 
@@ -2101,9 +2103,53 @@ def _upgrade_excerpts_to_paragraphs(
             seen[key] = len(upgraded)
             upgraded.append({**m, "excerpt": block_text, **geom})
         else:
-            upgraded.append(m)
+            upgraded.append(_resolve_lazy_excerpt(m, lazy_excerpt))
 
     return upgraded
+
+
+def _resolve_lazy_excerpt(
+    m: dict[str, Any], lazy_excerpt: Callable[[], str] | None
+) -> dict[str, Any]:
+    """Fill a match's excerpt from its deferred span computation, if any.
+
+    Paragraph and window styles build their own excerpt from text blocks
+    and only fall back to the incoming one on a blockless page (scanned,
+    OCR text). For semantic-only hits that incoming excerpt is the
+    anchored span, whose search encodes candidate windows and doubled
+    pure-semantic paragraph latency when computed for every hit up
+    front. Those hits therefore arrive with `excerpt: ""` plus a
+    `_lazy_excerpt` thunk that the two fallback branches resolve here.
+    Snippet style stays eager.
+    """
+    if lazy_excerpt is None:
+        return m
+    return {**m, "excerpt": lazy_excerpt()}
+
+
+def _semantic_excerpt_fields(
+    excerpt_style: str,
+    path: str,
+    page0: int,
+    query: str,
+    query_vec: Any,
+    model: str,
+    context_chars: int,
+    chunk: Callable[[], str | None],
+) -> dict[str, Any]:
+    """Excerpt fields for a semantic-only hit: the anchored span now for
+    snippet style, deferred (see `_resolve_lazy_excerpt`) for paragraph
+    and window. `chunk` returns the page's best sub-page unit text and is
+    called only when the span is actually computed."""
+
+    def span() -> str:
+        return _semantic_snippet_excerpt(
+            path, page0, query, query_vec, model, context_chars, chunk()
+        )
+
+    if excerpt_style in ("paragraph", "window"):
+        return {"excerpt": "", "_lazy_excerpt": span}
+    return {"excerpt": span()}
 
 
 def _attach_snippet_geometry(
@@ -2470,13 +2516,14 @@ def _expand_excerpts_to_windows(
     out: list[dict[str, Any]] = []
     for m in matches:
         best_chunk = m.pop("_best_chunk", None)
+        lazy_excerpt = m.pop("_lazy_excerpt", None)
         page_num_0 = m["page"] - 1
         page = _layout_page(doc, page_num_0)
         blocks = page.get_text("blocks", sort=True)
         text_blocks = [b for b in blocks if b[6] == 0]
         texts = [b[4] for b in text_blocks]
         if not texts:
-            out.append(m)
+            out.append(_resolve_lazy_excerpt(m, lazy_excerpt))
             continue
         anchor: int | None = None
         how = "page_top"
@@ -2941,12 +2988,26 @@ def pdf_search(
             matches: list[dict[str, Any]] = []
             for idx in top_idx:
                 page_num = page_nums_list[int(idx)]
-                text = cache.get_page_text(local_path, page_num) or ""
                 score = round(float(sem_scores[idx]), 4)
                 matches.append(
                     {
                         "page": page_num + 1,
-                        "excerpt": text[:context_chars],
+                        **_semantic_excerpt_fields(
+                            excerpt_style,
+                            local_path,
+                            page_num,
+                            query,
+                            query_vec,
+                            _model_name,
+                            context_chars,
+                            partial(
+                                _best_subchunk_text,
+                                local_path,
+                                page_num,
+                                cached_embeddings,
+                                query_vec,
+                            ),
+                        ),
                         "score": score,
                         "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                         "position": 0,
@@ -3200,6 +3261,7 @@ def pdf_search(
                 cache.save_page_embeddings(local_path, raw_new, _model_name)
 
         page_sem_score: dict[int, float] = {}
+        query_vec = None
         if cached_embeddings:
             try:
                 query_vec = _embedder.encode_query(query, _model_name)
@@ -3234,10 +3296,26 @@ def pdf_search(
         hybrid_matches: list[dict[str, Any]] = []
         for page_num, rrf_score in fused:
             if page_num in keyword_excerpts:
-                excerpt = keyword_excerpts[page_num]
+                excerpt_fields = {"excerpt": keyword_excerpts[page_num]}
             else:
-                page_text = cache.get_page_text(local_path, page_num) or ""
-                excerpt = page_text[:context_chars]
+                # Semantic-only hit: fused only contains such pages when
+                # the semantic arm ran, so query_vec is bound here.
+                excerpt_fields = _semantic_excerpt_fields(
+                    excerpt_style,
+                    local_path,
+                    page_num,
+                    query,
+                    query_vec,
+                    _model_name,
+                    context_chars,
+                    partial(
+                        _best_subchunk_text,
+                        local_path,
+                        page_num,
+                        cached_embeddings,
+                        query_vec,
+                    ),
+                )
             # A hybrid match is low-confidence when (a) it has no keyword
             # hit on the page AND (b) the underlying semantic cosine is
             # below the confidence threshold. Keyword-hit pages always
@@ -3250,7 +3328,7 @@ def pdf_search(
             hybrid_matches.append(
                 {
                     "page": page_num + 1,
-                    "excerpt": excerpt,
+                    **excerpt_fields,
                     "score": round(rrf_score, 4),
                     "semantic_score": round(sem_score, 4),
                     "low_confidence": low_confidence,
@@ -3440,8 +3518,14 @@ def pdf_corpus_warm(
         recursive: Directory mode only, recurse into subdirectories.
 
     Returns:
-        - docs: per-doc rows {path, status: "warmed"|"cached", pages,
-          embeddings_cached, text_coverage}. embeddings_cached reports
+        - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
+          pages, embeddings_cached, text_coverage}. A very large
+          document may not finish embedding inside one budget: it is
+          reported with status "partial" plus embedded_pages (how many
+          pages hold embeddings so far), stays in `unprocessed`, and
+          continues from committed progress on the next call. Committed
+          progress survives client timeouts and server restarts.
+          embeddings_cached reports
           actual cache state for the configured embedding model (not
           the request flag), so a text-only call answers whether an
           embeddings pass is needed before semantic search.
@@ -3815,6 +3899,40 @@ def _merge_doc_match_counts(
     for path, _page in doc_list or []:
         merged[path] = max(merged.get(path, 0), 1)
     return merged
+
+
+def _semantic_snippet_excerpt(
+    path: str,
+    page0: int,
+    query: str,
+    query_vec: Any,
+    model: str,
+    context_chars: int,
+    chunk: str | None,
+) -> str:
+    """Snippet excerpt for a page matched semantically (no keyword hit
+    to anchor on): the best `context_chars` span of the page's best
+    sub-page chunk, or of the whole page when there is no chunk.
+
+    `text[:context_chars]` here returned excerpts with no relation to
+    the query (2026-09-01 consumer tryout, F1): on prefaced pages the
+    excerpt was boilerplate while the matching content sat further
+    down. Lexical rescue (p34, second form): when the best-scoring
+    chunk holds no literal query term but the page does, widen the
+    span search to the whole page, otherwise the term windows the
+    back-off in `_best_span_in_text` needs are outside the searched
+    text. Shared by every semantic-only hit in both search tools and
+    every mode, so the rule lives in one place.
+    """
+    page_text = cache.get_page_text(path, page0) or ""
+    text = chunk or page_text
+    if chunk and page_text:
+        terms = _corpus_query_terms(query)
+        low_chunk = chunk.lower()
+        if terms and not any(t in low_chunk for t in terms):
+            if any(t in page_text.lower() for t in terms):
+                text = page_text
+    return _best_span_in_text(text, query_vec, model, context_chars, query=query)
 
 
 def _best_subchunk_text(
@@ -4274,12 +4392,20 @@ def pdf_corpus_search(
 
         def _sem_build(path: str, page: int, idx: int) -> dict[str, Any]:
             score = round(score_map[(path, page)], 4)
-            text = cache.get_page_text(path, page - 1) or ""
             return {
                 "path": path,
                 "doc_title": _title_for(path),
                 "page": page,
-                "excerpt": text[:context_chars],
+                **_semantic_excerpt_fields(
+                    excerpt_style,
+                    path,
+                    page - 1,
+                    query,
+                    query_vec,
+                    embed_model,
+                    context_chars,
+                    lambda: best_chunks.get((path, page)),
+                ),
                 "score": score,
                 "low_confidence": score < _SEMANTIC_CONFIDENCE_THRESHOLD,
                 "position": 0,
@@ -4462,29 +4588,17 @@ def pdf_corpus_search(
 
     def _hybrid_build(path: str, page: int, idx: int) -> dict[str, Any]:
         if (path, page) in kw_payload:
-            excerpt = kw_payload[(path, page)]["excerpt"]
+            excerpt_fields = {"excerpt": kw_payload[(path, page)]["excerpt"]}
         else:
-            # Semantic-only hit: anchor the snippet on the page's
-            # best-scoring sub-page chunk rather than the top of the
-            # page. text[:context_chars] here returned excerpts with no
-            # relation to the query (2026-09-01 consumer tryout, F1) --
-            # on prefaced pages the excerpt was boilerplate while the
-            # matching content sat further down.
-            chunk = hybrid_best_chunks.get((path, page))
-            page_text = cache.get_page_text(path, page - 1) or ""
-            text = chunk or page_text
-            # Lexical rescue (p34, second form): when the best-scoring
-            # chunk holds no literal query term but the page does, widen
-            # the span search to the whole page -- otherwise the term
-            # windows the back-off needs are outside the searched text.
-            if chunk and page_text:
-                _terms = _corpus_query_terms(query)
-                _low_chunk = chunk.lower()
-                if _terms and not any(t in _low_chunk for t in _terms):
-                    if any(t in page_text.lower() for t in _terms):
-                        text = page_text
-            excerpt = _best_span_in_text(
-                text, query_vec, embed_model, context_chars, query=query
+            excerpt_fields = _semantic_excerpt_fields(
+                excerpt_style,
+                path,
+                page - 1,
+                query,
+                query_vec,
+                embed_model,
+                context_chars,
+                lambda: hybrid_best_chunks.get((path, page)),
             )
         sem_score = sem_score_map.get((path, page), 0.0)
         # A hybrid match is low-confidence when (a) it has no keyword
@@ -4499,7 +4613,7 @@ def pdf_corpus_search(
             "path": path,
             "doc_title": _title_for(path),
             "page": page,
-            "excerpt": excerpt,
+            **excerpt_fields,
             "score": round(rrf_score_map[(path, page)], 4),
             "semantic_score": round(sem_score, 4),
             "doc_score": (round(doc_cos[path], 4) if path in doc_cos else None),

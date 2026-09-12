@@ -60,6 +60,12 @@ PDF_MCP_CACHE_TTL=48
 # (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
 PDF_MCP_MAX_WORKERS=8
 
+# Embedding device. 1 = use the GPU and warn if it is not available;
+# 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
+# Needs onnxruntime-gpu and a CUDA runtime; see "GPU embedding (NVIDIA
+# CUDA)" below.
+PDF_MCP_CUDA=1
+
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
 PDF_MCP_HTTP_HOST=127.0.0.1       # bind address
@@ -77,6 +83,74 @@ The `PDF_MCP_HTTP_*` and `PDF_MCP_ALLOW_ANY_PATH` variables affect
 For what the auth token protects and the trust boundary it creates, see
 [remote-access.md](remote-access.md). To set the transport up and rotate the
 token, see [HTTP transport setup](#http-transport-setup) below.
+
+### GPU embedding (NVIDIA CUDA)
+
+Optional and off by default. On an NVIDIA card the embedding pass is one to
+two orders of magnitude faster, on Linux and Windows x86_64. Vectors are the
+same as the CPU path produces (cosine 0.999998 measured), so the cache is
+shared and the choice is speed only.
+
+For a Turing or newer GPU (GTX 16, RTX 20+) on driver r580+:
+
+```bash
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
+pip install nvidia-cublas nvidia-cuda-runtime nvidia-cufft nvidia-curand \
+            nvidia-cudnn-cu13
+```
+
+Maxwell, Pascal and Volta cards (GTX 900, GTX 10-series, Titan V) predate
+CUDA 13 and take the CUDA 12 build:
+
+```bash
+pip uninstall -y onnxruntime
+pip install fastembed-gpu
+pip install --force-reinstall --no-deps onnxruntime-gpu --index-url \
+  https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-cufft-cu12 \
+            nvidia-curand-cu12 nvidia-cudnn-cu12
+```
+
+Then, either way:
+
+```bash
+export PDF_MCP_CUDA=1   # Linux, macOS
+set PDF_MCP_CUDA=1      # Windows
+```
+
+The uninstall is needed because `onnxruntime` and `onnxruntime-gpu` install
+into the same directory, so with both present the CPU build wins the import.
+
+What the variable does:
+
+| `PDF_MCP_CUDA` | behaviour |
+|---|---|
+| `1` | GPU. If the CUDA provider cannot load, the server warns with the provider it actually got and falls back to CPU instead of running slower in silence. |
+| `0` | CPU, always. |
+| unset | fastembed decides. On a plain install that is the CPU, exactly as before. On a machine where onnxruntime-gpu is installed and a CUDA runtime is already on the library path (a system-wide CUDA toolkit, for example) it auto-detects the GPU even though nothing asked for it. Set `0` if that is not what you want. |
+
+Two things to expect on the GPU path, both measured on an A10G
+(`benchmark_data/cuda_embedding/RESULTS.md`): the first CUDA session in a
+process takes 12 to 15 s to load the model (later ones about 1 s, CPU about
+5 s), so a session that embeds only a few pages gains nothing; and
+onnxruntime 1.29 prints two warnings on every CUDA session, "No registered
+plugin EP device found for 'CUDAExecutionProvider'" and "Some nodes were
+not assigned to the preferred execution providers", which are benign when
+the pass runs at GPU speed. A runtime that is present but broken (cuDNN
+missing, wrong series) can pass the provider check and fail on the first
+encode instead; the error names the kernel, and reinstalling the runtime
+wheels for your CUDA series is the fix.
+
+Apple Silicon is not covered: the CoreML provider in the standard wheel
+gives no speedup on the shipped model. What the CPU path does instead is
+keep its batches small: texts are sorted by length and embedded 16 at a
+time, so onnxruntime pads each sub-batch to a near neighbour rather than to
+the longest page in a 24-page warm group. On an M4 Pro that is 1.37x
+faster than one large padded batch and holds about 0.7 GB of transient
+encode memory instead of 2.8 GB, with identical vectors. Thread pinning
+was measured on the same machine and does not help: one intra-op thread
+ran as fast as fourteen, so the encode is memory-bound, not compute-bound.
 
 ### Docker deployment notes
 

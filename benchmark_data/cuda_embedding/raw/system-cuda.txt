@@ -1,0 +1,17 @@
+# system CUDA on the AMI
+/usr/local/cuda
+/usr/local/cuda-12.8
+/usr/local/cuda-12.9
+/usr/local/cuda-13.0
+/usr/local/cuda-13.2
+	libcudart.so.13 (libc6,x86-64) => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcudart.so.13
+	libcudart.so.13 (libc6,x86-64) => /usr/local/cuda-13.2/targets/x86_64-linux/lib/libcudart.so.13
+	libcudart.so.12 (libc6,x86-64) => /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart.so.12
+	libcudart.so.12 (libc6,x86-64) => /usr/local/cuda-12.9/targets/x86_64-linux/lib/libcudart.so.12
+	libcudart.so (libc6,x86-64) => /usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart.so
+	libcudart.so (libc6,x86-64) => /usr/local/cuda-12.9/targets/x86_64-linux/lib/libcudart.so
+	libcudart.so (libc6,x86-64) => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcudart.so
+	libcudart.so (libc6,x86-64) => /usr/local/cuda-13.2/targets/x86_64-linux/lib/libcudart.so
+	libcublas.so.13 (libc6,x86-64) => /usr/local/cuda-13.0/targets/x86_64-linux/lib/libcublas.so.13
+	libcublas.so.13 (libc6,x86-64) => /usr/local/cuda-13.2/targets/x86_64-linux/lib/libcublas.so.13
+LD_LIBRARY_PATH=/usr/local/cuda-13.2/lib:/usr/local/cuda-13.2/lib64:/usr/local/cuda-13.2:/usr/local/cuda-13.2/targets/x86_64-linux/lib/:/usr/local/cuda-13.2/extras/CUPTI/lib64:/opt/amazon/openmpi/lib:/usr/local/lib:/usr/lib

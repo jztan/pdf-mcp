@@ -4,16 +4,19 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="color-scheme" content="light dark" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon.ico" sizes="48x48" />
+<meta name="theme-color" content="#1f5eff" />
 
-<title>pdf-mcp · PDF extraction for AI agents | Browser demo</title>
-<meta name="description" content="See what your AI agent sees. Drop a PDF into your browser and watch an agent skim, search, and read only the pages that matter — without blowing its context window. 100% client-side." />
+<title>pdf-mcp · Agentic RAG over one PDF or a whole folder | Browser demo</title>
+<meta name="description" content="An MCP server that gives your AI agent agentic RAG over your PDFs, one file or a whole folder. Drop some in and watch it search across every document and read only the pages that matter." />
 
 <link rel="canonical" href="https://pdf-mcp.jztan.com/" />
 
 <!-- Open Graph (LinkedIn, Facebook, Slack) -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
-<meta property="og:description" content="Drop in a PDF and watch an AI agent read only the pages that matter. Try it in your browser — no install required, 100% client-side." />
+<meta property="og:title" content="pdf-mcp · Your agent doesn’t need the whole corpus" />
+<meta property="og:description" content="Drop in a PDF, or a whole folder of them, and watch an AI agent search across every document and read only the pages that matter. Try it in your browser, no install required, 100% client-side." />
 <meta property="og:url" content="https://pdf-mcp.jztan.com/" />
 <meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 <meta property="og:image:width" content="1200" />
@@ -22,8 +25,8 @@
 
 <!-- Twitter / X card -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="pdf-mcp · Your agent doesn’t need the whole document" />
-<meta name="twitter:description" content="Watch an AI agent read only the pages that matter, in your browser. No install." />
+<meta name="twitter:title" content="pdf-mcp · Your agent doesn’t need the whole corpus" />
+<meta name="twitter:description" content="Watch an AI agent search a PDF, or a whole folder of them, and read only the pages that matter, in your browser. No install." />
 <meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png" />
 
 <!-- Structured data: SoftwareApplication -->
@@ -32,7 +35,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "pdf-mcp",
-  "description": "Production-ready MCP server for PDF processing with intelligent caching. Extract text, search, and analyze PDFs with AI agents like Claude, Cursor, and Codex.",
+  "description": "An open-source MCP server that gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic and keyword search, selective page reads, tables, images, OCR, and chart data. Works with agents like Claude, Cursor, and Codex.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Linux, macOS, Windows",
   "offers": {
@@ -166,7 +169,7 @@
   nav.top .inner { max-width: 1160px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   nav.top .brand-wrap { display: flex; align-items: center; gap: 16px; min-width: 0; }
   nav.top .brand { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text); text-decoration: none; white-space: nowrap; }
-  nav.top .brand span { color: var(--text-tertiary); font-weight: 400; margin-left: 4px; }
+  nav.top .brand span { color: var(--text-tertiary); font-weight: 400; }
   nav.top ul { list-style: none; display: flex; gap: 26px; margin: 0; padding: 0; align-items: center; }
   nav.top ul a { font-size: 14px; color: var(--text-secondary); text-decoration: none; transition: color 0.15s ease; white-space: nowrap; }
   nav.top ul a:hover { color: var(--text); }
@@ -685,7 +688,7 @@
 <nav class="top">
   <div class="inner">
     <div class="brand-wrap">
-      <a href="https://github.com/jztan/pdf-mcp" class="brand">pdf-mcp<span>/demo</span></a>
+      <a href="https://github.com/jztan/pdf-mcp" class="brand"><span>jztan/</span>pdf-mcp</a>
       <div class="ledger hidden" id="ledger">context used <b id="ledgerVal">0</b> / <span id="ledgerMax"></span> tokens</div>
     </div>
     <ul>
@@ -701,8 +704,8 @@
 <div class="atmosphere">
 <section class="hero">
   <div class="inner">
-    <h1 class="hero-title">Your agent doesn&#8217;t need the whole document. It needs the right pages.</h1>
-    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents 13 tools to skim, search, and read PDFs the way a person does: structure first, then the pages that matter. One file or a whole folder.</p>
+    <h1 class="hero-title">Your agent doesn&#8217;t need the whole corpus. It needs the right pages.</h1>
+    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents agentic RAG over your PDFs, one file or a whole folder: search across every document, then read only the pages that matter. 13 tools, one MCP server.</p>
     <div class="hero-ctas">
       <div class="install-pill">
         <span class="dollar">$</span><span class="install-cmd-text" id="installCmd">pip install pdf-mcp</span>
@@ -1002,7 +1005,7 @@ estimated_tokens: 925</pre>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <h3 class="cap-head">Search a <b>whole folder</b> at once</h3>
-        <p class="cap-desc">Warm a directory on a time budget, get a triage card per document, then one ranked hit list across all of them with document and page on every hit. <code>pdf_corpus_search</code></p>
+        <p class="cap-desc">Warm a directory on a time budget, get a triage card per document, then one ranked hit list across all of them with document and page on every hit. On an NVIDIA GPU the warm runs about 25x faster with optional CUDA embedding. <code>pdf_corpus_search</code></p>
       </div>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
@@ -1135,7 +1138,7 @@ estimated_tokens: 925</pre>
     </details>
     <details class="qa">
       <summary>Is semantic search a separate service?</summary>
-      <p>No. Embeddings run locally on CPU with fastembed (<code>BAAI/bge-small-en-v1.5</code> by default, configurable). The first search on a document embeds its pages once and caches them; later searches reuse the cache.</p>
+      <p>No. Embeddings run locally with fastembed (<code>BAAI/bge-small-en-v1.5</code> by default, configurable), on CPU out of the box or on an NVIDIA GPU with the optional CUDA build of onnxruntime, about 25x faster when warming a large corpus. The first search on a document embeds its pages once and caches them; later searches reuse the cache. Setup is in the <a href="https://github.com/jztan/pdf-mcp/blob/master/docs/configuration.md#gpu-embedding-nvidia-cuda">configuration guide</a>.</p>
     </details>
     <details class="qa">
       <summary>Which AI clients does it work with?</summary>
@@ -1167,17 +1170,17 @@ estimated_tokens: 925</pre>
 <details class="seo-content">
   <summary>About pdf-mcp</summary>
   <div class="seo-content-body">
-  <h2 class="seo-h1">pdf-mcp: PDF extraction for AI agents</h2>
+  <h2 class="seo-h1">pdf-mcp: Agentic RAG over your PDFs, one file or a whole folder</h2>
   <p class="seo-lede">
-    pdf-mcp is an open-source MCP (Model Context Protocol) server that lets AI agents read, search, and analyze PDF files without loading the whole document into context. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
+    pdf-mcp is an open-source MCP (Model Context Protocol) server that gives AI agents agentic RAG over your PDFs, one file or a whole folder of them. The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts rather than whole documents. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. pdf-mcp replaces the all-at-once approach with a set of targeted tools that let the agent explore a document the way a human skims it: inspect structure first, search for relevant sections, then read only the pages that matter.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still, because there is no native way to ask which of forty documents even mentions the thing you are looking for. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>
-    The server exposes thirteen tools, but a typical agent workflow uses two or three. First, <code>pdf_info</code> returns document metadata: page count, table of contents, per-page text coverage, estimated token count. This lightweight call tells the agent the shape of the document before it commits to reading anything. Second, <code>pdf_search</code> runs hybrid semantic + BM25 search by default (keyword-only and semantic-only modes are one argument away) and returns structural paragraph excerpts, the bullet, paragraph, or heading that matched rather than a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. The other ten tools (<code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_corpus_warm</code>, <code>pdf_corpus_overview</code>, <code>pdf_corpus_search</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code>) cover full-document reads, visual inspection of scanned pages, chart-data extraction, whole-folder triage and cross-document search, cache management, and discovery of which optional features are installed.
+    The server exposes thirteen tools, but a typical workflow uses two or three. For a single document, <code>pdf_info</code> returns page count, table of contents, per-page text coverage, and estimated token count, so the agent knows the shape of the document before it commits to reading anything. <code>pdf_search</code> then runs hybrid semantic + BM25 search by default (keyword-only and semantic-only modes are one argument away) and returns structural paragraph excerpts, the bullet, paragraph, or heading that matched rather than a fixed-width window. These excerpts are often enough to answer directly. When deeper context is needed, <code>pdf_read_pages</code> extracts full text, images, and tables from specific pages. For a folder, <code>pdf_corpus_warm</code> indexes it within a time budget, <code>pdf_corpus_overview</code> returns a triage card per document, and <code>pdf_corpus_search</code> ranks matches across every document at once. Each corpus hit carries the path and title of the document it came from, so the agent can follow up with the single-document tools and hit the warm cache. The remaining seven tools (<code>pdf_read_all</code>, <code>pdf_get_toc</code>, <code>pdf_render_pages</code>, <code>pdf_extract_chart</code>, <code>pdf_cache_stats</code>, <code>pdf_cache_clear</code>, and <code>server_info</code>) cover full-document reads, visual inspection of scanned pages, chart-data extraction, cache management, and discovery of which optional features are installed.
   </p>
   <h2>What the browser demo shows</h2>
   <p>
@@ -1192,7 +1195,7 @@ estimated_tokens: 925</pre>
 
 <footer>
   <p>pdf-mcp is open source · MIT licensed · built by <a href="https://blog.jztan.com/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=footer-byline">jztan</a> · sibling of <a href="https://redmine-mcp-server.jztan.com">redmine-mcp-server</a></p>
-  <p style="margin-top:4px;font-size:11px"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v3.1.3</p>
+  <p style="margin-top:4px;font-size:11px"><a href="https://pypi.org/project/pdf-mcp/" style="color:inherit;">pdf-mcp __PDF_MCP_VERSION__</a> · demo v3.1.4</p>
 </footer>
 
 <div class="toast" id="toast">Copied</div>

@@ -22,38 +22,31 @@ jobs:
         run: |
           uv build --wheel
           $whl = (Get-ChildItem dist/pdf_mcp-*.whl).FullName
-          uv run --no-project python scripts/build_mcpb.py --wheel $whl --out spike
+          uv sync --frozen --extra dev
+          uv run python scripts/build_mcpb.py --wheel $whl --out spike
           Expand-Archive (Get-ChildItem spike/*.mcpb).FullName -DestinationPath spike/unpacked
-      - name: Cold-start the bundle (Q2)
+          # The project venv's python has `mcp` (via fastmcp) for the smoke
+          # client and keeps working after uv is removed from PATH.
+          uv run python -c "import sys; print(sys.executable)" > py.txt
+      - name: Launcher unit tests on Windows (real tar.exe on a real zip comes next)
+        shell: pwsh
+        run: node --test tests/launcher/launcher.test.js
+      - name: Zero-prerequisite start (no uv on PATH, empty cache)
         shell: pwsh
         run: |
-          uv cache clean
-          uv run --no-project --with mcp python scripts/smoke_mcpb.py spike/unpacked --timeout 900
+          $py = (Get-Content py.txt).Trim()
+          $env:PDF_MCP_CACHE_DIR = "$env:RUNNER_TEMP\pdfmcp-cold"
+          $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_ 'uv.exe')) }) -join ';'
+          if (Get-Command uv -ErrorAction SilentlyContinue) { throw "uv still on PATH" }
+          & $py scripts/smoke_mcpb.py spike/unpacked --timeout 900
+          Get-ChildItem "$env:PDF_MCP_CACHE_DIR\uv" -Recurse | Select-Object FullName
+      - name: Fallback responder when the download is blocked
+        shell: pwsh
+        run: |
+          $py = (Get-Content py.txt).Trim()
+          & $py scripts/smoke_mcpb.py spike/unpacked --expect-fallback --timeout 120 `
+            --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-blocked" `
+            --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"
       - name: Validate manifest with the official CLI
         shell: pwsh
         run: npx -y @anthropic-ai/mcpb@2.1.2 validate spike/unpacked/manifest.json
-      - name: Is winget present?
-        continue-on-error: true
-        shell: pwsh
-        run: winget --version
-      - name: winget name query (Q3a, current docs)
-        continue-on-error: true
-        shell: pwsh
-        run: winget install Tesseract-OCR --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
-      - name: winget exact ID (Q3b)
-        continue-on-error: true
-        shell: pwsh
-        run: winget install -e --id UB-Mannheim.TesseractOCR --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
-      - name: Where did Tesseract land, and is it on PATH? (Q3c)
-        shell: pwsh
-        run: |
-          Get-ChildItem "C:\Program Files\Tesseract-OCR\tesseract.exe","C:\Program Files (x86)\Tesseract-OCR\tesseract.exe","$env:LOCALAPPDATA\Programs\Tesseract-OCR\tesseract.exe" -ErrorAction SilentlyContinue | Select-Object FullName
-          "Machine PATH entries:"; [Environment]::GetEnvironmentVariable('Path','Machine') -split ';' | Select-String -SimpleMatch Tesseract
-          "User PATH entries:"; [Environment]::GetEnvironmentVariable('Path','User') -split ';' | Select-String -SimpleMatch Tesseract
-      - name: Per-user install location (Q3d)
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          winget uninstall -e --id UB-Mannheim.TesseractOCR --silent --disable-interactivity
-          winget install -e --id UB-Mannheim.TesseractOCR --scope user --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
-          Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter tesseract.exe -ErrorAction SilentlyContinue -Depth 4 | Select-Object FullName

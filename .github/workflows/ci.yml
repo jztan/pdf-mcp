@@ -226,3 +226,47 @@ jobs:
         # slow.
         run: uv run pytest tests/ -v -m "not slow" -n auto
 
+
+  # Claude Desktop cannot run in CI, so this proves the bundle's launcher
+  # path on macOS (pinned darwin uv, bsdtar extraction, uv-managed Python,
+  # early init, hand-over, fallback) the way test-windows does for Windows.
+  # Host behaviour (60 s initialize limit, 30 s request limit, list_changed)
+  # was measured once in Claude Desktop and does not depend on the OS.
+  bundle-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Launcher unit tests (real bsdtar on a real tarball)
+        run: node --test tests/launcher/launcher.test.js
+      - name: Build the Claude Desktop bundle from this commit
+        run: |
+          uv build --wheel
+          uv run python scripts/build_mcpb.py --wheel "$(ls dist/pdf_mcp-*.whl)" --out bundle-smoke
+          mkdir -p bundle-smoke/unpacked
+          (cd bundle-smoke/unpacked && unzip -q ../pdf-mcp-*.mcpb)
+          npx -y @anthropic-ai/mcpb@2.1.2 validate bundle-smoke/unpacked/manifest.json
+      - name: Start the bundle from an empty cache, then with the download blocked
+        # The launcher never looks at PATH: it downloads its pinned uv and uv
+        # fetches its own Python. The checks after the cold start prove both
+        # came from the launcher, not from the runner.
+        run: |
+          py="$(uv run python -c 'import sys; print(sys.executable)')"
+          cold="$RUNNER_TEMP/pdfmcp-cold"
+          "$py" scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --extra-env "PDF_MCP_CACHE_DIR=$cold"
+          uv_bin="$(ls "$cold"/uv/*/uv)"
+          echo "launcher's uv: $uv_bin"
+          test -x "$uv_bin"
+          test -n "$(ls "$cold/python")"
+          test -d "$cold/venv/$(python3 -c "import json; print(json.load(open('bundle-smoke/unpacked/manifest.json'))['version'])")"
+          tail -n 20 "$cold/launcher.log"
+          "$py" scripts/smoke_mcpb.py bundle-smoke/unpacked --expect-fallback --timeout 120 --extra-env "PDF_MCP_CACHE_DIR=$RUNNER_TEMP/pdfmcp-blocked" --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"

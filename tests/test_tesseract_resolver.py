@@ -98,3 +98,33 @@ def test_resolve_tessdata_uses_resolved_binary(monkeypatch, tmp_path):
     monkeypatch.setattr("subprocess.run", fake_run)
     assert extractor._resolve_tessdata() == str(tessdata)
     assert seen == [exe]
+
+
+@pytest.mark.parametrize(
+    "platform, marker",
+    [
+        ("win32", "Windows installer"),
+        ("darwin", "brew install tesseract"),
+        ("linux", "apt install tesseract-ocr"),
+    ],
+)
+def test_missing_message_names_one_os(platform, marker):
+    msg = extractor.missing_tesseract_message(platform)
+    assert msg.startswith("Tesseract not found")
+    assert marker in msg and extractor.OCR_SETUP_URL in msg
+    others = {"win32": "Windows installer", "darwin": "brew", "linux": "apt "}
+    assert not any(m in msg for p, m in others.items() if p != platform)
+
+
+def test_install_hint_uses_exact_winget_id():
+    hint = extractor.tesseract_install_hint()
+    assert "winget install -e --id UB-Mannheim.TesseractOCR" in hint
+    assert "winget install Tesseract-OCR" not in hint
+
+
+def test_check_tesseract_available_uses_os_message(monkeypatch):
+    monkeypatch.setattr(extractor, "find_tesseract", lambda: None)
+    monkeypatch.setattr(extractor.sys, "platform", "win32")
+    with pytest.raises(RuntimeError) as info:
+        extractor.check_tesseract_available()
+    assert str(info.value) == extractor.missing_tesseract_message("win32")

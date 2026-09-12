@@ -2660,6 +2660,17 @@ class TestPdfReadPagesOcr:
         result = pdf_search(sample_pdf_scanned, "fox", mode="keyword")
         assert result["total_matches"] >= 1
 
+    def test_ocr_install_hint_uses_exact_winget_id(self, sample_pdf, isolated_server):
+        from unittest.mock import patch
+
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "UB-Mannheim.TesseractOCR" in result["install_hint"]
+        assert "TESSDATA_PREFIX" in result["install_hint"]
+
 
 class TestPdfSearchSource:
     """Tests for source field on pdf_search matches (v1.10.0)."""

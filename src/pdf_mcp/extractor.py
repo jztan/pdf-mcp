@@ -1655,6 +1655,36 @@ def native_render_dpi_cap(doc: Any, page_num: int) -> "int | None":
         return None
 
 
+OCR_SETUP_URL = "https://github.com/jztan/pdf-mcp/blob/master/docs/clients.md#ocr-setup"
+_OCR_INSTALL_STEP = {
+    "win32": "Download and run the Windows installer linked at {url}.",
+    "darwin": "Install it with Homebrew (brew install tesseract), or see {url}.",
+}
+_OCR_INSTALL_STEP_DEFAULT = (
+    "Install it with your package manager (for example: "
+    "apt install tesseract-ocr), or see {url}."
+)
+
+
+def missing_tesseract_message(platform: str | None = None) -> str:
+    """One plain instruction for this OS, for the agent to relay."""
+    step = _OCR_INSTALL_STEP.get(platform or sys.platform, _OCR_INSTALL_STEP_DEFAULT)
+    return (
+        "Tesseract not found, so scanned pages cannot be read with OCR. "
+        + step.format(url=OCR_SETUP_URL)
+        + " Then ask again; no restart is needed."
+    )
+
+
+def tesseract_install_hint() -> str:
+    """Terminal commands for every OS, for callers who have a shell."""
+    return (
+        "brew install tesseract (macOS) / "
+        "apt install tesseract-ocr (Linux) / "
+        "winget install -e --id UB-Mannheim.TesseractOCR (Windows)"
+    )
+
+
 def check_tesseract_available() -> None:
     """
     Verify a Tesseract binary is installed (find_tesseract), and cache
@@ -1673,15 +1703,7 @@ def check_tesseract_available() -> None:
             raise FileNotFoundError("tesseract")
         subprocess.run([exe, "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        raise RuntimeError(
-            "Tesseract not found. Install with: "
-            "brew install tesseract (macOS) / "
-            "apt install tesseract-ocr (Linux) / "
-            "winget install Tesseract-OCR (Windows). "
-            "See https://tesseract-ocr.github.io/tessdoc/Installation.html. "
-            "If OCR returns empty for a page with visible text, also verify "
-            "the language pack: tesseract --list-langs"
-        ) from exc
+        raise RuntimeError(missing_tesseract_message()) from exc
 
     if _TESSDATA_PATH is None:
         _TESSDATA_PATH = _resolve_tessdata()

@@ -52,7 +52,7 @@ OCR on scanned PDFs additionally needs system Tesseract:
 ```bash
 brew install tesseract        # macOS
 apt install tesseract-ocr     # Ubuntu/Debian
-winget install Tesseract-OCR  # Windows
+winget install -e --id UB-Mannheim.TesseractOCR  # Windows
 ```
 
 GPU embedding is optional and off by default. On an NVIDIA card it makes the

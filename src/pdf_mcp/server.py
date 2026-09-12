@@ -54,6 +54,7 @@ from .extractor import (
     page_text_chars,
     stale_layout_pages,
     parse_page_range,
+    tesseract_install_hint,
     render_page_as_image,
     render_page_as_png,
 )
@@ -900,10 +901,8 @@ def pdf_read_pages(
             return {
                 "error": str(exc),
                 "install_hint": (
-                    "brew install tesseract (macOS) / "
-                    "apt install tesseract-ocr (Linux) / "
-                    "winget install Tesseract-OCR (Windows); "
-                    "or set TESSDATA_PREFIX env var to your tessdata directory"
+                    tesseract_install_hint()
+                    + "; or set TESSDATA_PREFIX env var to your tessdata directory"
                 ),
             }
 

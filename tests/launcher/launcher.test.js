@@ -39,6 +39,10 @@ function makeTarball(dir, target) {
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
+// Tests that spawn processes or open sockets: a hang becomes a named failure
+// instead of stalling the whole file (CI once timed the file out at 300 s).
+const SPAWNS = { timeout: 30000 };
+
 test('platformKey joins platform and arch', () => {
   assert.strictEqual(L.platformKey('win32', 'x64'), 'win32-x64');
 });
@@ -64,7 +68,7 @@ test('tarCommand uses System32 tar.exe on Windows by absolute path', () => {
   assert.strictEqual(L.tarCommand('linux', {}), 'tar');
 });
 
-test('download follows redirects and returns the sha256', async () => {
+test('download follows redirects and returns the sha256', SPAWNS, async () => {
   const body = Buffer.from('payload');
   const server = await serve({ '/a': { redirect: '/b' }, '/b': { body } });
   const { port } = server.address();
@@ -76,7 +80,7 @@ test('download follows redirects and returns the sha256', async () => {
   } finally { server.close(); }
 });
 
-test('ensureUv downloads, verifies, extracts, and caches', { skip: process.platform === 'win32' }, async () => {
+test('ensureUv downloads, verifies, extracts, and caches', { ...SPAWNS, skip: process.platform === 'win32' }, async () => {
   const dir = tmpdir();
   const target = 'test-target';
   const archive = makeTarball(dir, target);
@@ -94,7 +98,7 @@ test('ensureUv downloads, verifies, extracts, and caches', { skip: process.platf
   } finally { server.close(); }
 });
 
-test('ensureUv rejects a hash mismatch and leaves no binary', async () => {
+test('ensureUv rejects a hash mismatch and leaves no binary', SPAWNS, async () => {
   const dir = tmpdir();
   const server = await serve({ '/v1/uv.tar.gz': { body: Buffer.from('evil') } });
   const { port } = server.address();
@@ -115,7 +119,7 @@ test('ensureUv names the computer when the platform is unsupported', async () =>
   );
 });
 
-test('ensureUv reports an offline download in plain words', async () => {
+test('ensureUv reports an offline download in plain words', SPAWNS, async () => {
   const pins = { version: 'v1', assets: { 'linux-x64': { file: 'uv.tar.gz', sha256: 'a'.repeat(64) } } };
   const dir = tmpdir();
   await assert.rejects(
@@ -172,7 +176,7 @@ test('fallback replays prefilled input (the initialize the child never answered)
   assert.strictEqual(out[0].id, 7);
 });
 
-test('runServer pipes bytes both ways', async () => {
+test('runServer pipes bytes both ways', SPAWNS, async () => {
   const echo = path.join(tmpdir(), 'echo.js');
   fs.writeFileSync(echo, "process.stdin.on('data', (d) => process.stdout.write(d));");
   const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
@@ -185,7 +189,7 @@ test('runServer pipes bytes both ways', async () => {
   child.kill();
 });
 
-test('runServer reports an early exit with the forwarded input and stderr tail', async () => {
+test('runServer reports an early exit with the forwarded input and stderr tail', SPAWNS, async () => {
   const dies = path.join(tmpdir(), 'dies.js');
   fs.writeFileSync(dies, "process.stdin.once('data', () => { process.stderr.write('no network'); process.exit(2); });");
   const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
@@ -230,7 +234,7 @@ test('pruneVenvs is a no-op when no venv dir exists yet', () => {
   L.pruneVenvs(path.join(tmpdir(), 'missing'), '1', {});
 });
 
-test('stdin EOF ends the child and reports its exit code', async () => {
+test('stdin EOF ends the child and reports its exit code', SPAWNS, async () => {
   const eof = path.join(tmpdir(), 'eof.js');
   fs.writeFileSync(eof, "process.stdin.on('data', (d) => process.stdout.write(d)); process.stdin.on('end', () => process.exit(3));");
   const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
@@ -245,7 +249,7 @@ test('stdin EOF ends the child and reports its exit code', async () => {
   assert.strictEqual(code, 3);
 });
 
-test('a killed launcher leaves no child running (EOF, not signals)', async () => {
+test('a killed launcher leaves no child running (EOF, not signals)', SPAWNS, async () => {
   const { spawn } = require('node:child_process');
   const dir = tmpdir();
   const childJs = path.join(dir, 'child.js');
@@ -258,10 +262,28 @@ test('a killed launcher leaves no child running (EOF, not signals)', async () =>
     `L.runServer(process.execPath, [${JSON.stringify(childJs)}], { env: process.env,`,
     '  stdin: process.stdin, stdout: process.stdout, stderr: process.stderr, onEarlyExit() {} });',
   ].join('\n'));
-  const parent = spawn(process.execPath, [parentJs], { stdio: ['pipe', 'pipe', 'inherit'] });
-  const childPid = await new Promise((r) => parent.stdout.once('data', (d) => r(Number(String(d).trim()))));
-  parent.kill('SIGKILL'); // TerminateProcess on Windows: no signal reaches the child either way
-  const alive = () => { try { process.kill(childPid, 0); return true; } catch { return false; } };
-  for (let i = 0; i < 50 && alive(); i += 1) await new Promise((r) => setTimeout(r, 100));
-  assert.strictEqual(alive(), false, `child ${childPid} outlived its launcher`);
+  const parent = spawn(process.execPath, [parentJs], { stdio: ['pipe', 'pipe', 'pipe'] });
+  let childPid = 0;
+  try {
+    childPid = await new Promise((resolve, reject) => {
+      let buf = '';
+      parent.stdout.on('data', (d) => {
+        buf += d;
+        const line = buf.split('\n')[0];
+        if (buf.includes('\n')) resolve(Number(line.trim()));
+      });
+      parent.on('exit', (code) => reject(new Error(`launcher exited early (${code})`)));
+    });
+    assert.ok(childPid > 0, `bad child pid ${childPid}`);
+    parent.kill('SIGKILL'); // TerminateProcess on Windows: no signal reaches the child either way
+    const alive = () => { try { process.kill(childPid, 0); return true; } catch { return false; } };
+    for (let i = 0; i < 50 && alive(); i += 1) await new Promise((r) => setTimeout(r, 100));
+    assert.strictEqual(alive(), false, `child ${childPid} outlived its launcher`);
+  } finally {
+    // Never leave a process or pipe behind: either would keep this test
+    // file's event loop alive and hang the whole run.
+    if (childPid > 0) { try { process.kill(childPid, 'SIGKILL'); } catch { /* already gone */ } }
+    try { parent.kill('SIGKILL'); } catch { /* already gone */ }
+    parent.stdin.destroy(); parent.stdout.destroy(); parent.stderr.destroy();
+  }
 });

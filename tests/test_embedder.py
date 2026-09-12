@@ -9,6 +9,21 @@ import pytest
 DEFAULT = "BAAI/bge-small-en-v1.5"
 
 
+@pytest.fixture(autouse=True)
+def _fresh_model_singleton(monkeypatch):
+    """Every test starts with no cached model.
+
+    Another test on the same xdist worker may already have loaded the real
+    model; _get_model would then return it without ever calling the mocked
+    constructor, and constructor assertions fail depending on test order.
+    monkeypatch restores the previous values afterwards.
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setattr(emb, "_model", None)
+    monkeypatch.setattr(emb, "_model_name_loaded", None)
+
+
 def test_check_available_raises_when_fastembed_missing():
     """check_available() raises ImportError with install hint when fastembed absent."""
     import pdf_mcp.embedder as emb

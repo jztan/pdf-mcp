@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minutes; Claude sees the tools right away and they start answering once
   setup finishes. Later starts take seconds, and installing a newer
   bundle replaces the old one in place, even while it is running. Works
-  in Claude Desktop's Chat. If setup cannot finish (for example the
+  in Claude Desktop's Chat, on Windows 10+, Intel Macs with macOS 13+, and
+  Apple Silicon Macs with macOS 14+. If setup cannot finish (for example the
   computer is offline), Claude is told why in plain words instead of
   seeing a disconnected server.
 

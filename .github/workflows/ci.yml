@@ -260,7 +260,14 @@ jobs:
   # Host behaviour (60 s initialize limit, 30 s request limit, list_changed)
   # was measured once in Claude Desktop and does not depend on the OS.
   bundle-macos:
-    runs-on: macos-latest
+    # Intel as well as Apple Silicon: the bundle installs the locked pins, and
+    # Intel Macs need their own onnxruntime (1.23.2, the last release with
+    # Intel-Mac wheels; see [tool.uv] in pyproject.toml).
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -91,6 +91,9 @@ dependencies = [
     # Runtime since the backend swap: pypdfium2 renders to a Pillow image and
     # image/render output is written as PNG through it.
     "pillow>=12.3.0",
+    # Pure-Python Snowball stemmers (no C extension), used by the optional
+    # [fts].language = "de" German FTS mirror index in cache.py.
+    "snowballstemmer>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -216,6 +219,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "fastembed"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "snowballstemmer"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

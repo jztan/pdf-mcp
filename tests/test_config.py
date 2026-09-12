@@ -270,3 +270,19 @@ class TestUpdateCheckConfig:
         cfg.write_text('[updates]\ncheck = "no"\n', encoding="utf-8")
         with pytest.raises(ValueError, match=r"\[updates\] check"):
             PDFConfig(config_path=cfg).update_check
+
+
+class TestFtsLanguageConfig:
+    def test_absent_is_none(self, tmp_path):
+        assert PDFConfig(config_path=tmp_path / "none.toml").fts_language is None
+
+    def test_de_is_read(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[fts]\nlanguage = "de"\n', encoding="utf-8")
+        assert PDFConfig(config_path=cfg).fts_language == "de"
+
+    def test_unsupported_value_raises(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[fts]\nlanguage = "fr"\n', encoding="utf-8")
+        with pytest.raises(ValueError, match=r"\[fts\] language"):
+            PDFConfig(config_path=cfg).fts_language

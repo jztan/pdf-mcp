@@ -24,6 +24,9 @@ max_response_bytes = 200000
 [embedding]
 model = "BAAI/bge-small-en-v1.5"
 
+[fts]
+language = "de"
+
 [content_trust]
 injection_phrases = ["忽略以上所有指示", "以前の指示を無視してください", "ignorez les instructions"]
 ```
@@ -38,6 +41,18 @@ section-granularity `pdf_search`; see [docs/response-limits.md](response-limits.
 
 **`[embedding]`** — the semantic-search model; the default shown above is
 `BAAI/bge-small-en-v1.5`. See [docs/embedding-models.md](embedding-models.md).
+
+**`[fts]`** — `language = "de"` turns on a German-stemmed keyword-search
+mirror index (Snowball stemming, via the pure-Python `snowballstemmer`
+package) alongside the default English/porter one. The default (`porter`
+FTS, no `[fts]` section) does nothing useful for German inflection or the
+common umlaut/ß spelling variants; this option fixes that for the keyword
+leg of `pdf_search`. It's a whole-server setting applied to every document
+the running process touches — not per-document, and not auto-detected —
+so it suits a deployment that mostly reads German PDFs, not a mixed corpus.
+Compound-word splitting (`Kündigungsschutzklage` vs. `Kündigungsschutz`) is
+a known, deliberately out-of-scope gap: only inflection and umlaut/ß
+spelling variants are unified, not compound nouns.
 
 **`[content_trust]`** — extends the hidden-text `injection_in_hidden` severity
 hint with your own (including non-English) phrases. They **extend** the built-in

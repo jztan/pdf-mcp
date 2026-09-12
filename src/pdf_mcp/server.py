@@ -189,12 +189,15 @@ def _ttl_hours_from_env() -> int:
     return value
 
 
-# Initialize cache, config, and URL fetcher
+# Initialize config, cache, and URL fetcher. Config first: the cache's FTS
+# language mirror ([fts] language = "de") is a startup-time cache setting,
+# not a per-call one, so it has to be known before PDFCache is constructed.
+pdf_config = PDFConfig()
 cache = PDFCache(
     cache_dir=_cache_dir_from_env(),
     ttl_hours=_ttl_hours_from_env(),
+    fts_language=pdf_config.fts_language,
 )
-pdf_config = PDFConfig()
 url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
 
 # Update check: bundle installs only (the bundle sets PDF_MCP_UPDATE_CHECK),

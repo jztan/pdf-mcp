@@ -1,0 +1,20 @@
+{
+  "tag": "tesseract-5.5.2-pdfmcp1",
+  "assets": {
+    "win32-x64": {
+      "file": "pdf-mcp-tesseract-win-x64.zip",
+      "size": 13469839,
+      "sha256": "00005aab11815e7bc469627d57dcdc24e4a6d91f793a27675abd9540369a351f"
+    },
+    "darwin-arm64": {
+      "file": "pdf-mcp-tesseract-macos-arm64.zip",
+      "size": 14224458,
+      "sha256": "564f810661d1437fec4e77ea9b8b55f0bd1b350d2794da23a5107aad667b3389"
+    },
+    "darwin-x64": {
+      "file": "pdf-mcp-tesseract-macos-x64.zip",
+      "size": 14620295,
+      "sha256": "36fee239d709c568967b681d18c562e17fcf443ff692e06ebb99bb7f045b5e98"
+    }
+  }
+}

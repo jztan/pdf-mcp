@@ -485,19 +485,21 @@ test('launcherLog starts over when the file has grown past its cap', async () =>
 test('rmTree clears read-only files and retries when the first delete gets EPERM', async () => {
   // Windows: uv hardlinks venv files from its cache and those are read-only;
   // Node's rm then fails with EPERM (measured on a 3.2.0 venv).
+  const dir = tmpdir(); // exists, so the EPERM is a real failure
   const calls = [];
-  const rm = async (p) => {
+  const rm = async (p, o) => {
     calls.push(`rm ${p}`);
     if (calls.length === 1) { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; }
+    fs.rmSync(p, o);
   };
   const chmod = async (p) => { calls.push(`chmod ${p}`); };
-  await L.rmTree('/v/3.2.0', { rm, chmod });
-  assert.deepStrictEqual(calls, ['rm /v/3.2.0', 'chmod /v/3.2.0', 'rm /v/3.2.0']);
+  await L.rmTree(dir, { rm, chmod });
+  assert.deepStrictEqual(calls, [`rm ${dir}`, `chmod ${dir}`, `rm ${dir}`]);
 });
 
 test('rmTree does not mask other errors', async () => {
   const rm = async () => { const e = new Error('ENOSPC'); e.code = 'ENOSPC'; throw e; };
-  await assert.rejects(L.rmTree('/v/x', { rm, chmod: async () => {} }), /ENOSPC/);
+  await assert.rejects(L.rmTree(tmpdir(), { rm, chmod: async () => {} }), /ENOSPC/);
 });
 
 test('chmodTree makes every file and folder in a tree writable', async () => {
@@ -511,4 +513,12 @@ test('chmodTree makes every file and folder in a tree writable', async () => {
   if (process.platform !== 'win32') assert.ok(fs.statSync(f).mode & 0o200, 'file still read-only');
   fs.rmSync(root, { recursive: true, force: true });
   assert.ok(!fs.existsSync(root));
+});
+
+test('rmTree treats a tree another launcher already deleted as success', async () => {
+  // Claude Desktop starts two or three launchers at once; each prunes, and
+  // the loser of the race gets EPERM on files the winner is deleting.
+  const gone = path.join(tmpdir(), 'already-gone');
+  const rm = async () => { const e = new Error('EPERM'); e.code = 'EPERM'; throw e; };
+  await L.rmTree(gone, { rm, chmod: async () => {} }); // must not throw
 });

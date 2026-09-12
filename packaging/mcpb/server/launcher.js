@@ -239,13 +239,22 @@ async function rmTree(target, { rm = fs.promises.rm, chmod = chmodTree } = {}) {
   // uv hardlinks venv files from its cache, and those are read-only; on
   // Windows Node's rm then fails with EPERM (measured). Clear and retry,
   // as rimraf does.
+  // Claude Desktop also starts two or three launchers at once, each of which
+  // prunes: whoever loses the race sees EPERM on files the winner is
+  // already deleting. A tree that is gone afterwards is a success.
   const opts = { recursive: true, force: true, maxRetries: 3 };
+  const gone = () => !fs.existsSync(target);
   try {
     await rm(target, opts);
   } catch (err) {
+    if (gone()) return;
     if (err.code !== 'EPERM' && err.code !== 'EACCES') throw err;
     await chmod(target);
-    await rm(target, opts);
+    try {
+      await rm(target, opts);
+    } catch (again) {
+      if (!gone()) throw again;
+    }
   }
 }
 

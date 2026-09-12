@@ -204,6 +204,10 @@ function bundleEnv(env, home, version) {
     UV_CACHE_DIR: path.join(root, 'uv-cache'),
     UV_PYTHON_INSTALL_DIR: path.join(root, 'python'),
     UV_PYTHON_PREFERENCE: 'only-managed',
+    // The embedding model (~130 MB) as well: fastembed's default is the
+    // system temp folder, which Windows cleans and MSIX redirects, and macOS
+    // purges, so every clean-up meant another download on the next search.
+    FASTEMBED_CACHE_PATH: env.FASTEMBED_CACHE_PATH || path.join(root, 'fastembed'),
   };
 }
 

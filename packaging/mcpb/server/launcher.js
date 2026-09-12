@@ -20,6 +20,18 @@ const { spawn, spawnSync } = require('child_process');
 const BUNDLE_DIR = path.resolve(__dirname, '..');
 const UV_BASE = 'https://github.com/astral-sh/uv/releases/download/';
 
+// Early-init mode: answer `initialize` at once and hand the stream to the
+// Python server when it is ready. Claude Desktop cancels `initialize` after
+// 60 s and kills the server (measured on Windows Server 2025, 2026-09-12),
+// while a first start downloads uv, Python and ~250 MB of dependencies.
+const EARLY_INIT = true;
+
+// The protocol versions of the pinned Python MCP SDK, which is the server
+// this launcher hands over to. scripts/build_mcpb.py rewrites both lines
+// from that SDK at build time; the values here are mcp 1.28.1's.
+const SUPPORTED_PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
+const LATEST_PROTOCOL_VERSION = '2025-11-25';
+
 class SetupError extends Error {
   constructor(userMessage, detail) {
     super(detail || userMessage);
@@ -189,6 +201,128 @@ function pruneVenvs(root, keep, { rm = fs.rmSync, log = () => {} } = {}) {
   }
 }
 
+function lineReader(onLine) {
+  let buf = '';
+  const feed = (chunk) => {
+    buf += chunk.toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (line) onLine(line);
+    }
+  };
+  const rest = () => { const r = buf; buf = ''; return r; };
+  return { feed, rest };
+}
+
+function negotiateVersion(
+  requested, supported = SUPPORTED_PROTOCOL_VERSIONS, latest = LATEST_PROTOCOL_VERSION,
+) {
+  // The Python SDK's rule, so the launcher's early answer matches what the
+  // real server agrees to at hand-over.
+  return supported.includes(requested) ? requested : latest;
+}
+
+const STARTING =
+  'pdf-mcp is finishing first-time setup (it downloads its components once); ' +
+  'try again in a minute.';
+
+function earlyServe({ stdin, stdout, tools, version }) {
+  const send = (msg) => stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
+  let mode = 'early'; // early -> handing -> piped, or failed
+  let initParams = null;
+  let onInit = null; // resolves a handOver that is waiting for the client
+  const queue = [];
+  const handle = (line) => {
+    if (mode === 'handing') { queue.push(line); return; }
+    if (mode !== 'early') return;
+    let req;
+    try { req = JSON.parse(line); } catch { return; }
+    if (req.id === undefined || req.id === null) return; // notification
+    const { id, method, params = {} } = req;
+    if (method === 'initialize') {
+      initParams = params;
+      send({ id, result: {
+        protocolVersion: negotiateVersion(params.protocolVersion),
+        capabilities: { tools: { listChanged: true } },
+        serverInfo: { name: 'pdf-mcp', version },
+      } });
+      if (onInit) onInit();
+      return undefined;
+    }
+    if (method === 'ping') return send({ id, result: {} });
+    if (method === 'tools/list') {
+      // Real names, so a client that ignores list_changed still reaches the
+      // real tools after hand-over; only this description goes stale.
+      return send({ id, result: { tools: tools.map((t) => ({
+        name: t.name,
+        description: `STARTING: ${STARTING} (When ready: ${t.description})`,
+        inputSchema: { type: 'object', additionalProperties: true },
+      })) } });
+    }
+    if (method === 'tools/call') {
+      return send({ id, result: { content: [{ type: 'text', text: STARTING }], isError: true } });
+    }
+    return send({ id, error: { code: -32603, message: STARTING } });
+  };
+  const reader = lineReader(handle);
+  stdin.on('data', reader.feed);
+
+  async function handOver(child) {
+    if (mode !== 'early') return;
+    if (!initParams) await new Promise((resolve) => { onInit = resolve; });
+    if (mode !== 'early') return; // failed while waiting
+    mode = 'handing';
+    const initId = 'pdf-mcp-launcher-handover';
+    await new Promise((resolve) => {
+      let buf = '';
+      const onChild = (chunk) => {
+        buf += chunk.toString();
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i);
+          buf = buf.slice(i + 1);
+          let msg = null;
+          try { msg = JSON.parse(line); } catch { /* not ours */ }
+          if (msg && msg.id === initId) {
+            child.stdout.removeListener('data', onChild);
+            child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+            stdin.removeListener('data', reader.feed);
+            for (const queued of queue) child.stdin.write(queued + '\n');
+            queue.length = 0;
+            const partial = reader.rest();
+            if (partial) child.stdin.write(partial);
+            mode = 'piped';
+            // Steady state: bytes both ways, nothing parsed.
+            stdin.on('data', (c) => child.stdin.write(c));
+            if (buf) stdout.write(buf);
+            child.stdout.on('data', (c) => stdout.write(c));
+            send({ method: 'notifications/tools/list_changed' });
+            resolve();
+            return;
+          }
+        }
+      };
+      child.stdout.on('data', onChild);
+      child.stdin.write(JSON.stringify({
+        jsonrpc: '2.0', id: initId, method: 'initialize', params: initParams,
+      }) + '\n');
+    });
+  }
+
+  function fail(message) {
+    if (mode === 'piped' || mode === 'failed') return;
+    const pending = queue.length ? queue.join('\n') + '\n' : '';
+    mode = 'failed';
+    stdin.removeListener('data', reader.feed);
+    fallbackServe(message, { stdin, stdout, tools, version, prefill: pending + reader.rest() });
+    send({ method: 'notifications/tools/list_changed' });
+  }
+
+  return { handOver, fail };
+}
+
 function fallbackServe(message, { stdin, stdout, tools, version, prefill = '' }) {
   const send = (msg) => stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
   const handle = (line) => {
@@ -264,9 +398,53 @@ function runServer(cmd, args, { env, stdin, stdout, stderr, onEarlyExit, onExit 
   return child;
 }
 
+async function mainEarly(manifest, pins) {
+  const log = (m) => process.stderr.write(`pdf-mcp launcher: ${m}\n`);
+  const early = earlyServe({
+    stdin: process.stdin, stdout: process.stdout,
+    tools: manifest.tools, version: manifest.version,
+  });
+  let uv;
+  try {
+    uv = await ensureUv({ pins });
+  } catch (err) {
+    log(err.stack || err);
+    return early.fail(err.userMessage || OFFLINE);
+  }
+  const venv = venvDir(process.env, os.homedir(), manifest.version);
+  pruneVenvs(path.dirname(venv), manifest.version, { log });
+  const child = spawn(uv, ['run', '--directory', BUNDLE_DIR, 'src/server.py'], {
+    env: bundleEnv(process.env, os.homedir(), manifest.version),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  let handed = false;
+  let ended = false;
+  let tail = '';
+  child.stderr.on('data', (c) => { process.stderr.write(c); tail = (tail + c.toString()).slice(-2000); });
+  // Shutdown is stdin EOF, before and after hand-over alike.
+  process.stdin.on('end', () => { ended = true; child.stdin.end(); });
+  if (process.platform !== 'win32') {
+    for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
+  }
+  const setupFailed = (why) => {
+    log(`server exited during setup: ${why}\n${tail}`);
+    early.fail(OFFLINE);
+  };
+  child.on('error', (err) => { if (!handed) setupFailed(err.message); });
+  child.on('exit', (code) => {
+    if (handed || ended) return process.exit(code === null ? 1 : code);
+    return setupFailed(`exit ${code}`);
+  });
+  await early.handOver(child);
+  handed = true;
+  return undefined;
+}
+
 async function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, 'manifest.json'), 'utf8'));
   const pins = JSON.parse(fs.readFileSync(path.join(__dirname, 'uv-pins.json'), 'utf8'));
+  if (EARLY_INIT) return mainEarly(manifest, pins);
   const io = { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr };
   const fallback = (message, prefill = '') =>
     fallbackServe(message, { ...io, tools: manifest.tools, version: manifest.version, prefill });
@@ -292,6 +470,7 @@ async function main() {
 module.exports = {
   BUNDLE_DIR, SetupError, platformKey, cacheRoot, uvExeName, tarCommand,
   download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main,
+  EARLY_INIT, SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION, negotiateVersion, earlyServe,
 };
 
 if (process.env.PDF_MCP_LAUNCHER_TEST !== '1') {

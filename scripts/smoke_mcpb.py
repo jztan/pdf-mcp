@@ -33,16 +33,27 @@ def launch_params(bundle_dir: Path, extra_env: dict[str, str]) -> StdioServerPar
     return StdioServerParameters(command=cfg["command"], args=args, env=env)
 
 
+_STARTING = "STARTING:"
+_UNAVAILABLE = "UNAVAILABLE:"
+
+
 async def _run(params: StdioServerParameters, expect_fallback: bool):
     started = time.monotonic()
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            tools = (await session.list_tools()).tools
-            call = None
-            if expect_fallback:
-                call = await session.call_tool(tools[0].name, {})
-    return time.monotonic() - started, tools, call
+            init_seconds = time.monotonic() - started
+            # Early init answers at once with placeholder tools, so a listing
+            # alone proves nothing: poll until the real server has taken over
+            # (or the launcher gave up and switched to its fallback).
+            while True:
+                tools = (await session.list_tools()).tools
+                if not any((t.description or "").startswith(_STARTING) for t in tools):
+                    break
+                await asyncio.sleep(1.0)
+            name = tools[0].name if expect_fallback else "server_info"
+            call = await session.call_tool(name, {})
+    return init_seconds, time.monotonic() - started, tools, call
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -55,23 +66,36 @@ def main(argv: list[str] | None = None) -> int:
     extra = dict(item.split("=", 1) for item in args.extra_env)
     manifest = json.loads((args.bundle_dir / "manifest.json").read_text("utf-8"))
     expected = sorted(t["name"] for t in manifest["tools"])
-    seconds, tools, call = asyncio.run(
+    init_seconds, seconds, tools, call = asyncio.run(
         asyncio.wait_for(
             _run(launch_params(args.bundle_dir, extra), args.expect_fallback),
             args.timeout,
         )
     )
     names = sorted(t.name for t in tools)
-    print(f"startup_seconds={seconds:.1f} tools={len(names)}")
+    # initialize_seconds is what Claude Desktop's 60 s limit applies to;
+    # startup_seconds is until the real server answered a tool call.
+    print(
+        f"initialize_seconds={init_seconds:.1f} "
+        f"startup_seconds={seconds:.1f} tools={len(names)}"
+    )
     if names != expected:
         print(f"tool mismatch: expected {expected}, got {names}", file=sys.stderr)
         return 1
+    descriptions = [t.description or "" for t in tools]
     if args.expect_fallback:
-        ok = all((t.description or "").startswith("UNAVAILABLE:") for t in tools)
-        if not ok or call is None or not call.isError:
+        ok = all(d.startswith(_UNAVAILABLE) for d in descriptions)
+        if not ok or not call.isError:
             print("fallback responder did not report the failure", file=sys.stderr)
             return 1
         print(f"fallback_message={call.content[0].text}")
+        return 0
+    if any(d.startswith((_STARTING, _UNAVAILABLE)) for d in descriptions):
+        print("real server never took over from the launcher", file=sys.stderr)
+        return 1
+    if call.isError:
+        print(f"server_info failed: {call.content}", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -151,3 +151,27 @@ def test_manifest_passes_official_validator(tmp_path):
         shell=sys.platform == "win32",
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_launcher_carries_the_pinned_sdk_protocol_versions():
+    """Early init answers `initialize` before the Python server exists; its
+    version rule must use the same list the real server will."""
+    from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+    from mcp.types import LATEST_PROTOCOL_VERSION
+
+    js = build_mcpb.render_files("1.0.0", pins=[])["server/launcher.js"].decode()
+    quoted = ", ".join(f"'{v}'" for v in SUPPORTED_PROTOCOL_VERSIONS)
+    assert f"const SUPPORTED_PROTOCOL_VERSIONS = [{quoted}];" in js
+    assert f"const LATEST_PROTOCOL_VERSION = '{LATEST_PROTOCOL_VERSION}';" in js
+
+
+def test_render_launcher_rewrites_both_lines():
+    src = (
+        "const SUPPORTED_PROTOCOL_VERSIONS = ['a'];\n"
+        "const LATEST_PROTOCOL_VERSION = 'a';\n"
+    )
+    out = build_mcpb.render_launcher(src, ["x", "y"], "y")
+    assert "const SUPPORTED_PROTOCOL_VERSIONS = ['x', 'y'];" in out
+    assert "const LATEST_PROTOCOL_VERSION = 'y';" in out
+    with pytest.raises(SystemExit):
+        build_mcpb.render_launcher("nothing here", ["x"], "x")

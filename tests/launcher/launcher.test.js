@@ -293,3 +293,119 @@ test('a killed launcher leaves no child running (EOF, not signals)', SPAWNS, asy
     parent.stdin.destroy(); parent.stdout.destroy(); parent.stderr.destroy();
   }
 });
+
+// ---- Early-init mode (Task 4a): answer initialize at once, hand over later.
+
+function fakeChild() {
+  const stdin = new PassThrough(); const stdout = new PassThrough();
+  // What the launcher sent to the child. Tolerant: after hand-over the
+  // launcher forwards raw bytes, and one test sends non-JSON on purpose.
+  const got = [];
+  let buf = '';
+  stdin.on('data', (c) => {
+    buf += c.toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i); buf = buf.slice(i + 1);
+      try { got.push(JSON.parse(line)); } catch { /* raw passthrough */ }
+    }
+  });
+  return { stdin, stdout, got };
+}
+const INIT = (id = 0, v = '2025-06-18') => JSON.stringify({ jsonrpc: '2.0', id, method: 'initialize', params: { protocolVersion: v, capabilities: {}, clientInfo: { name: 'claude-ai', version: '1' } } }) + '\n';
+
+test('negotiateVersion follows the Python SDK rule', () => {
+  const supported = ['2024-11-05', '2025-06-18', '2025-11-25'];
+  assert.strictEqual(L.negotiateVersion('2025-06-18', supported, '2025-11-25'), '2025-06-18');
+  assert.strictEqual(L.negotiateVersion('2099-01-01', supported, '2025-11-25'), '2025-11-25');
+  assert.strictEqual(L.negotiateVersion(undefined, supported, '2025-11-25'), '2025-11-25');
+});
+
+test('early: initialize is answered at once and advertises listChanged', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const out = collect(stdout);
+  L.earlyServe({ stdin, stdout, tools: TOOLS, version: '1.2.3' });
+  stdin.write(INIT(0, '2025-06-18'));
+  await tick();
+  assert.strictEqual(out[0].id, 0);
+  assert.strictEqual(out[0].result.protocolVersion, L.negotiateVersion('2025-06-18'));
+  assert.deepStrictEqual(out[0].result.capabilities, { tools: { listChanged: true } });
+  assert.deepStrictEqual(out[0].result.serverInfo, { name: 'pdf-mcp', version: '1.2.3' });
+});
+
+test('early: tools/list returns the real names as STARTING placeholders; calls say retry', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const out = collect(stdout);
+  L.earlyServe({ stdin, stdout, tools: TOOLS, version: '1' });
+  stdin.write(INIT());
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'pdf_info', arguments: {} } }) + '\n');
+  await tick();
+  const list = out.find((m) => m.id === 1).result.tools;
+  assert.deepStrictEqual(list.map((t) => t.name), TOOLS.map((t) => t.name));
+  assert.ok(list.every((t) => t.description.startsWith('STARTING: pdf-mcp is finishing first-time setup')));
+  const call = out.find((m) => m.id === 2).result;
+  assert.strictEqual(call.isError, true);
+  assert.match(call.content[0].text, /try again in a minute/);
+});
+
+test('early: handOver replays the client initialize, hides the reply, then pipes raw bytes', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const out = collect(stdout);
+  let raw = ''; stdout.on('data', (d) => { raw += d; });
+  const early = L.earlyServe({ stdin, stdout, tools: TOOLS, version: '1' });
+  stdin.write(INIT(0, '2025-06-18'));
+  await tick();
+  const child = fakeChild();
+  const done = early.handOver(child);
+  await tick();
+  // The child got the client's own initialize params under the launcher's id.
+  assert.strictEqual(child.got[0].method, 'initialize');
+  assert.strictEqual(child.got[0].params.protocolVersion, '2025-06-18');
+  assert.deepStrictEqual(child.got[0].params.clientInfo, { name: 'claude-ai', version: '1' });
+  // A request arriving mid-handshake is queued, not answered by the placeholder.
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'pdf_info', arguments: {} } }) + '\n');
+  await tick();
+  assert.ok(!out.some((m) => m.id === 7));
+  child.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: child.got[0].id, result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'pdf-mcp', version: '1' } } }) + '\n');
+  await done;
+  await tick();
+  assert.strictEqual(child.got[1].method, 'notifications/initialized');
+  assert.strictEqual(child.got[2].id, 7); // the queued call, after initialized
+  // The client never saw the child's initialize reply; it did get one list_changed.
+  assert.strictEqual(out.filter((m) => m.id === 0).length, 1);
+  assert.strictEqual(out.filter((m) => m.method === 'notifications/tools/list_changed').length, 1);
+  // From here on the launcher parses nothing, in either direction.
+  child.stdout.write('{"id":7,"result":{"content":[]}}\n');
+  stdin.write('not json at all\n');
+  await tick();
+  assert.ok(raw.endsWith('{"id":7,"result":{"content":[]}}\n'));
+  let childRaw = ''; child.stdin.on('data', (d) => { childRaw += d; });
+  stdin.write('still not json\n');
+  await tick();
+  assert.strictEqual(childRaw, 'still not json\n');
+});
+
+test('early: handOver waits for the client initialize when the server is faster', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough();
+  const early = L.earlyServe({ stdin, stdout, tools: TOOLS, version: '1' });
+  const child = fakeChild();
+  early.handOver(child);
+  await tick();
+  assert.strictEqual(child.got.length, 0); // nothing to replay yet
+  stdin.write(INIT(3, '2025-03-26'));
+  await tick();
+  assert.strictEqual(child.got[0].method, 'initialize');
+  assert.strictEqual(child.got[0].params.protocolVersion, '2025-03-26');
+});
+
+test('early: fail() turns the placeholders into the fallback responder', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const out = collect(stdout);
+  const early = L.earlyServe({ stdin, stdout, tools: TOOLS, version: '1' });
+  stdin.write(INIT());
+  await tick();
+  early.fail('offline, reconnect');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'pdf_info', arguments: {} } }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 6, method: 'tools/list' }) + '\n');
+  await tick();
+  assert.ok(out.some((m) => m.method === 'notifications/tools/list_changed'));
+  assert.match(out.find((m) => m.id === 5).result.content[0].text, /offline, reconnect/);
+  assert.ok(out.find((m) => m.id === 6).result.tools.every((t) => t.description.startsWith('UNAVAILABLE:')));
+});

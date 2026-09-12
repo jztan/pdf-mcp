@@ -62,6 +62,38 @@ def export_pins(root: Path = ROOT, run=subprocess.run) -> list[str]:
     return pins
 
 
+def protocol_versions() -> tuple[list[str], str]:
+    """The MCP protocol versions of the pinned Python SDK (this build venv
+    installs the same mcp pin as the bundle, both from uv.lock). The
+    launcher answers `initialize` early with them, so its answer must match
+    what the real server agrees to at hand-over."""
+    from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+    from mcp.types import LATEST_PROTOCOL_VERSION
+
+    return list(SUPPORTED_PROTOCOL_VERSIONS), str(LATEST_PROTOCOL_VERSION)
+
+
+def render_launcher(source: str, supported: list[str], latest: str) -> str:
+    supported_line = (
+        f"const SUPPORTED_PROTOCOL_VERSIONS = {json.dumps(supported)};".replace(
+            '"', "'"
+        ).replace("','", "', '")
+    )
+    latest_line = f"const LATEST_PROTOCOL_VERSION = '{latest}';"
+    out, n1 = re.subn(
+        r"^const SUPPORTED_PROTOCOL_VERSIONS = .*;$",
+        supported_line,
+        source,
+        flags=re.M,
+    )
+    out, n2 = re.subn(
+        r"^const LATEST_PROTOCOL_VERSION = .*;$", latest_line, out, flags=re.M
+    )
+    if n1 != 1 or n2 != 1:
+        raise SystemExit("launcher.js protocol-version lines not found")
+    return out
+
+
 def render_files(
     version: str, wheel: Path | None = None, pins: list[str] | None = None
 ) -> dict[str, bytes]:
@@ -83,7 +115,10 @@ def render_files(
         "manifest.json": (json.dumps(manifest, indent=2) + "\n").encode("utf-8"),
         "pyproject.toml": pyproject.encode("utf-8"),
         "src/server.py": (TEMPLATE / "src" / "server.py").read_bytes(),
-        "server/launcher.js": (TEMPLATE / "server" / "launcher.js").read_bytes(),
+        "server/launcher.js": render_launcher(
+            (TEMPLATE / "server" / "launcher.js").read_text(encoding="utf-8"),
+            *protocol_versions(),
+        ).encode("utf-8"),
         "server/uv-pins.json": (TEMPLATE / "server" / "uv-pins.json").read_bytes(),
         "icon.png": (TEMPLATE / "icon.png").read_bytes(),
         ".mcpbignore": (TEMPLATE / ".mcpbignore").read_bytes(),

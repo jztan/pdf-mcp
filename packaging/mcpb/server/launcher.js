@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 
 const BUNDLE_DIR = path.resolve(__dirname, '..');
 const UV_BASE = 'https://github.com/astral-sh/uv/releases/download/';
@@ -96,6 +96,22 @@ function download(url, dest, { get = https.get, maxRedirects = 5 } = {}) {
   });
 }
 
+function runAsync(cmd, args, opts = {}) {
+  // Async so a cold start's archive extraction never blocks the event loop
+  // that answers Claude Desktop.
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { ...opts, windowsHide: true });
+    } catch {
+      resolve({ status: null });
+      return;
+    }
+    child.on('error', () => resolve({ status: null }));
+    child.on('exit', (code) => resolve({ status: code }));
+  });
+}
+
 function findFile(dir, name, depth = 2) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -110,7 +126,7 @@ function findFile(dir, name, depth = 2) {
 
 async function ensureUv({
   pins, platform = process.platform, arch = process.arch, env = process.env,
-  home = os.homedir(), get = https.get, run = spawnSync,
+  home = os.homedir(), get = https.get, run = runAsync,
   base = env.PDF_MCP_UV_DOWNLOAD_BASE || UV_BASE,
 }) {
   const key = platformKey(platform, arch);
@@ -146,7 +162,7 @@ async function ensureUv({
     }
     const unpacked = path.join(work, 'x');
     fs.mkdirSync(unpacked);
-    const res = run(tarCommand(platform, env), ['-xf', archive, '-C', unpacked], { stdio: 'ignore' });
+    const res = await run(tarCommand(platform, env), ['-xf', archive, '-C', unpacked], { stdio: 'ignore' });
     const found = res.status === 0 ? findFile(unpacked, exe) : null;
     if (!found) {
       throw new SetupError(OFFLINE, `could not unpack ${asset.file} (tar exit ${res.status})`);
@@ -179,8 +195,11 @@ function bundleEnv(env, home, version) {
   // and one folder is one thing to delete on uninstall. Python comes from
   // python-build-standalone via uv, never the machine's.
   const root = cacheRoot(env, home);
+  // An activated virtualenv in the user's environment must not leak in:
+  // uv would warn about it on every start and it is never the right target.
+  const { VIRTUAL_ENV: _ignored, ...rest } = env;
   return {
-    ...env,
+    ...rest,
     UV_PROJECT_ENVIRONMENT: venvDir(env, home, version),
     UV_CACHE_DIR: path.join(root, 'uv-cache'),
     UV_PYTHON_INSTALL_DIR: path.join(root, 'python'),
@@ -200,17 +219,38 @@ function uvRunCommand(bundleDir, home) {
   };
 }
 
-function pruneVenvs(root, keep, { rm = fs.rmSync, log = () => {} } = {}) {
+async function pruneVenvs(root, keep, { rm = fs.promises.rm, log = () => {} } = {}) {
+  // Async: an old venv is ~250 MB of small files, and deleting it
+  // synchronously blocked the event loop for 12 s (measured), long enough
+  // to leave Claude Desktop's initialize unanswered.
   let entries;
-  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
+  try { entries = await fs.promises.readdir(root, { withFileTypes: true }); } catch { return; }
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name === keep) continue;
     try {
-      rm(path.join(root, entry.name), { recursive: true, force: true });
+      await rm(path.join(root, entry.name), { recursive: true, force: true });
     } catch (err) {
-      log(`pdf-mcp launcher: could not remove old venv ${entry.name}: ${err.message}`);
+      log(`could not remove old venv ${entry.name}: ${err.message}`);
     }
   }
+}
+
+function launcherLog(file, { echo = (m) => process.stderr.write(`${m}\n`), maxBytes = 1024 * 1024 } = {}) {
+  // Claude Desktop does not show an extension's stderr, so the launcher
+  // also keeps its own log beside the cache it manages.
+  try {
+    if (fs.statSync(file).size > maxBytes) fs.rmSync(file, { force: true });
+  } catch { /* no log yet */ }
+  let chain = Promise.resolve();
+  const log = (message) => {
+    const line = `${new Date().toISOString()} ${message}`;
+    try { echo(`pdf-mcp launcher: ${message}`); } catch { /* stderr gone */ }
+    chain = chain.then(() => fs.promises.mkdir(path.dirname(file), { recursive: true }))
+      .then(() => fs.promises.appendFile(file, `${line}\n`))
+      .catch(() => { /* logging must never break the launcher */ });
+  };
+  log.flush = () => chain;
+  return log;
 }
 
 function lineReader(onLine) {
@@ -242,12 +282,13 @@ const STARTING =
 
 function earlyServe({ stdin, stdout, tools, version }) {
   const send = (msg) => stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
-  let mode = 'early'; // early -> handing -> piped, or failed
+  let mode = 'early'; // early -> piped, or failed
   let initParams = null;
   let onInit = null; // resolves a handOver that is waiting for the client
-  const queue = [];
   const handle = (line) => {
-    if (mode === 'handing') { queue.push(line); return; }
+    // Placeholder answers continue until the real server has replied:
+    // Claude Desktop cancels any request after 30 s (measured), and a
+    // Python start can take longer, so nothing is ever queued.
     if (mode !== 'early') return;
     let req;
     try { req = JSON.parse(line); } catch { return; }
@@ -285,7 +326,6 @@ function earlyServe({ stdin, stdout, tools, version }) {
     if (mode !== 'early') return;
     if (!initParams) await new Promise((resolve) => { onInit = resolve; });
     if (mode !== 'early') return; // failed while waiting
-    mode = 'handing';
     const initId = 'pdf-mcp-launcher-handover';
     await new Promise((resolve) => {
       let buf = '';
@@ -300,9 +340,8 @@ function earlyServe({ stdin, stdout, tools, version }) {
           if (msg && msg.id === initId) {
             child.stdout.removeListener('data', onChild);
             child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+            if (mode !== 'early') return; // fail() won the race
             stdin.removeListener('data', reader.feed);
-            for (const queued of queue) child.stdin.write(queued + '\n');
-            queue.length = 0;
             const partial = reader.rest();
             if (partial) child.stdin.write(partial);
             mode = 'piped';
@@ -325,10 +364,9 @@ function earlyServe({ stdin, stdout, tools, version }) {
 
   function fail(message) {
     if (mode === 'piped' || mode === 'failed') return;
-    const pending = queue.length ? queue.join('\n') + '\n' : '';
     mode = 'failed';
     stdin.removeListener('data', reader.feed);
-    fallbackServe(message, { stdin, stdout, tools, version, prefill: pending + reader.rest() });
+    fallbackServe(message, { stdin, stdout, tools, version, prefill: reader.rest() });
     send({ method: 'notifications/tools/list_changed' });
   }
 
@@ -411,7 +449,11 @@ function runServer(cmd, args, { env, cwd, stdin, stdout, stderr, onEarlyExit, on
 }
 
 async function mainEarly(manifest, pins) {
-  const log = (m) => process.stderr.write(`pdf-mcp launcher: ${m}\n`);
+  const home = os.homedir();
+  const log = launcherLog(path.join(cacheRoot(process.env, home), 'launcher.log'));
+  const t0 = Date.now();
+  const since = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+  log(`start pid=${process.pid} version=${manifest.version} node=${process.version} early-init`);
   const early = earlyServe({
     stdin: process.stdin, stdout: process.stdout,
     tools: manifest.tools, version: manifest.version,
@@ -420,12 +462,12 @@ async function mainEarly(manifest, pins) {
   try {
     uv = await ensureUv({ pins });
   } catch (err) {
-    log(err.stack || err);
+    log(`setup failed at ${since()}: ${err.stack || err}`);
     return early.fail(err.userMessage || OFFLINE);
   }
-  const venv = venvDir(process.env, os.homedir(), manifest.version);
-  pruneVenvs(path.dirname(venv), manifest.version, { log });
-  const run = uvRunCommand(BUNDLE_DIR, os.homedir());
+  log(`uv ready at ${since()}: ${uv}`);
+  const venv = venvDir(process.env, home, manifest.version);
+  const run = uvRunCommand(BUNDLE_DIR, home);
   const child = spawn(uv, run.args, {
     env: bundleEnv(process.env, os.homedir(), manifest.version),
     cwd: run.cwd,
@@ -436,22 +478,29 @@ async function mainEarly(manifest, pins) {
   let ended = false;
   let tail = '';
   child.stderr.on('data', (c) => { process.stderr.write(c); tail = (tail + c.toString()).slice(-2000); });
+  log(`spawned uv run (pid ${child.pid}) at ${since()}`);
   // Shutdown is stdin EOF, before and after hand-over alike.
-  process.stdin.on('end', () => { ended = true; child.stdin.end(); });
+  process.stdin.on('end', () => { ended = true; log(`stdin closed at ${since()}`); child.stdin.end(); });
   if (process.platform !== 'win32') {
     for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
   }
   const setupFailed = (why) => {
-    log(`server exited during setup: ${why}\n${tail}`);
+    log(`server exited during setup at ${since()}: ${why}\n${tail}`);
     early.fail(OFFLINE);
   };
   child.on('error', (err) => { if (!handed) setupFailed(err.message); });
-  child.on('exit', (code) => {
-    if (handed || ended) return process.exit(code === null ? 1 : code);
-    return setupFailed(`exit ${code}`);
+  child.on('exit', (code, signal) => {
+    if (handed || ended) {
+      log(`server exited at ${since()}: code=${code} signal=${signal}\n${tail}`);
+      return log.flush().then(() => process.exit(code === null ? 1 : code));
+    }
+    return setupFailed(`exit ${code} signal ${signal}`);
   });
   await early.handOver(child);
   handed = true;
+  log(`handed over to the Python server at ${since()}`);
+  // Old venvs go only now, off the event loop, once the new server is up.
+  pruneVenvs(path.dirname(venv), manifest.version, { log }).catch(() => {});
   return undefined;
 }
 
@@ -470,8 +519,10 @@ async function main() {
     return fallback(err.userMessage || OFFLINE);
   }
   const venv = venvDir(process.env, os.homedir(), manifest.version);
-  pruneVenvs(path.dirname(venv), manifest.version, { log: (m) => process.stderr.write(`${m}\n`) });
   const run = uvRunCommand(BUNDLE_DIR, os.homedir());
+  pruneVenvs(path.dirname(venv), manifest.version, {
+    log: (m) => process.stderr.write(`${m}\n`),
+  }).catch(() => {});
   runServer(uv, run.args, {
     ...io,
     cwd: run.cwd,
@@ -486,6 +537,7 @@ async function main() {
 module.exports = {
   BUNDLE_DIR, SetupError, platformKey, cacheRoot, uvExeName, tarCommand,
   download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main, uvRunCommand,
+  launcherLog, runAsync,
   EARLY_INIT, SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION, negotiateVersion, earlyServe,
 };
 

@@ -216,19 +216,20 @@ test('venvDir is <cache>/venv/<bundle version>, outside the extension folder', (
 });
 
 test('bundleEnv keeps every uv dir under the pdf-mcp cache and forces managed Python', () => {
-  const env = L.bundleEnv({ PATH: '/bin', PDF_MCP_CACHE_DIR: '/c' }, '/home/u', '3.2.0');
+  const env = L.bundleEnv({ PATH: '/bin', PDF_MCP_CACHE_DIR: '/c', VIRTUAL_ENV: '/v' }, '/home/u', '3.2.0');
   assert.strictEqual(env.PATH, '/bin');
+  assert.ok(!('VIRTUAL_ENV' in env));
   assert.strictEqual(env.UV_PROJECT_ENVIRONMENT, path.join('/c', 'venv', '3.2.0'));
   assert.strictEqual(env.UV_CACHE_DIR, path.join('/c', 'uv-cache'));
   assert.strictEqual(env.UV_PYTHON_INSTALL_DIR, path.join('/c', 'python'));
   assert.strictEqual(env.UV_PYTHON_PREFERENCE, 'only-managed');
 });
 
-test('pruneVenvs removes other versions, keeps the current one, survives a failed delete', () => {
+test('pruneVenvs removes other versions, keeps the current one, survives a failed delete', async () => {
   const root = tmpdir();
   for (const v of ['3.0.0', '3.1.0', '3.2.0']) fs.mkdirSync(path.join(root, v));
   const logs = [];
-  L.pruneVenvs(root, '3.2.0', {
+  await L.pruneVenvs(root, '3.2.0', {
     rm: (p, o) => { if (p.endsWith('3.0.0')) throw new Error('EBUSY: locked'); fs.rmSync(p, o); },
     log: (m) => logs.push(m),
   });
@@ -236,8 +237,26 @@ test('pruneVenvs removes other versions, keeps the current one, survives a faile
   assert.match(logs.join('\n'), /EBUSY/);
 });
 
-test('pruneVenvs is a no-op when no venv dir exists yet', () => {
-  L.pruneVenvs(path.join(tmpdir(), 'missing'), '1', {});
+test('pruneVenvs is a no-op when no venv dir exists yet', async () => {
+  await L.pruneVenvs(path.join(tmpdir(), 'missing'), '1', {});
+});
+
+test('pruneVenvs does not block the event loop (a 250 MB venv took 12 s)', async () => {
+  const root = tmpdir();
+  fs.mkdirSync(path.join(root, 'old'));
+  let released;
+  const slowRm = () => new Promise((r) => { released = r; });
+  const pending = L.pruneVenvs(root, 'new', { rm: slowRm });
+  assert.ok(pending instanceof Promise);
+  // The event loop keeps turning while the delete is in flight.
+  let turns = 0;
+  while (!released && turns < 1000) { await new Promise((r) => setImmediate(r)); turns += 1; }
+  assert.ok(released, 'rm was never called');
+  const before = turns;
+  await new Promise((r) => setImmediate(r));
+  assert.ok(turns >= before);
+  released();
+  await pending;
 });
 
 test('stdin EOF ends the child and reports its exit code', SPAWNS, async () => {
@@ -360,23 +379,28 @@ test('early: handOver replays the client initialize, hides the reply, then pipes
   assert.strictEqual(child.got[0].method, 'initialize');
   assert.strictEqual(child.got[0].params.protocolVersion, '2025-06-18');
   assert.deepStrictEqual(child.got[0].params.clientInfo, { name: 'claude-ai', version: '1' });
-  // A request arriving mid-handshake is queued, not answered by the placeholder.
-  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'pdf_info', arguments: {} } }) + '\n');
+  // Until the child has answered, requests still get placeholder answers:
+  // Claude Desktop times a request out after 30 s (measured), and a Python
+  // start can take longer than that.
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/list' }) + '\n');
   await tick();
-  assert.ok(!out.some((m) => m.id === 7));
+  assert.ok(out.find((m) => m.id === 7).result.tools.every((t) => t.description.startsWith('STARTING:')));
   child.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: child.got[0].id, result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'pdf-mcp', version: '1' } } }) + '\n');
   await done;
   await tick();
   assert.strictEqual(child.got[1].method, 'notifications/initialized');
-  assert.strictEqual(child.got[2].id, 7); // the queued call, after initialized
+  // A request written after the hand-over goes to the real server.
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 8, method: 'tools/list' }) + '\n');
+  await tick();
+  assert.strictEqual(child.got[2].id, 8);
   // The client never saw the child's initialize reply; it did get one list_changed.
   assert.strictEqual(out.filter((m) => m.id === 0).length, 1);
   assert.strictEqual(out.filter((m) => m.method === 'notifications/tools/list_changed').length, 1);
   // From here on the launcher parses nothing, in either direction.
-  child.stdout.write('{"id":7,"result":{"content":[]}}\n');
+  child.stdout.write('{"id":8,"result":{"tools":[]}}\n');
   stdin.write('not json at all\n');
   await tick();
-  assert.ok(raw.endsWith('{"id":7,"result":{"content":[]}}\n'));
+  assert.ok(raw.endsWith('{"id":8,"result":{"tools":[]}}\n'));
   let childRaw = ''; child.stdin.on('data', (d) => { childRaw += d; });
   stdin.write('still not json\n');
   await tick();
@@ -433,4 +457,27 @@ test('runServer passes its cwd to the child', async () => {
   } finally {
     child.kill();
   }
+});
+
+test('launcherLog appends timestamped lines to a file in the cache dir', async () => {
+  const dir = tmpdir();
+  const log = L.launcherLog(path.join(dir, 'launcher.log'), { echo: () => {} });
+  log('first');
+  log('second');
+  await log.flush();
+  const text = fs.readFileSync(path.join(dir, 'launcher.log'), 'utf8');
+  const lines = text.trim().split('\n');
+  assert.strictEqual(lines.length, 2);
+  assert.match(lines[0], /^\d{4}-\d{2}-\d{2}T.* first$/);
+  assert.match(lines[1], / second$/);
+});
+
+test('launcherLog starts over when the file has grown past its cap', async () => {
+  const dir = tmpdir();
+  const file = path.join(dir, 'launcher.log');
+  fs.writeFileSync(file, 'x'.repeat(2000));
+  const log = L.launcherLog(file, { echo: () => {}, maxBytes: 1000 });
+  log('fresh');
+  await log.flush();
+  assert.ok(!fs.readFileSync(file, 'utf8').includes('xxxx'));
 });

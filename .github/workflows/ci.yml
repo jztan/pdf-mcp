@@ -154,11 +154,21 @@ jobs:
           version: "latest"
       - name: Install dependencies
         run: uv sync --frozen --extra dev
+      - name: Restore the Tesseract install
+        # choco took about a minute on every run. The UB Mannheim install is a
+        # self-contained folder, so a pinned version restores from cache and
+        # choco runs only when the version (the cache key) changes.
+        id: tesseract-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\Program Files\Tesseract-OCR
+          key: tesseract-choco-5.5.3.20260724
       - name: Install Tesseract
         # Without this the OCR tests skip themselves (shutil.which guard) and
         # the Windows-specific tessdata discovery path would never be tested,
         # which is the single most platform-divergent piece of code we have.
-        run: choco install --no-progress -y tesseract
+        if: steps.tesseract-cache.outputs.cache-hit != 'true'
+        run: choco install --no-progress -y tesseract --version 5.5.3.20260724
       - name: Put Tesseract on PATH
         # choco edits the machine PATH, which does not reliably reach later
         # steps. Without this the which() guard fails and every OCR test
@@ -170,26 +180,6 @@ jobs:
         run: |
           tesseract --version
           uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
-      - name: Build the Claude Desktop bundle from this commit
-        # Proves the node launcher installs this commit's wheel through a
-        # freshly downloaded, pinned uv, with no uv on PATH, and answers an
-        # MCP handshake with every tool the manifest declares.
-        if: matrix.python-version == '3.13'
-        shell: pwsh
-        run: |
-          uv build --wheel
-          $whl = (Get-ChildItem dist/pdf_mcp-*.whl).FullName
-          uv run python scripts/build_mcpb.py --wheel $whl --out bundle-smoke
-          Expand-Archive (Get-ChildItem bundle-smoke/*.mcpb).FullName -DestinationPath bundle-smoke/unpacked
-          npx -y @anthropic-ai/mcpb@2.1.2 validate bundle-smoke/unpacked/manifest.json
-      - name: Start the bundle with nothing preinstalled
-        if: matrix.python-version == '3.13'
-        shell: pwsh
-        run: |
-          $py = (uv run python -c "import sys; print(sys.executable)").Trim()
-          $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_ 'uv.exe')) }) -join ';'
-          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-cold"
-          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --expect-fallback --timeout 120 --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-blocked" --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"
       - name: Restore the embedding model cache
         # bge-small lives only on Hugging Face Hub (fastembed has no mirror
         # for it). Downloading it on every job made the gate depend on that
@@ -226,6 +216,43 @@ jobs:
         # slow.
         run: uv run pytest tests/ -v -m "not slow" -n auto
 
+
+  # The bundle smoke used to run inside test-windows (3.13) and made it the
+  # slowest job by ~1.5 min; on its own it runs alongside the test jobs.
+  bundle-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Launcher unit tests (real tar.exe on a real zip)
+        run: node --test tests/launcher/launcher.test.js
+      - name: Build the Claude Desktop bundle from this commit
+        # Proves the node launcher installs this commit's wheel through a
+        # freshly downloaded, pinned uv, with no uv on PATH, and answers an
+        # MCP handshake with every tool the manifest declares.
+        shell: pwsh
+        run: |
+          uv build --wheel
+          $whl = (Get-ChildItem dist/pdf_mcp-*.whl).FullName
+          uv run python scripts/build_mcpb.py --wheel $whl --out bundle-smoke
+          Expand-Archive (Get-ChildItem bundle-smoke/*.mcpb).FullName -DestinationPath bundle-smoke/unpacked
+          npx -y @anthropic-ai/mcpb@2.1.2 validate bundle-smoke/unpacked/manifest.json
+      - name: Start the bundle with nothing preinstalled
+        shell: pwsh
+        run: |
+          $py = (uv run python -c "import sys; print(sys.executable)").Trim()
+          $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_ 'uv.exe')) }) -join ';'
+          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --pdf pages/corpus/gao-cloud.pdf --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-cold"
+          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --expect-fallback --timeout 120 --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-blocked" --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"
 
   # Claude Desktop cannot run in CI, so this proves the bundle's launcher
   # path on macOS (pinned darwin uv, bsdtar extraction, uv-managed Python,

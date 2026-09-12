@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`PDF_MCP_CUDA=1` now falls back to CPU when the GPU session cannot
+  actually encode.** onnxruntime can load the CUDA provider and still fail
+  on the first batch (a cuDNN or cuBLAS series that does not match the
+  onnxruntime-gpu build, or a GPU with no free memory). The server used to
+  accept such a session and the failure surfaced inside the first search
+  or corpus warm. It now runs one short test encode when the model loads,
+  and on failure warns with the error and uses the CPU.
+
 ## [3.2.0] - 2026-09-12
 ### Added
 

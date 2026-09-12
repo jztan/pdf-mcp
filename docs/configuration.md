@@ -126,7 +126,7 @@ What the variable does:
 
 | `PDF_MCP_CUDA` | behaviour |
 |---|---|
-| `1` | GPU. If the CUDA provider cannot load, the server warns with the provider it actually got and falls back to CPU instead of running slower in silence. |
+| `1` | GPU. If the CUDA provider cannot load, or loads but fails a one-line test encode (a cuDNN or cuBLAS series mismatch, or a card out of memory), the server warns with the reason and falls back to CPU instead of running slower in silence or failing mid-search. |
 | `0` | CPU, always. |
 | unset | fastembed decides. On a plain install that is the CPU, exactly as before. On a machine where onnxruntime-gpu is installed and a CUDA runtime is already on the library path (a system-wide CUDA toolkit, for example) it auto-detects the GPU even though nothing asked for it. Set `0` if that is not what you want. |
 

@@ -175,6 +175,24 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
         )
         return None
     if "CUDAExecutionProvider" in _providers(candidate):
+        # get_providers() lists what registered, not what will run. A cuDNN or
+        # cuBLAS series mismatch, a missing libcudnn, or a card with no free
+        # memory all build a session that names CUDA and then raise on the
+        # first batch, which would land inside a user's search with no CPU
+        # fallback left. One short encode here surfaces it while falling back
+        # is still possible. embed() is lazy, so the list() is what runs it.
+        try:
+            list(candidate.embed(["cuda probe"]))
+        except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+            warnings.warn(
+                "PDF_MCP_CUDA is set and onnxruntime loaded the CUDA provider, "
+                f"but a test encode on it failed ({exc!r}); using CPU. Usually "
+                "the installed cuDNN or cuBLAS is the wrong series for this "
+                "onnxruntime-gpu build, or the GPU is out of memory.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return None
         return candidate
     # The likely causes, in the order they happen, because this is the only
     # place the environment's shape is visible. A resolver cannot check any of

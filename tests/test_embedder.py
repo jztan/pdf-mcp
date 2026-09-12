@@ -240,6 +240,82 @@ def test_cuda_session_raising_falls_back(monkeypatch):
     assert result is cpu
 
 
+def test_cuda_session_that_cannot_encode_falls_back(monkeypatch):
+    """A session that lists CUDA but fails its first encode falls back to CPU.
+
+    get_providers() reports what was registered, not what will run: a cuDNN
+    or cuBLAS series mismatch, a missing libcudnn, or an out-of-memory card
+    all build a session that names CUDA and then raise on the first batch.
+    The probe encode catches that at load time, while a CPU fallback is
+    still possible, rather than inside a user's search.
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    broken = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    broken.embed.side_effect = RuntimeError("CUDNN_STATUS_NOT_INITIALIZED")
+    cpu = _session_with(["CPUExecutionProvider"])
+    cls = MagicMock(side_effect=[broken, cpu])
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="CUDNN_STATUS_NOT_INITIALIZED"):
+                result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is cpu
+    assert cls.call_count == 2  # the CUDA attempt, then the CPU fallback
+
+
+def test_cuda_probe_consumes_the_lazy_embed_generator(monkeypatch):
+    """fastembed's embed() is a generator: nothing runs until it is iterated.
+
+    A probe that only calls embed() would pass on every broken session, so
+    the failure has to be raised from iteration, not from the call.
+    """
+    import pdf_mcp.embedder as emb
+
+    def lazy_failure(texts):
+        raise RuntimeError("CUBLAS_STATUS_ALLOC_FAILED")
+        yield  # pragma: no cover - makes this a generator
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    broken = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    broken.embed.side_effect = lazy_failure
+    cpu = _session_with(["CPUExecutionProvider"])
+    cls = MagicMock(side_effect=[broken, cpu])
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="CUBLAS_STATUS_ALLOC_FAILED"):
+                result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is cpu
+
+
+def test_cuda_probe_runs_one_short_encode(monkeypatch):
+    """A working CUDA session is kept, and the probe costs one short text."""
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    gpu = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    cls = MagicMock(return_value=gpu)
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is gpu
+    gpu.embed.assert_called_once()
+    (texts,), _ = gpu.embed.call_args
+    assert len(texts) == 1 and len(texts[0]) < 50
+
+
 def test_cuda_requested_accepts_several_spellings(monkeypatch):
     """1, true, yes and on all mean yes; anything else means no."""
     import pdf_mcp.embedder as emb

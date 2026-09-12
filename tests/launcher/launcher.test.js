@@ -180,13 +180,19 @@ test('runServer pipes bytes both ways', SPAWNS, async () => {
   const echo = path.join(tmpdir(), 'echo.js');
   fs.writeFileSync(echo, "process.stdin.on('data', (d) => process.stdout.write(d));");
   const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
-  let got = '';
-  stdout.on('data', (d) => { got += d; });
   const child = L.runServer(process.execPath, [echo], { env: process.env, stdin, stdout, stderr, onEarlyExit: () => assert.fail('no early exit'), onExit: () => {} });
-  stdin.write('{"hello":1}\n');
-  await tick(); await tick();
-  assert.strictEqual(got, '{"hello":1}\n');
-  child.kill();
+  try {
+    // Wait for the echo, not a fixed delay: a loaded CI runner can take far
+    // longer than a few ticks to start a node child.
+    const got = await new Promise((resolve) => {
+      let buf = '';
+      stdout.on('data', (d) => { buf += d; if (buf.endsWith('\n')) resolve(buf); });
+      stdin.write('{"hello":1}\n');
+    });
+    assert.strictEqual(got, '{"hello":1}\n');
+  } finally {
+    child.kill(); // a live child would keep this file's event loop alive
+  }
 });
 
 test('runServer reports an early exit with the forwarded input and stderr tail', SPAWNS, async () => {

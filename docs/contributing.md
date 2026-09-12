@@ -63,6 +63,8 @@ uv run pytest tests/test_benchmark_rrf_v2.py \
 
 The coherence guard is the one to leave alone unless you mean to spend money on it.
 
+**Prose-only pushes do not run the matrix.** `ci.yml` ignores pushes that touch only documentation (README, CHANGELOG, SECURITY, `docs/`, `pages/`, the issue and PR templates, and the markdown under `benchmark_data/`). Those pushes run `docs.yml` instead: one Linux job that runs the docs-vs-code consistency tests, the README contributors check, and the demo fusion parity script, since those read the docs. A push that mixes code and docs runs everything. The two path lists must match, and `tests/test_ci_workflows.py` fails if they drift.
+
 ### Cross-platform notes
 
 CI runs the suite on Windows as well as Linux, and it is not a formality: it has caught bugs no Linux job could see, including OCR failing outright on a default Windows Tesseract install (the install path contains a space) and cold `pdf_search` taking 17.5s there against 3.2s on Linux. Two habits keep changes portable:

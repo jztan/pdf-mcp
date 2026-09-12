@@ -154,7 +154,149 @@ async function ensureUv({
   }
 }
 
+function venvDir(env, home, version) {
+  // Outside the extension folder, which Claude Desktop replaces on every
+  // update or reinstall; per version, so a new bundle never runs on an old
+  // bundle's pins.
+  return path.join(cacheRoot(env, home), 'venv', version);
+}
+
+function bundleEnv(env, home, version) {
+  // All uv state under the pdf-mcp cache: uv's defaults live under AppData,
+  // which MSIX redirects to Claude Desktop's private storage on Windows,
+  // and one folder is one thing to delete on uninstall. Python comes from
+  // python-build-standalone via uv, never the machine's.
+  const root = cacheRoot(env, home);
+  return {
+    ...env,
+    UV_PROJECT_ENVIRONMENT: venvDir(env, home, version),
+    UV_CACHE_DIR: path.join(root, 'uv-cache'),
+    UV_PYTHON_INSTALL_DIR: path.join(root, 'python'),
+    UV_PYTHON_PREFERENCE: 'only-managed',
+  };
+}
+
+function pruneVenvs(root, keep, { rm = fs.rmSync, log = () => {} } = {}) {
+  let entries;
+  try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === keep) continue;
+    try {
+      rm(path.join(root, entry.name), { recursive: true, force: true });
+    } catch (err) {
+      log(`pdf-mcp launcher: could not remove old venv ${entry.name}: ${err.message}`);
+    }
+  }
+}
+
+function fallbackServe(message, { stdin, stdout, tools, version, prefill = '' }) {
+  const send = (msg) => stdout.write(JSON.stringify({ jsonrpc: '2.0', ...msg }) + '\n');
+  const handle = (line) => {
+    let req;
+    try { req = JSON.parse(line); } catch { return; }
+    if (req.id === undefined || req.id === null) return; // notification
+    const { id, method, params = {} } = req;
+    if (method === 'initialize') {
+      return send({ id, result: {
+        protocolVersion: params.protocolVersion || '2025-06-18',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'pdf-mcp', version },
+      } });
+    }
+    if (method === 'ping') return send({ id, result: {} });
+    if (method === 'tools/list') {
+      return send({ id, result: { tools: tools.map((t) => ({
+        name: t.name,
+        description: `UNAVAILABLE: pdf-mcp could not finish setting up. ${message} (When working: ${t.description})`,
+        inputSchema: { type: 'object', additionalProperties: true },
+      })) } });
+    }
+    if (method === 'tools/call') {
+      return send({ id, result: { content: [{ type: 'text', text: message }], isError: true } });
+    }
+    return send({ id, error: { code: -32603, message } });
+  };
+  let buf = '';
+  const feed = (chunk) => {
+    buf += chunk.toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (line) handle(line);
+    }
+  };
+  if (prefill) feed(prefill);
+  stdin.on('data', feed);
+}
+
+function runServer(cmd, args, { env, stdin, stdout, stderr, onEarlyExit, onExit = process.exit }) {
+  const child = spawn(cmd, args, { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  let started = false;
+  let forwarded = '';
+  let tail = '';
+  const onInput = (chunk) => {
+    if (!started) forwarded += chunk.toString();
+    child.stdin.write(chunk);
+  };
+  stdin.on('data', onInput);
+  // Shutdown is stdin EOF: works on every OS, and if the launcher is killed
+  // outright the OS closes this pipe's write end, so the child still exits.
+  stdin.on('end', () => child.stdin.end());
+  child.stdout.on('data', (chunk) => { started = true; forwarded = ''; stdout.write(chunk); });
+  child.stderr.on('data', (chunk) => { stderr.write(chunk); tail = (tail + chunk.toString()).slice(-2000); });
+  if (process.platform !== 'win32') {
+    // Courtesy only; Windows has no SIGTERM to forward.
+    for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
+  }
+  let reported = false; // 'error' and 'exit' can both fire for one failure
+  const early = (why) => {
+    if (reported) return;
+    reported = true;
+    stdin.removeListener('data', onInput);
+    onEarlyExit(forwarded, `${tail}${why ? `\n${why}` : ''}`);
+  };
+  child.on('error', (err) => early(err.message));
+  child.on('exit', (code) => {
+    if (!started) return early(`exit ${code}`);
+    onExit(code === null ? 1 : code);
+  });
+  return child;
+}
+
+async function main() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(BUNDLE_DIR, 'manifest.json'), 'utf8'));
+  const pins = JSON.parse(fs.readFileSync(path.join(__dirname, 'uv-pins.json'), 'utf8'));
+  const io = { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr };
+  const fallback = (message, prefill = '') =>
+    fallbackServe(message, { ...io, tools: manifest.tools, version: manifest.version, prefill });
+  let uv;
+  try {
+    uv = await ensureUv({ pins });
+  } catch (err) {
+    process.stderr.write(`pdf-mcp launcher: ${err.stack || err}\n`);
+    return fallback(err.userMessage || OFFLINE);
+  }
+  const venv = venvDir(process.env, os.homedir(), manifest.version);
+  pruneVenvs(path.dirname(venv), manifest.version, { log: (m) => process.stderr.write(`${m}\n`) });
+  runServer(uv, ['run', '--directory', BUNDLE_DIR, 'src/server.py'], {
+    ...io,
+    env: bundleEnv(process.env, os.homedir(), manifest.version),
+    onEarlyExit: (prefill, tail) => {
+      process.stderr.write(`pdf-mcp launcher: server exited during setup:\n${tail}\n`);
+      fallback(OFFLINE, prefill);
+    },
+  });
+}
+
 module.exports = {
   BUNDLE_DIR, SetupError, platformKey, cacheRoot, uvExeName, tarCommand,
-  download, ensureUv,
+  download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main,
 };
+
+if (process.env.PDF_MCP_LAUNCHER_TEST !== '1') {
+  main().catch((err) => {
+    process.stderr.write(`pdf-mcp launcher: ${err.stack || err}\n`);
+    process.exit(1);
+  });
+}

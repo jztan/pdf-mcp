@@ -123,3 +123,145 @@ test('ensureUv reports an offline download in plain words', async () => {
     (err) => err instanceof L.SetupError && /internet/i.test(err.userMessage),
   );
 });
+
+const { PassThrough } = require('node:stream');
+
+function collect(stream) {
+  const lines = [];
+  let buf = '';
+  stream.on('data', (c) => {
+    buf += c.toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) { lines.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); }
+  });
+  return lines;
+}
+const tick = () => new Promise((r) => setTimeout(r, 30));
+const TOOLS = [{ name: 'pdf_info', description: 'Page count.' }, { name: 'pdf_search', description: 'Search.' }];
+
+test('fallback answers initialize, ping, tools/list, tools/call; ignores notifications', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough();
+  const out = collect(stdout);
+  L.fallbackServe('offline, reconnect', { stdin, stdout, tools: TOOLS, version: '1.2.3' });
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'pdf_info', arguments: {} } }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'resources/list' }) + '\n');
+  await tick();
+  assert.deepStrictEqual(out.map((m) => m.id), [1, 2, 3, 4, 5]); // no reply to the notification
+  assert.strictEqual(out[0].result.protocolVersion, '2025-06-18');
+  assert.deepStrictEqual(out[0].result.capabilities, { tools: {} });
+  assert.deepStrictEqual(out[0].result.serverInfo, { name: 'pdf-mcp', version: '1.2.3' });
+  assert.deepStrictEqual(out[1].result, {});
+  assert.strictEqual(out[2].result.tools.length, 2);
+  assert.ok(out[2].result.tools.every((t) => t.description.startsWith('UNAVAILABLE: pdf-mcp could not finish setting up.')));
+  assert.ok(out[2].result.tools.every((t) => t.inputSchema.type === 'object'));
+  assert.strictEqual(out[3].result.isError, true);
+  assert.match(out[3].result.content[0].text, /offline, reconnect/);
+  assert.match(out[4].error.message, /offline, reconnect/);
+});
+
+test('fallback replays prefilled input (the initialize the child never answered)', async () => {
+  const stdin = new PassThrough(); const stdout = new PassThrough();
+  const out = collect(stdout);
+  const prefill = JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'initialize', params: {} }) + '\n';
+  L.fallbackServe('m', { stdin, stdout, tools: TOOLS, version: '1', prefill });
+  await tick();
+  assert.strictEqual(out[0].id, 7);
+});
+
+test('runServer pipes bytes both ways', async () => {
+  const echo = path.join(tmpdir(), 'echo.js');
+  fs.writeFileSync(echo, "process.stdin.on('data', (d) => process.stdout.write(d));");
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
+  let got = '';
+  stdout.on('data', (d) => { got += d; });
+  const child = L.runServer(process.execPath, [echo], { env: process.env, stdin, stdout, stderr, onEarlyExit: () => assert.fail('no early exit'), onExit: () => {} });
+  stdin.write('{"hello":1}\n');
+  await tick(); await tick();
+  assert.strictEqual(got, '{"hello":1}\n');
+  child.kill();
+});
+
+test('runServer reports an early exit with the forwarded input and stderr tail', async () => {
+  const dies = path.join(tmpdir(), 'dies.js');
+  fs.writeFileSync(dies, "process.stdin.once('data', () => { process.stderr.write('no network'); process.exit(2); });");
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
+  const seen = await new Promise((resolve) => {
+    L.runServer(process.execPath, [dies], { env: process.env, stdin, stdout, stderr, onEarlyExit: (prefill, tail) => resolve({ prefill, tail }) });
+    stdin.write('{"id":1}\n');
+  });
+  assert.strictEqual(seen.prefill, '{"id":1}\n');
+  assert.match(seen.tail, /no network/);
+});
+
+test('venvDir is <cache>/venv/<bundle version>, outside the extension folder', () => {
+  assert.strictEqual(
+    L.venvDir({}, '/home/u', '3.2.0'),
+    path.join('/home/u', '.cache', 'pdf-mcp', 'venv', '3.2.0'),
+  );
+  assert.strictEqual(L.venvDir({ PDF_MCP_CACHE_DIR: '/x' }, '/home/u', '1'), path.join('/x', 'venv', '1'));
+});
+
+test('bundleEnv keeps every uv dir under the pdf-mcp cache and forces managed Python', () => {
+  const env = L.bundleEnv({ PATH: '/bin', PDF_MCP_CACHE_DIR: '/c' }, '/home/u', '3.2.0');
+  assert.strictEqual(env.PATH, '/bin');
+  assert.strictEqual(env.UV_PROJECT_ENVIRONMENT, path.join('/c', 'venv', '3.2.0'));
+  assert.strictEqual(env.UV_CACHE_DIR, path.join('/c', 'uv-cache'));
+  assert.strictEqual(env.UV_PYTHON_INSTALL_DIR, path.join('/c', 'python'));
+  assert.strictEqual(env.UV_PYTHON_PREFERENCE, 'only-managed');
+});
+
+test('pruneVenvs removes other versions, keeps the current one, survives a failed delete', () => {
+  const root = tmpdir();
+  for (const v of ['3.0.0', '3.1.0', '3.2.0']) fs.mkdirSync(path.join(root, v));
+  const logs = [];
+  L.pruneVenvs(root, '3.2.0', {
+    rm: (p, o) => { if (p.endsWith('3.0.0')) throw new Error('EBUSY: locked'); fs.rmSync(p, o); },
+    log: (m) => logs.push(m),
+  });
+  assert.deepStrictEqual(fs.readdirSync(root).sort(), ['3.0.0', '3.2.0']);
+  assert.match(logs.join('\n'), /EBUSY/);
+});
+
+test('pruneVenvs is a no-op when no venv dir exists yet', () => {
+  L.pruneVenvs(path.join(tmpdir(), 'missing'), '1', {});
+});
+
+test('stdin EOF ends the child and reports its exit code', async () => {
+  const eof = path.join(tmpdir(), 'eof.js');
+  fs.writeFileSync(eof, "process.stdin.on('data', (d) => process.stdout.write(d)); process.stdin.on('end', () => process.exit(3));");
+  const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
+  const code = await new Promise((resolve) => {
+    L.runServer(process.execPath, [eof], {
+      env: process.env, stdin, stdout, stderr,
+      onEarlyExit: () => assert.fail('no early exit'), onExit: resolve,
+    });
+    stdin.write('{"id":1}\n');
+    setTimeout(() => stdin.end(), 100);
+  });
+  assert.strictEqual(code, 3);
+});
+
+test('a killed launcher leaves no child running (EOF, not signals)', async () => {
+  const { spawn } = require('node:child_process');
+  const dir = tmpdir();
+  const childJs = path.join(dir, 'child.js');
+  fs.writeFileSync(childJs, "process.stdout.write(process.pid + '\\n'); process.stdin.resume(); process.stdin.on('end', () => process.exit(0));");
+  const parentJs = path.join(dir, 'parent.js');
+  const launcher = path.resolve(__dirname, '../../packaging/mcpb/server/launcher.js');
+  fs.writeFileSync(parentJs, [
+    "process.env.PDF_MCP_LAUNCHER_TEST = '1';",
+    `const L = require(${JSON.stringify(launcher)});`,
+    `L.runServer(process.execPath, [${JSON.stringify(childJs)}], { env: process.env,`,
+    '  stdin: process.stdin, stdout: process.stdout, stderr: process.stderr, onEarlyExit() {} });',
+  ].join('\n'));
+  const parent = spawn(process.execPath, [parentJs], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const childPid = await new Promise((r) => parent.stdout.once('data', (d) => r(Number(String(d).trim()))));
+  parent.kill('SIGKILL'); // TerminateProcess on Windows: no signal reaches the child either way
+  const alive = () => { try { process.kill(childPid, 0); return true; } catch { return false; } };
+  for (let i = 0; i < 50 && alive(); i += 1) await new Promise((r) => setTimeout(r, 100));
+  assert.strictEqual(alive(), false, `child ${childPid} outlived its launcher`);
+});

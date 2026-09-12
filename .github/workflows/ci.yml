@@ -170,6 +170,26 @@ jobs:
         run: |
           tesseract --version
           uv run python -c "import shutil; assert shutil.which('tesseract'), 'tesseract not on PATH'"
+      - name: Build the Claude Desktop bundle from this commit
+        # Proves the node launcher installs this commit's wheel through a
+        # freshly downloaded, pinned uv, with no uv on PATH, and answers an
+        # MCP handshake with every tool the manifest declares.
+        if: matrix.python-version == '3.13'
+        shell: pwsh
+        run: |
+          uv build --wheel
+          $whl = (Get-ChildItem dist/pdf_mcp-*.whl).FullName
+          uv run python scripts/build_mcpb.py --wheel $whl --out bundle-smoke
+          Expand-Archive (Get-ChildItem bundle-smoke/*.mcpb).FullName -DestinationPath bundle-smoke/unpacked
+          npx -y @anthropic-ai/mcpb@2.1.2 validate bundle-smoke/unpacked/manifest.json
+      - name: Start the bundle with nothing preinstalled
+        if: matrix.python-version == '3.13'
+        shell: pwsh
+        run: |
+          $py = (uv run python -c "import sys; print(sys.executable)").Trim()
+          $env:PATH = ($env:PATH -split ';' | Where-Object { -not (Test-Path (Join-Path $_ 'uv.exe')) }) -join ';'
+          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --timeout 900 --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-cold"
+          & $py scripts/smoke_mcpb.py bundle-smoke/unpacked --expect-fallback --timeout 120 --extra-env "PDF_MCP_CACHE_DIR=$env:RUNNER_TEMP\pdfmcp-blocked" --extra-env "PDF_MCP_UV_DOWNLOAD_BASE=https://127.0.0.1:9/"
       - name: Restore the embedding model cache
         # bge-small lives only on Hugging Face Hub (fastembed has no mirror
         # for it). Downloading it on every job made the gate depend on that

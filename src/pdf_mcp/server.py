@@ -5924,14 +5924,16 @@ def main() -> None:
     Run the MCP server using STDIO transport.
 
     STDIO is used because:
-    - Claude Desktop spawns a new process per conversation
+    - Claude Desktop starts the server with the app and keeps it for the
+      app's lifetime
     - Communication happens via stdin/stdout
-    - Process exits after conversation ends
+    - Process exits when the client closes stdin
 
     That's why we use SQLite caching - it persists between process restarts.
     """
     # Explicitly use STDIO transport (this is the default, but being explicit)
-    mcp.run(transport="stdio")
+    # show_banner=False: fastmcp's banner also checks PyPI for a newer fastmcp.
+    mcp.run(transport="stdio", show_banner=False)
 
 
 def main_http() -> None:
@@ -5998,7 +6000,7 @@ def main_http() -> None:
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
     path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")
 
-    mcp.run(transport="http", host=host, port=port, path=path)
+    mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
 
 
 if __name__ == "__main__":

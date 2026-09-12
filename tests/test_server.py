@@ -5318,6 +5318,7 @@ class TestHTTPTransportEntryPoint:
             "host": "127.0.0.1",
             "port": 8000,
             "path": "/mcp",
+            "show_banner": False,
         }
 
     def test_host_port_path_come_from_env(self, monkeypatch):
@@ -5339,7 +5340,7 @@ class TestHTTPTransportEntryPoint:
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
         server.main()
-        assert captured == {"transport": "stdio"}
+        assert captured == {"transport": "stdio", "show_banner": False}
 
     def _allowlisted_config(self, tmp_path):
         cfg = tmp_path / "config.toml"
@@ -5417,7 +5418,7 @@ class TestHTTPTransportEntryPoint:
 
         server.main()
 
-        assert captured == {"transport": "stdio"}
+        assert captured == {"transport": "stdio", "show_banner": False}
 
     def test_health_route_is_registered_and_unauthenticated(
         self, tmp_path, monkeypatch

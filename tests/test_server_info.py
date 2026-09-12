@@ -317,3 +317,13 @@ def test_server_info_ocr_flag_is_live(monkeypatch):
     assert server.server_info()["features"]["extraction"]["ocr"]["available"] is False
     monkeypatch.setattr(server, "find_tesseract", lambda: "/x/tesseract")
     assert server.server_info()["features"]["extraction"]["ocr"]["available"] is True
+
+
+def test_main_runs_without_banner(monkeypatch):
+    """fastmcp checks PyPI for its own updates while printing its banner."""
+    from pdf_mcp import server
+
+    seen = {}
+    monkeypatch.setattr(server.mcp, "run", lambda **kw: seen.update(kw))
+    server.main()
+    assert seen == {"transport": "stdio", "show_banner": False}

@@ -1,11 +1,16 @@
 # tests/test_release.py
 """Tests for scripts/release.py pre-flight behavior."""
 
+import hashlib
 import inspect
+import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -492,3 +497,93 @@ def test_approved_notes_reject_empty_or_missing_files(tmp_path):
         release.load_approved_notes(path, "1.1.0", SECTION)
     with pytest.raises(release.NotesFileError, match="not found"):
         release.load_approved_notes(tmp_path / "missing.md", "1.1.0", SECTION)
+
+
+def _project_copy(tmp_path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    src = Path(__file__).parent.parent
+    shutil.copy(src / "server.json", root / "server.json")
+    shutil.copy(src / "CHANGELOG.md", root / "CHANGELOG.md")
+    return root
+
+
+@pytest.fixture
+def no_export(monkeypatch):
+    import build_mcpb
+
+    monkeypatch.setattr(build_mcpb, "export_pins", lambda *a, **k: ["anyio==4.13.0"])
+
+
+def test_mcpb_release_url():
+    assert release.mcpb_release_url("3.2.0") == (
+        "https://github.com/jztan/pdf-mcp/releases/download/v3.2.0/pdf-mcp-3.2.0.mcpb"
+    )
+
+
+def test_build_and_register_adds_mcpb_entry(tmp_path, no_export):
+    root = _project_copy(tmp_path)
+    path = release.build_and_register_mcpb(root, "3.2.0", dry_run=False)
+    data = json.loads((root / "server.json").read_text())
+    assert data["packages"][0]["registryType"] == "pypi"
+    mcpb = [p for p in data["packages"] if p["registryType"] == "mcpb"]
+    assert len(mcpb) == 1
+    assert mcpb[0]["identifier"] == release.mcpb_release_url("3.2.0")
+    assert mcpb[0]["fileSha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert mcpb[0]["transport"] == {"type": "stdio"}
+
+
+def test_build_and_register_is_idempotent(tmp_path, no_export):
+    root = _project_copy(tmp_path)
+    release.build_and_register_mcpb(root, "3.2.0", dry_run=False)
+    release.build_and_register_mcpb(root, "3.2.1", dry_run=False)
+    data = json.loads((root / "server.json").read_text())
+    mcpb = [p for p in data["packages"] if p["registryType"] == "mcpb"]
+    assert len(mcpb) == 1 and mcpb[0]["identifier"].endswith("pdf-mcp-3.2.1.mcpb")
+
+
+def test_dry_run_writes_nothing(tmp_path, no_export):
+    root = _project_copy(tmp_path)
+    before = (root / "server.json").read_text()
+    assert release.build_and_register_mcpb(root, "3.2.0", dry_run=True) is None
+    assert (root / "server.json").read_text() == before
+
+
+def test_asset_refused_when_hash_mismatches(tmp_path, no_export):
+    root = _project_copy(tmp_path)
+    path = release.build_and_register_mcpb(root, "3.2.0", dry_run=False)
+    assert release.mcpb_asset_for_upload(root, "3.2.0") == path
+    path.write_bytes(b"tampered")
+    assert release.mcpb_asset_for_upload(root, "3.2.0") is None
+
+
+def test_create_github_release_attaches_bundle(tmp_path, monkeypatch, no_export):
+    root = _project_copy(tmp_path)
+    path = release.build_and_register_mcpb(root, "3.2.0", dry_run=False)
+    calls = []
+
+    class Ok:
+        returncode = 0
+        stdout = stderr = ""
+
+    monkeypatch.setattr(
+        release, "run_command", lambda cmd, **kw: calls.append(cmd) or Ok()
+    )
+    config = release.ReleaseConfig(bump_type="minor", dry_run=False, project_root=root)
+    release.create_github_release(config, "3.2.0")
+    create = next(c for c in calls if c[:3] == ["gh", "release", "create"])
+    assert str(path) in create
+
+
+def test_bundle_built_after_lock_regeneration(monkeypatch, tmp_path):
+    order = []
+    monkeypatch.setattr(release, "regenerate_uv_lock", lambda c: order.append("lock"))
+    monkeypatch.setattr(
+        release, "build_and_register_mcpb", lambda r, v, d: order.append("mcpb")
+    )
+    monkeypatch.setattr(release, "run_command", lambda *a, **k: None)
+    config = release.ReleaseConfig(
+        bump_type="minor", dry_run=True, project_root=tmp_path
+    )
+    release.commit_version_bump(config, "3.2.0")
+    assert order == ["lock", "mcpb"]

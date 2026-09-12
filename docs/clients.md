@@ -47,6 +47,10 @@ Or add to `~/.claude.json`:
    of PDFs. A PDF attached to the chat is read by Claude directly and does
    not go through pdf-mcp.
 
+Needs Windows 10 or later, macOS 13 or later on an Intel Mac, or macOS 14 or
+later on an Apple Silicon Mac (the oldest versions pdf-mcp's search engine,
+onnxruntime, is built for).
+
 Works in Claude Desktop's **Chat**. Cowork and Claude Code inside Claude
 Desktop start extensions differently and need Node.js installed on the
 computer; if you use those, install with pip below.

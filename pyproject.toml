@@ -57,8 +57,9 @@ dependencies = [
     # Semantic/hybrid search. Core, not an extra (since the corpus-search
     # release): hybrid RRF is the validated core of the tool and every install
     # channel (PyPI, MCP Registry, uvx) should deliver it. Platform note: pulls onnxruntime, which
-    # has no wheels for Intel macOS on Python 3.14+ or musl/Alpine — those
-    # environments need Python <= 3.13 or a from-source onnxruntime build.
+    # has no Intel-macOS wheels from 1.24 on (so none for Python 3.14+ there,
+    # where fastembed needs >=1.24.2) and none for musl/Alpine. [tool.uv]
+    # required-environments below keeps Intel Macs on <=3.13 installable.
     # Do not declare a new Python version in classifiers/CI before
     # fastembed/onnxruntime ship wheels for it.
     "fastembed>=0.7,<1.0",
@@ -229,3 +230,15 @@ ignore_missing_imports = true
 module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]
 disallow_untyped_calls = false
 warn_unused_ignores = false
+
+[tool.uv]
+# The Claude Desktop bundle installs exactly these locked pins, on every
+# platform it lists, Intel Macs included. onnxruntime stopped shipping
+# Intel-Mac wheels at 1.24, so require the lock to resolve for Intel macOS:
+# uv then pins the last onnxruntime with Intel-Mac wheels (1.23.2) there and
+# keeps 1.24+ elsewhere. Python 3.14 is excluded because fastembed needs
+# onnxruntime >=1.24.2 on it, which has no Intel-Mac wheel; the bundle caps
+# Python below 3.14 anyway.
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.14'",
+]

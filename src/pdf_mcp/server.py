@@ -33,6 +33,7 @@ from . import __version__
 from . import chart_extractor
 from . import content_trust
 from . import corpus
+from . import updates
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
 from .extractor import (
@@ -195,6 +196,25 @@ cache = PDFCache(
 )
 pdf_config = PDFConfig()
 url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
+
+# Update check: bundle installs only (the bundle sets PDF_MCP_UPDATE_CHECK),
+# and `[updates] check` in the config always wins. Claude Desktop does not
+# show server `instructions` to the model, so the notice rides on the first
+# dict-shaped tool result of this process; instructions carry it too for
+# clients that read them.
+_UPDATE_CHECK_ENABLED = updates.check_enabled(pdf_config.update_check)
+_BASE_INSTRUCTIONS: str = mcp.instructions or ""
+
+
+def _initial_notice(enabled: bool, cache_dir: Path) -> str:
+    if not enabled:
+        return ""
+    return updates.notice_text(updates.update_status(__version__, cache_dir, True))
+
+
+_pending_notice = _initial_notice(_UPDATE_CHECK_ENABLED, cache.cache_dir)
+if _pending_notice:
+    mcp.instructions = f"{_BASE_INSTRUCTIONS}\n\nUPDATE: {_pending_notice}"
 
 
 def _resolve_path(
@@ -4872,6 +4892,9 @@ def server_info() -> dict[str, Any]:
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
                    precedent).
+        - update: {current, latest, update_available, checked_at,
+                   download_url} from the daily update check, or null when
+                   the check is off (every pip/uvx install by default).
     """
     # max_workers: resolve the actually-in-effect cap (PDF_MCP_MAX_WORKERS
     # override or the min(cpu_count, cap) default) by reusing resolve_workers
@@ -4881,6 +4904,9 @@ def server_info() -> dict[str, Any]:
     allow_patterns = pdf_config.path_allow_patterns
     return {
         "version": __version__,
+        "update": updates.update_status(
+            __version__, cache.cache_dir, _UPDATE_CHECK_ENABLED
+        ),
         "features": _live_features(),
         "documents": {
             "access_mode": ("allowlist" if allow_patterns else "unrestricted"),
@@ -5919,6 +5945,41 @@ def pdf_extract_chart(
 # ============================================================================
 
 
+from fastmcp.server.middleware import Middleware, MiddlewareContext  # noqa: E402
+from fastmcp.tools import ToolResult  # noqa: E402
+from mcp.types import TextContent  # noqa: E402
+
+
+class _UpdateNoticeMiddleware(Middleware):
+    """Adds the pending update notice to the first dict-shaped tool result.
+
+    Rebuilds the result from the updated dict so the JSON text block (what
+    clients such as Claude Desktop show the model) and structuredContent
+    both carry it. List-shaped results (pdf_render_pages) are left alone;
+    the notice waits for the next dict result.
+    """
+
+    async def on_call_tool(  # type: ignore[override]
+        self, context: MiddlewareContext, call_next: Any
+    ) -> ToolResult:
+        global _pending_notice  # noqa: PLW0603
+        result: ToolResult = await call_next(context)
+        data = result.structured_content
+        single_text = len(result.content) == 1 and isinstance(
+            result.content[0], TextContent
+        )
+        if _pending_notice and isinstance(data, dict) and single_text:
+            updated = {**data, "notice": _pending_notice}
+            _pending_notice = ""
+            return ToolResult(
+                content=updated, structured_content=updated, meta=result.meta
+            )
+        return result
+
+
+mcp.add_middleware(_UpdateNoticeMiddleware())
+
+
 def main() -> None:
     """
     Run the MCP server using STDIO transport.
@@ -5932,6 +5993,8 @@ def main() -> None:
     That's why we use SQLite caching - it persists between process restarts.
     """
     # Explicitly use STDIO transport (this is the default, but being explicit)
+    if _UPDATE_CHECK_ENABLED:
+        updates.start_background_refresh(cache.cache_dir)
     # show_banner=False: fastmcp's banner also checks PyPI for a newer fastmcp.
     mcp.run(transport="stdio", show_banner=False)
 

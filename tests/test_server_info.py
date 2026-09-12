@@ -327,3 +327,38 @@ def test_main_runs_without_banner(monkeypatch):
     monkeypatch.setattr(server.mcp, "run", lambda **kw: seen.update(kw))
     server.main()
     assert seen == {"transport": "stdio", "show_banner": False}
+
+
+def test_server_info_update_is_null_when_check_off(monkeypatch):
+    from pdf_mcp import server
+
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    assert server.server_info()["update"] is None
+
+
+def test_server_info_update_block_when_on(monkeypatch, isolated_server):
+    from pdf_mcp import server, updates
+
+    cache, _ = isolated_server
+    (cache.cache_dir / updates.CACHE_FILENAME).write_text(
+        json.dumps({"latest": "999.0.0", "checked_at": 0.0})
+    )
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    block = server.server_info()["update"]
+    assert block["latest"] == "999.0.0" and block["update_available"] is True
+
+
+def test_main_starts_check_only_when_on(monkeypatch):
+    from pdf_mcp import server, updates
+
+    started = []
+    monkeypatch.setattr(
+        updates, "start_background_refresh", lambda d: started.append(d)
+    )
+    monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    server.main()
+    assert started == []  # pip/uvx default: zero update-check requests
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    server.main()
+    assert started == [server.cache.cache_dir]

@@ -10,13 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **One-click install for Claude Desktop.** Every release now ships a
-  `pdf-mcp-<version>.mcpb` bundle. Download it from the release page and
-  double-click it; nothing needs to be installed first, not Python and not
-  uv. The first start downloads pdf-mcp's components (about 250 MB; usually
-  under a minute on a fast connection, longer on a slow one) into
-  `~/.cache/pdf-mcp`; later starts take about a second. Works in Claude Desktop's Chat. If setup cannot finish (for
-  example the computer is offline), Claude is told why in plain words
-  instead of seeing a disconnected server.
+  `pdf-mcp-<version>.mcpb` bundle. Download it and drag it onto Claude
+  Desktop's Settings > Extensions page; nothing needs to be installed
+  first, not Python and not uv. The first start downloads pdf-mcp's
+  components (about 250 MB) into `~/.cache/pdf-mcp` and can take a few
+  minutes; Claude sees the tools right away and they start answering once
+  setup finishes. Later starts take seconds, and installing a newer
+  bundle replaces the old one in place, even while it is running. Works
+  in Claude Desktop's Chat. If setup cannot finish (for example the
+  computer is offline), Claude is told why in plain words instead of
+  seeing a disconnected server.
 
 - **Bundle installs learn about new versions.** Once a day the bundle asks
   PyPI whether a newer pdf-mcp exists, and Claude mentions it once, on the

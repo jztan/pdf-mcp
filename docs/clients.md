@@ -35,17 +35,25 @@ Or add to `~/.claude.json`:
 
 1. Download `pdf-mcp-<version>.mcpb` from the
    [latest release](https://github.com/jztan/pdf-mcp/releases/latest).
-2. Double-click it. Claude Desktop opens an install dialog; click **Install**.
+2. In Claude Desktop open **Settings > Extensions** and drag the file onto
+   that page (double-clicking the file also works on some computers). Click
+   **Install**.
 3. The first start downloads pdf-mcp's components (about 250 MB) and needs an
-   internet connection; usually under a minute on a fast connection, longer on
-   a slow one. Later starts take about a second.
+   internet connection; it can take a few minutes. Claude sees the tools
+   right away and they start working once setup finishes. Later starts take
+   seconds.
+4. Use it in a **Chat**: give Claude the file's location, for example
+   "Use pdf-mcp to summarize C:\Users\me\Downloads\report.pdf", or a folder
+   of PDFs. A PDF attached to the chat is read by Claude directly and does
+   not go through pdf-mcp.
 
 Works in Claude Desktop's **Chat**. Cowork and Claude Code inside Claude
 Desktop start extensions differently and need Node.js installed on the
 computer; if you use those, install with pip below.
 
-**Updating:** download the newer `.mcpb` and double-click it. With "Check for
-updates" left on, Claude tells you when a new version is out.
+**Updating:** download the newer `.mcpb` and drag it onto Settings >
+Extensions the same way; it replaces the installed version in place. With
+"Check for updates" left on, Claude tells you when a new version is out.
 
 **Uninstalling:** remove pdf-mcp in Claude Desktop's extension settings, then
 delete the folder `.cache\pdf-mcp` in your user folder

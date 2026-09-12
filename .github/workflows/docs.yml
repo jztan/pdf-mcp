@@ -1,0 +1,81 @@
+name: Docs
+
+# The prose-only counterpart of ci.yml. Docs are not test-free:
+# tests/test_docs_consistency.py pins the tool list, the released version
+# and internal link anchors against README, ROADMAP and docs/;
+# test_committed_readme_contributors_match_the_changelog holds the README
+# contributors block to the CHANGELOG credits; and
+# scripts/check_demo_fusion_parity.mjs diffs the JS fusion block in
+# pages/index.html against Python-generated fixtures. A plain paths-ignore
+# on the matrix would have dropped all three, so they run here instead,
+# on one runner and one Python, whenever a push touches only the paths
+# ci.yml ignores. The `paths` list must equal ci.yml's `paths-ignore`
+# list; tests/test_ci_workflows.py enforces that.
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'docs/**'
+      - 'pages/**'
+      - 'examples/README.md'
+      - 'benchmark_data/**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+
+  push:
+    branches:
+      - develop
+      - feature/*
+      - release/*
+      - hotfix/*
+    paths:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'docs/**'
+      - 'pages/**'
+      - 'examples/README.md'
+      - 'benchmark_data/**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+      - name: Install dependencies
+        # The consistency test imports pdf_mcp.server to enumerate the
+        # registered tools, so it needs the real package, not just pytest.
+        # No embedding model is loaded on import, so no model cache here.
+        run: uv sync --frozen --extra dev
+      - name: Docs-vs-code consistency
+        run: >
+          uv run pytest -v
+          tests/test_docs_consistency.py
+          tests/test_ci_workflows.py
+          "tests/test_release.py::test_committed_readme_contributors_match_the_changelog"
+      - name: Demo fusion parity
+        # The JS fusion block in pages/index.html must reproduce the Python
+        # RRF fixtures byte for byte. Node is preinstalled on the runner.
+        run: node scripts/check_demo_fusion_parity.mjs

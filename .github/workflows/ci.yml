@@ -1,10 +1,31 @@
 name: CI
 
+# Prose-only pushes skip this matrix. The `paths-ignore` list below is
+# the set of files nothing here reads; every push that touches anything
+# else (a mixed docs-plus-code push included, GitHub evaluates the filter
+# against the whole push) still runs all seven jobs. The docs that ARE
+# read by tests (README, CHANGELOG, ROADMAP, docs/, the fusion block in
+# pages/index.html) get their own one-job check in docs.yml, which
+# triggers on exactly this list. tests/test_ci_workflows.py holds the two
+# lists to the same set, so a path cannot be dropped from one and not the
+# other. Before 2026-09-12 a CHANGELOG-only merge to develop ran the full
+# matrix (5 Linux + 2 Windows, ~20 minutes of wall time) for nothing.
 on:
   pull_request:
     branches:
       - main
       - develop
+    paths-ignore:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'docs/**'
+      - 'pages/**'
+      - 'examples/README.md'
+      - 'benchmark_data/**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
 
   push:
     branches:
@@ -12,6 +33,17 @@ on:
       - feature/*
       - release/*
       - hotfix/*
+    paths-ignore:
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'docs/**'
+      - 'pages/**'
+      - 'examples/README.md'
+      - 'benchmark_data/**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
 
   workflow_dispatch:  # allows manual run from GitHub UI
 

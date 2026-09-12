@@ -342,6 +342,12 @@ def ocr_page_text(
     # TESSDATA_PREFIX carries it intact, and is what Tesseract's own error
     # message recommends. Only used for the spaced case, so the flag path
     # that already works everywhere else is left alone.
+    if tessdata is None:
+        # Same fallback as the tesserocr path: a portable macOS/Linux
+        # Tesseract has no compiled-in tessdata path and would look in "./".
+        from ..extractor import _resolve_tessdata
+
+        tessdata = _resolve_tessdata()
     config = ""
     restore: tuple[bool, str | None] = (False, None)
     if tessdata:

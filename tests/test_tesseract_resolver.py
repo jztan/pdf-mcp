@@ -128,3 +128,51 @@ def test_check_tesseract_available_uses_os_message(monkeypatch):
     with pytest.raises(RuntimeError) as info:
         extractor.check_tesseract_available()
     assert str(info.value) == extractor.missing_tesseract_message("win32")
+
+
+def test_resolve_tessdata_skips_a_reported_dir_without_traineddata(
+    monkeypatch, tmp_path
+):
+    """A portable macOS/Linux Tesseract has no compiled-in tessdata path and
+    reports "./" (measured on the pdf-mcp-tesseract macOS builds). That is a
+    directory but not tessdata: fall back to the folder beside the binary."""
+    exe = _make_exe(tmp_path / "portable" / "tesseract")
+    tessdata = tmp_path / "portable" / "tessdata"
+    tessdata.mkdir()
+    (tessdata / "eng.traineddata").write_bytes(b"")
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
+    monkeypatch.setattr(extractor, "find_tesseract", lambda: exe)
+
+    class Result:
+        stdout = 'List of available languages in "./" (0):\n'
+        stderr = ""
+
+    monkeypatch.setattr("subprocess.run", lambda cmd, **kwargs: Result())
+    assert extractor._resolve_tessdata() == str(tessdata)
+
+
+def test_pytesseract_path_resolves_tessdata_when_none_given(monkeypatch):
+    """ocr_page_text(tessdata=None) on the pytesseract path must pass the
+    resolved folder, as the tesserocr path does, instead of leaving a
+    portable Tesseract to look in "./"."""
+    from pdf_mcp.backend import raster
+
+    monkeypatch.setenv("PDF_MCP_OCR", "pytesseract")
+    monkeypatch.setattr(raster, "_text_layer", lambda *a: "")
+    monkeypatch.setattr(raster, "_scan_native_dpi", lambda *a: None)
+    monkeypatch.setattr(raster, "render_page", lambda *a, **k: object())
+    monkeypatch.setattr(extractor, "_resolve_tessdata", lambda: "/portable/tessdata")
+    seen = {}
+
+    import pytesseract
+
+    def fake_image_to_string(image, lang, config):
+        seen["config"] = config
+        return "text"
+
+    monkeypatch.setattr(pytesseract, "image_to_string", fake_image_to_string)
+    assert raster.ocr_page_text("x.pdf", 0) == "text"
+    assert seen["config"] == "--tessdata-dir /portable/tessdata"

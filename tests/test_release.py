@@ -387,3 +387,108 @@ def test_prompt_forbids_victory_claims_in_headlines():
     prompt = release.RELEASE_NOTES_PROMPT
     assert "measured against" in prompt
     assert '"ahead of"' in prompt
+
+
+# The notes used to be editable only through $EDITOR mid-release (vi when
+# unset), and --dry-run printed its draft without saving it. These pin the
+# draft-then-release flow: the dry run saves a draft, the maintainer edits it
+# in any app, and the real run publishes that file instead of regenerating.
+
+UNRELEASED = (
+    "# Changelog\n\n## [Unreleased]\n"
+    "<!-- headline: corpus search -->\n"
+    "### Added\n- **thing**\n\n"
+    "### Contributors\n- @alice — reported it ([#1](https://x/1))\n\n"
+    "## [1.0.0] - 2026-01-01\n- old\n"
+)
+SECTION = "### Added\n- **thing**\n\n### Contributors\n- @alice — reported it"
+
+
+def _fake_claude(calls):
+    def fake_run(cmd, **kwargs):
+        calls.append(kwargs["input"])
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout="TITLE 1: One\nTITLE 2: Two\nTITLE 3: Three\n"
+            "## Highlights\n\nThanks @alice.",
+            stderr="",
+        )
+
+    return fake_run
+
+
+def _config(tmp_path):
+    (tmp_path / "CHANGELOG.md").write_text(UNRELEASED, encoding="utf-8")
+    return release.ReleaseConfig("minor", dry_run=True, project_root=tmp_path)
+
+
+def test_dry_run_saves_the_draft_with_every_title_candidate(tmp_path):
+    config = _config(tmp_path)
+    path = release.notes_file_path(tmp_path, "1.1.0")
+    calls: list = []
+    with patch.object(release.subprocess, "run", _fake_claude(calls)):
+        release.preview_release_notes(config, "1.1.0", path)
+
+    text = path.read_text(encoding="utf-8")
+    assert "v1.1.0: Two" in text and "v1.1.0: Three" in text
+    assert "corpus search" in calls[0]  # the headline hint still steers it
+    title, body = release.read_notes_file(path)
+    assert title == "v1.1.0: One"
+    # The alternates are a drafting aid; they never reach the published body.
+    assert "v1.1.0: Two" not in body
+    assert body.startswith("## Highlights")
+    assert "pip install pdf-mcp==1.1.0" in body
+
+
+def test_dry_run_never_overwrites_an_existing_draft(tmp_path):
+    config = _config(tmp_path)
+    path = release.notes_file_path(tmp_path, "1.1.0")
+    release.write_notes_file(path, "v1.1.0: Mine", "hand edited")
+    calls: list = []
+    with patch.object(release.subprocess, "run", _fake_claude(calls)):
+        release.preview_release_notes(config, "1.1.0", path)
+    assert calls == []
+    assert release.read_notes_file(path) == ("v1.1.0: Mine", "hand edited")
+
+
+def test_an_edited_title_line_is_the_one_published(tmp_path):
+    path = tmp_path / "notes.md"
+    release.write_notes_file(
+        path, "v1.1.0: One", "body @alice", alternates=["v1.1.0: Two"]
+    )
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace("title: v1.1.0: One", "title: v1.1.0: Two"))
+    assert release.load_approved_notes(path, "1.1.0", SECTION) == (
+        "v1.1.0: Two",
+        "body @alice",
+    )
+
+
+def test_approved_notes_must_name_the_version_being_cut(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.0.9: Old draft", "body @alice")
+    with pytest.raises(release.NotesFileError, match="v1.1.0"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+
+
+def test_approved_notes_must_keep_every_contributor(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.1.0: Fine", "no credits here")
+    with pytest.raises(release.NotesFileError, match="@alice"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+
+
+def test_approved_notes_reject_empty_or_missing_files(tmp_path):
+    import pytest
+
+    path = tmp_path / "notes.md"
+    release.write_notes_file(path, "v1.1.0: Fine", "")
+    with pytest.raises(release.NotesFileError, match="empty"):
+        release.load_approved_notes(path, "1.1.0", SECTION)
+    with pytest.raises(release.NotesFileError, match="not found"):
+        release.load_approved_notes(tmp_path / "missing.md", "1.1.0", SECTION)

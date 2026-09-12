@@ -307,3 +307,13 @@ class TestStorageCapabilities:
         from pdf_mcp.server import cache
 
         assert server_info()["storage"]["keyword_search_ranked"] is cache.fts_available
+
+
+def test_server_info_ocr_flag_is_live(monkeypatch):
+    """The OCR flag follows the resolver at call time, not a startup probe."""
+    from pdf_mcp import server
+
+    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    assert server.server_info()["features"]["extraction"]["ocr"]["available"] is False
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/x/tesseract")
+    assert server.server_info()["features"]["extraction"]["ocr"]["available"] is True

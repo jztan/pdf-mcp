@@ -9,6 +9,7 @@ Usage:
 """
 
 import base64
+import copy
 import hashlib
 import json
 import logging
@@ -39,6 +40,7 @@ from .extractor import (
     _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
+    find_tesseract,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -391,13 +393,11 @@ def _detect_features() -> dict[str, Any]:
     (`extractor.column_detection_available`) so the reported flag can never
     drift from what extraction actually does.
     """
-    import shutil
-
     from . import embedder, extractor
 
     column_aware = extractor.column_detection_available()
     vertical_aware = extractor.vertical_detection_available()
-    ocr_available = shutil.which("tesseract") is not None
+    ocr_available = find_tesseract() is not None
 
     search: dict[str, Any] = {
         "modes_available": ["keyword"],
@@ -4798,6 +4798,18 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
     return sorted(roots)
 
 
+def _live_features() -> dict[str, Any]:
+    """Startup feature probe with the OCR flag re-checked per call.
+
+    Claude Desktop keeps servers for the app's lifetime and Tesseract can be
+    installed meanwhile; OCR re-resolves the binary per call, so the flag
+    must too.
+    """
+    features = copy.deepcopy(_SERVER_FEATURES)
+    features["extraction"]["ocr"]["available"] = find_tesseract() is not None
+    return features
+
+
 @mcp.tool(
     description=(
         "Report which optional features are installed and what "
@@ -4813,7 +4825,8 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
         "list, document roots, and active config values. Cheap to call "
         "(no I/O beyond reading process state and stat-ing the configured "
         "roots). Results are stable for the server's lifetime, except that "
-        "a root appears once its directory exists on disk."
+        "a root appears once its directory exists on disk and OCR shows as "
+        "available once Tesseract is installed."
     )
 )
 def server_info() -> dict[str, Any]:
@@ -4869,7 +4882,7 @@ def server_info() -> dict[str, Any]:
     allow_patterns = pdf_config.path_allow_patterns
     return {
         "version": __version__,
-        "features": _SERVER_FEATURES,
+        "features": _live_features(),
         "documents": {
             "access_mode": ("allowlist" if allow_patterns else "unrestricted"),
             "roots": _document_roots(allow_patterns),

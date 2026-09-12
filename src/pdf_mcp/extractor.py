@@ -53,6 +53,46 @@ logger = logging.getLogger(__name__)
 # subprocess discovery (which PyMuPDF does via fragile shell=True on Windows).
 _TESSDATA_PATH: str | None = None
 
+# Resolved Tesseract binary, cached only on a hit: a miss is retried on the
+# next call, so installing Tesseract mid-session needs no restart.
+_TESSERACT_EXE: str | None = None
+
+# A server started by Claude Desktop does not see the shell PATH: macOS
+# Dock/Finder launches miss Homebrew, and the Windows installer does not add
+# itself to PATH (measured on windows-latest). Standard install locations:
+_MACOS_TESSERACT_DIRS: tuple[str, ...] = ("/opt/homebrew/bin", "/usr/local/bin")
+_WINDOWS_TESSERACT_ROOTS: tuple[str, ...] = ("ProgramFiles", "ProgramFiles(x86)")
+
+
+def _tesseract_candidates(
+    platform: str, environ: typing.Mapping[str, str]
+) -> list[str]:
+    """Standard non-PATH install locations for this platform, in order."""
+    if platform == "win32":
+        return [
+            os.path.join(base, "Tesseract-OCR", "tesseract.exe")
+            for var in _WINDOWS_TESSERACT_ROOTS
+            if (base := environ.get(var))
+        ]
+    if platform == "darwin":
+        return [os.path.join(d, "tesseract") for d in _MACOS_TESSERACT_DIRS]
+    return []
+
+
+def find_tesseract() -> str | None:
+    """Absolute path to the Tesseract binary, or None when not installed."""
+    global _TESSERACT_EXE  # noqa: PLW0603
+    if _TESSERACT_EXE is not None and os.path.isfile(_TESSERACT_EXE):
+        return _TESSERACT_EXE
+    exe = shutil.which("tesseract")
+    if exe is None:
+        for candidate in _tesseract_candidates(sys.platform, os.environ):
+            if os.path.isfile(candidate):
+                exe = candidate
+                break
+    _TESSERACT_EXE = exe
+    return exe
+
 
 def _has_traineddata(path: str) -> bool:
     """Check if path contains any .traineddata files."""
@@ -130,8 +170,11 @@ def _resolve_tessdata() -> str | None:
             if os.path.isdir(subdir) and _has_traineddata(subdir):
                 return subdir
             return env_path
+        exe = find_tesseract()
+        if exe is None:
+            return None
         result = subprocess.run(
-            ["tesseract", "--list-langs"],
+            [exe, "--list-langs"],
             capture_output=True,
             text=True,
             check=True,
@@ -152,11 +195,9 @@ def _resolve_tessdata() -> str | None:
             alt = path.replace("/", "\\")
             if os.path.isdir(alt):
                 return alt
-        exe = shutil.which("tesseract")
-        if exe:
-            candidate = os.path.join(os.path.dirname(exe), "tessdata")
-            if os.path.isdir(candidate):
-                return candidate
+        candidate = os.path.join(os.path.dirname(exe), "tessdata")
+        if os.path.isdir(candidate):
+            return candidate
     except Exception:
         pass
     return None
@@ -1616,7 +1657,8 @@ def native_render_dpi_cap(doc: Any, page_num: int) -> "int | None":
 
 def check_tesseract_available() -> None:
     """
-    Verify Tesseract binary is on PATH, and cache tessdata path.
+    Verify a Tesseract binary is installed (find_tesseract), and cache
+    the tessdata path.
 
     Raises:
         RuntimeError: If tesseract binary is not found or returns non-zero.
@@ -1625,12 +1667,11 @@ def check_tesseract_available() -> None:
 
     global _TESSDATA_PATH  # noqa: PLW0603
 
+    exe = find_tesseract()
     try:
-        subprocess.run(
-            ["tesseract", "--version"],
-            capture_output=True,
-            check=True,
-        )
+        if exe is None:
+            raise FileNotFoundError("tesseract")
+        subprocess.run([exe, "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         raise RuntimeError(
             "Tesseract not found. Install with: "

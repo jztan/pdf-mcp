@@ -1596,9 +1596,10 @@ class TestExtractorRenderAndOcr:
         from unittest.mock import patch
         from pdf_mcp.extractor import check_tesseract_available
 
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            with pytest.raises(RuntimeError, match="Tesseract not found"):
-                check_tesseract_available()
+        with patch("pdf_mcp.extractor.find_tesseract", return_value=None):
+            with patch("subprocess.run", side_effect=FileNotFoundError):
+                with pytest.raises(RuntimeError, match="Tesseract not found"):
+                    check_tesseract_available()
 
     def test_check_tesseract_available_passes_when_present(self):
         """check_tesseract_available does not raise when binary is present."""
@@ -1607,8 +1608,11 @@ class TestExtractorRenderAndOcr:
 
         mock_result = MagicMock()
         mock_result.returncode = 0
-        with patch("subprocess.run", return_value=mock_result):
-            check_tesseract_available()  # should not raise
+        with patch(
+            "pdf_mcp.extractor.find_tesseract", return_value="/usr/bin/tesseract"
+        ):
+            with patch("subprocess.run", return_value=mock_result):
+                check_tesseract_available()  # should not raise
 
     def test_ocr_page_returns_string(self, sample_pdf):
         """ocr_page returns a string (may be empty if tesseract not installed)."""

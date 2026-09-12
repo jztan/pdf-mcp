@@ -2660,6 +2660,17 @@ class TestPdfReadPagesOcr:
         result = pdf_search(sample_pdf_scanned, "fox", mode="keyword")
         assert result["total_matches"] >= 1
 
+    def test_ocr_install_hint_uses_exact_winget_id(self, sample_pdf, isolated_server):
+        from unittest.mock import patch
+
+        with patch(
+            "pdf_mcp.server.check_tesseract_available",
+            side_effect=RuntimeError("Tesseract not found."),
+        ):
+            result = pdf_read_pages(sample_pdf, "1", ocr=True)
+        assert "UB-Mannheim.TesseractOCR" in result["install_hint"]
+        assert "TESSDATA_PREFIX" in result["install_hint"]
+
 
 class TestPdfSearchSource:
     """Tests for source field on pdf_search matches (v1.10.0)."""
@@ -5307,6 +5318,7 @@ class TestHTTPTransportEntryPoint:
             "host": "127.0.0.1",
             "port": 8000,
             "path": "/mcp",
+            "show_banner": False,
         }
 
     def test_host_port_path_come_from_env(self, monkeypatch):
@@ -5328,7 +5340,7 @@ class TestHTTPTransportEntryPoint:
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
         server.main()
-        assert captured == {"transport": "stdio"}
+        assert captured == {"transport": "stdio", "show_banner": False}
 
     def _allowlisted_config(self, tmp_path):
         cfg = tmp_path / "config.toml"
@@ -5406,7 +5418,7 @@ class TestHTTPTransportEntryPoint:
 
         server.main()
 
-        assert captured == {"transport": "stdio"}
+        assert captured == {"transport": "stdio", "show_banner": False}
 
     def test_health_route_is_registered_and_unauthenticated(
         self, tmp_path, monkeypatch

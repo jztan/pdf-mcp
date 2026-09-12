@@ -334,3 +334,30 @@ substring matching; `server_info` reports this as
 - Automatic when file modification time changes
 - Manual via the `pdf_cache_clear` tool
 - TTL: 24 hours (configurable)
+
+## Network requests
+
+pdf-mcp works offline except for these:
+
+- **URLs you pass it:** `path` can be an `https://` URL; pdf-mcp downloads it.
+- **Embedding model:** the first semantic search downloads the model once.
+- **Update check (Claude Desktop bundle only):** once a day, one anonymous
+  HTTPS GET to `https://pypi.org/pypi/pdf-mcp/json` (no file paths, no
+  document content, no identifiers), in the background, giving up after 3
+  seconds. pip and uvx installs never make it. Turn it off by unticking
+  **Check for updates** in Claude Desktop's extension settings, with
+  `PDF_MCP_UPDATE_CHECK=0`, or in `~/.config/pdf-mcp/config.toml`:
+
+  ```toml
+  [updates]
+  check = false
+  ```
+
+  The config file wins over the other two; `check = true` turns the check on
+  for any install.
+- **Bundle first start:** the Claude Desktop bundle downloads uv from
+  Astral's GitHub releases (`github.com/astral-sh/uv`, checked against a
+  SHA-256 shipped in the bundle), then Python from Astral's
+  python-build-standalone GitHub releases, then pdf-mcp and its
+  dependencies (exact versions, pinned in the bundle) from PyPI. A new
+  bundle version downloads only what changed.

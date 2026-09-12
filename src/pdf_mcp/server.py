@@ -9,6 +9,7 @@ Usage:
 """
 
 import base64
+import copy
 import hashlib
 import json
 import logging
@@ -32,6 +33,7 @@ from . import __version__
 from . import chart_extractor
 from . import content_trust
 from . import corpus
+from . import updates
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
 from .extractor import (
@@ -39,6 +41,7 @@ from .extractor import (
     _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
+    find_tesseract,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -52,6 +55,7 @@ from .extractor import (
     page_text_chars,
     stale_layout_pages,
     parse_page_range,
+    tesseract_install_hint,
     render_page_as_image,
     render_page_as_png,
 )
@@ -192,6 +196,25 @@ cache = PDFCache(
 )
 pdf_config = PDFConfig()
 url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
+
+# Update check: bundle installs only (the bundle sets PDF_MCP_UPDATE_CHECK),
+# and `[updates] check` in the config always wins. Claude Desktop does not
+# show server `instructions` to the model, so the notice rides on the first
+# dict-shaped tool result of this process; instructions carry it too for
+# clients that read them.
+_UPDATE_CHECK_ENABLED = updates.check_enabled(pdf_config.update_check)
+_BASE_INSTRUCTIONS: str = mcp.instructions or ""
+
+
+def _initial_notice(enabled: bool, cache_dir: Path) -> str:
+    if not enabled:
+        return ""
+    return updates.notice_text(updates.update_status(__version__, cache_dir, True))
+
+
+_pending_notice = _initial_notice(_UPDATE_CHECK_ENABLED, cache.cache_dir)
+if _pending_notice:
+    mcp.instructions = f"{_BASE_INSTRUCTIONS}\n\nUPDATE: {_pending_notice}"
 
 
 def _resolve_path(
@@ -391,13 +414,11 @@ def _detect_features() -> dict[str, Any]:
     (`extractor.column_detection_available`) so the reported flag can never
     drift from what extraction actually does.
     """
-    import shutil
-
     from . import embedder, extractor
 
     column_aware = extractor.column_detection_available()
     vertical_aware = extractor.vertical_detection_available()
-    ocr_available = shutil.which("tesseract") is not None
+    ocr_available = find_tesseract() is not None
 
     search: dict[str, Any] = {
         "modes_available": ["keyword"],
@@ -900,10 +921,8 @@ def pdf_read_pages(
             return {
                 "error": str(exc),
                 "install_hint": (
-                    "brew install tesseract (macOS) / "
-                    "apt install tesseract-ocr (Linux) / "
-                    "winget install Tesseract-OCR (Windows); "
-                    "or set TESSDATA_PREFIX env var to your tessdata directory"
+                    tesseract_install_hint()
+                    + "; or set TESSDATA_PREFIX env var to your tessdata directory"
                 ),
             }
 
@@ -4798,6 +4817,18 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
     return sorted(roots)
 
 
+def _live_features() -> dict[str, Any]:
+    """Startup feature probe with the OCR flag re-checked per call.
+
+    Claude Desktop keeps servers for the app's lifetime and Tesseract can be
+    installed meanwhile; OCR re-resolves the binary per call, so the flag
+    must too.
+    """
+    features = copy.deepcopy(_SERVER_FEATURES)
+    features["extraction"]["ocr"]["available"] = find_tesseract() is not None
+    return features
+
+
 @mcp.tool(
     description=(
         "Report which optional features are installed and what "
@@ -4813,7 +4844,8 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
         "list, document roots, and active config values. Cheap to call "
         "(no I/O beyond reading process state and stat-ing the configured "
         "roots). Results are stable for the server's lifetime, except that "
-        "a root appears once its directory exists on disk."
+        "a root appears once its directory exists on disk and OCR shows as "
+        "available once Tesseract is installed."
     )
 )
 def server_info() -> dict[str, Any]:
@@ -4860,6 +4892,9 @@ def server_info() -> dict[str, Any]:
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
                    precedent).
+        - update: {current, latest, update_available, checked_at,
+                   download_url} from the daily update check, or null when
+                   the check is off (every pip/uvx install by default).
     """
     # max_workers: resolve the actually-in-effect cap (PDF_MCP_MAX_WORKERS
     # override or the min(cpu_count, cap) default) by reusing resolve_workers
@@ -4869,7 +4904,10 @@ def server_info() -> dict[str, Any]:
     allow_patterns = pdf_config.path_allow_patterns
     return {
         "version": __version__,
-        "features": _SERVER_FEATURES,
+        "update": updates.update_status(
+            __version__, cache.cache_dir, _UPDATE_CHECK_ENABLED
+        ),
+        "features": _live_features(),
         "documents": {
             "access_mode": ("allowlist" if allow_patterns else "unrestricted"),
             "roots": _document_roots(allow_patterns),
@@ -5907,19 +5945,58 @@ def pdf_extract_chart(
 # ============================================================================
 
 
+from fastmcp.server.middleware import Middleware, MiddlewareContext  # noqa: E402
+from fastmcp.tools import ToolResult  # noqa: E402
+from mcp.types import TextContent  # noqa: E402
+
+
+class _UpdateNoticeMiddleware(Middleware):
+    """Adds the pending update notice to the first dict-shaped tool result.
+
+    Rebuilds the result from the updated dict so the JSON text block (what
+    clients such as Claude Desktop show the model) and structuredContent
+    both carry it. List-shaped results (pdf_render_pages) are left alone;
+    the notice waits for the next dict result.
+    """
+
+    async def on_call_tool(  # type: ignore[override]
+        self, context: MiddlewareContext, call_next: Any
+    ) -> ToolResult:
+        global _pending_notice  # noqa: PLW0603
+        result: ToolResult = await call_next(context)
+        data = result.structured_content
+        single_text = len(result.content) == 1 and isinstance(
+            result.content[0], TextContent
+        )
+        if _pending_notice and isinstance(data, dict) and single_text:
+            updated = {**data, "notice": _pending_notice}
+            _pending_notice = ""
+            return ToolResult(
+                content=updated, structured_content=updated, meta=result.meta
+            )
+        return result
+
+
+mcp.add_middleware(_UpdateNoticeMiddleware())
+
+
 def main() -> None:
     """
     Run the MCP server using STDIO transport.
 
     STDIO is used because:
-    - Claude Desktop spawns a new process per conversation
+    - Claude Desktop starts the server with the app and keeps it for the
+      app's lifetime
     - Communication happens via stdin/stdout
-    - Process exits after conversation ends
+    - Process exits when the client closes stdin
 
     That's why we use SQLite caching - it persists between process restarts.
     """
     # Explicitly use STDIO transport (this is the default, but being explicit)
-    mcp.run(transport="stdio")
+    if _UPDATE_CHECK_ENABLED:
+        updates.start_background_refresh(cache.cache_dir)
+    # show_banner=False: fastmcp's banner also checks PyPI for a newer fastmcp.
+    mcp.run(transport="stdio", show_banner=False)
 
 
 def main_http() -> None:
@@ -5986,7 +6063,7 @@ def main_http() -> None:
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
     path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")
 
-    mcp.run(transport="http", host=host, port=port, path=path)
+    mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
 
 
 if __name__ == "__main__":

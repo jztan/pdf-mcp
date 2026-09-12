@@ -31,6 +31,7 @@ Gitflow:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -41,6 +42,9 @@ import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_mcpb  # noqa: E402
 
 # Single source of truth is the workflow's `env: IMAGE`; a contract test in
 # tests/test_docker_contract.py asserts these two agree.
@@ -356,6 +360,67 @@ def update_server_json(project_root: Path, new_version: str, dry_run: bool) -> N
     else:
         server_json.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
         print("  ✓ Updated server.json")
+
+
+def mcpb_release_url(version: str) -> str:
+    return (
+        f"https://github.com/jztan/pdf-mcp/releases/download/v{version}/"
+        f"{build_mcpb.bundle_filename(version)}"
+    )
+
+
+def build_and_register_mcpb(
+    project_root: Path, new_version: str, dry_run: bool
+) -> Path | None:
+    """Build the Claude Desktop bundle and record it in server.json.
+
+    Runs after uv.lock is regenerated (its dependency pins come from it) and
+    before the bump commit, because server.json is committed before the tag.
+    The build is byte-reproducible and create_github_release re-hashes the
+    file before uploading, so what the registry verifies is what ships.
+    """
+    if dry_run:
+        print(f"  [DRY-RUN] Would build {build_mcpb.bundle_filename(new_version)}")
+        print("  [DRY-RUN] Would add its mcpb entry + fileSha256 to server.json")
+        return None
+    path, sha = build_mcpb.build(new_version, project_root / "dist")
+    server_json = project_root / "server.json"
+    content = json.loads(server_json.read_text(encoding="utf-8"))
+    packages = [
+        p for p in content.get("packages", []) if p.get("registryType") != "mcpb"
+    ]
+    packages.append(
+        {
+            "registryType": "mcpb",
+            "identifier": mcpb_release_url(new_version),
+            "fileSha256": sha,
+            "transport": {"type": "stdio"},
+        }
+    )
+    content["packages"] = packages
+    server_json.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+    print(f"  ✓ Built {path.name} ({sha[:12]}) and registered it in server.json")
+    return path
+
+
+def mcpb_asset_for_upload(project_root: Path, new_version: str) -> Path | None:
+    path = project_root / "dist" / build_mcpb.bundle_filename(new_version)
+    if not path.exists():
+        return None
+    content = json.loads((project_root / "server.json").read_text(encoding="utf-8"))
+    expected = next(
+        (
+            p["fileSha256"]
+            for p in content.get("packages", [])
+            if p.get("registryType") == "mcpb"
+        ),
+        None,
+    )
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if expected != actual:
+        print(f"  ✗ {path.name} hash {actual[:12]} does not match server.json")
+        return None
+    return path
 
 
 def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
@@ -985,6 +1050,9 @@ def commit_version_bump(config: ReleaseConfig, new_version: str) -> None:
     print("\n=== Commit Version Bump ===\n")
 
     regenerate_uv_lock(config)
+    # After the lock (the bundle's dependency pins come from it), before the
+    # commit (server.json carries the bundle's hash and is committed pre-tag).
+    build_and_register_mcpb(config.project_root, new_version, config.dry_run)
 
     # Stage changes
     files = [
@@ -1071,6 +1139,10 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
 
     if config.dry_run:
         print(f"  [DRY-RUN] Would create GitHub release: {tag}")
+        print(
+            "  [DRY-RUN] Would attach "
+            f"dist/{build_mcpb.bundle_filename(new_version)}"
+        )
         if notes_path.exists():
             print(f"  [DRY-RUN] Title: {title}")
             print("  [DRY-RUN] Release notes preview:")
@@ -1083,10 +1155,18 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
                 "notes file (see the Release Notes preview above)."
             )
     else:
-        result = run_command(
-            ["gh", "release", "create", tag, "--title", title, "--notes", notes],
-            check=False,
-        )
+        cmd = ["gh", "release", "create", tag, "--title", title, "--notes", notes]
+        bundle = mcpb_asset_for_upload(config.project_root, new_version)
+        if bundle is not None:
+            cmd.append(str(bundle))
+        else:
+            print("  ⚠ Releasing without the .mcpb; rebuild and upload with:")
+            print(f"      python scripts/build_mcpb.py --version {new_version}")
+            print(
+                f"      gh release upload {tag} "
+                f"dist/{build_mcpb.bundle_filename(new_version)}"
+            )
+        result = run_command(cmd, check=False)
         if result.returncode != 0:
             print("  ✗ gh release create failed:")
             print(f"    {result.stderr.strip()}")

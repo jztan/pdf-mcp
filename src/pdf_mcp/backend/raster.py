@@ -318,6 +318,14 @@ def ocr_page_text(
     import os
     import pytesseract
 
+    from ..extractor import find_tesseract
+
+    exe = find_tesseract()
+    if exe is not None:
+        # pytesseract defaults to the bare name, which a GUI-launched server
+        # cannot resolve when Tesseract is installed outside PATH.
+        pytesseract.pytesseract.tesseract_cmd = exe
+
     # Grayscale here too: the fallback is the only OCR path on platforms
     # without tesserocr wheels (pip on Windows foremost), and feeding RGB
     # costs Tesseract ~0.12s/page in internal conversion either way.

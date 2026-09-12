@@ -40,6 +40,11 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 
 ## Installation
 
+**No terminal?** Download `pdf-mcp-<version>.mcpb` from the
+[latest release](https://github.com/jztan/pdf-mcp/releases/latest) and drag
+it onto Claude Desktop's Settings > Extensions. Details under Claude Desktop
+in [docs/clients.md](docs/clients.md).
+
 ```bash
 pip install pdf-mcp
 ```
@@ -52,7 +57,7 @@ OCR on scanned PDFs additionally needs system Tesseract:
 ```bash
 brew install tesseract        # macOS
 apt install tesseract-ocr     # Ubuntu/Debian
-winget install Tesseract-OCR  # Windows
+winget install -e --id UB-Mannheim.TesseractOCR  # Windows
 ```
 
 GPU embedding is optional and off by default. On an NVIDIA card it makes the

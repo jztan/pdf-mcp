@@ -31,7 +31,38 @@ Or add to `~/.claude.json`:
 <details>
 <summary><strong>Claude Desktop</strong></summary>
 
-Add to your `claude_desktop_config.json`:
+**One-click install (nothing to install first):**
+
+1. Download `pdf-mcp-<version>.mcpb` from the
+   [latest release](https://github.com/jztan/pdf-mcp/releases/latest).
+2. In Claude Desktop open **Settings > Extensions** and drag the file onto
+   that page (double-clicking the file also works on some computers). Click
+   **Install**.
+3. The first start downloads pdf-mcp's components (about 250 MB) and needs an
+   internet connection; it can take a few minutes. Claude sees the tools
+   right away and they start working once setup finishes. Later starts take
+   seconds.
+4. Use it in a **Chat**: give Claude the file's location, for example
+   "Use pdf-mcp to summarize C:\Users\me\Downloads\report.pdf", or a folder
+   of PDFs. A PDF attached to the chat is read by Claude directly and does
+   not go through pdf-mcp.
+
+Works in Claude Desktop's **Chat**. Cowork and Claude Code inside Claude
+Desktop start extensions differently and need Node.js installed on the
+computer; if you use those, install with pip below.
+
+**Updating:** download the newer `.mcpb` and drag it onto Settings >
+Extensions the same way; it replaces the installed version in place. With
+"Check for updates" left on, Claude tells you when a new version is out.
+
+**Uninstalling:** remove pdf-mcp in Claude Desktop's extension settings, then
+delete the folder `.cache\pdf-mcp` in your user folder
+(`%USERPROFILE%\.cache\pdf-mcp` on Windows, `~/.cache/pdf-mcp` on macOS and
+Linux). It holds pdf-mcp's downloaded components and its PDF cache; Claude
+Desktop does not remove it.
+
+**Or configure it by hand** (needs `pip install pdf-mcp` first). Add to your
+`claude_desktop_config.json`:
 
 ```json
 {
@@ -164,3 +195,19 @@ pdf-mcp --help
 
 If the server starts and your client lists the pdf-mcp tools, you are set.
 See [tool-reference.md](tool-reference.md) for what each tool does.
+
+## OCR setup
+
+Scanned PDFs (pages that are photos, with no selectable text) need
+Tesseract. Everything else works without it.
+
+- **Windows:** download the 64-bit installer from the
+  [UB Mannheim Tesseract page](https://github.com/UB-Mannheim/tesseract/wiki)
+  and run it with the default folder. Or, in a terminal:
+  `winget install -e --id UB-Mannheim.TesseractOCR`.
+- **macOS:** `brew install tesseract`.
+- **Linux:** `sudo apt install tesseract-ocr` (or your distribution's package).
+
+pdf-mcp finds Tesseract in its standard install folder even when it is not
+on `PATH`, so there is nothing to configure and no restart: ask Claude to
+read the scanned page again.

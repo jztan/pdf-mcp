@@ -254,3 +254,19 @@ class TestPathAllowlistIntrospection:
     def test_config_path_is_exposed(self, tmp_path):
         cfg = tmp_path / "config.toml"
         assert PDFConfig(config_path=cfg).config_path == cfg
+
+
+class TestUpdateCheckConfig:
+    def test_absent_is_none(self, tmp_path):
+        assert PDFConfig(config_path=tmp_path / "none.toml").update_check is None
+
+    def test_false_is_read(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text("[updates]\ncheck = false\n", encoding="utf-8")
+        assert PDFConfig(config_path=cfg).update_check is False
+
+    def test_non_bool_raises(self, tmp_path):
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[updates]\ncheck = "no"\n', encoding="utf-8")
+        with pytest.raises(ValueError, match=r"\[updates\] check"):
+            PDFConfig(config_path=cfg).update_check

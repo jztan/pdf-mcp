@@ -223,6 +223,14 @@ test('bundleEnv keeps every uv dir under the pdf-mcp cache and forces managed Py
   assert.strictEqual(env.UV_CACHE_DIR, path.join('/c', 'uv-cache'));
   assert.strictEqual(env.UV_PYTHON_INSTALL_DIR, path.join('/c', 'python'));
   assert.strictEqual(env.UV_PYTHON_PREFERENCE, 'only-managed');
+  // The embedding model too: fastembed defaults to the system temp folder,
+  // which Windows cleans (and MSIX redirects) and macOS purges.
+  assert.strictEqual(env.FASTEMBED_CACHE_PATH, path.join('/c', 'fastembed'));
+});
+
+test('bundleEnv keeps a FASTEMBED_CACHE_PATH the user already set', () => {
+  const env = L.bundleEnv({ FASTEMBED_CACHE_PATH: '/mine' }, '/home/u', '1');
+  assert.strictEqual(env.FASTEMBED_CACHE_PATH, '/mine');
 });
 
 test('pruneVenvs removes other versions, keeps the current one, survives a failed delete', async () => {

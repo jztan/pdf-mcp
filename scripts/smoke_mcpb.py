@@ -37,7 +37,15 @@ _STARTING = "STARTING:"
 _UNAVAILABLE = "UNAVAILABLE:"
 
 
-async def _run(params: StdioServerParameters, expect_fallback: bool):
+async def _timed(session: ClientSession, name: str, args: dict):
+    start = time.monotonic()
+    result = await session.call_tool(name, args)
+    return time.monotonic() - start, result
+
+
+async def _run(
+    params: StdioServerParameters, expect_fallback: bool, pdf: Path | None = None
+):
     started = time.monotonic()
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -53,7 +61,17 @@ async def _run(params: StdioServerParameters, expect_fallback: bool):
                 await asyncio.sleep(1.0)
             name = tools[0].name if expect_fallback else "server_info"
             call = await session.call_tool(name, {})
-    return init_seconds, time.monotonic() - started, tools, call
+            # First real calls after a fresh venv: pdf_info reads the file
+            # only; pdf_search also loads the embedding model (downloaded on
+            # first use). A 45 s first call was seen once on Windows.
+            first: dict[str, tuple[float, object]] = {}
+            if pdf is not None and not expect_fallback:
+                path = str(pdf.resolve())
+                first["pdf_info"] = await _timed(session, "pdf_info", {"path": path})
+                first["search"] = await _timed(
+                    session, "pdf_search", {"path": path, "query": "cloud security"}
+                )
+    return init_seconds, time.monotonic() - started, tools, call, first
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,13 +80,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=900.0)
     parser.add_argument("--expect-fallback", action="store_true")
     parser.add_argument("--extra-env", action="append", default=[])
+    parser.add_argument("--pdf", type=Path, default=None)
     args = parser.parse_args(argv)
     extra = dict(item.split("=", 1) for item in args.extra_env)
     manifest = json.loads((args.bundle_dir / "manifest.json").read_text("utf-8"))
     expected = sorted(t["name"] for t in manifest["tools"])
-    init_seconds, seconds, tools, call = asyncio.run(
+    init_seconds, seconds, tools, call, first = asyncio.run(
         asyncio.wait_for(
-            _run(launch_params(args.bundle_dir, extra), args.expect_fallback),
+            _run(launch_params(args.bundle_dir, extra), args.expect_fallback, args.pdf),
             args.timeout,
         )
     )
@@ -96,6 +115,16 @@ def main(argv: list[str] | None = None) -> int:
     if call.isError:
         print(f"server_info failed: {call.content}", file=sys.stderr)
         return 1
+    if first:
+        # Measurement only, no threshold: CI reports these on every push.
+        print(
+            f"first_pdf_info_seconds={first['pdf_info'][0]:.1f} "
+            f"first_search_seconds={first['search'][0]:.1f}"
+        )
+        for label, (_, result) in first.items():
+            if getattr(result, "isError", False):
+                print(f"{label} failed: {result.content}", file=sys.stderr)
+                return 1
     return 0
 
 

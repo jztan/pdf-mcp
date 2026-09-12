@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pymupdf
 import pytest
 
-from pdf_mcp import warm_cli
+from pdf_mcp import corpus, warm_cli
 
 
 class TestDiscoverPdfs:
@@ -50,9 +52,7 @@ class TestDiscoverPdfs:
 
     def test_dedupes_overlapping_inputs(self, corpus_dir):
         target = str(corpus_dir / "alpha.pdf")
-        found = warm_cli._discover_pdfs(
-            [target, str(corpus_dir)], recursive=False
-        )
+        found = warm_cli._discover_pdfs([target, str(corpus_dir)], recursive=False)
         assert found.count(target) == 1
 
     def test_result_is_sorted(self, corpus_dir):
@@ -78,8 +78,10 @@ class TestCacheEnvHelpers:
 
     def test_cache_dir_from_env_expands_user(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_CACHE_DIR", "~/x")
-        assert str(warm_cli._cache_dir_from_env()).startswith("/")
-        assert "~" not in str(warm_cli._cache_dir_from_env())
+        # Path.home() / "x" rather than an absolute-path-starts-with-"/"
+        # check: on Windows an expanded path starts with a drive letter,
+        # not "/".
+        assert warm_cli._cache_dir_from_env() == Path.home() / "x"
 
     def test_ttl_default_when_unset(self, monkeypatch):
         monkeypatch.delenv("PDF_MCP_CACHE_TTL", raising=False)
@@ -135,12 +137,34 @@ class TestMainEndToEnd:
         self, corpus_dir, tmp_path, monkeypatch, capsys
     ):
         monkeypatch.setenv("PDF_MCP_CACHE_DIR", str(tmp_path / "cache"))
-        rc = warm_cli.main(
-            [str(corpus_dir), "--no-embeddings", "--batch-size", "1"]
-        )
+        rc = warm_cli.main([str(corpus_dir), "--no-embeddings", "--batch-size", "1"])
         assert rc == 0
         out = capsys.readouterr().err
         assert "batch 3/3" in out
+
+    def test_batch_size_above_max_files_is_clamped(
+        self, corpus_dir, tmp_path, monkeypatch, capsys
+    ):
+        """Regression: resolve_corpus rejects any batch over
+        corpus.CORPUS_MAX_FILES outright (its own per-call cap), so an
+        unclamped --batch-size above that made every batch fail with
+        "error" and every file land in skipped, exiting 1 -- with the
+        clamp, this behaves exactly like the default batch size."""
+        monkeypatch.setenv("PDF_MCP_CACHE_DIR", str(tmp_path / "cache"))
+        rc = warm_cli.main(
+            [
+                str(corpus_dir),
+                "--no-embeddings",
+                "--no-sections",
+                "--batch-size",
+                str(corpus.CORPUS_MAX_FILES * 10),
+            ]
+        )
+        assert rc == 0
+        out = capsys.readouterr().err
+        assert "batch 1/1" in out
+        assert "3 warmed this run" in out
+        assert "0 skipped" in out
 
     def test_embeddings_flag_warms_vectors(
         self, corpus_dir, tmp_path, monkeypatch, capsys

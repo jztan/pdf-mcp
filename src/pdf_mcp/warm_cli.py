@@ -73,9 +73,7 @@ def _ttl_hours_from_env() -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise ValueError(
-            f"PDF_MCP_CACHE_TTL must be an integer (got {raw!r})"
-        ) from exc
+        raise ValueError(f"PDF_MCP_CACHE_TTL must be an integer (got {raw!r})") from exc
     if value < 0 or value > _MAX_CACHE_TTL_HOURS:
         raise ValueError(
             f"PDF_MCP_CACHE_TTL must be in [0, {_MAX_CACHE_TTL_HOURS}] hours "
@@ -181,9 +179,11 @@ def main(argv: "list[str] | None" = None) -> int:
         type=int,
         default=corpus.CORPUS_MAX_FILES,
         help=(
-            f"files per warm_docs call (default: {corpus.CORPUS_MAX_FILES}, "
-            "matching corpus.CORPUS_MAX_FILES; purely a progress-reporting "
-            "grain here, not a cap on the total run)"
+            f"files per warm_docs call (default and max: "
+            f"{corpus.CORPUS_MAX_FILES}, matching corpus.CORPUS_MAX_FILES "
+            "-- clamped to that ceiling since resolve_corpus rejects a "
+            "larger batch outright; purely a progress-reporting grain "
+            "here, not a cap on the total run)"
         ),
     )
     args = ap.parse_args(argv)
@@ -227,7 +227,11 @@ def main(argv: "list[str] | None" = None) -> int:
 
     total_warmed = total_skipped = total_unprocessed = 0
     t0 = time.monotonic()
-    batch_size = max(1, args.batch_size)
+    # Clamped to CORPUS_MAX_FILES: resolve_corpus rejects a larger batch
+    # outright (its own 100-file cap, meant for one MCP tool call), so a
+    # bigger --batch-size here would make every batch fail with "error"
+    # and every file land in skipped instead of being warmed.
+    batch_size = max(1, min(args.batch_size, corpus.CORPUS_MAX_FILES))
     batches = _chunks(files, batch_size)
     for i, batch in enumerate(batches, 1):
         res = corpus.resolve_corpus(
@@ -236,8 +240,9 @@ def main(argv: "list[str] | None" = None) -> int:
         if "error" in res:
             # Cannot happen at len(batch) <= CORPUS_MAX_FILES from an
             # explicit list (the only error case left is "no files",
-            # already excluded by the batch being non-empty), but treat
-            # it like any other unusable batch rather than assume.
+            # already excluded by the batch being non-empty) now that
+            # batch_size is clamped above; treat it like any other
+            # unusable batch rather than assume.
             print(f"batch {i}/{len(batches)}: {res['error']}", file=sys.stderr)
             total_skipped += len(batch)
             continue

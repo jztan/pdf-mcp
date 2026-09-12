@@ -36,6 +36,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -421,6 +422,14 @@ def mcpb_asset_for_upload(project_root: Path, new_version: str) -> Path | None:
         print(f"  ✗ {path.name} hash {actual[:12]} does not match server.json")
         return None
     return path
+
+
+def stable_bundle_copy(bundle: Path) -> Path:
+    """The same bytes under build_mcpb.STABLE_FILENAME, for the
+    releases/latest/download link in the README and on the site."""
+    stable = bundle.with_name(build_mcpb.STABLE_FILENAME)
+    shutil.copyfile(bundle, stable)
+    return stable
 
 
 def update_init_py(project_root: Path, new_version: str, dry_run: bool) -> None:
@@ -1141,7 +1150,8 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
         print(f"  [DRY-RUN] Would create GitHub release: {tag}")
         print(
             "  [DRY-RUN] Would attach "
-            f"dist/{build_mcpb.bundle_filename(new_version)}"
+            f"dist/{build_mcpb.bundle_filename(new_version)} and the same file "
+            f"as dist/{build_mcpb.STABLE_FILENAME}"
         )
         if notes_path.exists():
             print(f"  [DRY-RUN] Title: {title}")
@@ -1158,13 +1168,18 @@ def create_github_release(config: ReleaseConfig, new_version: str) -> None:
         cmd = ["gh", "release", "create", tag, "--title", title, "--notes", notes]
         bundle = mcpb_asset_for_upload(config.project_root, new_version)
         if bundle is not None:
-            cmd.append(str(bundle))
+            cmd += [str(bundle), str(stable_bundle_copy(bundle))]
         else:
             print("  ⚠ Releasing without the .mcpb; rebuild and upload with:")
             print(f"      python scripts/build_mcpb.py --version {new_version}")
             print(
+                f"      cp dist/{build_mcpb.bundle_filename(new_version)} "
+                f"dist/{build_mcpb.STABLE_FILENAME}"
+            )
+            print(
                 f"      gh release upload {tag} "
-                f"dist/{build_mcpb.bundle_filename(new_version)}"
+                f"dist/{build_mcpb.bundle_filename(new_version)} "
+                f"dist/{build_mcpb.STABLE_FILENAME}"
             )
         result = run_command(cmd, check=False)
         if result.returncode != 0:

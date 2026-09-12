@@ -20,7 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in Claude Desktop's Chat, on Windows 10+, Intel Macs with macOS 13+, and
   Apple Silicon Macs with macOS 14+. If setup cannot finish (for example the
   computer is offline), Claude is told why in plain words instead of
-  seeing a disconnected server.
+  seeing a disconnected server. Each release also carries the bundle as
+  `pdf-mcp.mcpb`, so
+  https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb
+  always downloads the newest one.
 
 - **Bundle installs learn about new versions.** Once a day the bundle asks
   PyPI whether a newer pdf-mcp exists, and Claude mentions it once, on the

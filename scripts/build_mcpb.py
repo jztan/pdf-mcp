@@ -49,6 +49,14 @@ def bundle_filename(version: str) -> str:
     return f"pdf-mcp-{version}.mcpb"
 
 
+#: Every release also carries the bundle under this fixed name, so docs can
+#: link straight to the newest one with no version in the URL.
+STABLE_FILENAME = "pdf-mcp.mcpb"
+LATEST_DOWNLOAD_URL = (
+    f"https://github.com/jztan/pdf-mcp/releases/latest/download/{STABLE_FILENAME}"
+)
+
+
 def export_pins(root: Path = ROOT, run=subprocess.run) -> list[str]:
     """Every runtime dependency at the version uv.lock resolved (what CI
     tested), with environment markers, so the bundle does not float to

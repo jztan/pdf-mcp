@@ -573,6 +573,13 @@ def test_create_github_release_attaches_bundle(tmp_path, monkeypatch, no_export)
     release.create_github_release(config, "3.2.0")
     create = next(c for c in calls if c[:3] == ["gh", "release", "create"])
     assert str(path) in create
+    # The same bytes under a fixed name, for releases/latest/download links.
+    stable = path.with_name("pdf-mcp.mcpb")
+    assert str(stable) in create
+    assert stable.read_bytes() == path.read_bytes()
+    assert release.build_mcpb.LATEST_DOWNLOAD_URL.endswith(
+        "/releases/latest/download/pdf-mcp.mcpb"
+    )
 
 
 def test_bundle_built_after_lock_regeneration(monkeypatch, tmp_path):

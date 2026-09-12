@@ -219,7 +219,37 @@ function uvRunCommand(bundleDir, home) {
   };
 }
 
-async function pruneVenvs(root, keep, { rm = fs.promises.rm, log = () => {} } = {}) {
+async function chmodTree(target) {
+  // Clears read-only files and folders (on Windows, chmod's write bit is the
+  // read-only attribute), so a tree can be deleted.
+  let st;
+  try { st = await fs.promises.lstat(target); } catch { return; }
+  if (st.isSymbolicLink()) return;
+  if (!st.isDirectory()) {
+    try { await fs.promises.chmod(target, 0o666); } catch { /* best effort */ }
+    return;
+  }
+  try { await fs.promises.chmod(target, 0o777); } catch { /* best effort */ }
+  let entries = [];
+  try { entries = await fs.promises.readdir(target); } catch { /* best effort */ }
+  for (const name of entries) await chmodTree(path.join(target, name));
+}
+
+async function rmTree(target, { rm = fs.promises.rm, chmod = chmodTree } = {}) {
+  // uv hardlinks venv files from its cache, and those are read-only; on
+  // Windows Node's rm then fails with EPERM (measured). Clear and retry,
+  // as rimraf does.
+  const opts = { recursive: true, force: true, maxRetries: 3 };
+  try {
+    await rm(target, opts);
+  } catch (err) {
+    if (err.code !== 'EPERM' && err.code !== 'EACCES') throw err;
+    await chmod(target);
+    await rm(target, opts);
+  }
+}
+
+async function pruneVenvs(root, keep, { rm = rmTree, log = () => {} } = {}) {
   // Async: an old venv is ~250 MB of small files, and deleting it
   // synchronously blocked the event loop for 12 s (measured), long enough
   // to leave Claude Desktop's initialize unanswered.
@@ -537,7 +567,7 @@ async function main() {
 module.exports = {
   BUNDLE_DIR, SetupError, platformKey, cacheRoot, uvExeName, tarCommand,
   download, ensureUv, fallbackServe, venvDir, bundleEnv, pruneVenvs, runServer, main, uvRunCommand,
-  launcherLog, runAsync,
+  launcherLog, runAsync, rmTree, chmodTree,
   EARLY_INIT, SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION, negotiateVersion, earlyServe,
 };
 

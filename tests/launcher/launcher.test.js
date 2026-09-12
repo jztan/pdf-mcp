@@ -481,3 +481,34 @@ test('launcherLog starts over when the file has grown past its cap', async () =>
   await log.flush();
   assert.ok(!fs.readFileSync(file, 'utf8').includes('xxxx'));
 });
+
+test('rmTree clears read-only files and retries when the first delete gets EPERM', async () => {
+  // Windows: uv hardlinks venv files from its cache and those are read-only;
+  // Node's rm then fails with EPERM (measured on a 3.2.0 venv).
+  const calls = [];
+  const rm = async (p) => {
+    calls.push(`rm ${p}`);
+    if (calls.length === 1) { const e = new Error('EPERM: operation not permitted'); e.code = 'EPERM'; throw e; }
+  };
+  const chmod = async (p) => { calls.push(`chmod ${p}`); };
+  await L.rmTree('/v/3.2.0', { rm, chmod });
+  assert.deepStrictEqual(calls, ['rm /v/3.2.0', 'chmod /v/3.2.0', 'rm /v/3.2.0']);
+});
+
+test('rmTree does not mask other errors', async () => {
+  const rm = async () => { const e = new Error('ENOSPC'); e.code = 'ENOSPC'; throw e; };
+  await assert.rejects(L.rmTree('/v/x', { rm, chmod: async () => {} }), /ENOSPC/);
+});
+
+test('chmodTree makes every file and folder in a tree writable', async () => {
+  const root = tmpdir();
+  const sub = path.join(root, 'a', 'b');
+  fs.mkdirSync(sub, { recursive: true });
+  const f = path.join(sub, 'x.py');
+  fs.writeFileSync(f, 'x');
+  fs.chmodSync(f, 0o444);
+  await L.chmodTree(root);
+  if (process.platform !== 'win32') assert.ok(fs.statSync(f).mode & 0o200, 'file still read-only');
+  fs.rmSync(root, { recursive: true, force: true });
+  assert.ok(!fs.existsSync(root));
+});

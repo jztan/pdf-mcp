@@ -3932,7 +3932,27 @@ def _semantic_snippet_excerpt(
         if terms and not any(t in low_chunk for t in terms):
             if any(t in page_text.lower() for t in terms):
                 text = page_text
-    return _best_span_in_text(text, query_vec, model, context_chars, query=query)
+    span = _best_span_in_text(text, query_vec, model, context_chars, query=query)
+    return _whole_token_span(span, page_text, text)
+
+
+def _whole_token_span(span: str, page_text: str, searched: str) -> str:
+    """Widen a semantic span to whole tokens and mark its cuts, the same
+    shape keyword excerpts have. The span is a raw character window, so it
+    ended mid-word and carried no "..." markers. Markers are judged against
+    the page text where the span can be found there, because a span that
+    opens a sub-page chunk does not open the page. Fail-safe: a span found
+    in neither text comes back unchanged."""
+    from .extractor import widen_to_token_bounds
+
+    if not span.strip():
+        return span
+    for source in (page_text, searched):
+        if source:
+            i = source.find(span)
+            if i >= 0:
+                return widen_to_token_bounds(source, i, i + len(span))
+    return span
 
 
 def _best_subchunk_text(

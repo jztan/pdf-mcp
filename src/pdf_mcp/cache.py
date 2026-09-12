@@ -14,7 +14,11 @@ from typing import Any, cast
 
 from pdf_mcp import content_trust
 from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
-from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
+from pdf_mcp.extractor import (
+    EXCERPT_ELLIPSIS,
+    TABLE_EXTRACTION_VERSION,
+    widen_to_token_bounds,
+)
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -103,6 +107,31 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
 def _is_cjk_char(ch: str) -> bool:
     o = ord(ch)
     return any(lo <= o <= hi for lo, hi in _CJK_RANGES)
+
+
+def _whole_token_snippet(snippet: str, text: str) -> str:
+    """Re-cut an FTS5 ``snippet()`` fragment on whole-token boundaries.
+
+    snippet() emits a verbatim substring of the column, cut at tokenizer
+    separators, with ``...`` added where it cut. Locating that substring in
+    the page text and widening it (`widen_to_token_bounds`) restores the
+    split token ("variable-length", not "length"; "0.30", not "30") and
+    recomputes the markers from what was actually cut. Fail-safe: a fragment
+    that cannot be located comes back unchanged.
+    """
+    if not snippet or not text:
+        return snippet
+    body = snippet
+    if body.startswith(EXCERPT_ELLIPSIS):
+        body = body[len(EXCERPT_ELLIPSIS) :]
+    if body.endswith(EXCERPT_ELLIPSIS):
+        body = body[: -len(EXCERPT_ELLIPSIS)]
+    if not body.strip():
+        return snippet
+    i = text.find(body)
+    if i < 0:
+        return snippet
+    return widen_to_token_bounds(text, i, i + len(body))
 
 
 def _contains_cjk(text: str) -> bool:
@@ -2285,9 +2314,7 @@ class PDFCache:
         half = max(0, (context_chars - len(best_needle)) // 2)
         start = max(0, best_idx - half)
         end = min(len(text), best_idx + len(best_needle) + half)
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(text) else ""
-        return f"{prefix}{text[start:end]}{suffix}"
+        return widen_to_token_bounds(text, start, end)
 
     def _build_temp_page_fts(
         self, conn: sqlite3.Connection, path: str, cjk: bool
@@ -2391,7 +2418,7 @@ class PDFCache:
                 sql = (
                     "SELECT page_num,"
                     " snippet(doc_fts, 1, '', '', '...', ?),"
-                    " -bm25(doc_fts)"
+                    " -bm25(doc_fts), text"
                     " FROM doc_fts"
                     " WHERE doc_fts MATCH ?"
                     " ORDER BY bm25(doc_fts)"
@@ -2412,10 +2439,10 @@ class PDFCache:
         return [
             {
                 "page": int(page_num) + 1,
-                "excerpt": excerpt or "",
+                "excerpt": _whole_token_snippet(excerpt or "", text or ""),
                 "score": float(score),
             }
-            for page_num, excerpt, score in rows
+            for page_num, excerpt, score, text in rows
         ]
 
     def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:

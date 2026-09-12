@@ -395,6 +395,50 @@ _VERTICAL_MIN_CHARS = 30
 _CJK_RE = re.compile("[　-ヿ㐀-䶿一-鿿가-힯豈-﫿" "＀-￯]|[\U00020000-\U0002a6df]")
 
 
+EXCERPT_ELLIPSIS = "..."
+
+
+def _joins_token(ch: str) -> bool:
+    """True when `ch` continues a token: not whitespace, not a CJK
+    character (CJK runs have no spaces, so every character is its own
+    boundary; widening through one would swallow the whole run)."""
+    return not ch.isspace() and not _CJK_RE.match(ch)
+
+
+def widen_to_token_bounds(text: str, start: int, end: int, max_extend: int = 40) -> str:
+    """The excerpt `text[start:end]`, widened outward to whole tokens, with
+    an ``...`` marker on each side where non-whitespace text was cut.
+
+    FTS5 ``snippet()`` cuts at tokenizer separators, so "variable-length"
+    opened as "length" and a datasheet "0.30" opened as "30", which misstates
+    the value. Semantic spans were raw character windows and ended mid-word.
+    Widening (never trimming) keeps every character the cut already held, so
+    an answer contained before stays contained. A token longer than
+    `max_extend` on either side (a URL, a hash) keeps its cut and gets the
+    marker, rather than growing the excerpt without bound.
+    """
+    n = len(text)
+    start = max(0, min(start, n))
+    end = max(start, min(end, n))
+    if start > 0 and start < n and _joins_token(text[start - 1]):
+        if _joins_token(text[start]):
+            s = start
+            while s > 0 and _joins_token(text[s - 1]):
+                s -= 1
+            if start - s <= max_extend:
+                start = s
+    if end < n and end > 0 and _joins_token(text[end]):
+        if _joins_token(text[end - 1]):
+            e = end
+            while e < n and _joins_token(text[e]):
+                e += 1
+            if e - end <= max_extend:
+                end = e
+    prefix = EXCERPT_ELLIPSIS if text[:start].strip() else ""
+    suffix = EXCERPT_ELLIPSIS if text[end:].strip() else ""
+    return f"{prefix}{text[start:end].strip()}{suffix}"
+
+
 def detect_writing_mode(page: Any) -> str:
     """Classify a page as 'vertical', 'mixed', or 'horizontal'.
 

@@ -189,11 +189,14 @@ def _resolve_tessdata() -> str | None:
                 result.stdout or "",
             )
         if match:
+            # Trust the reported path only if it holds language data: a
+            # portable macOS/Linux Tesseract has no compiled-in path and
+            # reports "./", which is always a directory but never tessdata.
             path = match.group(1)
-            if os.path.isdir(path):
+            if os.path.isdir(path) and _has_traineddata(path):
                 return path
             alt = path.replace("/", "\\")
-            if os.path.isdir(alt):
+            if os.path.isdir(alt) and _has_traineddata(alt):
                 return alt
         candidate = os.path.join(os.path.dirname(exe), "tessdata")
         if os.path.isdir(candidate):

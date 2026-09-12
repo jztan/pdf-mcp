@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after a normal install. `server_info` now re-checks OCR on every call, so
   installing Tesseract mid-session works without a restart.
 
+- **OCR works with a Tesseract unpacked anywhere.** A Tesseract without a
+  built-in install path (a portable or unzipped copy on macOS or Linux)
+  reports "./" as its language-data folder; pdf-mcp accepted that and OCR
+  failed with "Error opening data file ./eng.traineddata". pdf-mcp now uses a
+  reported folder only if it holds language data, and otherwise the
+  `tessdata` folder next to the Tesseract program.
+
 - **The missing-Tesseract error gives one install step for your OS.** The
   Windows command is now `winget install -e --id UB-Mannheim.TesseractOCR`;
   the old one failed with "Multiple packages found".

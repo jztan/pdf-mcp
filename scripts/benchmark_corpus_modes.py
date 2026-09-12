@@ -571,7 +571,11 @@ def main(argv: list[str] | None = None) -> int:
             "search_mode_reported": per_mode[mode]["search_mode_reported"],
         }
 
+    from bench_env import environment, markdown_line
+
+    env = environment()
     out = {
+        "environment": env,
         "corpus_docs": len(paths),
         "top_k": TOP_K,
         "queries": len(queries["queries"]),
@@ -597,6 +601,8 @@ def main(argv: list[str] | None = None) -> int:
     class_header = " | ".join(classes)
     lines = [
         "# pdf_corpus_search mode benchmark (production tool, real embeddings)",
+        "",
+        markdown_line(env),
         "",
         f"Corpus: {len(paths)} docs. Queries: {len(queries['queries'])}"
         f" ({dataset_note}). top_k={TOP_K}. The tool itself is"

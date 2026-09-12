@@ -575,8 +575,12 @@ def write_results(
     sensitivity: dict | None = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+    from bench_env import environment, markdown_line
+
+    env = environment()
     payload = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "environment": env,
         "config": config,
         "summary": summary,
         "summary_excl_flagged": sensitivity,
@@ -585,9 +589,10 @@ def write_results(
     (out_dir / "results.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    (out_dir / "RESULTS.md").write_text(
-        render_markdown(summary, config, sensitivity=sensitivity), encoding="utf-8"
-    )
+    lines = render_markdown(summary, config, sensitivity=sensitivity).split("\n")
+    title = next((i for i, ln in enumerate(lines) if ln.startswith("# ")), 0)
+    lines[title + 1 : title + 1] = ["", markdown_line(env)]
+    (out_dir / "RESULTS.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def _sha256_json(obj: Any) -> str:

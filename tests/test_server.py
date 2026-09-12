@@ -6615,3 +6615,48 @@ class TestLazySemanticSpan:
         top = result["matches"][0]
         assert "zonkey" in top["excerpt"].lower(), top["excerpt"]
         assert len(calls) == 1, calls
+
+
+class TestSemanticSnippetWholeTokens:
+    """Semantic-only snippet excerpts were raw character windows: they
+    ended mid-word ("atte|ntion") and never carried the "..." markers that
+    keyword excerpts do, so one response mixed two excerpt shapes. The
+    span is now widened to whole tokens and marked against the PAGE text,
+    since a span at the start of a sub-page chunk is not the page start."""
+
+    PAGE = (
+        "Section 3.2.2 compares heads. While single-head attention is 0.9 "
+        "BLEU worse than the best setting, quality also drops off with too "
+        "many heads, as the table shows."
+    )
+
+    def _run(self, monkeypatch, span, chunk=None):
+        monkeypatch.setattr(server.cache, "get_page_text", lambda p, n: self.PAGE)
+        monkeypatch.setattr(server, "_best_span_in_text", lambda *a, **k: span)
+        return server._semantic_snippet_excerpt(
+            "doc.pdf", 0, "attention heads", None, "fake", 60, chunk
+        )
+
+    def test_mid_word_end_is_widened_and_marked(self, monkeypatch):
+        start = self.PAGE.index("While")
+        end = self.PAGE.index("attention") + 4  # "atte|ntion"
+        out = self._run(monkeypatch, self.PAGE[start:end])
+        assert out == "...While single-head attention..."
+
+    def test_mid_word_start_is_widened(self, monkeypatch):
+        start = self.PAGE.index("single-head") + 3  # "sin|gle-head"
+        end = self.PAGE.index(" BLEU")
+        out = self._run(monkeypatch, self.PAGE[start:end])
+        assert out == "...single-head attention is 0.9..."
+
+    def test_span_from_a_chunk_is_marked_against_the_page(self, monkeypatch):
+        chunk = self.PAGE[self.PAGE.index("quality") :]
+        out = self._run(monkeypatch, chunk[:40], chunk=chunk)
+        assert out.startswith("...quality also drops"), out
+        assert out.endswith("..."), out
+
+    def test_whole_page_span_has_no_markers(self, monkeypatch):
+        assert self._run(monkeypatch, self.PAGE) == self.PAGE
+
+    def test_unlocatable_span_is_returned_unchanged(self, monkeypatch):
+        assert self._run(monkeypatch, "text from elsewhere") == "text from elsewhere"

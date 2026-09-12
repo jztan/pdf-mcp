@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or corpus warm. It now runs one short test encode when the model loads,
   and on failure warns with the error and uses the CPU.
 
+- **Snippet excerpts no longer cut words or numbers in half.** Keyword
+  hits could open or close inside a hyphenated word or a decimal, so a
+  datasheet value of `0.30` could come back as `30`. Semantic hits ended
+  mid-word and carried no `...` markers at all, so one `pdf_search` or
+  `pdf_corpus_search` response mixed two excerpt shapes. Every snippet
+  excerpt now starts and ends on a whole word and carries `...` exactly
+  where page text was cut. On the 20-document excerpt benchmark,
+  mid-word cuts in `mode="auto"` snippets fell from 135 of 425 to 1 (a
+  URL longer than the widening limit), and wrong or missing markers from
+  283 to 0.
+
 ## [3.2.0] - 2026-09-12
 ### Added
 

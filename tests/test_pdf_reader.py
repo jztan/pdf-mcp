@@ -4020,3 +4020,148 @@ def test_nul_bearing_text_is_not_treated_as_empty(cache, sample_pdf):
     assert cache.get_pages_text(sample_pdf, [0], ocr_lang="khm") == {
         0: "\x00leading nul but real text"
     }
+
+
+# ============================================================================
+# Excerpt boundaries: whole tokens, honest "..." markers
+# ============================================================================
+
+
+class TestWidenToTokenBounds:
+    """A snippet cut must never split a token. FTS5 cuts at tokenizer
+    separators, so "variable-length" opened as "length" and a datasheet
+    "0.30" opened as "30", which misstates the value. Semantic spans were
+    raw character windows and ended mid-word ("atte|ntion")."""
+
+    def test_start_inside_hyphenated_word_widens_left(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "a mapping from one variable-length sequence of symbols"
+        start = text.index("length")
+        out = widen_to_token_bounds(text, start, text.index(" of"))
+        assert out == "...variable-length sequence..."
+
+    def test_start_inside_decimal_widens_left(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "Drift with supply 0.30 percent per volt"
+        out = widen_to_token_bounds(text, text.index("30 percent"), len(text))
+        assert out == "...0.30 percent per volt"
+
+    def test_end_inside_word_widens_right(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "While single-head attention is 0.9 BLEU worse than the best."
+        end = text.index("attention") + 4  # "atte|ntion"
+        out = widen_to_token_bounds(text, 0, end)
+        assert out == "While single-head attention..."
+
+    def test_cut_on_whitespace_is_unchanged_apart_from_markers(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "one two three four five"
+        out = widen_to_token_bounds(text, text.index("two"), text.index(" four"))
+        assert out == "...two three..."
+
+    def test_whole_text_has_no_markers(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "one two three"
+        assert widen_to_token_bounds(text, 0, len(text)) == text
+
+    def test_marker_only_when_non_whitespace_text_was_cut(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "  \n one two three \n "
+        out = widen_to_token_bounds(text, 4, len(text) - 3)
+        assert out == "one two three"
+
+    def test_overlong_token_is_not_widened(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        url = "https://example.com/" + "x" * 200
+        text = f"see {url} for details"
+        start = text.index("x" * 10) + 100
+        out = widen_to_token_bounds(text, start, len(text))
+        assert out.startswith("...x")
+        assert out.endswith("for details")
+
+    def test_cjk_characters_are_boundaries(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        text = "前文漢字検索結果本文"
+        out = widen_to_token_bounds(text, 4, 8)
+        assert out == "...検索結果..."
+
+    def test_out_of_range_is_clamped(self):
+        from pdf_mcp.extractor import widen_to_token_bounds
+
+        assert widen_to_token_bounds("abc def", -5, 99) == "abc def"
+        assert widen_to_token_bounds("", 0, 0) == ""
+
+
+class TestSearchFtsWholeTokenSnippets:
+    """search_fts runs FTS5 snippet() and must hand back whole tokens.
+    The 4-token cuts below are deterministic for porter unicode61."""
+
+    PAGE = (
+        "Earlier encoders relied on recurrence. "
+        "Earlier work introduced a mapping from one variable-length sequence "
+        "of symbols to another one of equal length in encoders. "
+        "The sequence model then attends over encoder states."
+    )
+    DATASHEET = (
+        "Supply current 4.5 mA typical. "
+        "Drift with supply 0.30 percent per volt and threshold voltage 0.66 "
+        "of supply measured here in this row of the datasheet."
+    )
+
+    def test_hyphenated_word_is_not_split(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+        cache.save_page_text(sample_pdf, 0, self.PAGE)
+        cache.save_page_text(sample_pdf, 1, "unrelated page about parsing")
+        (hit,) = cache.search_fts(sample_pdf, "sequence", 5, context_chars=20)
+        assert not hit["excerpt"].startswith("...length"), hit["excerpt"]
+        body = hit["excerpt"].removeprefix("...").removesuffix("...")
+        assert body in self.PAGE
+        i = self.PAGE.index(body)
+        assert i == 0 or self.PAGE[i - 1].isspace(), hit["excerpt"]
+
+    def test_decimal_value_is_not_split(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+        cache.save_page_text(sample_pdf, 0, self.DATASHEET)
+        (hit,) = cache.search_fts(sample_pdf, "percent", 5, context_chars=20)
+        assert "0.30 percent" in hit["excerpt"], hit["excerpt"]
+        assert hit["excerpt"].startswith("...")
+
+    def test_every_cut_lands_on_whitespace(self, cache, sample_pdf):
+        """Across several small fragment sizes, no excerpt opens or closes
+        inside a token, and the markers match what was cut."""
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+        cache.save_page_text(sample_pdf, 0, self.PAGE)
+        cache.save_page_text(sample_pdf, 1, self.DATASHEET)
+        for query in ("sequence", "symbols", "percent", "threshold", "supply"):
+            for cc in (20, 25, 30, 40):
+                for hit in cache.search_fts(sample_pdf, query, 5, cc):
+                    text = self.PAGE if hit["page"] == 1 else self.DATASHEET
+                    ex = hit["excerpt"]
+                    lead, trail = ex.startswith("..."), ex.endswith("...")
+                    body = ex[3 if lead else 0 : len(ex) - (3 if trail else 0)]
+                    i = text.find(body)
+                    assert i >= 0, ex
+                    j = i + len(body)
+                    assert i == 0 or text[i - 1].isspace(), (query, cc, ex)
+                    assert j == len(text) or text[j].isspace(), (query, cc, ex)
+                    assert lead == (i > 0), (query, cc, ex)
+                    assert trail == (j < len(text)), (query, cc, ex)
+
+    def test_page_text_with_its_own_ellipsis_is_kept_verbatim(self, cache, sample_pdf):
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available in this SQLite build")
+        text = "...continued from the previous page, the quagga count rose."
+        cache.save_page_text(sample_pdf, 0, text)
+        (hit,) = cache.search_fts(sample_pdf, "quagga", 5, context_chars=500)
+        assert hit["excerpt"] == text

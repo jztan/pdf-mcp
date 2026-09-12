@@ -40,6 +40,10 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 
 ## Installation
 
+**No terminal?** In Claude Desktop, download `pdf-mcp-<version>.mcpb` from the
+[latest release](https://github.com/jztan/pdf-mcp/releases/latest) and
+double-click it. Details under Claude Desktop in [docs/clients.md](docs/clients.md).
+
 ```bash
 pip install pdf-mcp
 ```

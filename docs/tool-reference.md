@@ -15,6 +15,8 @@ All paths accept absolute paths, paths relative to the server's working director
 
 Paths always resolve on the server. Under the stdio transport that is the caller's own machine, so any local file works. Over HTTP it is the remote host: a caller reads files already present under an allow-listed root, or URLs the server fetches, and cannot pass a file from its own filesystem. `server_info` reports the roots available; see [Getting documents to the server](remote-access.md#getting-documents-to-the-server).
 
+**Response notes:** installs from the Claude Desktop bundle may see a one-time `notice` field (a plain sentence naming the newer version and where to download it) on the first dict-shaped tool result after the daily update check finds a newer release. It appears at most once per server process, never on list-shaped results (`pdf_render_pages`), and never when the update check is off, which is the default for pip and uvx installs.
+
 ---
 
 ## Security & Hardening
@@ -996,16 +998,17 @@ pdf_cache_clear(expired_only=False)  # full wipe + URL cache
 
 ### `server_info`
 
-Reports which optional features are installed and which configuration values are active on the server. Setup-time discovery — distinct from `pdf_cache_stats`, which reports runtime *cache* state; this reports what the server *can do*. Call it before feature-dependent calls (semantic search, OCR, column-aware extraction) so you can branch on availability rather than discovering a silent fallback (column-aware → positional sort) or an error (semantic mode → `error`) downstream. Named without the `pdf_` prefix because it operates on the server, not on a PDF. Results are stable for the server's lifetime.
+Reports which optional features are installed and which configuration values are active on the server. Setup-time discovery, distinct from `pdf_cache_stats`, which reports runtime *cache* state; this reports what the server *can do*. Call it before feature-dependent calls (semantic search, OCR, column-aware extraction) so you can branch on availability rather than discovering a silent fallback (column-aware → positional sort) or an error (semantic mode → `error`) downstream. Named without the `pdf_` prefix because it operates on the server, not on a PDF. Results are stable for the server's lifetime, except `features.extraction.ocr.available` (re-checked on every call, so Tesseract installed mid-session shows up) and `update` (refreshed daily in the background).
 
 **Parameters:** None.
 
 **Returns:**
 - `version` (string) — `pdf-mcp` release version.
+- `update` (object or null): the daily update check, `{current, latest, update_available, checked_at, download_url}`. `null` when the check is off (every pip/uvx install unless `[updates] check = true`). `latest` and `checked_at` are `null` before the first check completes.
 - `features` (object):
   - `extraction.column_aware` — `{available, description}`. `available` is always `true`: column detection is built in and no longer depends on an optional package, so it cannot drift from what extraction does.
   - `extraction.vertical_aware` — `{available, description}`. `available` is always `true`: vertical-script (tategaki / 直排) reading-order reconstruction is built in and needs no extra.
-  - `extraction.ocr` — `{available, description}`. `available` reflects `shutil.which("tesseract")`. OCR is opt-in (`pdf_read_pages(ocr=True)`); no tool runs it automatically, and the description says so.
+  - `extraction.ocr`: `{available, description}`. `available` is re-checked per call: `true` when Tesseract is on `PATH` or in its standard install folder (`%ProgramFiles%\Tesseract-OCR` on Windows, `/opt/homebrew/bin` or `/usr/local/bin` on macOS). OCR is opt-in (`pdf_read_pages(ocr=True)`); no tool runs it automatically, and the description says so.
   - `search.modes_available` (array) — always includes `"keyword"`; includes `"semantic"` and `"auto"` only when `fastembed` is installed and the configured embedding model is valid.
   - `search.default_mode` (string) — `"auto"`.
   - `search.embedding_model` (string, conditional) — present **only** when semantic search is available; omitted otherwise.

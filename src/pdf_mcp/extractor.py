@@ -179,11 +179,20 @@ def _resolve_tessdata() -> str | None:
         exe = find_tesseract()
         if exe is None:
             return None
+        # tessdata beside the binary first (the Windows installer's layout,
+        # and pdf-mcp's portable copy), before asking Tesseract. A portable
+        # macOS/Linux build answers --list-langs by recursively scanning the
+        # current directory, which for a server started in the home folder
+        # can fail on an unreadable subfolder or take a long time.
+        beside = os.path.join(os.path.dirname(exe), "tessdata")
+        if _has_traineddata(beside):
+            return beside
         result = subprocess.run(
             [exe, "--list-langs"],
             capture_output=True,
             text=True,
             check=True,
+            timeout=15,
         )
         match = re.search(
             r'List of available languages in "(.+)"',

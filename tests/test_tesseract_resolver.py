@@ -1,5 +1,7 @@
 """find_tesseract(): PATH first, then the standard GUI install folders."""
 
+import subprocess
+
 import pytest
 
 from pdf_mcp import extractor
@@ -80,8 +82,9 @@ def test_check_tesseract_available_raises_when_resolver_misses(monkeypatch):
 
 def test_resolve_tessdata_uses_resolved_binary(monkeypatch, tmp_path):
     exe = _make_exe(tmp_path / "Tesseract-OCR" / "tesseract.exe")
-    tessdata = tmp_path / "Tesseract-OCR" / "tessdata"
-    tessdata.mkdir()
+    # Elsewhere than beside the binary, so only --list-langs can find it.
+    tessdata = tmp_path / "share" / "tessdata"
+    tessdata.mkdir(parents=True)
     (tessdata / "eng.traineddata").write_bytes(b"")
     monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
     monkeypatch.setattr(extractor, "find_tesseract", lambda: exe)
@@ -151,6 +154,25 @@ def test_resolve_tessdata_skips_a_reported_dir_without_traineddata(
         stderr = ""
 
     monkeypatch.setattr("subprocess.run", lambda cmd, **kwargs: Result())
+    assert extractor._resolve_tessdata() == str(tessdata)
+
+
+def test_resolve_tessdata_prefers_the_folder_beside_the_binary(monkeypatch, tmp_path):
+    """Measured in the macOS bundle smoke: a portable Tesseract answers
+    --list-langs by recursively scanning the working directory, and from a
+    home folder that fails on an unreadable subfolder (exit 1). tessdata
+    beside the binary must be found without running it at all."""
+    exe = _make_exe(tmp_path / "portable" / "tesseract")
+    tessdata = tmp_path / "portable" / "tessdata"
+    tessdata.mkdir()
+    (tessdata / "eng.traineddata").write_bytes(b"")
+    monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
+    monkeypatch.setattr(extractor, "find_tesseract", lambda: exe)
+
+    def failing_scan(cmd, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd, stderr="filesystem error")
+
+    monkeypatch.setattr("subprocess.run", failing_scan)
     assert extractor._resolve_tessdata() == str(tessdata)
 
 

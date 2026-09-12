@@ -66,6 +66,11 @@ PDF_MCP_MAX_WORKERS=8
 # CUDA)" below.
 PDF_MCP_CUDA=1
 
+# OCR with no Tesseract installed: 1 = download pdf-mcp's portable,
+# English-only Tesseract on the first OCR call (the Claude Desktop bundle
+# sets this); unset = never. [ocr] auto_install in the config file wins.
+PDF_MCP_OCR_AUTO_INSTALL=1
+
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
 PDF_MCP_HTTP_HOST=127.0.0.1       # bind address
@@ -355,6 +360,22 @@ pdf-mcp works offline except for these:
 
   The config file wins over the other two; `check = true` turns the check on
   for any install.
+- **Tesseract for OCR (Claude Desktop bundle only):** the first OCR call
+  on a computer with no Tesseract installed downloads a portable,
+  English-only Tesseract (about 14 MB) from
+  `github.com/jztan/pdf-mcp-tesseract` releases, checked against a SHA-256
+  shipped in pdf-mcp, and unpacks it into `<cache dir>/tesseract/`.
+  Windows x64 and macOS (Apple Silicon and Intel) only. A Tesseract you
+  installed yourself is always used first, and nothing downloads until OCR
+  is asked for. pip and uvx installs never download it unless the config
+  says so. Turn it off in `~/.config/pdf-mcp/config.toml`:
+
+  ```toml
+  [ocr]
+  auto_install = false
+  ```
+
+  `auto_install = true` turns it on for any install.
 - **Bundle first start:** the Claude Desktop bundle downloads uv from
   Astral's GitHub releases (`github.com/astral-sh/uv`, checked against a
   SHA-256 shipped in the bundle), then Python from Astral's

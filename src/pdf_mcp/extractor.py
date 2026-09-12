@@ -90,6 +90,12 @@ def find_tesseract() -> str | None:
             if os.path.isfile(candidate):
                 exe = candidate
                 break
+    if exe is None:
+        # Last: the portable copy pdf-mcp may have fetched into its cache
+        # (bundle installs); a Tesseract the user installed always wins.
+        from . import portable_tesseract
+
+        exe = portable_tesseract.installed_binary()
     _TESSERACT_EXE = exe
     return exe
 

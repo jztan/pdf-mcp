@@ -319,6 +319,31 @@ def test_server_info_ocr_flag_is_live(monkeypatch):
     assert server.server_info()["features"]["extraction"]["ocr"]["available"] is True
 
 
+def test_server_info_ocr_source(monkeypatch):
+    """A bundle install reports OCR available before the first download."""
+    from pdf_mcp import portable_tesseract, server
+
+    def ocr():
+        return server.server_info()["features"]["extraction"]["ocr"]
+
+    monkeypatch.setattr(portable_tesseract, "installed_binary", lambda: "/c/tesseract")
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/usr/bin/tesseract")
+    assert ocr()["source"] == "system"
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/c/tesseract")
+    assert ocr()["source"] == "portable"
+
+    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    monkeypatch.setattr(portable_tesseract, "platform_key", lambda: "darwin-arm64")
+    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    assert ocr() | {"description": ""} == {
+        "available": True,
+        "source": "on_first_use",
+        "description": "",
+    }
+    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", False)
+    assert ocr()["source"] == "none" and ocr()["available"] is False
+
+
 def test_main_runs_without_banner(monkeypatch):
     """fastmcp checks PyPI for its own updates while printing its banner."""
     from pdf_mcp import server

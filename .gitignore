@@ -124,7 +124,11 @@ scripts/demo-recorder/package-lock.json
 # Operator PDFs mounted into the container
 documents/
 
-benchmark_data/bedrock_kb/.stack.json
+# Local-only benchmark data. No trailing slash, so the entries also match
+# when a path is a symlink.
+benchmark_data/corpus_search
+benchmark_data/financial_reports
+benchmark_data/bedrock_kb
 
 # CDK synth output (multi-megabyte, regenerable via `cdk synth`)
 infra/bedrock_kb/cdk.out/

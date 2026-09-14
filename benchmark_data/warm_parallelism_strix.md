@@ -8,8 +8,7 @@ Machine: AMD Ryzen AI 9 HX PRO 375 (12C/24T), 62 GB RAM, Linux, Python
 below), fork start method, `pdf-mcp` dev install (`.[dev,fast-ocr]`).
 Corpus: a 24-doc synthetic corpus (5-40 pages each, 465 pages total,
 generated with `pymupdf`, varied paragraph text) unless noted; not
-committed (matches this repo's own convention for benchmark corpora —
-see `benchmark_data/corpus_search/manifest.json`'s "local-only" note).
+committed (matches this repo's own convention for benchmark corpora).
 
 ## Start method correction
 

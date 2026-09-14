@@ -114,8 +114,7 @@ Reproduce: `python scripts/benchmark_german_fts.py`.
 ## Query latency (real 100+ page document)
 
 Median per-query `search_fts` time on `googl-fy2023.pdf` (111 pages, a real
-10-K from `benchmark_data/financial_reports/manifest.json`, fetched with
-`scripts/fetch_financial_corpus.py`), 3 queries × 5 repeats. The document is
+10-K), 3 queries × 5 repeats. The document is
 English — irrelevant for a timing measurement, since the "de" search path
 re-tokenizes and stems whatever text is on the page regardless of its actual
 language. Reproduce: `python scripts/benchmark_german_fts.py --latency`.

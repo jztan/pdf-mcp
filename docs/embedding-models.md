@@ -26,7 +26,7 @@ These four models have been live-tested against the 7-scenario arxiv ground-trut
 | Model | Size | MTEB Retrieval | License | Notes |
 |-------|------|---------------|---------|-------|
 | `BAAI/bge-small-en-v1.5` *(default)* | 67 MB | 51.68 | MIT | Best retrieval-per-MB at this size; proven default |
-| `snowflake/snowflake-arctic-embed-s` | 130 MB | 51.98 | Apache 2.0 | Slightly better retrieval than default; good Apache 2.0 alternative |
+| `snowflake/snowflake-arctic-embed-s` | 130 MB | 51.98 | Apache 2.0 | Slightly higher MTEB than default; good Apache 2.0 alternative |
 
 ### Mid-Size English (768 dimensions)
 
@@ -44,7 +44,7 @@ These four models have been live-tested against the 7-scenario arxiv ground-trut
 | Keep it simple | `BAAI/bge-small-en-v1.5` *(default)* |
 | Apache 2.0 drop-in for default | `snowflake/snowflake-arctic-embed-s` |
 | Mid-size step-up (MIT) | `BAAI/bge-base-en-v1.5` |
-| Best validated retrieval | `snowflake/snowflake-arctic-embed-m` |
+| Highest MTEB under 500 MB | `snowflake/snowflake-arctic-embed-m` |
 
 ---
 
@@ -85,4 +85,8 @@ Measured on the existing arxiv ground-truth corpus (Attention paper + GPT-3 pape
 | `snowflake/snowflake-arctic-embed-s` | 0.607 | 67.0 ms | 130 MB | 51.98 |
 | `snowflake/snowflake-arctic-embed-m` | 0.452 | 50.5 ms | 430 MB | 54.90 |
 
-**Default decision (rerun 2026-09-15, Python 3.13.1, SQLite 3.51.0, macOS arm64):** kept. No challenger passed the gate (MRR lift ≥ 0.05 AND p50 ≤ 1.5x baseline). bge-small leads bge-base by only 0.012 MRR here, and with 7 scenarios one query moving a single rank shifts MRR by up to about 0.07, so treat the two as tied on quality; bge-base is about 5x slower per query. arctic-embed-m scores lowest (0.452), likely because fastembed does not apply its query/passage prefix protocol; if you run that family via BYOM, validate your results before relying on them. The previous run (2026-05-09) scored bge-small 0.806 with the same verdict; p50 latency is a median of 3 runs of one query, so compare it only within a single run.
+**Default decision (rerun 2026-09-15, Python 3.13.1, SQLite 3.51.0, macOS arm64):** kept. No challenger passed the gate (MRR lift ≥ 0.05 AND p50 ≤ 1.5x baseline). bge-small leads bge-base by only 0.012 MRR, and with 7 scenarios one query moving a single rank shifts MRR by up to about 0.07, so treat the two as tied on quality.
+
+The MRR changes since the previous run (2026-05-09) all come from sub-page embeddings. Scoring with whole-page vectors alone reproduces that run's bge-small 0.806 and bge-base 0.667 exactly. arctic-embed-m's whole-page vectors rank the same few pages first for every query, while its ~300-token windows do not, which is why it went from 0.029 to 0.452. bge-small's drop is a single query, where a window on another page now outscores the labelled one.
+
+p50 latency covers the whole warm `pdf_search` call, and most of it is building semantic excerpts for the top hits, which embeds candidate spans with the same model. Encoding the query itself takes about 1.5 ms with bge-small and 4 ms with bge-base. That is why bge-base is about 5x slower per search here, and why these latencies are not comparable with the 2026-05-09 run, which predates semantic excerpts.

@@ -10,23 +10,15 @@ default.** The only change worth making was an unrelated bug the
 investigation surfaced — the embedding **normalization fix** (shipped to
 `develop`).
 
-**This conclusion is English-only.** A separate German-language benchmark
-([`german_embedding_results.md`](german_embedding_results.md), against a
-public statute PDF per
-[jztan/pdf-mcp#46](https://github.com/jztan/pdf-mcp/issues/46), 119
-scenarios, scored on the target norm page rather than the looser page set
-that also counts a citing referrer page as a hit) found bge-small's German
-hybrid MRR (0.222) meaningfully below three local models whose CIs exclude
-zero: `multilingual-e5-large` (+0.075 MRR), the specific model the issue
-asked about once a fastembed/onnxruntime graph-optimization incompatibility
-is worked around, `jina-embeddings-v2-base-de` (+0.073 MRR), and
-`paraphrase-multilingual-mpnet-base-v2` (+0.060 MRR). All three clear this
-repo's existing MRR-lift *and* 1.5x latency gates on hybrid-mode numbers —
-a change from the pre-review draft of this benchmark, which compared
-against semantic-only latency and wrongly reported neither as gate-passing.
-That does not make any of them the production default on its own (see the
-detail doc for caveats), but the catalog is not exhausted for German the
-way it is for English.
+**This conclusion is English-only.** On a German benchmark (119 queries
+on a public statute PDF, scored on the target norm's page; see
+[`german_embedding_results.md`](german_embedding_results.md) and
+[jztan/pdf-mcp#46](https://github.com/jztan/pdf-mcp/issues/46)),
+bge-small's hybrid MRR is 0.222, and three local models beat it with CIs
+that exclude zero: `multilingual-e5-large` +0.075 [+0.011, +0.139],
+`jina-embeddings-v2-base-de` +0.073 [+0.014, +0.132], and
+`paraphrase-multilingual-mpnet-base-v2` +0.060 [+0.002, +0.117]. None is a
+default; the detail doc has the caveats.
 
 Detail docs (kept): [`e5_prefix_results.md`](e5_prefix_results.md) ·
 [`mlx_backend_results.md`](mlx_backend_results.md) ·

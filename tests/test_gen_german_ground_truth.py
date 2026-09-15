@@ -703,3 +703,14 @@ class TestMainExitsOnShaMismatch:
         with pytest.raises(Exception) as exc:
             ggt.main()
         assert not (isinstance(exc.value, SystemExit) and exc.value.code == 2)
+
+
+def test_default_provenance_out_follows_out():
+    # The committed default is unchanged, and a scratch --out no longer
+    # writes over the committed provenance file.
+    assert ggt._default_provenance_out(
+        "benchmark_data/german_ground_truth.json"
+    ) == str(Path("benchmark_data/german_ground_truth_provenance.json"))
+    assert ggt._default_provenance_out("/tmp/scratch/gt.json") == str(
+        Path("/tmp/scratch/gt_provenance.json")
+    )

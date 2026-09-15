@@ -80,9 +80,9 @@ Measured on the existing arxiv ground-truth corpus (Attention paper + GPT-3 pape
 
 | Model | MRR | p50 latency | Size | MTEB |
 |-------|-----|-------------|------|------|
-| `BAAI/bge-small-en-v1.5` *(baseline)* | 0.806 | 6.1 ms | 67 MB | 51.68 |
-| `snowflake/snowflake-arctic-embed-s` | 0.690 | 4.1 ms | 130 MB | 51.98 |
-| `BAAI/bge-base-en-v1.5` | 0.667 | 5.7 ms | 210 MB | 53.25 |
-| `snowflake/snowflake-arctic-embed-m` | 0.029 | 5.8 ms | 430 MB | 54.90 |
+| `BAAI/bge-small-en-v1.5` *(baseline)* | 0.726 | 41.9 ms | 67 MB | 51.68 |
+| `BAAI/bge-base-en-v1.5` | 0.714 | 207.3 ms | 210 MB | 53.25 |
+| `snowflake/snowflake-arctic-embed-s` | 0.607 | 67.0 ms | 130 MB | 51.98 |
+| `snowflake/snowflake-arctic-embed-m` | 0.452 | 50.5 ms | 430 MB | 54.90 |
 
-**Default decision (2026-05-09):** kept — no challenger passed the gate (MRR lift ≥ 0.05 AND p50 ≤ 1.5x baseline). bge-small wins MRR by 0.116 over the best challenger on this corpus. The arctic-embed-m collapse (0.029) likely reflects a missing query/passage prefix protocol that fastembed does not apply automatically; users running BYOM with that family should validate their results before relying on them.
+**Default decision (rerun 2026-09-15, Python 3.13.1, SQLite 3.51.0, macOS arm64):** kept. No challenger passed the gate (MRR lift ≥ 0.05 AND p50 ≤ 1.5x baseline). bge-small leads bge-base by only 0.012 MRR here, and with 7 scenarios one query moving a single rank shifts MRR by up to about 0.07, so treat the two as tied on quality; bge-base is about 5x slower per query. arctic-embed-m scores lowest (0.452), likely because fastembed does not apply its query/passage prefix protocol; if you run that family via BYOM, validate your results before relying on them. The previous run (2026-05-09) scored bge-small 0.806 with the same verdict; p50 latency is a median of 3 runs of one query, so compare it only within a single run.

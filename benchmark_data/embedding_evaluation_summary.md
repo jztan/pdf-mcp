@@ -5,13 +5,33 @@ default `BAAI/bge-small-en-v1.5` on fastembed/CPU, via different prefixes, an ML
 (Apple-GPU) backend, or a different model? Every path was benchmark-tested before
 any production change.
 
-**Conclusion: no. `bge-small` on fastembed CPU stays the default.** The only
-change worth making was an unrelated bug the investigation surfaced — the
-embedding **normalization fix** (shipped to `develop`).
+**Conclusion: no, for English. `bge-small` on fastembed CPU stays the
+default.** The only change worth making was an unrelated bug the
+investigation surfaced — the embedding **normalization fix** (shipped to
+`develop`).
+
+**This conclusion is English-only.** A separate German-language benchmark
+([`german_embedding_results.md`](german_embedding_results.md), against a
+public statute PDF per
+[jztan/pdf-mcp#46](https://github.com/jztan/pdf-mcp/issues/46), 119
+scenarios, scored on the target norm page rather than the looser page set
+that also counts a citing referrer page as a hit) found bge-small's German
+hybrid MRR (0.222) meaningfully below three local models whose CIs exclude
+zero: `multilingual-e5-large` (+0.075 MRR), the specific model the issue
+asked about once a fastembed/onnxruntime graph-optimization incompatibility
+is worked around, `jina-embeddings-v2-base-de` (+0.073 MRR), and
+`paraphrase-multilingual-mpnet-base-v2` (+0.060 MRR). All three clear this
+repo's existing MRR-lift *and* 1.5x latency gates on hybrid-mode numbers —
+a change from the pre-review draft of this benchmark, which compared
+against semantic-only latency and wrongly reported neither as gate-passing.
+That does not make any of them the production default on its own (see the
+detail doc for caveats), but the catalog is not exhausted for German the
+way it is for English.
 
 Detail docs (kept): [`e5_prefix_results.md`](e5_prefix_results.md) ·
 [`mlx_backend_results.md`](mlx_backend_results.md) ·
-[`large_models_results.md`](large_models_results.md).
+[`large_models_results.md`](large_models_results.md) ·
+[`german_embedding_results.md`](german_embedding_results.md).
 Raw per-run output: `benchmark_results/*.json` (+ `.txt`), gitignored.
 
 ## Everything tested
@@ -47,5 +67,7 @@ LLM-fed page retrieval** — short factual queries over PDF pages, results hande
 an agent. Confirmed three independent times (May 4-model run, e5-large, this
 large-model screen) and corroborated by the literature (arXiv 2506.00049,
 "small embeddings + LLM re-ranking beat bigger models"). Model size buys almost
-nothing in pdf-mcp's regime. The only remaining lever for more confidence is a
-broader, multi-domain corpus — the model catalog is exhausted.
+nothing in pdf-mcp's regime, for English. The only remaining lever for more
+confidence on the *English* path is a broader, multi-domain corpus — that
+catalog is exhausted. Non-English is a different question with a different
+answer; see [`german_embedding_results.md`](german_embedding_results.md).

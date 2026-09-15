@@ -1,0 +1,32 @@
+{
+  "eligible_norm_count": 809,
+  "environment": {
+    "implementation": "CPython",
+    "machine": "x86_64",
+    "packages": {
+      "fastembed": "0.8.0",
+      "numpy": "2.4.4",
+      "onnxruntime": "1.24.4",
+      "pdf-mcp": "3.2.0",
+      "pypdfium2": "5.13.0"
+    },
+    "platform": "Linux-7.2.3-ebook-x86_64-with-glibc2.43",
+    "python": "3.12.2",
+    "sqlite": "3.45.1"
+  },
+  "sample_size": 300,
+  "sampled_norm_count": 300,
+  "scenario_count": 419,
+  "script_version": 2,
+  "seed": 20260913,
+  "sha256": "d75a31513293eaf31c166e0985fe1f8586158ceaf56614f3dfd50da183935786",
+  "skip_counts": {
+    "empty_clause": 13,
+    "external_statute_citation": 59,
+    "natural_query_rejected": 137,
+    "no_referrer": 1,
+    "range_entry": 24,
+    "referrer_too_close": 30,
+    "weggefallen": 23
+  }
+}

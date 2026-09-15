@@ -59,8 +59,9 @@ Known gotchas we've already hit:
 - **`BAAI/bge-large-en-v1.5`** (1.2 GB, 1024-dim) — not run against the live corpus.
 - **`intfloat/multilingual-e5-small`** (384-dim, 100+ languages) — not run against the live corpus.
 - **`intfloat/multilingual-e5-large`** (2.2 GB, 1024-dim, 100+ languages) — not run against the live corpus.
+- **`jinaai/jina-embeddings-v2-base-de`** (320 MB, 768-dim, German) — **does not load under pdf-mcp today.** fastembed hardcodes onnxruntime's `ORT_ENABLE_ALL` graph-optimization level and this model's exported graph fails a fusion pass there. The German benchmark harness works around it process-locally (`--patch-onnx-graph-opt`); `embedder.py` has no per-model session-options override, so configuring this model via BYOM fails at load.
 
-If you need any of these (long contexts, multilingual, larger English models), pin via BYOM and validate the retrieval yourself before depending on it.
+If you need any of these (long contexts, multilingual, larger English models), pin via BYOM and validate the retrieval yourself before depending on it. For German specifically, see [`german_embedding_results.md`](../benchmark_data/german_embedding_results.md) — several models there clear this project's MRR-lift and latency gates on the tested corpus, but none has been adopted as a default.
 
 ---
 

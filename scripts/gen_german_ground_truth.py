@@ -562,6 +562,16 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _default_provenance_out(out_arg: str) -> str:
+    """Provenance path that sits next to --out: `x.json` -> `x_provenance.json`.
+
+    For the default --out this is the committed provenance file; for a
+    scratch --out it stays in the scratch location instead of overwriting it.
+    """
+    out = Path(out_arg)
+    return str(out.with_name(f"{out.stem}_provenance.json"))
+
+
 def _pinned_sha256(out_arg: str) -> str | None:
     """Read pdfs.bgb.sha256 from the currently committed answer key.
 
@@ -693,8 +703,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--provenance-out",
-        default="benchmark_data/german_ground_truth_provenance.json",
-        help="Provenance output path",
+        default=None,
+        help=(
+            "Provenance output path (default: <--out stem>_provenance.json "
+            "next to --out, so a scratch --out never overwrites the "
+            "committed provenance file)"
+        ),
     )
     parser.add_argument(
         "--force",
@@ -706,6 +720,8 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    if args.provenance_out is None and args.out != "-":
+        args.provenance_out = _default_provenance_out(args.out)
 
     if args.pdf:
         pdf_path = args.pdf

@@ -157,36 +157,25 @@ Shipping this as a permanent fix for the production path would need
 `embedder.py` to accept a per-model session-options override — out of
 scope here, tracked as a fast-follow if `jina-de` is adopted.
 
-**On hybrid MRR/latency, three of four candidates clear both of this
-repo's existing gates (+0.05 MRR lift, ≤1.5x p50 latency): `e5-large`
-(1.34x), `jina-de` (1.33x), and `mpnet` (1.12x)** — all three CIs exclude
-zero, so the lift is real, not noise. Only `MiniLM` fails, and only the
-MRR gate (+0.031, CI includes zero); its latency ratio (1.07x) would also
-pass. **`mpnet` is the standout on the gate's own terms**: cheapest to
-embed of the three passing candidates (221s vs e5-large's 819s), lowest
-latency ratio, and it clears cleanly — but it is not the model either the
-original issue or `jina-de`'s workaround investigation was about, so it
-hasn't had the same scrutiny as the other two here. This is a real,
-reproducible change to what the existing decision gate would recommend on
-this corpus (`compute_verdict` would pick `e5-large` as the highest-MRR
-passing challenger if all four ran together); it is presented here as a
-finding, not a recommendation to change the production default — that
-decision is the maintainer's, and the gate itself (see below) may not be
-the right one for German. All models run raw, with **no**
-`query:`/`passage:` prefix — matching pdf-mcp's actual production path
-today (no prefix mechanism exists in `embedder.py`) — so these numbers
-likely understate what prefix-aware models could do, at the cost of the
-extra machinery `benchmark_data/e5_prefix_results.md` already found
-net-negative for English. Hybrid-mode numbers also depend on
-`confidence_threshold`, pinned here to `server.py`'s current default; a
-future PR making that configurable should not be read as a regression
-against these numbers. The latency gate itself is tuned for the *English*
-arxiv corpus's decision, not written with German in mind, so whether it
-should bind the same way here is a real open question.
+**On hybrid MRR, three candidates beat bge-small with CIs that exclude
+zero:** `e5-large` (+0.075), `jina-de` (+0.073) and `mpnet` (+0.060).
+`mpnet` is borderline: its lower bound is +0.002, from a single run.
+`MiniLM` (+0.031) does not separate from bge-small (CI includes zero).
+Hybrid p50 latency stays within 1.5x of bge-small for all four, but cold
+embed cost varies far more (49 s to 819 s against bge-small's 139 s), so
+query latency alone understates the cost of a larger model. These are
+findings on one corpus, not a change to the default. All models run raw,
+with no `query:`/`passage:` prefix, matching pdf-mcp's production path
+(there is no prefix mechanism in `embedder.py`), so prefix-aware models
+may be understated here; `benchmark_data/e5_prefix_results.md` found
+prefixes net-negative for English. The latency gate was tuned on the
+English arxiv corpus, so whether it should bind the same way for German
+is an open question.
 
-`MiniLM` is also markedly cheaper to embed than the default (49s vs 139s
-cold) — worth keeping in mind as a budget option even though its lift
-doesn't clear the MRR gate.
+`MiniLM`'s fast cold embed (49 s against 139 s) is partly truncation: it
+encodes at most 128 tokens per unit, while the page chunks run about 300
+tokens, so it sees less of each chunk than `bge-small` or `mpnet`,
+which both take 512.
 
 ### Secondary: scored on `relevant_pages` (referrer counts as a hit), semantic only
 

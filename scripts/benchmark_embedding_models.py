@@ -19,6 +19,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -86,6 +87,31 @@ def load_ground_truth(path: str = "benchmark_data/ground_truth.json") -> dict:
         raise FileNotFoundError(f"Ground truth file not found: {path}")
     with open(gt_path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def pinned_pdf_mismatches(gt: dict) -> list[tuple[str, str, str]]:
+    """Return (pdf_key, pinned, actual) for every PDF whose bytes differ from
+    its pinned `sha256`. Entries without a pin are not checked.
+
+    The German answer key's BGB is fetched live, and each amendment shifts
+    page numbers under the committed labels, so a stale pin must stop the run
+    rather than score silently against the wrong pages.
+    """
+    mismatches: list[tuple[str, str, str]] = []
+    for pdf_key, pdf in gt["pdfs"].items():
+        pinned = pdf.get("sha256")
+        if not pinned:
+            continue
+        path, err = _resolve_path(pdf["url"])
+        if err is not None:
+            raise RuntimeError(err["error"])
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        if h.hexdigest() != pinned:
+            mismatches.append((pdf_key, pinned, h.hexdigest()))
+    return mismatches
 
 
 # ── ANSI / printing helpers (duplicated from benchmark_rrf.py) ──────
@@ -813,6 +839,14 @@ def main() -> None:
     )
 
     gt = load_ground_truth(args.ground_truth)
+    for pdf_key, pinned, actual in pinned_pdf_mismatches(gt):
+        print(
+            f"ERROR: {pdf_key} sha256 mismatch (pinned {pinned}, got {actual}). "
+            "The source PDF changed, so page labels no longer line up; "
+            "regenerate the ground truth before scoring.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     gt = _filter_ground_truth_by_arm(gt, arms)
     total_scenarios = sum(len(pdf["scenarios"]) for pdf in gt["pdfs"].values())
     if total_scenarios == 0:

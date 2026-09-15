@@ -1156,3 +1156,66 @@ class TestMainValidatesBaselineAndArms:
         with pytest.raises(SystemExit) as exc_info:
             bem.main()
         assert exc_info.value.code == 2
+
+
+class TestPinnedPdfDigest:
+    """A ground-truth PDF entry that pins `sha256` must match the bytes the
+    harness actually scores against. The BGB is fetched live and changes with
+    every amendment, which shifts page numbers under the committed labels."""
+
+    def _gt(self, tmp_path, pdf_bytes: bytes, pinned: str) -> Path:
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(pdf_bytes)
+        gt_path = tmp_path / "gt.json"
+        gt_path.write_text(
+            json.dumps(
+                {
+                    "pdfs": {
+                        "bgb": {
+                            "url": str(pdf),
+                            "sha256": pinned,
+                            "title": "X",
+                            "page_count": 1,
+                            "scenarios": {"1a": {"query": "q", "relevant_pages": [1]}},
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        return gt_path
+
+    def test_mismatch_lists_the_pdf(self, tmp_path):
+        import hashlib
+
+        gt = json.loads(
+            self._gt(tmp_path, b"%PDF-1.4 new", "0" * 64).read_text("utf-8")
+        )
+        mismatches = bem.pinned_pdf_mismatches(gt)
+        assert len(mismatches) == 1
+        assert mismatches[0][0] == "bgb"
+        assert mismatches[0][2] == hashlib.sha256(b"%PDF-1.4 new").hexdigest()
+
+    def test_match_and_unpinned_pass(self, tmp_path):
+        import hashlib
+
+        digest = hashlib.sha256(b"%PDF-1.4 same").hexdigest()
+        gt = json.loads(self._gt(tmp_path, b"%PDF-1.4 same", digest).read_text("utf-8"))
+        assert bem.pinned_pdf_mismatches(gt) == []
+        del gt["pdfs"]["bgb"]["sha256"]
+        assert bem.pinned_pdf_mismatches(gt) == []
+
+    def test_main_exits_2_before_running_any_model(self, monkeypatch, tmp_path):
+        gt_path = self._gt(tmp_path, b"%PDF-1.4 new", "0" * 64)
+        ran = []
+        monkeypatch.setattr(bem, "run_model", lambda *a, **k: ran.append(a))
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["benchmark_embedding_models.py", "--ground-truth", str(gt_path)],
+        )
+        bem._OUTPUT.clear()
+        with pytest.raises(SystemExit) as exc_info:
+            bem.main()
+        assert exc_info.value.code == 2
+        assert ran == []

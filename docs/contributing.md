@@ -98,6 +98,8 @@ These come from real review rounds, so meeting them up front is the fastest way 
 
 Features that change search or extraction quality must follow: **fix → benchmark → corpus expand → re-benchmark**. The initial small-sample benchmark overstates the gap; expanding the corpus narrows it to honest numbers and surfaces ground-truth errors. Don't skip steps.
 
+The gate for search and excerpt changes is the excerpt gate, `scripts/benchmark_excerpt_quality.py` (exit 0 pass, 1 regression, 2 setup error); run it before and after your change.
+
 ## Coherence eval harness
 
 `scripts/eval_coherence.py` has Claude read pdf-mcp's extracted text and classify its reading-order coherence (coherent / partial / scrambled) across a fixed corpus. It catches reading-order scrambling that containment and uniqueness metrics miss — those guard *performance* regressions, this guards extraction *quality*.

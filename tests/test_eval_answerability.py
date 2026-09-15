@@ -8,6 +8,8 @@ an agent that already knows the answer.
 
 from unittest.mock import patch
 
+import pytest
+
 from scripts.eval_financial_answerability import (
     JUDGE_CONTEXT_FLAGS,
     ballots_decided,
@@ -140,6 +142,9 @@ class TestQuestionScopeField:
             Path(__file__).resolve().parents[1]
             / "benchmark_data/financial_reports/answerability_questions.json"
         )
+        if not path.exists():
+            # The 10-K question set is local-only and absent in CI.
+            pytest.skip("financial_reports data not present")
         return json.loads(path.read_text(encoding="utf-8"))["questions"]
 
     def test_every_question_declares_a_scope(self):

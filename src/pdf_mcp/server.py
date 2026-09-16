@@ -5175,9 +5175,11 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
     """
     if expired_only:
         cleared = cache.clear_expired()
+        corpus.clear_warm_memo()
     else:
         cleared = cache.clear_all()
         url_fetcher.clear_cache()
+        corpus.clear_warm_memo()
 
     return {
         "expired_only": expired_only,

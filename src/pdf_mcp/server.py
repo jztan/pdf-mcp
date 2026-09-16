@@ -37,6 +37,7 @@ from . import portable_tesseract
 from . import updates
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
+from .vector_cache import page_max_from_lists
 from .extractor import (
     _NUMBER_TOKEN,
     _columns_reliable,
@@ -3085,14 +3086,10 @@ def pdf_search(
                     "error": f"embedding model load/encode failed: {exc}",
                     "query": query,
                 }
-            page_nums_list = sorted(cached_embeddings.keys())
             # Page score is its best chunk. Averaging would re-introduce the
             # page-level dilution this change exists to remove.
-            sem_scores: Any = np.array(
-                [
-                    max(float(v @ query_vec) for v in cached_embeddings[p])
-                    for p in page_nums_list
-                ]
+            page_nums_list, sem_scores = page_max_from_lists(
+                cached_embeddings, query_vec
             )
 
             top_k = min(max_results, len(page_nums_list))
@@ -3383,12 +3380,8 @@ def pdf_search(
                 return _auto_keyword_fallback(
                     f"embedding model load/encode failed: {exc}"
                 )
-            page_nums_list = sorted(cached_embeddings.keys())
-            sem_scores = np.array(
-                [
-                    max(float(v @ query_vec) for v in cached_embeddings[p])
-                    for p in page_nums_list
-                ]
+            page_nums_list, sem_scores = page_max_from_lists(
+                cached_embeddings, query_vec
             )
             page_sem_score = {
                 page_nums_list[i]: float(sem_scores[i])
@@ -4121,37 +4114,51 @@ def _corpus_semantic_scores(
     """
     import numpy as np
 
+    from . import cache as cache_mod
     from .extractor import page_embedding_units
+    from .vector_cache import CACHE, build_doc_matrix, score_doc
 
     scored: list[tuple[str, int, float]] = []
     semantic_unprocessed: list[str] = []
+    qv = np.asarray(query_vec, dtype=np.float32)
     for path in files:
         meta = cache.get_metadata(path)
         if meta is None:
             semantic_unprocessed.append(path)
             continue
         page_nums = list(range(meta["page_count"]))
-        raw = cache.get_page_embeddings(path, page_nums, model_name)
-        if not raw:
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = 0.0
+        # The key is the cache's own validity rule (path, mtime, model) plus
+        # the extraction version, so a re-warm after a bump never serves a
+        # stale matrix. One stacked matrix per document replaces decoding
+        # every unit blob on every query (the vector scan was the only part
+        # of hybrid search that scaled with the window count).
+        key = (path, mtime, model_name, cache_mod._EXTRACTION_VERSION)
+
+        def _load(path: str = path, page_nums: list[int] = page_nums) -> Any:
+            return build_doc_matrix(
+                cache.get_page_embeddings(path, page_nums, model_name)
+            )
+
+        dm = CACHE.get(key, _load)
+        if dm is None:
             semantic_unprocessed.append(path)
             continue
-        for page_num, blobs in raw.items():
-            if not blobs:
-                continue
-            # Page score is its best chunk. Averaging would re-introduce the
-            # page-level dilution this change exists to remove.
-            sims = [
-                float(np.frombuffer(b, dtype=np.float32).copy() @ query_vec)
-                for b in blobs
-            ]
-            scored.append((path, page_num + 1, max(sims)))
-            if best_chunks is not None and len(sims) > 1:
+        # Page score is its best chunk. Averaging would re-introduce the
+        # page-level dilution sub-page embedding exists to remove.
+        page_max, _best_local = score_doc(dm, qv)
+        ends = np.append(dm.offsets[1:], len(dm.M))
+        for i, page_num in enumerate(dm.pages):
+            scored.append((path, page_num + 1, float(page_max[i])))
+            n_units = int(ends[i] - dm.offsets[i])
+            if best_chunks is not None and n_units > 1:
                 units = page_embedding_units(cache.get_page_text(path, page_num) or "")
-                if len(units) == len(sims):
-                    sub = sims[1:]
-                    best_chunks[(path, page_num + 1)] = units[
-                        1 + max(range(len(sub)), key=sub.__getitem__)
-                    ]
+                if len(units) == n_units:
+                    sub = dm.M[dm.offsets[i] + 1 : ends[i]] @ qv
+                    best_chunks[(path, page_num + 1)] = units[1 + int(np.argmax(sub))]
     return scored, semantic_unprocessed
 
 

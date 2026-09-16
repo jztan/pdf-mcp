@@ -131,3 +131,73 @@ class TestPageMaxHelper:
 
         pages, scores = page_max_from_lists({}, np.zeros(4, np.float32))
         assert pages == [] and len(scores) == 0
+
+
+class TestCorpusScoresParity:
+    def test_matrix_path_equals_blob_path(self, tmp_path, monkeypatch):
+        """Same scored tuples and best_chunks as the per-blob reference."""
+        import pdf_mcp.server as srv
+        from pdf_mcp.extractor import page_embedding_units
+        from pdf_mcp.vector_cache import CACHE
+
+        text = ". ".join(f"sentence number {i} about topic {i % 7}" for i in range(400))
+        units = page_embedding_units(text)
+        assert len(units) > 2
+        rng = np.random.default_rng(0)
+        vs = rng.normal(size=(len(units), 8)).astype(np.float32)
+        vs /= np.linalg.norm(vs, axis=1, keepdims=True)
+        blobs = {0: [v.tobytes() for v in vs], 1: [vs[0].tobytes()]}
+
+        class FakeCache:
+            cache_dir = tmp_path
+
+            def get_metadata(self, path):
+                return {"page_count": 2}
+
+            def get_page_embeddings(self, path, pages, model):
+                return blobs
+
+            def get_page_text(self, path, p):
+                return text if p == 0 else "short"
+
+        monkeypatch.setattr(srv, "cache", FakeCache())
+        CACHE.clear()
+        q = rng.normal(size=8).astype(np.float32)
+        best: dict = {}
+        scored, unproc = srv._corpus_semantic_scores(
+            [str(tmp_path / "x.pdf")], "m", q, best_chunks=best
+        )
+        ref = {
+            p: max(float(np.frombuffer(b, dtype=np.float32) @ q) for b in bl)
+            for p, bl in blobs.items()
+        }
+        assert unproc == []
+        assert {(p, round(s, 6)) for _, p, s in scored} == {
+            (p + 1, round(s, 6)) for p, s in ref.items()
+        }
+        sub = [float(v @ q) for v in vs[1:]]
+        key = (str(tmp_path / "x.pdf"), 1)
+        assert best[key] == units[1 + int(np.argmax(sub))]
+        assert (str(tmp_path / "x.pdf"), 2) not in best
+        # second call is served from the matrix cache
+        before = CACHE.stats()["hits"]
+        srv._corpus_semantic_scores([str(tmp_path / "x.pdf")], "m", q)
+        assert CACHE.stats()["hits"] == before + 1
+
+    def test_doc_without_embeddings_is_unprocessed(self, tmp_path, monkeypatch):
+        import pdf_mcp.server as srv
+        from pdf_mcp.vector_cache import CACHE
+
+        class FakeCache:
+            def get_metadata(self, path):
+                return {"page_count": 3}
+
+            def get_page_embeddings(self, path, pages, model):
+                return {}
+
+        monkeypatch.setattr(srv, "cache", FakeCache())
+        CACHE.clear()
+        scored, unproc = srv._corpus_semantic_scores(
+            ["/nope.pdf"], "m", np.zeros(8, np.float32)
+        )
+        assert scored == [] and unproc == ["/nope.pdf"]

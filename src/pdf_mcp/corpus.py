@@ -10,6 +10,7 @@ caller; this module owns no storage of its own.
 
 from __future__ import annotations
 
+import os
 import logging
 import math
 import multiprocessing
@@ -196,7 +197,66 @@ def resolve_corpus(
     return {"files": files, "skipped": skipped}
 
 
+# Per-process memo of positive warm verdicts. Every pdf_corpus_search call
+# re-verifies that each document is fully warm, and that verification
+# re-chunks every page to check the stored unit layout (stale_layout_pages):
+# on a 100-document corpus it was the largest per-query cost (profile
+# 2026-09-17), and it grew with the window count. Key: path, file mtime,
+# cache db, embeddings flag, model, extraction version. Only positive
+# verdicts are stored; a document that is not warm is re-checked every time
+# so a warm that completes later is seen. Writers call forget_warm_verdict;
+# cache clears call clear_warm_memo.
+_WARM_MEMO: dict[tuple[Any, ...], int] = {}
+_WARM_MEMO_MAX = 10_000
+
+
+def clear_warm_memo() -> None:
+    _WARM_MEMO.clear()
+
+
+def forget_warm_verdict(path: str) -> None:
+    for key in [k for k in _WARM_MEMO if k[0] == path]:
+        _WARM_MEMO.pop(key, None)
+
+
+def _warm_memo_key(
+    path: str, cache: Any, embeddings: bool, model_name: str | None
+) -> tuple[Any, ...] | None:
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return None
+    from .cache import _EXTRACTION_VERSION
+
+    db = getattr(cache, "db_path", None)
+    try:
+        db_ino = os.stat(db).st_ino if db is not None else None
+    except OSError:
+        db_ino = None
+    return (path, mtime, str(db), db_ino, embeddings, model_name, _EXTRACTION_VERSION)
+
+
 def _cached_pages(
+    path: str,
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+) -> int | None:
+    """Memoised ``_cached_pages_check``: see ``_WARM_MEMO``."""
+    key = _warm_memo_key(path, cache, embeddings, model_name)
+    if key is not None:
+        hit = _WARM_MEMO.get(key)
+        if hit is not None:
+            return hit
+    pages = _cached_pages_check(path, cache, embeddings, model_name)
+    if key is not None and pages is not None:
+        if len(_WARM_MEMO) >= _WARM_MEMO_MAX:
+            _WARM_MEMO.clear()
+        _WARM_MEMO[key] = pages
+    return pages
+
+
+def _cached_pages_check(
     path: str,
     cache: Any,
     embeddings: bool,
@@ -420,6 +480,7 @@ def _embed_doc_batched(
             count = len(per_page[pn])
             blobs[pn] = vecs[cursor : cursor + count]
             cursor += count
+        forget_warm_verdict(path)
         with cache.write_transaction() as conn:
             cache.save_page_embeddings(path, blobs, model_name, conn=conn)
         done += len(batch)
@@ -478,6 +539,7 @@ def _finalize_doc(
     found nothing, and IS written, replacing any stale rows with an
     authoritative empty index.
     """
+    forget_warm_verdict(path)
     # Preserve previously-OCR'd pages: a scanned doc's page may already
     # carry non-empty OCR text (via pdf_read_pages(ocr=True)) even though
     # this doc was never "fully warm" (e.g. missing metadata/text_coverage
@@ -566,6 +628,7 @@ def _warm_one_doc(
     Extraction completes fully before any write, so a failure leaves
     the cache untouched.
     """
+    forget_warm_verdict(path)
     page_count, metadata, toc, texts, coverage, layout, sections = _warm_extract_worker(
         path, want_sections
     )

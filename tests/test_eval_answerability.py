@@ -284,3 +284,33 @@ class TestBallotCache:
         assert first != second
         assert third is None
         mod._BALLOT_CACHE = None
+
+
+class TestDataDirAndCacheDirFlags:
+    def test_data_dir_and_cache_dir_are_parsed(self):
+        from scripts import eval_financial_answerability as ev
+
+        ns = ev.build_parser().parse_args(
+            [
+                "--data-dir",
+                "/tmp/x",
+                "--cache-dir",
+                "/tmp/c",
+                "--limit",
+                "5",
+                "--classes",
+                "described,needle",
+            ]
+        )
+        from pathlib import Path
+
+        assert ns.data_dir == Path("/tmp/x") and ns.cache_dir == Path("/tmp/c")
+        assert ns.limit == 5 and ns.classes == ["described", "needle"]
+
+    def test_defaults_keep_the_financial_set(self):
+        from scripts import eval_financial_answerability as ev
+
+        ns = ev.build_parser().parse_args([])
+        assert ns.data_dir == ev.DATA
+        assert ns.cache_dir == ev.REPO / "benchmark_data" / ".answerability_cache"
+        assert ns.limit is None and ns.classes is None

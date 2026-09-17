@@ -110,6 +110,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[ocr] auto_install = false`; pip and uvx installs never download it
   unless that is set to `true`.
 
+### Changed
+
+- **Corpus search no longer re-verifies the whole corpus on every call.**
+  Each `pdf_corpus_search` used to re-check that every document was fully
+  warm, re-chunking every page to compare the stored embedding layout, and
+  re-read every embedding vector from the cache. The warm verdict is now
+  remembered per document for the life of the process (keyed on the file's
+  modification time, the cache and the embedding model, forgotten when the
+  document is re-warmed or the cache is cleared), and each document's
+  vectors are kept in memory as one matrix, bounded by
+  `PDF_MCP_VECTOR_CACHE_MB` (default 256, `0` disables). On a 100-document
+  corpus, hybrid search went from about 1.0 to 0.7 s per query and semantic
+  from 0.8 to 0.5, with identical results.
+  ([#55](https://github.com/jztan/pdf-mcp/issues/55))
+
 ### Fixed
 
 - **A page could be read as another page's text.** Since 3.0.0, once a

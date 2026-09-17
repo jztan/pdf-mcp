@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -137,7 +138,7 @@ def followup_docs(
 def build_payload(matches: list[dict[str, Any]], id_by_path: dict[str, str]) -> str:
     lines = []
     for i, m in enumerate(matches, 1):
-        doc = id_by_path.get(m["path"], Path(m["path"]).stem)
+        doc = id_by_path.get(os.path.realpath(m["path"]), Path(m["path"]).stem)
         excerpt = " ".join((m.get("excerpt") or "").split())
         lines.append(f"{i}. [{doc} page {m['page']}] {excerpt}")
     return "\n".join(lines) if lines else "(no results returned)"
@@ -383,8 +384,33 @@ def judge_one(question: dict[str, Any], payload: str, model: str) -> dict[str, A
     return ballot
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DATA,
+        help="question set dir holding manifest.json and answerability_questions.json;"
+        " results and the ballot cache are written beside them",
+    )
+    ap.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=REPO / "benchmark_data" / ".answerability_cache",
+        help="pdf-mcp cache dir to warm and search from (a warm dir is reused)",
+    )
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="first N questions after the class filter",
+    )
+    ap.add_argument(
+        "--classes",
+        type=lambda v: [c.strip() for c in v.split(",") if c.strip()],
+        default=None,
+        help="comma list of question types to keep (the 'type' field)",
+    )
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--mode", default="auto", choices=["auto", "keyword", "semantic"])
     ap.add_argument(
@@ -414,7 +440,13 @@ def main(argv: list[str] | None = None) -> int:
             " arm costs a full judged pass."
         ),
     )
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    global BALLOT_CACHE
+    args = build_parser().parse_args(argv)
+    BALLOT_CACHE = args.data_dir / "judge_ballot_cache.jsonl"
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
     for a in arms:
         if a not in ("search", "followup", "read"):
@@ -430,17 +462,27 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
 
-    manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((args.data_dir / "manifest.json").read_text(encoding="utf-8"))
     questions = json.loads(
-        (DATA / "answerability_questions.json").read_text(encoding="utf-8")
+        (args.data_dir / "answerability_questions.json").read_text(encoding="utf-8")
     )
-    id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
+    qs = questions["questions"]
+    if args.classes:
+        qs = [q for q in qs if q.get("type") in args.classes]
+    if args.limit:
+        qs = qs[: args.limit]
+    questions = {**questions, "questions": qs}
+    # The tool returns resolved paths; key by the real path so a manifest
+    # under a symlinked benchmark directory (worktrees) still maps to ids.
+    id_by_path = {
+        os.path.realpath(str(REPO / d["path"])): d["id"] for d in manifest["docs"]
+    }
     paths = [p for p in id_by_path if Path(p).exists()]
     if not paths:
         print("ERROR: no corpus docs available; run scripts/fetch_financial_corpus.py")
         return 2
 
-    cache_dir = REPO / "benchmark_data" / ".answerability_cache"
+    cache_dir = args.cache_dir
     server_module.cache = PDFCache(cache_dir=cache_dir, ttl_hours=24 * 30)
     warm = pdf_corpus_warm(paths, budget_seconds=600, embeddings=True)
     while warm.get("unprocessed"):
@@ -475,12 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         # Discoverability is objective: of the documents a complete answer
         # needs, how many did the FIRST response either return or name in
         # doc_match_counts? This is what the caller could have known.
-        visible = {id_by_path.get(m["path"], "") for m in matches}
-        visible |= {id_by_path.get(p, "") for p in counts}
+        visible = {id_by_path.get(os.path.realpath(m["path"]), "") for m in matches}
+        visible |= {id_by_path.get(os.path.realpath(p), "") for p in counts}
         expect_ids = q["expect_docs"]
         discoverable = sum(1 for d in expect_ids if d in visible) / len(expect_ids)
 
-        got_docs = [id_by_path.get(m["path"], "") for m in matches]
+        got_docs = [id_by_path.get(os.path.realpath(m["path"]), "") for m in matches]
         expect = q["expect_docs"]
         present = [d for d in expect if d in got_docs]
         counts = {d: got_docs.count(d) for d in expect}
@@ -499,7 +541,9 @@ def main(argv: list[str] | None = None) -> int:
                 "balance": round(balance, 3),
                 "n_matches": len(matches),
                 "discoverable": round(discoverable, 3),
-                "followup_docs": [id_by_path.get(p, p) for p in followups],
+                "followup_docs": [
+                    id_by_path.get(os.path.realpath(p), p) for p in followups
+                ],
                 "payload": build_payload(matches, id_by_path),
                 "payload_decomposed": build_payload(
                     matches + followup_matches, id_by_path
@@ -611,10 +655,10 @@ def main(argv: list[str] | None = None) -> int:
         "per_question": rows,
     }
     suffix = "" if args.excerpt_style == "paragraph" else f"_{args.excerpt_style}"
-    (DATA / f"answerability_results{suffix}.json").write_text(
+    (args.data_dir / f"answerability_results{suffix}.json").write_text(
         json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    print(f"\nwrote {DATA / ('answerability_results' + suffix + '.json')}")
+    print(f"\nwrote {args.data_dir / ('answerability_results' + suffix + '.json')}")
     return 0
 
 

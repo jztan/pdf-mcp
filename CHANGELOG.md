@@ -112,6 +112,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Password-protected PDFs return a clear error.** A PDF that needs a
+  password to open used to fail with raw PDFium text (most tools raised
+  `Incorrect password error`). Every single-file tool now returns
+  `error_code: "password_required"` with a hint to pass an unlocked copy,
+  and corpus tools skip the file with reason `password_required` instead of
+  `unreadable: ...`. Owner-password-only PDFs are unaffected.
+  ([#59](https://github.com/jztan/pdf-mcp/issues/59))
+
 - **Corpus search no longer re-verifies the whole corpus on every call.**
   Each `pdf_corpus_search` used to re-check that every document was fully
   warm, re-chunking every page to compare the stored embedding layout, and

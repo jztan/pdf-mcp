@@ -644,3 +644,42 @@ def sample_pdf_synthetic_scan(isolated_server):
         path = str(Path(f.name).resolve())
         yield path
         unlink_quietly(path)
+
+
+def _make_statement_pdf(path: Path, **save_kwargs) -> None:
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "late fee statement balance due")
+    doc.save(str(path), **save_kwargs)
+    doc.close()
+
+
+@pytest.fixture
+def plain_statement_pdf(tmp_path):
+    """Unencrypted one-page PDF with the same text as the locked fixtures."""
+    path = tmp_path / "plain.pdf"
+    _make_statement_pdf(path)
+    return path
+
+
+@pytest.fixture
+def locked_pdf(tmp_path):
+    """AES-256 PDF that needs a user (open) password."""
+    path = tmp_path / "statement.pdf"
+    _make_statement_pdf(
+        path, encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="u", owner_pw="o"
+    )
+    return path
+
+
+@pytest.fixture
+def owner_only_pdf(tmp_path):
+    """Owner-password-only PDF: restricted permissions, opens without one."""
+    path = tmp_path / "restricted.pdf"
+    _make_statement_pdf(
+        path,
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="o",
+        permissions=pymupdf.PDF_PERM_PRINT,
+    )
+    return path

@@ -23,6 +23,7 @@ from typing import Annotated, Any, Callable
 
 import httpx
 
+from .backend.bytesopen import is_password_locked
 from .backend.geometry import Rect as GeomRect
 from .docopen import open_pdf
 from fastmcp import FastMCP
@@ -289,7 +290,42 @@ if _pending_notice:
     mcp.instructions = f"{_BASE_INSTRUCTIONS}\n\nUPDATE: {_pending_notice}"
 
 
+PASSWORD_REQUIRED_CODE = "password_required"
+
+
+def _password_required_payload(source: str) -> dict[str, str]:
+    return {
+        "error": f"PDF is password-protected: {source}",
+        "error_code": PASSWORD_REQUIRED_CODE,
+        "hint": (
+            "pdf-mcp cannot open PDFs that need a password. Ask the user to "
+            "save an unlocked copy (open it with the password and export or "
+            "print to PDF, or run qpdf --decrypt) and pass that file's path."
+        ),
+    }
+
+
 def _resolve_path(
+    source: str,
+) -> tuple[str, None] | tuple[None, dict[str, str]]:
+    """
+    Resolve source to a local, openable file path.
+
+    Wraps `_resolve_source` so both of its exits (URL download and local
+    path) get the password check: a PDF that needs an open password returns
+    a `password_required` payload instead of failing later with raw PDFium
+    text.
+    """
+    local_path, error = _resolve_source(source)
+    if error is not None:
+        return None, error
+    assert local_path is not None
+    if is_password_locked(local_path):
+        return None, _password_required_payload(source)
+    return local_path, None
+
+
+def _resolve_source(
     source: str,
 ) -> tuple[str, None] | tuple[None, dict[str, str]]:
     """

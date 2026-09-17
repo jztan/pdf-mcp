@@ -92,6 +92,12 @@ PDF_MCP_CACHE_TTL=48
 # (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
 PDF_MCP_MAX_WORKERS=8
 
+# Memory budget in MB for embedding vectors kept in memory between searches
+# (default: 256). Each searched document's vectors are held as one matrix so
+# a query does not re-read them from the cache; the least recently used
+# documents are dropped past the budget. 0 disables the in-memory copy.
+PDF_MCP_VECTOR_CACHE_MB=256
+
 # Embedding device. 1 = use the GPU and warn if it is not available;
 # 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
 # Needs onnxruntime-gpu and a CUDA runtime; see "GPU embedding (NVIDIA

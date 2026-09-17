@@ -918,3 +918,25 @@ class TestProvenancePath:
 
         outside = tmp_path / "results.json"
         assert bk.provenance_path(outside) == str(outside)
+
+    def test_path_under_a_symlinked_subdirectory_stays_repo_relative(
+        self, tmp_path, monkeypatch
+    ):
+        """benchmark_data/bedrock_kb is a symlink into the bench checkout;
+        resolving it first used to put every in-repo path outside the repo."""
+        from scripts import benchmark_bedrock_kb as bk
+
+        repo = tmp_path / "repo"
+        elsewhere = tmp_path / "bench" / "bedrock_kb"
+        (repo / "benchmark_data").mkdir(parents=True)
+        elsewhere.mkdir(parents=True)
+        link = repo / "benchmark_data" / "bedrock_kb"
+        try:
+            link.symlink_to(elsewhere, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not available on this platform")
+        monkeypatch.setattr(bk, "REPO", repo)
+        assert (
+            bk.provenance_path(link / "results.json")
+            == "benchmark_data/bedrock_kb/results.json"
+        )

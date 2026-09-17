@@ -4092,11 +4092,50 @@ def _best_subchunk_text(
     return units[1 + max(range(len(scores)), key=scores.__getitem__)]
 
 
+class _LazyBestChunks:
+    """Best sub-page unit per page, resolved to text only when read.
+
+    The scorer knows each page's best unit index from the matrix product;
+    turning that into text means re-reading the page and re-chunking it,
+    which only the returned pages ever need. Doing it for every multi-unit
+    page on every query cost about 0.4 s per corpus query."""
+
+    def __init__(self) -> None:
+        self._idx: dict[tuple[str, int], tuple[int, int]] = {}
+        self._text: dict[tuple[str, int], str | None] = {}
+
+    def record(self, path: str, page: int, unit_idx: int, n_units: int) -> None:
+        self._idx[(path, page)] = (unit_idx, n_units)
+
+    def get(self, key: tuple[str, int], default: Any = None) -> Any:
+        if key in self._text:
+            val = self._text[key]
+            return default if val is None else val
+        rec = self._idx.get(key)
+        if rec is None:
+            return default
+        from .extractor import page_embedding_units
+
+        units = page_embedding_units(cache.get_page_text(key[0], key[1] - 1) or "")
+        val = units[rec[0]] if len(units) == rec[1] else None
+        self._text[key] = val
+        return default if val is None else val
+
+    def __bool__(self) -> bool:
+        return bool(self._idx)
+
+    def __len__(self) -> int:
+        return len(self._idx)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._idx
+
+
 def _corpus_semantic_scores(
     files: list[str],
     model_name: str,
     query_vec: Any,
-    best_chunks: dict[tuple[str, int], str] | None = None,
+    best_chunks: Any = None,
 ) -> tuple[list[tuple[str, int, float]], list[str]]:
     """Compute per-page cosine similarity to `query_vec` across a
     warmed corpus's cached embeddings.
@@ -4155,10 +4194,16 @@ def _corpus_semantic_scores(
             scored.append((path, page_num + 1, float(page_max[i])))
             n_units = int(ends[i] - dm.offsets[i])
             if best_chunks is not None and n_units > 1:
-                units = page_embedding_units(cache.get_page_text(path, page_num) or "")
-                if len(units) == n_units:
-                    sub = dm.M[dm.offsets[i] + 1 : ends[i]] @ qv
-                    best_chunks[(path, page_num + 1)] = units[1 + int(np.argmax(sub))]
+                sub = dm.M[dm.offsets[i] + 1 : ends[i]] @ qv
+                best_idx = 1 + int(np.argmax(sub))
+                if hasattr(best_chunks, "record"):
+                    best_chunks.record(path, page_num + 1, best_idx, n_units)
+                else:  # plain dict: eager text, kept for callers and tests
+                    units = page_embedding_units(
+                        cache.get_page_text(path, page_num) or ""
+                    )
+                    if len(units) == n_units:
+                        best_chunks[(path, page_num + 1)] = units[best_idx]
     return scored, semantic_unprocessed
 
 
@@ -4203,7 +4248,7 @@ def _finalize_corpus_matches(
     query: str,
     keyword_excerpts_by_doc: dict[str, dict[int, str]] | None = None,
     window_tokens: int = _WINDOW_TOKENS_DEFAULT,
-    best_chunks: dict[tuple[str, int], str] | None = None,
+    best_chunks: Any = None,
     attach_geometry: bool = False,
 ) -> list[dict[str, Any]]:
     """Shared per-doc finalize step for every `pdf_corpus_search` mode:
@@ -4538,7 +4583,7 @@ def pdf_corpus_search(
                 "error": f"embedding model load/encode failed: {exc}",
                 "query": query,
             }
-        best_chunks: dict[tuple[str, int], str] = {}
+        best_chunks = _LazyBestChunks()
         scored, semantic_unprocessed = _corpus_semantic_scores(
             ready_paths, embed_model, query_vec, best_chunks
         )
@@ -4722,7 +4767,7 @@ def pdf_corpus_search(
     # query_vec was already encoded above (before the keyword-only branch),
     # so a failed encode has already demoted this call to that branch.
     assert query_vec is not None  # embeddings_needed guarantees it was set
-    hybrid_best_chunks: dict[tuple[str, int], str] = {}
+    hybrid_best_chunks = _LazyBestChunks()
     scored, semantic_unprocessed = _corpus_semantic_scores(
         ready_paths, embed_model, query_vec, hybrid_best_chunks
     )

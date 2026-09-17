@@ -120,9 +120,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modification time, the cache and the embedding model, forgotten when the
   document is re-warmed or the cache is cleared), and each document's
   vectors are kept in memory as one matrix, bounded by
-  `PDF_MCP_VECTOR_CACHE_MB` (default 256, `0` disables). On a 100-document
-  corpus, hybrid search went from about 1.0 to 0.7 s per query and semantic
-  from 0.8 to 0.5, with identical results.
+  `PDF_MCP_VECTOR_CACHE_MB` (default 256, `0` disables). The text of each
+  page's best-matching window, which the excerpt anchors on, is now looked
+  up only for the pages a search returns rather than for every page on
+  every query. On a 100-document corpus, hybrid search went from about 1.0
+  to 0.3 s per query and semantic from 0.8 to 0.1, with identical results.
   ([#55](https://github.com/jztan/pdf-mcp/issues/55))
 
 ### Fixed

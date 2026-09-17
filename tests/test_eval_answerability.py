@@ -302,7 +302,9 @@ class TestDataDirAndCacheDirFlags:
                 "described,needle",
             ]
         )
-        assert str(ns.data_dir) == "/tmp/x" and str(ns.cache_dir) == "/tmp/c"
+        from pathlib import Path
+
+        assert ns.data_dir == Path("/tmp/x") and ns.cache_dir == Path("/tmp/c")
         assert ns.limit == 5 and ns.classes == ["described", "needle"]
 
     def test_defaults_keep_the_financial_set(self):

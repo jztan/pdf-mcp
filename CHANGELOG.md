@@ -123,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PDF_MCP_VECTOR_CACHE_MB` (default 256, `0` disables). On a 100-document
   corpus, hybrid search went from about 1.0 to 0.7 s per query and semantic
   from 0.8 to 0.5, with identical results.
+  ([#55](https://github.com/jztan/pdf-mcp/issues/55))
 
 ### Fixed
 

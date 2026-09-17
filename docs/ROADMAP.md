@@ -42,7 +42,7 @@ _Nothing queued._
 
 ### P1: high-value, well-scoped
 
-- [ ] **Within-document page ranking on deep-page paraphrase queries**: the right document, the wrong page (gold page ranks median 6 inside its own document on the 184-query set); this is the whole `described` gap
+- [x] **Within-document page ranking on deep-page paraphrase queries**: closed as measured on 2026-09-17. Sharper embedding windows lift the returned page (hybrid described page NDCG@10 +0.09, CI excluding zero) but not what an agent can answer from the response (answerable-in-full -4.8 points, inside the noise floor), and neither a semantic-anchored excerpt nor LLM-written page context reaches the twelve queries no arm ranks in the top ten. The corpus-search latency work found on the way (per-document warm verdict memo and in-memory vector matrices) ships on its own
 - [ ] **Portable Tesseract for zero-install OCR**, so the one-click bundle covers scanned pages without an admin installer; gated on a static-build spike
 - [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985, 3 s/query); 1,000 waits on the 900-distractor rung. Open precondition: the cap error hint, tool descriptions and tool reference must say that a corpus of hundreds of files warms across several re-issued calls
 - [ ] **Teach keyword-mode query shape in the tool descriptions**, since AND-joined terms silently return nothing

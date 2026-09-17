@@ -125,7 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   up only for the pages a search returns rather than for every page on
   every query. On a 100-document corpus, hybrid search went from about 1.0
   to 0.3 s per query and semantic from 0.8 to 0.1, with identical results.
-  ([#55](https://github.com/jztan/pdf-mcp/issues/55))
+  ([#55](https://github.com/jztan/pdf-mcp/issues/55), [#57](https://github.com/jztan/pdf-mcp/issues/57))
 
 ### Fixed
 

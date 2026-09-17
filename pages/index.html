@@ -2033,7 +2033,7 @@ estimated_tokens: 925</pre>
     catch (err) {
       hideLoader();
       uploadSection.classList.remove("hidden");
-      if (err.name === "PasswordException") showToast("Password-protected — pdf-mcp supports these server-side");
+      if (err.name === "PasswordException") showToast("Password-protected PDFs are not supported. Remove the password and try again.");
       else showToast("Couldn't parse this PDF");
       return;
     }

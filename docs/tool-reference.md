@@ -56,6 +56,20 @@ The deny list also covers IPv4-mapped IPv6 representations of IPv4 addresses —
 
 Per-host allow/deny rules can be added via `[urls]` in the config file. Path access can be similarly constrained via `[paths]`.
 
+### Password-protected PDFs
+
+pdf-mcp does not accept passwords. A PDF that needs a password to open returns an inline error from every single-file tool (as the single element of the list for `pdf_render_pages` and `pdf_extract_chart`):
+
+```json
+{
+  "error": "PDF is password-protected: statement.pdf",
+  "error_code": "password_required",
+  "hint": "pdf-mcp cannot open PDFs that need a password. Ask the user to save an unlocked copy ..."
+}
+```
+
+Corpus tools skip such a file with `{"path": ..., "reason": "password_required"}` and process the rest. Owner-password-only PDFs (restricted permissions, no password needed to open) are read normally.
+
 ---
 
 ## Document Introspection
@@ -757,7 +771,7 @@ Both tools take a directory of local PDFs (or an explicit list of paths) and pro
 Shared envelope (both tools):
 - `docs` (array): per-tool row shape, see below.
 - `unprocessed` (array of paths): resolved paths not warmed this call and worth retrying: the budget ran out, or a doc that was cached when the call started had been invalidated (file touched, TTL sweep) by the time the response was built.
-- `skipped` (array): `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, unreadable file), plus any doc that warmed but whose cache row would not read back afterwards (`warmed but not readable back from cache`); a retry under the same conditions would repeat it, so it is reported rather than looped on.
+- `skipped` (array): `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, `password_required` for a PDF that needs a password to open, unreadable file), plus any doc that warmed but whose cache row would not read back afterwards (`warmed but not readable back from cache`); a retry under the same conditions would repeat it, so it is reported rather than looped on.
 - `corpus_size` (int): number of files that passed resolution into the corpus (skipped entries are excluded).
 - `warmed_this_call` (int): count of docs actually extracted this call and verified present in the cache (cache hits don't count).
 - `budget_exhausted` (bool): `true` when `unprocessed` is non-empty because the budget ran out.

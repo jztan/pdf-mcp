@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -137,7 +138,7 @@ def followup_docs(
 def build_payload(matches: list[dict[str, Any]], id_by_path: dict[str, str]) -> str:
     lines = []
     for i, m in enumerate(matches, 1):
-        doc = id_by_path.get(m["path"], Path(m["path"]).stem)
+        doc = id_by_path.get(os.path.realpath(m["path"]), Path(m["path"]).stem)
         excerpt = " ".join((m.get("excerpt") or "").split())
         lines.append(f"{i}. [{doc} page {m['page']}] {excerpt}")
     return "\n".join(lines) if lines else "(no results returned)"
@@ -471,7 +472,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit:
         qs = qs[: args.limit]
     questions = {**questions, "questions": qs}
-    id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
+    # The tool returns resolved paths; key by the real path so a manifest
+    # under a symlinked benchmark directory (worktrees) still maps to ids.
+    id_by_path = {
+        os.path.realpath(str(REPO / d["path"])): d["id"] for d in manifest["docs"]
+    }
     paths = [p for p in id_by_path if Path(p).exists()]
     if not paths:
         print("ERROR: no corpus docs available; run scripts/fetch_financial_corpus.py")
@@ -512,12 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         # Discoverability is objective: of the documents a complete answer
         # needs, how many did the FIRST response either return or name in
         # doc_match_counts? This is what the caller could have known.
-        visible = {id_by_path.get(m["path"], "") for m in matches}
-        visible |= {id_by_path.get(p, "") for p in counts}
+        visible = {id_by_path.get(os.path.realpath(m["path"]), "") for m in matches}
+        visible |= {id_by_path.get(os.path.realpath(p), "") for p in counts}
         expect_ids = q["expect_docs"]
         discoverable = sum(1 for d in expect_ids if d in visible) / len(expect_ids)
 
-        got_docs = [id_by_path.get(m["path"], "") for m in matches]
+        got_docs = [id_by_path.get(os.path.realpath(m["path"]), "") for m in matches]
         expect = q["expect_docs"]
         present = [d for d in expect if d in got_docs]
         counts = {d: got_docs.count(d) for d in expect}
@@ -536,7 +541,9 @@ def main(argv: list[str] | None = None) -> int:
                 "balance": round(balance, 3),
                 "n_matches": len(matches),
                 "discoverable": round(discoverable, 3),
-                "followup_docs": [id_by_path.get(p, p) for p in followups],
+                "followup_docs": [
+                    id_by_path.get(os.path.realpath(p), p) for p in followups
+                ],
                 "payload": build_payload(matches, id_by_path),
                 "payload_decomposed": build_payload(
                     matches + followup_matches, id_by_path

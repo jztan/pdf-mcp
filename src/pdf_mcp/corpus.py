@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+from .backend.bytesopen import is_password_locked
 from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
@@ -118,6 +119,8 @@ def _validate_file(
             return None, str(e)
     if not resolved.exists():
         return None, "file not found"
+    if is_password_locked(str(resolved)):
+        return None, "password_required"
     return str(resolved), None
 
 

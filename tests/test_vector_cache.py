@@ -201,3 +201,49 @@ class TestCorpusScoresParity:
             ["/nope.pdf"], "m", np.zeros(8, np.float32)
         )
         assert scored == [] and unproc == ["/nope.pdf"]
+
+
+class TestLazyBestChunks:
+    def test_scorer_records_index_without_reading_page_text(
+        self, tmp_path, monkeypatch
+    ):
+        """Best-window text is resolved only when a returned page asks for
+        it: the scorer must not read or re-chunk every page per query."""
+        import pdf_mcp.server as srv
+        from pdf_mcp.extractor import page_embedding_units
+        from pdf_mcp.vector_cache import CACHE
+
+        text = ". ".join(f"sentence number {i} about topic {i % 7}" for i in range(400))
+        units = page_embedding_units(text)
+        rng = np.random.default_rng(0)
+        vs = rng.normal(size=(len(units), 8)).astype(np.float32)
+        vs /= np.linalg.norm(vs, axis=1, keepdims=True)
+        blobs = {0: [v.tobytes() for v in vs], 1: [vs[0].tobytes()]}
+        reads = []
+
+        class FakeCache:
+            cache_dir = tmp_path
+
+            def get_metadata(self, path):
+                return {"page_count": 2}
+
+            def get_page_embeddings(self, path, pages, model):
+                return blobs
+
+            def get_page_text(self, path, p):
+                reads.append(p)
+                return text if p == 0 else "short"
+
+        monkeypatch.setattr(srv, "cache", FakeCache())
+        CACHE.clear()
+        q = rng.normal(size=8).astype(np.float32)
+        lazy = srv._LazyBestChunks()
+        srv._corpus_semantic_scores([str(tmp_path / "x.pdf")], "m", q, best_chunks=lazy)
+        assert reads == []  # nothing read during scoring
+        assert bool(lazy) and (str(tmp_path / "x.pdf"), 1) in lazy
+        assert lazy.get((str(tmp_path / "x.pdf"), 2)) is None  # single-unit page
+        sub = [float(v @ q) for v in vs[1:]]
+        assert lazy.get((str(tmp_path / "x.pdf"), 1)) == units[1 + int(np.argmax(sub))]
+        assert reads == [0]  # one read, on demand
+        lazy.get((str(tmp_path / "x.pdf"), 1))
+        assert reads == [0]  # cached after the first resolution

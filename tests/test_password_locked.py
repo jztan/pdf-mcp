@@ -2,6 +2,7 @@
 
 import shutil
 import sqlite3
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -112,9 +113,7 @@ def mixed_corpus(tmp_path, locked_pdf, plain_statement_pdf):
 
 
 def _skip_reasons(result):
-    return {
-        entry["path"].rsplit("/", 1)[-1]: entry["reason"] for entry in result["skipped"]
-    }
+    return {Path(entry["path"]).name: entry["reason"] for entry in result["skipped"]}
 
 
 CORPUS_CALLS = {

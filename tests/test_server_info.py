@@ -134,6 +134,34 @@ class TestServerInfo:
             feats = _detect_features()
         assert feats["corpus"]["modes_available"] == ["keyword", "semantic", "auto"]
 
+    def test_server_info_reports_fastembed_backend(self):
+        with patch.object(embedder, "check_available", return_value=None):
+            feats = _detect_features()
+        search = feats["search"]
+        assert search["embedding_backend"] == "fastembed"
+        assert "embedding_endpoint" not in search
+
+    def test_server_info_reports_remote_backend_and_endpoint(
+        self, tmp_path, monkeypatch
+    ):
+        from pdf_mcp.config import PDFConfig
+
+        cfg = tmp_path / "config.toml"
+        cfg.write_text(
+            '[embedding]\nbackend = "openai"\n'
+            'base_url = "http://user:sk-secret@localhost:8000/v1"\n'
+            'model = "bge-small-en-v1.5"\n',
+            encoding="utf-8",
+        )
+        remote_config = PDFConfig(config_path=cfg)
+        monkeypatch.setattr(server, "pdf_config", remote_config)
+        with patch.object(embedder, "check_available", return_value=None):
+            feats = _detect_features()
+        search = feats["search"]
+        assert search["embedding_backend"] == "openai"
+        assert search["embedding_endpoint"] == "localhost:8000"
+        assert "sk-secret" not in str(search)
+
 
 class TestDocumentRoots:
     """Root derivation: allow globs reduced to directories a caller can use."""
@@ -307,3 +335,83 @@ class TestStorageCapabilities:
         from pdf_mcp.server import cache
 
         assert server_info()["storage"]["keyword_search_ranked"] is cache.fts_available
+
+
+def test_server_info_ocr_flag_is_live(monkeypatch):
+    """The OCR flag follows the resolver at call time, not a startup probe."""
+    from pdf_mcp import server
+
+    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    assert server.server_info()["features"]["extraction"]["ocr"]["available"] is False
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/x/tesseract")
+    assert server.server_info()["features"]["extraction"]["ocr"]["available"] is True
+
+
+def test_server_info_ocr_source(monkeypatch):
+    """A bundle install reports OCR available before the first download."""
+    from pdf_mcp import portable_tesseract, server
+
+    def ocr():
+        return server.server_info()["features"]["extraction"]["ocr"]
+
+    monkeypatch.setattr(portable_tesseract, "installed_binary", lambda: "/c/tesseract")
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/usr/bin/tesseract")
+    assert ocr()["source"] == "system"
+    monkeypatch.setattr(server, "find_tesseract", lambda: "/c/tesseract")
+    assert ocr()["source"] == "portable"
+
+    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    monkeypatch.setattr(portable_tesseract, "platform_key", lambda: "darwin-arm64")
+    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    assert ocr() | {"description": ""} == {
+        "available": True,
+        "source": "on_first_use",
+        "description": "",
+    }
+    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", False)
+    assert ocr()["source"] == "none" and ocr()["available"] is False
+
+
+def test_main_runs_without_banner(monkeypatch):
+    """fastmcp checks PyPI for its own updates while printing its banner."""
+    from pdf_mcp import server
+
+    seen = {}
+    monkeypatch.setattr(server.mcp, "run", lambda **kw: seen.update(kw))
+    server.main()
+    assert seen == {"transport": "stdio", "show_banner": False}
+
+
+def test_server_info_update_is_null_when_check_off(monkeypatch):
+    from pdf_mcp import server
+
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    assert server.server_info()["update"] is None
+
+
+def test_server_info_update_block_when_on(monkeypatch, isolated_server):
+    from pdf_mcp import server, updates
+
+    cache, _ = isolated_server
+    (cache.cache_dir / updates.CACHE_FILENAME).write_text(
+        json.dumps({"latest": "999.0.0", "checked_at": 0.0})
+    )
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    block = server.server_info()["update"]
+    assert block["latest"] == "999.0.0" and block["update_available"] is True
+
+
+def test_main_starts_check_only_when_on(monkeypatch):
+    from pdf_mcp import server, updates
+
+    started = []
+    monkeypatch.setattr(
+        updates, "start_background_refresh", lambda d: started.append(d)
+    )
+    monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    server.main()
+    assert started == []  # pip/uvx default: zero update-check requests
+    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    server.main()
+    assert started == [server.cache.cache_dir]

@@ -1,0 +1,29 @@
+{
+  "version": "0.12.13",
+  "assets": {
+    "win32-x64": {
+      "file": "uv-x86_64-pc-windows-msvc.zip",
+      "sha256": "a86c9dc7bad9b03f388583b7187c05fe9951c2e0d392217e8fd43d97787f6ec2"
+    },
+    "win32-arm64": {
+      "file": "uv-aarch64-pc-windows-msvc.zip",
+      "sha256": "1efb2654b06e7063d4ac1fc9d49a9bda9a6704d82f035b589a2751a592f14151"
+    },
+    "darwin-x64": {
+      "file": "uv-x86_64-apple-darwin.tar.gz",
+      "sha256": "5e287ef61cb6a9b61b3a83fef124fd143e400468a7dac794230147a810e17119"
+    },
+    "darwin-arm64": {
+      "file": "uv-aarch64-apple-darwin.tar.gz",
+      "sha256": "7e6ddb9316acc00f2296c82ff4d99977870ee34b2f0ddcae9444d714db9364ed"
+    },
+    "linux-x64": {
+      "file": "uv-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "745765a3b6e360ad76743599ae5c42e9278c7edf8bbff9fc76d05bf2623a04dd"
+    },
+    "linux-arm64": {
+      "file": "uv-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "2eaa5d94f5db7b3a1a092156b9420459e42ab0217d917fe74a876309cef9b5e9"
+    }
+  }
+}

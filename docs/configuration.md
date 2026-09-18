@@ -24,6 +24,9 @@ max_response_bytes = 200000
 [embedding]
 model = "BAAI/bge-small-en-v1.5"
 
+[fts]
+language = "de"
+
 [content_trust]
 injection_phrases = ["忽略以上所有指示", "以前の指示を無視してください", "ignorez les instructions"]
 ```
@@ -37,7 +40,36 @@ starting — it never silently falls back to permissive.
 section-granularity `pdf_search`; see [docs/response-limits.md](response-limits.md).
 
 **`[embedding]`** — the semantic-search model; the default shown above is
-`BAAI/bge-small-en-v1.5`. See [docs/embedding-models.md](embedding-models.md).
+`BAAI/bge-small-en-v1.5`. See [docs/embedding-models.md](embedding-models.md)
+and "Remote-served bge-small (`[embedding].backend = "openai"`)" below.
+
+**`[fts]`** — `language = "de"` turns on a German-stemmed keyword-search
+mirror index (Snowball stemming, via the pure-Python `snowballstemmer`
+package) alongside the default English/porter one. The default (`porter`
+FTS, no `[fts]` section) does nothing useful for German inflection or the
+common umlaut/ß spelling variants; this option fixes that for the keyword
+leg of `pdf_search`. It's a whole-server setting applied to every document
+the running process touches — not per-document, and not auto-detected —
+so it suits a deployment that mostly reads German PDFs, not a mixed corpus.
+Compound-word splitting (`Kündigungsschutzklage` vs. `Kündigungsschutz`) is
+a known, deliberately out-of-scope gap: only inflection and umlaut/ß
+spelling variants are unified, not compound nouns. A multi-word query
+requires every word's stem to be present first; a query of three or more
+words that matches nothing is retried with its stems OR-joined, same
+threshold as the default keyword path (see
+[docs/tool-reference.md](tool-reference.md)) — a query using one word the
+page doesn't have still finds a page that has the others, with BM25
+ranking pages carrying more (and rarer) stems first. The threshold counts
+raw words, not stems, so `"§ 626 BGB"` (3 words) retries but `"626 BGB"`
+(2 words) does not, even though both stem to the same two search terms.
+Once turned on, the mirror index is maintained by every cache writer for
+the life of the cache directory — removing `[fts] language` from
+`config.toml` stops new queries from using it, but existing rows are only
+cleared by deleting the cache. Turning it on for the first time stems
+every already-cached document once, before the server accepts requests —
+about 28 seconds measured on a 4,000-page cache; later starts only
+re-stem documents whose page count changed since the mirror was last
+synced.
 
 **`[content_trust]`** — extends the hidden-text `injection_in_hidden` severity
 hint with your own (including non-English) phrases. They **extend** the built-in
@@ -60,11 +92,22 @@ PDF_MCP_CACHE_TTL=48
 # (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
 PDF_MCP_MAX_WORKERS=8
 
+# Memory budget in MB for embedding vectors kept in memory between searches
+# (default: 256). Each searched document's vectors are held as one matrix so
+# a query does not re-read them from the cache; the least recently used
+# documents are dropped past the budget. 0 disables the in-memory copy.
+PDF_MCP_VECTOR_CACHE_MB=256
+
 # Embedding device. 1 = use the GPU and warn if it is not available;
 # 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
 # Needs onnxruntime-gpu and a CUDA runtime; see "GPU embedding (NVIDIA
 # CUDA)" below.
 PDF_MCP_CUDA=1
+
+# OCR with no Tesseract installed: 1 = download pdf-mcp's portable,
+# English-only Tesseract on the first OCR call (the Claude Desktop bundle
+# sets this); unset = never. [ocr] auto_install in the config file wins.
+PDF_MCP_OCR_AUTO_INSTALL=1
 
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
@@ -126,7 +169,7 @@ What the variable does:
 
 | `PDF_MCP_CUDA` | behaviour |
 |---|---|
-| `1` | GPU. If the CUDA provider cannot load, the server warns with the provider it actually got and falls back to CPU instead of running slower in silence. |
+| `1` | GPU. If the CUDA provider cannot load, or loads but fails a one-line test encode (a cuDNN or cuBLAS series mismatch, or a card out of memory), the server warns with the reason and falls back to CPU instead of running slower in silence or failing mid-search. |
 | `0` | CPU, always. |
 | unset | fastembed decides. On a plain install that is the CPU, exactly as before. On a machine where onnxruntime-gpu is installed and a CUDA runtime is already on the library path (a system-wide CUDA toolkit, for example) it auto-detects the GPU even though nothing asked for it. Set `0` if that is not what you want. |
 
@@ -151,6 +194,111 @@ faster than one large padded batch and holds about 0.7 GB of transient
 encode memory instead of 2.8 GB, with identical vectors. Thread pinning
 was measured on the same machine and does not help: one intra-op thread
 ran as fast as fourteen, so the encode is memory-bound, not compute-bound.
+
+### Remote-served bge-small (`[embedding].backend = "openai"`)
+
+Optional and off by default (`fastembed`, the bundled local path). Points
+semantic search at a self-hosted, OpenAI-compatible `POST /v1/embeddings`
+HTTP endpoint instead of onnxruntime — useful when a server on your network
+(ollama, lemonade, llama-server, vLLM) can reach a faster compute backend
+than the ones fastembed's onnxruntime wheels support on your machine (for
+example a Vulkan iGPU path on some AMD hardware).
+
+**This is deliberately narrow: the remote endpoint must serve
+`BAAI/bge-small-en-v1.5`** — the same model fastembed uses by default —
+not an arbitrary model. `low_confidence` and the hybrid RRF fusion score
+used elsewhere in this server are tuned to bge-small's cosine-similarity
+distribution; a different model's distribution would silently throw those
+off with no error, which is exactly the failure mode this version avoids
+by not supporting one. General model choice, with the validation and
+threshold recalibration a different model would need, is tracked
+separately (see
+[jztan/pdf-mcp#46](https://github.com/jztan/pdf-mcp/issues/46)).
+
+Measured against a real quantized deployment (Q8_0 GGUF over `llama-server`
+on Vulkan): cosine parity against local fastembed is 0.99989 minimum /
+0.99993 mean over 36 real page-chunk passages
+([`bge_small_cosine_parity_results.md`](../benchmark_data/bge_small_cosine_parity_results.md)),
+and throughput on 600 real ~300-token warm chunks is 4.2-4.8x fastembed CPU
+depending on concurrency
+([`bge_small_throughput_results.md`](../benchmark_data/bge_small_throughput_results.md)).
+
+```toml
+[embedding]
+backend = "openai"
+base_url = "http://localhost:8000/v1"
+model = "bge-small-en-v1.5"       # informational: names the model your
+                                  # server should load; does not change how
+                                  # text is encoded (see below) and is not
+                                  # part of the vector-cache identity
+api_key_env = "MY_EMBED_API_KEY"  # optional; names an env var, never a
+                                  # literal key in config.toml
+timeout = 60                      # seconds, per request (default 60)
+batch_size = 32                   # texts per request (default 32)
+max_concurrency = 4               # concurrent in-flight requests (default 4)
+```
+
+`base_url` and `model` are required whenever `backend = "openai"`. Every
+other key has the default shown above and may be omitted.
+
+Why `model` doesn't select behavior here: this client applies no
+document/query prefix and validates no output dimension — bge-small needs
+neither. Setting `document_prefix`, `query_prefix`, or `dimensions` under
+`[embedding]` is rejected with a startup `ValueError` rather than silently
+ignored, since a config that needs one of them wants the general-model-
+choice feature this version does not provide.
+
+**The vector cache is shared with local fastembed, not namespaced per
+endpoint.** `embedding_model` (the identity that keys `page_embeddings`/
+`doc_profiles` rows) is always the bare `BAAI/bge-small-en-v1.5` name,
+regardless of backend — a verified remote endpoint proves it returns the
+same vectors (see the mandatory startup check below), so a CPU fallback, a
+different `base_url`, or `127.0.0.1` vs `localhost` all read the same
+cached rows instead of re-embedding everything. This is exactly why the
+startup check below is mandatory rather than optional: an unverified
+endpoint would silently write mismatched vectors into rows local fastembed
+also reads. The `api_key`, if any, and any credentials embedded in
+`base_url`, are never written into a log line or an exception message.
+
+**`base_url` must resolve to a private/loopback address.** pdf-mcp resolves
+`base_url`'s hostname (via the same DNS lookup and private/loopback ranges
+`url_fetcher.py` uses for its own SSRF guard, reused the other way round)
+and rejects config load if it resolves to a public address. This is a guard
+against pointing pdf-mcp at a public API by accident — page and query text
+goes to whatever `base_url` names — not a security boundary: it won't catch
+a tunnel or VPN that routes a private address to a public host, and that's
+a known, accepted gap. `localhost`, `127.0.0.1`, `host.docker.internal`, a
+Docker/compose service name, a LAN hostname/IP, or a Tailscale (or other
+CGNAT, `100.64.0.0/10`) address are all expected to pass, since they
+resolve to loopback/RFC 1918/link-local/CGNAT addresses. A hostname
+that doesn't resolve at all (e.g. a compose service not started yet) also
+passes this check rather than blocking config load — see [Network
+requests](#network-requests) for the general privacy consideration around
+any outbound request this server makes.
+
+`server_info`'s `search` block reports `embedding_backend` ("fastembed" or
+"openai") and, for the remote backend, `embedding_endpoint` (host:port
+only) once the endpoint is configured and `embedding_model` resolves
+successfully.
+
+**Startup safety check (mandatory).** pdf-mcp cannot see which model
+actually sits behind `base_url` — a misconfigured endpoint could silently
+serve a different model, quantization, or pooling strategy, each of which
+shifts the cosine-similarity distribution `low_confidence`/RRF fusion are
+tuned against, and which the shared cache above would otherwise let leak
+straight into local fastembed's own rows. So, once at startup (before the
+first real request, and before `embedder.configure_remote` is called),
+pdf-mcp embeds a handful of fixed reference sentences through the
+configured endpoint (a single request, one attempt — it fails fast on an
+unreachable endpoint rather than blocking startup) and compares each
+vector to a stored local-fastembed `bge-small-en-v1.5` reference by cosine
+similarity (`src/pdf_mcp/remote_embedding_check.py`). If the *minimum*
+per-sentence cosine drops below `0.999`, the server logs a warning and
+falls back to the local fastembed backend for the rest of the process — it
+never crashes and never silently serves vectors from the wrong space. This
+check cannot be turned off: since a verified endpoint's vectors and local
+fastembed's share the same cache rows, an unverified endpoint would corrupt
+that shared cache rather than just its own.
 
 ### Docker deployment notes
 
@@ -291,6 +439,46 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 Substitute your own port if you changed `PDF_MCP_HOST_PORT` from its 8802
 default.
 
+## Offline prewarm (`pdf-mcp-warm`)
+
+`pdf_corpus_warm` (the MCP tool) is built to fit inside one client-side
+tool call: it caps at 100 files and `budget_seconds <= 300` per call (see
+[tool-reference.md](tool-reference.md#pdf_corpus_warm)), so a folder that
+does not fit either limit means re-issuing the same call by hand,
+possibly many times, from inside a chat session — and a query against a
+still-partly-warm corpus just times out in the meantime.
+
+`pdf-mcp-warm` is a separate command installed alongside `pdf-mcp` (same
+`pip install`/`uvx` package, a second entry point) that runs outside any
+MCP client, so neither limit applies. It walks a whole folder and warms
+it to completion in one run, writing to the exact same on-disk cache
+(`PDF_MCP_CACHE_DIR`, this file's `[paths]` allow-list, `[embedding].model`)
+the server reads — run it once before a chat session so `pdf_search` /
+`pdf_corpus_search` hit a warm cache instead of timing out.
+
+```bash
+pdf-mcp-warm /path/to/reports/ --recursive
+pdf-mcp-warm doc1.pdf doc2.pdf --no-embeddings   # text only, skip vectors
+pdf-mcp-warm /path/to/reports/ --model BAAI/bge-small-en-v1.5
+```
+
+Embeddings **and** the section-granularity search index are both warmed
+by default (`--no-embeddings` / `--no-sections` opt out of each). Unlike
+`pdf_corpus_warm`, which leaves `sections` off by default to stay
+budget-conscious, this CLI has no budget to protect — and skipping either
+just moves the cost to query time instead of removing it: a prewarm that
+skips vectors leaves semantic search to time out later, and skipping
+sections leaves a large document's first
+`pdf_search(granularity="section")` call to build that index from
+scratch, on its own, which can by itself exceed a timeout-bounded MCP
+client's budget even on an otherwise fully-warmed corpus. Progress and a
+final summary go to stderr; already-cached documents are free (see
+`pdf_corpus_warm` above), so re-running after an interrupt (Ctrl-C, a
+crash) resumes rather than redoing work. If your corpus is large enough
+to need this, also raise `PDF_MCP_CACHE_TTL` (below) — the default
+24-hour TTL will otherwise
+start expiring a prewarm you're not actively querying.
+
 ## Caching
 
 The server uses SQLite for persistent caching.
@@ -334,3 +522,46 @@ substring matching; `server_info` reports this as
 - Automatic when file modification time changes
 - Manual via the `pdf_cache_clear` tool
 - TTL: 24 hours (configurable)
+
+## Network requests
+
+pdf-mcp works offline except for these:
+
+- **URLs you pass it:** `path` can be an `https://` URL; pdf-mcp downloads it.
+- **Embedding model:** the first semantic search downloads the model once.
+- **Update check (Claude Desktop bundle only):** once a day, one anonymous
+  HTTPS GET to `https://pypi.org/pypi/pdf-mcp/json` (no file paths, no
+  document content, no identifiers), in the background, giving up after 3
+  seconds. pip and uvx installs never make it. Turn it off by unticking
+  **Check for updates** in Claude Desktop's extension settings, with
+  `PDF_MCP_UPDATE_CHECK=0`, or in `~/.config/pdf-mcp/config.toml`:
+
+  ```toml
+  [updates]
+  check = false
+  ```
+
+  The config file wins over the other two; `check = true` turns the check on
+  for any install.
+- **Tesseract for OCR (Claude Desktop bundle only):** the first OCR call
+  on a computer with no Tesseract installed downloads a portable,
+  English-only Tesseract (about 14 MB) from
+  `github.com/jztan/pdf-mcp-tesseract` releases, checked against a SHA-256
+  shipped in pdf-mcp, and unpacks it into `<cache dir>/tesseract/`.
+  Windows x64 and macOS (Apple Silicon and Intel) only. A Tesseract you
+  installed yourself is always used first, and nothing downloads until OCR
+  is asked for. pip and uvx installs never download it unless the config
+  says so. Turn it off in `~/.config/pdf-mcp/config.toml`:
+
+  ```toml
+  [ocr]
+  auto_install = false
+  ```
+
+  `auto_install = true` turns it on for any install.
+- **Bundle first start:** the Claude Desktop bundle downloads uv from
+  Astral's GitHub releases (`github.com/astral-sh/uv`, checked against a
+  SHA-256 shipped in the bundle), then Python from Astral's
+  python-build-standalone GitHub releases, then pdf-mcp and its
+  dependencies (exact versions, pinned in the bundle) from PyPI. A new
+  bundle version downloads only what changed.

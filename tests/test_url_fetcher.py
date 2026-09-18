@@ -452,6 +452,24 @@ class TestSSRFProtection:
             ):
                 assert URLFetcher._is_blocked_ip("some-host") is True
 
+    def test_is_blocked_ip_cgnat(self):
+        """CGNAT space (100.64.0.0/10) is blocked -- Tailscale hands out
+        its IPv4 addresses from this range, so this also keeps a
+        Tailscale-reached host out of the URL fetcher."""
+        for ip in ["100.64.0.1", "100.127.255.254"]:
+            with patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", (ip, 0))],
+            ):
+                assert URLFetcher._is_blocked_ip("some-host") is True
+        # just outside the /10 on either side -- not blocked
+        for ip in ["100.63.255.255", "100.128.0.1"]:
+            with patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", (ip, 0))],
+            ):
+                assert URLFetcher._is_blocked_ip("some-host") is False
+
     def test_is_blocked_ip_link_local(self):
         """Link-local addresses (cloud metadata) are detected as blocked."""
         with patch(

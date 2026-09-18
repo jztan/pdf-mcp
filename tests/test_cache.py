@@ -1619,16 +1619,18 @@ class TestChunkedEmbeddings:
         cache.save_page_embeddings(sample_pdf, {0: []}, self.MODEL)
         assert cache.get_page_embeddings(sample_pdf, [0], self.MODEL) == {}
 
-    def test_extraction_version_is_thirteen(self):
+    def test_extraction_version_is_fourteen(self):
         """11: spanning rows (a two-column paper's full-width title, author
         or abstract line) are no longer split at the gutter; cached text
         from earlier versions holds the right half of such lines displaced
         after the whole left column and must be re-extracted. 12: a narrow
         table cell straddling a detector-drawn gutter is no longer a band.
-        13: ff/ffi ligature halves are kept."""
+        13: ff/ffi ligature halves are kept. 14: purges text v3.0.0 to
+        v3.2.0 may have cached from the wrong page (blocks memoized by
+        id())."""
         from pdf_mcp.cache import _EXTRACTION_VERSION
 
-        assert _EXTRACTION_VERSION == 13
+        assert _EXTRACTION_VERSION == 14
 
     def test_stats_counts_pages_not_chunks(self, temp_cache_dir, sample_pdf):
         """pdf_cache_stats is user-facing. A page with three chunks must not

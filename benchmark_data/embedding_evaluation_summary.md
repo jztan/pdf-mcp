@@ -5,13 +5,25 @@ default `BAAI/bge-small-en-v1.5` on fastembed/CPU, via different prefixes, an ML
 (Apple-GPU) backend, or a different model? Every path was benchmark-tested before
 any production change.
 
-**Conclusion: no. `bge-small` on fastembed CPU stays the default.** The only
-change worth making was an unrelated bug the investigation surfaced — the
-embedding **normalization fix** (shipped to `develop`).
+**Conclusion: no, for English. `bge-small` on fastembed CPU stays the
+default.** The only change worth making was an unrelated bug the
+investigation surfaced — the embedding **normalization fix** (shipped to
+`develop`).
+
+**This conclusion is English-only.** On a German benchmark (119 queries
+on a public statute PDF, scored on the target norm's page; see
+[`german_embedding_results.md`](german_embedding_results.md) and
+[jztan/pdf-mcp#46](https://github.com/jztan/pdf-mcp/issues/46)),
+bge-small's hybrid MRR is 0.222, and three local models beat it with CIs
+that exclude zero: `multilingual-e5-large` +0.075 [+0.011, +0.139],
+`jina-embeddings-v2-base-de` +0.073 [+0.014, +0.132], and
+`paraphrase-multilingual-mpnet-base-v2` +0.060 [+0.002, +0.117]. None is a
+default; the detail doc has the caveats.
 
 Detail docs (kept): [`e5_prefix_results.md`](e5_prefix_results.md) ·
 [`mlx_backend_results.md`](mlx_backend_results.md) ·
-[`large_models_results.md`](large_models_results.md).
+[`large_models_results.md`](large_models_results.md) ·
+[`german_embedding_results.md`](german_embedding_results.md).
 Raw per-run output: `benchmark_results/*.json` (+ `.txt`), gitignored.
 
 ## Everything tested
@@ -47,5 +59,7 @@ LLM-fed page retrieval** — short factual queries over PDF pages, results hande
 an agent. Confirmed three independent times (May 4-model run, e5-large, this
 large-model screen) and corroborated by the literature (arXiv 2506.00049,
 "small embeddings + LLM re-ranking beat bigger models"). Model size buys almost
-nothing in pdf-mcp's regime. The only remaining lever for more confidence is a
-broader, multi-domain corpus — the model catalog is exhausted.
+nothing in pdf-mcp's regime, for English. The only remaining lever for more
+confidence on the *English* path is a broader, multi-domain corpus — that
+catalog is exhausted. Non-English is a different question with a different
+answer; see [`german_embedding_results.md`](german_embedding_results.md).

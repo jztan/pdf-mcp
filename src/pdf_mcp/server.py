@@ -9,6 +9,7 @@ Usage:
 """
 
 import base64
+import copy
 import hashlib
 import json
 import logging
@@ -22,6 +23,7 @@ from typing import Annotated, Any, Callable
 
 import httpx
 
+from .backend.bytesopen import is_password_locked
 from .backend.geometry import Rect as GeomRect
 from .docopen import open_pdf
 from fastmcp import FastMCP
@@ -32,13 +34,17 @@ from . import __version__
 from . import chart_extractor
 from . import content_trust
 from . import corpus
+from . import portable_tesseract
+from . import updates
 from .cache import PDFCache, normalize_ocr_lang
 from .config import PDFConfig
+from .vector_cache import page_max_from_lists
 from .extractor import (
     _NUMBER_TOKEN,
     _columns_reliable,
     block_bbox_for_index,
     check_tesseract_available,
+    find_tesseract,
     estimate_tokens,
     extract_images_from_page,
     extract_metadata,
@@ -52,6 +58,7 @@ from .extractor import (
     page_text_chars,
     stale_layout_pages,
     parse_page_range,
+    tesseract_install_hint,
     render_page_as_image,
     render_page_as_png,
 )
@@ -107,7 +114,29 @@ RENDER_RESULT_BYTE_BUDGET = 900_000
 # cost (~0.5 s/worker) is well-amortized; below that the win is marginal.
 _OCR_PARALLEL_GATE = 2
 _RENDER_PARALLEL_GATE = 16
-_MAX_PARALLEL_WORKERS = 8
+# Cap was a flat 8 (the M4 Pro reference above has 14 CPUs; 8 was never
+# raised past that). Re-measured on a 24-thread Ryzen AI Strix box
+# (benchmark_data/warm_parallelism_strix.md): OCR kept scaling to 8.09x
+# and render to 6.04x at 16 workers, both still climbing, not yet
+# plateaued -- so the flat 8 was leaving real throughput idle on a
+# many-core host. Scale with the host instead, ceilinged at 16 because
+# that is as far as the re-measurement went (raise it again only with new
+# numbers past that). No separate floor needed below 16: the actual
+# worker count is `min(os.cpu_count(), n_pages, this cap)`
+# (parallel.resolve_workers), so on fewer than 16 cores the cpu_count
+# term already governs regardless of what this cap says -- a `max(...,
+# 8)` floor on the cap itself would be inert, not a safety net.
+# `PDF_MCP_MAX_WORKERS` still only clamps this down, same function.
+#
+# os.cpu_count() reads the OS's total logical CPUs, not a cgroup quota or
+# sched affinity mask (parallel.py documents this as an accepted
+# platform-wide choice already) -- so on Linux under a CPU-limited
+# container (e.g. `docker run --cpus=2`) this raise doubles the
+# worst-case oversubscription version-over-version, from 8 workers to 16
+# on a host whose full core count the container never sees. The shipped
+# Docker image sets no CPU limit itself; a deployment that adds one
+# should also set PDF_MCP_MAX_WORKERS.
+_MAX_PARALLEL_WORKERS = min(os.cpu_count() or 8, 16)
 
 # Initialize MCP server. `version` is propagated through the MCP
 # `initialize` handshake as `serverInfo.version`, so clients can tell
@@ -185,16 +214,118 @@ def _ttl_hours_from_env() -> int:
     return value
 
 
-# Initialize cache, config, and URL fetcher
+# Initialize config, cache, and URL fetcher. Config first: the cache's FTS
+# language mirror ([fts] language = "de") is a startup-time cache setting,
+# not a per-call one, so it has to be known before PDFCache is constructed.
+pdf_config = PDFConfig()
 cache = PDFCache(
     cache_dir=_cache_dir_from_env(),
     ttl_hours=_ttl_hours_from_env(),
+    fts_language=pdf_config.fts_language,
 )
-pdf_config = PDFConfig()
 url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
+
+# Resolve, verify (mandatory startup safety check, issue #42), and
+# register the remote embedding spec (if [embedding].backend = "openai")
+# once, here, rather than at every encode()/encode_query() call site -- see
+# remote_embedding_check.configure_remote_backend's docstring for the full
+# sequence and why it's shared with pdf-mcp-warm (warm_cli.py), the other
+# process entry point that must run it. None (the fastembed backend, the
+# default) is a valid, cheap call. A misconfigured [embedding].backend =
+# "openai" (bad base_url, unset api_key_env, ...) fails fast here, at
+# process start, with the same ValueError contract PDFConfig already has,
+# rather than surfacing later as a confusing encode-time error. A cosine
+# mismatch against the configured endpoint (wrong model, wrong
+# quantization, wrong pooling, or the endpoint being unreachable) instead
+# falls back to the local fastembed backend with a warning -- the server
+# must still start and serve correct (if slower) vectors, never crash and
+# never silently serve vectors from the wrong space.
+from . import remote_embedding_check as _remote_check_startup  # noqa: E402
+from .remote_embedder import _redact_base_url as _redact_base_url_startup  # noqa: E402
+
+_remote_setup_startup = _remote_check_startup.configure_remote_backend(pdf_config)
+if _remote_setup_startup.spec is not None:
+    assert _remote_setup_startup.check_result is not None  # spec implies a check ran
+    if _remote_setup_startup.active:
+        logger.info(
+            "Remote embedding backend passed the startup safety check "
+            "against %s: %s",
+            _redact_base_url_startup(_remote_setup_startup.spec.base_url),
+            _remote_setup_startup.check_result.reason,
+        )
+    else:
+        from . import embedder as _embedder_startup
+
+        logger.warning(
+            "Remote embedding backend failed the startup safety check "
+            "against %s: %s. Falling back to local fastembed (%s).",
+            _redact_base_url_startup(_remote_setup_startup.spec.base_url),
+            _remote_setup_startup.check_result.reason,
+            _embedder_startup.DEFAULT_MODEL,
+        )
+        del _embedder_startup
+
+del _remote_check_startup, _redact_base_url_startup, _remote_setup_startup
+
+# Update check: bundle installs only (the bundle sets PDF_MCP_UPDATE_CHECK),
+# and `[updates] check` in the config always wins. Claude Desktop does not
+# show server `instructions` to the model, so the notice rides on the first
+# dict-shaped tool result of this process; instructions carry it too for
+# clients that read them.
+_UPDATE_CHECK_ENABLED = updates.check_enabled(pdf_config.update_check)
+# Zero-install OCR (bundle installs, or [ocr] auto_install = true).
+portable_tesseract.configure(cache.cache_dir)
+_OCR_AUTO_INSTALL = portable_tesseract.enabled(pdf_config.ocr_auto_install)
+_BASE_INSTRUCTIONS: str = mcp.instructions or ""
+
+
+def _initial_notice(enabled: bool, cache_dir: Path) -> str:
+    if not enabled:
+        return ""
+    return updates.notice_text(updates.update_status(__version__, cache_dir, True))
+
+
+_pending_notice = _initial_notice(_UPDATE_CHECK_ENABLED, cache.cache_dir)
+if _pending_notice:
+    mcp.instructions = f"{_BASE_INSTRUCTIONS}\n\nUPDATE: {_pending_notice}"
+
+
+PASSWORD_REQUIRED_CODE = "password_required"
+
+
+def _password_required_payload(source: str) -> dict[str, str]:
+    return {
+        "error": f"PDF is password-protected: {source}",
+        "error_code": PASSWORD_REQUIRED_CODE,
+        "hint": (
+            "pdf-mcp cannot open PDFs that need a password. Ask the user to "
+            "save an unlocked copy (open it with the password and export or "
+            "print to PDF, or run qpdf --decrypt) and pass that file's path."
+        ),
+    }
 
 
 def _resolve_path(
+    source: str,
+) -> tuple[str, None] | tuple[None, dict[str, str]]:
+    """
+    Resolve source to a local, openable file path.
+
+    Wraps `_resolve_source` so both of its exits (URL download and local
+    path) get the password check: a PDF that needs an open password returns
+    a `password_required` payload instead of failing later with raw PDFium
+    text.
+    """
+    local_path, error = _resolve_source(source)
+    if error is not None:
+        return None, error
+    assert local_path is not None
+    if is_password_locked(local_path):
+        return None, _password_required_payload(source)
+    return local_path, None
+
+
+def _resolve_source(
     source: str,
 ) -> tuple[str, None] | tuple[None, dict[str, str]]:
     """
@@ -391,13 +522,11 @@ def _detect_features() -> dict[str, Any]:
     (`extractor.column_detection_available`) so the reported flag can never
     drift from what extraction actually does.
     """
-    import shutil
-
     from . import embedder, extractor
 
     column_aware = extractor.column_detection_available()
     vertical_aware = extractor.vertical_detection_available()
-    ocr_available = shutil.which("tesseract") is not None
+    ocr_available = find_tesseract() is not None
 
     search: dict[str, Any] = {
         "modes_available": ["keyword"],
@@ -412,6 +541,20 @@ def _detect_features() -> dict[str, Any]:
     else:
         search["modes_available"] = ["keyword", "semantic", "auto"]
         search["embedding_model"] = model_name
+        search["embedding_backend"] = pdf_config.embedding_backend
+        remote_spec = pdf_config.remote_embedding_spec
+        if remote_spec is not None:
+            # Endpoint host[:port] only -- never the api_key, and never any
+            # userinfo (user:pass@) a user's base_url might embed. netloc
+            # would include both; hostname/port strips them the same way
+            # remote_embedder._redact_base_url does.
+            from urllib.parse import urlsplit
+
+            parts = urlsplit(remote_spec.base_url)
+            endpoint = parts.hostname or ""
+            if parts.port:
+                endpoint = f"{endpoint}:{parts.port}"
+            search["embedding_endpoint"] = endpoint
 
     return {
         "extraction": {
@@ -894,18 +1037,9 @@ def pdf_read_pages(
     handling a raised exception.
     """
     if ocr:
-        try:
-            check_tesseract_available()
-        except RuntimeError as exc:
-            return {
-                "error": str(exc),
-                "install_hint": (
-                    "brew install tesseract (macOS) / "
-                    "apt install tesseract-ocr (Linux) / "
-                    "winget install Tesseract-OCR (Windows); "
-                    "or set TESSDATA_PREFIX env var to your tessdata directory"
-                ),
-            }
+        missing = _ocr_unavailable(ocr_lang)
+        if missing is not None:
+            return missing
 
     _res = _resolve_path(path)
     if _res[1] is not None:
@@ -2942,7 +3076,18 @@ def pdf_search(
                         pn: page_embedding_units(non_empty[pn]) for pn in sorted_nums
                     }
                     flat = [c for pn in sorted_nums for c in per_page[pn]]
-                    vecs: Any = _embedder.encode(flat, _model_name) if flat else []
+                    try:
+                        vecs: Any = _embedder.encode(flat, _model_name) if flat else []
+                    except Exception as exc:
+                        # A remote backend can die mid-session (issue #47
+                        # review item 4) -- surface it the same way every
+                        # other tool failure does, an inline {"error": ...},
+                        # rather than letting RemoteEmbeddingError propagate
+                        # as an uncaught exception.
+                        return {
+                            "error": f"embedding model load/encode failed: {exc}",
+                            "query": query,
+                        }
                     raw_new = {}
                     cursor = 0
                     for pn in sorted_nums:
@@ -2970,15 +3115,17 @@ def pdf_search(
                     "hidden_text_detected": False,
                 }
 
-            query_vec: Any = _embedder.encode_query(query, _model_name)
-            page_nums_list = sorted(cached_embeddings.keys())
+            try:
+                query_vec: Any = _embedder.encode_query(query, _model_name)
+            except Exception as exc:
+                return {
+                    "error": f"embedding model load/encode failed: {exc}",
+                    "query": query,
+                }
             # Page score is its best chunk. Averaging would re-introduce the
             # page-level dilution this change exists to remove.
-            sem_scores: Any = np.array(
-                [
-                    max(float(v @ query_vec) for v in cached_embeddings[p])
-                    for p in page_nums_list
-                ]
+            page_nums_list, sem_scores = page_max_from_lists(
+                cached_embeddings, query_vec
             )
 
             top_k = min(max_results, len(page_nums_list))
@@ -3269,12 +3416,8 @@ def pdf_search(
                 return _auto_keyword_fallback(
                     f"embedding model load/encode failed: {exc}"
                 )
-            page_nums_list = sorted(cached_embeddings.keys())
-            sem_scores = np.array(
-                [
-                    max(float(v @ query_vec) for v in cached_embeddings[p])
-                    for p in page_nums_list
-                ]
+            page_nums_list, sem_scores = page_max_from_lists(
+                cached_embeddings, query_vec
             )
             page_sem_score = {
                 page_nums_list[i]: float(sem_scores[i])
@@ -3498,6 +3641,7 @@ def pdf_corpus_warm(
     budget_seconds: int = 45,
     embeddings: bool = False,
     recursive: bool = False,
+    sections: bool = False,
 ) -> dict[str, Any]:
     """
     Warm a corpus of local PDFs into the cache within a time budget.
@@ -3516,6 +3660,15 @@ def pdf_corpus_warm(
         embeddings: Also compute and cache page embeddings (requires
             the embedding extra; needed before semantic corpus search).
         recursive: Directory mode only, recurse into subdirectories.
+        sections: Also build the section-granularity search index (TOC-
+            first with heuristic fallback). Off by default because it adds
+            real per-doc cost on top of text extraction (~32ms/page for a
+            heuristic-fallback doc with no TOC). Without this, a doc's
+            section index is instead built lazily on its first
+            pdf_search(granularity="section") call — which can by itself
+            exceed a timeout-bounded MCP client's budget on a large
+            document, even though the corpus was otherwise fully warmed.
+            Pass this when you know section-granularity search is coming.
 
     Returns:
         - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
@@ -3592,6 +3745,7 @@ def pdf_corpus_warm(
         embeddings=embeddings,
         model_name=model_name,
         embed=embed_fn,
+        sections=sections,
     )
     return {
         "docs": warm["docs"],
@@ -3932,7 +4086,27 @@ def _semantic_snippet_excerpt(
         if terms and not any(t in low_chunk for t in terms):
             if any(t in page_text.lower() for t in terms):
                 text = page_text
-    return _best_span_in_text(text, query_vec, model, context_chars, query=query)
+    span = _best_span_in_text(text, query_vec, model, context_chars, query=query)
+    return _whole_token_span(span, page_text, text)
+
+
+def _whole_token_span(span: str, page_text: str, searched: str) -> str:
+    """Widen a semantic span to whole tokens and mark its cuts, the same
+    shape keyword excerpts have. The span is a raw character window, so it
+    ended mid-word and carried no "..." markers. Markers are judged against
+    the page text where the span can be found there, because a span that
+    opens a sub-page chunk does not open the page. Fail-safe: a span found
+    in neither text comes back unchanged."""
+    from .extractor import widen_to_token_bounds
+
+    if not span.strip():
+        return span
+    for source in (page_text, searched):
+        if source:
+            i = source.find(span)
+            if i >= 0:
+                return widen_to_token_bounds(source, i, i + len(span))
+    return span
 
 
 def _best_subchunk_text(
@@ -3954,11 +4128,50 @@ def _best_subchunk_text(
     return units[1 + max(range(len(scores)), key=scores.__getitem__)]
 
 
+class _LazyBestChunks:
+    """Best sub-page unit per page, resolved to text only when read.
+
+    The scorer knows each page's best unit index from the matrix product;
+    turning that into text means re-reading the page and re-chunking it,
+    which only the returned pages ever need. Doing it for every multi-unit
+    page on every query cost about 0.4 s per corpus query."""
+
+    def __init__(self) -> None:
+        self._idx: dict[tuple[str, int], tuple[int, int]] = {}
+        self._text: dict[tuple[str, int], str | None] = {}
+
+    def record(self, path: str, page: int, unit_idx: int, n_units: int) -> None:
+        self._idx[(path, page)] = (unit_idx, n_units)
+
+    def get(self, key: tuple[str, int], default: Any = None) -> Any:
+        if key in self._text:
+            val = self._text[key]
+            return default if val is None else val
+        rec = self._idx.get(key)
+        if rec is None:
+            return default
+        from .extractor import page_embedding_units
+
+        units = page_embedding_units(cache.get_page_text(key[0], key[1] - 1) or "")
+        val = units[rec[0]] if len(units) == rec[1] else None
+        self._text[key] = val
+        return default if val is None else val
+
+    def __bool__(self) -> bool:
+        return bool(self._idx)
+
+    def __len__(self) -> int:
+        return len(self._idx)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._idx
+
+
 def _corpus_semantic_scores(
     files: list[str],
     model_name: str,
     query_vec: Any,
-    best_chunks: dict[tuple[str, int], str] | None = None,
+    best_chunks: Any = None,
 ) -> tuple[list[tuple[str, int, float]], list[str]]:
     """Compute per-page cosine similarity to `query_vec` across a
     warmed corpus's cached embeddings.
@@ -3976,37 +4189,57 @@ def _corpus_semantic_scores(
     """
     import numpy as np
 
+    from . import cache as cache_mod
     from .extractor import page_embedding_units
+    from .vector_cache import CACHE, build_doc_matrix, score_doc
 
     scored: list[tuple[str, int, float]] = []
     semantic_unprocessed: list[str] = []
+    qv = np.asarray(query_vec, dtype=np.float32)
     for path in files:
         meta = cache.get_metadata(path)
         if meta is None:
             semantic_unprocessed.append(path)
             continue
         page_nums = list(range(meta["page_count"]))
-        raw = cache.get_page_embeddings(path, page_nums, model_name)
-        if not raw:
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = 0.0
+        # The key is the cache's own validity rule (path, mtime, model) plus
+        # the extraction version, so a re-warm after a bump never serves a
+        # stale matrix. One stacked matrix per document replaces decoding
+        # every unit blob on every query (the vector scan was the only part
+        # of hybrid search that scaled with the window count).
+        key = (path, mtime, model_name, cache_mod._EXTRACTION_VERSION)
+
+        def _load(path: str = path, page_nums: list[int] = page_nums) -> Any:
+            return build_doc_matrix(
+                cache.get_page_embeddings(path, page_nums, model_name)
+            )
+
+        dm = CACHE.get(key, _load)
+        if dm is None:
             semantic_unprocessed.append(path)
             continue
-        for page_num, blobs in raw.items():
-            if not blobs:
-                continue
-            # Page score is its best chunk. Averaging would re-introduce the
-            # page-level dilution this change exists to remove.
-            sims = [
-                float(np.frombuffer(b, dtype=np.float32).copy() @ query_vec)
-                for b in blobs
-            ]
-            scored.append((path, page_num + 1, max(sims)))
-            if best_chunks is not None and len(sims) > 1:
-                units = page_embedding_units(cache.get_page_text(path, page_num) or "")
-                if len(units) == len(sims):
-                    sub = sims[1:]
-                    best_chunks[(path, page_num + 1)] = units[
-                        1 + max(range(len(sub)), key=sub.__getitem__)
-                    ]
+        # Page score is its best chunk. Averaging would re-introduce the
+        # page-level dilution sub-page embedding exists to remove.
+        page_max, _best_local = score_doc(dm, qv)
+        ends = np.append(dm.offsets[1:], len(dm.M))
+        for i, page_num in enumerate(dm.pages):
+            scored.append((path, page_num + 1, float(page_max[i])))
+            n_units = int(ends[i] - dm.offsets[i])
+            if best_chunks is not None and n_units > 1:
+                sub = dm.M[dm.offsets[i] + 1 : ends[i]] @ qv
+                best_idx = 1 + int(np.argmax(sub))
+                if hasattr(best_chunks, "record"):
+                    best_chunks.record(path, page_num + 1, best_idx, n_units)
+                else:  # plain dict: eager text, kept for callers and tests
+                    units = page_embedding_units(
+                        cache.get_page_text(path, page_num) or ""
+                    )
+                    if len(units) == n_units:
+                        best_chunks[(path, page_num + 1)] = units[best_idx]
     return scored, semantic_unprocessed
 
 
@@ -4051,7 +4284,7 @@ def _finalize_corpus_matches(
     query: str,
     keyword_excerpts_by_doc: dict[str, dict[int, str]] | None = None,
     window_tokens: int = _WINDOW_TOKENS_DEFAULT,
-    best_chunks: dict[tuple[str, int], str] | None = None,
+    best_chunks: Any = None,
     attach_geometry: bool = False,
 ) -> list[dict[str, Any]]:
     """Shared per-doc finalize step for every `pdf_corpus_search` mode:
@@ -4376,8 +4609,17 @@ def pdf_corpus_search(
     # ── mode="semantic" ───────────────────────────────────────────────
     if mode == "semantic":
         assert embed_model is not None  # guaranteed by check_available above
-        query_vec = _embedder.encode_query(query, embed_model)
-        best_chunks: dict[tuple[str, int], str] = {}
+        try:
+            query_vec = _embedder.encode_query(query, embed_model)
+        except Exception as exc:
+            # A remote backend can die mid-session (issue #47 review item
+            # 4) -- surface it the same way every other tool failure does,
+            # an inline {"error": ...}, rather than an uncaught exception.
+            return {
+                "error": f"embedding model load/encode failed: {exc}",
+                "query": query,
+            }
+        best_chunks = _LazyBestChunks()
         scored, semantic_unprocessed = _corpus_semantic_scores(
             ready_paths, embed_model, query_vec, best_chunks
         )
@@ -4479,6 +4721,21 @@ def pdf_corpus_search(
             len(kw_doc_match_counts), window_tokens
         )
 
+    # mode="semantic" already returned above, so only "keyword"/"auto"
+    # reach here. For "auto" with embeddings available, encode the query
+    # now (before deciding whether we can do hybrid fusion below) so a
+    # remote backend dying mid-session (issue #47 review item 4) demotes
+    # this call to the keyword-only response right below -- the same
+    # semantic_unavailable/semantic_unavailable_reason path used when
+    # fastembed itself was never available -- instead of raising.
+    query_vec = None
+    if embeddings_needed:
+        try:
+            query_vec = _embedder.encode_query(query, embed_model)
+        except Exception as exc:
+            embeddings_needed = False
+            semantic_unavailable_reason = f"embedding model load/encode failed: {exc}"
+
     if mode == "keyword" or not embeddings_needed:
 
         def _kw_build(path: str, page: int, idx: int) -> dict[str, Any]:
@@ -4543,8 +4800,10 @@ def pdf_corpus_search(
         # branch is unreachable on the request path and exists so mypy
         # can narrow embed_fn to non-None without an assert here.
         raise RuntimeError("embed_fn unset despite embeddings_needed")
-    query_vec = _embedder.encode_query(query, embed_model)
-    hybrid_best_chunks: dict[tuple[str, int], str] = {}
+    # query_vec was already encoded above (before the keyword-only branch),
+    # so a failed encode has already demoted this call to that branch.
+    assert query_vec is not None  # embeddings_needed guarantees it was set
+    hybrid_best_chunks = _LazyBestChunks()
     scored, semantic_unprocessed = _corpus_semantic_scores(
         ready_paths, embed_model, query_vec, hybrid_best_chunks
     )
@@ -4778,6 +5037,104 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
     return sorted(roots)
 
 
+def _ocr_unavailable(ocr_lang: str) -> dict[str, Any] | None:
+    """None when OCR can run; otherwise the inline error to return.
+
+    With auto-install on and no Tesseract installed, the first call fetches
+    the pinned portable Tesseract, waiting up to
+    portable_tesseract.WAIT_SECONDS before replying "setting up".
+    """
+    try:
+        check_tesseract_available()
+    except RuntimeError as exc:
+        missing: dict[str, Any] = {
+            "error": str(exc),
+            "install_hint": (
+                tesseract_install_hint()
+                + "; or set TESSDATA_PREFIX env var to your tessdata directory"
+            ),
+        }
+        if not _OCR_AUTO_INSTALL:
+            return missing
+        state, detail = portable_tesseract.ensure()
+        if state == "downloading":
+            return {
+                "error": (
+                    "Setting up OCR (a one-time download of about 14 MB). "
+                    "Try again in a minute."
+                ),
+                "hint": (
+                    "Meanwhile pdf_render_pages shows the page as an image you "
+                    "can read directly."
+                ),
+            }
+        if state != "ready":
+            logger.info("portable Tesseract unavailable: %s", detail)
+            return missing
+        from . import extractor as _extractor
+
+        # Re-resolve now that the portable copy exists.
+        _extractor._TESSERACT_EXE = None
+        _extractor._TESSDATA_PATH = None
+        try:
+            check_tesseract_available()
+        except RuntimeError:
+            return missing
+    if not _lang_available(ocr_lang):
+        return {
+            "error": (
+                f"The OCR language '{ocr_lang}' is not installed. The Tesseract "
+                "pdf-mcp set up includes English only; install Tesseract with "
+                "that language to read it."
+            ),
+            "install_hint": tesseract_install_hint(),
+        }
+    return None
+
+
+def _lang_available(ocr_lang: str) -> bool:
+    """True unless the Tesseract in use is pdf-mcp's portable, English-only
+    copy and a language it lacks was asked for."""
+    from . import extractor as _extractor
+
+    exe = find_tesseract()
+    if exe is None or exe != portable_tesseract.installed_binary():
+        return True
+    tessdata = _extractor._TESSDATA_PATH
+    if not tessdata:
+        return True
+    return all(
+        os.path.isfile(os.path.join(tessdata, f"{lang}.traineddata"))
+        for lang in ocr_lang.split("+")
+        if lang
+    )
+
+
+def _live_features() -> dict[str, Any]:
+    """Startup feature probe with the OCR flag re-checked per call.
+
+    Claude Desktop keeps servers for the app's lifetime and Tesseract can be
+    installed meanwhile; OCR re-resolves the binary per call, so the flag
+    must too.
+    """
+    features = copy.deepcopy(_SERVER_FEATURES)
+    source = _ocr_source()
+    features["extraction"]["ocr"]["available"] = source != "none"
+    features["extraction"]["ocr"]["source"] = source
+    return features
+
+
+def _ocr_source() -> str:
+    """system | portable | on_first_use (a bundle install that will fetch
+    the portable Tesseract on the first OCR call) | none."""
+    exe = find_tesseract()
+    if exe is not None:
+        return "portable" if exe == portable_tesseract.installed_binary() else "system"
+    if _OCR_AUTO_INSTALL and portable_tesseract.platform_key() is not None:
+        return "on_first_use"
+    return "none"
+
+
 @mcp.tool(
     description=(
         "Report which optional features are installed and what "
@@ -4793,7 +5150,8 @@ def _document_roots(patterns: tuple[str, ...]) -> list[str]:
         "list, document roots, and active config values. Cheap to call "
         "(no I/O beyond reading process state and stat-ing the configured "
         "roots). Results are stable for the server's lifetime, except that "
-        "a root appears once its directory exists on disk."
+        "a root appears once its directory exists on disk and OCR shows as "
+        "available once Tesseract is installed."
     )
 )
 def server_info() -> dict[str, Any]:
@@ -4808,7 +5166,10 @@ def server_info() -> dict[str, Any]:
     Returns:
         - version: pdf-mcp release version.
         - features: {
-            extraction: {column_aware, ocr} — each {available, description},
+            extraction: {column_aware, ocr} — each {available, description};
+                ocr also has source: "system", "portable", "on_first_use"
+                (a bundle install that downloads Tesseract on the first OCR
+                call) or "none",
             search: {modes_available, default_mode, embedding_model?}
                 (embedding_model present only when semantic search is
                  available),
@@ -4840,6 +5201,9 @@ def server_info() -> dict[str, Any]:
                    cache_dir}. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
                    precedent).
+        - update: {current, latest, update_available, checked_at,
+                   download_url} from the daily update check, or null when
+                   the check is off (every pip/uvx install by default).
     """
     # max_workers: resolve the actually-in-effect cap (PDF_MCP_MAX_WORKERS
     # override or the min(cpu_count, cap) default) by reusing resolve_workers
@@ -4849,7 +5213,10 @@ def server_info() -> dict[str, Any]:
     allow_patterns = pdf_config.path_allow_patterns
     return {
         "version": __version__,
-        "features": _SERVER_FEATURES,
+        "update": updates.update_status(
+            __version__, cache.cache_dir, _UPDATE_CHECK_ENABLED
+        ),
+        "features": _live_features(),
         "documents": {
             "access_mode": ("allowlist" if allow_patterns else "unrestricted"),
             "roots": _document_roots(allow_patterns),
@@ -4889,9 +5256,11 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
     """
     if expired_only:
         cleared = cache.clear_expired()
+        corpus.clear_warm_memo()
     else:
         cleared = cache.clear_all()
         url_fetcher.clear_cache()
+        corpus.clear_warm_memo()
 
     return {
         "expired_only": expired_only,
@@ -5887,19 +6256,58 @@ def pdf_extract_chart(
 # ============================================================================
 
 
+from fastmcp.server.middleware import Middleware, MiddlewareContext  # noqa: E402
+from fastmcp.tools import ToolResult  # noqa: E402
+from mcp.types import TextContent  # noqa: E402
+
+
+class _UpdateNoticeMiddleware(Middleware):
+    """Adds the pending update notice to the first dict-shaped tool result.
+
+    Rebuilds the result from the updated dict so the JSON text block (what
+    clients such as Claude Desktop show the model) and structuredContent
+    both carry it. List-shaped results (pdf_render_pages) are left alone;
+    the notice waits for the next dict result.
+    """
+
+    async def on_call_tool(  # type: ignore[override]
+        self, context: MiddlewareContext, call_next: Any
+    ) -> ToolResult:
+        global _pending_notice  # noqa: PLW0603
+        result: ToolResult = await call_next(context)
+        data = result.structured_content
+        single_text = len(result.content) == 1 and isinstance(
+            result.content[0], TextContent
+        )
+        if _pending_notice and isinstance(data, dict) and single_text:
+            updated = {**data, "notice": _pending_notice}
+            _pending_notice = ""
+            return ToolResult(
+                content=updated, structured_content=updated, meta=result.meta
+            )
+        return result
+
+
+mcp.add_middleware(_UpdateNoticeMiddleware())
+
+
 def main() -> None:
     """
     Run the MCP server using STDIO transport.
 
     STDIO is used because:
-    - Claude Desktop spawns a new process per conversation
+    - Claude Desktop starts the server with the app and keeps it for the
+      app's lifetime
     - Communication happens via stdin/stdout
-    - Process exits after conversation ends
+    - Process exits when the client closes stdin
 
     That's why we use SQLite caching - it persists between process restarts.
     """
     # Explicitly use STDIO transport (this is the default, but being explicit)
-    mcp.run(transport="stdio")
+    if _UPDATE_CHECK_ENABLED:
+        updates.start_background_refresh(cache.cache_dir)
+    # show_banner=False: fastmcp's banner also checks PyPI for a newer fastmcp.
+    mcp.run(transport="stdio", show_banner=False)
 
 
 def main_http() -> None:
@@ -5966,7 +6374,7 @@ def main_http() -> None:
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
     path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")
 
-    mcp.run(transport="http", host=host, port=port, path=path)
+    mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
 
 
 if __name__ == "__main__":

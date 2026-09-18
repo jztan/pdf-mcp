@@ -8,6 +8,8 @@ an agent that already knows the answer.
 
 from unittest.mock import patch
 
+import pytest
+
 from scripts.eval_financial_answerability import (
     JUDGE_CONTEXT_FLAGS,
     ballots_decided,
@@ -140,6 +142,9 @@ class TestQuestionScopeField:
             Path(__file__).resolve().parents[1]
             / "benchmark_data/financial_reports/answerability_questions.json"
         )
+        if not path.exists():
+            # The 10-K question set is local-only and absent in CI.
+            pytest.skip("financial_reports data not present")
         return json.loads(path.read_text(encoding="utf-8"))["questions"]
 
     def test_every_question_declares_a_scope(self):
@@ -279,3 +284,33 @@ class TestBallotCache:
         assert first != second
         assert third is None
         mod._BALLOT_CACHE = None
+
+
+class TestDataDirAndCacheDirFlags:
+    def test_data_dir_and_cache_dir_are_parsed(self):
+        from scripts import eval_financial_answerability as ev
+
+        ns = ev.build_parser().parse_args(
+            [
+                "--data-dir",
+                "/tmp/x",
+                "--cache-dir",
+                "/tmp/c",
+                "--limit",
+                "5",
+                "--classes",
+                "described,needle",
+            ]
+        )
+        from pathlib import Path
+
+        assert ns.data_dir == Path("/tmp/x") and ns.cache_dir == Path("/tmp/c")
+        assert ns.limit == 5 and ns.classes == ["described", "needle"]
+
+    def test_defaults_keep_the_financial_set(self):
+        from scripts import eval_financial_answerability as ev
+
+        ns = ev.build_parser().parse_args([])
+        assert ns.data_dir == ev.DATA
+        assert ns.cache_dir == ev.REPO / "benchmark_data" / ".answerability_cache"
+        assert ns.limit is None and ns.classes is None

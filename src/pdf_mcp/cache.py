@@ -14,7 +14,11 @@ from typing import Any, cast
 
 from pdf_mcp import content_trust
 from pdf_mcp.chart_extractor import CHART_EXTRACTION_VERSION
-from pdf_mcp.extractor import TABLE_EXTRACTION_VERSION
+from pdf_mcp.extractor import (
+    EXCERPT_ELLIPSIS,
+    TABLE_EXTRACTION_VERSION,
+    widen_to_token_bounds,
+)
 from pdf_mcp.embedder import DEFAULT_MODEL
 from pdf_mcp.section_detector import Section
 
@@ -67,17 +71,48 @@ _FTS5_CJK_SECTION_TABLE_SCHEMA = (
     ")"
 )
 
+# German mirror tables ([fts] language = "de"). Stemming is done in Python
+# (snowballstemmer) before insert/query, so the tokenizer here only needs
+# unicode61's word-boundary + diacritic-folding behavior, same as the CJK
+# tables — porter would double-stem (English rules) whatever the German
+# stemmer already normalized.
+_FTS5_DE_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_search_fts_de USING fts5("
+    "file_path UNINDEXED, "
+    "page_num UNINDEXED, "
+    "text, "
+    "tokenize='unicode61'"
+    ")"
+)
+
+_FTS5_DE_SECTION_TABLE_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS pdf_section_fts_de USING fts5("
+    "file_path UNINDEXED, "
+    "section_id UNINDEXED, "
+    "title, "
+    "text, "
+    "start_page UNINDEXED, "
+    "end_page UNINDEXED, "
+    "title_source UNINDEXED, "
+    "tokenize='unicode61'"
+    ")"
+)
+
 
 # Bump when text-extraction logic changes so cached text + everything derived
 # from it (embeddings, FTS indexes) is dropped and rebuilt. v1: column-aware
 # reading order for multi-column PDFs. v2: suppress the column path on sparse
 # grids (e.g. author/affiliation blocks on academic title pages) that v1
 # mis-read column-major — drops v1's scrambled title-page text/embeddings/FTS.
+# 14: purge text that v3.0.0 to v3.2.0 may have cached from the WRONG page:
+#     grouped blocks were memoized under id(lines), so after the in-process
+#     line cache evicted a page, a later page whose line list reused that
+#     address got the dead page's text. Affected rows cannot be told apart.
 # 13: ff/ffi ligature halves kept
 # 12: spanning bands must be wide, not just two-sided (table cells)
 # 11: spanning rows no longer split at the gutter
 # 10: layout-checked chunked embeddings (9 was interim)
-_EXTRACTION_VERSION = 13
+_EXTRACTION_VERSION = 14
 
 # Per-connection pragmas. Both reset on every open, unlike journal_mode which
 # is persistent in the database file (see _connect / _init_db).
@@ -103,6 +138,31 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
 def _is_cjk_char(ch: str) -> bool:
     o = ord(ch)
     return any(lo <= o <= hi for lo, hi in _CJK_RANGES)
+
+
+def _whole_token_snippet(snippet: str, text: str) -> str:
+    """Re-cut an FTS5 ``snippet()`` fragment on whole-token boundaries.
+
+    snippet() emits a verbatim substring of the column, cut at tokenizer
+    separators, with ``...`` added where it cut. Locating that substring in
+    the page text and widening it (`widen_to_token_bounds`) restores the
+    split token ("variable-length", not "length"; "0.30", not "30") and
+    recomputes the markers from what was actually cut. Fail-safe: a fragment
+    that cannot be located comes back unchanged.
+    """
+    if not snippet or not text:
+        return snippet
+    body = snippet
+    if body.startswith(EXCERPT_ELLIPSIS):
+        body = body[len(EXCERPT_ELLIPSIS) :]
+    if body.endswith(EXCERPT_ELLIPSIS):
+        body = body[: -len(EXCERPT_ELLIPSIS)]
+    if not body.strip():
+        return snippet
+    i = text.find(body)
+    if i < 0:
+        return snippet
+    return widen_to_token_bounds(text, i, i + len(body))
 
 
 def _contains_cjk(text: str) -> bool:
@@ -197,6 +257,95 @@ def _escape_fts5_query_cjk(query: str) -> str:
     if not phrases:
         return _NO_MATCH_SENTINEL
     return " ".join(phrases)
+
+
+_GERMAN_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+_german_stemmer: Any = None
+
+
+def _get_german_stemmer() -> Any:
+    """Lazy-init the German Snowball stemmer.
+
+    Import deferred to here (not module top) so environments that never set
+    [fts] language = "de" never pay for it, and so a missing/broken
+    snowballstemmer install only breaks German mode, not the whole cache
+    module.
+    """
+    global _german_stemmer
+    if _german_stemmer is None:
+        import snowballstemmer
+
+        _german_stemmer = snowballstemmer.stemmer("german")
+    return _german_stemmer
+
+
+def _german_normalize(text: str) -> str:
+    """Lowercase, tokenize, and Snowball-stem every word.
+
+    Defines the German token stream for BOTH the write path and the query
+    escaper (`_escape_fts5_query_de`), the same contract `_cjk_split` holds
+    for CJK: whatever transform runs at index time must run identically at
+    query time, or the two token streams diverge and nothing matches.
+
+    No manual ä/ö/ü/ß-spelling folding is needed here: the German Snowball
+    algorithm already normalizes umlauts, ß, and their ASCII-transliteration
+    spellings (ue/oe/ae/ss) to the same stem on its own -- verified directly
+    (`kündigung`/`kuendigung`/`kundigung` -> `kundig`; `straße`/`strasse` ->
+    `strass`). Non-alphanumeric runs (punctuation, whitespace, `§`) are
+    dropped as separators -- unicode61 would drop them anyway, so this just
+    does it before stemming instead of after. Digit runs ARE kept as tokens
+    (unlike an earlier version of this regex, which dropped them): a
+    citation like "§ 626 BGB" must still match a query for "626", and the
+    Snowball stemmer is the identity on digit-only and alphanumeric tokens
+    ("626" -> "626", "2023" -> "2023"), so no special-casing is needed here.
+    """
+    tokens = _GERMAN_TOKEN_RE.findall(text.lower())
+    if not tokens:
+        return ""
+    stemmed = _get_german_stemmer().stemWords(tokens)
+    return " ".join(stemmed)
+
+
+def _escape_fts5_query_de(query: str) -> str:
+    """Escape a query for the German-stemmed FTS mirror index.
+
+    Runs the whole query through `_german_normalize` (same transform the
+    write path applies), then quotes each resulting stem as its own AND
+    term — structurally the twin of `_escape_fts5_query_cjk`.
+    """
+    normalized = _german_normalize(query)
+    if not normalized:
+        return _NO_MATCH_SENTINEL
+    return " ".join(f'"{stem}"' for stem in normalized.split())
+
+
+def _fts5_or_fallback_de(query: str) -> str | None:
+    """OR-joined German-stem variant of `_escape_fts5_query_de`.
+
+    The German twin of `_fts5_or_fallback`: same retry, but built from
+    stems (like `_escape_fts5_query_de`) instead of raw tokens, so it stays
+    consistent with whatever tokenization `_german_normalize` applied at
+    index time.
+
+    Qualification is delegated to `_fts5_or_fallback` itself (its
+    "3+ whitespace tokens" rule) rather than re-derived from the stem
+    count, so "de" qualifies for the retry in exactly the same cases the
+    default path does -- not more, not fewer. That matters because the two
+    counts can differ: "§ 626 BGB" is 3 raw tokens but only 2 German stems
+    (`_german_normalize` drops "§" as a separator). A stem-count threshold
+    would silently exclude that exact query from the retry.
+
+    Returns None when the query doesn't qualify (delegated check) or when
+    it stems down to fewer than 2 terms (the OR form would be identical to
+    the AND form -- nothing to gain from a second MATCH).
+    """
+    if _fts5_or_fallback(query) is None:
+        return None
+    stems = _german_normalize(query).split()
+    if len(stems) < 2:
+        return None
+    return " OR ".join(f'"{stem}"' for stem in stems)
 
 
 def _get_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
@@ -365,6 +514,7 @@ class PDFCache:
         cache_dir: Path | None = None,
         ttl_hours: int = 24,
         images_dir: Path | None = None,
+        fts_language: str | None = None,
     ):
         """
         Initialize the cache.
@@ -374,10 +524,16 @@ class PDFCache:
             ttl_hours: Time-to-live for cache entries in hours
             images_dir: Directory to store extracted images.
                 Defaults to cache_dir/images
+            fts_language: None (default porter/English FTS) or "de" to
+                additionally maintain and query the German-stemmed FTS
+                mirror tables (pdf_search_fts_de / pdf_section_fts_de).
+                Mirrors PDFConfig.fts_language; a whole-cache setting, not
+                per-document.
         """
         if cache_dir is None:
             cache_dir = Path.home() / ".cache" / "pdf-mcp"
 
+        self.fts_language = fts_language
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         # Tighten perms on the cache dir itself (images/renders subdirs
@@ -454,6 +610,9 @@ class PDFCache:
                 # stale rows must go with it or the backfill skips them.
                 conn.execute("DROP TABLE IF EXISTS pdf_search_fts_cjk")
                 conn.execute("DROP TABLE IF EXISTS pdf_section_fts_cjk")
+                # German stemmed mirrors: same rebuild-on-open contract.
+                conn.execute("DROP TABLE IF EXISTS pdf_search_fts_de")
+                conn.execute("DROP TABLE IF EXISTS pdf_section_fts_de")
                 # Derived from the same extraction pipeline as page_text.
                 conn.execute("DROP TABLE IF EXISTS page_blocks")
                 # Head text and term counts derive from page_text.
@@ -780,6 +939,16 @@ class PDFCache:
             except sqlite3.OperationalError:
                 self.fts_available = False
 
+            # Whether pdf_search_fts_de / pdf_section_fts_de exist in THIS
+            # database file, regardless of this instance's fts_language.
+            # Every writer below is gated on this flag, not on fts_language,
+            # so a cache opened without [fts] language = "de" (e.g.
+            # pdf-mcp-warm run under an older config, or a second server
+            # process on the same cache_dir) still keeps the mirror complete
+            # once another process has turned it on -- set further down,
+            # once we know whether this instance itself creates the tables.
+            self._de_tables_exist = False
+
             if self.fts_available:
                 # Section FTS table: drop and recreate if the title_source
                 # column is missing (pre-1.13 cache). FTS5 virtual tables
@@ -812,6 +981,34 @@ class PDFCache:
                 else:
                     if not cjk_existed and bool(_get_columns(conn, "page_text")):
                         self._backfill_cjk_tables(conn)
+
+                # German mirror tables: only CREATED when this cache is
+                # opened with fts_language="de" (a whole-cache setting — see
+                # __init__). Not content-detected like CJK, since German text
+                # can't be told apart from English by character range. Once
+                # created (by this instance or an earlier one on the same
+                # cache_dir), every writer maintains them -- see
+                # _de_tables_exist above, checked instead of fts_language at
+                # every write site so a plain PDFCache (e.g. a warm run
+                # before [fts] language was set) doesn't leave the mirror
+                # incomplete for the next "de" open to silently miss.
+                if self.fts_language == "de":
+                    try:
+                        conn.execute(_FTS5_DE_TABLE_SCHEMA)
+                        conn.execute(_FTS5_DE_SECTION_TABLE_SCHEMA)
+                    except sqlite3.OperationalError:
+                        pass
+                    else:
+                        self._de_tables_exist = True
+                        if bool(_get_columns(conn, "page_text")):
+                            self._sync_de_tables(conn)
+                else:
+                    self._de_tables_exist = bool(
+                        conn.execute(
+                            "SELECT name FROM sqlite_master"
+                            " WHERE type='table' AND name='pdf_search_fts_de'"
+                        ).fetchone()
+                    )
 
         # The PK migration's drop-and-rename leaves the freed pages in the
         # file (~50% growth, measured). VACUUM reclaims them and cannot run
@@ -868,6 +1065,117 @@ class PDFCache:
             if sec_inserts:
                 conn.executemany(
                     "INSERT INTO pdf_section_fts_cjk"
+                    " (file_path, section_id, title, text,"
+                    " start_page, end_page, title_source)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    sec_inserts,
+                )
+
+    def _sync_de_tables(self, conn: sqlite3.Connection) -> None:
+        """Bring the German FTS mirror tables in sync with page_text /
+        pdf_section_fts, on EVERY open with [fts] language = "de" -- not
+        only the first time the mirror tables are created.
+
+        A per-row write (save_page_text et al.) keeps the mirror current
+        for writes made through THIS cache instance. But a document can
+        also land in page_text / pdf_section_fts through a different
+        PDFCache instance that never had fts_language="de" -- a
+        pdf-mcp-warm run before the config option was turned on, or a
+        second server process on the same cache_dir that hasn't picked up
+        the new config yet -- and that instance's writes never touch
+        pdf_search_fts_de. Comparing per-document page/section COUNTs
+        (cheap even on a large cache, since page_text/pdf_section_fts are
+        indexed on file_path -- only pdf_search_fts_de itself, an FTS5
+        virtual table, is scanned in full) against the mirror finds
+        documents that are MISSING or have a different row count there,
+        re-stemming only those -- not every document on every open. This
+        does not catch same-page-count content drift (a document
+        re-extracted with different text but an unchanged page count,
+        written by an instance that never touched the mirror) -- that
+        narrower case stays stale until the document's page count changes
+        or it is rewritten by an instance that does maintain the mirror.
+        A document with zero rows here after a page_text delete is purged
+        the same way (0 != its old mirror count triggers the delete, and
+        the empty page_text means nothing is re-inserted). No
+        re-extraction, no re-embedding.
+        """
+        page_counts = dict(
+            conn.execute(
+                "SELECT file_path, COUNT(*) FROM page_text GROUP BY file_path"
+            ).fetchall()
+        )
+        de_page_counts = dict(
+            conn.execute(
+                "SELECT file_path, COUNT(*) FROM pdf_search_fts_de"
+                " GROUP BY file_path"
+            ).fetchall()
+        )
+        stale_paths = [
+            fp
+            for fp in set(page_counts) | set(de_page_counts)
+            if page_counts.get(fp, 0) != de_page_counts.get(fp, 0)
+        ]
+        for path in stale_paths:
+            conn.execute("DELETE FROM pdf_search_fts_de WHERE file_path = ?", (path,))
+            rows = conn.execute(
+                "SELECT page_num, text FROM page_text WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+            # No `if txt` filter: the writers (save_page_text et al.) insert
+            # one mirror row per page_text row regardless of whether the
+            # page's text is empty, so the count comparison above only
+            # agrees once this loop does the same -- filtering out empty
+            # pages here left a permanent count mismatch for any document
+            # with a blank page, re-stemming that document's FULL text on
+            # every single "de" open, forever (found in review).
+            inserts = [(path, pn, _german_normalize(txt)) for pn, txt in rows]
+            if inserts:
+                conn.executemany(
+                    "INSERT INTO pdf_search_fts_de (file_path, page_num, text)"
+                    " VALUES (?, ?, ?)",
+                    inserts,
+                )
+
+        if not bool(_get_columns(conn, "pdf_section_fts")):
+            return
+        sec_counts = dict(
+            conn.execute(
+                "SELECT file_path, COUNT(*) FROM pdf_section_fts GROUP BY file_path"
+            ).fetchall()
+        )
+        de_sec_counts = dict(
+            conn.execute(
+                "SELECT file_path, COUNT(*) FROM pdf_section_fts_de"
+                " GROUP BY file_path"
+            ).fetchall()
+        )
+        stale_sec_paths = [
+            fp
+            for fp in set(sec_counts) | set(de_sec_counts)
+            if sec_counts.get(fp, 0) != de_sec_counts.get(fp, 0)
+        ]
+        for path in stale_sec_paths:
+            conn.execute("DELETE FROM pdf_section_fts_de WHERE file_path = ?", (path,))
+            rows = conn.execute(
+                "SELECT file_path, section_id, title, text, start_page,"
+                " end_page, title_source FROM pdf_section_fts WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+            sec_inserts = [
+                (
+                    fp,
+                    sid,
+                    _german_normalize(title or ""),
+                    _german_normalize(text or ""),
+                    sp,
+                    ep,
+                    ts,
+                )
+                for fp, sid, title, text, sp, ep, ts in rows
+            ]
+            if sec_inserts:
+                conn.executemany(
+                    "INSERT INTO pdf_section_fts_de"
                     " (file_path, section_id, title, text,"
                     " start_page, end_page, title_source)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1242,6 +1550,17 @@ class PDFCache:
                         " (file_path, page_num, text) VALUES (?, ?, ?)",
                         (path, page_num, _cjk_split(text)),
                     )
+                if self._de_tables_exist:
+                    conn.execute(
+                        "DELETE FROM pdf_search_fts_de"
+                        " WHERE file_path = ? AND page_num = ?",
+                        (path, page_num),
+                    )
+                    conn.execute(
+                        "INSERT INTO pdf_search_fts_de"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        (path, page_num, _german_normalize(text)),
+                    )
 
     def get_page_source(self, path: str, page_num: int) -> str | None:
         """Return 'extracted', 'ocr', or None (page not cached)."""
@@ -1366,6 +1685,25 @@ class PDFCache:
                         "INSERT INTO pdf_search_fts_cjk"
                         " (file_path, page_num, text) VALUES (?, ?, ?)",
                         [(path, pn, _cjk_split(txt)) for pn, txt in cjk.items()],
+                    )
+                # German mirror, whole-cache setting (not per-row content
+                # detection like CJK above) -- see fts_language in __init__.
+                # Gated on _de_tables_exist (not fts_language) so a plain
+                # cache writing into a cache_dir another process opened with
+                # [fts] language = "de" still keeps the mirror complete.
+                if self._de_tables_exist:
+                    conn.execute(
+                        f"DELETE FROM pdf_search_fts_de"
+                        f" WHERE file_path = ? AND page_num IN ({placeholders})",
+                        (path, *page_nums),
+                    )
+                    conn.executemany(
+                        "INSERT INTO pdf_search_fts_de"
+                        " (file_path, page_num, text) VALUES (?, ?, ?)",
+                        [
+                            (path, pn, _german_normalize(txt))
+                            for pn, txt in pages.items()
+                        ],
                     )
 
     # ==================== Image Operations ====================
@@ -1996,6 +2334,10 @@ class PDFCache:
             )
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
+            if self._de_tables_exist:
+                conn.execute(
+                    "DELETE FROM pdf_search_fts_de WHERE file_path = ?", (path,)
+                )
 
     def clear_expired(self) -> int:
         """
@@ -2068,6 +2410,12 @@ class PDFCache:
                 if self.fts_available:
                     conn.execute(
                         f"DELETE FROM pdf_search_fts"
+                        f" WHERE file_path IN ({placeholders})",
+                        expired_paths,
+                    )
+                if self._de_tables_exist:
+                    conn.execute(
+                        f"DELETE FROM pdf_search_fts_de"
                         f" WHERE file_path IN ({placeholders})",
                         expired_paths,
                     )
@@ -2145,6 +2493,9 @@ class PDFCache:
                 conn.execute("DELETE FROM pdf_search_fts_cjk")
                 conn.execute("DELETE FROM pdf_section_fts")
                 conn.execute("DELETE FROM pdf_section_fts_cjk")
+                if self._de_tables_exist:
+                    conn.execute("DELETE FROM pdf_search_fts_de")
+                    conn.execute("DELETE FROM pdf_section_fts_de")
             # Return freed pages to the filesystem, or the DB file keeps
             # its high-water size and cache_size_bytes reports megabytes
             # of residual after a full clear. VACUUM cannot run inside a
@@ -2285,12 +2636,38 @@ class PDFCache:
         half = max(0, (context_chars - len(best_needle)) // 2)
         start = max(0, best_idx - half)
         end = min(len(text), best_idx + len(best_needle) + half)
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(text) else ""
-        return f"{prefix}{text[start:end]}{suffix}"
+        return widen_to_token_bounds(text, start, end)
+
+    def _german_excerpt(
+        self, path: str, page_num: int, query: str, context_chars: int
+    ) -> str | None:
+        """Build an excerpt from ORIGINAL page text for a German-stemmed match.
+
+        Unlike the CJK excerpt (literal substring per token), a German match
+        is stem-EQUAL, not literal: the query word and the page's word can be
+        different inflections of the same stem ("Kündigungen" vs. the page's
+        "kündigen"). Re-tokenizes the original page text with the same rule
+        `_german_normalize` uses, stems each token, and returns the window
+        around the earliest page token whose stem is among the query's
+        stems -- keeping the ORIGINAL (unstemmed) span for display. Returns
+        None if no query stem occurs anywhere on the page (should not happen
+        for a page FTS5 already matched; a safety net, not the common path).
+        """
+        text = self.get_page_text(path, page_num) or ""
+        query_stems = set(_german_normalize(query).split())
+        if not query_stems:
+            return None
+        stemmer = _get_german_stemmer()
+        for m in _GERMAN_TOKEN_RE.finditer(text):
+            if stemmer.stemWord(m.group(0).lower()) in query_stems:
+                half = max(0, (context_chars - (m.end() - m.start())) // 2)
+                start = max(0, m.start() - half)
+                end = min(len(text), m.end() + half)
+                return widen_to_token_bounds(text, start, end)
+        return None
 
     def _build_temp_page_fts(
-        self, conn: sqlite3.Connection, path: str, cjk: bool
+        self, conn: sqlite3.Connection, path: str, cjk: bool, de: bool = False
     ) -> None:
         """Build a connection-local FTS index over one document's pages.
 
@@ -2300,14 +2677,51 @@ class PDFCache:
         holding only this document's pages makes ``bm25()`` IDF document-local,
         so a PDF's page ranking is stable regardless of what else is cached.
         The temp table is dropped automatically when ``conn`` closes.
+
+        ``cjk`` and ``de`` are mutually exclusive (callers never set both).
         """
-        tokenizer = "unicode61" if cjk else "porter unicode61"
+        tokenizer = "unicode61" if (cjk or de) else "porter unicode61"
         conn.execute("DROP TABLE IF EXISTS temp.doc_fts")
         conn.execute(
             "CREATE VIRTUAL TABLE temp.doc_fts USING fts5("
             f"page_num UNINDEXED, text, tokenize='{tokenizer}')"
         )
-        if cjk:
+        if de:
+            # Copy already-stemmed rows from the shared mirror instead of
+            # re-stemming this document's pages on every query -- stemming
+            # is the expensive part (~1s/query on a 121-page document,
+            # measured, vs ~5ms for the porter/CJK paths below, which are
+            # cheap enough to redo per query). The mirror is kept complete
+            # by every writer plus the open-time sync (see
+            # _sync_de_tables), so this is normally a plain copy.
+            rows = conn.execute(
+                "SELECT page_num, text FROM pdf_search_fts_de WHERE file_path = ?",
+                (path,),
+            ).fetchall()
+            # Compare against page_text's count (indexed on file_path, so
+            # cheap) rather than just checking "rows is empty": a document
+            # PARTIALLY present in the mirror -- e.g. one page written by an
+            # instance whose _de_tables_exist was still False when it wrote,
+            # after this cache's own open-time sync already ran -- would
+            # otherwise silently search only that partial set instead of
+            # falling back. A stale-but-same-length mirror (re-extracted
+            # text, same page count) is not caught by a count check; that
+            # narrower window is closed by the next full cache open, not
+            # here (see _sync_de_tables).
+            (page_text_count,) = conn.execute(
+                "SELECT COUNT(*) FROM page_text WHERE file_path = ?", (path,)
+            ).fetchone()
+            if len(rows) != page_text_count:
+                page_rows = conn.execute(
+                    "SELECT page_num, text FROM page_text WHERE file_path = ?",
+                    (path,),
+                ).fetchall()
+                rows = [(pn, _german_normalize(txt)) for pn, txt in page_rows]
+            conn.executemany(
+                "INSERT INTO temp.doc_fts (page_num, text) VALUES (?, ?)",
+                rows,
+            )
+        elif cjk:
             rows = conn.execute(
                 "SELECT page_num, text FROM page_text WHERE file_path = ?",
                 (path,),
@@ -2381,6 +2795,52 @@ class PDFCache:
                 )
             return out
 
+        if self.fts_language == "de":
+            escaped = _escape_fts5_query_de(query)
+            sql = (
+                "SELECT page_num, -bm25(doc_fts)"
+                " FROM doc_fts"
+                " WHERE doc_fts MATCH ?"
+                " ORDER BY bm25(doc_fts) LIMIT ?"
+            )
+            with self._connect() as conn:
+                try:
+                    self._build_temp_page_fts(conn, path, cjk=False, de=True)
+                    rows = conn.execute(sql, (escaped, max_results)).fetchall()
+                    if not rows and allow_or_fallback:
+                        # Mirror the default path's OR retry (an unmatched
+                        # multi-word query keeps one absent stem from
+                        # zeroing an otherwise precise query). Excluded
+                        # from the multi-document comparison path (which
+                        # passes allow_or_fallback=False), same reason as
+                        # the default path: relaxing every document
+                        # independently there would flood the comparison
+                        # with loose single-term hits.
+                        alt = _fts5_or_fallback_de(query)
+                        if alt is not None:
+                            rows = conn.execute(sql, (alt, max_results)).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+            out = []
+            for page_num, score in rows:
+                # _german_excerpt windows around the EARLIEST page token
+                # whose stem is in the query's stem set (an ANY match, not
+                # ALL), so an OR-recovered page -- one missing some query
+                # stems -- still produces a valid excerpt here.
+                excerpt = self._german_excerpt(
+                    path, int(page_num), query, context_chars
+                )
+                if excerpt is None:
+                    continue
+                out.append(
+                    {
+                        "page": int(page_num) + 1,
+                        "excerpt": excerpt,
+                        "score": float(score),
+                    }
+                )
+            return out
+
         escaped = _escape_fts5_query(query)
         # Map context_chars to FTS5 snippet token count (approximate)
         num_tokens = max(4, min(64, context_chars // 5))
@@ -2391,7 +2851,7 @@ class PDFCache:
                 sql = (
                     "SELECT page_num,"
                     " snippet(doc_fts, 1, '', '', '...', ?),"
-                    " -bm25(doc_fts)"
+                    " -bm25(doc_fts), text"
                     " FROM doc_fts"
                     " WHERE doc_fts MATCH ?"
                     " ORDER BY bm25(doc_fts)"
@@ -2412,10 +2872,10 @@ class PDFCache:
         return [
             {
                 "page": int(page_num) + 1,
-                "excerpt": excerpt or "",
+                "excerpt": _whole_token_snippet(excerpt or "", text or ""),
                 "score": float(score),
             }
-            for page_num, excerpt, score in rows
+            for page_num, excerpt, score, text in rows
         ]
 
     def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:
@@ -2455,6 +2915,41 @@ class PDFCache:
                 if count > 0:
                     counts[int(page_num)] = count
             return counts
+
+        if self.fts_language == "de":
+            escaped = _escape_fts5_query_de(query)
+            query_stems = set(_german_normalize(query).split())
+            if not query_stems:
+                return {}
+            with self._connect() as conn:
+                try:
+                    # Build the same connection-local, always-in-sync temp
+                    # index search_fts uses (falls back to stemming from
+                    # page_text when the shared mirror is missing or partial
+                    # for this path -- see _build_temp_page_fts) instead of
+                    # querying pdf_search_fts_de directly, so this always
+                    # agrees with what search_fts actually matched.
+                    self._build_temp_page_fts(conn, path, cjk=False, de=True)
+                    sql = "SELECT page_num, text FROM doc_fts WHERE doc_fts MATCH ?"
+                    rows = conn.execute(sql, (escaped,)).fetchall()
+                    if not rows:
+                        # Mirror search_fts's OR retry so the "pages in
+                        # matches also appear here" invariant keeps holding.
+                        alt = _fts5_or_fallback_de(query)
+                        if alt is not None:
+                            rows = conn.execute(sql, (alt,)).fetchall()
+                except sqlite3.OperationalError:
+                    return {}
+            # Count against the temp index's text, which is already the
+            # `_german_normalize` stem stream. Re-stemming each matched
+            # page's raw text instead cost 4-5 s per query on a 490-page
+            # document once the OR fallback matched nearly every page.
+            de_counts: dict[int, int] = {}
+            for page_num, stemmed_text in rows:
+                count = sum(1 for tok in stemmed_text.split() if tok in query_stems)
+                if count > 0:
+                    de_counts[int(page_num)] = count
+            return de_counts
 
         tokens_lower = [_FTS_TOKEN_STRIP.sub("", tok).lower() for tok in query.split()]
         tokens_lower = [t for t in tokens_lower if t]
@@ -2571,9 +3066,33 @@ class PDFCache:
                     " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     cjk_sections,
                 )
+            if self._de_tables_exist:
+                conn.execute(
+                    "DELETE FROM pdf_section_fts_de WHERE file_path = ?", (path,)
+                )
+                de_sections = [
+                    (
+                        path,
+                        i,
+                        _german_normalize(s.title or ""),
+                        _german_normalize(s.text or ""),
+                        s.start_page,
+                        s.end_page,
+                        s.title_source,
+                    )
+                    for i, s in enumerate(sections)
+                ]
+                if de_sections:
+                    conn.executemany(
+                        "INSERT INTO pdf_section_fts_de"
+                        " (file_path, section_id, title, text,"
+                        " start_page, end_page, title_source)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        de_sections,
+                    )
 
     def _build_temp_section_fts(
-        self, conn: sqlite3.Connection, path: str, cjk: bool
+        self, conn: sqlite3.Connection, path: str, cjk: bool, de: bool = False
     ) -> None:
         """Build a connection-local section FTS index over one document.
 
@@ -2581,9 +3100,15 @@ class PDFCache:
         #17). Rows are copied from the shared section table (already
         tokenized at index time) for this ``path`` only. Dropped when
         ``conn`` closes.
+
+        ``cjk`` and ``de`` are mutually exclusive (callers never set both).
         """
-        src = "pdf_section_fts_cjk" if cjk else "pdf_section_fts"
-        tokenizer = "unicode61" if cjk else "porter unicode61"
+        src = (
+            "pdf_section_fts_de"
+            if de
+            else "pdf_section_fts_cjk" if cjk else "pdf_section_fts"
+        )
+        tokenizer = "unicode61" if (cjk or de) else "porter unicode61"
         conn.execute("DROP TABLE IF EXISTS temp.doc_sec_fts")
         conn.execute(
             "CREATE VIRTUAL TABLE temp.doc_sec_fts USING fts5("
@@ -2639,6 +3164,46 @@ class PDFCache:
                     return []
                 # Restore original (unsplit) titles from the porter section
                 # table for clean display — unchanged from prior behavior.
+                orig = conn.execute(
+                    "SELECT section_id, title FROM pdf_section_fts"
+                    " WHERE file_path = ?",
+                    (path,),
+                ).fetchall()
+                title_by_id = {int(s): t for s, t in orig}
+            return [
+                {
+                    "section_id": int(sid),
+                    "title": title_by_id.get(int(sid), title),
+                    "start_page": int(sp),
+                    "end_page": int(ep),
+                    "title_source": title_source,
+                    "score": float(score),
+                }
+                for sid, title, sp, ep, title_source, score in rows
+            ]
+        if self.fts_language == "de":
+            escaped = _escape_fts5_query_de(query)
+            sql = (
+                "SELECT section_id, title, start_page, end_page,"
+                " title_source, -bm25(doc_sec_fts)"
+                " FROM doc_sec_fts"
+                " WHERE doc_sec_fts MATCH ?"
+                " ORDER BY bm25(doc_sec_fts)"
+                " LIMIT ?"
+            )
+            with self._connect() as conn:
+                try:
+                    self._build_temp_section_fts(conn, path, cjk=False, de=True)
+                    rows = conn.execute(sql, (escaped, max_results)).fetchall()
+                    if not rows:
+                        # Mirror the default section path's OR retry.
+                        alt = _fts5_or_fallback_de(query)
+                        if alt is not None:
+                            rows = conn.execute(sql, (alt, max_results)).fetchall()
+                except sqlite3.OperationalError:
+                    return []
+                # Restore original (unstemmed) titles from the porter
+                # section table for clean display, same as the CJK path.
                 orig = conn.execute(
                     "SELECT section_id, title FROM pdf_section_fts"
                     " WHERE file_path = ?",

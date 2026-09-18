@@ -69,6 +69,7 @@ from benchmark_bedrock_kb import (  # noqa: E402
     warm_corpus,
 )
 from benchmark_corpus_modes import build_ranked, grade_query  # noqa: E402
+from bench_env import environment, markdown_line, timing_mismatch  # noqa: E402
 from benchmark_excerpt_quality import (  # noqa: E402
     _assert_answer_on_page,
     _assert_sha256,
@@ -242,6 +243,7 @@ def run_all(
     run: dict = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "git_head": _git_head(),
+        "environment": environment(),
         "config": {
             "mode": "semantic",
             "styles": list(STYLES),
@@ -375,8 +377,65 @@ def evaluate_ratchet(baseline: dict, current: dict) -> dict:
                     f" [{inv['lo']:+.3f}, {inv['hi']:+.3f}]; retrieval changed,"
                     " so the excerpt deltas above are confounded"
                 )
+    verdict["timing"] = compare_timing(baseline, current)
     verdict["pass"] = not verdict["regressions"] and not verdict["id_mismatch"]
     return verdict
+
+
+def compare_timing(baseline: dict, current: dict) -> dict:
+    """s/query against the baseline, only when both runs recorded the same
+    environment (`bench_env.timing_mismatch`). Report-only: timing never
+    fails the gate. Two venvs on different interpreters once made identical
+    code read ~37% slower (2026-09-12), so a mismatch returns its reasons
+    and no rows, rather than a delta nobody should quote."""
+    reasons = timing_mismatch(baseline.get("environment"), current.get("environment"))
+    if reasons:
+        return {"comparable": False, "reasons": reasons, "rows": []}
+    rows = []
+    for arm in ARMS:
+        if arm not in current["arms"] or arm not in baseline["arms"]:
+            continue
+        b_spq = baseline["arms"][arm].get("seconds_per_query") or {}
+        c_spq = current["arms"][arm].get("seconds_per_query") or {}
+        for style in STYLES:
+            if b_spq.get(style) is not None and c_spq.get(style) is not None:
+                rows.append(
+                    {
+                        "arm": arm,
+                        "style": style,
+                        "baseline": b_spq[style],
+                        "current": c_spq[style],
+                    }
+                )
+    return {"comparable": True, "reasons": [], "rows": rows}
+
+
+def _render_timing(timing: dict) -> list[str]:
+    lines = ["## Timing vs baseline", ""]
+    if not timing["comparable"]:
+        lines.append(
+            "Timings are not comparable with the baseline, so no delta is"
+            " shown. Re-run both in one environment before quoting one:"
+        )
+        lines += [f"- {r}" for r in timing["reasons"]]
+        lines.append("")
+        return lines
+    lines.append("Same environment as the baseline. Report-only, never gated.")
+    lines.append("")
+    lines.append("| arm | style | baseline s/query | current s/query | change |")
+    lines.append("|---|---|---|---|---|")
+    for r in timing["rows"]:
+        change = (
+            f"{(r['current'] - r['baseline']) / r['baseline']:+.0%}"
+            if r["baseline"]
+            else "n/a"
+        )
+        lines.append(
+            f"| {r['arm']} | {r['style']} | {r['baseline']:.2f} |"
+            f" {r['current']:.2f} | {change} |"
+        )
+    lines.append("")
+    return lines
 
 
 def _fmt_ci(cell: dict) -> str:
@@ -397,6 +456,8 @@ def render_markdown(run: dict, summary: dict, verdict: dict | None) -> str:
         f" (max_results={run['config']['single_max_results']}).",
         "",
     ]
+    if run.get("environment"):
+        lines += [markdown_line(run["environment"]), ""]
     if run["config"].get("limit"):
         lines += [f"**Pilot run: first {run['config']['limit']} queries only.**", ""]
     for arm, s in summary.items():
@@ -455,6 +516,8 @@ def render_markdown(run: dict, summary: dict, verdict: dict | None) -> str:
                 lines.append(f"**{label}:**")
                 lines += [f"- {i}" for i in items]
                 lines.append("")
+        if verdict.get("timing") is not None:
+            lines += _render_timing(verdict["timing"])
     return "\n".join(lines).rstrip() + "\n"
 
 

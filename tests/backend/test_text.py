@@ -448,3 +448,36 @@ def test_faux_bold_duplicates_are_still_deduped():
     chars = _collect_chars(page, tp)
     keys = [(c.ch, round(c.x0, 1), round(c.y0, 1)) for c in chars if c.ch.strip()]
     assert len(keys) == len(set(keys)), "faux-bold duplicates leaked"
+
+
+def test_page_text_never_depends_on_object_identity(tmp_path, monkeypatch):
+    """A page's text must come from that page, whatever address its line
+    model happens to occupy.
+
+    Grouped blocks used to be memoized under id(lines). CPython reuses a
+    freed object's address, so once the line cache evicted a page, a
+    different page (or document) whose line list landed at the same
+    address was served the dead page's blocks: another page's text,
+    written on into page_text, FTS and embeddings. It surfaced as a
+    single-document pdf_search returning a corpus fixture's page on CI
+    (1 run in 21). Waiting for the allocator to collide is flaky, so the
+    test makes the collision certain by shadowing id() in the module.
+    """
+    from pdf_mcp.backend import text as text_module
+
+    pdf = tmp_path / "two_pages.pdf"
+    doc = pymupdf.open()
+    for marker in ("FIRSTPAGE", "SECONDPAGE"):
+        page = doc.new_page()
+        page.insert_text((50, 50), f"{marker} heading line.")
+        page.insert_text((50, 300), f"{marker} body block.")
+    doc.save(str(pdf))
+    doc.close()
+
+    monkeypatch.setattr(text_module, "id", lambda _obj: 0, raising=False)
+
+    first = get_text(str(pdf), 0, "text")
+    second = get_text(str(pdf), 1, "text")
+
+    assert "FIRSTPAGE" in first
+    assert "SECONDPAGE" in second and "FIRSTPAGE" not in second

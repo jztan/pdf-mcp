@@ -30,6 +30,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from bench_env import environment, markdown_line  # noqa: E402
+
 from pdf_mcp.cache import (  # noqa: E402
     _cjk_split,
     _contains_cjk,
@@ -390,6 +392,7 @@ def run_benchmark(force: bool = False) -> int:
         "class_ndcg_rrf_fusion": class_ndcg_b,
         "dochit3_temp_fts": class_mean("dochit3", "a"),
         "dochit3_rrf_fusion": class_mean("dochit3", "b"),
+        "environment": environment(),
         "arm_a_mean_query_seconds": round(arm_a_mean_s, 4),
         "arm_b_index_build_seconds": round(arm_b_build_s, 3),
         "decision": decision,
@@ -408,6 +411,8 @@ def _write_results_md(results: dict, force: bool = False) -> None:
     d = results["decision"]
     lines = [
         "# Cross-Doc Keyword Ranking Spike: Results",
+        "",
+        markdown_line(results["environment"]) if "environment" in results else "",
         "",
         f"Corpus: {results['corpus_docs']} docs,"
         f" {results['corpus_pages']} pages"

@@ -511,9 +511,13 @@ def main() -> None:
             build_text_pdf(text_pdf, args.pages)
             page_nums = list(range(args.pages))
 
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from bench_env import environment, markdown_line
+
         header = [
             "# Parallel page processing benchmark",
             "",
+            f"- {markdown_line(environment())}",
             f"- CPUs: {os.cpu_count()}",
             f"- PyMuPDF: {pymupdf.version[0]}",
             f"- Process start method: {multiprocessing.get_start_method()} "

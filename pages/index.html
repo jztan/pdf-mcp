@@ -219,6 +219,9 @@
   }
   @media (prefers-color-scheme: dark) { .btn-ghost-pill { background: rgba(255, 255, 255, 0.06); } }
   .btn-ghost-pill:hover { background: var(--bg-elev); }
+  p.hero-alt { margin: 16px 0 0; font-size: 14px; color: var(--text-secondary); }
+  p.hero-alt a, .step p a, .qa p a { color: var(--accent); font-weight: 500; text-decoration: none; }
+  p.hero-alt a:hover, .step p a:hover, .qa p a:hover { text-decoration: underline; }
 
   /* Page field: 216 pages, a scan sweeps them, the found pages land. */
   .hero-field { width: 100%; max-width: 620px; margin: 56px auto 0; display: flex; flex-direction: column; gap: 18px; }
@@ -708,7 +711,7 @@
     <p class="hero-sub"><code>pdf-mcp</code> gives AI agents agentic RAG over your PDFs, one file or a whole folder: search across every document, then read only the pages that matter. 13 tools, one MCP server.</p>
     <div class="hero-ctas">
       <div class="install-pill">
-        <span class="dollar">$</span><span class="install-cmd-text" id="installCmd">pip install pdf-mcp</span>
+        <span class="dollar">$</span><span class="install-cmd-text" id="installCmd">uv tool install pdf-mcp</span>
         <button id="installCopyBtn" data-copy-install aria-label="Copy install command" title="Copy">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
@@ -718,6 +721,7 @@
         <span id="heroGithubLabel">Star on GitHub</span>
       </a>
     </div>
+    <p class="hero-alt">Using Claude Desktop? <a href="https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb">Download the one-click extension</a>: nothing else to install, OCR included.</p>
 
     <div class="hero-field">
       <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
@@ -1095,8 +1099,8 @@ estimated_tokens: 925</pre>
       <div class="step">
         <span class="step-n">01</span>
         <h3 class="step-label">Install from PyPI.</h3>
-        <div class="codebox" data-copy-install role="button" tabindex="0"><pre>pip install pdf-mcp</pre><small>copy</small></div>
-        <p>Python 3.10+. Add <code>pdf-mcp[ocr]</code> for scanned pages (needs Tesseract). Column-aware reading order is built in.</p>
+        <div class="codebox" data-copy-install role="button" tabindex="0"><pre>uv tool install pdf-mcp</pre><small>copy</small></div>
+        <p>Python 3.10+. Or <code>pipx install pdf-mcp</code>. Scanned pages also need Tesseract. On Claude Desktop, skip steps 01 and 02: <a href="https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb">download pdf-mcp.mcpb</a> and drag it onto Settings &gt; Extensions.</p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
@@ -1134,7 +1138,7 @@ estimated_tokens: 925</pre>
     </details>
     <details class="qa">
       <summary>What about scanned PDFs and non-English documents?</summary>
-      <p><code>pdf_info</code> reports which pages have no text layer. With the <code>[ocr]</code> extra and Tesseract installed, <code>pdf_read_pages</code> OCRs those pages in the language you specify. Search works in any language; Japanese, Chinese, and Korean use a dedicated character-level index.</p>
+      <p><code>pdf_info</code> reports which pages have no text layer, and <code>pdf_read_pages</code> OCRs those pages with Tesseract in the language you specify. The Claude Desktop extension downloads an English Tesseract on the first scanned page; with a terminal install, install Tesseract yourself. Search works in any language; Japanese, Chinese, and Korean use a dedicated character-level index.</p>
     </details>
     <details class="qa">
       <summary>Is semantic search a separate service?</summary>
@@ -1161,7 +1165,7 @@ estimated_tokens: 925</pre>
       </div>
     </div>
     <div class="closing-code">
-      <div class="cmd" data-copy-install role="button" tabindex="0"><div><span>$ </span>pip install pdf-mcp</div><small>copy</small></div>
+      <div class="cmd" data-copy-install role="button" tabindex="0"><div><span>$ </span>uv tool install pdf-mcp</div><small>copy</small></div>
       <pre>claude mcp add pdf-mcp -- pdf-mcp</pre>
     </div>
   </div>
@@ -1188,7 +1192,7 @@ estimated_tokens: 925</pre>
   </p>
   <h2>Install</h2>
   <p>
-    pdf-mcp is MIT-licensed and published on PyPI. Install with <code>pip install pdf-mcp</code>, then add it to your MCP client's config. Full instructions for Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro, and generic MCP clients are in the <a href="https://github.com/jztan/pdf-mcp#readme">README</a>. The source code is on <a href="https://github.com/jztan/pdf-mcp">GitHub</a>, and the Python package is on <a href="https://pypi.org/project/pdf-mcp/">PyPI</a>. For a detailed write-up of the design decisions, see the <a href="https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=seo-body">blog post on how it was built</a>.
+    pdf-mcp is MIT-licensed and published on PyPI. Install with <code>uv tool install pdf-mcp</code> (or <code>pipx install pdf-mcp</code>), then add it to your MCP client's config; on Claude Desktop, the <a href="https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb">one-click extension</a> needs nothing installed first. Full instructions for Claude Desktop, Claude Code, Cursor, VS Code, Codex, Kiro, and generic MCP clients are in the <a href="https://github.com/jztan/pdf-mcp#readme">README</a>. The source code is on <a href="https://github.com/jztan/pdf-mcp">GitHub</a>, and the Python package is on <a href="https://pypi.org/project/pdf-mcp/">PyPI</a>. For a detailed write-up of the design decisions, see the <a href="https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=pdf-mcp-demo&utm_medium=referral&utm_campaign=demo-launch&utm_content=seo-body">blog post on how it was built</a>.
   </p>
   </div>
 </details>
@@ -1205,7 +1209,7 @@ estimated_tokens: 925</pre>
   (function () {
     const CLIENTS = {
       "claude-code": { code: "claude mcp add pdf-mcp -- pdf-mcp", note: "Or add the same server block to <code>~/.claude.json</code> by hand." },
-      "claude-desktop": { code: "{\n  \"mcpServers\": {\n    \"pdf-mcp\": { \"command\": \"pdf-mcp\" }\n  }\n}", note: "In <code>claude_desktop_config.json</code>, then restart Claude Desktop." },
+      "claude-desktop": { code: "{\n  \"mcpServers\": {\n    \"pdf-mcp\": { \"command\": \"pdf-mcp\" }\n  }\n}", note: "Easier: <a href=\"https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb\">download pdf-mcp.mcpb</a> and drag it onto Settings &gt; Extensions, with no step 01. Or add this block to <code>claude_desktop_config.json</code> and restart Claude Desktop." },
       "vscode": { code: "code --add-mcp '{\"name\":\"pdf-mcp\",\"command\":\"pdf-mcp\"}'", note: "VS Code 1.101+ with GitHub Copilot. Or add a <code>servers</code> block to <code>.vscode/mcp.json</code>." },
       "codex": { code: "codex mcp add pdf-mcp -- pdf-mcp", note: "Or in <code>~/.codex/config.toml</code>: <code>[mcp_servers.pdf-mcp] command = \"pdf-mcp\"</code>." },
       "other": { code: "{\n  \"mcpServers\": {\n    \"pdf-mcp\": { \"command\": \"pdf-mcp\" }\n  }\n}", note: "The standard <code>mcpServers</code> block works for most clients; Kiro reads it from <code>.kiro/settings/mcp.json</code>." }
@@ -2029,7 +2033,7 @@ estimated_tokens: 925</pre>
     catch (err) {
       hideLoader();
       uploadSection.classList.remove("hidden");
-      if (err.name === "PasswordException") showToast("Password-protected — pdf-mcp supports these server-side");
+      if (err.name === "PasswordException") showToast("Password-protected PDFs are not supported. Remove the password and try again.");
       else showToast("Couldn't parse this PDF");
       return;
     }

@@ -40,39 +40,60 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 
 ## Installation
 
+### Claude Desktop: nothing to install first
+
+1. **[Download pdf-mcp.mcpb](https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb)**.
+2. In Claude Desktop, open **Settings > Extensions**, drag the file onto
+   that page, and click **Install**.
+3. Ask Claude about a PDF by its location, for example "Use pdf-mcp to
+   summarize C:\Users\me\Downloads\report.pdf", or about a whole folder.
+
+The first start downloads pdf-mcp's components (about 250 MB) and can take a
+few minutes; later starts take seconds. OCR for scanned pages is included:
+the first scanned page downloads an English-only Tesseract (about 14 MB).
+Needs Windows 10 or later, or macOS 13 or later (14 on Apple Silicon), and
+works in Claude Desktop's Chat. Updating, uninstalling and other details are
+in [docs/clients.md](docs/clients.md).
+
+### Claude Code and other MCP clients
+
+Needs Python 3.10 or later. Install the `pdf-mcp` command with
+[uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
+
 ```bash
-pip install pdf-mcp
+uv tool install pdf-mcp     # or: pipx install pdf-mcp
 ```
 
-That is the whole install: hybrid search, corpus tools, multi-column and
-CJK reading order all work out of the box.
+`pip install pdf-mcp` works inside a virtual environment; Homebrew's Python
+and recent Debian and Ubuntu refuse a system-wide pip install.
 
-OCR on scanned PDFs additionally needs system Tesseract:
-
-```bash
-brew install tesseract        # macOS
-apt install tesseract-ocr     # Ubuntu/Debian
-winget install Tesseract-OCR  # Windows
-```
-
-GPU embedding is optional and off by default. On an NVIDIA card it makes the
-embedding pass one to two orders of magnitude faster; set `PDF_MCP_CUDA=1`
-after installing the CUDA build of onnxruntime. Setup per CUDA series is in
-[docs/configuration.md](docs/configuration.md#gpu-embedding-nvidia-cuda).
-
-## Quick Start
+Then add it to your client. For Claude Code:
 
 ```bash
 claude mcp add pdf-mcp -- pdf-mcp
 ```
 
-Then ask Claude to read a PDF. For Claude Desktop, VS Code, Codex CLI,
-Kiro, or any other MCP client, see **[docs/clients.md](docs/clients.md)**.
+For VS Code, Cursor, Codex CLI, Kiro or any other MCP client, see
+**[docs/clients.md](docs/clients.md)**. Then ask your agent to read a PDF.
 
-pdf-mcp's tools are also plain Python functions, so you can import them
-and hand a PDF to the Anthropic SDK without running a server. Two
-runnable scripts, for a question and for a whole document:
-**[examples/](examples/)**.
+Search, the corpus tools, tables and multi-column and CJK reading order work
+out of the box. OCR on scanned pages also needs Tesseract:
+
+```bash
+brew install tesseract                             # macOS
+sudo apt install tesseract-ocr                     # Ubuntu/Debian
+winget install -e --id UB-Mannheim.TesseractOCR    # Windows
+```
+
+Optional: CUDA embedding on an NVIDIA card warms large folders one to two
+orders of magnitude faster; see
+[docs/configuration.md](docs/configuration.md#gpu-embedding-nvidia-cuda).
+
+### From Python
+
+pdf-mcp's tools are also plain Python functions, so you can import them and
+hand a PDF to the Anthropic SDK without running a server. Two runnable
+scripts, for a question and for a whole document: **[examples/](examples/)**.
 
 Why this exists, and what broke along the way: [Claude's 100-page PDF limit and how I got around it](https://blog.jztan.com/how-i-built-pdf-mcp-solving-claude-large-pdf-limitations/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=quickstart-how-i-built-pdf-mcp-solving-claude-large-pdf-limitations)
 
@@ -190,7 +211,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">
@@ -229,6 +250,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 - [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-knowledge-base): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
 - [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 84.8% of 184 graded queries over a 100-PDF corpus
+- [How Amazon Bedrock Helped Me Make My RAG Better](https://blog.jztan.com/how-bedrock-improved-my-rag/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-bedrock-improved-my-rag): Benchmarking pdf_corpus_search against Bedrock Knowledge Bases at an equal 2,000-token budget for four cents surfaced two bugs eight months of self-testing missed: an excerpt picker discarding answers from pages it had already retrieved, and one embedding per page hiding short answers
 
 **Search & retrieval**
 

@@ -183,7 +183,8 @@ EXPECTED_CHART_KEYS = {
 }  # optional, status-dependent keys (y_axis_right, decline_reason) excluded.
 # verification_card/verification are present on every EMITTING chart (the
 # coupling probe uses an ok chart); declined charts omit them.
-EXPECTED_SCHEMA_VERSION = 18  # BUMP THIS whenever the set above changes
+# 19 changed no keys: it purged page_charts rows built from wrong-page text.
+EXPECTED_SCHEMA_VERSION = 19  # BUMP THIS whenever the set above changes
 
 
 def test_response_schema_coupled_to_version():

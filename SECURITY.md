@@ -41,7 +41,7 @@ The following remain **unsupported** configurations: multi-tenant deployments, o
 
 pdf-mcp routinely processes attacker-controllable input — PDF byte streams (local or fetched via URL), PDF metadata, OCR output, and embedded section text. Even in single-user deployments, the attacker controls the PDF content the user opens, so the following are **in scope** for security reports:
 
-- **SSRF via URL fetch.** A prompt-injected PDF can instruct the agent to fetch attacker-chosen URLs (`http://169.254.169.254/...`, DNS-rebinding hosts, IPv6 link-local, etc.). In scope: local-network access (RFC 1918, link-local, loopback, IPv6 ULA, AWS IMDS), DNS rebinding (TOCTOU between resolution and connect), content smuggling via `Content-Type` misrepresentation.
+- **SSRF via URL fetch.** A prompt-injected PDF can instruct the agent to fetch attacker-chosen URLs (`http://169.254.169.254/...`, DNS-rebinding hosts, IPv6 link-local, etc.). In scope: local-network access (RFC 1918, CGNAT, link-local, loopback, IPv6 ULA, AWS IMDS), DNS rebinding (TOCTOU between resolution and connect), content smuggling via `Content-Type` misrepresentation.
 - **Prompt injection via PDF-derived content.** Extracted text, OCR output, metadata fields, table contents, and section titles are all attacker-controllable. Each content-returning MCP tool's `description` restates the untrusted-content contract for the consuming LLM, but final responsibility for honoring it lies with the agent runtime.
 - **Resource exhaustion.** Multi-thousand-page documents, pathologically large titles, or oversized URL responses that bypass the configured caps.
 - **Path traversal or symlink escape** through path-resolution logic.

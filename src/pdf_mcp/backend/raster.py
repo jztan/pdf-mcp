@@ -318,6 +318,14 @@ def ocr_page_text(
     import os
     import pytesseract
 
+    from ..extractor import find_tesseract
+
+    exe = find_tesseract()
+    if exe is not None:
+        # pytesseract defaults to the bare name, which a GUI-launched server
+        # cannot resolve when Tesseract is installed outside PATH.
+        pytesseract.pytesseract.tesseract_cmd = exe
+
     # Grayscale here too: the fallback is the only OCR path on platforms
     # without tesserocr wheels (pip on Windows foremost), and feeding RGB
     # costs Tesseract ~0.12s/page in internal conversion either way.
@@ -334,6 +342,12 @@ def ocr_page_text(
     # TESSDATA_PREFIX carries it intact, and is what Tesseract's own error
     # message recommends. Only used for the spaced case, so the flag path
     # that already works everywhere else is left alone.
+    if tessdata is None:
+        # Same fallback as the tesserocr path: a portable macOS/Linux
+        # Tesseract has no compiled-in tessdata path and would look in "./".
+        from ..extractor import _resolve_tessdata
+
+        tessdata = _resolve_tessdata()
     config = ""
     restore: tuple[bool, str | None] = (False, None)
     if tessdata:

@@ -64,7 +64,27 @@ _SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 #: PyMuPDF absorbed at ~3ms/page and this pipeline could not; per-query
 #: latency ran 3x the baseline before this existed.
 _LINE_CACHE_MAX = 256
-_LINE_CACHE: "OrderedDict[tuple[str, int, int, int], list[Any]]" = OrderedDict()
+
+
+class _PageLines:
+    """A page's line model plus its grouped blocks, cached as ONE entry.
+
+    The blocks used to live in a separate dict keyed on id(lines). An
+    evicted line list freed its address while its blocks stayed behind,
+    and CPython hands freed addresses to new objects, so a later page
+    whose line list landed there was served the dead page's blocks, i.e.
+    another page's (or document's) text. Holding both in the LRU entry
+    means they are evicted together and nothing is keyed on an address.
+    """
+
+    __slots__ = ("lines", "blocks")
+
+    def __init__(self, lines: list[Any]) -> None:
+        self.lines = lines
+        self.blocks: list[list[Any]] | None = None
+
+
+_LINE_CACHE: "OrderedDict[tuple[str, int, int, int], _PageLines]" = OrderedDict()
 _LINE_CACHE_LOCK = threading.Lock()
 
 
@@ -76,23 +96,23 @@ def _file_key(pdf_path: str, page_num: int) -> tuple[str, int, int, int] | None:
     return (os.path.abspath(pdf_path), st.st_mtime_ns, st.st_size, page_num)
 
 
-def _cached_lines(pdf_path: str, page_num: int) -> "list[Any] | None":
+def _cached_lines(pdf_path: str, page_num: int) -> "_PageLines | None":
     key = _file_key(pdf_path, page_num)
     if key is None:
         return None
     with _LINE_CACHE_LOCK:
-        lines = _LINE_CACHE.get(key)
-        if lines is not None:
+        entry = _LINE_CACHE.get(key)
+        if entry is not None:
             _LINE_CACHE.move_to_end(key)
-        return lines
+        return entry
 
 
-def _store_lines(pdf_path: str, page_num: int, lines: "list[Any]") -> None:
+def _store_lines(pdf_path: str, page_num: int, entry: _PageLines) -> None:
     key = _file_key(pdf_path, page_num)
     if key is None:
         return
     with _LINE_CACHE_LOCK:
-        _LINE_CACHE[key] = lines
+        _LINE_CACHE[key] = entry
         _LINE_CACHE.move_to_end(key)
         while len(_LINE_CACHE) > _LINE_CACHE_MAX:
             _LINE_CACHE.popitem(last=False)
@@ -1198,16 +1218,15 @@ def get_text(
 
     cached = _cached_lines(pdf_path, page_num)
     if cached is not None:
-        lines = cached
-        return _shape_from_lines(lines, kind, sort=sort, clip=clip)
+        return _shape_from_lines(cached, kind, sort=sort, clip=clip)
 
     doc = pdfium.PdfDocument(pdf_path)
     try:
         page = doc[page_num]
         textpage = page.get_textpage()
-        lines = _lines(page, textpage)
-        _store_lines(pdf_path, page_num, lines)
-        return _shape_from_lines(lines, kind, sort=sort, clip=clip)
+        entry = _PageLines(_lines(page, textpage))
+        _store_lines(pdf_path, page_num, entry)
+        return _shape_from_lines(entry, kind, sort=sort, clip=clip)
     finally:
         close_pdfium(doc)
 
@@ -1250,33 +1269,24 @@ def open_text_page(pdf_path: str, page_num: int) -> TextPage:
     return TextPage(pdf_path, page_num, Rect(0.0, 0.0, width, height))
 
 
-#: Grouped blocks are cached alongside the lines for unclipped calls
-#: (the paragraph picker and bbox lookup always call unclipped, several
-#: times per hit page). A clip changes the line set and therefore the
-#: grouping, so clipped calls always group fresh.
-_BLOCK_CACHE: "dict[int, list[list[Any]]]" = {}
-
-
 def _shape_from_lines(
-    lines: list[Any],
+    entry: _PageLines,
     kind: str,
     *,
     sort: bool = False,
     clip: tuple[float, float, float, float] | None = None,
 ) -> Any:
+    # Unclipped groupings are cached on the page's own entry (the
+    # paragraph picker and bbox lookup call unclipped several times per
+    # hit page). A clip changes the line set and therefore the grouping,
+    # so clipped calls always group fresh.
     if clip is not None:
-        clipped_lines = [ln for ln in lines if _clipped(ln[0], clip)]
+        clipped_lines = [ln for ln in entry.lines if _clipped(ln[0], clip)]
         blocks = _group_into_blocks(clipped_lines)
     else:
-        cache_key = id(lines)
-        cached_blocks = _BLOCK_CACHE.get(cache_key)
-        if cached_blocks is None:
-            cached_blocks = _group_into_blocks(lines)
-            with _LINE_CACHE_LOCK:
-                if len(_BLOCK_CACHE) > _LINE_CACHE_MAX:
-                    _BLOCK_CACHE.clear()
-                _BLOCK_CACHE[cache_key] = cached_blocks
-        blocks = cached_blocks
+        if entry.blocks is None:
+            entry.blocks = _group_into_blocks(entry.lines)
+        blocks = entry.blocks
 
     if kind == "text":
         return "\n\n".join("\n".join(ln[1] for ln in block) for block in blocks)

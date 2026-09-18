@@ -92,10 +92,14 @@ def _timed(fn):
 
 
 def main() -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from bench_env import environment
+
     results: dict[str, object] = {
         "platform": platform.platform(),
         "python": platform.python_version(),
         "cpus": os.cpu_count(),
+        "environment": environment(),
     }
     workdir = Path(tempfile.mkdtemp(prefix="pdfmcp-bench-"))
     os.environ["PDF_MCP_CACHE_DIR"] = str(workdir / "cache")

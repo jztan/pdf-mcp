@@ -6,13 +6,13 @@
     "url": "https://github.com/jztan/pdf-mcp",
     "source": "github"
   },
-  "version": "3.2.0",
+  "version": "3.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pdf-mcp",
-      "version": "3.2.0",
+      "version": "3.3.0",
       "transport": {
         "type": "stdio"
       },
@@ -28,6 +28,14 @@
           "name": "PDF_MCP_CACHE_TTL"
         }
       ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jztan/pdf-mcp/releases/download/v3.3.0/pdf-mcp-3.3.0.mcpb",
+      "fileSha256": "016c9e4ff3ebe84faced1117cf9c62be2df84c48375ae1071de20b0df49e8e0f",
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }

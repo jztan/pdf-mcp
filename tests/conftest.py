@@ -1,8 +1,11 @@
 # tests/conftest.py
 """Shared test fixtures for pdf-mcp tests."""
 
+import atexit
 import base64
 import io
+import os
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -11,10 +14,22 @@ import pymupdf
 import pytest
 from PIL import Image, ImageDraw
 
-from pdf_mcp.cache import PDFCache
-from pdf_mcp.url_fetcher import URLFetcher
-import pdf_mcp.server as server_module
-from tests.tmpfiles import unlink_quietly
+# Must run before anything imports pdf_mcp.server: the server builds its
+# module-level cache at import, from PDF_MCP_CACHE_DIR or else the user's
+# real ~/.cache/pdf-mcp. Without this, every test run opened the real
+# cache, and a branch that bumped _EXTRACTION_VERSION ran its upgrade on
+# it (dropping the developer's cached text and embeddings). Set
+# unconditionally: no test may touch a cache it did not create. Each
+# xdist worker imports this file and gets its own directory; subprocesses
+# the tests start inherit it. Guarded by test_session_cache_isolation.py.
+_SESSION_CACHE_DIR = tempfile.mkdtemp(prefix="pdf-mcp-test-cache-")
+os.environ["PDF_MCP_CACHE_DIR"] = _SESSION_CACHE_DIR
+atexit.register(shutil.rmtree, _SESSION_CACHE_DIR, ignore_errors=True)
+
+from pdf_mcp.cache import PDFCache  # noqa: E402
+from pdf_mcp.url_fetcher import URLFetcher  # noqa: E402
+import pdf_mcp.server as server_module  # noqa: E402
+from tests.tmpfiles import unlink_quietly  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -629,3 +644,42 @@ def sample_pdf_synthetic_scan(isolated_server):
         path = str(Path(f.name).resolve())
         yield path
         unlink_quietly(path)
+
+
+def _make_statement_pdf(path: Path, **save_kwargs) -> None:
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "late fee statement balance due")
+    doc.save(str(path), **save_kwargs)
+    doc.close()
+
+
+@pytest.fixture
+def plain_statement_pdf(tmp_path):
+    """Unencrypted one-page PDF with the same text as the locked fixtures."""
+    path = tmp_path / "plain.pdf"
+    _make_statement_pdf(path)
+    return path
+
+
+@pytest.fixture
+def locked_pdf(tmp_path):
+    """AES-256 PDF that needs a user (open) password."""
+    path = tmp_path / "statement.pdf"
+    _make_statement_pdf(
+        path, encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="u", owner_pw="o"
+    )
+    return path
+
+
+@pytest.fixture
+def owner_only_pdf(tmp_path):
+    """Owner-password-only PDF: restricted permissions, opens without one."""
+    path = tmp_path / "restricted.pdf"
+    _make_statement_pdf(
+        path,
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="o",
+        permissions=pymupdf.PDF_PERM_PRINT,
+    )
+    return path

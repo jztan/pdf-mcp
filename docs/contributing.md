@@ -63,6 +63,8 @@ uv run pytest tests/test_benchmark_rrf_v2.py \
 
 The coherence guard is the one to leave alone unless you mean to spend money on it.
 
+**Prose-only pushes do not run the matrix.** `ci.yml` ignores pushes that touch only documentation (README, CHANGELOG, SECURITY, `docs/`, `pages/`, the issue and PR templates, and the markdown under `benchmark_data/`). Those pushes run `docs.yml` instead: one Linux job that runs the docs-vs-code consistency tests, the README contributors check, and the demo fusion parity script, since those read the docs. A push that mixes code and docs runs everything. The two path lists must match, and `tests/test_ci_workflows.py` fails if they drift.
+
 ### Cross-platform notes
 
 CI runs the suite on Windows as well as Linux, and it is not a formality: it has caught bugs no Linux job could see, including OCR failing outright on a default Windows Tesseract install (the install path contains a space) and cold `pdf_search` taking 17.5s there against 3.2s on Linux. Two habits keep changes portable:
@@ -74,15 +76,29 @@ CI runs the suite on Windows as well as Linux, and it is not a formality: it has
 
 ## Submitting a PR
 
-1. For a new feature or a change in behaviour, open an issue first (or comment on an existing one) describing the problem and the approach you have in mind. Agreeing on scope before the code exists saves both of us a round trip; several plausible ideas here have already been tried and closed with data (see [investigated-rejected.md](investigated-rejected.md)). Bug fixes, docs and small cleanups can go straight to a PR.
-2. Fork the repo and create a branch from `develop`
-3. Make your changes with tests covering the new behaviour
-4. Ensure all checks pass (`pytest`, `mypy`, `flake8`, `black --check`)
-5. Open a PR against `develop` with a clear description of what changed and why, linking the issue
+1. For a new feature or a change in behaviour, open an issue first describing the problem and the approach you have in mind, and wait for my reply on it before writing the code. Agreeing on scope first saves both of us a round trip, and several plausible ideas here have already been tried and closed with data (see [investigated-rejected.md](investigated-rejected.md)). Bug fixes, docs and small cleanups can go straight to a PR.
+2. Fork the repo and create a branch from `develop`.
+3. Make your changes with tests covering the new behaviour.
+4. Ensure all checks pass (`pytest`, `mypy`, `flake8`, `black --check`).
+5. Open a PR against `develop` using the PR template, linking the issue.
+
+### What I check in review
+
+These come from real review rounds, so meeting them up front is the fastest way to a merge:
+
+- **Mark stacked PRs.** If a PR builds on another open PR, say which one at the top of the description. I review it once the first one has merged, when its diff shows only its own changes.
+- **Keep the branch mergeable.** GitHub runs no CI on a PR that conflicts with `develop`, so merge `develop` in whenever it moves. CI on a fork PR also waits for my approval on each push, so a quiet PR is not a failed one.
+- **New dependencies update `uv.lock` in the same commit** (`uv lock`). CI installs with `uv sync --frozen`, so a dependency that is only in `pyproject.toml` is missing in CI.
+- **Benchmarks must be reproducible by me.** Commit the harness and run it on documents I can download. Numbers from a private document are welcome as context in the issue, but they can't be the basis for a merge. Include the cases most likely to break, not just the ones the change targets: numbers, multi-word queries, and the default English path.
+- **Measure latency when you touch the search path.** Report per-query time before and after on a realistic document (100+ pages). A quality gain that makes each query much slower needs discussing before it merges.
+- **Response shapes are agreed on the issue first.** New, renamed or nullable fields in a tool response change the contract every agent relies on, so settle them on the issue before writing the code.
+- **For now, PDF content stays on the user's machine.** pdf-mcp is local-first today, so at the moment I'm not taking features that send document text to a third-party service.
 
 ## Quality loop
 
 Features that change search or extraction quality must follow: **fix → benchmark → corpus expand → re-benchmark**. The initial small-sample benchmark overstates the gap; expanding the corpus narrows it to honest numbers and surfaces ground-truth errors. Don't skip steps.
+
+The gate for search and excerpt changes is the excerpt gate, `scripts/benchmark_excerpt_quality.py` (exit 0 pass, 1 regression, 2 setup error); run it before and after your change.
 
 ## Coherence eval harness
 

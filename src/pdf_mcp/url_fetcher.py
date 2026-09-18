@@ -94,6 +94,7 @@ _BLOCKED_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),  # RFC 1918
     ipaddress.ip_network("172.16.0.0/12"),  # RFC 1918
     ipaddress.ip_network("192.168.0.0/16"),  # RFC 1918
+    ipaddress.ip_network("100.64.0.0/10"),  # CGNAT / Tailscale overlay
     ipaddress.ip_network("169.254.0.0/16"),  # link-local / cloud metadata
     ipaddress.ip_network("0.0.0.0/8"),  # reserved
     ipaddress.ip_network("::1/128"),  # IPv6 loopback
@@ -131,7 +132,7 @@ def _pick_pinned_ip(hostname: str) -> tuple[str, socket.AddressFamily]:
         return ip_str, info[0]  # family is socket.AF_INET / AF_INET6
     raise ValueError(
         f"URL host resolves to a blocked IP on the SSRF deny list "
-        f"(loopback / RFC 1918 / link-local / IMDS / IPv6 ULA): {hostname}"
+        f"(loopback / RFC 1918 / CGNAT / link-local / IMDS / IPv6 ULA): {hostname}"
     )
 
 
@@ -209,7 +210,7 @@ class URLFetcher:
 
         Blocks:
         - Non-HTTPS schemes (http, ftp, file, data, etc.)
-        - IPs in blocked ranges: loopback, RFC 1918, link-local, reserved, IPv6
+        - IPs in blocked ranges: loopback, RFC 1918, CGNAT, link-local, reserved, IPv6
 
         Raises:
             ValueError: If URL targets a blocked address or uses a blocked scheme
@@ -229,7 +230,7 @@ class URLFetcher:
         if self._is_blocked_ip(hostname):
             raise ValueError(
                 f"URL host resolves to a blocked IP on the SSRF deny list "
-                f"(loopback / RFC 1918 / link-local / IMDS / IPv6 ULA): {url}"
+                f"(loopback / RFC 1918 / CGNAT / link-local / IMDS / IPv6 ULA): {url}"
             )
 
         if self._config is not None:

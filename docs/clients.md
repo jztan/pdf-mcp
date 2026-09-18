@@ -1,11 +1,18 @@
 # MCP client setup
 
-Configuration for each MCP client pdf-mcp is known to work with. Install
-the server first:
+Configuration for each MCP client pdf-mcp is known to work with. Claude
+Desktop can install everything itself (see its one-click install below).
+Every other client runs the `pdf-mcp` command, so install it first (Python
+3.10 or later):
 
 ```bash
-pip install pdf-mcp
+uv tool install pdf-mcp     # or: pipx install pdf-mcp
 ```
+
+`pip install pdf-mcp` works inside a virtual environment; Homebrew's Python
+and recent Debian and Ubuntu refuse a system-wide pip install. If a client
+cannot find the `pdf-mcp` command, use `uvx` instead (see Other MCP Clients
+below), which needs nothing installed but uv.
 
 <details open>
 <summary><strong>Claude Code</strong></summary>
@@ -31,7 +38,44 @@ Or add to `~/.claude.json`:
 <details>
 <summary><strong>Claude Desktop</strong></summary>
 
-Add to your `claude_desktop_config.json`:
+**One-click install (nothing to install first):**
+
+1. [Download pdf-mcp.mcpb](https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb)
+   (always the newest release).
+2. In Claude Desktop open **Settings > Extensions** and drag the file onto
+   that page (double-clicking the file also works on some computers). Click
+   **Install**.
+3. The first start downloads pdf-mcp's components (about 250 MB) and needs an
+   internet connection; it can take a few minutes. Claude sees the tools
+   right away and they start working once setup finishes. Later starts take
+   seconds.
+4. Use it in a **Chat**: give Claude the file's location, for example
+   "Use pdf-mcp to summarize C:\Users\me\Downloads\report.pdf", or a folder
+   of PDFs. A PDF attached to the chat is read by Claude directly and does
+   not go through pdf-mcp.
+
+Needs Windows 10 or later, macOS 13 or later on an Intel Mac, or macOS 14 or
+later on an Apple Silicon Mac (the oldest versions pdf-mcp's search engine,
+onnxruntime, is built for).
+
+Works in Claude Desktop's **Chat**. Cowork and Claude Code inside Claude
+Desktop start extensions differently and need Node.js installed on the
+computer; if you use those, install the `pdf-mcp` command as at the top of
+this page and configure it by hand below.
+
+**Updating:** download `pdf-mcp.mcpb` again and drag it onto Settings >
+Extensions the same way; it replaces the installed version in place. With
+"Check for updates" left on, Claude tells you when a new version is out.
+
+**Uninstalling:** remove pdf-mcp in Claude Desktop's extension settings, then
+delete the folder `.cache\pdf-mcp` in your user folder
+(`%USERPROFILE%\.cache\pdf-mcp` on Windows, `~/.cache/pdf-mcp` on macOS and
+Linux). It holds pdf-mcp's downloaded components and its PDF cache; Claude
+Desktop does not remove it.
+
+**Or configure it by hand** (needs the `pdf-mcp` command installed first,
+see the top of this page). Add to your
+`claude_desktop_config.json`:
 
 ```json
 {
@@ -164,3 +208,25 @@ pdf-mcp --help
 
 If the server starts and your client lists the pdf-mcp tools, you are set.
 See [tool-reference.md](tool-reference.md) for what each tool does.
+
+## OCR setup
+
+Scanned PDFs (pages that are photos, with no selectable text) need
+Tesseract. Everything else works without it.
+
+With the Claude Desktop bundle on Windows or a Mac there is nothing to do:
+the first scanned page you ask about downloads an English-only Tesseract
+(about 14 MB) into pdf-mcp's cache folder. If that first call says OCR is
+being set up, ask again a minute later. To read other languages, or with a
+pip or uvx install, install Tesseract yourself:
+
+- **Windows:** download the 64-bit installer from the
+  [UB Mannheim Tesseract page](https://github.com/UB-Mannheim/tesseract/wiki)
+  and run it with the default folder. Or, in a terminal:
+  `winget install -e --id UB-Mannheim.TesseractOCR`.
+- **macOS:** `brew install tesseract`.
+- **Linux:** `sudo apt install tesseract-ocr` (or your distribution's package).
+
+pdf-mcp finds Tesseract in its standard install folder even when it is not
+on `PATH`, so there is nothing to configure and no restart: ask Claude to
+read the scanned page again.

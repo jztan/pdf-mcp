@@ -1,19 +1,43 @@
 """
-Thin wrapper around fastembed for lazy model loading and text embedding.
+Thin wrapper around fastembed (local) and remote_embedder (an OpenAI-
+compatible HTTP endpoint serving bge-small-en-v1.5 remotely) for lazy model
+loading and text embedding.
 
 The embedding model is loaded once per process (singleton). If the configured
 model name changes mid-process, the singleton reloads automatically.
 fastembed is an optional dependency; calling encode() when it is not installed
 raises ImportError with an actionable install hint.
 
-Note: _get_model is not thread-safe. This is intentional — FastMCP uses
-asyncio with a single thread for STDIO transport, so concurrent access cannot
-occur in normal operation.
+Backend selection is by whether a RemoteSpec is currently registered
+(`configure_remote()`), NOT by `model_name` -- PDFConfig.embedding_model
+always returns the bare fastembed identity ("BAAI/bge-small-en-v1.5")
+regardless of backend, precisely so a verified remote endpoint shares the
+same vector-cache rows as local fastembed (see PDFConfig.embedding_model's
+docstring). `configure_remote()` registers the RemoteSpec (base_url,
+api_key, ...) the remote path needs -- call it once per process, right
+after resolving PDFConfig (and after the startup safety check decides
+whether the endpoint is trustworthy), before any
+encode()/encode_query()/check_available() call. server.py does this at its
+PDFConfig call site; every other call site (corpus.py, the `_embed`
+closures in server.py, tests that stub `model_name="fake-model"`) is
+unchanged by this backend's existence.
+
+Note: _get_model (and the module-level _remote_spec below) is not
+thread-safe. This is intentional — FastMCP uses asyncio with a single thread
+for STDIO transport, so concurrent access cannot occur in normal operation.
+
+check_available() never makes a network call when a remote backend is
+registered: it is called inside `except Exception: pass` in server.py's
+startup capability probe, so a network probe there would silently demote a
+temporarily-down endpoint to keyword-only search rather than fail at the
+point of actual use.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from .remote_embedder import RemoteSpec
 
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
@@ -21,14 +45,39 @@ DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 _model: Any = None
 _model_name_loaded: str | None = None
 
+# The RemoteSpec for the current process's "openai:" backend, if any. See
+# configure_remote() below.
+_remote_spec: "RemoteSpec | None" = None
+
+
+def configure_remote(spec: "RemoteSpec | None") -> None:
+    """Register the RemoteSpec that switches encode()/encode_query() to the
+    remote backend, or clear it (pass None) to switch back to fastembed.
+
+    Mirrors _model/_model_name_loaded in being process-global, single-
+    active-config state: there is one embedding configuration per process,
+    same as today's single fastembed singleton. This is the only thing that
+    turns the remote path on or off -- see the module docstring for why
+    `model_name` no longer carries that signal.
+    """
+    global _remote_spec
+    _remote_spec = spec
+
 
 def check_available(model_name: str) -> None:
     """
-    Raise ImportError (fastembed missing) or ValueError (unknown model name).
+    Raise ImportError (fastembed missing) or ValueError (unknown fastembed
+    model name).
 
     Call this before running semantic search to surface config errors
-    before any expensive PDF work begins.
+    before any expensive PDF work begins. When a remote backend is
+    registered (`configure_remote`), this is a no-op -- OFFLINE ONLY, see
+    the module docstring for why no network probe happens here; `model_name`
+    is only consulted for the fastembed backend, since it always names a
+    real fastembed model regardless of which backend is active.
     """
+    if _remote_spec is not None:
+        return
     try:
         from fastembed import TextEmbedding
     except ImportError as exc:
@@ -175,6 +224,24 @@ def _cuda_model(model_name: str, embedding_cls: Any) -> Any:
         )
         return None
     if "CUDAExecutionProvider" in _providers(candidate):
+        # get_providers() lists what registered, not what will run. A cuDNN or
+        # cuBLAS series mismatch, a missing libcudnn, or a card with no free
+        # memory all build a session that names CUDA and then raise on the
+        # first batch, which would land inside a user's search with no CPU
+        # fallback left. One short encode here surfaces it while falling back
+        # is still possible. embed() is lazy, so the list() is what runs it.
+        try:
+            list(candidate.embed(["cuda probe"]))
+        except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+            warnings.warn(
+                "PDF_MCP_CUDA is set and onnxruntime loaded the CUDA provider, "
+                f"but a test encode on it failed ({exc!r}); using CPU. Usually "
+                "the installed cuDNN or cuBLAS is the wrong series for this "
+                "onnxruntime-gpu build, or the GPU is out of memory.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return None
         return candidate
     # The likely causes, in the order they happen, because this is the only
     # place the environment's shape is visible. A resolver cannot check any of
@@ -251,30 +318,69 @@ def _embed_length_sorted(model: Any, texts: list[str], batch_size: int) -> list[
     return out
 
 
+def _l2_normalize(arr: Any) -> Any:
+    """Shared by both backends so the `v @ query_vec == cosine` invariant
+    server.py relies on holds regardless of which encoder produced `arr`.
+    fastembed 0.8 returns unnormalized vectors for some models (e.g.
+    multilingual-e5-large, norm ~28 after its CLS->mean pooling change), and
+    there is no reason to trust a remote server's output any more than
+    fastembed's."""
+    if arr.size == 0:
+        return arr
+    import numpy as np  # type: ignore[import-untyped]
+
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    return arr / np.clip(norms, 1e-12, None)
+
+
+def _encode_remote(texts: list[str]) -> Any:
+    import numpy as np  # type: ignore[import-untyped]
+
+    if not texts:
+        return np.empty((0,), dtype=np.float32)
+    if _remote_spec is None:
+        raise ValueError(
+            "_encode_remote() called with no remote backend registered -- "
+            "configure_remote() must be called after resolving PDFConfig "
+            "before this runs"
+        )
+    from . import remote_embedder
+
+    arr = remote_embedder.encode(texts, _remote_spec)
+    return _l2_normalize(arr)
+
+
 def encode(texts: list[str], model_name: str) -> Any:
     """
     Encode a list of texts into embedding vectors.
 
     Returns an ndarray of shape (N, D), dtype float32, L2-normalized so that
     a dot product equals cosine similarity. We normalize here rather than rely
-    on the model: fastembed 0.8 returns unnormalized vectors for some models
-    (e.g. multilingual-e5-large, norm ~28 after its CLS->mean pooling change),
-    which would otherwise break semantic scoring in server.py.
+    on the model/server: fastembed 0.8 returns unnormalized vectors for some
+    models (e.g. multilingual-e5-large, norm ~28 after its CLS->mean pooling
+    change), which would otherwise break semantic scoring in server.py.
+
+    `model_name` is the identity string from PDFConfig.embedding_model --
+    always the bare fastembed model name, even when the remote backend is
+    active (see the module docstring). Routing is instead by whether a
+    RemoteSpec is currently registered via configure_remote(): if so, this
+    delegates to remote_embedder using that spec and `model_name` is
+    ignored; otherwise it is a fastembed model name, exactly as before this
+    backend existed.
     """
     import numpy as np  # type: ignore[import-untyped]
 
     if not texts:
         return np.empty((0,), dtype=np.float32)
+    if _remote_spec is not None:
+        return _encode_remote(texts)
     model = _get_model(model_name)
     if _is_cuda(model):
         vecs = list(model.embed(texts))
     else:
         vecs = _embed_length_sorted(model, texts, CPU_BATCH_SIZE)
     arr = np.array(vecs, dtype=np.float32)
-    if arr.size == 0:
-        return arr
-    norms = np.linalg.norm(arr, axis=1, keepdims=True)
-    return arr / np.clip(norms, 1e-12, None)
+    return _l2_normalize(arr)
 
 
 def encode_query(text: str, model_name: str) -> Any:
@@ -282,5 +388,14 @@ def encode_query(text: str, model_name: str) -> Any:
     Encode a single query string.
 
     Returns an ndarray of shape (D,), dtype float32.
+
+    # TODO(model-choice, see issue #46): this is the plug-in point for an
+    # asymmetric query prefix (e.g. nomic's "search_query:" vs
+    # "search_document:") once a remote identity can name an arbitrary
+    # model -- bge-small-en-v1.5, the only model this version serves
+    # remotely, uses no such prefix, so `encode` and `encode_query` are
+    # identical here for both backends.
     """
+    if _remote_spec is not None:
+        return _encode_remote([text])[0]
     return encode([text], model_name)[0]

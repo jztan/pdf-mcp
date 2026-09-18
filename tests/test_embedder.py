@@ -9,6 +9,22 @@ import pytest
 DEFAULT = "BAAI/bge-small-en-v1.5"
 
 
+@pytest.fixture(autouse=True)
+def _fresh_model_singleton(monkeypatch):
+    """Every test starts with no cached model.
+
+    Another test on the same xdist worker may already have loaded the real
+    model; _get_model would then return it without ever calling the mocked
+    constructor, and constructor assertions fail depending on test order.
+    monkeypatch restores the previous values afterwards.
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setattr(emb, "_model", None)
+    monkeypatch.setattr(emb, "_model_name_loaded", None)
+    monkeypatch.setattr(emb, "_remote_spec", None)
+
+
 def test_check_available_raises_when_fastembed_missing():
     """check_available() raises ImportError with install hint when fastembed absent."""
     import pdf_mcp.embedder as emb
@@ -238,6 +254,82 @@ def test_cuda_session_raising_falls_back(monkeypatch):
         emb._model_name_loaded = None
 
     assert result is cpu
+
+
+def test_cuda_session_that_cannot_encode_falls_back(monkeypatch):
+    """A session that lists CUDA but fails its first encode falls back to CPU.
+
+    get_providers() reports what was registered, not what will run: a cuDNN
+    or cuBLAS series mismatch, a missing libcudnn, or an out-of-memory card
+    all build a session that names CUDA and then raise on the first batch.
+    The probe encode catches that at load time, while a CPU fallback is
+    still possible, rather than inside a user's search.
+    """
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    broken = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    broken.embed.side_effect = RuntimeError("CUDNN_STATUS_NOT_INITIALIZED")
+    cpu = _session_with(["CPUExecutionProvider"])
+    cls = MagicMock(side_effect=[broken, cpu])
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="CUDNN_STATUS_NOT_INITIALIZED"):
+                result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is cpu
+    assert cls.call_count == 2  # the CUDA attempt, then the CPU fallback
+
+
+def test_cuda_probe_consumes_the_lazy_embed_generator(monkeypatch):
+    """fastembed's embed() is a generator: nothing runs until it is iterated.
+
+    A probe that only calls embed() would pass on every broken session, so
+    the failure has to be raised from iteration, not from the call.
+    """
+    import pdf_mcp.embedder as emb
+
+    def lazy_failure(texts):
+        raise RuntimeError("CUBLAS_STATUS_ALLOC_FAILED")
+        yield  # pragma: no cover - makes this a generator
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    broken = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    broken.embed.side_effect = lazy_failure
+    cpu = _session_with(["CPUExecutionProvider"])
+    cls = MagicMock(side_effect=[broken, cpu])
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            with pytest.warns(RuntimeWarning, match="CUBLAS_STATUS_ALLOC_FAILED"):
+                result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is cpu
+
+
+def test_cuda_probe_runs_one_short_encode(monkeypatch):
+    """A working CUDA session is kept, and the probe costs one short text."""
+    import pdf_mcp.embedder as emb
+
+    monkeypatch.setenv("PDF_MCP_CUDA", "1")
+    gpu = _session_with(["CUDAExecutionProvider", "CPUExecutionProvider"])
+    cls = MagicMock(return_value=gpu)
+    try:
+        with patch.dict(sys.modules, {"fastembed": MagicMock(TextEmbedding=cls)}):
+            result = emb._get_model(DEFAULT)
+    finally:
+        emb._model = None
+        emb._model_name_loaded = None
+
+    assert result is gpu
+    gpu.embed.assert_called_once()
+    (texts,), _ = gpu.embed.call_args
+    assert len(texts) == 1 and len(texts[0]) < 50
 
 
 def test_cuda_requested_accepts_several_spellings(monkeypatch):
@@ -509,3 +601,94 @@ def test_cpu_encode_empty_list():
 
     assert result.size == 0
     assert model.calls == []
+
+
+class TestRemoteDispatch:
+    """Routing is by whether a RemoteSpec is registered via
+    configure_remote(), NOT by the shape of `model_name` -- PR #47 review
+    item 2 made PDFConfig.embedding_model always return the bare fastembed
+    identity so a verified remote endpoint shares cache rows with local
+    fastembed, so `model_name` can no longer carry the "this is remote"
+    signal. See embedder.py's module docstring."""
+
+    def _spec(self):
+        from pdf_mcp.remote_embedder import RemoteSpec
+
+        return RemoteSpec(base_url="http://localhost:8000/v1", model="bge-small")
+
+    def test_check_available_without_configure_remote_checks_fastembed(self):
+        """No remote spec registered: check_available falls through to the
+        ordinary fastembed model-name validation, same as before this
+        backend existed."""
+        import pdf_mcp.embedder as emb
+
+        with pytest.raises(ValueError, match="Unknown embedding model"):
+            emb.check_available("not-a-real-model")
+
+    def test_check_available_with_configured_spec_is_offline_only(self):
+        import pdf_mcp.embedder as emb
+
+        emb.configure_remote(self._spec())
+        with patch("pdf_mcp.remote_embedder.encode") as mock_encode:
+            emb.check_available(DEFAULT)
+        mock_encode.assert_not_called()
+
+    def test_encode_routes_to_remote_embedder_when_spec_registered(self):
+        import pdf_mcp.embedder as emb
+
+        emb.configure_remote(self._spec())
+        with patch("pdf_mcp.remote_embedder.encode") as mock_encode:
+            mock_encode.return_value = np.array([[3.0, 4.0, 0.0]], dtype=np.float32)
+            # model_name is the ordinary fastembed identity -- it does not
+            # select the remote path; configure_remote() already did.
+            result = emb.encode(["hello"], DEFAULT)
+        mock_encode.assert_called_once()
+        args, _ = mock_encode.call_args
+        assert args[0] == ["hello"]
+        assert args[1] is emb._remote_spec
+        np.testing.assert_allclose(result[0], [0.6, 0.8, 0.0])
+
+    def test_encode_query_routes_to_remote_embedder_when_spec_registered(self):
+        import pdf_mcp.embedder as emb
+
+        emb.configure_remote(self._spec())
+        with patch("pdf_mcp.remote_embedder.encode") as mock_encode:
+            mock_encode.return_value = np.array([[1.0, 0.0]], dtype=np.float32)
+            result = emb.encode_query("hi", DEFAULT)
+        assert result.shape == (2,)
+
+    def test_encode_without_configure_remote_uses_fastembed(self):
+        """No remote spec registered: encode() takes the ordinary fastembed
+        path (and fails there, since DEFAULT's model isn't actually loaded
+        in this test) rather than erroring about a missing remote spec."""
+        import pdf_mcp.embedder as emb
+
+        with patch("pdf_mcp.remote_embedder.encode") as mock_encode:
+            with pytest.raises(Exception):
+                emb.encode(["hi"], "not-a-real-model")
+        mock_encode.assert_not_called()
+
+    def test_encode_remote_empty_list_makes_no_call(self):
+        import pdf_mcp.embedder as emb
+
+        emb.configure_remote(self._spec())
+        with patch("pdf_mcp.remote_embedder.encode") as mock_encode:
+            result = emb.encode([], DEFAULT)
+        mock_encode.assert_not_called()
+        assert result.size == 0
+
+    def test_configure_remote_none_switches_back_to_fastembed(self):
+        """configure_remote() is the only thing that switches the path --
+        clearing it (None) must restore the fastembed path even for a
+        model_name that used to be a remote identity string."""
+        import pdf_mcp.embedder as emb
+
+        emb.configure_remote(self._spec())
+        emb.configure_remote(None)
+        model = _recording_model(["CPUExecutionProvider"])
+        emb2 = _with_model(model)
+        try:
+            result = emb2.encode(["hello"], DEFAULT)
+        finally:
+            _reset()
+        assert result.shape[0] == 1

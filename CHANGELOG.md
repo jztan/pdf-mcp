@@ -5,6 +5,198 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-09-19
+### Added
+
+- **Remote GPU embedding for bge-small (opt-in).** `[embedding].backend =
+  "openai"` sends semantic-search embedding to a self-hosted,
+  OpenAI-compatible `/v1/embeddings` server (ollama, llama-server, vLLM,
+  lemonade), so a GPU that onnxruntime can't use, such as an AMD iGPU over
+  Vulkan, does the work: 4.2 to 4.8x faster than the CPU path on one.
+  It serves the same bge-small model and shares the local vector cache. At
+  startup the server checks the endpoint's vectors against local bge-small
+  and falls back to CPU with a warning if they don't match. If the endpoint
+  goes down mid-session, `mode="semantic"` returns an error and
+  `mode="auto"` falls back to keyword search. `base_url` must resolve to a
+  loopback or private address (LAN, Docker, Tailscale). See
+  [docs/configuration.md](docs/configuration.md).
+  ([#42](https://github.com/jztan/pdf-mcp/issues/42))
+
+- **`pdf-mcp-warm`: an offline entry point that warms a whole corpus to
+  completion, outside any MCP client.** `pdf_corpus_warm` (the tool) caps
+  at 100 files and 300 seconds per call by design, so a folder that does
+  not fit either limit needs the same call re-issued by hand, and a query
+  against a still-partly-warm corpus times out in the meantime. Installed
+  alongside `pdf-mcp` (same package, a second console script), it walks a
+  folder (`--recursive`), warms embeddings *and* the section-granularity
+  search index by default (`--no-embeddings` / `--no-sections` opt out),
+  and writes to the exact cache the server reads — already-cached
+  documents are free, so re-running after an interrupt resumes rather
+  than redoing work. See
+  [docs/configuration.md](docs/configuration.md#offline-prewarm-pdf-mcp-warm) ([#41](https://github.com/jztan/pdf-mcp/pull/41)).
+
+- **`pdf_corpus_warm(paths, sections=True)`: warm the section-granularity
+  search index ahead of query time.** Previously, a corpus warmed with
+  `pdf_corpus_warm` (any combination of text/embeddings) still left
+  `pdf_search(granularity="section")` to build that document's section
+  index from scratch, in full, serially, on the first section-mode
+  query — for a heuristic-fallback document with no TOC, measured at
+  ~32ms/page, enough on its own to time out a timeout-bounded MCP client
+  on a large document even though the rest of the corpus was fully warm.
+  `sections=True` (default `False`, to stay budget-conscious like
+  `embeddings`) builds it during warm instead, in the same parallel
+  worker pool that already extracts text — including backfilling it for
+  documents that were already fully cached before this flag was first
+  requested. That backfill is itself budgeted: a doc the deadline cuts
+  off joins `unprocessed` (`warm_complete: false`) instead of running
+  past `budget_seconds`, and finishes on a later call. See
+  [docs/tool-reference.md](docs/tool-reference.md#pdf_corpus_warm) and
+  [benchmark_data/warm_parallelism_strix.md](benchmark_data/warm_parallelism_strix.md) ([#41](https://github.com/jztan/pdf-mcp/pull/41)).
+
+- **OCR and page rendering now use up to 16 parallel workers on many-core
+  hosts, up from a flat cap of 8.** Re-measured on a 24-thread host: OCR
+  and render dispatch were both still gaining at 16 workers (8.09x /
+  6.04x), not yet plateaued, so the old flat cap left real throughput
+  idle on many-core machines. Below 16 cores this is unchanged from
+  before (worker count was already governed by the core count, not the
+  cap); the new ceiling of 16 stands pending a benchmark past that.
+  `PDF_MCP_MAX_WORKERS` still only clamps the worker count down, same as
+  before. Note for CPU-limited containers: worker count is sized from
+  the host's total logical CPUs, not a cgroup quota, so this can double
+  oversubscription under `docker run --cpus=N`; set
+  `PDF_MCP_MAX_WORKERS` explicitly there. See
+  [benchmark_data/warm_parallelism_strix.md](benchmark_data/warm_parallelism_strix.md) ([#41](https://github.com/jztan/pdf-mcp/pull/41)).
+
+- **One-click install for Claude Desktop.** Every release now ships a
+  `pdf-mcp-<version>.mcpb` bundle. Download it and drag it onto Claude
+  Desktop's Settings > Extensions page; nothing needs to be installed
+  first, not Python and not uv. The first start downloads pdf-mcp's
+  components (about 250 MB) into `~/.cache/pdf-mcp` and can take a few
+  minutes; Claude sees the tools right away and they start answering once
+  setup finishes. Later starts take seconds, and installing a newer
+  bundle replaces the old one in place, even while it is running. Works
+  in Claude Desktop's Chat, on Windows 10+, Intel Macs with macOS 13+, and
+  Apple Silicon Macs with macOS 14+. If setup cannot finish (for example the
+  computer is offline), Claude is told why in plain words instead of
+  seeing a disconnected server. Each release also carries the bundle as
+  `pdf-mcp.mcpb`, so
+  https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb
+  always downloads the newest one.
+
+- **Bundle installs learn about new versions.** Once a day the bundle asks
+  PyPI whether a newer pdf-mcp exists, and Claude mentions it once, on the
+  first result after it is found; `server_info` reports it under `update`.
+  Turn it off in the extension settings, with `PDF_MCP_UPDATE_CHECK=0`, or
+  with `[updates] check = false`. pip and uvx installs never check.
+
+- **German-aware keyword search (opt-in).** `[fts] language = "de"` in
+  `config.toml` turns on a German-stemmed mirror index for keyword and hybrid
+  search, so a query like `kündigen` now also finds pages using `Kündigung`
+  or the common ASCII-transliteration spellings (`Kuendigung`, `Strasse` for
+  `Straße`), none of which the default English/porter index could match.
+  Turning it on for the first time stems the whole existing cache once,
+  before the server accepts requests. Off by default; see
+  [docs/configuration.md](docs/configuration.md).
+  ([#43](https://github.com/jztan/pdf-mcp/issues/43))
+
+- **OCR with nothing to install (Claude Desktop bundle).** On Windows and
+  Macs, the first OCR call on a computer with no Tesseract downloads a
+  portable, English-only Tesseract (about 14 MB), checks it against a
+  SHA-256 shipped in pdf-mcp, and uses it. A Tesseract you installed
+  always wins. If the download takes longer than about 20 seconds, Claude
+  is told OCR is being set up and to try again shortly. `server_info`
+  reports where OCR comes from under `ocr.source`. Turn it off with
+  `[ocr] auto_install = false`; pip and uvx installs never download it
+  unless that is set to `true`.
+
+### Changed
+
+- **Password-protected PDFs return a clear error.** A PDF that needs a
+  password to open used to fail with raw PDFium text (most tools raised
+  `Incorrect password error`). Every single-file tool now returns
+  `error_code: "password_required"` with a hint to pass an unlocked copy,
+  and corpus tools skip the file with reason `password_required` instead of
+  `unreadable: ...`. Owner-password-only PDFs are unaffected.
+  ([#59](https://github.com/jztan/pdf-mcp/issues/59))
+
+- **Corpus search no longer re-verifies the whole corpus on every call.**
+  Each `pdf_corpus_search` used to re-check that every document was fully
+  warm, re-chunking every page to compare the stored embedding layout, and
+  re-read every embedding vector from the cache. The warm verdict is now
+  remembered per document for the life of the process (keyed on the file's
+  modification time, the cache and the embedding model, forgotten when the
+  document is re-warmed or the cache is cleared), and each document's
+  vectors are kept in memory as one matrix, bounded by
+  `PDF_MCP_VECTOR_CACHE_MB` (default 256, `0` disables). The text of each
+  page's best-matching window, which the excerpt anchors on, is now looked
+  up only for the pages a search returns rather than for every page on
+  every query. On a 100-document corpus, hybrid search went from about 1.0
+  to 0.3 s per query and semantic from 0.8 to 0.1, with identical results.
+  ([#55](https://github.com/jztan/pdf-mcp/issues/55), [#57](https://github.com/jztan/pdf-mcp/issues/57))
+
+### Fixed
+
+- **A page could be read as another page's text.** Since 3.0.0, once a
+  server process had extracted more than 256 pages, a later page could
+  occasionally come back carrying the text of a page extracted earlier,
+  from the same PDF or a different one. Search, read, excerpts, bounding
+  boxes and chart labels all used that text, and it was saved to the
+  cache, where it stayed until the PDF changed. Nothing in a response
+  showed it. Cached text, search indexes, embeddings and chart results
+  from 3.0.0 to 3.2.0 are discarded on first start and rebuilt on next
+  use, so the first searches after upgrading re-extract and re-embed.
+  ([#52](https://github.com/jztan/pdf-mcp/issues/52))
+
+- **OCR finds Tesseract installed outside `PATH`.** The Windows
+  installer's default folder, and Homebrew on macOS when Claude Desktop
+  starts the server, were invisible, so OCR reported Tesseract missing
+  after a normal install. `server_info` now re-checks OCR on every call, so
+  installing Tesseract mid-session works without a restart.
+
+- **OCR works with a Tesseract unpacked anywhere.** A Tesseract without a
+  built-in install path (a portable or unzipped copy on macOS or Linux)
+  reports "./" as its language-data folder; pdf-mcp accepted that and OCR
+  failed with "Error opening data file ./eng.traineddata". pdf-mcp now uses a
+  reported folder only if it holds language data, and otherwise the
+  `tessdata` folder next to the Tesseract program.
+
+- **The missing-Tesseract error gives one install step for your OS.** The
+  Windows command is now `winget install -e --id UB-Mannheim.TesseractOCR`;
+  the old one failed with "Multiple packages found".
+
+- **pdf-mcp no longer prints fastmcp's startup banner,** which also checked
+  PyPI for fastmcp updates on every start.
+
+- **`PDF_MCP_CUDA=1` now falls back to CPU when the GPU session cannot
+  actually encode.** onnxruntime can load the CUDA provider and still fail
+  on the first batch (a cuDNN or cuBLAS series that does not match the
+  onnxruntime-gpu build, or a GPU with no free memory). The server used to
+  accept such a session and the failure surfaced inside the first search
+  or corpus warm. It now runs one short test encode when the model loads,
+  and on failure warns with the error and uses the CPU.
+
+- **Snippet excerpts no longer cut words or numbers in half.** Keyword
+  hits could open or close inside a hyphenated word or a decimal, so a
+  datasheet value of `0.30` could come back as `30`. Semantic hits ended
+  mid-word and carried no `...` markers at all, so one `pdf_search` or
+  `pdf_corpus_search` response mixed two excerpt shapes. Every snippet
+  excerpt now starts and ends on a whole word and carries `...` exactly
+  where page text was cut. On the 20-document excerpt benchmark,
+  mid-word cuts in `mode="auto"` snippets fell from 135 of 425 to 1 (a
+  URL longer than the widening limit), and wrong or missing markers from
+  283 to 0.
+
+### Security
+
+- `100.64.0.0/10` (CGNAT, also used by Tailscale) joined the URL fetcher's
+  SSRF deny list, alongside RFC 1918/loopback/link-local. It also feeds the
+  `[embedding].base_url` private-address check above, so a Tailscale-reached
+  endpoint is treated the same as any other private address.
+
+### Contributors
+
+- @janLo — `pdf-mcp-warm` offline prewarm, section-index warming in `pdf_corpus_warm`, and a core-scaled OCR/render worker pool, benchmarked on a 24-thread host ([#41](https://github.com/jztan/pdf-mcp/pull/41)), opt-in German-aware keyword search ([#44](https://github.com/jztan/pdf-mcp/pull/44)), and remote GPU embedding for bge-small ([#47](https://github.com/jztan/pdf-mcp/pull/47))
+
 ## [3.2.0] - 2026-09-12
 ### Added
 

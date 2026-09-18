@@ -1,6 +1,6 @@
 [project]
 name = "pdf-mcp"
-version = "3.2.0"
+version = "3.3.0"
 description = "Gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic + keyword search, selective page reads, tables, images, TOC, OCR, chart data, and CJK/vertical-script support, with SQLite caching."
 readme = "README.md"
 license = { text = "MIT" }
@@ -57,8 +57,9 @@ dependencies = [
     # Semantic/hybrid search. Core, not an extra (since the corpus-search
     # release): hybrid RRF is the validated core of the tool and every install
     # channel (PyPI, MCP Registry, uvx) should deliver it. Platform note: pulls onnxruntime, which
-    # has no wheels for Intel macOS on Python 3.14+ or musl/Alpine — those
-    # environments need Python <= 3.13 or a from-source onnxruntime build.
+    # has no Intel-macOS wheels from 1.24 on (so none for Python 3.14+ there,
+    # where fastembed needs >=1.24.2) and none for musl/Alpine. [tool.uv]
+    # required-environments below keeps Intel Macs on <=3.13 installable.
     # Do not declare a new Python version in classifiers/CI before
     # fastembed/onnxruntime ship wheels for it.
     "fastembed>=0.7,<1.0",
@@ -72,6 +73,9 @@ dependencies = [
     # Pulled in transitively via fastmcp -> rich; floor to clear PYSEC-2026-2987.
     "pygments>=2.20.0",
     "httpx>=0.27.0",
+    # Version comparison for the bundle's update check. Already installed
+    # transitively; declared because pdf_mcp.updates imports it.
+    "packaging>=23.0",
     "tomli>=2.0; python_version < '3.11'",
     # Permissive PDF backend (src/pdf_mcp/backend/). These replace pymupdf,
     # which is dual-licensed AGPL-3.0 / Artifex Commercial and therefore
@@ -87,6 +91,9 @@ dependencies = [
     # Runtime since the backend swap: pypdfium2 renders to a Pillow image and
     # image/render output is written as PNG through it.
     "pillow>=12.3.0",
+    # Pure-Python Snowball stemmers (no C extension), used by the optional
+    # [fts].language = "de" German FTS mirror index in cache.py.
+    "snowballstemmer>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -169,6 +176,7 @@ Changelog = "https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md"
 [project.scripts]
 pdf-mcp = "pdf_mcp.server:main"
 pdf-mcp-http = "pdf_mcp.server:main_http"
+pdf-mcp-warm = "pdf_mcp.warm_cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -215,6 +223,10 @@ module = "fastembed"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "snowballstemmer"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "pymupdf4llm"
 ignore_missing_imports = true
 
@@ -226,3 +238,15 @@ ignore_missing_imports = true
 module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]
 disallow_untyped_calls = false
 warn_unused_ignores = false
+
+[tool.uv]
+# The Claude Desktop bundle installs exactly these locked pins, on every
+# platform it lists, Intel Macs included. onnxruntime stopped shipping
+# Intel-Mac wheels at 1.24, so require the lock to resolve for Intel macOS:
+# uv then pins the last onnxruntime with Intel-Mac wheels (1.23.2) there and
+# keeps 1.24+ elsewhere. Python 3.14 is excluded because fastembed needs
+# onnxruntime >=1.24.2 on it, which has no Intel-Mac wheel; the bundle caps
+# Python below 3.14 anyway.
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.14'",
+]

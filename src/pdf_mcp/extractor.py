@@ -53,6 +53,52 @@ logger = logging.getLogger(__name__)
 # subprocess discovery (which PyMuPDF does via fragile shell=True on Windows).
 _TESSDATA_PATH: str | None = None
 
+# Resolved Tesseract binary, cached only on a hit: a miss is retried on the
+# next call, so installing Tesseract mid-session needs no restart.
+_TESSERACT_EXE: str | None = None
+
+# A server started by Claude Desktop does not see the shell PATH: macOS
+# Dock/Finder launches miss Homebrew, and the Windows installer does not add
+# itself to PATH (measured on windows-latest). Standard install locations:
+_MACOS_TESSERACT_DIRS: tuple[str, ...] = ("/opt/homebrew/bin", "/usr/local/bin")
+_WINDOWS_TESSERACT_ROOTS: tuple[str, ...] = ("ProgramFiles", "ProgramFiles(x86)")
+
+
+def _tesseract_candidates(
+    platform: str, environ: typing.Mapping[str, str]
+) -> list[str]:
+    """Standard non-PATH install locations for this platform, in order."""
+    if platform == "win32":
+        return [
+            os.path.join(base, "Tesseract-OCR", "tesseract.exe")
+            for var in _WINDOWS_TESSERACT_ROOTS
+            if (base := environ.get(var))
+        ]
+    if platform == "darwin":
+        return [os.path.join(d, "tesseract") for d in _MACOS_TESSERACT_DIRS]
+    return []
+
+
+def find_tesseract() -> str | None:
+    """Absolute path to the Tesseract binary, or None when not installed."""
+    global _TESSERACT_EXE  # noqa: PLW0603
+    if _TESSERACT_EXE is not None and os.path.isfile(_TESSERACT_EXE):
+        return _TESSERACT_EXE
+    exe = shutil.which("tesseract")
+    if exe is None:
+        for candidate in _tesseract_candidates(sys.platform, os.environ):
+            if os.path.isfile(candidate):
+                exe = candidate
+                break
+    if exe is None:
+        # Last: the portable copy pdf-mcp may have fetched into its cache
+        # (bundle installs); a Tesseract the user installed always wins.
+        from . import portable_tesseract
+
+        exe = portable_tesseract.installed_binary()
+    _TESSERACT_EXE = exe
+    return exe
+
 
 def _has_traineddata(path: str) -> bool:
     """Check if path contains any .traineddata files."""
@@ -130,11 +176,23 @@ def _resolve_tessdata() -> str | None:
             if os.path.isdir(subdir) and _has_traineddata(subdir):
                 return subdir
             return env_path
+        exe = find_tesseract()
+        if exe is None:
+            return None
+        # tessdata beside the binary first (the Windows installer's layout,
+        # and pdf-mcp's portable copy), before asking Tesseract. A portable
+        # macOS/Linux build answers --list-langs by recursively scanning the
+        # current directory, which for a server started in the home folder
+        # can fail on an unreadable subfolder or take a long time.
+        beside = os.path.join(os.path.dirname(exe), "tessdata")
+        if _has_traineddata(beside):
+            return beside
         result = subprocess.run(
-            ["tesseract", "--list-langs"],
+            [exe, "--list-langs"],
             capture_output=True,
             text=True,
             check=True,
+            timeout=15,
         )
         match = re.search(
             r'List of available languages in "(.+)"',
@@ -146,17 +204,18 @@ def _resolve_tessdata() -> str | None:
                 result.stdout or "",
             )
         if match:
+            # Trust the reported path only if it holds language data: a
+            # portable macOS/Linux Tesseract has no compiled-in path and
+            # reports "./", which is always a directory but never tessdata.
             path = match.group(1)
-            if os.path.isdir(path):
+            if os.path.isdir(path) and _has_traineddata(path):
                 return path
             alt = path.replace("/", "\\")
-            if os.path.isdir(alt):
+            if os.path.isdir(alt) and _has_traineddata(alt):
                 return alt
-        exe = shutil.which("tesseract")
-        if exe:
-            candidate = os.path.join(os.path.dirname(exe), "tessdata")
-            if os.path.isdir(candidate):
-                return candidate
+        candidate = os.path.join(os.path.dirname(exe), "tessdata")
+        if os.path.isdir(candidate):
+            return candidate
     except Exception:
         pass
     return None
@@ -393,6 +452,50 @@ _VERTICAL_MIN_CHARS = 30
 # (incl. Ext-A and the SIP Ext-B block), Hiragana, Katakana, Hangul, CJK
 # symbols/punctuation, and halfwidth/fullwidth forms.
 _CJK_RE = re.compile("[　-ヿ㐀-䶿一-鿿가-힯豈-﫿" "＀-￯]|[\U00020000-\U0002a6df]")
+
+
+EXCERPT_ELLIPSIS = "..."
+
+
+def _joins_token(ch: str) -> bool:
+    """True when `ch` continues a token: not whitespace, not a CJK
+    character (CJK runs have no spaces, so every character is its own
+    boundary; widening through one would swallow the whole run)."""
+    return not ch.isspace() and not _CJK_RE.match(ch)
+
+
+def widen_to_token_bounds(text: str, start: int, end: int, max_extend: int = 40) -> str:
+    """The excerpt `text[start:end]`, widened outward to whole tokens, with
+    an ``...`` marker on each side where non-whitespace text was cut.
+
+    FTS5 ``snippet()`` cuts at tokenizer separators, so "variable-length"
+    opened as "length" and a datasheet "0.30" opened as "30", which misstates
+    the value. Semantic spans were raw character windows and ended mid-word.
+    Widening (never trimming) keeps every character the cut already held, so
+    an answer contained before stays contained. A token longer than
+    `max_extend` on either side (a URL, a hash) keeps its cut and gets the
+    marker, rather than growing the excerpt without bound.
+    """
+    n = len(text)
+    start = max(0, min(start, n))
+    end = max(start, min(end, n))
+    if start > 0 and start < n and _joins_token(text[start - 1]):
+        if _joins_token(text[start]):
+            s = start
+            while s > 0 and _joins_token(text[s - 1]):
+                s -= 1
+            if start - s <= max_extend:
+                start = s
+    if end < n and end > 0 and _joins_token(text[end]):
+        if _joins_token(text[end - 1]):
+            e = end
+            while e < n and _joins_token(text[e]):
+                e += 1
+            if e - end <= max_extend:
+                end = e
+    prefix = EXCERPT_ELLIPSIS if text[:start].strip() else ""
+    suffix = EXCERPT_ELLIPSIS if text[end:].strip() else ""
+    return f"{prefix}{text[start:end].strip()}{suffix}"
 
 
 def detect_writing_mode(page: Any) -> str:
@@ -1570,9 +1673,40 @@ def native_render_dpi_cap(doc: Any, page_num: int) -> "int | None":
         return None
 
 
+OCR_SETUP_URL = "https://github.com/jztan/pdf-mcp/blob/master/docs/clients.md#ocr-setup"
+_OCR_INSTALL_STEP = {
+    "win32": "Download and run the Windows installer linked at {url}.",
+    "darwin": "Install it with Homebrew (brew install tesseract), or see {url}.",
+}
+_OCR_INSTALL_STEP_DEFAULT = (
+    "Install it with your package manager (for example: "
+    "apt install tesseract-ocr), or see {url}."
+)
+
+
+def missing_tesseract_message(platform: str | None = None) -> str:
+    """One plain instruction for this OS, for the agent to relay."""
+    step = _OCR_INSTALL_STEP.get(platform or sys.platform, _OCR_INSTALL_STEP_DEFAULT)
+    return (
+        "Tesseract not found, so scanned pages cannot be read with OCR. "
+        + step.format(url=OCR_SETUP_URL)
+        + " Then ask again; no restart is needed."
+    )
+
+
+def tesseract_install_hint() -> str:
+    """Terminal commands for every OS, for callers who have a shell."""
+    return (
+        "brew install tesseract (macOS) / "
+        "apt install tesseract-ocr (Linux) / "
+        "winget install -e --id UB-Mannheim.TesseractOCR (Windows)"
+    )
+
+
 def check_tesseract_available() -> None:
     """
-    Verify Tesseract binary is on PATH, and cache tessdata path.
+    Verify a Tesseract binary is installed (find_tesseract), and cache
+    the tessdata path.
 
     Raises:
         RuntimeError: If tesseract binary is not found or returns non-zero.
@@ -1581,22 +1715,13 @@ def check_tesseract_available() -> None:
 
     global _TESSDATA_PATH  # noqa: PLW0603
 
+    exe = find_tesseract()
     try:
-        subprocess.run(
-            ["tesseract", "--version"],
-            capture_output=True,
-            check=True,
-        )
+        if exe is None:
+            raise FileNotFoundError("tesseract")
+        subprocess.run([exe, "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        raise RuntimeError(
-            "Tesseract not found. Install with: "
-            "brew install tesseract (macOS) / "
-            "apt install tesseract-ocr (Linux) / "
-            "winget install Tesseract-OCR (Windows). "
-            "See https://tesseract-ocr.github.io/tessdoc/Installation.html. "
-            "If OCR returns empty for a page with visible text, also verify "
-            "the language pack: tesseract --list-langs"
-        ) from exc
+        raise RuntimeError(missing_tesseract_message()) from exc
 
     if _TESSDATA_PATH is None:
         _TESSDATA_PATH = _resolve_tessdata()
@@ -1684,6 +1809,7 @@ def _render_page_worker(
 
 def _warm_extract_worker(
     path: str,
+    want_sections: bool = False,
 ) -> tuple[
     int,
     dict[str, Any],
@@ -1691,6 +1817,7 @@ def _warm_extract_worker(
     dict[int, str],
     list[dict[str, int]],
     "dict[int, tuple[list[Any], tuple[float, float], bool]]",
+    "list[Any] | None",
 ]:
     """Picklable whole-doc extraction worker for concurrent corpus warm.
 
@@ -1700,6 +1827,26 @@ def _warm_extract_worker(
     a ``skipped`` entry. Lives in extractor.py so spawn re-imports only
     PyMuPDF, never FastMCP (same rule as the per-page workers above).
     Coverage counts use raw ``get_text()`` chars, matching pdf_info.
+
+    ``want_sections``, when true, also runs ``section_detector.derive_sections``
+    (TOC-first / heuristic-fallback) here in the worker -- pure text/layout
+    work, no embeddings, no rendering, so it parallelizes the same way text
+    extraction does. Section detection is otherwise built lazily on a
+    document's first ``pdf_search(granularity="section")`` call
+    (server.py's ``_pdf_search_section_mode``), which is exactly the gap
+    this closes: a doc whose text and embeddings were prewarmed still paid
+    that cost, in full, serially, on the first section-mode query -- for a
+    heuristic-fallback doc (no TOC) measured at ~32ms/page
+    (benchmark_data/warm_parallelism_strix.md), enough on its own to time
+    out a timeout-bounded MCP client on a large document. Best-effort: a
+    failure here does not fail the whole document's warm, matching the
+    layout block below. Unlike the layout block, a failure is logged
+    (``logger.warning``) and returns ``None``, not ``[]`` -- ``[]`` means
+    detection succeeded and genuinely found nothing, which the caller
+    writes to cache as an authoritative empty index; ``None`` means it
+    could not run, which the caller must NOT write, or a doc whose text
+    just happened to be re-warmed would have a previously-valid section
+    index silently deleted by a transient detection failure.
     """
     doc = open_pdf(path)
     try:
@@ -1739,7 +1886,24 @@ def _warm_extract_worker(
                 pass
     finally:
         doc.close()
-    return page_count, metadata, toc, texts, coverage, layout
+
+    # None (not requested, or detection failed) vs [] (requested, genuinely
+    # no sections found) matter to the caller: _finalize_doc writes [] to
+    # cache.index_sections, which DELETEs any existing rows first. A failed
+    # detection returning [] the same way a section-less doc does would
+    # silently wipe a previously-valid index on a doc whose text just
+    # happened to be re-warmed (e.g. after a TTL sweep or edit) -- the
+    # regression this whole feature exists to avoid, just moved earlier.
+    sections: "list[Any] | None" = None
+    if want_sections:
+        try:
+            from .section_detector import derive_sections
+
+            sections = derive_sections(path)
+        except Exception as exc:  # noqa: BLE001 - best-effort, like layout above
+            logger.warning("section detection failed for %s: %s", path, exc)
+
+    return page_count, metadata, toc, texts, coverage, layout, sections
 
 
 # A detected "table" whose bounding box spans almost the entire page body in

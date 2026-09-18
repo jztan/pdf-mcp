@@ -250,3 +250,77 @@ class TestMain:
     @pytest.mark.parametrize("arms", ["bogus", ""])
     def test_unknown_arm_is_exit_2(self, tmp_path, arms):
         assert main(self._paths(tmp_path) + ["--arms", arms]) == 2
+
+
+ENV_313 = {
+    "python": "3.13.1",
+    "implementation": "CPython",
+    "sqlite": "3.51.0",
+    "machine": "arm64",
+    "platform": "macOS-26.6-arm64",
+    "executable": "/main/.venv/bin/python",
+    "packages": {"onnxruntime": "1.24.4"},
+}
+ENV_312 = {**ENV_313, "python": "3.12.12", "sqlite": "3.50.4"}
+
+
+def _timed(env: dict | None, snippet_spq: float) -> dict:
+    run = _run(corpus=_corpus_rows({q: 0.5 for q in IDS}))
+    run["arms"]["corpus"]["seconds_per_query"] = {
+        "snippet": snippet_spq,
+        "paragraph": 1.5,
+    }
+    if env is not None:
+        run["environment"] = env
+    return run
+
+
+class TestTimingAgainstBaseline:
+    """s/query is compared with the baseline only when both runs recorded
+    the same environment. The 2026-09-12 confound (a worktree venv on
+    Python 3.12 / SQLite 3.50 read ~37% slower than the main checkout's
+    3.13 / 3.51 on identical code) must print its cause, not a delta."""
+
+    def test_same_environment_reports_the_timing_delta(self):
+        v = evaluate_ratchet(_timed(ENV_313, 1.40), _timed(ENV_313, 1.54))
+        t = v["timing"]
+        assert t["comparable"] is True
+        row = next(
+            r for r in t["rows"] if r["arm"] == "corpus" and r["style"] == "snippet"
+        )
+        assert (row["baseline"], row["current"]) == (1.40, 1.54)
+        md = render_markdown(_timed(ENV_313, 1.54), summarize(_timed(ENV_313, 1.54)), v)
+        assert "## Timing vs baseline" in md
+        assert "| corpus | snippet | 1.40 | 1.54 | +10% |" in md
+
+    def test_different_environment_refuses_the_comparison(self):
+        cur = _timed(ENV_312, 2.04)
+        v = evaluate_ratchet(_timed(ENV_313, 1.47), cur)
+        assert v["timing"]["comparable"] is False
+        assert "python 3.13.1 != 3.12.12" in v["timing"]["reasons"]
+        md = render_markdown(cur, summarize(cur), v)
+        assert "Timings are not comparable with the baseline" in md
+        assert "python 3.13.1 != 3.12.12" in md
+        assert "| corpus | snippet | 1.47 | 2.04" not in md
+
+    def test_baseline_without_environment_is_not_comparable(self):
+        v = evaluate_ratchet(_timed(None, 1.47), _timed(ENV_313, 1.50))
+        assert v["timing"]["reasons"] == ["baseline recorded no environment"]
+
+    def test_timing_never_fails_the_gate(self):
+        v = evaluate_ratchet(_timed(ENV_313, 1.0), _timed(ENV_313, 9.0))
+        assert v["pass"] is True
+        v = evaluate_ratchet(_timed(ENV_313, 1.0), _timed(ENV_312, 1.0))
+        assert v["pass"] is True
+
+    def test_report_names_the_environment_it_ran_in(self):
+        run = _timed(ENV_313, 1.5)
+        md = render_markdown(run, summarize(run), None)
+        assert "Python 3.13.1" in md and "SQLite 3.51.0" in md
+
+    def test_run_all_records_the_environment(self, tmp_path):
+        from scripts.benchmark_semantic_excerpts import run_all
+
+        run = run_all((), tmp_path, tmp_path, None)
+        assert run["environment"]["python"]
+        assert run["environment"]["sqlite"]

@@ -15,6 +15,8 @@ All paths accept absolute paths, paths relative to the server's working director
 
 Paths always resolve on the server. Under the stdio transport that is the caller's own machine, so any local file works. Over HTTP it is the remote host: a caller reads files already present under an allow-listed root, or URLs the server fetches, and cannot pass a file from its own filesystem. `server_info` reports the roots available; see [Getting documents to the server](remote-access.md#getting-documents-to-the-server).
 
+**Response notes:** installs from the Claude Desktop bundle may see a one-time `notice` field (a plain sentence naming the newer version and where to download it) on the first dict-shaped tool result after the daily update check finds a newer release. It appears at most once per server process, never on list-shaped results (`pdf_render_pages`), and never when the update check is off, which is the default for pip and uvx installs.
+
 ---
 
 ## Security & Hardening
@@ -44,7 +46,7 @@ Many responses also include an inline `content_warning` field as a runtime remin
 When a tool receives an `https://` URL, the server:
 
 1. Rejects any non-HTTPS scheme.
-2. Resolves the hostname once per redirect hop and validates every resolved address against a deny list (loopback, RFC 1918, link-local, IPv4-mapped IPv6, AWS IMDS over IPv6, IPv6 ULA, NAT64 well-known, IPv6 documentation, and a few more).
+2. Resolves the hostname once per redirect hop and validates every resolved address against a deny list (loopback, RFC 1918, CGNAT (`100.64.0.0/10`, also used by Tailscale), link-local, IPv4-mapped IPv6, AWS IMDS over IPv6, IPv6 ULA, NAT64 well-known, IPv6 documentation, and a few more).
 3. **Pins** the validated IP for the actual TCP connect (with the original hostname preserved in the `Host` header and TLS SNI) so a hostile resolver cannot return a different address between validation and connect (classic DNS rebinding).
 4. Rejects non-PDF `Content-Type` responses (`text/*`, `application/json`, `application/xml`, `application/xhtml+xml`, `image/*`, `audio/*`, `video/*`, `multipart/*`) **before** buffering any body bytes.
 5. Falls back to magic-byte verification (first 4 bytes `%PDF`) whenever the `Content-Type` header does not contain `"pdf"` — covers `application/octet-stream`, missing headers, and any non-deny-listed type that isn't explicitly `application/pdf`.
@@ -53,6 +55,20 @@ When a tool receives an `https://` URL, the server:
 The deny list also covers IPv4-mapped IPv6 representations of IPv4 addresses — `::ffff:127.0.0.1` is rejected as loopback after the address is unwrapped.
 
 Per-host allow/deny rules can be added via `[urls]` in the config file. Path access can be similarly constrained via `[paths]`.
+
+### Password-protected PDFs
+
+pdf-mcp does not accept passwords. A PDF that needs a password to open returns an inline error from every single-file tool (as the single element of the list for `pdf_render_pages` and `pdf_extract_chart`):
+
+```json
+{
+  "error": "PDF is password-protected: statement.pdf",
+  "error_code": "password_required",
+  "hint": "pdf-mcp cannot open PDFs that need a password. Ask the user to save an unlocked copy ..."
+}
+```
+
+Corpus tools skip such a file with `{"path": ..., "reason": "password_required"}` and process the rest. Owner-password-only PDFs (restricted permissions, no password needed to open) are read normally.
 
 ---
 
@@ -649,6 +665,13 @@ hits measurably lowers result quality.
 > tool attaches a `cjk_keyword_warning` advisory and steers you to
 > `mode='semantic'` (`pip install 'pdf-mcp[cjk]'`).
 
+> **German queries:** the default keyword index uses an English (porter)
+> stemmer, so it does not unify German inflection (`kündigen`/`Kündigung`) or
+> the ASCII-transliteration spelling of umlauts/ß (`Kuendigung`/`Kundigung`,
+> `Strasse`/`Straße`). Set `[fts] language = "de"` in `config.toml` to turn on
+> a German-stemmed mirror index instead — see
+> [docs/configuration.md](configuration.md).
+
 - `max_results` (int, optional, default `10`) — Maximum number of matches. Clamped to `[1, 100]`.
 - `context_chars` (int, optional, default `200`) — Characters of context around each match. Clamped to `[10, 2000]`.
 - `granularity` (string, optional, default `"page"`):
@@ -656,7 +679,7 @@ hits measurably lowers result quality.
   - `"section"` — returns matching sections (TOC-first with heuristic fallback). Sections come from the PDF's TOC when available (~95% of academic PDFs); the heuristic fallback uses 7 signals (font-size delta, bold, whitespace gap, top-of-page position, regex, capitalization, line length). Validated on arxiv PDFs: detector F1 0.80–0.94.
 - `excerpt_style` (string, optional, default `"paragraph"`):
   - `"paragraph"` — returns the text block containing the hit instead of a fixed-width window. On structured documents (bullets, numbered lists, headings), the result is typically more focused than snippet — just the unit that matched, without adjacent content. On long-form prose, the result may be longer than snippet, capped at 2000 chars with snippet fallback. Short blocks under 80 chars (headings, figure captions) are skipped in favor of substantive body blocks when one matches the query at least as well; when every longer block matches worse (e.g. the hit is a table cell), the short matching block is kept so the excerpt and its geometry stay on the true hit. On prose pages with prominent figure captions, the caption may be preferred over the body paragraph when both contain the query terms. Matches landing in the same text block are deduplicated (highest score kept). Ignored when `granularity="section"`. Best results with `mode="keyword"` or `mode="auto"` where the FTS5 keyword excerpt anchors block selection; pure `mode="semantic"` uses token overlap only, which may pick a topically related but not optimal block.
-  - `"snippet"` — fixed-width context window around each hit (controlled by `context_chars`).
+  - `"snippet"`: fixed-width context window around each hit (controlled by `context_chars`). The window is widened to whole words, so its length can exceed `context_chars` slightly, and `...` marks each side where page text was cut.
   - `"window"`: the anchor block plus contiguous neighbouring blocks, up to `window_tokens`. The anchor is the keyword-hit block; else the block covered by the page's best-scoring sub-page embedding chunk; else the most query-dense block; else the page top. Entries carry `window_blocks` (`[first, last]` block indices), `anchor` (`"keyword"` / `"semantic"` / `"query_terms"` / `"page_top"`) and the same `bbox`/`page_rect`/`clip` geometry as `"paragraph"` (union of the window's blocks). Short blocks (titles, captions) are included as neighbours, so a title above a matching abstract arrives in the same excerpt. Fewer hits fit a given token budget: prefer it when one call must carry the evidence in context, `"paragraph"` when you want the single most relevant block per hit.
 - `window_tokens` (int, optional, default `600`): token budget per excerpt for `excerpt_style="window"` (about 4 characters per token). Ignored for other styles.
 
@@ -664,14 +687,19 @@ hits measurably lowers result quality.
 - `matches` (array) — Each entry has `{page, excerpt, position, score, source, hidden_text}`. `hidden_text` (bool) is `true` when the hit's page contains text invisible to a human reader (page-level signal, same as `pdf_read_pages`). Semantic-mode entries also carry `low_confidence` (cosine below threshold). Hybrid-mode entries additionally carry `semantic_score` and `low_confidence` (set only when there is **no** keyword hit on the page AND the semantic cosine is below threshold — pages with literal-term hits stay confident regardless).
 - **Source geometry (`excerpt_style="paragraph"` only)** — when a hit's excerpt was upgraded to the containing text block, the entry additionally carries `bbox` (`[x0, y0, x1, y1]`, absolute PDF points, 1 dp — cite it), `page_rect` (the page's own coordinate box, same shape and units as `bbox`), and a server-computed `clip` (page fractions in `[0, 1]`, 3 dp) that can be pasted straight into `pdf_render_pages(clip=...)` to render just that region — no client-side coordinate math. Omitted when: `excerpt_style="snippet"` (fixed-width window, not a single block); `granularity="section"` (no per-block geometry); or the block picker fell back without resolving a concrete block index (rare — text extraction anomalies). **Limitation:** this geometry is provenance — it lets an agent point at or render the source region — not a verification signal; it does not detect misquotation or confirm the excerpt was quoted faithfully.
 - **Table context (`excerpt_style="paragraph"` only, conditional)**: an entry whose excerpt holds two or more numbers and no column-identity word (`min`, `max`, `typ`, `value`, `rating`, ...) is a value a caller cannot resolve unaided: the table header is a separate text block, and counting columns is no substitute because empty cells are elided. Such an entry carries `table_context` with `header` (list of column label strings), `rows` (every table row the hit's `bbox` covers, each a list of cell strings, in document order, capped at 20), and `columns_reliable` (bool). An excerpt block routinely spans several rows and nothing in the geometry says which one the caller meant, so all covered rows are returned rather than one being guessed; the rows are already visible in the excerpt, and the header is the part that was missing. A match that sits inside, or directly above or below, a detected table is associated with it, so a hit landing on a table's caption carries that table's header and rows. Unambiguous prose matches carry no `table_context` and cost no extra extraction. **Limitations:** the field is absent when the page has no detectable table, when the match carries no `bbox`, or when no table row's vertical span contains the hit, since a guessed row is worse than none. `columns_reliable` is `false` when any cell in the table holds two or more numbers, which happens on datasheets drawn without vertical rules and means the extractor could not split that table's columns; it is a **table-level caution, not a per-row verdict**: an individual row in a flagged table may still be perfectly aligned, and a row in a table flagged `true` is not thereby verified. When `columns_reliable` is `false` the entry additionally carries `bbox` and `clip` for the whole table (same units as the hit geometry above): the column structure is lost in the text layer but is still legible on the page, so the clip can be passed straight to `pdf_render_pages(clip=...)` to look at the table instead of trusting a merged cell. These two fields are absent when the columns are reliable, so their presence is itself the signal. This mirrors `pdf_extract_chart`, which returns a render rather than guessing when it cannot read a chart. `pdf_corpus_search` deliberately omits `table_context` to protect its cross-document latency budget.
-- `total_matches`, `page_match_counts` (int / object).
+- **What `score` means depends on the mode, and no score is comparable across calls.**
+  - Keyword mode: BM25 over this document's pages only, so a higher value means a stronger match within this document. It is `0.0` on the rare install whose SQLite lacks FTS5, where matching falls back to a plain scan.
+  - Semantic mode: cosine similarity between the query and the page's best-scoring unit (the whole page or one of its roughly 300-token sub-page windows), rounded to 4 dp.
+  - Hybrid mode: the Reciprocal Rank Fusion score, the sum of `1 / (60 + rank)` over the keyword and semantic rankings. It encodes rank positions within this one call, not relevance on an absolute scale, so do not compare it between queries or documents, and do not threshold it. The page's cosine is in `semantic_score`.
+- `total_matches` (int): `len(matches)` in every mode.
+- `page_match_counts` (object): keyed by 1-indexed page, as a string. In keyword mode the value is the number of query-term occurrences on the page, and it covers every page that matched, including pages that did not make it into `matches`. In semantic and hybrid modes it is `1` for each returned page: a presence marker, not a count.
 - `text_coverage` (string) — `"full"`, `"partial"`, or `"none"`: how much of the document has extractable text. Page mode only. When this is not `"full"` and `matches` is empty, read the result as *unknown*, not "no matches": the text-less pages are typically scanned images, invisible to keyword and semantic search alike until OCR'd via `pdf_read_pages(ocr=True)` (or inspected via `pdf_render_pages`).
 - `search_mode` (string) — `"hybrid"`, `"keyword"`, or `"semantic"`.
 - `searched_pages` (int).
 - `hidden_text_detected` (bool) — `true` if any returned hit's page contained hidden text. Always present in page mode (`false` when there are no matches). Treat flagged excerpts as especially untrusted; the text is not removed (flag-only). Not present in section mode. For the per-signal breakdown, call `pdf_info(content_trust=true, detail=true)`.
 - `excerpt_style` (string): `"paragraph"` (default), `"snippet"` or `"window"` as requested. Reflects which excerpt mode produced the results.
 - `all_results_low_confidence` (bool, conditional) — present in semantic and hybrid modes.
-- `confidence_threshold` (float, conditional).
+- `confidence_threshold` (float, conditional): the cosine floor behind `low_confidence`. It applies to the semantic `score` in semantic mode and to `semantic_score` in hybrid mode, never to the hybrid RRF `score`.
 - `semantic_unavailable` (bool, conditional) — set in `auto` mode when fastembed is not installed or the embedding model could not be loaded; response degrades to `search_mode="keyword"` and carries `semantic_unavailable_reason` (with an install hint when fastembed is missing).
 
 **Returns (section mode, `granularity="section"`):**
@@ -743,7 +771,7 @@ Both tools take a directory of local PDFs (or an explicit list of paths) and pro
 Shared envelope (both tools):
 - `docs` (array): per-tool row shape, see below.
 - `unprocessed` (array of paths): resolved paths not warmed this call and worth retrying: the budget ran out, or a doc that was cached when the call started had been invalidated (file touched, TTL sweep) by the time the response was built.
-- `skipped` (array): `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, unreadable file), plus any doc that warmed but whose cache row would not read back afterwards (`warmed but not readable back from cache`); a retry under the same conditions would repeat it, so it is reported rather than looped on.
+- `skipped` (array): `[{path, reason}]` for entries that couldn't be resolved or warmed (bad path, URL, wrong extension, denied by config, `password_required` for a PDF that needs a password to open, unreadable file), plus any doc that warmed but whose cache row would not read back afterwards (`warmed but not readable back from cache`); a retry under the same conditions would repeat it, so it is reported rather than looped on.
 - `corpus_size` (int): number of files that passed resolution into the corpus (skipped entries are excluded).
 - `warmed_this_call` (int): count of docs actually extracted this call and verified present in the cache (cache hits don't count).
 - `budget_exhausted` (bool): `true` when `unprocessed` is non-empty because the budget ran out.
@@ -766,11 +794,13 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 - `budget_seconds` (int, optional, default `45`): Wall-clock budget for warming uncached docs, clamped to 1-300. Cached docs are free.
 - `embeddings` (bool, optional, default `false`): Also compute and cache page embeddings for each doc (requires the embedding extra to be installed and a working embedding model). Needed before semantic search over the corpus.
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
+- `sections` (bool, optional, default `false`): Also build the section-granularity search index for each doc (TOC-first, heuristic fallback). Without this, `pdf_search(granularity="section")` builds it lazily, in full, on that document's first section-mode call — which can by itself exceed a timeout-bounded MCP client's budget on a large document, even though the rest of the corpus was already fully warmed. Off by default because it adds real per-doc cost on top of text extraction (~32ms/page for a heuristic-fallback doc with no TOC). Pass this when you know section-granularity search is coming; already-cached documents get it backfilled too, same as `embeddings`.
 
 **Returns:**
 - `docs` (array, sorted by path): `[{path, status: "warmed" | "cached" | "partial", pages, embeddings_cached, text_coverage}, ...]`. A very large document may not finish embedding inside one budget: it is reported with status `"partial"` plus `embedded_pages` (how many pages hold embeddings so far), stays in `unprocessed`, and continues from committed progress on the next call. Committed progress survives client timeouts and server restarts. `embeddings_cached` reports actual per-doc cache state for the configured embedding model (not an echo of the `embeddings` request flag), so a cheap text-only call answers "do I need an embeddings pass before semantic search?". `text_coverage` (`"full"` / `"partial"` / `"none"`) reports how many pages yielded extractable text: `"none"` means the doc warmed to zero searchable characters (typically a scan — warming never runs OCR; make it searchable with `pdf_read_pages(ocr=True)`). For a `"none"` doc, `embeddings_cached: true` means only that everything embeddable was embedded — which was nothing.
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`, `warm_complete`, `unwarmed`).
 - With `embeddings=True`, already-cached documents also get their document profile (used by `pdf_corpus_search` hybrid mode and `pdf_corpus_overview.about`) backfilled at no budget cost.
+- With `sections=True`, already-cached documents also get their section index backfilled, checked against `budget_seconds` between docs (unlike the document-profile backfill above, which is cheap enough to run unconditionally): a doc the deadline cuts off here lands in `unprocessed` and `warm_complete: false`, and finishes on a later call. `docs` rows carry no per-doc section-coverage field (unlike `embeddings_cached`); the only way to check is a `pdf_search(granularity="section")` call.
 
 **Limitations:**
 - The 100-file cap, budget clamp, and URL rejection described above apply.
@@ -779,6 +809,7 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 - Repeat calls continue warming from where the previous call's budget stopped; already-warmed docs come back as `"cached"` and don't re-extract. Re-issue until `warm_complete` is `true`; stopping when `unprocessed` empties can leave documents missing, because a per-document failure lands in `skipped`, not `unprocessed`.
 - Some MCP clients (and proxies/bridges) enforce their own per-call timeout, commonly ~60s, independent of `budget_seconds`. A budget at or above that ceiling guarantees a client-visible timeout error even while warming succeeds: docs finished before the cutoff are already committed to the cache, so treat the timeout as a partial run and re-issue the call rather than as a failure. Keep `budget_seconds` under the client's timeout to get a graceful partial return (`unprocessed` + `budget_exhausted` + `warm_complete: false`) instead of an error.
 - A document larger than one budget's embedding work warms across several re-issued calls; each call commits its progress durably (text lands atomically first, then embeddings in page batches), so a several-hundred-page PDF converges even through a ~60s timeout-bounded bridge. Its interim rows report `status: "partial"` with `embedded_pages`; keep re-issuing until `warm_complete` is `true`.
+- For a corpus you know you want fully warm before a chat session even starts — more than 100 files, or one that would take many re-issued calls to converge — `pdf-mcp-warm` (a separate command-line entry point installed alongside `pdf-mcp`, run outside any MCP client) warms a whole folder to completion in one run: no 100-file cap, no budget ceiling. See [Offline prewarm](configuration.md#offline-prewarm-pdf-mcp-warm).
 
 **Example:**
 
@@ -897,7 +928,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - Semantic and hybrid modes require fastembed (included in the default install) and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
 - The document arm reads page 1 only; a document whose first page is a blank cover or an image gets no profile and is ranked by the page arms alone.
 - `about` terms and the document arm's term lists tokenise Latin words only; CJK documents get an empty `about`.
-- The document arm judges a document by its first page, so a paper whose abstract is about one thing but which *uses* the queried method deep inside can lose its top-3 slot to a paper whose abstract mentions the method. Measured cost across corpus sizes 50 to 500: one spread query at 100 documents or fewer, none above; described queries improve at every size (`benchmark_data/corpus_search/doc_arm_size_sweep.md`).
+- The document arm judges a document by its first page, so a paper whose abstract is about one thing but which *uses* the queried method deep inside can lose its top-3 slot to a paper whose abstract mentions the method. Measured cost across corpus sizes 50 to 500: one spread query at 100 documents or fewer, none above; described queries improve at every size.
 
 **Example:**
 
@@ -991,19 +1022,22 @@ pdf_cache_clear(expired_only=False)  # full wipe + URL cache
 
 ### `server_info`
 
-Reports which optional features are installed and which configuration values are active on the server. Setup-time discovery — distinct from `pdf_cache_stats`, which reports runtime *cache* state; this reports what the server *can do*. Call it before feature-dependent calls (semantic search, OCR, column-aware extraction) so you can branch on availability rather than discovering a silent fallback (column-aware → positional sort) or an error (semantic mode → `error`) downstream. Named without the `pdf_` prefix because it operates on the server, not on a PDF. Results are stable for the server's lifetime.
+Reports which optional features are installed and which configuration values are active on the server. Setup-time discovery, distinct from `pdf_cache_stats`, which reports runtime *cache* state; this reports what the server *can do*. Call it before feature-dependent calls (semantic search, OCR, column-aware extraction) so you can branch on availability rather than discovering a silent fallback (column-aware → positional sort) or an error (semantic mode → `error`) downstream. Named without the `pdf_` prefix because it operates on the server, not on a PDF. Results are stable for the server's lifetime, except `features.extraction.ocr.available` (re-checked on every call, so Tesseract installed mid-session shows up) and `update` (refreshed daily in the background).
 
 **Parameters:** None.
 
 **Returns:**
 - `version` (string) — `pdf-mcp` release version.
+- `update` (object or null): the daily update check, `{current, latest, update_available, checked_at, download_url}`. `null` when the check is off (every pip/uvx install unless `[updates] check = true`). `latest` and `checked_at` are `null` before the first check completes.
 - `features` (object):
   - `extraction.column_aware` — `{available, description}`. `available` is always `true`: column detection is built in and no longer depends on an optional package, so it cannot drift from what extraction does.
   - `extraction.vertical_aware` — `{available, description}`. `available` is always `true`: vertical-script (tategaki / 直排) reading-order reconstruction is built in and needs no extra.
-  - `extraction.ocr` — `{available, description}`. `available` reflects `shutil.which("tesseract")`. OCR is opt-in (`pdf_read_pages(ocr=True)`); no tool runs it automatically, and the description says so.
+  - `extraction.ocr`: `{available, description}`. `available` is re-checked per call: `true` when Tesseract is on `PATH` or in its standard install folder (`%ProgramFiles%\Tesseract-OCR` on Windows, `/opt/homebrew/bin` or `/usr/local/bin` on macOS). OCR is opt-in (`pdf_read_pages(ocr=True)`); no tool runs it automatically, and the description says so.
   - `search.modes_available` (array) — always includes `"keyword"`; includes `"semantic"` and `"auto"` only when `fastembed` is installed and the configured embedding model is valid.
   - `search.default_mode` (string) — `"auto"`.
-  - `search.embedding_model` (string, conditional) — present **only** when semantic search is available; omitted otherwise.
+  - `search.embedding_model` (string, conditional) — present **only** when semantic search is available; omitted otherwise. Always the bare fastembed model name (e.g. `BAAI/bge-small-en-v1.5`), even under the remote (`openai`) backend: a verified remote endpoint shares the same vector-cache identity as local fastembed rather than a namespaced one, see `docs/configuration.md`.
+  - `search.embedding_backend` (string, conditional) — `"fastembed"` or `"openai"`; present under the same condition as `embedding_model`. See `docs/configuration.md` for `[embedding].backend`.
+  - `search.embedding_endpoint` (string, conditional) — `host[:port]` of the remote endpoint; present only when `embedding_backend` is `"openai"`. Never includes credentials or userinfo.
   - `corpus.tools` (array) — the multi-document tools (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`).
   - `corpus.max_files` (int) — corpus size cap (100).
   - `corpus.budget_seconds_range` (array) — clamp range for `budget_seconds` on the corpus tools (`[1, 300]`).

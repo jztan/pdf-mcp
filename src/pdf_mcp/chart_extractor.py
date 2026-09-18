@@ -34,7 +34,10 @@ from typing import Any
 
 import numpy as np
 
-CHART_EXTRACTION_VERSION = 18
+# 19: no shape change. Purges page_charts rows v3.0.0 to v3.2.0 may have
+# calibrated against another page's tick labels (backend.text served stale
+# blocks by id(); see cache._EXTRACTION_VERSION 14).
+CHART_EXTRACTION_VERSION = 19
 
 
 def hints_hash(hints: dict[str, str] | None) -> str:

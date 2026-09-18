@@ -32,6 +32,7 @@ import datetime as dt
 import hashlib
 from typing import Any
 import json
+import os
 import random
 import re
 import sys
@@ -51,9 +52,21 @@ def provenance_path(path: Path) -> str:
 
     Repo-relative when the file lies inside the repo, so the committed
     artifact never carries a machine-local checkout path; absolute otherwise.
+
+    The inside-the-repo test is lexical first: `benchmark_data/bedrock_kb` is a
+    symlink into a separate checkout, and resolving it first put every in-repo
+    path outside the repo. Only a path that is not lexically inside falls back
+    to the resolved comparison. Relative paths use forward slashes on every
+    platform so the recorded value is the same wherever the run happened.
     """
+    p = Path(os.path.abspath(path))
+    for root in (REPO, REPO.resolve()):
+        try:
+            return p.relative_to(root).as_posix()
+        except ValueError:
+            continue
     try:
-        return str(Path(path).resolve().relative_to(REPO.resolve()))
+        return Path(path).resolve().relative_to(REPO.resolve()).as_posix()
     except ValueError:
         return str(path)
 
@@ -575,8 +588,12 @@ def write_results(
     sensitivity: dict | None = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+    from bench_env import environment, markdown_line
+
+    env = environment()
     payload = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "environment": env,
         "config": config,
         "summary": summary,
         "summary_excl_flagged": sensitivity,
@@ -585,9 +602,10 @@ def write_results(
     (out_dir / "results.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    (out_dir / "RESULTS.md").write_text(
-        render_markdown(summary, config, sensitivity=sensitivity), encoding="utf-8"
-    )
+    lines = render_markdown(summary, config, sensitivity=sensitivity).split("\n")
+    title = next((i for i, ln in enumerate(lines) if ln.startswith("# ")), 0)
+    lines[title + 1 : title + 1] = ["", markdown_line(env)]
+    (out_dir / "RESULTS.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def _sha256_json(obj: Any) -> str:

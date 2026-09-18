@@ -282,6 +282,21 @@ class TestRenderAndWrite:
         assert (tmp_path / "results.json").exists()
         assert (tmp_path / "RESULTS.md").exists()
 
+    def test_write_results_records_the_environment(self, tmp_path: Path):
+        """Latency in results.json is only quotable next to the interpreter
+        and SQLite that produced it (bench_env, 2026-09-12 confound)."""
+        import json
+        import sqlite3
+
+        rows = {"P": {"q1": _row("needle", "exact")}}
+        s = summarize(rows, ["needle"], anchor_arms=())
+        write_results(s, rows, {"budget_tokens": 2000}, tmp_path)
+        env = json.loads((tmp_path / "results.json").read_text())["environment"]
+        assert env["sqlite"] == sqlite3.sqlite_version
+        lines = (tmp_path / "RESULTS.md").read_text().splitlines()
+        title = next(i for i, ln in enumerate(lines) if ln.startswith("# "))
+        assert f"SQLite {sqlite3.sqlite_version}" in lines[title + 2]
+
 
 from scripts.benchmark_bedrock_kb import bedrock_results_to_units  # noqa: E402
 
@@ -903,3 +918,25 @@ class TestProvenancePath:
 
         outside = tmp_path / "results.json"
         assert bk.provenance_path(outside) == str(outside)
+
+    def test_path_under_a_symlinked_subdirectory_stays_repo_relative(
+        self, tmp_path, monkeypatch
+    ):
+        """benchmark_data/bedrock_kb is a symlink into the bench checkout;
+        resolving it first used to put every in-repo path outside the repo."""
+        from scripts import benchmark_bedrock_kb as bk
+
+        repo = tmp_path / "repo"
+        elsewhere = tmp_path / "bench" / "bedrock_kb"
+        (repo / "benchmark_data").mkdir(parents=True)
+        elsewhere.mkdir(parents=True)
+        link = repo / "benchmark_data" / "bedrock_kb"
+        try:
+            link.symlink_to(elsewhere, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks not available on this platform")
+        monkeypatch.setattr(bk, "REPO", repo)
+        assert (
+            bk.provenance_path(link / "results.json")
+            == "benchmark_data/bedrock_kb/results.json"
+        )

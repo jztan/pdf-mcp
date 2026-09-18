@@ -256,6 +256,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 
 - [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-knowledge-base): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
 - [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 84.8% of 184 graded queries over a 100-PDF corpus
+- [How Amazon Bedrock Helped Me Make My RAG Better](https://blog.jztan.com/how-bedrock-improved-my-rag/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-bedrock-improved-my-rag): Benchmarking pdf_corpus_search against Bedrock Knowledge Bases at an equal 2,000-token budget for four cents surfaced two bugs eight months of self-testing missed: an excerpt picker discarding answers from pages it had already retrieved, and one embedding per page hiding short answers
 
 **Search & retrieval**
 

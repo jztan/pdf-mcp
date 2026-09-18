@@ -40,12 +40,6 @@ Or add to `~/.claude.json`:
 
 **One-click install (nothing to install first):**
 
-<!-- until-release -->
-> **Coming in the next release.** The download
-> link works once that release is out; until then, use the `pdf-mcp`
-> command (top of this page) and configure it by hand below.
-<!-- /until-release -->
-
 1. [Download pdf-mcp.mcpb](https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb)
    (always the newest release).
 2. In Claude Desktop open **Settings > Extensions** and drag the file onto

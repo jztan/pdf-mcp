@@ -42,12 +42,6 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 
 ### Claude Desktop: nothing to install first
 
-<!-- until-release -->
-> **Coming in the next release.** The download
-> link works once that release is out; until then, use the terminal
-> install below.
-<!-- /until-release -->
-
 1. **[Download pdf-mcp.mcpb](https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb)**.
 2. In Claude Desktop, open **Settings > Extensions**, drag the file onto
    that page, and click **Install**.

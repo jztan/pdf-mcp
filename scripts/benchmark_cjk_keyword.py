@@ -72,44 +72,54 @@ def run_benchmark() -> dict:
     """
     data = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))
 
-    tmp = tempfile.mkdtemp(prefix="cjk_bench_")
-    _core.cache = PDFCache(cache_dir=Path(tmp))
-
     text_cache: dict[str, list[str]] = {}
     results: dict[str, dict] = {}
     recalls: list[float] = []
 
-    for q in data["queries"]:
-        pdf_path = str(CORPUS_DIR / q["pdf"])
-        if not Path(pdf_path).exists():
-            continue
-        if pdf_path not in text_cache:
-            text_cache[pdf_path] = _page_texts(pdf_path)
-        needle = "".join(q["query"].split())
-        gt_pages = [i + 1 for i, t in enumerate(text_cache[pdf_path]) if needle in t]
+    tmp = tempfile.mkdtemp(prefix="cjk_bench_")
+    # Restore the server's cache afterwards: left swapped, it leaks into
+    # whatever runs next in the same process (url_fetcher still points at the
+    # original cache root, so the two disagree).
+    prev_cache = _core.cache
+    _core.cache = PDFCache(cache_dir=Path(tmp))
+    try:
+        for q in data["queries"]:
+            pdf_path = str(CORPUS_DIR / q["pdf"])
+            if not Path(pdf_path).exists():
+                continue
+            if pdf_path not in text_cache:
+                text_cache[pdf_path] = _page_texts(pdf_path)
+            needle = "".join(q["query"].split())
+            gt_pages = [
+                i + 1 for i, t in enumerate(text_cache[pdf_path]) if needle in t
+            ]
 
-        res = server_module.pdf_search(
-            pdf_path, q["query"], mode="keyword", max_results=50
-        )
-        ret_pages = (
-            [m["page"] for m in res.get("matches", [])] if "error" not in res else []
-        )
+            res = server_module.pdf_search(
+                pdf_path, q["query"], mode="keyword", max_results=50
+            )
+            ret_pages = (
+                [m["page"] for m in res.get("matches", [])]
+                if "error" not in res
+                else []
+            )
 
-        relevant = set(gt_pages)
-        hit_set = set(ret_pages) & relevant
-        recall = len(hit_set) / len(relevant) if relevant else 0.0
-        precision = len(hit_set) / len(ret_pages) if ret_pages else 0.0
+            relevant = set(gt_pages)
+            hit_set = set(ret_pages) & relevant
+            recall = len(hit_set) / len(relevant) if relevant else 0.0
+            precision = len(hit_set) / len(ret_pages) if ret_pages else 0.0
 
-        results[q["query"]] = {
-            "pdf": q["pdf"],
-            "hits": len(ret_pages),
-            "gt_pages": gt_pages,
-            "ret_pages": ret_pages,
-            "recall": recall,
-            "precision": precision,
-        }
-        if relevant:
-            recalls.append(recall)
+            results[q["query"]] = {
+                "pdf": q["pdf"],
+                "hits": len(ret_pages),
+                "gt_pages": gt_pages,
+                "ret_pages": ret_pages,
+                "recall": recall,
+                "precision": precision,
+            }
+            if relevant:
+                recalls.append(recall)
+    finally:
+        _core.cache = prev_cache
 
     results["mean_recall"] = sum(recalls) / len(recalls) if recalls else 0.0
     return results

@@ -74,6 +74,39 @@ CI runs the suite on Windows as well as Linux, and it is not a formality: it has
 
 `scripts/benchmark_platform_smoke.py` times the user-facing paths on one machine and prints a JSON blob; the `platform-bench` workflow runs it on both platforms. Reach for it when a change could plausibly cost more on one OS than another, rather than inferring it from how long CI took.
 
+## Where tool code lives
+
+`server.py` only wires things up. Each tool lives in `src/pdf_mcp/tools/`:
+
+| module | tools |
+|---|---|
+| `tools/info.py` | `pdf_info`, `pdf_get_toc` |
+| `tools/read.py` | `pdf_read_pages`, `pdf_read_all` |
+| `tools/search.py` | `pdf_search` |
+| `tools/corpus_tools.py` | `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search` |
+| `tools/render.py` | `pdf_render_pages` |
+| `tools/chart.py` | `pdf_extract_chart` |
+| `tools/admin.py` | `pdf_cache_stats`, `pdf_cache_clear`, `server_info` |
+
+Helpers shared by several tools are in the `_`-prefixed modules next to them
+(`_search_common.py`, `_tables.py`, `_render.py`). Shared state (`mcp`, `cache`,
+`pdf_config`, `url_fetcher`, the feature flags) and `_resolve_path` are in
+`src/pdf_mcp/_core.py`.
+
+Three rules, each enforced by a test:
+
+- Imports point one way: `server` -> tool modules -> `_` helper modules -> `_core`.
+  A tool module never imports another tool module.
+- Read state through the module (`_core.cache.get_...`), never
+  `from .._core import cache`. That keeps one patch point per piece of state.
+- In tests, patch the module that looks the name up: `pdf_mcp._core` for state,
+  `pdf_mcp.tools.read` for `ocr_page`, and so on. `pdf_mcp.server` exports only
+  the 13 tool functions, `mcp`, `main` and `main_http`, so patching anything else
+  on it fails `tests/test_no_stale_server_patches.py`.
+
+If your branch predates the split, rebase and move your `server.py` changes into
+the module that now holds the function you touched.
+
 ## Submitting a PR
 
 1. For a new feature or a change in behaviour, open an issue first describing the problem and the approach you have in mind, and wait for my reply on it before writing the code. Agreeing on scope first saves both of us a round trip, and several plausible ideas here have already been tried and closed with data (see [investigated-rejected.md](investigated-rejected.md)). Bug fixes, docs and small cleanups can go straight to a PR.

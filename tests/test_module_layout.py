@@ -7,6 +7,8 @@ Shared state lives in _core and is read as `_core.cache`, never bound.
 import ast
 from pathlib import Path
 
+import pytest
+
 PKG = Path(__file__).resolve().parents[1] / "src" / "pdf_mcp"
 STATE_NAMES = {
     "cache",
@@ -36,24 +38,57 @@ def _layer(name: str) -> int:
 
 
 def _edges(name: str, path: Path) -> set[str]:
-    """Layout modules that `name` imports (relative imports only)."""
+    """Layout modules that `name` imports, relative or absolute."""
     known = set(_modules())
     base = ["tools"] if name.startswith("tools.") else []
     found: set[str] = set()
     for node in ast.walk(ast.parse(path.read_text())):
-        if not isinstance(node, ast.ImportFrom) or not node.level:
-            continue
-        parts = base[: len(base) - (node.level - 1)]
-        target = ".".join(parts + (node.module.split(".") if node.module else []))
-        candidates = [target] + [
-            ".".join(filter(None, [target, a.name])) for a in node.names
-        ]
+        candidates: list[str] = []
+        if isinstance(node, ast.Import):
+            candidates = [
+                a.name[len("pdf_mcp.") :]
+                for a in node.names
+                if a.name.startswith("pdf_mcp.")
+            ]
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if node.level:
+                parts = base[: len(base) - (node.level - 1)]
+                target = ".".join(parts + (module.split(".") if module else []))
+            elif module == "pdf_mcp" or module.startswith("pdf_mcp."):
+                target = module[len("pdf_mcp") :].lstrip(".")
+            else:
+                continue
+            candidates = [target] + [
+                ".".join(filter(None, [target, a.name])) for a in node.names
+            ]
         found.update(c for c in candidates if c in known and c != name)
     return found
 
 
 def test_layout_modules_exist():
     assert {"_core", "server", "tools.search", "tools._render"} <= set(_modules())
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from .search import pdf_search\n", {"tools.search"}),
+        ("from . import search\n", {"tools.search"}),
+        ("from .. import _core\n", {"_core"}),
+        ("from .._core import mcp\n", {"_core"}),
+        ("from pdf_mcp.tools.search import pdf_search\n", {"tools.search"}),
+        ("from pdf_mcp.tools import search\n", {"tools.search"}),
+        ("import pdf_mcp.tools.search\n", {"tools.search"}),
+        ("from pdf_mcp import _core\n", {"_core"}),
+        ("from pdf_mcp._core import mcp\n", {"_core"}),
+        ("from ..extractor import ocr_page\nimport os\n", set()),
+    ],
+)
+def test_edges_sees_relative_and_absolute_imports(tmp_path, source, expected):
+    probe = tmp_path / "probe.py"
+    probe.write_text(source)
+    assert _edges("tools.info", probe) == expected
 
 
 def test_imports_only_point_down_the_layers():

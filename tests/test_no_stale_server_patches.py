@@ -108,6 +108,7 @@ def test_no_stale_server_patch_targets():
         "import pdf_mcp.server\npdf_mcp.server.pdf_config = 1\n",
         "from pdf_mcp import server\nmonkeypatch.setattr(server, 'cache', 1)\n",
         "patch('pdf_mcp.server.url_fetcher')\n",
+        "monkeypatch.setattr('pdf_mcp.server.cache', 1)\n",
     ],
 )
 def test_the_scan_catches_each_stale_form(tmp_path, source):

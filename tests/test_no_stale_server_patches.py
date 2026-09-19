@@ -37,7 +37,7 @@ def _is_server(expr: ast.AST, aliases: set[str]) -> bool:
 
 
 def _stale_sites(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     aliases = _server_aliases(tree)
     rel = path.relative_to(REPO) if path.is_relative_to(REPO) else path
     found = []

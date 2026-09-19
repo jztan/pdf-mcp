@@ -42,7 +42,7 @@ def _edges(name: str, path: Path) -> set[str]:
     known = set(_modules())
     base = ["tools"] if name.startswith("tools.") else []
     found: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         candidates: list[str] = []
         if isinstance(node, ast.Import):
             candidates = [
@@ -124,7 +124,7 @@ def test_state_is_never_bound_outside_core():
     for name, path in _modules().items():
         if name == "_core":
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and (node.module or "").endswith(
                 "_core"

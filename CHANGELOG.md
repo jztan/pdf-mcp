@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+
+- **`tools/list` order: `pdf_get_toc` is now listed second, right after
+  `pdf_info`** (it was fifth). Tool names, descriptions, input and output
+  schemas, and responses are unchanged, so a client that picks tools by name
+  sees no difference; one that relies on list position sees the new order.
+
+- **Log records now come from per-module loggers.** Records that used to be
+  emitted under `pdf_mcp.server` come from `pdf_mcp._core` or
+  `pdf_mcp.tools.<module>` (for example `pdf_mcp.tools.search`). A filter or
+  level set on the `pdf_mcp.server` logger no longer matches them; set it on
+  `pdf_mcp` to cover every module.
+
 ## [3.3.0] - 2026-09-19
 ### Added
 

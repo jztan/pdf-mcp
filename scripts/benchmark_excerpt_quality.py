@@ -36,7 +36,8 @@ import pymupdf
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
+from pdf_mcp.server import pdf_search  # noqa: E402
 
 VALID_CATEGORIES = {"prose", "structured", "table"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")

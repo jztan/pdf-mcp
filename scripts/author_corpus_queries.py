@@ -353,12 +353,14 @@ def nearest_neighbours(docs: list[dict]) -> dict[str, str]:
     import numpy as np
 
     sys.path.insert(0, str(REPO / "src"))
-    from pdf_mcp.server import cache, pdf_config
+    from pdf_mcp import _core
 
     # cache rows are keyed by the resolved path (benchmark dirs are symlinks
     # into the main checkout from a worktree)
     paths = {d["id"]: str((REPO / d["path"]).resolve()) for d in docs}
-    profiles = cache.get_doc_profiles(list(paths.values()), pdf_config.embedding_model)
+    profiles = _core.cache.get_doc_profiles(
+        list(paths.values()), _core.pdf_config.embedding_model
+    )
     ids = [i for i, p in paths.items() if profiles.get(p) is not None]
     if len(ids) < 2:
         return {}

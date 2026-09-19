@@ -38,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).parent))  # for _retrieval_metrics
 
 import _retrieval_metrics as _rm  # noqa: E402
 from benchmark_rrf import _isolated_corpus_cache  # noqa: E402
-from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
+from pdf_mcp.server import pdf_search  # noqa: E402
 
 import fitz  # noqa: E402
 from fastembed.rerank.cross_encoder import TextCrossEncoder  # noqa: E402

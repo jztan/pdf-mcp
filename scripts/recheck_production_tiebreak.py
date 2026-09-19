@@ -5,11 +5,11 @@ scripts/recheck_production_tiebreak.py
 Does the SHIPPED corpus search depend on what the files are called?
 
 Companion to recheck_tiebreak_permutation.py, which tests the stage-2
-spike harness. This one drives the production path in server.py -- the
-keyword arm, the coverage/IDF tie-break, and the hybrid fusion with the
-semantic arm -- then re-fuses everything under stable renamings of every
-document. A ranking that carries real relevance is invariant; one that
-moves is reporting filename order.
+spike harness. This one drives the production path in
+tools/corpus_tools.py -- the keyword arm, the coverage/IDF tie-break, and
+the hybrid fusion with the semantic arm -- then re-fuses everything under
+stable renamings of every document. A ranking that carries real
+relevance is invariant; one that moves is reporting filename order.
 
 Both bugs found on 2026-07-27 were exactly this failure, so the drift
 numbers here are the acceptance gate for any change to cross-document
@@ -36,14 +36,16 @@ from statistics import mean
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
-import pdf_mcp.server as sm  # noqa: E402
+from pdf_mcp import _core  # noqa: E402
 from pdf_mcp import corpus, embedder as E  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.config import PDFConfig  # noqa: E402
+from pdf_mcp.tools import corpus_tools as ct  # noqa: E402
+from pdf_mcp.tools._search_common import _corpus_query_terms  # noqa: E402
 import _retrieval_metrics as rm  # noqa: E402
 
 CACHE_DIR = REPO / "benchmark_data" / ".tiebreak_probe_cache"
-sm.cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
+_core.cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
 model = PDFConfig().embedding_model
 E.check_available(model)
 man = json.load(open(REPO / "benchmark_data/corpus_search/manifest.json"))
@@ -63,15 +65,15 @@ def docndcg(f, g):
 
 cap = {}
 for q in Q:
-    rl, _d, _p = sm._corpus_keyword_rankings(
+    rl, _d, _p = ct._corpus_keyword_rankings(
         paths, q["query"], TOP, 300, allow_or_fallback=False
     )
-    terms = sm._corpus_query_terms(q["query"])
+    terms = _corpus_query_terms(q["query"])
     cov = {
-        h[0][0]: sm._doc_covered_terms(h[0][0], [p for _x, p in h], terms) for h in rl
+        h[0][0]: ct._doc_covered_terms(h[0][0], [p for _x, p in h], terms) for h in rl
     }
     qv = E.encode_query(q["query"], model)
-    scored, _u = sm._corpus_semantic_scores(paths, model, qv)
+    scored, _u = ct._corpus_semantic_scores(paths, model, qv)
     cap[q["id"]] = (q["class"], rl, cov, scored)
 print("captured", len(cap), flush=True)
 
@@ -88,7 +90,7 @@ def ev(seed, use_cov):
         rl2 = [[(ren(d), p) for d, p in h] for h in rl]
         sc = None
         if use_cov:
-            ds = sm._corpus_coverage_scores(cov)
+            ds = ct._corpus_coverage_scores(cov)
             sc = {(ren(d), p): ds.get(d, 0.0) for h in rl for d, p in h}
         kw = corpus.rrf_fuse_doc_rankings(rl2, top_k=TOP, scores=sc)
         s2 = [(ren(p), pg, v) for p, pg, v in scored]

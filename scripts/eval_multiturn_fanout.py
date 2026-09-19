@@ -157,13 +157,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import parse_page_range  # noqa: F401  (via extractor)
+    from pdf_mcp.extractor import parse_page_range  # noqa: F401
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
     stream_dir = STREAM_DIR if not args.tag else Path(str(STREAM_DIR) + "_" + args.tag)
     stream_dir.mkdir(exist_ok=True)
 

@@ -56,11 +56,11 @@ def contain(context: str, evidence: str) -> bool:
 
 
 def extracted_page_text(path: Path, page_num_0: int) -> str:
+    from pdf_mcp import _core
     from pdf_mcp.backend.page import open_document
     from pdf_mcp.extractor import extract_text_from_page
-    from pdf_mcp.server import cache
 
-    cached = cache.get_page_text(str(path.resolve()), page_num_0)
+    cached = _core.cache.get_page_text(str(path.resolve()), page_num_0)
     if cached is not None:
         return cached
     doc = open_document(str(path))

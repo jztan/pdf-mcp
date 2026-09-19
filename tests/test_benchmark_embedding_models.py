@@ -140,7 +140,7 @@ class TestRunModel:
 
         def fake_search(pdf_path, query, mode, max_results):
             # Capture which model is "active" via the patched pdf_config
-            observed_models.append(bem.server_module.pdf_config.embedding_model)
+            observed_models.append(bem._core.pdf_config.embedding_model)
             page = 1 if query == "q1" else 2
             return {"matches": [{"page": page}]}
 
@@ -182,13 +182,13 @@ class TestRunModel:
         monkeypatch.setattr(
             bem, "pdf_search", lambda *a, **kw: {"matches": [{"page": 1}]}
         )
-        original_model = bem.server_module.pdf_config.embedding_model
+        original_model = bem._core.pdf_config.embedding_model
         bem.run_model(
             model_name="BAAI/bge-base-en-v1.5",
             gt=gt,
             scenario_k={"1a": 5},
         )
-        assert bem.server_module.pdf_config.embedding_model == original_model
+        assert bem._core.pdf_config.embedding_model == original_model
 
     def test_failing_warmup_search_raises_instead_of_scoring_zero(self, monkeypatch):
         # Regression: pdf_search reports failures as {"error": ...} rather
@@ -217,16 +217,13 @@ class TestRunModel:
                 scenario_k={"1a": 5},
             )
         # ...and the real config is still restored afterwards.
-        assert not isinstance(bem.server_module.pdf_config, bem._ConfigStub)
+        assert not isinstance(bem._core.pdf_config, bem._ConfigStub)
 
     def test_config_stub_carries_confidence_threshold(self):
         # _ConfigStub must expose every pdf_config attribute server.py reads
         # on the pdf_search path; a missing one surfaces as a search error.
         stub = bem._ConfigStub("BAAI/bge-small-en-v1.5")
-        assert (
-            stub.confidence_threshold
-            == bem.server_module._SEMANTIC_CONFIDENCE_THRESHOLD
-        )
+        assert stub.confidence_threshold == bem._core._SEMANTIC_CONFIDENCE_THRESHOLD
 
     def test_tolerates_pdf_with_no_scenarios_yet(self, monkeypatch):
         # Regression: benchmark_data/ground_truth.json carries PDFs with an

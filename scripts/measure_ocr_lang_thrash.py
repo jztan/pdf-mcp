@@ -94,11 +94,12 @@ def build_bilingual_scan(path: str, n_pages: int) -> None:
 
 def run_sequence(pdf_path: str, page_spec: str, langs: list[str], calls: int) -> dict:
     """Run `calls` OCR reads, cycling through `langs`, on a cold cache."""
+    from pdf_mcp import _core
     from pdf_mcp import server as server_module
     from pdf_mcp.cache import PDFCache
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cache_dir:
-        server_module.cache = PDFCache(cache_dir=pathlib.Path(cache_dir))
+        _core.cache = PDFCache(cache_dir=pathlib.Path(cache_dir))
         per_call = []
         for i in range(calls):
             lang = langs[i % len(langs)]

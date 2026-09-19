@@ -279,30 +279,30 @@ def test_find_tesseract_falls_back_to_the_portable_copy(monkeypatch, tmp_path):
 
 @pytest.fixture
 def no_tesseract(monkeypatch):
-    from pdf_mcp import server
+    from pdf_mcp import _core
 
     def missing():
         raise RuntimeError("Tesseract is not installed")
 
-    monkeypatch.setattr(server, "check_tesseract_available", missing)
-    return server
+    monkeypatch.setattr(_core, "check_tesseract_available", missing)
+    return _core
 
 
 def test_gate_keeps_the_install_message_when_auto_install_is_off(
     no_tesseract, monkeypatch
 ):
-    server = no_tesseract
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", False)
+    core = no_tesseract
+    monkeypatch.setattr(core, "_OCR_AUTO_INSTALL", False)
     monkeypatch.setattr(pt, "ensure", lambda *a, **k: pytest.fail("downloaded"))
-    result = server._ocr_unavailable("eng")
+    result = core._ocr_unavailable("eng")
     assert "not installed" in result["error"] and "install_hint" in result
 
 
 def test_gate_says_setting_up_while_the_download_runs(no_tesseract, monkeypatch):
-    server = no_tesseract
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    core = no_tesseract
+    monkeypatch.setattr(core, "_OCR_AUTO_INSTALL", True)
     monkeypatch.setattr(pt, "ensure", lambda *a, **k: ("downloading", None))
-    result = server._ocr_unavailable("eng")
+    result = core._ocr_unavailable("eng")
     assert result["error"].startswith("Setting up OCR")
     assert "pdf_render_pages" in result["hint"]
 
@@ -310,14 +310,14 @@ def test_gate_says_setting_up_while_the_download_runs(no_tesseract, monkeypatch)
 def test_gate_falls_back_to_the_install_message_when_unavailable(
     no_tesseract, monkeypatch
 ):
-    server = no_tesseract
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    core = no_tesseract
+    monkeypatch.setattr(core, "_OCR_AUTO_INSTALL", True)
     monkeypatch.setattr(pt, "ensure", lambda *a, **k: ("unavailable", "offline"))
-    assert "install_hint" in server._ocr_unavailable("eng")
+    assert "install_hint" in core._ocr_unavailable("eng")
 
 
 def test_gate_passes_once_the_portable_copy_is_ready(monkeypatch):
-    from pdf_mcp import server
+    from pdf_mcp import _core
 
     calls = []
 
@@ -326,30 +326,30 @@ def test_gate_passes_once_the_portable_copy_is_ready(monkeypatch):
         if len(calls) == 1:
             raise RuntimeError("Tesseract is not installed")
 
-    monkeypatch.setattr(server, "check_tesseract_available", check)
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    monkeypatch.setattr(_core, "check_tesseract_available", check)
+    monkeypatch.setattr(_core, "_OCR_AUTO_INSTALL", True)
     monkeypatch.setattr(pt, "ensure", lambda *a, **k: ("ready", "/c/tesseract"))
-    monkeypatch.setattr(server, "_lang_available", lambda lang: True)
-    assert server._ocr_unavailable("eng") is None
+    monkeypatch.setattr(_core, "_lang_available", lambda lang: True)
+    assert _core._ocr_unavailable("eng") is None
     assert len(calls) == 2
 
 
 def test_portable_copy_reads_english_only(monkeypatch, tmp_path):
-    from pdf_mcp import server
+    from pdf_mcp import _core
 
     (tmp_path / "eng.traineddata").write_text("")
-    monkeypatch.setattr(server, "find_tesseract", lambda: "/c/tesseract")
+    monkeypatch.setattr(_core, "find_tesseract", lambda: "/c/tesseract")
     monkeypatch.setattr(pt, "installed_binary", lambda: "/c/tesseract")
     monkeypatch.setattr(extractor, "_TESSDATA_PATH", str(tmp_path))
-    assert server._lang_available("eng") is True
-    assert server._lang_available("eng+jpn") is False
-    monkeypatch.setattr(server, "check_tesseract_available", lambda: None)
-    assert "English only" in server._ocr_unavailable("jpn")["error"]
+    assert _core._lang_available("eng") is True
+    assert _core._lang_available("eng+jpn") is False
+    monkeypatch.setattr(_core, "check_tesseract_available", lambda: None)
+    assert "English only" in _core._ocr_unavailable("jpn")["error"]
 
 
 def test_a_system_tesseract_is_trusted_with_any_language(monkeypatch):
-    from pdf_mcp import server
+    from pdf_mcp import _core
 
-    monkeypatch.setattr(server, "find_tesseract", lambda: "/usr/bin/tesseract")
+    monkeypatch.setattr(_core, "find_tesseract", lambda: "/usr/bin/tesseract")
     monkeypatch.setattr(pt, "installed_binary", lambda: "/c/tesseract")
-    assert server._lang_available("jpn") is True
+    assert _core._lang_available("jpn") is True

@@ -50,7 +50,10 @@ ROOT = SCRIPTS.parent.parent  # archive/ -> scripts/ -> repo root
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(SCRIPTS))
 
+from pdf_mcp import _core  # noqa: E402
 import pdf_mcp.server as server_module  # noqa: E402
+import pdf_mcp.tools.read as read_module  # noqa: E402
+import pdf_mcp.tools.search as search_module  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from benchmark_boilerplate import (  # noqa: E402
     _band,
@@ -111,19 +114,23 @@ def search_pages(
     pdf: Path, query: str, removal: dict[int, set[str]] | None
 ) -> list[int]:
     """Keyword-mode pdf_search on a fresh index; return ranked 1-indexed pages."""
-    orig_cache = server_module.cache
-    orig_extract = server_module.extract_text_from_page
+    orig_cache = _core.cache
+    orig_extract_read = read_module.extract_text_from_page
+    orig_extract_search = search_module.extract_text_from_page
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
-        server_module.extract_text_from_page = make_extractor(removal)
+        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        extractor = make_extractor(removal)
+        read_module.extract_text_from_page = extractor
+        search_module.extract_text_from_page = extractor
         try:
             res = server_module.pdf_search(
                 str(pdf), query, mode="keyword", max_results=TOPK
             )
             return [m["page"] for m in res.get("matches", [])]
         finally:
-            server_module.cache = orig_cache
-            server_module.extract_text_from_page = orig_extract
+            _core.cache = orig_cache
+            read_module.extract_text_from_page = orig_extract_read
+            search_module.extract_text_from_page = orig_extract_search
 
 
 # --------------------------------------------------------------------------- #

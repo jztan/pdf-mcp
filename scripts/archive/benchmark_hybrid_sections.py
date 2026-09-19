@@ -35,7 +35,7 @@ import sqlite3  # noqa: E402
 
 import numpy as np  # noqa: E402
 
-from pdf_mcp.server import _rrf_fuse  # noqa: E402  reuse the existing RRF
+from pdf_mcp.tools.search import _rrf_fuse  # noqa: E402  reuse the existing RRF
 
 T = TypeVar("T")
 
@@ -341,7 +341,8 @@ def run_all_cells(all_pdfs: dict, embedder) -> dict:
     """
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.section_detector import derive_sections
-    from pdf_mcp.server import pdf_search as _pdf_search, _resolve_path
+    from pdf_mcp.server import pdf_search as _pdf_search
+    from pdf_mcp._core import _resolve_path
 
     cache = PDFCache()
     CELLS = ("keyword-page", "hybrid-page", "keyword-section", "hybrid-section")

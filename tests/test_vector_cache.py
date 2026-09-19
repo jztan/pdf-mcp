@@ -136,7 +136,8 @@ class TestPageMaxHelper:
 class TestCorpusScoresParity:
     def test_matrix_path_equals_blob_path(self, tmp_path, monkeypatch):
         """Same scored tuples and best_chunks as the per-blob reference."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import corpus_tools as srv
         from pdf_mcp.extractor import page_embedding_units
         from pdf_mcp.vector_cache import CACHE
 
@@ -160,7 +161,7 @@ class TestCorpusScoresParity:
             def get_page_text(self, path, p):
                 return text if p == 0 else "short"
 
-        monkeypatch.setattr(srv, "cache", FakeCache())
+        monkeypatch.setattr(_core, "cache", FakeCache())
         CACHE.clear()
         q = rng.normal(size=8).astype(np.float32)
         best: dict = {}
@@ -185,7 +186,8 @@ class TestCorpusScoresParity:
         assert CACHE.stats()["hits"] == before + 1
 
     def test_doc_without_embeddings_is_unprocessed(self, tmp_path, monkeypatch):
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import corpus_tools as srv
         from pdf_mcp.vector_cache import CACHE
 
         class FakeCache:
@@ -195,7 +197,7 @@ class TestCorpusScoresParity:
             def get_page_embeddings(self, path, pages, model):
                 return {}
 
-        monkeypatch.setattr(srv, "cache", FakeCache())
+        monkeypatch.setattr(_core, "cache", FakeCache())
         CACHE.clear()
         scored, unproc = srv._corpus_semantic_scores(
             ["/nope.pdf"], "m", np.zeros(8, np.float32)
@@ -209,7 +211,8 @@ class TestLazyBestChunks:
     ):
         """Best-window text is resolved only when a returned page asks for
         it: the scorer must not read or re-chunk every page per query."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import corpus_tools as srv
         from pdf_mcp.extractor import page_embedding_units
         from pdf_mcp.vector_cache import CACHE
 
@@ -234,7 +237,7 @@ class TestLazyBestChunks:
                 reads.append(p)
                 return text if p == 0 else "short"
 
-        monkeypatch.setattr(srv, "cache", FakeCache())
+        monkeypatch.setattr(_core, "cache", FakeCache())
         CACHE.clear()
         q = rng.normal(size=8).astype(np.float32)
         lazy = srv._LazyBestChunks()

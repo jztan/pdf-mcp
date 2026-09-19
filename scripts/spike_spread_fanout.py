@@ -47,12 +47,12 @@ FANOUT_KS = (2, 3, 5)
 
 
 def main() -> int:
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}

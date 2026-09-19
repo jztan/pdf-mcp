@@ -35,6 +35,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 import pymupdf  # noqa: E402
 
+from pdf_mcp import _core  # noqa: E402
 import pdf_mcp.server as server_module  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.extractor import extract_text_from_page  # noqa: E402
@@ -72,7 +73,7 @@ def run_benchmark() -> dict:
     data = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))
 
     tmp = tempfile.mkdtemp(prefix="cjk_bench_")
-    server_module.cache = PDFCache(cache_dir=Path(tmp))
+    _core.cache = PDFCache(cache_dir=Path(tmp))
 
     text_cache: dict[str, list[str]] = {}
     results: dict[str, dict] = {}

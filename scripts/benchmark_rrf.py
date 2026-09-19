@@ -29,9 +29,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp import _core  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
-from pdf_mcp.server import _resolve_path, pdf_search  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
+from pdf_mcp.server import pdf_search  # noqa: E402
 
 # Detect fastembed once at import time.
 try:
@@ -83,7 +84,8 @@ def check_fastembed(current_version: str, baseline_version: str) -> str | None:
 
 def run_graded(corpus, ground_truth, modes=("keyword", "semantic", "auto"), k=10):
     """Per-query and overall NDCG@k for each search mode over the graded corpus."""
-    from pdf_mcp.server import _resolve_path, pdf_search
+    from pdf_mcp._core import _resolve_path
+    from pdf_mcp.server import pdf_search
 
     per_query: dict[str, dict[str, float]] = {}
     for q in corpus["queries"]:
@@ -778,26 +780,26 @@ _GATE_CACHE_DIR = Path.home() / ".cache" / "pdf-mcp-rrf-gate"
 def _isolated_corpus_cache(cache_dir: Path = _GATE_CACHE_DIR):
     """Point the server at a corpus-only cache for the duration of the gate.
 
-    Swaps the server-module ``cache`` and ``url_fetcher`` globals (the same
+    Swaps the ``_core`` ``cache`` and ``url_fetcher`` globals (the same
     ones pdf_search/_resolve_path read) onto ``cache_dir`` and restores the
     originals on exit, so bm25() IDF is computed over the benchmark corpus
     alone — see the module note above and the cross-document leakage issue.
     """
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.url_fetcher import URLFetcher
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
-    prev_cache = server_module.cache
-    prev_fetcher = server_module.url_fetcher
-    server_module.cache = PDFCache(cache_dir=cache_dir)
-    server_module.url_fetcher = URLFetcher(
-        cache_dir=cache_dir / "downloads", config=server_module.pdf_config
+    prev_cache = _core.cache
+    prev_fetcher = _core.url_fetcher
+    _core.cache = PDFCache(cache_dir=cache_dir)
+    _core.url_fetcher = URLFetcher(
+        cache_dir=cache_dir / "downloads", config=_core.pdf_config
     )
     try:
         yield
     finally:
-        server_module.cache = prev_cache
-        server_module.url_fetcher = prev_fetcher
+        _core.cache = prev_cache
+        _core.url_fetcher = prev_fetcher
 
 
 def run_gate(update_baseline: bool) -> int:
@@ -943,14 +945,14 @@ def main() -> None:
     gt = load_ground_truth(args.ground_truth)
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        original_cache = server_module.cache
-        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        original_cache = _core.cache
+        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         try:
             qa_results = run_qa_group(gt)
             context_results = run_context_group(gt)
             nav_results = run_navigation_group(gt)
         finally:
-            server_module.cache = original_cache
+            _core.cache = original_cache
 
     all_results = qa_results + context_results + nav_results
 

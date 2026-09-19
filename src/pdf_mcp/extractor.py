@@ -1391,7 +1391,8 @@ def block_bbox_for_index(
     block on the page.
 
     Uses the same enumeration as get_best_paragraph_for_query and the
-    direct-containment branch in server._upgrade_excerpts_to_paragraphs:
+    direct-containment branch in
+    tools/_search_common.py's _upgrade_excerpts_to_paragraphs:
     text blocks only (block[6] == 0), sorted by position. Returns None if
     block_idx is out of range.
     """
@@ -1763,7 +1764,7 @@ def _ocr_page_worker(
 
     Opens its OWN Document (PyMuPDF documents are not shareable across
     processes) and isolates per-page failure as a PageError so one bad page
-    never crashes the batch. Lives in extractor.py (not server.py) so spawn
+    never crashes the batch. Lives in extractor.py (not _core.py) so spawn
     re-imports only PyMuPDF, never FastMCP.
 
     Args tuple: (path, page_num, lang, dpi, tessdata)
@@ -1833,10 +1834,10 @@ def _warm_extract_worker(
     work, no embeddings, no rendering, so it parallelizes the same way text
     extraction does. Section detection is otherwise built lazily on a
     document's first ``pdf_search(granularity="section")`` call
-    (server.py's ``_pdf_search_section_mode``), which is exactly the gap
-    this closes: a doc whose text and embeddings were prewarmed still paid
-    that cost, in full, serially, on the first section-mode query -- for a
-    heuristic-fallback doc (no TOC) measured at ~32ms/page
+    (tools/search.py's ``_pdf_search_section_mode``), which is exactly the
+    gap this closes: a doc whose text and embeddings were prewarmed still
+    paid that cost, in full, serially, on the first section-mode query --
+    for a heuristic-fallback doc (no TOC) measured at ~32ms/page
     (benchmark_data/warm_parallelism_strix.md), enough on its own to time
     out a timeout-bounded MCP client on a large document. Best-effort: a
     failure here does not fail the whole document's warm, matching the

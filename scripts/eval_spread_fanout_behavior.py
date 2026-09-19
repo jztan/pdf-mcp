@@ -174,12 +174,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     wanted = tuple(c.strip() for c in args.classes.split(",") if c.strip())
 
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
     corpus_doc = (pdf_corpus_search.__doc__ or "").strip()
     if args.arm in ("new", "new2"):
         repl = NEW_INSTRUCTION if args.arm == "new" else NEW_INSTRUCTION_V2

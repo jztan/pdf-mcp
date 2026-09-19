@@ -15,7 +15,7 @@ def test_non_arxiv_two_column_pages_are_not_short_circuited():
     import pymupdf
 
     from pdf_mcp.extractor import is_confidently_single_column
-    from pdf_mcp.server import _resolve_path
+    from pdf_mcp._core import _resolve_path
 
     corpus = json.loads(CORPUS.read_text("utf-8"))
     for entry in corpus["must_not_short_circuit"]:

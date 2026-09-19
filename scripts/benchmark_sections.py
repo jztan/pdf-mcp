@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp import _core  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.section_detector import (  # noqa: E402
     Section,
@@ -46,7 +46,7 @@ from pdf_mcp.section_detector import (  # noqa: E402
 )
 
 
-from pdf_mcp.server import _resolve_path  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search as _PDF_SEARCH_FN  # noqa: E402
 
 
@@ -837,7 +837,7 @@ def _print_summary(results: dict, calibrate: bool) -> tuple[bool, list[str]]:
 
 
 def _resolve_pdf_local_path(url: str) -> str:
-    """Wrapper around server._resolve_path (kept separate so tests can stub it)."""
+    """Wrapper around _core._resolve_path (kept separate so tests can stub it)."""
     path, err = _resolve_path(url)
     if err is not None:
         raise RuntimeError(err["error"])
@@ -920,8 +920,8 @@ def main(argv: list[str] | None = None) -> None:
     results: dict = {}
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        original_cache = server_module.cache
-        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+        original_cache = _core.cache
+        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
         try:
             if 1 in selected_groups:
                 results["group_1"] = run_boundary_group(pdfs)
@@ -938,7 +938,7 @@ def main(argv: list[str] | None = None) -> None:
             _save_results(results, file_ts, iso_ts)
             sys.exit(2)
         finally:
-            server_module.cache = original_cache
+            _core.cache = original_cache
 
     passed, failures = _print_summary(results, calibrate=args.calibrate)
     _save_results(results, file_ts, iso_ts)

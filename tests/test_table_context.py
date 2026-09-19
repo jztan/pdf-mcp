@@ -135,7 +135,7 @@ def test_every_table_carries_columns_reliable_and_split_cells(ruled_table_pdf):
 
 def test_ambiguity_trigger():
     """Only excerpts a caller cannot resolve are worth a subprocess."""
-    from pdf_mcp.server import _excerpt_is_ambiguous
+    from pdf_mcp.tools._tables import _excerpt_is_ambiguous
 
     # Several numbers, nothing saying which is which.
     assert _excerpt_is_ambiguous("Reset Voltage | 0.4 | 0.5 | 1 | V") is True
@@ -149,7 +149,7 @@ def test_ambiguity_trigger():
 
 def test_header_fallback_promotes_row_zero():
     """PyMuPDF sometimes reports a section title as the header."""
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     title_header = ["Electrical Characteristics (@ TA = +25C)", "", ""]
     rows = [["Characteristic", "Min", "Max"], ["Vf", "0.7", "1.1"]]
@@ -159,7 +159,7 @@ def test_header_fallback_promotes_row_zero():
 
 
 def test_header_fallback_does_not_fire_on_a_real_header():
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     real = ["PARAMETER", "MIN", "MAX"]
     rows = [["Vf", "0.7", "1.1"]]
@@ -178,7 +178,7 @@ def test_empty_header_does_not_promote_a_one_cell_section_row():
     the column header -- a wrong claim that 'Net revenues:' labels a column.
     A header names two or more columns; one filled cell is a section band.
     """
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     empty = ["", "", "", "", "", "", "", ""]
     rows = [
@@ -191,7 +191,7 @@ def test_empty_header_does_not_promote_a_one_cell_section_row():
 
 
 def test_columns_reliable_false_when_a_cell_holds_two_numbers():
-    from pdf_mcp.server import _columns_reliable
+    from pdf_mcp.extractor import _columns_reliable
 
     assert _columns_reliable([["Reset Voltage", "0.4 0.5 1", "V"]]) is False
     assert _columns_reliable([["Reset Voltage", "0.4", "V"]]) is True
@@ -200,7 +200,7 @@ def test_columns_reliable_false_when_a_cell_holds_two_numbers():
 def test_attach_adds_context_to_an_ambiguous_match(ruled_table_pdf):
     """End to end: an ambiguous excerpt gains a header and its row."""
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import _attach_table_context
+    from pdf_mcp.tools._tables import _attach_table_context
     import tempfile as _tf
 
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -288,7 +288,7 @@ def test_a_bare_row_label_inside_the_rules_earns_extraction(wrapped_label_table_
     import tempfile as _tf
 
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import _attach_table_context, _match_may_touch_a_table
+    from pdf_mcp.tools._tables import _attach_table_context, _match_may_touch_a_table
 
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         cache = PDFCache(cache_dir=pathlib.Path(tmp))
@@ -318,12 +318,18 @@ def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_tabl
     import pathlib
     import tempfile as _tf
 
-    from pdf_mcp import server as srv
+    from pdf_mcp.tools import _tables as srv
+    from pdf_mcp.tools import read as read_tools
     from pdf_mcp.cache import PDFCache
 
     called = []
     monkeypatch.setattr(
         srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
+    )
+    monkeypatch.setattr(
+        read_tools,
         "extract_tables_for_pages",
         lambda *a, **k: called.append(a) or {"tables": {}},
     )
@@ -342,7 +348,8 @@ def test_prose_beside_a_ruled_table_still_spawns_nothing(monkeypatch, ruled_tabl
 
 def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
     """A prose search must cost nothing."""
-    from pdf_mcp import server as srv
+    from pdf_mcp.tools import _tables as srv
+    from pdf_mcp.tools import read as read_tools
     from pdf_mcp.cache import PDFCache
     import pathlib
     import tempfile as _tf
@@ -350,6 +357,11 @@ def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
     called = []
     monkeypatch.setattr(
         srv,
+        "extract_tables_for_pages",
+        lambda *a, **k: called.append(a) or {"tables": {}},
+    )
+    monkeypatch.setattr(
+        read_tools,
         "extract_tables_for_pages",
         lambda *a, **k: called.append(a) or {"tables": {}},
     )
@@ -363,7 +375,7 @@ def test_no_subprocess_for_unambiguous_matches(monkeypatch, ruled_table_pdf):
 def test_no_context_when_the_match_has_no_bbox(ruled_table_pdf):
     """49 of 51 gate matches carry a bbox; without one there is no row."""
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import _attach_table_context
+    from pdf_mcp.tools._tables import _attach_table_context
     import pathlib
     import tempfile as _tf
 
@@ -385,7 +397,7 @@ def test_whole_table_block_returns_every_row_not_one_guess(ruled_table_pdf):
     without guessing which row was meant.
     """
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import _attach_table_context
+    from pdf_mcp.tools._tables import _attach_table_context
     import pathlib
     import tempfile as _tf
 
@@ -408,7 +420,7 @@ def test_whole_table_block_returns_every_row_not_one_guess(ruled_table_pdf):
 
 def test_context_rows_are_capped(ruled_table_pdf):
     """A match covering a huge table must not bloat the response."""
-    from pdf_mcp.server import _MAX_CONTEXT_ROWS
+    from pdf_mcp.tools._tables import _MAX_CONTEXT_ROWS
 
     assert _MAX_CONTEXT_ROWS == 20
 
@@ -422,7 +434,7 @@ def test_header_promotion_is_not_bound_to_datasheet_vocabulary():
     while the fiscal years sit in row 0. Only Vishay promoted, and only
     because its labels happen to read Min/Max.
     """
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     fed_header = ["Table 2. Estimated APRs for select online products", "", ""]
     fed_rows = [
@@ -462,7 +474,7 @@ def test_header_promotion_needs_three_columns():
     is the shape of ordinary data, so the structural signal cannot
     distinguish it from a caption and must not fire.
     """
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     header = ["Name", ""]
     rows = [["Alice", "30"], ["Bob", "41"]]
@@ -472,7 +484,7 @@ def test_header_promotion_needs_three_columns():
 
 
 def test_header_promotion_leaves_a_fully_populated_header_alone():
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     real = ["Parameter", "Description", "Min", "Max", "Unit"]
     rows = [["Ioutput1", "Cumulative IO", "-", "1200", "mA"]]
@@ -489,7 +501,7 @@ def test_header_promotion_refuses_a_row_carrying_money():
     allowance alone promoted that data row over a correct header. A header
     names columns; it does not carry currency or thousands-grouped amounts.
     """
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     header = ["", "2024", "", "", "", "2023", "", "", "", "2022", "", ""]
     rows = [
@@ -529,7 +541,7 @@ def test_header_promotion_refuses_a_row_carrying_money():
 
 def test_header_promotion_still_fires_on_a_year_row_without_money():
     """Berkshire p61: caption header, row 0 is bare years, so promote."""
-    from pdf_mcp.server import _resolve_header
+    from pdf_mcp.tools._tables import _resolve_header
 
     header = [""] * 18
     header[0] = "Percentage change"
@@ -556,7 +568,8 @@ def test_thousands_grouped_numbers_are_one_token():
     single-value excerpt look ambiguous, on every financial or government
     table that groups thousands.
     """
-    from pdf_mcp.server import _columns_reliable, _excerpt_is_ambiguous
+    from pdf_mcp.tools._tables import _excerpt_is_ambiguous
+    from pdf_mcp.extractor import _columns_reliable
 
     # One clean value per cell: the columns are fine.
     assert _columns_reliable([["Licensed stores", "4,350.4", "4,505.1"]]) is True
@@ -569,7 +582,7 @@ def test_thousands_grouped_numbers_are_one_token():
 
 def test_overlapping_rows_reports_every_covered_row():
     """Row selection reports all covered rows, not a single choice."""
-    from pdf_mcp.server import _rows_overlapping
+    from pdf_mcp.tools._tables import _rows_overlapping
 
     rows = [
         [43.0, 100.0, 551.0, 113.0],
@@ -647,7 +660,7 @@ def test_packed_table_context_carries_a_render_clip():
     layer does not. Same call the chart extractor makes when it declines
     and returns a render instead of guessing.
     """
-    from pdf_mcp.server import _context_for_match
+    from pdf_mcp.tools._tables import _context_for_match
 
     packed = [
         {
@@ -668,7 +681,7 @@ def test_packed_table_context_carries_a_render_clip():
 
 def test_clean_table_context_carries_no_clip():
     """A readable table needs no picture, so the field stays absent."""
-    from pdf_mcp.server import _context_for_match
+    from pdf_mcp.tools._tables import _context_for_match
 
     clean = [
         {
@@ -694,7 +707,7 @@ def test_match_beside_a_table_is_associated_with_it():
     can: 12 of the 19 have the winner inside, or within 60pt of, the
     table whose rows hold the answer.
     """
-    from pdf_mcp.server import _table_near_match
+    from pdf_mcp.tools._tables import _table_near_match
 
     table = {"bbox": [50.0, 200.0, 500.0, 400.0]}
     # Caption sitting just above the table.
@@ -713,7 +726,7 @@ def test_trigger_fires_for_a_caption_with_no_numbers():
     'Table 3: Variations on the Transformer architecture' is the single
     largest failure bucket (7 of 19) and carries no value at all.
     """
-    from pdf_mcp.server import _excerpt_wants_table_context
+    from pdf_mcp.tools._tables import _excerpt_wants_table_context
 
     cap = "Table 3: Variations on the Transformer architecture."
     assert _excerpt_wants_table_context(cap, near_table=True) is True
@@ -747,7 +760,8 @@ def test_cached_tables_allow_attachment_without_re_extracting(
     import pathlib
     import tempfile as _tf
 
-    from pdf_mcp import server as srv
+    from pdf_mcp.tools import _tables as srv
+    from pdf_mcp.tools import read as read_tools
     from pdf_mcp.cache import PDFCache
 
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
@@ -760,6 +774,11 @@ def test_cached_tables_allow_attachment_without_re_extracting(
         re_extracted = []
         monkeypatch.setattr(
             srv,
+            "extract_tables_for_pages",
+            lambda *a, **k: re_extracted.append(a) or {"tables": {}},
+        )
+        monkeypatch.setattr(
+            read_tools,
             "extract_tables_for_pages",
             lambda *a, **k: re_extracted.append(a) or {"tables": {}},
         )
@@ -777,11 +796,12 @@ def test_cached_tables_allow_attachment_without_re_extracting(
 
 
 def test_number_token_and_columns_reliable_live_in_extractor():
-    from pdf_mcp import extractor, server
+    from pdf_mcp import extractor
+    from pdf_mcp.tools import _tables
 
     assert extractor._NUMBER_TOKEN.findall("4,350.4 and 16") == ["4,350.4", "16"]
     assert extractor._columns_reliable([["ok", "1"]]) is True
     assert extractor._columns_reliable([["4.5 16"]]) is False
-    # server must re-use the extractor definitions, not keep its own copies.
-    assert server._NUMBER_TOKEN is extractor._NUMBER_TOKEN
-    assert server._columns_reliable is extractor._columns_reliable
+    # _tables must re-use the extractor definitions, not keep its own copies.
+    assert _tables._NUMBER_TOKEN is extractor._NUMBER_TOKEN
+    assert _tables._columns_reliable is extractor._columns_reliable

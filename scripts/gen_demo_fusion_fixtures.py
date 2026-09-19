@@ -2,10 +2,11 @@
 """Generate fixtures for the demo page's JS corpus-fusion port.
 
 Expected outputs come from the REAL Python implementations
-(corpus.rrf_fuse_doc_rankings, server._corpus_query_terms,
-server._corpus_coverage_scores). covered_terms replicates the set
-logic of server._doc_covered_terms, which is cache-bound and cannot
-be called directly on raw strings.
+(corpus.rrf_fuse_doc_rankings, tools/_search_common.py's
+_corpus_query_terms, tools/corpus_tools.py's _corpus_coverage_scores).
+covered_terms replicates the set logic of tools/corpus_tools.py's
+_doc_covered_terms, which is cache-bound and cannot be called directly
+on raw strings.
 
 Run: uv run python scripts/gen_demo_fusion_fixtures.py
 Writes: tests/data/demo_fusion_fixtures.json
@@ -18,8 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pdf_mcp import corpus  # noqa: E402
-from pdf_mcp.server import _corpus_coverage_scores  # noqa: E402
-from pdf_mcp.server import _corpus_query_terms  # noqa: E402
+from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores  # noqa: E402
+from pdf_mcp.tools._search_common import _corpus_query_terms  # noqa: E402
 
 TERM_RE = re.compile(r"[a-z0-9]+")
 
@@ -48,7 +49,7 @@ def skey(doc: str, page: int) -> str:
 
 
 def e2e_expected(docs: dict[str, dict[int, str]], query: str, top_k: int):
-    """Mirror server.py's keyword-arm wiring on raw page texts.
+    """Mirror tools/corpus_tools.py's keyword-arm wiring on raw page texts.
 
     NOTE: caps hits AFTER best-first sorting; the demo and the server's
     fallback cap in page order BEFORE sorting. Equivalent only while

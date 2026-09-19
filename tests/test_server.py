@@ -1729,10 +1729,14 @@ class TestReadPagesInlineImages:
         assert stats_after["cache_size_bytes"] > stats_before["cache_size_bytes"]
 
     def test_pdf_extract_images_tool_removed(self):
-        """pdf_extract_images is no longer defined in server module."""
+        """pdf_extract_images is no longer a registered MCP tool."""
+        import asyncio
+
         import pdf_mcp.server as mod
 
-        assert not hasattr(mod, "pdf_extract_images")
+        registered = {t.name for t in asyncio.run(mod.mcp.list_tools())}
+        assert "pdf_read_pages" in registered  # the listing is not empty
+        assert "pdf_extract_images" not in registered
 
 
 class TestReadPagesInlineTables:

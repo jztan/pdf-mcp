@@ -207,6 +207,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[embedding].base_url` private-address check above, so a Tailscale-reached
   endpoint is treated the same as any other private address.
 
+- Bumped transitive `anyio` 4.13.0 → 4.15.1 to clear CVE-2026-64847 and
+  CVE-2026-63374. Reached via `fastmcp`, `mcp` and `httpx`, none of which cap
+  it, so the bump is lockfile-only with no change to `pyproject.toml`
+  constraints. The Claude Desktop bundle installs the locked versions, so
+  bundle installs of 3.3.0 already carry the fix.
+
 ### Contributors
 
 - @janLo — `pdf-mcp-warm` offline prewarm, section-index warming in `pdf_corpus_warm`, and a core-scaled OCR/render worker pool, benchmarked on a 24-thread host ([#41](https://github.com/jztan/pdf-mcp/pull/41)), opt-in German-aware keyword search ([#44](https://github.com/jztan/pdf-mcp/pull/44)), and remote GPU embedding for bge-small ([#47](https://github.com/jztan/pdf-mcp/pull/47))

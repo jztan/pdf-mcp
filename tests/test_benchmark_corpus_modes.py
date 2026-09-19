@@ -160,6 +160,23 @@ class TestValidateQueries:
         errors = validate_queries(self.manifest, queries, lambda d, p: "other text")
         assert len(errors) == 1 and "evidence not found" in errors[0]
 
+    def test_rejects_a_ligature_label_the_scorer_cannot_match(self):
+        # casefold() would turn the ligature into "ff" and pass this label,
+        # but the span scorer (benchmark_bedrock_kb.contain) uses lower().
+        queries = {
+            "queries": [
+                {
+                    "id": "t1",
+                    "class": "trap",
+                    "labels": [
+                        {"doc": "a", "page": 1, "gain": 2, "evidence": "Eﬀects"}
+                    ],
+                }
+            ]
+        }
+        errors = validate_queries(self.manifest, queries, lambda d, p: "Effects")
+        assert len(errors) == 1 and "evidence not found" in errors[0]
+
     def test_rejects_unknown_doc(self):
         queries = {
             "queries": [

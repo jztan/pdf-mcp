@@ -8,7 +8,9 @@ ranking, on a real multi-doc corpus with hand-authored graded truth.
 
 Subcommands:
     --build-manifest   write benchmark_data/corpus_search/manifest.json
-    --validate         check every ground-truth label against page text
+    --validate         check every ground-truth label against the CACHED page
+                       text the harnesses score (exit 0 ok, 1 a label failed,
+                       2 corpus not warm in the active cache)
     --run              warm corpus, run both arms, write RESULTS.md
 
 Zero production-code changes: this script builds its own scratch SQLite
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -242,12 +245,20 @@ def normalize(text: str) -> str:
     return _WS.sub(" ", text).strip().casefold()
 
 
-def validate_queries(manifest, queries, page_text_lookup) -> list[str]:
-    """Check every label: doc exists in manifest, evidence substring is
-    present (normalized) in that doc/page's text. Returns error strings.
+class CorpusNotWarm(Exception):
+    """A labelled page has no cached text: a setup error, not a bad label."""
 
-    page_text_lookup(doc_id, page_1indexed) -> str
+
+def validate_queries(manifest, queries, page_text_lookup) -> list[str]:
+    """Check every label: doc exists in manifest, and the evidence is found
+    in that doc/page's text under the rule the harnesses score with
+    (`benchmark_bedrock_kb.contain`). Returns error strings.
+
+    page_text_lookup(doc_id, page_1indexed) -> str, or None when the page is
+    not cached, which raises CorpusNotWarm.
     """
+    from benchmark_bedrock_kb import contain
+
     known = {d["id"] for d in manifest["docs"]}
     errors: list[str] = []
     for q in queries["queries"]:
@@ -256,7 +267,9 @@ def validate_queries(manifest, queries, page_text_lookup) -> list[str]:
                 errors.append(f"{q['id']}: unknown doc {label['doc']}")
                 continue
             text = page_text_lookup(label["doc"], label["page"])
-            if normalize(label["evidence"]) not in normalize(text):
+            if text is None:
+                raise CorpusNotWarm(f"{label['doc']} p{label['page']}")
+            if contain(text, label["evidence"]) == "missing":
                 errors.append(
                     f"{q['id']}: evidence not found on"
                     f" {label['doc']} p{label['page']}:"
@@ -265,27 +278,77 @@ def validate_queries(manifest, queries, page_text_lookup) -> list[str]:
     return errors
 
 
-def _page_text_lookup_factory(manifest: dict):
-    """Open each doc lazily once; return extracted text per 1-indexed page."""
-    import pymupdf
+_NUMBER_RUN = re.compile(r"(?:^|\s)\d{1,4}(?=\s)")
 
-    from pdf_mcp.extractor import extract_text_from_page
 
-    docs_by_id = {d["id"]: REPO / d["path"] for d in manifest["docs"]}
-    cache: dict[str, list[str]] = {}
+def label_debris_warnings(queries) -> list[str]:
+    """Labels whose evidence looks like table, figure or axis debris rather
+    than a sentence stating the fact. Such a label validates, but it counts
+    any payload carrying the debris as a hit. Warnings only: review by eye."""
+    warnings: list[str] = []
+    for q in queries["queries"]:
+        for label in q["labels"]:
+            ev = " ".join(label["evidence"].split())
+            if ev.startswith(("Table", "Figure")) or len(_NUMBER_RUN.findall(ev)) >= 3:
+                warnings.append(
+                    f"{q['id']}: evidence looks like table/figure debris on"
+                    f" {label['doc']} p{label['page']}: {ev[:80]!r}"
+                )
+    return warnings
 
-    def lookup(doc_id: str, page: int) -> str:
-        if doc_id not in cache:
-            doc = pymupdf.open(str(docs_by_id[doc_id]))
-            cache[doc_id] = [
-                extract_text_from_page(doc[i], sort_by_position=True)
-                for i in range(len(doc))
-            ]
-            doc.close()
-        pages = cache[doc_id]
-        return pages[page - 1] if 1 <= page <= len(pages) else ""
+
+_VALIDATION_TTL_HOURS = 100 * 8760  # a warm cache's age must never matter here
+
+
+def open_validation_cache(cache_dir: Path | None):
+    """Open the cache the harnesses score against without purging it.
+
+    PDFCache drops rows older than its TTL (24 h by default) on open, which
+    empties a warm benchmark cache from an earlier day just by looking at it.
+    """
+    from pdf_mcp.cache import PDFCache
+
+    return PDFCache(cache_dir=cache_dir, ttl_hours=_VALIDATION_TTL_HOURS)
+
+
+def cached_page_text_lookup(paths_by_id: dict[str, str], cache):
+    """Cached text per 1-indexed page, None when not cached. The harnesses
+    score cached text, so re-extracting here validates a different string."""
+
+    def lookup(doc_id: str, page: int) -> str | None:
+        text: str | None = cache.get_page_text(paths_by_id[doc_id], page - 1)
+        return text
 
     return lookup
+
+
+def active_cache_dir() -> Path | None:
+    raw = os.environ.get("PDF_MCP_CACHE_DIR", "").strip()
+    return Path(raw).expanduser() if raw else None
+
+
+def run_validate() -> int:
+    """0 every label found, 1 a label failed, 2 the corpus is not warm."""
+    manifest, queries = load_manifest(), load_queries()
+    paths_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
+    lookup = cached_page_text_lookup(
+        paths_by_id, open_validation_cache(active_cache_dir())
+    )
+    try:
+        errors = validate_queries(manifest, queries, lookup)
+    except CorpusNotWarm as exc:
+        print(
+            f"SETUP ERROR: corpus not warm in the active cache ({exc} has no"
+            " cached text). Warm it (text is enough) and point"
+            " PDF_MCP_CACHE_DIR at that cache."
+        )
+        return 2
+    for w in label_debris_warnings(queries):
+        print(f"WARN: {w}")
+    for e in errors:
+        print(f"INVALID: {e}")
+    print(f"{len(queries['queries'])} queries, {len(errors)} label errors")
+    return 1 if errors else 0
 
 
 def run_benchmark(force: bool = False) -> int:
@@ -478,7 +541,7 @@ def write_results_md(body: str, force: bool = False) -> None:
     print(f"wrote {out}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--build-manifest", action="store_true")
     ap.add_argument("--validate", action="store_true")
@@ -488,7 +551,7 @@ def main() -> int:
         action="store_true",
         help="overwrite RESULTS.md even if it carries hand-written sections",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     if args.build_manifest:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -500,14 +563,7 @@ def main() -> int:
         return 0
 
     if args.validate:
-        manifest, queries = load_manifest(), load_queries()
-        errors = validate_queries(
-            manifest, queries, _page_text_lookup_factory(manifest)
-        )
-        for e in errors:
-            print(f"INVALID: {e}")
-        print(f"{len(queries['queries'])} queries," f" {len(errors)} label errors")
-        return 1 if errors else 0
+        return run_validate()
 
     if args.run:
         return run_benchmark(force=args.force)  # Task 4

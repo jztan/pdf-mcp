@@ -346,6 +346,8 @@ def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[st
     carrying a page) the evidence substring is present in that page's
     extracted text. page_text_lookup(doc_id, page_1indexed) -> str.
     Returns a list of human-readable error strings."""
+    from benchmark_bedrock_kb import contain
+
     known = {d["id"] for d in manifest["docs"]}
     errors: list[str] = []
     for q in queries["queries"]:
@@ -356,13 +358,34 @@ def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[st
             if "page" not in label:
                 continue
             text = page_text_lookup(label["doc"], label["page"])
-            if normalize(label["evidence"]) not in normalize(text):
+            # The scorer's own rule, not normalize(): casefold() turns the
+            # "\ufb00" ligature into "ff", so it passes a label that
+            # contain() (lower()) can never score.
+            if contain(text, label["evidence"]) == "missing":
                 errors.append(
                     f"{q['id']}: evidence not found on"
                     f" {label['doc']} p{label['page']}:"
                     f" {label['evidence']!r}"
                 )
     return errors
+
+
+def _run_validate(data: Path, manifest: dict, queries: dict, lookup) -> int:
+    errors = validate_queries(manifest, queries, lookup)
+    errors += validate_described_queries(queries, lookup)
+    fidelity_path = data / "fidelity_questions.json"
+    n_questions = 0
+    if fidelity_path.exists():
+        fidelity = json.loads(fidelity_path.read_text(encoding="utf-8"))
+        n_questions = len(fidelity["questions"])
+        errors += validate_fidelity_questions(fidelity, queries, lookup)
+    for err in errors:
+        print(f"INVALID {err}")
+    print(
+        f"\n{len(queries['queries'])} queries and {n_questions} fidelity"
+        f" questions checked, {len(errors)} errors"
+    )
+    return 1 if errors else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -376,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--validate",
         action="store_true",
-        help="check ground-truth labels against extracted page text, then exit",
+        help="check ground-truth labels against the cached page text, then exit",
     )
     ap.add_argument(
         "--single-doc-arm",
@@ -398,10 +421,6 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
-    import pdf_mcp.server as server_module
-    from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
-
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
     queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))
     classes = class_names(queries)
@@ -409,39 +428,38 @@ def main(argv: list[str] | None = None) -> int:
     id_by_path = {str((REPO / d["path"]).resolve()): d["id"] for d in manifest["docs"]}
 
     if args.validate:
-        import pymupdf
+        # Validate the CACHED text the harnesses score, never a re-extraction:
+        # the two disagree (ligatures, spacing, line breaks), which produced
+        # both false alarms and missed failures.
+        import benchmark_corpus_search as bcs
 
-        from pdf_mcp.extractor import extract_text_from_page
-
-        docs_by_id = {d["id"]: REPO / d["path"] for d in manifest["docs"]}
-        text_cache: dict[str, list[str]] = {}
+        paths_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}
+        cached = bcs.cached_page_text_lookup(
+            paths_by_id, bcs.open_validation_cache(bcs.active_cache_dir())
+        )
 
         def lookup(doc_id: str, page: int) -> str:
-            if doc_id not in text_cache:
-                doc = pymupdf.open(str(docs_by_id[doc_id]))
-                text_cache[doc_id] = [
-                    extract_text_from_page(doc[i], sort_by_position=True)
-                    for i in range(len(doc))
-                ]
-                doc.close()
-            pages = text_cache[doc_id]
-            return pages[page - 1] if 1 <= page <= len(pages) else ""
+            text = cached(doc_id, page)
+            if text is None:
+                raise bcs.CorpusNotWarm(f"{doc_id} p{page}")
+            return str(text)
 
-        errors = validate_queries(manifest, queries, lookup)
-        errors += validate_described_queries(queries, lookup)
-        fidelity_path = data / "fidelity_questions.json"
-        n_questions = 0
-        if fidelity_path.exists():
-            fidelity = json.loads(fidelity_path.read_text(encoding="utf-8"))
-            n_questions = len(fidelity["questions"])
-            errors += validate_fidelity_questions(fidelity, queries, lookup)
-        for err in errors:
-            print(f"INVALID {err}")
-        print(
-            f"\n{len(queries['queries'])} queries and {n_questions} fidelity"
-            f" questions checked, {len(errors)} errors"
-        )
-        return 1 if errors else 0
+        try:
+            return _run_validate(data, manifest, queries, lookup)
+        except bcs.CorpusNotWarm as exc:
+            print(
+                f"SETUP ERROR: corpus not warm in the active cache ({exc} has no"
+                " cached text). Warm it (text is enough) and point"
+                " PDF_MCP_CACHE_DIR at that cache."
+            )
+            return 2
+
+    # Imported after the validate branch on purpose: importing the server
+    # opens the active cache with the default 24 h TTL and purges older rows,
+    # which would empty a warm cache before --validate could read it.
+    import pdf_mcp.server as server_module
+    from pdf_mcp.cache import PDFCache
+    from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
 
     paths = [p for p in id_by_path if Path(p).exists()]
     if len(paths) != len(manifest["docs"]):

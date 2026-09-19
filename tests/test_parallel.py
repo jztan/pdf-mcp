@@ -9,12 +9,15 @@ from pdf_mcp.parallel import PageError, resolve_workers, run_pages
 
 def test_importing_extractor_does_not_import_server():
     # Spawn-safety: a worker imports pdf_mcp.extractor to unpickle; that must
-    # NOT drag in server.py / FastMCP / a module-level PDFCache. Run in a fresh
-    # interpreter so this test is not polluted by other imports in-process.
+    # NOT drag in server.py / FastMCP / a module-level PDFCache. The PDFCache
+    # lives in pdf_mcp._core, so _core and every tools module are checked too.
+    # Run in a fresh interpreter so other in-process imports cannot pollute it.
     code = (
         "import sys, pdf_mcp.extractor;"
-        " assert 'pdf_mcp.server' not in sys.modules, 'server imported';"
-        " assert 'fastmcp' not in sys.modules, 'fastmcp imported';"
+        " loaded = [m for m in sys.modules if m == 'pdf_mcp.server'"
+        " or m == 'pdf_mcp._core' or m.startswith('pdf_mcp.tools')"
+        " or m == 'fastmcp'];"
+        " assert not loaded, loaded;"
         " print('ok')"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

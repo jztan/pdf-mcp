@@ -54,7 +54,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 def test_rrf_fusion_surfaces_union_of_both_arms():
     # keyword finds {A=1, B=2}; semantic finds {B=2, C=3}; gold = {1,2,3}
-    from pdf_mcp.server import _rrf_fuse
+    from pdf_mcp.tools.search import _rrf_fuse
 
     fused = _rrf_fuse([1, 2], [2, 3], 10)
     pages = [p for p, _ in fused]
@@ -65,7 +65,7 @@ def test_rrf_fusion_surfaces_union_of_both_arms():
 
 def test_rrf_does_not_promote_single_signal_distractor_above_gold():
     # gold page 2 is mid-rank in both arms; distractor 9 tops only keyword.
-    from pdf_mcp.server import _rrf_fuse
+    from pdf_mcp.tools.search import _rrf_fuse
 
     fused = _rrf_fuse([9, 5, 2], [2, 5], 10)
     ranks = {p: i for i, (p, _) in enumerate(fused)}
@@ -123,18 +123,18 @@ def test_isolated_corpus_cache_swaps_and_restores(tmp_path):
     the originals afterward.
     """
     import benchmark_rrf as br
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
-    before_cache = server_module.cache
-    before_fetcher = server_module.url_fetcher
+    before_cache = _core.cache
+    before_fetcher = _core.url_fetcher
 
     with br._isolated_corpus_cache(tmp_path / "gate"):
-        assert server_module.cache is not before_cache
-        assert server_module.cache.cache_dir == tmp_path / "gate"
-        assert server_module.url_fetcher.cache_dir == tmp_path / "gate" / "downloads"
+        assert _core.cache is not before_cache
+        assert _core.cache.cache_dir == tmp_path / "gate"
+        assert _core.url_fetcher.cache_dir == tmp_path / "gate" / "downloads"
 
-    assert server_module.cache is before_cache
-    assert server_module.url_fetcher is before_fetcher
+    assert _core.cache is before_cache
+    assert _core.url_fetcher is before_fetcher
 
 
 @pytest.mark.slow

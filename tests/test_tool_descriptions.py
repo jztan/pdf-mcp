@@ -1,7 +1,8 @@
 """Tests that the untrusted-content contract is restated in each MCP tool
 description, not only in CLAUDE.md (which non-Claude-Code clients can't read)."""
 
-from pdf_mcp.server import mcp, _UNTRUSTED_PDF_PREAMBLE
+from pdf_mcp.server import mcp
+from pdf_mcp._core import _UNTRUSTED_PDF_PREAMBLE
 
 PDF_CONTENT_TOOLS = {
     "pdf_info",

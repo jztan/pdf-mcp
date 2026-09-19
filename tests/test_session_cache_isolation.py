@@ -11,15 +11,15 @@ upgrade would skip its purge (2026-09-14).
 
 from pathlib import Path
 
-import pdf_mcp.server as server_module
+from pdf_mcp import _core
 
 
 def test_server_cache_is_not_the_users_real_cache():
     real = (Path.home() / ".cache" / "pdf-mcp").resolve()
-    assert Path(server_module.cache.cache_dir).resolve() != real
+    assert Path(_core.cache.cache_dir).resolve() != real
 
 
 def test_url_downloads_are_not_under_the_users_real_cache():
     real = (Path.home() / ".cache" / "pdf-mcp").resolve()
-    downloads = Path(server_module.url_fetcher.cache_dir).resolve()
+    downloads = Path(_core.url_fetcher.cache_dir).resolve()
     assert real not in downloads.parents and downloads != real

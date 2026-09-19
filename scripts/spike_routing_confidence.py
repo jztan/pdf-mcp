@@ -100,17 +100,17 @@ def main(argv: list[str] | None = None) -> int:
 
     import numpy as np  # noqa: F401  (embeddings path needs it)
 
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp import corpus, embedder
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import (
+    from pdf_mcp.tools.corpus_tools import (
         _corpus_coverage_scores,
         _corpus_keyword_rankings,
-        _corpus_query_terms,
         _corpus_semantic_scores,
         _doc_covered_terms,
     )
+    from pdf_mcp.tools._search_common import _corpus_query_terms
 
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
     queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))["queries"]
@@ -120,8 +120,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WARNING: {len(manifest['docs']) - len(paths)} docs missing")
 
     args.cache_dir.mkdir(parents=True, exist_ok=True)
-    server_module.cache = PDFCache(cache_dir=args.cache_dir, ttl_hours=24 * 30)
-    model = server_module.pdf_config.embedding_model
+    _core.cache = PDFCache(cache_dir=args.cache_dir, ttl_hours=24 * 30)
+    model = _core.pdf_config.embedding_model
 
     def _embed(texts: list[str]) -> list[bytes]:
         return [v.tobytes() for v in embedder.encode(texts, model)]
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     warm = corpus.warm_docs(
         paths,
         600,
-        server_module.cache,
+        _core.cache,
         embeddings=True,
         model_name=model,
         embed=_embed,

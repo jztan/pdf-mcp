@@ -28,7 +28,8 @@ atexit.register(shutil.rmtree, _SESSION_CACHE_DIR, ignore_errors=True)
 
 from pdf_mcp.cache import PDFCache  # noqa: E402
 from pdf_mcp.url_fetcher import URLFetcher  # noqa: E402
-import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp import _core  # noqa: E402
+import pdf_mcp.server  # noqa: E402,F401 (import triggers the module-level cache)
 from tests.tmpfiles import unlink_quietly  # noqa: E402
 
 
@@ -142,8 +143,8 @@ def isolated_server(temp_cache_dir, monkeypatch):
     test_cache = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
     test_url_fetcher = URLFetcher(cache_dir=temp_cache_dir / "downloads")
 
-    monkeypatch.setattr(server_module, "cache", test_cache)
-    monkeypatch.setattr(server_module, "url_fetcher", test_url_fetcher)
+    monkeypatch.setattr(_core, "cache", test_cache)
+    monkeypatch.setattr(_core, "url_fetcher", test_url_fetcher)
 
     return test_cache, test_url_fetcher
 
@@ -528,7 +529,7 @@ def big_scan_pdf(tmp_path):
     # downsample test that still passes green. Fail loudly here instead,
     # as "fixture no longer exercises the cascade", rather than as a
     # confusing assertion failure deep in the render tests.
-    from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET, _encoded_len
+    from pdf_mcp._core import _encoded_len
 
     render_page = doc[0]
     render_pix = render_page.get_pixmap(dpi=200)
@@ -536,15 +537,16 @@ def big_scan_pdf(tmp_path):
     jpeg_len = _encoded_len(render_pix.tobytes("jpeg", jpg_quality=80))
     doc.close()
 
-    assert png_len > RENDER_RESULT_BYTE_BUDGET, (
+    assert png_len > _core.RENDER_RESULT_BYTE_BUDGET, (
         f"big_scan_pdf PNG at 200 DPI is {png_len} base64 bytes, no longer "
-        f"over the {RENDER_RESULT_BYTE_BUDGET} budget; regenerate the "
+        f"over the {_core.RENDER_RESULT_BYTE_BUDGET} budget; regenerate the "
         "fixture so the cascade test class still exercises JPEG fallback"
     )
-    assert jpeg_len <= RENDER_RESULT_BYTE_BUDGET, (
+    assert jpeg_len <= _core.RENDER_RESULT_BYTE_BUDGET, (
         f"big_scan_pdf JPEG q80 at 200 DPI is {jpeg_len} base64 bytes, over "
-        f"the {RENDER_RESULT_BYTE_BUDGET} budget; regenerate the fixture so "
-        "the cascade test class still exercises the JPEG success path"
+        f"the {_core.RENDER_RESULT_BYTE_BUDGET} budget; regenerate the "
+        "fixture so the cascade test class still exercises the JPEG "
+        "success path"
     )
 
     return str(out)

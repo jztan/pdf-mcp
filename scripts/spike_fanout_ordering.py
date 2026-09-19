@@ -128,21 +128,21 @@ def order_docs(
 
 
 def main() -> int:
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp import corpus, embedder
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import (
+    from pdf_mcp.server import pdf_search
+    from pdf_mcp.tools.corpus_tools import (
         _corpus_coverage_scores,
         _corpus_keyword_rankings,
-        _corpus_query_terms,
         _corpus_semantic_scores,
         _doc_covered_terms,
-        pdf_search,
     )
+    from pdf_mcp.tools._search_common import _corpus_query_terms
 
-    server_module.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
-    model = server_module.pdf_config.embedding_model
+    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    model = _core.pdf_config.embedding_model
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}

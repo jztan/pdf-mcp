@@ -457,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: the 'claude' CLI is not on PATH — the judge cannot run.")
         return 2
 
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
@@ -483,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     cache_dir = args.cache_dir
-    server_module.cache = PDFCache(cache_dir=cache_dir, ttl_hours=24 * 30)
+    _core.cache = PDFCache(cache_dir=cache_dir, ttl_hours=24 * 30)
     warm = pdf_corpus_warm(paths, budget_seconds=600, embeddings=True)
     while warm.get("unprocessed"):
         warm = pdf_corpus_warm(paths, budget_seconds=600, embeddings=True)

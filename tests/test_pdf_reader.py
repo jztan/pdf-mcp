@@ -3057,7 +3057,7 @@ def test_migration_adds_ocr_lang_to_pre_existing_db(tmp_path):
     # ('' -> None at the API boundary is covered by TestLanguageAwareReads;
     # this fixture's p.pdf does not exist on disk, so mtime validation drops
     # the row before it can be read back here.)
-    from pdf_mcp.server import _is_ocr_cache_hit
+    from pdf_mcp.tools.read import _is_ocr_cache_hit
 
     assert not _is_ocr_cache_hit(
         "ocr", {0: "old ocr"}, 0, requested_lang="khm", cached_lang=None

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pymupdf
 
-from pdf_mcp.server import _apply_byte_cap, pdf_read_all
+from pdf_mcp.tools.read import _apply_byte_cap, pdf_read_all
 
 
 class TestApplyByteCap:
@@ -78,10 +78,10 @@ class TestPdfReadAllByteCap:
         assert result["next_page"] is None
 
     def test_byte_cap_truncates(self, isolated_server, monkeypatch):
-        from pdf_mcp import server as server_module
+        from pdf_mcp import _core
 
         monkeypatch.setattr(
-            server_module.pdf_config,
+            _core.pdf_config,
             "_data",
             {"limits": {"max_response_bytes": 4096}},
             raising=False,
@@ -162,10 +162,10 @@ class TestPdfReadAllStartPage:
         is the invariant the response contract promises — if next_page
         is set, calling the same tool with start_page=next_page must
         actually work and continue from the right place."""
-        from pdf_mcp import server as server_module
+        from pdf_mcp import _core
 
         monkeypatch.setattr(
-            server_module.pdf_config,
+            _core.pdf_config,
             "_data",
             {"limits": {"max_response_bytes": 4096}},
             raising=False,
@@ -217,14 +217,13 @@ class TestPdfReadAllStartPage:
 
 class TestSectionSearchByteCap:
     def test_long_title_truncated(self, isolated_server, monkeypatch):
-        from pdf_mcp import server as server_module
+        from pdf_mcp import _core
+        from pdf_mcp.tools import search as search_module
 
         long_title = "A" * 5000
+        monkeypatch.setattr(_core.cache, "get_section_fts_coverage", lambda _p: 1)
         monkeypatch.setattr(
-            server_module.cache, "get_section_fts_coverage", lambda _p: 1
-        )
-        monkeypatch.setattr(
-            server_module.cache,
+            _core.cache,
             "search_section_fts",
             lambda _p, _q, _n: [
                 {
@@ -237,16 +236,17 @@ class TestSectionSearchByteCap:
                 }
             ],
         )
-        out = server_module._pdf_search_section_mode("/tmp/x.pdf", "q", 10)
+        out = search_module._pdf_search_section_mode("/tmp/x.pdf", "q", 10)
         match = out["sections"][0]
         assert match["title_truncated"] is True
         assert len(match["title"].encode("utf-8")) <= 2048
 
     def test_byte_cap_drops_trailing_matches(self, isolated_server, monkeypatch):
-        from pdf_mcp import server as server_module
+        from pdf_mcp import _core
+        from pdf_mcp.tools import search as search_module
 
         monkeypatch.setattr(
-            server_module.pdf_config,
+            _core.pdf_config,
             "_data",
             {"limits": {"max_response_bytes": 4096}},
             raising=False,
@@ -262,15 +262,13 @@ class TestSectionSearchByteCap:
             }
             for i in range(200)
         ]
+        monkeypatch.setattr(_core.cache, "get_section_fts_coverage", lambda _p: 200)
         monkeypatch.setattr(
-            server_module.cache, "get_section_fts_coverage", lambda _p: 200
-        )
-        monkeypatch.setattr(
-            server_module.cache,
+            _core.cache,
             "search_section_fts",
             lambda _p, _q, _n: matches,
         )
-        out = server_module._pdf_search_section_mode("/tmp/x.pdf", "q", 200)
+        out = search_module._pdf_search_section_mode("/tmp/x.pdf", "q", 200)
         assert out["truncated_bytes"] is True
         assert out["matches_omitted"] > 0
         assert len(out["sections"]) + out["matches_omitted"] == 200

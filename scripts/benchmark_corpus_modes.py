@@ -457,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     # Imported after the validate branch on purpose: importing the server
     # opens the active cache with the default 24 h TTL and purges older rows,
     # which would empty a warm cache before --validate could read it.
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
 
@@ -487,8 +487,8 @@ def main(argv: list[str] | None = None) -> int:
 
     single: dict[str, dict] = {}
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        prev_cache = server_module.cache
-        server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
+        prev_cache = _core.cache
+        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
         try:
             t0 = time.perf_counter()
             warm = pdf_corpus_warm(paths, budget_seconds=300, embeddings=True)
@@ -575,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
                     }
                     print(f"single-doc {mode}: NDCG@10 {single[mode]['ndcg']:.3f}")
         finally:
-            server_module.cache = prev_cache
+            _core.cache = prev_cache
 
     summary: dict[str, dict] = {}
     for mode in MODES:

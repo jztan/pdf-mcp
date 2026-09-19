@@ -165,7 +165,8 @@ def single_arm(queries_path: Path, limit: int | None = None) -> dict:
     of reading as a quality drop."""
     import pymupdf
 
-    from pdf_mcp.server import _resolve_path, pdf_search
+    from pdf_mcp._core import _resolve_path
+    from pdf_mcp.server import pdf_search
 
     all_pdfs = load_queries(str(queries_path))
     plan: list[tuple[str, str, dict]] = []

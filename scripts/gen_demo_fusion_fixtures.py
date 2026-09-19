@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pdf_mcp import corpus  # noqa: E402
-from pdf_mcp.server import _corpus_coverage_scores  # noqa: E402
-from pdf_mcp.server import _corpus_query_terms  # noqa: E402
+from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores  # noqa: E402
+from pdf_mcp.tools._search_common import _corpus_query_terms  # noqa: E402
 
 TERM_RE = re.compile(r"[a-z0-9]+")
 

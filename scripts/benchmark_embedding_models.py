@@ -236,14 +236,15 @@ class _ConfigStub:
     are no-ops because the benchmark only reads public arxiv PDFs that the
     real config already permits.
 
-    The stub has to carry every attribute server.py reads off `pdf_config`
-    on the pdf_search path. A missing one raises inside pdf_search, which
-    returns it as an `{"error": ...}` dict rather than propagating -- so the
-    benchmark used to score such a model 0.0 and report it as a real,
-    successful measurement. `run_model` now checks the warm-up search's
-    result (see below) so that failure mode is loud, and
-    `confidence_threshold` mirrors server.py's own default so the
-    semantic/hybrid confidence annotation behaves as it does in production.
+    The stub has to carry every attribute tools/search.py reads off
+    `pdf_config` on the pdf_search path. A missing one raises inside
+    pdf_search, which returns it as an `{"error": ...}` dict rather than
+    propagating -- so the benchmark used to score such a model 0.0 and
+    report it as a real, successful measurement. `run_model` now checks
+    the warm-up search's result (see below) so that failure mode is
+    loud, and `confidence_threshold` mirrors `_core.py`'s own default so
+    the semantic/hybrid confidence annotation behaves as it does in
+    production.
     """
 
     def __init__(self, model_name: str) -> None:

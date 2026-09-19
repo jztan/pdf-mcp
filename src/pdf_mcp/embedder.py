@@ -17,17 +17,17 @@ docstring). `configure_remote()` registers the RemoteSpec (base_url,
 api_key, ...) the remote path needs -- call it once per process, right
 after resolving PDFConfig (and after the startup safety check decides
 whether the endpoint is trustworthy), before any
-encode()/encode_query()/check_available() call. server.py does this at its
+encode()/encode_query()/check_available() call. `_core.py` does this at its
 PDFConfig call site; every other call site (corpus.py, the `_embed`
-closures in server.py, tests that stub `model_name="fake-model"`) is
-unchanged by this backend's existence.
+closures in `tools/corpus_tools.py`, tests that stub
+`model_name="fake-model"`) is unchanged by this backend's existence.
 
 Note: _get_model (and the module-level _remote_spec below) is not
 thread-safe. This is intentional — FastMCP uses asyncio with a single thread
 for STDIO transport, so concurrent access cannot occur in normal operation.
 
 check_available() never makes a network call when a remote backend is
-registered: it is called inside `except Exception: pass` in server.py's
+registered: it is called inside `except Exception: pass` in `_core.py`'s
 startup capability probe, so a network probe there would silently demote a
 temporarily-down endpoint to keyword-only search rather than fail at the
 point of actual use.
@@ -320,7 +320,8 @@ def _embed_length_sorted(model: Any, texts: list[str], batch_size: int) -> list[
 
 def _l2_normalize(arr: Any) -> Any:
     """Shared by both backends so the `v @ query_vec == cosine` invariant
-    server.py relies on holds regardless of which encoder produced `arr`.
+    the semantic-search paths rely on holds regardless of which encoder
+    produced `arr`.
     fastembed 0.8 returns unnormalized vectors for some models (e.g.
     multilingual-e5-large, norm ~28 after its CLS->mean pooling change), and
     there is no reason to trust a remote server's output any more than
@@ -358,7 +359,8 @@ def encode(texts: list[str], model_name: str) -> Any:
     a dot product equals cosine similarity. We normalize here rather than rely
     on the model/server: fastembed 0.8 returns unnormalized vectors for some
     models (e.g. multilingual-e5-large, norm ~28 after its CLS->mean pooling
-    change), which would otherwise break semantic scoring in server.py.
+    change), which would otherwise break semantic scoring in the search and
+    corpus tools.
 
     `model_name` is the identity string from PDFConfig.embedding_model --
     always the bare fastembed model name, even when the remote backend is

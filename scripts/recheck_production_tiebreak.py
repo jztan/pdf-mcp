@@ -5,11 +5,11 @@ scripts/recheck_production_tiebreak.py
 Does the SHIPPED corpus search depend on what the files are called?
 
 Companion to recheck_tiebreak_permutation.py, which tests the stage-2
-spike harness. This one drives the production path in server.py -- the
-keyword arm, the coverage/IDF tie-break, and the hybrid fusion with the
-semantic arm -- then re-fuses everything under stable renamings of every
-document. A ranking that carries real relevance is invariant; one that
-moves is reporting filename order.
+spike harness. This one drives the production path in
+tools/corpus_tools.py -- the keyword arm, the coverage/IDF tie-break, and
+the hybrid fusion with the semantic arm -- then re-fuses everything under
+stable renamings of every document. A ranking that carries real
+relevance is invariant; one that moves is reporting filename order.
 
 Both bugs found on 2026-07-27 were exactly this failure, so the drift
 numbers here are the acceptance gate for any change to cross-document

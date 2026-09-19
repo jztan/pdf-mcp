@@ -57,9 +57,10 @@ logger = logging.getLogger(__name__)
 # of silently truncating.
 CORPUS_MAX_FILES = 100
 
-# RRF constant for cross-document fusion; matches server._RRF_K so corpus
-# fusion and single-doc hybrid fusion share one k. Design decided by the
-# stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
+# RRF constant for cross-document fusion; matches tools/search.py's
+# _RRF_K so corpus fusion and single-doc hybrid fusion share one k.
+# Design decided by the stage-2 ranking benchmark: per-document fusion,
+# not corpus-wide FTS.
 CORPUS_RRF_K = 60
 
 # Weight of the document arm in hybrid corpus fusion. Measured on the 500-doc
@@ -73,8 +74,9 @@ CORPUS_DOC_ARM_WEIGHT = 0.25
 # arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
 PROFILE_HEAD_CHARS = 1500
 PROFILE_TERM_LIMIT = 200
-# Latin word tokens. Shared with server._corpus_query_terms so profile terms
-# and query terms agree on what a term is; 4+ chars filters function words.
+# Latin word tokens. Shared with tools/_search_common.py's
+# _corpus_query_terms so profile terms and query terms agree on what a
+# term is; 4+ chars filters function words.
 CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 
 # Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
@@ -97,7 +99,7 @@ def _validate_file(
     """Validate one corpus entry.
 
     Returns (resolved_path, None) on success or (None, reason).
-    Mirrors the local branch of server._resolve_path: absolute-ise,
+    Mirrors the local branch of _core.py's _resolve_path: absolute-ise,
     resolve symlinks, extension check, config allow/deny, existence.
     URLs are rejected outright (corpus calls are local-only).
     """
@@ -396,9 +398,9 @@ def backfill_sections(
     Covers a corpus warmed before ``sections=True`` was requested (or
     before section warming existed): a `pdf_search(granularity="section")`
     call used to build this on that document's first section-mode query
-    (server.py's ``_pdf_search_section_mode``) regardless of how warm the
-    rest of the cache was, which is the gap this closes. Reads only the
-    PDF itself via ``derive_sections`` (no cache text dependency, no
+    (tools/search.py's ``_pdf_search_section_mode``) regardless of how
+    warm the rest of the cache was, which is the gap this closes. Reads
+    only the PDF itself via ``derive_sections`` (no cache text dependency, no
     embed callback); a doc whose detection raises is logged and skipped
     so the rest still land. Returns ``(written, deferred)``: how many
     docs were (re-)indexed, and which of ``paths`` were never attempted
@@ -418,7 +420,8 @@ def backfill_sections(
     coverage 0 cannot distinguish "never indexed" from "indexed, no
     sections found" -- a genuinely section-less doc gets re-derived on
     every call that requests sections. Pre-existing behaviour (the same
-    ambiguity server.py's lazy path already has), not introduced here.
+    ambiguity tools/search.py's lazy path already has), not introduced
+    here.
 
     A doc with coverage != 0 is skipped even if its underlying file has
     since changed: the section tables carry no mtime (unlike page_text),
@@ -534,7 +537,7 @@ def _finalize_doc(
     is indexed via ``cache.index_sections`` as its own write, outside the
     metadata/text transaction above -- matching how the live
     ``pdf_search(granularity="section")`` path already writes it
-    (server.py's ``_pdf_search_section_mode``), which is a separate,
+    (tools/search.py's ``_pdf_search_section_mode``), which is a separate,
     non-atomic call too. None means either sections were not requested
     for this warm, or they were requested but detection failed -- in
     both cases nothing is written, so a doc's previously-indexed sections

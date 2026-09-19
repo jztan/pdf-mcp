@@ -2,10 +2,10 @@
 
 ``pdf_corpus_warm`` (the MCP tool) is built to fit inside one client-side
 tool call: it caps at ``corpus.CORPUS_MAX_FILES`` files and
-``budget_seconds <= 300`` per call (server.py), so warming a folder that
-does not fit either limit means re-issuing the same tool call by hand,
-possibly many times, from inside a chat session -- and a query against an
-only-partly-warm corpus just times out in the meantime.
+``budget_seconds <= 300`` per call (tools/corpus_tools.py), so warming a
+folder that does not fit either limit means re-issuing the same tool call
+by hand, possibly many times, from inside a chat session -- and a query
+against an only-partly-warm corpus just times out in the meantime.
 
 This entry point is not an MCP tool call, so neither limit applies: no
 client-side timeout to respect, no reason to cap file count. It walks the
@@ -50,11 +50,12 @@ from . import corpus
 from .cache import PDFCache
 from .config import PDFConfig
 
-# Mirrors server.py's _cache_dir_from_env/_ttl_hours_from_env exactly
+# Mirrors _core.py's _cache_dir_from_env/_ttl_hours_from_env exactly
 # (same env vars, same defaults, same validation) without importing
-# server.py -- that module also builds the FastMCP app and registers
-# every tool at import time, real weight this standalone CLI has no use
-# for. Kept in sync by hand; the pair is small and rarely changes.
+# server.py -- that module also builds the FastMCP app (_core.py) and
+# registers every tool at import time (tools/*.py), real weight this
+# standalone CLI has no use for. Kept in sync by hand; the pair is small
+# and rarely changes.
 _DEFAULT_CACHE_TTL_HOURS = 24
 _MAX_CACHE_TTL_HOURS = 8760  # one year
 
@@ -189,7 +190,7 @@ def main(argv: "list[str] | None" = None) -> int:
     args = ap.parse_args(argv)
 
     # Config first: [fts] language is a startup-time cache setting (like
-    # server.py's), so PDFCache needs it at construction time -- otherwise
+    # _core.py's), so PDFCache needs it at construction time -- otherwise
     # a corpus warmed here would be invisible to a "de"-mode server's
     # German FTS mirror (pdf_search_fts_de) until the mirror's own
     # open-time sync caught up.
@@ -205,7 +206,7 @@ def main(argv: "list[str] | None" = None) -> int:
         return 1
 
     if args.embeddings and args.model is None:
-        # Wire up [embedding].backend = "openai" exactly as server.py does
+        # Wire up [embedding].backend = "openai" exactly as _core.py does
         # at startup -- without this, a configured remote backend was
         # silently never used here: pdf_config.embedding_model always
         # names the bare fastembed model (see its docstring), so

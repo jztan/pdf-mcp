@@ -249,6 +249,55 @@ def _reassign_packed_cell(
     return fragments
 
 
+#: Overlap (pt) a cell box needs with a header column to count as covering
+#: it. Box edges and rules jitter by a point or so; a real merge covers the
+#: neighbour by its full width.
+_SPAN_MIN_OVERLAP = 2.0
+
+
+def _spanned_columns(
+    x0: float, x1: float, ranges: list[tuple[float, float] | None]
+) -> int:
+    """How many header columns the box [x0, x1] covers by more than 2 pt."""
+    return sum(
+        1
+        for r in ranges
+        if r is not None and min(x1, r[1]) - max(x0, r[0]) > _SPAN_MIN_OVERLAP
+    )
+
+
+def _reassign_spanning_cell(
+    words: list[tuple[float, str]],
+    ranges: list[tuple[float, float] | None],
+    labels: list[str],
+    row_cells: list[str | None],
+    src_col: int,
+) -> tuple[int, str] | None:
+    """Target (column, fragment) for a one-value merged cell, or None.
+
+    The one-number gate and the spans-2+-columns gate are the caller's.
+    pdfplumber files a merged box under its first column, so a lone value
+    printed under the second one (TI LM555 p4: 18 V under MAX) reads as a
+    MIN. Same fail-closed rules as the packed split: every word in one
+    named, empty column other than the source, and the fragment a value.
+    """
+    cols = {_column_index_for_centre(centre, ranges) for centre, _ in words}
+    if len(cols) != 1 or None in cols:
+        return None
+    target = cols.pop()
+    if target is None or target == src_col:
+        return None
+    if not labels[target].strip():
+        return None
+    existing = row_cells[target]
+    if existing and str(existing).strip():
+        return None
+    fragment = " ".join(text for _, text in words)
+    if not _fragment_value_shaped(fragment):
+        return None
+    return target, fragment
+
+
 def _split_packed_cells(
     page: Any, table: Any, cells: list[list[str | None]]
 ) -> tuple[list[list[str | None]], int]:
@@ -280,11 +329,16 @@ def _split_packed_cells(
         for i in range(1, len(new_cells)):
             row_boxes = table.rows[i].cells
             for j, text in enumerate(list(new_cells[i])):
-                if not text or len(_NUMBER_TOKEN.findall(str(text))) < 2:  # rule 1
+                n_numbers = len(_NUMBER_TOKEN.findall(str(text))) if text else 0
+                if n_numbers == 0:
                     continue
                 if j >= len(row_boxes) or row_boxes[j] is None:
                     continue
                 bx0, btop, bx1, bbot = (float(v) for v in row_boxes[j])
+                # One number: only a box merged across 2+ columns can have
+                # filed it under the wrong one.
+                if n_numbers == 1 and _spanned_columns(bx0, bx1, ranges) < 2:
+                    continue
                 in_cell: list[tuple[float, str]] = []
                 for w in words:
                     cx = (float(w["x0"]) + float(w["x1"])) / 2.0
@@ -292,6 +346,17 @@ def _split_packed_cells(
                     if bx0 - 1.0 <= cx <= bx1 + 1.0 and btop - 1.0 <= cy <= bbot + 1.0:
                         in_cell.append((cx, str(w["text"])))
                 if not in_cell:
+                    continue
+                if n_numbers == 1:
+                    moved = _reassign_spanning_cell(
+                        in_cell, ranges, labels, new_cells[i], j
+                    )
+                    if moved is None:
+                        continue
+                    target, fragment = moved
+                    new_cells[i][target] = fragment
+                    new_cells[i][j] = ""
+                    split_count += 1
                     continue
                 mapping = _reassign_packed_cell(
                     in_cell, ranges, labels, new_cells[i], j

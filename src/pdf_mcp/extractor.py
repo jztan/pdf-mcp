@@ -1949,13 +1949,27 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
 _NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 
 
-def _columns_reliable(rows: list[list[str]]) -> bool:
-    """False when any cell holds 2+ numbers, i.e. columns are merged.
+#: A currency symbol or a thousands-grouped amount. Marks a cell as data
+#: rather than a column label: a header row carrying one is a data row that
+#: `find_tables` took as the header because the real one sits above its
+#: bbox (Apple FY2024 10-K p32), and `tools._tables._resolve_header` uses it
+#: to keep a sparse-but-real header from being displaced by the row beneath.
+_MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
+
+
+def _columns_reliable(rows: list[list[str]], header: list[str] | None = None) -> bool:
+    """False when columns are merged or have no identity.
+
+    Merged: any body cell holds 2+ numbers. No identity: the header row
+    carries money amounts, so it is data and names no column. ``header``
+    is optional so callers that only have the body keep the first rule.
 
     Table-level caution, not a per-value verdict: a table can be flagged
     while an individual row still resolves cleanly. Callers must not treat
     False as "this row is wrong".
     """
+    if header and any(cell and _MONEY_CELL.search(cell) for cell in header):
+        return False
     for row in rows:
         for cell in row:
             if cell and len(_NUMBER_TOKEN.findall(cell)) >= 2:
@@ -1967,7 +1981,11 @@ def _columns_reliable(rows: list[list[str]]) -> bool:
 #: table dict gains `columns_reliable` (post-split) and `split_cells`.
 #: Version-4 rows carry neither field and the old packed cells, so they
 #: are ignored and re-extracted.
-TABLE_EXTRACTION_VERSION = 5
+#: 6: a single value in a cell merged across 2+ header columns moves to the
+#: column it is printed under (counted in `split_cells`), and a header row
+#: carrying money forces `columns_reliable` False. Version-5 rows hold the
+#: value under the wrong column and the old flag, so they are re-extracted.
+TABLE_EXTRACTION_VERSION = 6
 
 
 def _extract_tables_worker(
@@ -2102,9 +2120,11 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
         - row_bboxes: [x0, y0, x1, y1] per entry in `rows`, same order.
           Empty list if geometry could not be aligned with the rows.
         - columns_reliable: False when any body cell still holds 2+ numbers
-          (columns merged). Table-level caution, not a per-row verdict.
-        - split_cells: count of packed cells rewritten by header-anchored
-          geometry on this table (0 when nothing was split).
+          (columns merged) or the header row holds money amounts (it is a
+          data row). Table-level caution, not a per-row verdict.
+        - split_cells: count of cells rewritten by header-anchored geometry
+          on this table, packed cells split and single values moved out of
+          merged cells (0 when nothing changed).
     """
     tables: list[dict[str, Any]] = []
     raw: list[dict[str, Any]] = []
@@ -2157,7 +2177,7 @@ def extract_tables_from_page(page: Any) -> list[dict[str, Any]]:
                     "header": header,
                     "rows": rows,
                     "row_bboxes": row_bboxes,
-                    "columns_reliable": _columns_reliable(rows),
+                    "columns_reliable": _columns_reliable(rows, header=header),
                     "split_cells": item.get("split_cells", 0),
                 }
             )

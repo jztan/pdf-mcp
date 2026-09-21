@@ -1,6 +1,11 @@
-"""Header-anchored packed-cell split: the five rules, in isolation."""
+"""Header-anchored cell split: packed and single-value spanning rules, in isolation."""
 
-from pdf_mcp.backend.tables import _fragment_value_shaped, _reassign_packed_cell
+from pdf_mcp.backend.tables import (
+    _fragment_value_shaped,
+    _reassign_packed_cell,
+    _reassign_spanning_cell,
+    _spanned_columns,
+)
 
 # Param, Min, Max, Unit header x-ranges (pdfplumber raw page space).
 R4 = [(50.0, 130.0), (130.0, 190.0), (190.0, 245.0), (245.0, 300.0)]
@@ -142,3 +147,101 @@ def test_rollback_on_mid_loop_exception_leaves_cells_untouched():
     assert result_cells == original_cells
     # And the caller's own list object must not have been mutated either.
     assert cells == original_cells
+
+
+# --- Single-value spanning cells (issue: value filed under the wrong column) ---
+
+
+def test_spanned_columns_counts_header_ranges_the_box_covers():
+    assert _spanned_columns(130.0, 245.0, R4) == 2  # Min + Max
+    assert _spanned_columns(130.0, 190.0, R4) == 1  # Min only
+    # A sliver under 2 pt into a neighbour does not count as spanning it.
+    assert _spanned_columns(130.0, 191.5, R4) == 1
+
+
+def test_spanning_single_value_moves_to_its_printed_column():
+    # LM555 p4: one merged MIN+MAX box, "18" printed under MAX.
+    row = ["Supply Voltage", "18", None, "V"]
+    words = [(207.0, "18")]
+    assert _reassign_spanning_cell(words, R4, L4, row, src_col=1) == (2, "18")
+
+
+def test_spanning_value_already_in_its_column_is_left_alone():
+    row = ["Supply Voltage", "18", None, "V"]
+    assert _reassign_spanning_cell([(145.0, "18")], R4, L4, row, src_col=1) is None
+
+
+def test_spanning_word_in_no_single_column_refuses():
+    overlapping = [(50.0, 150.0), (140.0, 250.0)]
+    row = ["p", "18"]
+    assert (
+        _reassign_spanning_cell([(145.0, "18")], overlapping, ["A", "B"], row, 1)
+        is None
+    )
+
+
+def test_spanning_words_in_two_columns_refuse():
+    row = ["p", "< 18", None, "V"]
+    words = [(145.0, "<"), (207.0, "18")]
+    assert _reassign_spanning_cell(words, R4, L4, row, src_col=1) is None
+
+
+def test_spanning_unnamed_target_refuses():
+    labels = ["Parameter", "Min", "", "Unit"]
+    row = ["p", "18", None, "V"]
+    assert _reassign_spanning_cell([(207.0, "18")], R4, labels, row, 1) is None
+
+
+def test_spanning_occupied_target_refuses():
+    row = ["p", "18", "20", "V"]
+    assert _reassign_spanning_cell([(207.0, "18")], R4, L4, row, 1) is None
+
+
+def test_spanning_prose_fragment_refuses():
+    row = ["p", "18 volts", None, "V"]
+    words = [(200.0, "18"), (215.0, "volts")]
+    assert _reassign_spanning_cell(words, R4, L4, row, 1) is None
+
+
+_HEADER_BOXES = [
+    (50.0, 0.0, 130.0, 10.0),
+    (130.0, 0.0, 190.0, 10.0),
+    (190.0, 0.0, 245.0, 10.0),
+    (245.0, 0.0, 300.0, 10.0),
+]
+
+
+def _single_value_table(value_box):
+    return _FakeTable(
+        [
+            _HEADER_BOXES,
+            [(50.0, 20.0, 130.0, 30.0), value_box, None, (245.0, 20.0, 300.0, 30.0)],
+        ]
+    )
+
+
+def test_split_moves_a_single_value_out_of_a_merged_box():
+    from pdf_mcp.backend.tables import _split_packed_cells
+
+    table = _single_value_table((130.0, 20.0, 245.0, 30.0))
+    cells = [["Parameter", "Min", "Max", "Unit"], ["Supply Voltage", "18", None, "V"]]
+    page = _FakePage(
+        [{"x0": 205.0, "x1": 211.0, "top": 21.0, "bottom": 29.0, "text": "18"}]
+    )
+    out, count = _split_packed_cells(page, table, cells)
+    assert out[1] == ["Supply Voltage", "", "18", "V"]
+    assert count == 1
+
+
+def test_split_leaves_a_single_value_in_an_unmerged_box():
+    from pdf_mcp.backend.tables import _split_packed_cells
+
+    # The value box covers Min only, so there is no second column to move to.
+    table = _single_value_table((130.0, 20.0, 190.0, 30.0))
+    cells = [["Parameter", "Min", "Max", "Unit"], ["Supply Voltage", "18", None, "V"]]
+    page = _FakePage(
+        [{"x0": 142.0, "x1": 148.0, "top": 21.0, "bottom": 29.0, "text": "18"}]
+    )
+    out, count = _split_packed_cells(page, table, cells)
+    assert out == cells
+    assert count == 0

@@ -116,9 +116,9 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     assert tops == sorted(tops)
 
 
-def test_table_extraction_version_is_5():
+def test_table_extraction_version_is_6():
     """Packed-cell split changes the cached table shape (columns_reliable)."""
-    assert TABLE_EXTRACTION_VERSION == 5
+    assert TABLE_EXTRACTION_VERSION == 6
 
 
 def test_every_table_carries_columns_reliable_and_split_cells(ruled_table_pdf):
@@ -805,3 +805,84 @@ def test_number_token_and_columns_reliable_live_in_extractor():
     # _tables must re-use the extractor definitions, not keep its own copies.
     assert _tables._NUMBER_TOKEN is extractor._NUMBER_TOKEN
     assert _tables._columns_reliable is extractor._columns_reliable
+
+
+@pytest.fixture
+def spanning_value_table_pdf():
+    """Header ruled into Min|Max, body not: a lone value sits under Max.
+
+    TI LM555 p4 (Recommended Operating Conditions): the body cell spans
+    Min and Max, holds one number, and pdfplumber files it under Min.
+    Row 2 is packed ("0.4 1") so the page repeats values across blocks.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.close()
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.draw_rect(pymupdf.Rect(50, 50, 300, 150), color=(0, 0, 0))
+        for x in (130, 245):
+            page.draw_line(pymupdf.Point(x, 50), pymupdf.Point(x, 150), color=(0, 0, 0))
+        page.draw_line(pymupdf.Point(190, 50), pymupdf.Point(190, 83), color=(0, 0, 0))
+        for y in (83, 116):
+            page.draw_line(pymupdf.Point(50, y), pymupdf.Point(300, y), color=(0, 0, 0))
+        page.insert_text((55, 75), "Parameter")
+        page.insert_text((135, 75), "Min")
+        page.insert_text((200, 75), "Max")
+        page.insert_text((250, 75), "Unit")
+        page.insert_text((55, 108), "Supply Voltage")
+        page.insert_text((215, 108), "18")  # under Max only
+        page.insert_text((250, 108), "V")
+        page.insert_text((55, 141), "Reset Voltage")
+        page.insert_text((135, 141), "0.4")
+        page.insert_text((200, 141), "1")
+        page.insert_text((250, 141), "V")
+        doc.save(f.name)
+        doc.close()
+    yield f.name
+    unlink_quietly(f.name)
+
+
+def test_single_value_in_a_merged_cell_lands_under_its_printed_column(
+    spanning_value_table_pdf,
+):
+    t = extract_tables_for_pages(spanning_value_table_pdf, [0])["tables"]["0"][0]
+    assert [c.strip() for c in t["header"]] == ["Parameter", "Min", "Max", "Unit"]
+    assert [c.strip() for c in t["rows"][0]] == ["Supply Voltage", "", "18", "V"]
+    assert [c.strip() for c in t["rows"][1]] == ["Reset Voltage", "0.4", "1", "V"]
+    assert t["split_cells"] == 2
+    assert t["columns_reliable"] is True
+
+
+def test_columns_unreliable_when_the_header_row_is_data():
+    """Apple FY2024 10-K p32: the year header sits above the bbox."""
+    from pdf_mcp.extractor import _columns_reliable
+
+    rows = [["Services", "96,169", "85,200", "78,129"]]
+    data_header = ["Products $", "294,866 $", "298,085 $", "316,199"]
+    assert _columns_reliable(rows, header=data_header) is False
+    assert _columns_reliable(rows, header=["", "2024", "2023", "2022"]) is True
+    assert _columns_reliable(rows) is True  # no header given: old rule only
+
+
+def test_table_context_flags_a_data_row_header():
+    from pdf_mcp.tools._tables import _context_for_match
+
+    tables = [
+        {
+            "bbox": [54.0, 100.0, 558.0, 200.0],
+            "header": ["Products $", "294,866 $", "298,085 $", "316,199"],
+            "rows": [["Services", "96,169", "85,200", "78,129"]],
+            "row_bboxes": [[54.0, 120.0, 558.0, 132.0]],
+        }
+    ]
+    match = {"bbox": [54.0, 121.0, 300.0, 131.0]}
+    ctx = _context_for_match(match, tables, page_rect=[0.0, 0.0, 612.0, 792.0])
+    assert ctx["columns_reliable"] is False
+    assert "clip" in ctx
+
+
+def test_money_pattern_is_shared_with_the_extractor():
+    from pdf_mcp import extractor
+    from pdf_mcp.tools import _tables
+
+    assert _tables._MONEY_CELL is extractor._MONEY_CELL

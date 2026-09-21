@@ -12,8 +12,22 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 
 
+def _isolated_home(tmp_path):
+    """A directory under tmp_path to use as HOME/USERPROFILE, so a
+    developer's own ~/.config/pdf-mcp/config.toml can't change what the
+    subprocess workload does."""
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    return str(home)
+
+
 def _run_workload(tmp_path, *flags):
-    env = dict(os.environ, PDF_MCP_CACHE_DIR=str(tmp_path / "cache"))
+    env = dict(
+        os.environ,
+        PDF_MCP_CACHE_DIR=str(tmp_path / "cache"),
+        HOME=_isolated_home(tmp_path),
+        USERPROFILE=_isolated_home(tmp_path),
+    )
     return subprocess.run(
         [sys.executable, "-m", "tests._pdfium_race_workload", *flags],
         cwd=REPO,
@@ -61,7 +75,12 @@ async def main():
 
 asyncio.run(main())
 """
-    env = dict(os.environ, PDF_MCP_CACHE_DIR=str(tmp_path / "cache"))
+    env = dict(
+        os.environ,
+        PDF_MCP_CACHE_DIR=str(tmp_path / "cache"),
+        HOME=_isolated_home(tmp_path),
+        USERPROFILE=_isolated_home(tmp_path),
+    )
     result = subprocess.run(
         [sys.executable, "-c", script],
         cwd=REPO,

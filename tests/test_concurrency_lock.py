@@ -211,6 +211,113 @@ def test_a_long_read_all_lets_a_queued_call_run_between_pages(
     t1, t2 = _start(long_call), _start(short_call)
     t1.join(10)
     t2.join(10)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
+    assert events == ["page 0", "short call", "page 1", "page 2", "page 3"]
+
+
+def test_resolve_hidden_flags_lets_a_queued_call_run_between_pages(
+    tmp_path, isolated_server, monkeypatch
+):
+    """_core._resolve_hidden_flags (reached from pdf_read_all and
+    pdf_search) is a page-at-a-time pdfium loop of its own; per the
+    profile in the Task 5b report it is most of pdf_read_all's non-
+    extraction hold, so it needs the same between-pages yield."""
+    import pymupdf
+
+    from tests._pdfium_race_workload import make_pdf
+
+    from pdf_mcp import _core, concurrency, content_trust
+
+    pdf_path = str(tmp_path / "hidden.pdf")
+    make_pdf(pdf_path, n_pages=4)
+
+    events: list[str] = []
+    long_started = threading.Event()
+    real_check = content_trust.page_has_hidden_text
+
+    def fake_check(page, *args, **kwargs):
+        page_num = page.number
+        events.append(f"page {page_num}")
+        if page_num == 0:
+            long_started.set()
+            end = time.monotonic() + 5.0
+            while concurrency.PDF_ACCESS.waiters() < 1:
+                assert time.monotonic() < end, "short call never queued"
+                time.sleep(0.005)
+        return real_check(page, *args, **kwargs)
+
+    monkeypatch.setattr(content_trust, "page_has_hidden_text", fake_check)
+
+    doc = pymupdf.open(pdf_path)
+    try:
+
+        def long_call():
+            with concurrency.PDF_ACCESS:
+                _core._resolve_hidden_flags(pdf_path, doc, [0, 1, 2, 3])
+
+        def short_call():
+            long_started.wait(5)
+            with concurrency.PDF_ACCESS:
+                events.append("short call")
+
+        t1, t2 = _start(long_call), _start(short_call)
+        t1.join(10)
+        t2.join(10)
+        assert not t1.is_alive()
+        assert not t2.is_alive()
+        assert events == ["page 0", "short call", "page 1", "page 2", "page 3"]
+    finally:
+        doc.close()
+
+
+def test_a_long_keyword_search_lets_a_queued_call_run_between_pages(
+    tmp_path, isolated_server, monkeypatch
+):
+    """pdf_search twin of the pdf_read_all test above, pinning the yield
+    in search.py's keyword-mode text-extraction loop (search.py:589) that
+    the search_cold fix in Task 5b depends on: it is the loop that does
+    real per-page pdfium work for the measured cold hybrid/auto search,
+    since mode='auto' runs this loop first and caches every page's text
+    before the semantic/hybrid loops ever see a miss."""
+    from tests._pdfium_race_workload import make_pdf
+
+    from pdf_mcp import concurrency
+    from pdf_mcp.tools import search as search_mod
+
+    pdf_path = str(tmp_path / "search.pdf")
+    make_pdf(pdf_path, n_pages=4)
+
+    events: list[str] = []
+    long_started = threading.Event()
+    real_extract = search_mod.extract_text_from_page
+
+    def fake_extract(page, *args, **kwargs):
+        page_num = page.number
+        events.append(f"page {page_num}")
+        if page_num == 0:
+            long_started.set()
+            end = time.monotonic() + 5.0
+            while concurrency.PDF_ACCESS.waiters() < 1:
+                assert time.monotonic() < end, "short call never queued"
+                time.sleep(0.005)
+        return real_extract(page, *args, **kwargs)
+
+    monkeypatch.setattr(search_mod, "extract_text_from_page", fake_extract)
+
+    def long_call():
+        search_mod.pdf_search(pdf_path, "supply voltage", mode="keyword")
+
+    def short_call():
+        long_started.wait(5)
+        with concurrency.PDF_ACCESS:
+            events.append("short call")
+
+    t1, t2 = _start(long_call), _start(short_call)
+    t1.join(10)
+    t2.join(10)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
     assert events == ["page 0", "short call", "page 1", "page 2", "page 3"]
 
 

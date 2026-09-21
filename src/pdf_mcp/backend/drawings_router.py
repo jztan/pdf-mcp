@@ -74,7 +74,10 @@ def get_drawings(
         return parse_drawings(pdf_path, page_num)
     if fpx_page is None:
         doc = pdfium.PdfDocument(pdf_path)
-        return pdfium_drawings(doc[page_num])
+        try:
+            return pdfium_drawings(doc[page_num])
+        finally:
+            doc.close()
     return pdfium_drawings(fpx_page)
 
 

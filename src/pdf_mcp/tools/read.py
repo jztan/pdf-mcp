@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from ..concurrency import pdf_access, yield_pdf_access
 from ..docopen import open_pdf
 from .. import chart_extractor
 from ..cache import normalize_ocr_lang
@@ -130,6 +131,7 @@ def _apply_byte_cap(
         " page ranges like '1-5,10' and OCR for scanned pages."
     )
 )
+@pdf_access
 def pdf_read_pages(
     path: str,
     pages: str,
@@ -606,6 +608,7 @@ def pdf_read_pages(
         " to this same tool to resume on a clean page boundary."
     )
 )
+@pdf_access
 def pdf_read_all(
     path: str,
     max_pages: int = 50,
@@ -702,7 +705,13 @@ def pdf_read_all(
         texts: list[str] = []
         new_texts: dict[int, str] = {}
 
-        for page_num in page_nums:
+        for i, page_num in enumerate(page_nums):
+            if i:
+                # Let a call queued behind this long read run between
+                # pages, so it never waits out the whole extraction
+                # (issue #61 follow-up: same pattern as
+                # corpus._warm_sequential's between-document yield).
+                yield_pdf_access()
             if page_num in cached_texts:
                 texts.append(cached_texts[page_num])
             else:

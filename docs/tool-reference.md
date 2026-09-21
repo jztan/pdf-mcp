@@ -1018,6 +1018,10 @@ pdf_cache_clear(expired_only=False)  # full wipe + URL cache
 
 ---
 
+## Concurrency
+
+Calls that open a PDF take turns on the PDF engine, because it is not safe to use from several threads at once; parallel calls queue instead of failing. Long calls let queued calls run between units of work: corpus warms (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`) between documents, `pdf_read_all` and a cold `pdf_search` between pages, and a cold semantic or hybrid `pdf_search` also between embedding batches. A corpus warm's time budget counts the time spent on those other calls. `server_info`, `pdf_cache_stats` and `pdf_cache_clear` never queue. **Limitations:** `pdf_read_pages` over a large page range, and embedding on a remote or CUDA backend, hold the engine until they finish. The first call on a URL holds the PDF engine while the file downloads.
+
 ## Server Introspection
 
 ### `server_info`

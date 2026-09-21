@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Callable
+from ..concurrency import pdf_access
 from ..docopen import open_pdf
 from .. import corpus
 from .. import _core
@@ -65,6 +66,7 @@ def _corpus_completeness(
         " run and re-issue the same call."
     )
 )
+@pdf_access
 def pdf_corpus_warm(
     paths: str | list[str],
     budget_seconds: int = 45,
@@ -200,6 +202,7 @@ def pdf_corpus_warm(
         " `unprocessed`; call again to continue."
     )
 )
+@pdf_access
 def pdf_corpus_overview(
     paths: str | list[str],
     budget_seconds: int = 45,
@@ -710,6 +713,7 @@ def _finalize_corpus_matches(
         " follow up on the best match only."
     )
 )
+@pdf_access
 def pdf_corpus_search(
     paths: str | list[str],
     query: str,

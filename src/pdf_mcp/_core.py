@@ -11,6 +11,7 @@ from fastmcp import FastMCP
 from . import __version__
 from . import content_trust
 from . import corpus
+from .concurrency import yield_pdf_access
 from . import portable_tesseract
 from . import updates
 from .cache import PDFCache
@@ -470,7 +471,7 @@ def _detect_features() -> dict[str, Any]:
                 "description": (
                     "Vertical-script (tategaki / 直排) PDFs in Japanese and "
                     "Chinese are reconstructed into correct reading order from "
-                    "glyph geometry. PyMuPDF-only — no extra required."
+                    "glyph geometry. Built in; no extra required."
                 ),
             },
             "ocr": {
@@ -509,7 +510,13 @@ def _resolve_hidden_flags(
     cached = cache.get_pages_hidden_flag(local_path, page_nums)
     result: dict[int, bool] = {}
     to_persist: dict[int, bool] = {}
-    for n in page_nums:
+    for i, n in enumerate(page_nums):
+        if i:
+            # Let a call queued behind this scan run between pages
+            # (issue #61 follow-up): the except below swallows rather
+            # than re-raises, so this placement never skips a yield on
+            # an error path.
+            yield_pdf_access()
         val = cached.get(n)
         if val is None:
             try:

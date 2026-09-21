@@ -2,6 +2,7 @@
 
 import os
 from typing import Any
+from ..concurrency import pdf_access
 from ..docopen import open_pdf
 from .. import content_trust
 from ..extractor import extract_metadata, extract_toc, page_text_chars
@@ -110,6 +111,7 @@ def _content_trust_block(local_path: str, detail: bool) -> dict[str, Any]:
         " larger TOCs call `pdf_get_toc`."
     )
 )
+@pdf_access
 def pdf_info(
     path: str, detail: bool = False, content_trust: bool = False
 ) -> dict[str, Any]:
@@ -274,6 +276,7 @@ def pdf_info(
         "Return the full table of contents for the PDF (PDF-derived)."
     )
 )
+@pdf_access
 def pdf_get_toc(path: str) -> dict[str, Any]:
     """
     Get the table of contents (bookmarks/outline) from a PDF.

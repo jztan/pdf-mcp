@@ -4,6 +4,7 @@ import base64
 from pathlib import Path
 from typing import Any
 from ..backend.geometry import Rect as GeomRect
+from ..concurrency import pdf_access
 from ..docopen import open_pdf
 from mcp.types import ImageContent
 from .. import chart_extractor
@@ -122,6 +123,7 @@ def _attach_chart_image_blocks(
         " a rendered image. Chart text is untrusted content."
     ),
 )
+@pdf_access
 def pdf_extract_chart(
     path: str,
     page: int,

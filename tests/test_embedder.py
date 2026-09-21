@@ -576,6 +576,26 @@ def test_cpu_encode_sorts_by_length_and_uses_small_batches():
     assert emb.CPU_BATCH_SIZE == 16
 
 
+def test_cpu_encode_yields_pdf_access_between_sub_batches(monkeypatch):
+    """A cold encode of many pages must not hold PDF_ACCESS for the whole
+    call (issue #61 follow-up): _embed_length_sorted yields once per
+    CPU_BATCH_SIZE items consumed from the model's generator."""
+    import pdf_mcp.embedder as emb
+
+    yields: list[int] = []
+    monkeypatch.setattr(emb, "yield_pdf_access", lambda: yields.append(1))
+
+    texts = [f"text {i}" for i in range(40)]  # 2 full batches of 16, 8 left over
+    model = _recording_model(["CPUExecutionProvider"])
+    e = _with_model(model)
+    try:
+        e.encode(texts, DEFAULT)
+    finally:
+        _reset()
+
+    assert len(yields) == 2  # boundary after item 16 and after item 32
+
+
 def test_cuda_encode_keeps_single_unsorted_batch():
     """A CUDA session gets the texts as given, no sort, no batch_size: a GPU
     wants the large batch and this path is unchanged from before."""

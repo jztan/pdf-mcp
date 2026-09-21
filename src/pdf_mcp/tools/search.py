@@ -2,6 +2,7 @@
 
 from functools import partial
 from typing import Any
+from ..concurrency import pdf_access
 from ..docopen import open_pdf
 from .. import corpus
 from ..vector_cache import page_max_from_lists
@@ -179,6 +180,7 @@ def _searched_text_coverage(local_path: str, doc_pages: int) -> str:
         " surface more candidates."
     )
 )
+@pdf_access
 def pdf_search(
     path: str,
     query: str,

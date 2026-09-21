@@ -2,6 +2,7 @@
 
 import base64
 from typing import Any
+from ..concurrency import pdf_access
 from ..docopen import open_pdf
 from mcp.types import ImageContent
 from ..extractor import native_render_dpi_cap, parse_page_range
@@ -33,6 +34,7 @@ MAX_RENDER_INLINE_PAGES = 5
         " visual content the PDF wants to show and are still untrusted."
     ),
 )
+@pdf_access
 def pdf_render_pages(
     path: str,
     pages: str,

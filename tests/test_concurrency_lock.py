@@ -120,3 +120,53 @@ def test_decorated_calls_never_overlap():
     for t in threads:
         t.join()
     assert overlap == []
+
+
+LOCKED = {
+    "pdf_info",
+    "pdf_get_toc",
+    "pdf_read_pages",
+    "pdf_read_all",
+    "pdf_search",
+    "pdf_render_pages",
+    "pdf_extract_chart",
+    "pdf_corpus_warm",
+    "pdf_corpus_overview",
+    "pdf_corpus_search",
+}
+EXEMPT = {"server_info", "pdf_cache_stats", "pdf_cache_clear"}
+
+
+def _registered_tools():
+    import asyncio
+
+    import pdf_mcp.server  # noqa: F401 - registers every tool
+    from pdf_mcp import _core
+
+    return asyncio.run(_core.mcp.list_tools())
+
+
+def test_every_tool_is_classified_locked_or_exempt():
+    names = {t.name for t in _registered_tools()}
+    assert names == LOCKED | EXEMPT, (
+        f"unclassified: {sorted(names - LOCKED - EXEMPT)}; "
+        f"missing: {sorted((LOCKED | EXEMPT) - names)}. A new tool that opens "
+        "a PDF must be decorated with @pdf_access and added to LOCKED."
+    )
+
+
+def test_locked_tools_run_under_the_lock_and_exempt_ones_do_not():
+    for tool in _registered_tools():
+        marked = getattr(tool.fn, "__pdf_access__", False)
+        assert marked is (tool.name in LOCKED), tool.name
+
+
+def test_the_decorator_leaves_every_schema_unchanged():
+    import inspect
+
+    from fastmcp.tools import FunctionTool
+
+    for tool in _registered_tools():
+        if tool.name in LOCKED:
+            bare = FunctionTool.from_function(inspect.unwrap(tool.fn))
+            assert tool.parameters == bare.parameters, tool.name

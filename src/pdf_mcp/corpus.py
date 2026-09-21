@@ -437,6 +437,10 @@ def backfill_sections(
 
     written = 0
     for i, path in enumerate(paths):
+        if i:
+            # Let calls queued behind this backfill run between documents,
+            # same reason as _warm_sequential's between-documents yield.
+            yield_pdf_access()
         if clock() > deadline:
             return written, paths[i:]
         if cache.get_section_fts_coverage(path) != 0:

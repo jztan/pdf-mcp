@@ -220,9 +220,9 @@ def test_resolve_hidden_flags_lets_a_queued_call_run_between_pages(
     tmp_path, isolated_server, monkeypatch
 ):
     """_core._resolve_hidden_flags (reached from pdf_read_all and
-    pdf_search) is a page-at-a-time pdfium loop of its own; per the
-    profile in the Task 5b report it is most of pdf_read_all's non-
-    extraction hold, so it needs the same between-pages yield."""
+    pdf_search) is a page-at-a-time pdfium loop of its own, and profiling
+    showed it accounts for most of pdf_read_all's non-extraction hold, so
+    it needs the same between-pages yield."""
     import pymupdf
 
     from tests._pdfium_race_workload import make_pdf
@@ -275,11 +275,10 @@ def test_a_long_keyword_search_lets_a_queued_call_run_between_pages(
     tmp_path, isolated_server, monkeypatch
 ):
     """pdf_search twin of the pdf_read_all test above, pinning the yield
-    in search.py's keyword-mode text-extraction loop (search.py:589) that
-    the search_cold fix in Task 5b depends on: it is the loop that does
-    real per-page pdfium work for the measured cold hybrid/auto search,
-    since mode='auto' runs this loop first and caches every page's text
-    before the semantic/hybrid loops ever see a miss."""
+    in search.py's keyword-mode text-extraction loop: it is the loop that
+    does real per-page pdfium work for a cold hybrid/auto search, since
+    mode='auto' runs this loop first and caches every page's text before
+    the semantic/hybrid loops ever see a miss."""
     from tests._pdfium_race_workload import make_pdf
 
     from pdf_mcp import concurrency
@@ -329,8 +328,12 @@ def test_a_long_warm_lets_a_queued_call_run_between_documents(monkeypatch):
 
     def fake_warm_one(path, *a, **k):
         events.append(f"warm {path}")
-        started.set()
-        time.sleep(0.05)
+        if path == "a.pdf":
+            started.set()
+            end = time.monotonic() + 5.0
+            while concurrency.PDF_ACCESS.waiters() < 1:
+                assert time.monotonic() < end, "short call never queued"
+                time.sleep(0.005)
         raise RuntimeError("skip")  # _warm_sequential records it as skipped
 
     monkeypatch.setattr(corpus, "_warm_one_doc", fake_warm_one)
@@ -360,4 +363,50 @@ def test_a_long_warm_lets_a_queued_call_run_between_documents(monkeypatch):
     t1, t2 = _start(warm), _start(short_call)
     t1.join(10)
     t2.join(10)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
     assert events == ["warm a.pdf", "short call", "warm b.pdf"]
+
+
+def test_a_long_section_backfill_lets_a_queued_call_run_between_documents(
+    monkeypatch,
+):
+    """backfill_sections twin of the warm-loop test above: it runs
+    derive_sections doc after doc (pdfium work) for pdf_corpus_warm's
+    sections=True pass, so it needs the same between-documents yield."""
+    from pdf_mcp import concurrency, corpus, section_detector
+
+    events = []
+    started = threading.Event()
+
+    def fake_derive(path, *a, **k):
+        events.append(f"backfill {path}")
+        if path == "a.pdf":
+            started.set()
+            end = time.monotonic() + 5.0
+            while concurrency.PDF_ACCESS.waiters() < 1:
+                assert time.monotonic() < end, "short call never queued"
+                time.sleep(0.005)
+        raise RuntimeError("skip")  # backfill_sections logs and continues
+
+    monkeypatch.setattr(section_detector, "derive_sections", fake_derive)
+
+    class FakeCache:
+        def get_section_fts_coverage(self, path):
+            return 0
+
+    def backfill():
+        with concurrency.PDF_ACCESS:
+            corpus.backfill_sections(["a.pdf", "b.pdf"], FakeCache())
+
+    def short_call():
+        started.wait(5)
+        with concurrency.PDF_ACCESS:
+            events.append("short call")
+
+    t1, t2 = _start(backfill), _start(short_call)
+    t1.join(10)
+    t2.join(10)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
+    assert events == ["backfill a.pdf", "short call", "backfill b.pdf"]

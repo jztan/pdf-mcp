@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .concurrency import yield_pdf_access
 from .remote_embedder import RemoteSpec
 
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
@@ -309,9 +310,23 @@ def _is_cuda(model: Any) -> bool:
 def _embed_length_sorted(model: Any, texts: list[str], batch_size: int) -> list[Any]:
     """Embed `texts` shortest-first in `batch_size` sub-batches; return the
     vectors in the caller's order. Character length stands in for token
-    length: the sort only needs neighbours to be alike, not exact."""
+    length: the sort only needs neighbours to be alike, not exact.
+
+    Yields PDF_ACCESS after each sub-batch (issue #61 follow-up): a no-op
+    unless the current thread holds the lock and a call is queued behind
+    it, so a cold-embed of hundreds of pages does not hold the lock for
+    the whole encode. `model.embed(..., batch_size=batch_size)` yields one
+    vector per input text in the same order it was given, so item i falls
+    in sub-batch i // batch_size; yielding at the boundary lands right
+    after that sub-batch's onnxruntime call returns.
+    """
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
-    vecs = list(model.embed([texts[i] for i in order], batch_size=batch_size))
+    sorted_texts = [texts[i] for i in order]
+    vecs: list[Any] = []
+    for i, vec in enumerate(model.embed(sorted_texts, batch_size=batch_size)):
+        vecs.append(vec)
+        if (i + 1) % batch_size == 0:
+            yield_pdf_access()
     out: list[Any] = [None] * len(texts)
     for i, vec in zip(order, vecs):
         out[i] = vec

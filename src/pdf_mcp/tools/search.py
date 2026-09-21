@@ -2,7 +2,7 @@
 
 from functools import partial
 from typing import Any
-from ..concurrency import pdf_access
+from ..concurrency import pdf_access, yield_pdf_access
 from ..docopen import open_pdf
 from .. import corpus
 from ..vector_cache import page_max_from_lists
@@ -417,7 +417,11 @@ def pdf_search(
                 sem_texts = _core.cache.get_pages_text(local_path, uncached_nums)
                 page_texts_sem: dict[int, str] = {}
                 new_texts_sem: dict[int, str] = {}
-                for page_num in uncached_nums:
+                for i, page_num in enumerate(uncached_nums):
+                    if i:
+                        # Let a call queued behind this cold semantic
+                        # search run between pages (issue #61 follow-up).
+                        yield_pdf_access()
                     if page_num in sem_texts:
                         page_texts_sem[page_num] = sem_texts[page_num]
                     else:
@@ -585,6 +589,11 @@ def pdf_search(
             page_texts_kw: dict[int, str] = {}
             new_texts_kw: dict[int, str] = {}
             for page_num in range(doc_pages):
+                if page_num:
+                    # Let a call queued behind this cold search run between
+                    # pages (issue #61 follow-up); page_num is already the
+                    # loop index here, so this is "after the first".
+                    yield_pdf_access()
                 cached_text = _core.cache.get_page_text(local_path, page_num)
                 if cached_text is not None:
                     page_texts_kw[page_num] = cached_text
@@ -741,7 +750,11 @@ def pdf_search(
             hybrid_texts = _core.cache.get_pages_text(local_path, uncached_nums)
             page_texts_hyb: dict[int, str] = {}
             new_texts_hyb: dict[int, str] = {}
-            for page_num in uncached_nums:
+            for i, page_num in enumerate(uncached_nums):
+                if i:
+                    # Let a call queued behind this cold hybrid search
+                    # run between pages (issue #61 follow-up).
+                    yield_pdf_access()
                 if page_num in hybrid_texts:
                     page_texts_hyb[page_num] = hybrid_texts[page_num]
                 else:

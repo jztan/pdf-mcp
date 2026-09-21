@@ -172,6 +172,48 @@ def test_the_decorator_leaves_every_schema_unchanged():
             assert tool.parameters == bare.parameters, tool.name
 
 
+def test_a_long_read_all_lets_a_queued_call_run_between_pages(
+    tmp_path, isolated_server, monkeypatch
+):
+    from tests._pdfium_race_workload import make_pdf
+
+    from pdf_mcp import concurrency
+    from pdf_mcp.tools import read as read_mod
+
+    pdf_path = str(tmp_path / "long.pdf")
+    make_pdf(pdf_path, n_pages=4)
+
+    events: list[str] = []
+    long_started = threading.Event()
+    real_extract = read_mod.extract_text_from_page
+
+    def fake_extract(page, *args, **kwargs):
+        page_num = page.number
+        events.append(f"page {page_num}")
+        if page_num == 0:
+            long_started.set()
+            end = time.monotonic() + 5.0
+            while concurrency.PDF_ACCESS.waiters() < 1:
+                assert time.monotonic() < end, "short call never queued"
+                time.sleep(0.005)
+        return real_extract(page, *args, **kwargs)
+
+    monkeypatch.setattr(read_mod, "extract_text_from_page", fake_extract)
+
+    def long_call():
+        read_mod.pdf_read_all(pdf_path, max_pages=4)
+
+    def short_call():
+        long_started.wait(5)
+        with concurrency.PDF_ACCESS:
+            events.append("short call")
+
+    t1, t2 = _start(long_call), _start(short_call)
+    t1.join(10)
+    t2.join(10)
+    assert events == ["page 0", "short call", "page 1", "page 2", "page 3"]
+
+
 def test_a_long_warm_lets_a_queued_call_run_between_documents(monkeypatch):
     from pdf_mcp import concurrency, corpus
 

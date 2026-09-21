@@ -3095,6 +3095,24 @@
       "page_hit": 1,
       "contains": 1,
       "excerpt_digest": "c54a25f8278a"
+     },
+     "d07": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "f24871d9d079"
+     },
+     "d08": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "d09": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 0,
+      "excerpt_digest": "f98f386702d6"
      }
     },
     "paragraph": {
@@ -3589,6 +3607,24 @@
       "page_hit": 1,
       "contains": 1,
       "excerpt_digest": "30a9c12c9f22"
+     },
+     "d07": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
+     },
+     "d08": {
+      "class": "table",
+      "page_hit": 0,
+      "contains": 0,
+      "excerpt_digest": "da39a3ee5e6b"
+     },
+     "d09": {
+      "class": "table",
+      "page_hit": 1,
+      "contains": 1,
+      "excerpt_digest": "de144959319b"
      }
     }
    },

@@ -4,7 +4,12 @@ import logging
 import re
 from typing import Any
 from ..cache import PDFCache
-from ..extractor import _NUMBER_TOKEN, _columns_reliable, extract_tables_for_pages
+from ..extractor import (
+    _MONEY_CELL,
+    _NUMBER_TOKEN,
+    _columns_reliable,
+    extract_tables_for_pages,
+)
 from ._render import _bbox_to_clip
 
 logger = logging.getLogger(__name__)
@@ -21,10 +26,6 @@ _COLUMN_IDENTITY_WORDS = re.compile(
 #: reads as two tokens, which made a clean financial cell look merged to
 #: `_columns_reliable` and a single-value excerpt look ambiguous to
 #: `_excerpt_is_ambiguous`, on every table that groups thousands.
-#: A currency symbol or a thousands-grouped amount. Marks a cell as data
-#: rather than a column label, which is what keeps a sparse-but-real header
-#: from being displaced by the row beneath it.
-_MONEY_CELL = re.compile(r"[$€£¥]|\d,\d{3}")
 #: Upper bound on rows returned in a table_context, so a match covering a
 #: whole large table cannot bloat the response.
 _MAX_CONTEXT_ROWS = 20
@@ -357,7 +358,7 @@ def _context_for_match(
         offset = len(rows) - len(body)  # 1 when row 0 was promoted
         hits = _rows_overlapping(bbox, row_bboxes[offset:])
         if hits:
-            reliable = _columns_reliable(body)
+            reliable = _columns_reliable(body, header=header)
             ctx: dict[str, Any] = {
                 "header": header,
                 "rows": [body[i] for i in hits[:_MAX_CONTEXT_ROWS]],
@@ -392,7 +393,7 @@ def _context_for_match(
         near_ctx: dict[str, Any] = {
             "header": header,
             "rows": body[:_MAX_CONTEXT_ROWS],
-            "columns_reliable": _columns_reliable(body),
+            "columns_reliable": _columns_reliable(body, header=header),
         }
         tb = table.get("bbox")
         if tb and page_rect:

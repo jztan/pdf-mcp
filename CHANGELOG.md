@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tables no longer put a value under the wrong column while reporting
+  `columns_reliable: true`.** A single value in a cell merged across two
+  columns came back under the first column rather than the one it is printed
+  under (the TI LM555 18 V supply limit read as MIN instead of MAX); it now
+  lands in the printed column. A table whose header row holds money amounts
+  (its real header sits above the detected region, so the first row returned
+  is data) is now flagged `columns_reliable: false`, in `pdf_read_pages`
+  tables and in `pdf_search` `table_context`. Cached tables re-extract once
+  on the next read. ([#63](https://github.com/jztan/pdf-mcp/issues/63))
+
 - **Parallel tool calls no longer crash the server.** Since 3.0.0, two tool
   calls running at the same time could crash the server or leave it unable
   to open any PDF until it was restarted, because the PDF engine is not safe

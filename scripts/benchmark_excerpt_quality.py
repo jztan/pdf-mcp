@@ -41,7 +41,7 @@ from pdf_mcp.server import pdf_search  # noqa: E402
 
 VALID_CATEGORIES = {"prose", "structured", "table"}
 REQUIRED_QUERY_FIELDS = ("id", "category", "query", "page", "answer")
-GATED_CELLS = ("snippet", "paragraph")
+GATED_CELLS = ("snippet", "paragraph", "column_correct")
 
 #: Words that give a number its column identity (which of min/typ/max it is).
 #: Matched anywhere in the excerpt: on datasheets with a single value column
@@ -137,12 +137,25 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     Deliberately ignores `columns_reliable`: that flag is a table-level
     caution, while resolution is decided per value.
     """
+    cell = _governing_header(match, _norm(answer))
+    return cell is not None and _names_a_quantity(cell)
+
+
+def _governing_header(match: dict, want: str) -> str | None:
+    """The header cell governing the one context cell holding ``want``.
+
+    None when there is no table context, the value is not in exactly one
+    single-number cell, the header row is a caption band, or no populated
+    header sits at or left of the value's column. Shared by
+    `_resolves_via_context` (is that header a real label?) and
+    `_column_correct` (is it the RIGHT label?), so the two cannot disagree
+    about which cell they are judging.
+    """
     ctx = match.get("table_context")
     if not ctx:
-        return False
+        return None
     header = ctx.get("header") or []
     rows = ctx.get("rows") or []
-    want = _norm(answer)
     # Search every returned row: the answer must land in exactly ONE cell
     # across all of them, so a value repeated down a column still fails.
     hits = [
@@ -152,18 +165,18 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
         if want in [_norm(t) for t in _NUMBER.findall(cell or "")]
     ]
     if len(hits) != 1:
-        return False
+        return None
     r, idx = hits[0]
     if len(_NUMBER.findall(rows[r][idx] or "")) != 1:
-        return False
+        return None
     if idx >= len(header):
-        return False
+        return None
     # A caption band fills ONE header cell and leaves the rest empty; a
     # real header row fills several. This is the caption test, and it is
     # the same signal `_resolve_header` uses to decide promotion, so the
     # two rest on one principle rather than two hand-tuned heuristics.
     if sum(1 for c in header if c and c.strip()) < 2:
-        return False
+        return None
     # Look left past spacer columns. A currency or symbol column shifts a
     # value one place right of its own label: Berkshire p55 is header
     # ['', '2024', '', ...] over row ['BNSF', '', '5,031', ...], same
@@ -173,8 +186,22 @@ def _resolves_via_context(match: dict, answer: str) -> bool:
     for i in range(idx, -1, -1):
         cell = header[i] or ""
         if cell.strip():
-            return _names_a_quantity(cell)
-    return False
+            return cell
+    return None
+
+
+def _column_correct(match: dict, answer: str, column: str) -> bool:
+    """True if the table context files the answer under its gold column.
+
+    `_resolves_via_context` accepts any named column, so a value filed
+    under the wrong one passes it: TI LM555 p5 put 150 (printed under
+    TYP) under MIN and scored as resolved. A query carrying
+    `answer_column` is additionally graded on WHICH column, and that is
+    the only thing here that tells a right answer from a confidently
+    wrong one.
+    """
+    cell = _governing_header(match, _norm(answer))
+    return cell is not None and _norm(cell) == _norm(column)
 
 
 def bbox_contains_answer(page, bbox, answer: str) -> bool:
@@ -243,6 +270,17 @@ def load_queries(path: str) -> dict:
                         f"Query {q['id']}: table queries need answer_label,"
                         " the row/parameter name that must accompany the"
                         " value for the excerpt to be interpretable."
+                    )
+            if "answer_column" in q:
+                if q["category"] != "table":
+                    raise ValueError(
+                        f"Query {q['id']}: answer_column is only defined for"
+                        " table queries."
+                    )
+                if not str(q["answer_column"]).strip():
+                    raise ValueError(
+                        f"Query {q['id']}: answer_column must name the header"
+                        " the value is printed under."
                     )
             kf = q.get("known_fail")
             if kf is not None:
@@ -354,6 +392,7 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
             "interpretable_with_context",
             "answerable_from_response",
             "clip_points_wrong",
+            "column_correct",
         )
     }
     rows: list[dict] = []
@@ -488,6 +527,19 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
                     row["paragraph_answerable_from_response"] = answerable
                     row["paragraph_clip_points_wrong"] = clip_miss
 
+                    # Right column, not just a named one. Graded only on
+                    # queries that carry `answer_column`; None elsewhere so
+                    # the rate and clause 5 see only rows that asked.
+                    column = q.get("answer_column")
+                    column_ok = None
+                    if column:
+                        column_ok = int(
+                            contains == 1
+                            and _column_correct(target or {}, q["answer"], column)
+                        )
+                        accum["column_correct"][q["category"]].append(column_ok)
+                    row["paragraph_column_correct"] = column_ok
+
             rows.append(row)
 
         if doc is not None:
@@ -501,6 +553,7 @@ def run_all_cells(all_pdfs: dict) -> tuple[dict, list[dict]]:
         "interpretable_with_context",
         "answerable_from_response",
         "clip_points_wrong",
+        "column_correct",
     ):
         cell_out: dict[str, float] = {}
         all_vals: list[int] = []
@@ -524,7 +577,7 @@ def _frozen_for(row: dict, cell: str) -> bool:
 
 
 def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
-    """Evaluate the three-clause gate.
+    """Evaluate the five-clause gate.
 
     Clause 1: paragraph overall containment >= snippet.
     Clause 2: zero regressions (no query where snippet contains
@@ -539,6 +592,9 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
               information" — the global bbox_containment aggregate has
               exactly that flaw, which is why it stays a reported
               transparency metric only, not the gate.
+    Clause 4: no frozen (`known_fail`) row now passes its frozen cell.
+    Clause 5: every live query carrying `answer_column` finds its value
+              under that column in the attached table context.
     """
     # Clause 1 is scoped to live (unfrozen) rows, matching clause 2. A
     # frozen row scores 0 on paragraph by definition and cannot regress
@@ -566,8 +622,23 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     # un-frozen, or the next real regression there would be invisible.
     stale = [
         r for r in rows if _frozen_for(r, "paragraph") and r["paragraph_contains"] == 1
+    ] + [
+        r
+        for r in rows
+        if _frozen_for(r, "column_correct") and r.get("paragraph_column_correct") == 1
     ]
     clause_4_pass = len(stale) == 0
+
+    # Clause 5: a query that names its gold column must find the value
+    # under that column. Without it a value filed under the wrong header
+    # scores as resolved on every other metric (TI LM555 p5, 150 under MIN).
+    wrong_column = [
+        r
+        for r in rows
+        if r.get("paragraph_column_correct") == 0
+        and not _frozen_for(r, "column_correct")
+    ]
+    clause_5_pass = len(wrong_column) == 0
 
     bbox_rows = [r for r in rows if r.get("bbox_present") == 1]
     scoped_bbox = sum(r["bbox_contains"] for r in bbox_rows)
@@ -578,7 +649,11 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     clause_3_pass = len(bbox_rows) > 0 and scoped_bbox >= scoped_excerpt
 
     return {
-        "pass": clause_1_pass and clause_2_pass and clause_3_pass and clause_4_pass,
+        "pass": clause_1_pass
+        and clause_2_pass
+        and clause_3_pass
+        and clause_4_pass
+        and clause_5_pass,
         "clause_1_containment": {
             "pass": clause_1_pass,
             "snippet": live_snippet,
@@ -603,6 +678,14 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
             "count": len(stale),
             "ids": [r["id"] for r in stale],
             "action": "un-freeze these rows: delete their known_fail block",
+        },
+        "clause_5_column_correct": {
+            "pass": clause_5_pass,
+            "count": len(wrong_column),
+            "ids": [r["id"] for r in wrong_column],
+            "graded": sum(
+                1 for r in rows if r.get("paragraph_column_correct") is not None
+            ),
         },
     }
 
@@ -704,6 +787,7 @@ def print_gate_verdict(verdict: dict) -> None:
         "clause_2_regressions",
         "clause_3_bbox_fidelity",
         "clause_4_stale_known_fail",
+        "clause_5_column_correct",
     ):
         c = verdict[clause_key]
         marker = "✓" if c["pass"] else "✗"

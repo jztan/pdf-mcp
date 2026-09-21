@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (its real header sits above the detected region, so the first row returned
   is data) is now flagged `columns_reliable: false`, in `pdf_read_pages`
   tables and in `pdf_search` `table_context`. Cached tables re-extract once
-  on the next read.
+  on the next read. ([#63](https://github.com/jztan/pdf-mcp/issues/63))
 
 - **Parallel tool calls no longer crash the server.** Since 3.0.0, two tool
   calls running at the same time could crash the server or leave it unable

@@ -471,7 +471,7 @@ def _detect_features() -> dict[str, Any]:
                 "description": (
                     "Vertical-script (tategaki / 直排) PDFs in Japanese and "
                     "Chinese are reconstructed into correct reading order from "
-                    "glyph geometry. PyMuPDF-only — no extra required."
+                    "glyph geometry. Built in; no extra required."
                 ),
             },
             "ocr": {

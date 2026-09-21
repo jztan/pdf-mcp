@@ -1020,6 +1020,8 @@ pdf_cache_clear(expired_only=False)  # full wipe + URL cache
 
 ## Server Introspection
 
+**Concurrency.** Calls that open a PDF take turns on the PDF engine, because it is not safe to use from several threads at once; parallel calls queue instead of failing. Long calls let queued calls run between units of work: corpus warms (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`) between documents, `pdf_read_all` and a cold `pdf_search` between pages and between embedding batches. A corpus warm's time budget counts the time spent on those other calls. `server_info`, `pdf_cache_stats` and `pdf_cache_clear` never queue. **Limitations:** `pdf_read_pages` over a large page range, and embedding on a remote or CUDA backend, hold the engine until they finish.
+
 ### `server_info`
 
 Reports which optional features are installed and which configuration values are active on the server. Setup-time discovery, distinct from `pdf_cache_stats`, which reports runtime *cache* state; this reports what the server *can do*. Call it before feature-dependent calls (semantic search, OCR, column-aware extraction) so you can branch on availability rather than discovering a silent fallback (column-aware → positional sort) or an error (semantic mode → `error`) downstream. Named without the `pdf_` prefix because it operates on the server, not on a PDF. Results are stable for the server's lifetime, except `features.extraction.ocr.available` (re-checked on every call, so Tesseract installed mid-session shows up) and `update` (refreshed daily in the background).

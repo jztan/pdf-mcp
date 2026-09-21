@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   level set on the `pdf_mcp.server` logger no longer matches them; set it on
   `pdf_mcp` to cover every module.
 
+### Fixed
+
+- **Parallel tool calls no longer crash the server.** Since 3.0.0, two tool
+  calls running at the same time could crash the server or leave it unable
+  to open any PDF until it was restarted, because the PDF engine is not safe
+  to use from several threads at once. Calls that open a PDF now take turns
+  on the engine instead of running at the same time. Long calls (corpus
+  warms, a cold search of a large document, `pdf_read_all`) let waiting calls
+  run between documents or pages, so a quick call does not wait for a long
+  one to finish. A corpus warm's time budget includes the time it spends
+  letting other calls run, so under heavy parallel use it can return more
+  documents in `unprocessed`.
+  ([#61](https://github.com/jztan/pdf-mcp/issues/61))
+
 ## [3.3.0] - 2026-09-19
 ### Added
 

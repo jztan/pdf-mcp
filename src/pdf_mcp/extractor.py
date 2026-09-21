@@ -801,7 +801,7 @@ def _segment_by_rules(
 
 
 def vertical_detection_available() -> bool:
-    """True — vertical reorder is PyMuPDF-only and always available (no extra)."""
+    """True: vertical reorder is built in and always available (no extra)."""
     return True
 
 

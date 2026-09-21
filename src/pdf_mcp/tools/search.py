@@ -25,6 +25,7 @@ from ._search_common import (
     _semantic_excerpt_fields,
     _upgrade_excerpts_to_paragraphs,
 )
+from ._hit_context import attach_hit_context
 from ._tables import _attach_table_context
 
 MAX_RESULTS_LIMIT = 100
@@ -265,6 +266,17 @@ def pdf_search(
               scanned and are invisible to both keyword and semantic
               search until OCR'd via pdf_read_pages(ocr=True) (or
               inspected with pdf_render_pages).
+            - Per-match `section_path` (list of str, root to leaf, at most
+              3) — the PDF's own outline entries enclosing the hit. Absent
+              when the document has no outline or the page falls outside
+              it. Use it to tell a segment page from the consolidated
+              statement, a note from the MD&A.
+            - Per-match `lead_in` (str) — the sentence printed just above
+              the hit's table or list that introduces it (it ends with a
+              colon, e.g. "...on an unaudited pro forma basis...:"). Absent
+              for prose hits and when no such sentence sits directly above.
+              Read it before quoting a table figure: it says what the
+              numbers are.
             - Per-match `hidden_text` (bool) — true when the hit's page
               carries text invisible to a human reader (page-level, same
               signal as pdf_read_pages). Present on every page-mode hit.
@@ -544,6 +556,7 @@ def pdf_search(
                     matches, doc, query, window_tokens=window_tokens
                 )
 
+            matches = attach_hit_context(matches, local_path, doc)
             hidden_detected = _attach_hidden(matches)
             sem_page_counts = {str(m["page"]): 1 for m in matches}
             all_results_low_confidence = bool(matches) and all(
@@ -649,6 +662,7 @@ def pdf_search(
                     window_tokens=window_tokens,
                 )
 
+            kw_matches = attach_hit_context(kw_matches, local_path, doc)
             hidden_detected = _attach_hidden(kw_matches)
 
             response: dict[str, Any] = {
@@ -695,6 +709,7 @@ def pdf_search(
                     },
                     window_tokens=window_tokens,
                 )
+            auto_kw = attach_hit_context(auto_kw, local_path, doc)
             hidden_detected = _attach_hidden(auto_kw)
             response: dict[str, Any] = {
                 "content_warning": (
@@ -886,6 +901,7 @@ def pdf_search(
                 window_tokens=window_tokens,
             )
 
+        hybrid_matches = attach_hit_context(hybrid_matches, local_path, doc)
         hidden_detected = _attach_hidden(hybrid_matches)
         hybrid_page_counts = {str(m["page"]): 1 for m in hybrid_matches}
         all_results_low_confidence = bool(hybrid_matches) and all(

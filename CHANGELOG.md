@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **Search hits say where they sit.** `pdf_search` and `pdf_corpus_search`
+  hits now carry `section_path`, the PDF's own outline entries enclosing the
+  hit, and `lead_in`, the sentence printed just above a table or list that
+  introduces it. A bare table row no longer reads like the headline figure
+  when it is a segment result or a pro forma number: the JPMorgan segment
+  page reads `CONSUMER & COMMUNITY BANKING`, the consolidated statement
+  reads `Consolidated statements of income`, and Microsoft's pro forma table
+  carries its "on an unaudited pro forma basis" sentence. Both fields are
+  absent when they do not apply (no outline, a prose hit).
+  ([#66](https://github.com/jztan/pdf-mcp/issues/66))
+
 ### Changed
 
 - **`tools/list` order: `pdf_get_toc` is now listed second, right after

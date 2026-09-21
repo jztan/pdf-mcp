@@ -16,6 +16,7 @@ from .._core import (
     _tool_description,
     mcp,
 )
+from ._hit_context import attach_hit_context
 from ._search_common import (
     _CORPUS_TERM_RE,
     _WINDOW_TOKENS_DEFAULT,
@@ -681,6 +682,7 @@ def _finalize_corpus_matches(
                 )
             elif excerpt_style == "snippet" and attach_geometry:
                 doc_hits = _attach_snippet_geometry(doc_hits, doc)
+            doc_hits = attach_hit_context(doc_hits, path, doc)
         finally:
             doc.close()
         matches.extend(doc_hits)
@@ -766,6 +768,9 @@ def pdf_corpus_search(
     Returns:
         - matches: cross-document hits in fused order, each {path,
           doc_title, page, excerpt, position, source, hidden_text},
+          plus `section_path` (the document's outline entries enclosing
+          the hit) and `lead_in` (the colon sentence introducing the
+          hit's table or list) when they apply, same as pdf_search,
           plus geometry fields when excerpt_style is 'paragraph' or
           'window' ('window' adds `window_blocks` and `anchor` too).
           Keyword-mode hits also carry `score` (per-doc BM25,

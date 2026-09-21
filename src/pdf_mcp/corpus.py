@@ -23,6 +23,7 @@ from typing import Any, Callable
 
 
 from .backend.bytesopen import is_password_locked
+from .concurrency import yield_pdf_access
 from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
@@ -688,6 +689,10 @@ def _warm_sequential(
     budget_exhausted = False
     deadline = start + budget_seconds
     for i, (path, _pages) in enumerate(pending):
+        if i:
+            # Let calls queued behind this warm run between documents, so
+            # a quick pdf_info never waits out a whole corpus warm.
+            yield_pdf_access()
         if clock() - start > budget_seconds:
             unprocessed = [p for p, _ in pending[i:]]
             budget_exhausted = True
@@ -854,32 +859,38 @@ def _warm_concurrent(
                     except Exception as e:
                         handled.add(path)
                         skipped.append({"path": path, "reason": f"warm failed: {e}"})
-                        continue
-                    handled.add(path)
-                    if not _complete:
-                        docs.append(
-                            {
-                                "path": path,
-                                "status": "partial",
-                                "pages": page_count,
-                                "embeddings_cached": False,
-                                "embedded_pages": _embedded,
-                                "text_coverage": _doc_coverage_label(path, cache),
-                            }
-                        )
-                        unprocessed.append(path)
-                        budget_exhausted = True
-                        continue
-                    warmed += 1
-                    docs.append(
-                        {
-                            "path": path,
-                            "status": "warmed",
-                            "pages": page_count,
-                            "embeddings_cached": emb_cached(path),
-                            "text_coverage": _doc_coverage_label(path, cache),
-                        }
-                    )
+                    else:
+                        handled.add(path)
+                        if not _complete:
+                            docs.append(
+                                {
+                                    "path": path,
+                                    "status": "partial",
+                                    "pages": page_count,
+                                    "embeddings_cached": False,
+                                    "embedded_pages": _embedded,
+                                    "text_coverage": _doc_coverage_label(path, cache),
+                                }
+                            )
+                            unprocessed.append(path)
+                            budget_exhausted = True
+                        else:
+                            warmed += 1
+                            docs.append(
+                                {
+                                    "path": path,
+                                    "status": "warmed",
+                                    "pages": page_count,
+                                    "embeddings_cached": emb_cached(path),
+                                    "text_coverage": _doc_coverage_label(path, cache),
+                                }
+                            )
+                    # Let calls queued behind this warm run between
+                    # documents, so a quick pdf_info never waits out a
+                    # whole corpus warm. BrokenProcessPool/OSError above
+                    # re-raise before reaching here, which is correct: the
+                    # pool is being torn down, not paused between docs.
+                    yield_pdf_access()
     except (BrokenProcessPool, OSError):
         # Leaving the `with` block joins in-flight workers (shutdown(wait=
         # True)); their partial results are discarded and those docs are

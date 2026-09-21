@@ -170,3 +170,45 @@ def test_the_decorator_leaves_every_schema_unchanged():
         if tool.name in LOCKED:
             bare = FunctionTool.from_function(inspect.unwrap(tool.fn))
             assert tool.parameters == bare.parameters, tool.name
+
+
+def test_a_long_warm_lets_a_queued_call_run_between_documents(monkeypatch):
+    from pdf_mcp import concurrency, corpus
+
+    events = []
+    started = threading.Event()
+
+    def fake_warm_one(path, *a, **k):
+        events.append(f"warm {path}")
+        started.set()
+        time.sleep(0.05)
+        raise RuntimeError("skip")  # _warm_sequential records it as skipped
+
+    monkeypatch.setattr(corpus, "_warm_one_doc", fake_warm_one)
+    monkeypatch.setattr(corpus, "_cached_pages", lambda *a, **k: None)
+
+    def warm():
+        with concurrency.PDF_ACCESS:
+            corpus._warm_sequential(
+                [("a.pdf", 1), ("b.pdf", 1)],
+                60.0,
+                time.monotonic(),
+                time.monotonic,
+                cache=None,
+                embeddings=False,
+                model_name=None,
+                embed=None,
+                docs=[],
+                skipped=[],
+                emb_cached=lambda p: False,
+            )
+
+    def short_call():
+        started.wait(5)
+        with concurrency.PDF_ACCESS:
+            events.append("short call")
+
+    t1, t2 = _start(warm), _start(short_call)
+    t1.join(10)
+    t2.join(10)
+    assert events == ["warm a.pdf", "short call", "warm b.pdf"]

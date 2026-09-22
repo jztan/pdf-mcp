@@ -31,6 +31,7 @@ from .parallel import resolve_workers
 
 __all__ = [
     "CORPUS_MAX_FILES",
+    "CORPUS_LISTING_MAX",
     "CORPUS_RRF_K",
     "CORPUS_DOC_ARM_WEIGHT",
     "PROFILE_HEAD_CHARS",
@@ -57,6 +58,11 @@ logger = logging.getLogger(__name__)
 # explicit. Beyond this, corpus tools return an inline error instead
 # of silently truncating.
 CORPUS_MAX_FILES = 100
+
+# Most names an over-cap error lists back. A folder above the cap cannot be
+# surveyed by the corpus tools, and no tool lists files, so the error itself
+# carries the names; this bounds that payload (about 20 to 60 KB).
+CORPUS_LISTING_MAX = 1000
 
 # RRF constant for cross-document fusion; matches tools/search.py's
 # _RRF_K so corpus fusion and single-doc hybrid fusion share one k.
@@ -127,6 +133,51 @@ def _validate_file(
     return str(resolved), None
 
 
+def _over_cap_error(
+    n_files: int,
+    names: list[str] | None,
+    root: Path | None,
+    recursive: bool,
+    skipped: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Inline error for a corpus above CORPUS_MAX_FILES.
+
+    Directory mode (``root`` set) lists the validated PDFs relative to
+    ``root`` so a caller without a shell can pass a subset back, plus
+    per-subfolder counts when recursive. Explicit-list mode adds nothing:
+    the caller already holds the list.
+    """
+    cap = CORPUS_MAX_FILES
+    err: dict[str, Any] = {
+        "error": f"Corpus has {n_files} PDFs, above the {cap}-file cap",
+    }
+    if root is None or names is None:
+        err["hint"] = (
+            f"Pass up to {cap} of these paths per call. Scores from separate"
+            " calls are not comparable, so run one query over one subset."
+        )
+        err["skipped"] = skipped
+        return err
+    names = sorted(names)
+    err["hint"] = (
+        f"Pass up to {cap} of these as an explicit list (join each name to"
+        " root), or narrow to a subfolder. Scores from separate calls are"
+        " not comparable, so run one query over one subset."
+    )
+    err["root"] = str(root)
+    err["files"] = names[:CORPUS_LISTING_MAX]
+    err["files_truncated"] = len(names) > CORPUS_LISTING_MAX
+    if recursive:
+        counts: dict[str, int] = {}
+        for name in names:
+            head, sep, _ = name.partition("/")
+            key = head if sep else "."
+            counts[key] = counts.get(key, 0) + 1
+        err["subfolders"] = dict(sorted(counts.items()))
+    err["skipped"] = skipped
+    return err
+
+
 def resolve_corpus(
     paths: str | list[str],
     recursive: bool = False,
@@ -136,11 +187,13 @@ def resolve_corpus(
 
     Returns ``{"files": [...], "skipped": [{"path", "reason"}]}`` on
     success, or an inline ``{"error", "hint"}`` payload (missing
-    directory, empty corpus, cap exceeded). Directory mode is
+    directory, empty corpus, cap exceeded; over the cap, directory mode
+    also lists the folder's PDFs, see ``_over_cap_error``). Directory mode is
     non-recursive by default and matches ``*.pdf`` case-insensitively;
     results are sorted for determinism.
     """
     skipped: list[dict[str, str]] = []
+    root: Path | None = None
 
     if isinstance(paths, str):
         if "://" in paths:
@@ -172,6 +225,7 @@ def resolve_corpus(
         candidates = list(paths)
 
     files: list[str] = []
+    names: list[str] = []
     seen: set[str] = set()
     for entry in candidates:
         resolved, reason = _validate_file(entry, check_path)
@@ -180,6 +234,10 @@ def resolve_corpus(
         elif resolved not in seen:
             seen.add(resolved)
             files.append(resolved)
+            if root is not None:
+                # Name as found in the folder, before symlink resolution:
+                # always under root, and root/name resolves to this file.
+                names.append(Path(entry).relative_to(root).as_posix())
 
     if not files:
         return {
@@ -190,16 +248,13 @@ def resolve_corpus(
             "skipped": skipped,
         }
     if len(files) > CORPUS_MAX_FILES:
-        return {
-            "error": (
-                f"Corpus has {len(files)} PDFs, above the"
-                f" {CORPUS_MAX_FILES}-file cap"
-            ),
-            "hint": (
-                "Corpus tools target tens of documents. Narrow the"
-                " directory or pass an explicit subset."
-            ),
-        }
+        return _over_cap_error(
+            len(files),
+            names if root is not None else None,
+            root,
+            recursive,
+            skipped,
+        )
     return {"files": files, "skipped": skipped}
 
 

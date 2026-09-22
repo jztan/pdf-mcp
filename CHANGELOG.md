@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A folder over the corpus cap can now be split without a shell.** When a
+  directory passed to `pdf_corpus_warm`, `pdf_corpus_overview` or
+  `pdf_corpus_search` holds more than 100 PDFs, the error lists them
+  (`root`, `files`, plus `subfolders` counts on recursive calls) so an agent
+  can pass a subset back, and it says that scores from separate calls
+  cannot be compared. ([#68](https://github.com/jztan/pdf-mcp/issues/68))
 - **`tools/list` order: `pdf_get_toc` is now listed second, right after
   `pdf_info`** (it was fifth). Tool names, descriptions, input and output
   schemas, and responses are unchanged, so a client that picks tools by name

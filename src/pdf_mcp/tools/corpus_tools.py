@@ -81,7 +81,8 @@ def pdf_corpus_warm(
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
             paths. URLs are not accepted (fetch via a single-doc tool
-            first). Corpora are capped at 100 files.
+            first). Corpora are capped at 100 files; over the cap, a
+            directory's error lists its PDFs so a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300). Cached docs are free. Docs that do not
             fit the budget are listed in `unprocessed`; call again to
@@ -215,7 +216,8 @@ def pdf_corpus_overview(
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
             paths. URLs are not accepted. Corpora are capped at 100
-            files.
+            files; over the cap, a directory's error lists its PDFs so
+            a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300); unready docs land in `unprocessed`.
         recursive: Directory mode only, recurse into subdirectories.
@@ -734,7 +736,8 @@ def pdf_corpus_search(
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
             paths. URLs are not accepted. Corpora are capped at 100
-            files.
+            files; over the cap, a directory's error lists its PDFs so
+            a subset can be passed.
         query: Text to search for. In keyword mode terms are
             AND-matched independently per document (FTS5); prefer
             short, specific terms (1-3 words) over a full question, and

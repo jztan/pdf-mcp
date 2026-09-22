@@ -89,6 +89,105 @@ class TestResolveCorpus:
         assert "hint" in res
 
 
+def _stub_pdfs(d: Path, names: list[str]) -> None:
+    """Empty .pdf stubs: resolve_corpus only checks extension, config,
+    existence and the password probe, which reads an unopenable file as
+    not locked, so no real PDF is needed on the listing paths."""
+    for name in names:
+        p = d / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"")
+
+
+class TestOverCapListing:
+    def test_flat_directory_lists_relative_sorted_names(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(tmp_path, ["c.pdf", "a.pdf", "b.PDF"])
+        res = corpus.resolve_corpus(str(tmp_path))
+        assert res["error"] == "Corpus has 3 PDFs, above the 2-file cap"
+        assert res["root"] == str(tmp_path.resolve())
+        assert res["files"] == ["a.pdf", "b.PDF", "c.pdf"]
+        assert res["files_truncated"] is False
+        assert "subfolders" not in res
+        assert res["skipped"] == []
+        assert "join each name to root" in res["hint"]
+        assert "not comparable" in res["hint"]
+
+    def test_recursive_counts_subfolders(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(
+            tmp_path,
+            ["top.pdf", "x/one.pdf", "x/deep/two.pdf", "y/three.pdf"],
+        )
+        res = corpus.resolve_corpus(str(tmp_path), recursive=True)
+        assert res["files"] == [
+            "top.pdf",
+            "x/deep/two.pdf",
+            "x/one.pdf",
+            "y/three.pdf",
+        ]
+        assert res["subfolders"] == {".": 1, "x": 2, "y": 1}
+
+    def test_listing_truncates_but_counts_everything(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        monkeypatch.setattr(corpus, "CORPUS_LISTING_MAX", 3)
+        _stub_pdfs(tmp_path, [f"s/f{i}.pdf" for i in range(5)])
+        res = corpus.resolve_corpus(str(tmp_path), recursive=True)
+        assert res["error"] == "Corpus has 5 PDFs, above the 2-file cap"
+        assert res["files"] == ["s/f0.pdf", "s/f1.pdf", "s/f2.pdf"]
+        assert res["files_truncated"] is True
+        assert res["subfolders"] == {"s": 5}
+
+    def test_denied_file_is_skipped_not_listed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(tmp_path, ["a.pdf", "b.pdf", "c.pdf", "secret.pdf"])
+
+        def deny(path: str) -> None:
+            if path.endswith("secret.pdf"):
+                raise ValueError("path denied by config")
+
+        res = corpus.resolve_corpus(str(tmp_path), check_path=deny)
+        assert res["files"] == ["a.pdf", "b.pdf", "c.pdf"]
+        assert [Path(s["path"]).name for s in res["skipped"]] == ["secret.pdf"]
+
+    def test_explicit_list_over_cap_has_no_listing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(tmp_path, ["a.pdf", "b.pdf", "c.pdf"])
+        entries = [str(tmp_path / n) for n in ["a.pdf", "b.pdf", "c.pdf"]]
+        entries.append(str(tmp_path / "ghost.pdf"))
+        res = corpus.resolve_corpus(entries)
+        assert res["error"] == "Corpus has 3 PDFs, above the 2-file cap"
+        for key in ("root", "files", "files_truncated", "subfolders"):
+            assert key not in res
+        assert [Path(s["path"]).name for s in res["skipped"]] == ["ghost.pdf"]
+        assert "paths per call" in res["hint"]
+        assert "not comparable" in res["hint"]
+
+    def test_listed_names_round_trip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(tmp_path, ["a.pdf", "sub/b.pdf", "sub/c.pdf"])
+        res = corpus.resolve_corpus(str(tmp_path), recursive=True)
+        subset = [str(Path(res["root"]) / n) for n in res["files"][:2]]
+        back = corpus.resolve_corpus(subset)
+        assert "error" not in back
+        assert len(back["files"]) == 2
+
+    def test_symlink_out_of_folder_listed_by_own_name(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _stub_pdfs(outside, ["real.pdf"])
+        folder = tmp_path / "folder"
+        folder.mkdir()
+        _stub_pdfs(folder, ["a.pdf", "b.pdf"])
+        try:
+            os.symlink(outside / "real.pdf", folder / "link.pdf")
+        except OSError:
+            pytest.skip("symlinks not permitted on this platform")
+        res = corpus.resolve_corpus(str(folder))
+        assert res["files"] == ["a.pdf", "b.pdf", "link.pdf"]
+
+
 class SteppingClock:
     """Fake monotonic clock: advances a fixed step on every call."""
 

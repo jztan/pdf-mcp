@@ -4435,6 +4435,18 @@ CORPUS_ENVELOPE_KEYS = {
 
 
 class TestPdfCorpusOverview:
+    def test_over_cap_error_lists_folder(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        monkeypatch.setattr("pdf_mcp.corpus.CORPUS_MAX_FILES", 2)
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert result["error"] == "Corpus has 3 PDFs, above the 2-file cap"
+        assert result["root"] == str(corpus_dir.resolve())
+        assert result["files"] == ["alpha.pdf", "bravo.pdf", "charlie.pdf"]
+        assert result["files_truncated"] is False
+        assert "subfolders" not in result
+        assert "docs" not in result
+
     def test_cards_for_all_docs(self, corpus_dir, isolated_server):
         result = pdf_corpus_overview(str(corpus_dir))
         assert "error" not in result

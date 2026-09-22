@@ -782,7 +782,7 @@ Shared envelope (both tools):
 **Error contract:** call-level failures (missing directory, empty corpus, corpus above the file cap, embeddings requested with an unavailable embedding model) return an inline `{"error": "...", "hint": "..."}` payload instead of raising. Check for an `error` key before reading other fields.
 
 **Limitations (both tools):**
-- Corpora are capped at 100 files; a larger corpus returns an inline error rather than truncating silently.
+- Corpora are capped at 100 files; a larger corpus returns an inline error rather than truncating silently. For a directory, that error also carries `root`, `files` (the validated PDFs as names relative to `root`, sorted, at most 1,000, with `files_truncated`), `subfolders` (PDF count per top-level subfolder, `"."` for `root` itself; recursive calls only) and `skipped`, so a caller can pass up to 100 names joined to `root` as an explicit list. Scores from separate calls are not comparable: run one query over one subset. An explicit list above the cap gets `skipped` but no listing.
 - URLs are not accepted; fetch a remote PDF via a single-doc tool first, then point a corpus tool at its local path. Note that the fetched copy lands in the URL cache, not in a corpus directory, so this assembles a corpus only where you can also write to that directory. Over the HTTP transport a caller cannot, which is why a remote corpus is pre-placed under an allow-listed root by the operator.
 - `budget_seconds` is clamped to 1-300 regardless of what's passed in.
 

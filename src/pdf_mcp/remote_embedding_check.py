@@ -38,7 +38,7 @@ quantization/pooling mismatches; it is NOT a context-window check --
 `benchmark_data/bge_small_cosine_parity_results.md` covers real long-chunk
 behavior separately.
 
-Called once at server startup (server.py) right before
+Called once at server startup (_core.py) right before
 ``embedder.configure_remote``. Never raises for a reachability/format
 failure -- a startup check that could crash the server on a flaky network
 would be worse than the problem it guards against; it reports ``ok=False``
@@ -79,7 +79,7 @@ RemoteEncodeFn = Callable[["list[str]", RemoteSpec], Any]
 class SafetyCheckResult:
     """Outcome of one startup safety check run.
 
-    ``ok`` is the single bit the caller (server.py) acts on. Everything
+    ``ok`` is the single bit the caller (_core.py) acts on. Everything
     else is diagnostic detail for the log message / tests.
     """
 
@@ -233,20 +233,20 @@ def configure_remote_backend(pdf_config: Any) -> RemoteBackendSetup:
     sequence after `pdf-mcp-warm` (`warm_cli.py`) was found to skip this
     entirely -- it built its own `PDFConfig` and called `embedder.encode`
     directly, so a configured remote backend was silently never used (PR
-    #47 review follow-up). `server.py` and `warm_cli.py` both call this now
+    #47 review follow-up). `_core.py` and `warm_cli.py` both call this now
     so a third entry point can't repeat that gap.
 
     `pdf_config` is typed `Any` rather than `PDFConfig` to avoid a
     `config.py` <-> `remote_embedding_check.py` import cycle -- `config.py`
     already imports `RemoteSpec` from `remote_embedder.py`, so the
     dependency only ever points that direction. `embedder` is imported
-    locally, matching this module's and server.py's existing lazy-import
+    locally, matching this module's and `_core.py`'s existing lazy-import
     convention (a process that never touches semantic search shouldn't pay
     fastembed's import cost).
 
     Does NOT log or print anything itself -- the returned
     `RemoteBackendSetup` carries everything needed for that, so each caller
-    reports it in its own idiom (server.py's `logging`, the CLI's
+    reports it in its own idiom (`_core.py`'s `logging`, the CLI's
     `print(..., file=sys.stderr)`).
     """
     from . import embedder

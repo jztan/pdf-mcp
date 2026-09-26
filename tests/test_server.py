@@ -16,10 +16,12 @@ from unittest.mock import patch, Mock
 import httpx
 
 import pdf_mcp.server as server
+from pdf_mcp import _core
+from pdf_mcp._core import _resolve_path
+from pdf_mcp.tools._render import _bbox_to_clip
+from pdf_mcp.tools._search_common import _python_search
+from pdf_mcp.tools.search import _rrf_fuse
 from pdf_mcp.server import (
-    _resolve_path,
-    _python_search,
-    _rrf_fuse,
     pdf_info,
     pdf_read_pages,
     pdf_read_all,
@@ -43,11 +45,11 @@ class TestURLDownloadCacheWiring:
     def test_url_downloads_live_under_cache_root(self):
         """url_fetcher.cache_dir is cache.cache_dir/downloads, so it tracks
         PDF_MCP_CACHE_DIR like every other cache artifact (issue #15)."""
-        import pdf_mcp.server as server_module
+        from pdf_mcp import _core as core_module
 
         assert (
-            server_module.url_fetcher.cache_dir
-            == server_module.cache.cache_dir / "downloads"
+            core_module.url_fetcher.cache_dir
+            == core_module.cache.cache_dir / "downloads"
         )
 
 
@@ -876,9 +878,11 @@ class TestPdfReadPages:
         self, sample_pdf, isolated_server, monkeypatch
     ):
         """Requesting more pages than MAX_PAGES_LIMIT truncates to the limit."""
-        import pdf_mcp.server
+        from pdf_mcp.tools import read as read_tools
+        from pdf_mcp.tools import render as render_tools
 
-        monkeypatch.setattr(pdf_mcp.server, "MAX_PAGES_LIMIT", 2)
+        monkeypatch.setattr(read_tools, "MAX_PAGES_LIMIT", 2)
+        monkeypatch.setattr(render_tools, "MAX_PAGES_LIMIT", 2)
         result = pdf_read_pages(sample_pdf, "1-5")
 
         assert len(result["pages"]) == 2
@@ -1569,7 +1573,7 @@ class TestReadPagesCachedImages:
 
     def test_images_served_from_cache(self, sample_pdf_with_images, isolated_server):
         """Second call returns cached images; image_id resolves to the disk PNG."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
         result1 = pdf_read_pages(sample_pdf_with_images, "1")
         imgs1 = result1["pages"][0]["images"]
@@ -1583,7 +1587,7 @@ class TestReadPagesCachedImages:
             assert "image_id" in img
             assert "path" not in img
             assert "data" not in img
-            assert (srv.cache.images_dir / img["image_id"]).exists()
+            assert (_core.cache.images_dir / img["image_id"]).exists()
 
 
 class TestReadPagesInlineImages:
@@ -1655,21 +1659,19 @@ class TestReadPagesInlineImages:
         self, sample_pdf_with_images, isolated_server
     ):
         """If cached PNG deleted from disk, re-extraction occurs via pdf_read_pages."""
-        import pdf_mcp.server as srv
-
         result1 = pdf_read_pages(sample_pdf_with_images, "1")
         for img in result1["pages"][0]["images"]:
-            (srv.cache.images_dir / img["image_id"]).unlink()
+            (_core.cache.images_dir / img["image_id"]).unlink()
 
         result2 = pdf_read_pages(sample_pdf_with_images, "1")
         assert result2["pages"][0]["image_count"] == result1["pages"][0]["image_count"]
         for img in result2["pages"][0]["images"]:
-            assert (srv.cache.images_dir / img["image_id"]).exists()
+            assert (_core.cache.images_dir / img["image_id"]).exists()
 
     def test_imageless_page_sentinel_cached(self, sample_pdf, isolated_server):
         """extract_images_from_page called only once for imageless page."""
         with patch(
-            "pdf_mcp.server.extract_images_from_page", return_value=[]
+            "pdf_mcp.tools.read.extract_images_from_page", return_value=[]
         ) as mock_extract:
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1
@@ -1705,11 +1707,11 @@ class TestReadPagesInlineImages:
         self, sample_pdf_with_images, isolated_server
     ):
         """pdf_cache_clear removes image files extracted by pdf_read_pages."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
         result = pdf_read_pages(sample_pdf_with_images, "1")
         paths = [
-            srv.cache.images_dir / img["image_id"]
+            _core.cache.images_dir / img["image_id"]
             for img in result["pages"][0]["images"]
         ]
         assert all(p.exists() for p in paths)
@@ -1727,10 +1729,14 @@ class TestReadPagesInlineImages:
         assert stats_after["cache_size_bytes"] > stats_before["cache_size_bytes"]
 
     def test_pdf_extract_images_tool_removed(self):
-        """pdf_extract_images is no longer defined in server module."""
+        """pdf_extract_images is no longer a registered MCP tool."""
+        import asyncio
+
         import pdf_mcp.server as mod
 
-        assert not hasattr(mod, "pdf_extract_images")
+        registered = {t.name for t in asyncio.run(mod.mcp.list_tools())}
+        assert "pdf_read_pages" in registered  # the listing is not empty
+        assert "pdf_extract_images" not in registered
 
 
 class TestReadPagesInlineTables:
@@ -1805,10 +1811,16 @@ class TestReadPagesInlineTables:
         been imported. Patching that dispatch is what counts the extraction
         now.
         """
-        with patch(
-            "pdf_mcp.server.extract_tables_for_pages",
-            return_value={"tables": {"0": []}},
-        ) as mock_extract:
+        with (
+            patch(
+                "pdf_mcp.tools.read.extract_tables_for_pages",
+                return_value={"tables": {"0": []}},
+            ) as mock_extract,
+            patch(
+                "pdf_mcp.tools._tables.extract_tables_for_pages",
+                return_value={"tables": {"0": []}},
+            ),
+        ):
             pdf_read_pages(sample_pdf, "1")
             assert mock_extract.call_count == 1
 
@@ -1995,7 +2007,6 @@ class TestPdfSearchFTS5:
     def test_search_returns_matches_when_fts_unavailable(self, tmp_path):
         """F3: pdf_search returns non-empty matches even when fts_available=False."""
         import pymupdf
-        import pdf_mcp.server as server_module
         from pdf_mcp.cache import PDFCache
 
         pdf_path = str(tmp_path / "fts_off_test.pdf")
@@ -2008,12 +2019,12 @@ class TestPdfSearchFTS5:
         no_fts_cache = PDFCache(cache_dir=tmp_path / "cache_no_fts", ttl_hours=1)
         no_fts_cache.fts_available = False
 
-        original_cache = server_module.cache
-        server_module.cache = no_fts_cache
+        original_cache = _core.cache
+        _core.cache = no_fts_cache
         try:
             result = pdf_search(pdf_path, "fox")
         finally:
-            server_module.cache = original_cache
+            _core.cache = original_cache
 
         assert result["search_mode"] in ("keyword", "hybrid")
         assert result["total_matches"] >= 1
@@ -2133,10 +2144,10 @@ class TestPdfInfoTextCoverage:
 
     def test_text_coverage_lazy_backfill(self, sample_pdf, isolated_server):
         """Existing cached row with no coverage gets backfilled on next pdf_info."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
         # Manually save metadata without coverage to simulate pre-v1.9.0 cache
-        srv.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
+        _core.cache.save_metadata(sample_pdf, 5, {}, [], text_coverage=None)
         result = pdf_info(sample_pdf, detail=True)
         cov = result["text_coverage"]
         assert cov is not None
@@ -2178,7 +2189,7 @@ class TestPdfReadPagesRender:
 
     def test_render_dpi_adds_render_id(self, sample_pdf, isolated_server):
         """render_dpi set -> each page dict has opaque render_id (basename only)."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
         page = result["pages"][0]
@@ -2186,7 +2197,7 @@ class TestPdfReadPagesRender:
         assert "render_path" not in page  # absolute path no longer on the wire
         assert "/" not in page["render_id"]
         assert "\\" not in page["render_id"]
-        assert (srv.cache.renders_dir / page["render_id"]).exists()
+        assert (_core.cache.renders_dir / page["render_id"]).exists()
 
     def test_render_dpi_adds_render_size_bytes(self, sample_pdf, isolated_server):
         """render_dpi set -> each page dict has render_size_bytes > 0."""
@@ -2195,12 +2206,12 @@ class TestPdfReadPagesRender:
 
     def test_render_id_resolves_under_renders_dir(self, sample_pdf, isolated_server):
         """Rendered PNG (resolved via renders_dir) lives under renders_dir."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
-        render_path = srv.cache.renders_dir / result["pages"][0]["render_id"]
+        render_path = _core.cache.renders_dir / result["pages"][0]["render_id"]
         assert render_path.exists()
-        assert srv.cache.renders_dir in render_path.parents
+        assert _core.cache.renders_dir in render_path.parents
 
     def test_render_dpi_response_includes_dpi_fields(self, sample_pdf, isolated_server):
         """Response includes render_dpi_used and render_dpi_requested."""
@@ -2224,7 +2235,7 @@ class TestPdfReadPagesRender:
         from unittest.mock import patch
 
         pdf_read_pages(sample_pdf, "1", render_dpi=72)  # first call — renders
-        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+        with patch("pdf_mcp.tools.chart.render_page_as_png") as mock_render:
             pdf_read_pages(sample_pdf, "1", render_dpi=72)  # cache hit
             mock_render.assert_not_called()
 
@@ -2238,10 +2249,8 @@ class TestPdfReadPagesRender:
 
     def test_cache_clear_removes_render_png(self, sample_pdf, isolated_server):
         """pdf_cache_clear removes PNGs created by pdf_read_pages render_dpi."""
-        import pdf_mcp.server as srv
-
         result = pdf_read_pages(sample_pdf, "1", render_dpi=72)
-        png_path = srv.cache.renders_dir / result["pages"][0]["render_id"]
+        png_path = _core.cache.renders_dir / result["pages"][0]["render_id"]
         assert png_path.exists()
         pdf_cache_clear(expired_only=False)
         assert not png_path.exists()
@@ -2274,7 +2283,7 @@ class TestPdfReadPagesRender:
 
         pdf_read_pages(sample_pdf, "1", render_dpi=72)
         # pdf_render_pages at same DPI should hit the cache
-        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+        with patch("pdf_mcp.tools.chart.render_page_as_png") as mock_render:
             from pdf_mcp.server import pdf_render_pages
 
             pdf_render_pages(sample_pdf, "1", dpi=72)
@@ -2315,15 +2324,15 @@ class TestPdfRenderPages:
 
     def test_max_inline_pages_truncation(self, sample_pdf, isolated_server):
         """Requesting more than MAX_RENDER_INLINE_PAGES returns truncated_render."""
-        import pdf_mcp.server as srv
+        from pdf_mcp.tools import render as render_tools
         from mcp.types import ImageContent
 
-        original = srv.MAX_RENDER_INLINE_PAGES
-        srv.MAX_RENDER_INLINE_PAGES = 2
+        original = render_tools.MAX_RENDER_INLINE_PAGES
+        render_tools.MAX_RENDER_INLINE_PAGES = 2
         try:
             result = pdf_render_pages(sample_pdf, "1-5", dpi=72)
         finally:
-            srv.MAX_RENDER_INLINE_PAGES = original
+            render_tools.MAX_RENDER_INLINE_PAGES = original
         image_count = sum(1 for x in result if isinstance(x, ImageContent))
         assert image_count == 2
         assert result[0].get("truncated_render") is True
@@ -2342,7 +2351,7 @@ class TestPdfRenderPages:
         from unittest.mock import patch
 
         pdf_render_pages(sample_pdf, "1", dpi=72)
-        with patch("pdf_mcp.server.render_page_as_png") as mock_render:
+        with patch("pdf_mcp.tools.chart.render_page_as_png") as mock_render:
             pdf_read_pages(sample_pdf, "1", render_dpi=72)
             mock_render.assert_not_called()
 
@@ -2424,7 +2433,7 @@ class TestRenderBudget:
     def test_total_encoded_bytes_within_budget(
         self, sample_pdf, isolated_server, monkeypatch
     ):
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 50_000)
         result = pdf_render_pages(sample_pdf, "1", dpi=300)
         total = sum(len(b.data) for b in result[1:])  # b.data is already base64 ascii
         assert total <= 50_000
@@ -2433,7 +2442,7 @@ class TestRenderBudget:
         # sample_pdf page 1 encodes to ~66k base64 at 300 DPI but only ~8.8k at
         # the 72-DPI floor, so a 50k budget deterministically forces a
         # downsample-to-fit (not the common case, not the oversized fallback).
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 50_000)
         result = pdf_render_pages(sample_pdf, "1", dpi=300)
         summary = result[0]
         assert summary["pages_rendered"] == [1]
@@ -2457,7 +2466,7 @@ class TestRenderBudget:
         carry the same file_path_on_disk + suggestions contract, plus (task
         6) the single-page-alone remedy and clip-first ordering.
         """
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 50_000)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 50_000)
         result = pdf_render_pages(sample_pdf, "1", dpi=300)
         ds = result[0]["render_downsampled"][0]
         assert os.path.exists(ds["file_path_on_disk"])
@@ -2470,7 +2479,7 @@ class TestRenderBudget:
 
     def test_oversized_fallback(self, sample_pdf, isolated_server, monkeypatch):
         """Tiny budget: page can't fit at 72 -> oversized entry, no image block."""
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 500)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 500)
         result = pdf_render_pages(sample_pdf, "1", dpi=300)
         summary = result[0]
         assert summary["pages_rendered"] == []
@@ -2492,7 +2501,7 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         with patch(
-            "pdf_mcp.server.check_tesseract_available",
+            "pdf_mcp._core.check_tesseract_available",
             side_effect=RuntimeError("Tesseract not found."),
         ):
             result = pdf_read_pages(sample_pdf, "1", ocr=True)
@@ -2504,7 +2513,7 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         with patch(
-            "pdf_mcp.server.check_tesseract_available",
+            "pdf_mcp._core.check_tesseract_available",
             side_effect=RuntimeError("Tesseract not found."),
         ):
             result = pdf_read_pages("/nonexistent/file.pdf", "1", ocr=True)
@@ -2521,9 +2530,9 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
-        with patch("pdf_mcp.server.check_tesseract_available"):
+        with patch("pdf_mcp._core.check_tesseract_available"):
             with patch(
-                "pdf_mcp.server._ocr_page_worker",
+                "pdf_mcp.tools.read._ocr_page_worker",
                 side_effect=lambda args: (args[1], "ocr text here"),
             ):
                 result = pdf_read_pages(sample_pdf, "1", ocr=True)
@@ -2533,17 +2542,16 @@ class TestPdfReadPagesOcr:
         self, sample_pdf, isolated_server, monkeypatch
     ):
         """OCR result is stored with source='ocr' in cache."""
-        import pdf_mcp.server as srv
         from unittest.mock import patch
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
-        with patch("pdf_mcp.server.check_tesseract_available"):
+        with patch("pdf_mcp._core.check_tesseract_available"):
             with patch(
-                "pdf_mcp.server._ocr_page_worker",
+                "pdf_mcp.tools.read._ocr_page_worker",
                 side_effect=lambda args: (args[1], "hello from ocr"),
             ):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-        source = srv.cache.get_page_source(sample_pdf, 0)
+        source = _core.cache.get_page_source(sample_pdf, 0)
         assert source == "ocr"
 
     def test_ocr_cache_hit_does_not_re_ocr(
@@ -2554,8 +2562,8 @@ class TestPdfReadPagesOcr:
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         mock_worker = MagicMock(side_effect=lambda args: (args[1], "ocr result"))
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
                 call_count_first = mock_worker.call_count
                 pdf_read_pages(sample_pdf, "1", ocr=True)
@@ -2573,8 +2581,8 @@ class TestPdfReadPagesOcr:
         mock_worker = MagicMock(
             side_effect=lambda args: (args[1], f"text-in-{args[2]}")
         )
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)  # eng
                 result = pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
 
@@ -2590,8 +2598,8 @@ class TestPdfReadPagesOcr:
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         mock_worker = MagicMock(side_effect=lambda args: (args[1], "khmer text"))
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
                 first = mock_worker.call_count
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
@@ -2606,9 +2614,9 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
-        with patch("pdf_mcp.server.check_tesseract_available"):
+        with patch("pdf_mcp._core.check_tesseract_available"):
             with patch(
-                "pdf_mcp.server._ocr_page_worker",
+                "pdf_mcp.tools.read._ocr_page_worker",
                 side_effect=lambda args: (args[1], "khmer text"),
             ):
                 fresh = pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="khm")
@@ -2620,15 +2628,14 @@ class TestPdfReadPagesOcr:
         self, sample_pdf, isolated_server, monkeypatch
     ):
         """Empty OCR result is NOT cached; subsequent calls re-trigger OCR."""
-        import pdf_mcp.server as srv
         from unittest.mock import patch, MagicMock
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         mock_worker = MagicMock(side_effect=lambda args: (args[1], ""))
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
-                assert srv.cache.get_page_source(sample_pdf, 0) is None  # NOT cached
+                assert _core.cache.get_page_source(sample_pdf, 0) is None  # NOT cached
                 pdf_read_pages(sample_pdf, "1", ocr=True)
         assert mock_worker.call_count == 2  # called again because not cached
 
@@ -2636,16 +2643,17 @@ class TestPdfReadPagesOcr:
         self, sample_pdf, isolated_server, monkeypatch
     ):
         """Page with source='extracted' and non-empty text is not re-OCR'd."""
-        import pdf_mcp.server as srv
         from unittest.mock import patch, MagicMock
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
-        srv.cache.save_page_text(sample_pdf, 0, "native text here", source="extracted")
+        _core.cache.save_page_text(
+            sample_pdf, 0, "native text here", source="extracted"
+        )
         mock_worker = MagicMock(
             side_effect=lambda args: (args[1], "should not be called")
         )
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True)
         mock_worker.assert_not_called()
 
@@ -2654,20 +2662,20 @@ class TestPdfReadPagesOcr:
     ):
         """Requesting more than MAX_OCR_PAGES_LIMIT pages sets truncated_ocr."""
         from unittest.mock import patch
-        import pdf_mcp.server as srv
+        from pdf_mcp.tools import read as read_tools
 
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")  # force sequential (no pickle)
-        original = srv.MAX_OCR_PAGES_LIMIT
-        srv.MAX_OCR_PAGES_LIMIT = 2
+        original = read_tools.MAX_OCR_PAGES_LIMIT
+        read_tools.MAX_OCR_PAGES_LIMIT = 2
         try:
-            with patch("pdf_mcp.server.check_tesseract_available"):
+            with patch("pdf_mcp._core.check_tesseract_available"):
                 with patch(
-                    "pdf_mcp.server._ocr_page_worker",
+                    "pdf_mcp.tools.read._ocr_page_worker",
                     side_effect=lambda args: (args[1], "text"),
                 ):
                     result = pdf_read_pages(sample_pdf, "1-5", ocr=True)
         finally:
-            srv.MAX_OCR_PAGES_LIMIT = original
+            read_tools.MAX_OCR_PAGES_LIMIT = original
         assert result.get("truncated_ocr") is True
         assert len(result["pages"]) == 2
 
@@ -2681,8 +2689,8 @@ class TestPdfReadPagesOcr:
             captured.append(args)
             return (args[1], "text")
 
-        with patch("pdf_mcp.server.check_tesseract_available"):
-            with patch("pdf_mcp.server._ocr_page_worker", mock_worker):
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
         assert len(captured) == 1
         # args = (local_path, page_num, ocr_lang, dpi, tessdata)
@@ -2694,9 +2702,9 @@ class TestPdfReadPagesOcr:
         """OCR'd text is found by pdf_search after pdf_read_pages(ocr=True)."""
         from unittest.mock import patch
 
-        with patch("pdf_mcp.server.check_tesseract_available"):
+        with patch("pdf_mcp._core.check_tesseract_available"):
             with patch(
-                "pdf_mcp.server._ocr_page_worker",
+                "pdf_mcp.tools.read._ocr_page_worker",
                 side_effect=lambda args: (args[1], "the quick brown fox"),
             ):
                 pdf_read_pages(sample_pdf_scanned, "1", ocr=True)
@@ -2707,7 +2715,7 @@ class TestPdfReadPagesOcr:
         from unittest.mock import patch
 
         with patch(
-            "pdf_mcp.server.check_tesseract_available",
+            "pdf_mcp._core.check_tesseract_available",
             side_effect=RuntimeError("Tesseract not found."),
         ):
             result = pdf_read_pages(sample_pdf, "1", ocr=True)
@@ -2738,9 +2746,9 @@ class TestPdfSearchSource:
         self, sample_pdf_scanned, isolated_server
     ):
         """Matches from OCR'd pages have source='ocr'."""
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
-        srv.cache.save_page_text(
+        _core.cache.save_page_text(
             sample_pdf_scanned, 0, "ocr content here", source="ocr"
         )
         result = pdf_search(sample_pdf_scanned, "ocr", mode="keyword")
@@ -3004,7 +3012,7 @@ class TestExcerptStyle:
     def test_upgrade_deduplicates_same_block(self, isolated_server):
         """_upgrade_excerpts_to_paragraphs collapses matches in the same block."""
         import pymupdf
-        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        from pdf_mcp.tools._search_common import _upgrade_excerpts_to_paragraphs
         import tempfile
 
         doc = pymupdf.open()
@@ -3143,7 +3151,7 @@ class TestExcerptStyle:
         """In hybrid mode, keyword excerpt anchors paragraph to the
         block containing the FTS5 snippet, not the first block with
         the most token overlap."""
-        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        from pdf_mcp.tools._search_common import _upgrade_excerpts_to_paragraphs
         import tempfile
         import pymupdf
 
@@ -3179,7 +3187,7 @@ class TestExcerptStyle:
     ):
         """When the FTS5 snippet doesn't appear verbatim in any block,
         falls back to get_best_paragraph_for_query."""
-        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        from pdf_mcp.tools._search_common import _upgrade_excerpts_to_paragraphs
         import tempfile
         import pymupdf
 
@@ -3212,7 +3220,7 @@ class TestExcerptStyle:
         """Heading/caption blocks under the minimum-length floor are
         skipped; the picker retries with the floor and finds a
         substantive body block instead."""
-        from pdf_mcp.server import _upgrade_excerpts_to_paragraphs
+        from pdf_mcp.tools._search_common import _upgrade_excerpts_to_paragraphs
         import tempfile
         import pymupdf
 
@@ -3251,8 +3259,6 @@ class TestSearchGeometry:
     """Paragraph-style pdf_search hits carry bbox/page_rect/clip evidence."""
 
     def test_search_paragraph_hit_has_geometry(self, isolated_server, tmp_path):
-        from pdf_mcp import server
-
         pdf = tmp_path / "geo.pdf"
         doc = pymupdf.open()
         page = doc.new_page(width=612, height=792)
@@ -3282,7 +3288,7 @@ class TestSearchGeometry:
         assert "page_rect" in hit and hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
         assert "clip" in hit and len(hit["clip"]) == 4
         # clip is the server-computed fraction of bbox within page_rect
-        assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+        assert hit["clip"] == _bbox_to_clip(hit["bbox"], hit["page_rect"])
         # bbox round-trips: clip region re-extracts the excerpt
         # (punctuation-normalized)
         d2 = pymupdf.open(str(pdf))
@@ -3429,13 +3435,14 @@ class TestOcrParallelOrchestration:
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")  # force sequential path
         path = self._two_page_scanned(tmp_path)
 
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import read as read_tools
 
         # No-op the Tesseract gate so this orchestration test runs in CI
         # without the binary; the worker is mocked anyway.
-        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(_core, "check_tesseract_available", lambda: None)
         monkeypatch.setattr(
-            srv,
+            read_tools,
             "_ocr_page_worker",
             lambda args: (args[1], PageError("RuntimeError('ocr exploded')")),
         )
@@ -3452,12 +3459,15 @@ class TestOcrParallelOrchestration:
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         path = self._two_page_scanned(tmp_path)
 
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import read as read_tools
 
         # No-op Tesseract + mock the worker so the response-shape check runs in
         # CI without the binary or real OCR.
-        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
-        monkeypatch.setattr(srv, "_ocr_page_worker", lambda args: (args[1], "ocr text"))
+        monkeypatch.setattr(_core, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(
+            read_tools, "_ocr_page_worker", lambda args: (args[1], "ocr text")
+        )
 
         result = pdf_read_pages(path, "1-2", ocr=True)
         assert set(["pages", "total_chars", "cache_hits", "cache_misses"]).issubset(
@@ -3488,19 +3498,20 @@ class TestOcrParallelOrchestration:
         cache_instance, _ = isolated_server
         path = self._two_page_scanned(tmp_path)
 
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
+        from pdf_mcp.tools import read as read_tools
         from unittest.mock import MagicMock
 
         # No-op the Tesseract gate; run_pages itself is mocked below so no
         # real worker/pool involvement is needed.
-        monkeypatch.setattr(srv, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(_core, "check_tesseract_available", lambda: None)
         monkeypatch.setattr(
-            srv,
+            read_tools,
             "run_pages",
             lambda *args, **kwargs: [PageError("timeout"), PageError("timeout")],
         )
         fallback_ocr_page = MagicMock(side_effect=AssertionError("should not run"))
-        monkeypatch.setattr(srv, "ocr_page", fallback_ocr_page)
+        monkeypatch.setattr(read_tools, "ocr_page", fallback_ocr_page)
 
         result = pdf_read_pages(path, "1-2", ocr=True)
 
@@ -3536,10 +3547,10 @@ class TestRenderParallelOrchestration:
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
         path = self._multi_page_pdf(tmp_path, 2)
 
-        import pdf_mcp.server as srv
+        from pdf_mcp.tools import read as read_tools
 
         monkeypatch.setattr(
-            srv,
+            read_tools,
             "_render_page_worker",
             lambda args: (args[1], PageError("RuntimeError('render exploded')")),
         )
@@ -3567,15 +3578,16 @@ class TestRenderPagesStaysSequential:
     def test_inline_cap_is_below_render_gate(self):
         # The 5-page inline cap must stay below the render gate, so
         # resolve_workers returns 1 (sequential) for any pdf_render_pages call.
-        import pdf_mcp.server as srv
+        from pdf_mcp.tools import read as read_tools
+        from pdf_mcp.tools import render as render_tools
         from pdf_mcp.parallel import resolve_workers
 
-        assert srv.MAX_RENDER_INLINE_PAGES < srv._RENDER_PARALLEL_GATE
+        assert render_tools.MAX_RENDER_INLINE_PAGES < read_tools._RENDER_PARALLEL_GATE
         assert (
             resolve_workers(
-                srv.MAX_RENDER_INLINE_PAGES,
-                srv._RENDER_PARALLEL_GATE,
-                srv._MAX_PARALLEL_WORKERS,
+                render_tools.MAX_RENDER_INLINE_PAGES,
+                read_tools._RENDER_PARALLEL_GATE,
+                read_tools._MAX_PARALLEL_WORKERS,
             )
             == 1
         )
@@ -3597,10 +3609,10 @@ class TestRenderRealSpawnCorrectness:
     def test_parallel_render_matches_sequential(
         self, isolated_server, tmp_path, monkeypatch
     ):
-        import pdf_mcp.server as srv
+        from pdf_mcp.tools import read as read_tools
 
         # Lower the render gate so 4 pages actually spawn a real pool.
-        monkeypatch.setattr(srv, "_RENDER_PARALLEL_GATE", 2)
+        monkeypatch.setattr(read_tools, "_RENDER_PARALLEL_GATE", 2)
         path = self._multi_page_pdf(tmp_path, 4)
 
         # Sequential baseline.
@@ -3631,16 +3643,14 @@ class TestNoCJKKeywordWarning:
 
 class TestEncodedLen:
     def test_matches_base64_formula(self):
-        from pdf_mcp.server import _encoded_len
+        from pdf_mcp._core import _encoded_len
 
         for n in (0, 1, 2, 3, 4, 1000, 1001, 1002):
             raw = b"x" * n
             assert _encoded_len(raw) == len(base64.b64encode(raw))
 
     def test_budget_is_conservative(self):
-        from pdf_mcp.server import RENDER_RESULT_BYTE_BUDGET
-
-        assert RENDER_RESULT_BYTE_BUDGET == 900_000
+        assert _core.RENDER_RESULT_BYTE_BUDGET == 900_000
 
 
 class TestRenderClip:
@@ -3676,11 +3686,11 @@ class TestRenderClip:
         assert "error" in result[0]
 
     def test_clip_bypasses_render_cache(self, sample_pdf, isolated_server):
-        import pdf_mcp.server as srv
+        from pdf_mcp import _core
 
-        before = srv.cache.get_stats()["total_renders"]
+        before = _core.cache.get_stats()["total_renders"]
         pdf_render_pages(sample_pdf, "1", clip=[0.0, 0.0, 0.5, 0.5])
-        after = srv.cache.get_stats()["total_renders"]
+        after = _core.cache.get_stats()["total_renders"]
         # no page_renders row written for the clip
         assert after == before
 
@@ -3862,25 +3872,29 @@ class TestFitDpiLadder:
         """The estimate landing a hair over target must cost one more
         render, not 6x the pixels. Regression for the 187-DPI-misses ->
         straight-to-72 collapse."""
+        from pdf_mcp.tools import _render as render_impl
+
         monkeypatch.setattr(
-            "pdf_mcp.server._render_page_at", self._fake_render_page_at()
+            "pdf_mcp.tools._render._render_page_at", self._fake_render_page_at()
         )
-        result = server._fit_page_inline(
+        result = render_impl._fit_page_inline(
             "unused.pdf", None, 0, dpi=200, page_target=180_000
         )
 
         assert result["outcome"] == "inline"
-        assert result["dpi_used"] > server.RENDER_DPI_MIN * 1.5
+        assert result["dpi_used"] > render_impl.RENDER_DPI_MIN * 1.5
         assert result["codec"] == "jpeg"
 
     def test_returned_page_always_fits_the_per_page_target(self, monkeypatch):
         """No matter how many ladder iterations it takes, the loop must
         never return a page over its byte budget."""
+        from pdf_mcp.tools import _render as render_impl
+
         monkeypatch.setattr(
-            "pdf_mcp.server._render_page_at", self._fake_render_page_at()
+            "pdf_mcp.tools._render._render_page_at", self._fake_render_page_at()
         )
         page_target = 180_000
-        result = server._fit_page_inline(
+        result = render_impl._fit_page_inline(
             "unused.pdf", None, 0, dpi=200, page_target=page_target
         )
 
@@ -3900,13 +3914,13 @@ class TestFitDpiLadder:
         # base64) at the 72dpi floor where PyMuPDF's produced more, so
         # at 58k a legitimate above-floor rung now fits, which exercises
         # the ladder rather than the floor fallback this test pins.
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 41_000)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 41_000)
         result = pdf_render_pages(big_scan_pdf, "1", dpi=300)
         summary = result[0]
 
         assert summary["pages_rendered"] == [1]
         ds = summary["render_downsampled"][0]
-        assert ds["dpi_used"] == server.RENDER_DPI_MIN
+        assert ds["dpi_used"] == _core.RENDER_DPI_MIN
 
 
 class TestNativeCapDownsampleSignal:
@@ -4023,7 +4037,7 @@ class TestDownsampledEntryContract:
         # A tight budget forces a much harder downsample than the plain
         # 3-page/900_000 split; the render lands well under half the
         # 1200 px native raster width (measured: 468px at this budget).
-        monkeypatch.setattr("pdf_mcp.server.RENDER_RESULT_BYTE_BUDGET", 200_000)
+        monkeypatch.setattr("pdf_mcp._core.RENDER_RESULT_BYTE_BUDGET", 200_000)
         result = server.pdf_render_pages(big_scan_pdf, "1-3", dpi=200)
         entry = result[0]["render_downsampled"][0]
         assert entry["pixels"][0] < 600
@@ -4091,7 +4105,7 @@ def test_pdf_info_content_trust_is_cached(tmp_path, isolated_server):
 def test_pdf_info_content_trust_uses_configured_phrases(
     tmp_path, isolated_server, monkeypatch
 ):
-    import pdf_mcp.server
+    from pdf_mcp import _core
     from pdf_mcp.config import PDFConfig
 
     cfg_path = tmp_path / "config.toml"
@@ -4099,7 +4113,7 @@ def test_pdf_info_content_trust_uses_configured_phrases(
         '[content_trust]\ninjection_phrases = ["purchase the premium plan"]\n',
         encoding="utf-8",
     )
-    monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
+    monkeypatch.setattr(_core, "pdf_config", PDFConfig(config_path=cfg_path))
 
     p = tmp_path / "hidden_promo.pdf"
     doc = pymupdf.open()
@@ -4121,14 +4135,14 @@ def test_pdf_info_content_trust_malformed_config_degrades_gracefully(
 ):
     """Malformed injection_phrases config must surface as an error block,
     not raise — the never-raise contract for _content_trust_block."""
-    import pdf_mcp.server
+    from pdf_mcp import _core
     from pdf_mcp.config import PDFConfig
 
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
         '[content_trust]\ninjection_phrases = "not a list"\n', encoding="utf-8"
     )
-    monkeypatch.setattr(pdf_mcp.server, "pdf_config", PDFConfig(config_path=cfg_path))
+    monkeypatch.setattr(_core, "pdf_config", PDFConfig(config_path=cfg_path))
 
     p = tmp_path / "simple.pdf"
     _make_pdf_with_hidden_text(p)
@@ -4181,8 +4195,6 @@ def test_read_all_flags_hidden_text(tmp_path, isolated_server):
 
 
 def test_bbox_to_clip_zero_origin():
-    from pdf_mcp.server import _bbox_to_clip
-
     # Letter page, origin (0,0)
     clip = _bbox_to_clip([153.0, 396.0, 459.0, 594.0], [0.0, 0.0, 612.0, 792.0])
     assert clip == [0.25, 0.5, 0.75, 0.75]
@@ -4191,16 +4203,12 @@ def test_bbox_to_clip_zero_origin():
 def test_bbox_to_clip_nonzero_origin():
     # MANDATORY: proves the origin subtraction. Without it, a non-zero
     # MediaBox origin yields wrong fractions and every crop is off.
-    from pdf_mcp.server import _bbox_to_clip
-
     # page rect origin (100, 200), size 612x792
     clip = _bbox_to_clip([253.0, 596.0, 559.0, 794.0], [100.0, 200.0, 712.0, 992.0])
     assert clip == [0.25, 0.5, 0.75, 0.75]
 
 
 def test_bbox_to_clip_clamps_and_rounds():
-    from pdf_mcp.server import _bbox_to_clip
-
     clip = _bbox_to_clip([-10.0, -10.0, 700.0, 900.0], [0.0, 0.0, 612.0, 792.0])
     assert clip == [0.0, 0.0, 1.0, 1.0]
 
@@ -4214,7 +4222,7 @@ def test_read_pages_page_rect_and_image_clip(isolated_server, sample_pdf_with_im
     img = page["images"][0]
     assert "bbox" in img
     assert "clip" in img
-    assert img["clip"] == server._bbox_to_clip(img["bbox"], page["page_rect"])
+    assert img["clip"] == _bbox_to_clip(img["bbox"], page["page_rect"])
 
 
 def test_read_pages_table_bbox_and_clip(isolated_server, tmp_path):
@@ -4239,7 +4247,7 @@ def test_read_pages_table_bbox_and_clip(isolated_server, tmp_path):
         t = page0["tables"][0]
         assert "bbox" in t
         assert "clip" in t
-        assert t["clip"] == server._bbox_to_clip(t["bbox"], page0["page_rect"])
+        assert t["clip"] == _bbox_to_clip(t["bbox"], page0["page_rect"])
 
 
 def test_search_clip_renders_region(isolated_server, tmp_path):
@@ -4274,7 +4282,7 @@ def test_clip_arg_coerces_json_string_at_type_level():
     # client that stringifies the argument still validates.
     from pydantic import TypeAdapter
 
-    from pdf_mcp.server import _ClipArg
+    from pdf_mcp.tools._render import _ClipArg
 
     ta = TypeAdapter(_ClipArg)
     assert ta.validate_python("[0.1, 0.2, 0.3, 0.4]") == [0.1, 0.2, 0.3, 0.4]
@@ -4361,7 +4369,7 @@ def test_geometry_on_shifted_mediabox_pdf(isolated_server, tmp_path):
     )["matches"][0]
 
     assert hit["page_rect"] == [0.0, 0.0, 612.0, 792.0]
-    assert hit["clip"] == server._bbox_to_clip(hit["bbox"], hit["page_rect"])
+    assert hit["clip"] == _bbox_to_clip(hit["bbox"], hit["page_rect"])
 
     # bbox faithfully frames the excerpt in the normalized space
     d2 = pymupdf.open(str(pdf))
@@ -4427,6 +4435,18 @@ CORPUS_ENVELOPE_KEYS = {
 
 
 class TestPdfCorpusOverview:
+    def test_over_cap_error_lists_folder(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        monkeypatch.setattr("pdf_mcp.corpus.CORPUS_MAX_FILES", 2)
+        result = pdf_corpus_overview(str(corpus_dir))
+        assert result["error"] == "Corpus has 3 PDFs, above the 2-file cap"
+        assert result["root"] == str(corpus_dir.resolve())
+        assert result["files"] == ["alpha.pdf", "bravo.pdf", "charlie.pdf"]
+        assert result["files_truncated"] is False
+        assert "subfolders" not in result
+        assert "docs" not in result
+
     def test_cards_for_all_docs(self, corpus_dir, isolated_server):
         result = pdf_corpus_overview(str(corpus_dir))
         assert "error" not in result
@@ -4804,7 +4824,7 @@ class TestPdfCorpusSearchSemanticAuto:
         alpha = str(corpus_dir / "alpha.pdf")
         # A valid row with a NULL vector means "page 1 had no text": the
         # backfill must not re-encode it, and its matches score null.
-        cache.save_doc_profile(alpha, 1500, None, {}, server.pdf_config.embedding_model)
+        cache.save_doc_profile(alpha, 1500, None, {}, _core.pdf_config.embedding_model)
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
         assert result["doc_profile_coverage"] == {"profiled": 2, "searched": 3}
         alpha_hits = [m for m in result["matches"] if m["path"] == alpha]
@@ -4841,18 +4861,20 @@ class TestPdfCorpusSearchSemanticAuto:
         """Pins the call site at server.py: three arms, in order, at
         weights (1.0, 1.0, CORPUS_DOC_ARM_WEIGHT); a substituted weight
         or a swapped list here would slip past every other test."""
+        from pdf_mcp import corpus
+
         self._fake_embedder(monkeypatch)
         cache, _ = isolated_server
         top_k = 10
 
-        real_fuse = server.corpus.rrf_fuse_rankings_scored
+        real_fuse = corpus.rrf_fuse_rankings_scored
         captured: dict[str, Any] = {}
 
-        def spy(rankings, k=server.corpus.CORPUS_RRF_K, top_k=None):
+        def spy(rankings, k=corpus.CORPUS_RRF_K, top_k=None):
             captured["rankings"] = rankings
             return real_fuse(rankings, k=k, top_k=top_k)
 
-        monkeypatch.setattr(server.corpus, "rrf_fuse_rankings_scored", spy)
+        monkeypatch.setattr(corpus, "rrf_fuse_rankings_scored", spy)
 
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=top_k)
         assert result["search_mode"] == "hybrid"
@@ -4860,7 +4882,7 @@ class TestPdfCorpusSearchSemanticAuto:
         rankings = captured["rankings"]
         assert len(rankings) == 3
         weights = tuple(w for _list, w in rankings)
-        assert weights == (1.0, 1.0, server.corpus.CORPUS_DOC_ARM_WEIGHT)
+        assert weights == (1.0, 1.0, corpus.CORPUS_DOC_ARM_WEIGHT)
         kw_list, sem_list, doc_list = (r for r, _w in rankings)
 
         # Third arm: one best page per profiled doc, no duplicate docs.
@@ -4868,7 +4890,7 @@ class TestPdfCorpusSearchSemanticAuto:
         assert all(isinstance(page, int) and page >= 1 for _p, page in doc_list)
         assert len(doc_list) == len({p for p, _pg in doc_list})
         profiled = cache.get_doc_profiles(
-            [p for p, _pg in doc_list], server.pdf_config.embedding_model
+            [p for p, _pg in doc_list], _core.pdf_config.embedding_model
         )
         assert all(profiled.get(p) is not None for p, _pg in doc_list)
 
@@ -4894,20 +4916,22 @@ class TestPdfCorpusSearchSemanticAuto:
         document arm that favours charlie.pdf (alphabetically last)
         must be able to overturn that tie; an arm that never runs
         (empty doc_cos) must not."""
+        from pdf_mcp.tools import corpus_tools
+
         self._fake_embedder(monkeypatch)
         charlie = str(corpus_dir / "charlie.pdf")
 
         def favor_charlie(paths, model_name, query_vec):
             return {charlie: 5.0}
 
-        monkeypatch.setattr(server, "_corpus_doc_scores", favor_charlie)
+        monkeypatch.setattr(corpus_tools, "_corpus_doc_scores", favor_charlie)
         favored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
         assert favored["matches"][0]["path"] == charlie
 
         def no_doc_arm(paths, model_name, query_vec):
             return {}
 
-        monkeypatch.setattr(server, "_corpus_doc_scores", no_doc_arm)
+        monkeypatch.setattr(corpus_tools, "_corpus_doc_scores", no_doc_arm)
         unfavored = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=10)
         assert unfavored["matches"][0]["path"] != charlie
 
@@ -4943,9 +4967,9 @@ class TestPdfCorpusSearchSourceLabel:
     def _ocr_scanned(scanned_path, monkeypatch):
         """OCR the scanned doc via the mocked worker (no Tesseract)."""
         monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
-        with patch("pdf_mcp.server.check_tesseract_available"):
+        with patch("pdf_mcp._core.check_tesseract_available"):
             with patch(
-                "pdf_mcp.server._ocr_page_worker",
+                "pdf_mcp.tools.read._ocr_page_worker",
                 side_effect=lambda args: (args[1], "Scanned budget memo."),
             ):
                 result = pdf_read_pages(scanned_path, "1", ocr=True)
@@ -5158,7 +5182,7 @@ class TestCorpusKeywordOrFallbackScope:
     def test_auto_mode_does_not_use_the_keyword_or_fallback(
         self, corpus_dir, isolated_server
     ):
-        from pdf_mcp.server import _corpus_keyword_rankings
+        from pdf_mcp.tools.corpus_tools import _corpus_keyword_rankings
 
         files = sorted(str(p) for p in corpus_dir.glob("*.pdf"))
         pdf_corpus_warm(files)
@@ -5209,19 +5233,19 @@ class TestHybridDocMatchCounts:
     go ask them separately", and it was blank exactly when it mattered."""
 
     def test_keyword_counts_survive_when_semantic_adds_nothing(self):
-        from pdf_mcp.server import _merge_doc_match_counts
+        from pdf_mcp.tools.corpus_tools import _merge_doc_match_counts
 
         assert _merge_doc_match_counts({"a.pdf": 3}, []) == {"a.pdf": 3}
 
     def test_semantic_only_docs_are_reported(self):
-        from pdf_mcp.server import _merge_doc_match_counts
+        from pdf_mcp.tools.corpus_tools import _merge_doc_match_counts
 
         # The bug: keyword matched nothing, so the caller saw {}.
         out = _merge_doc_match_counts({}, [("a.pdf", 1), ("a.pdf", 7), ("b.pdf", 2)])
         assert out == {"a.pdf": 2, "b.pdf": 1}
 
     def test_overlapping_arms_do_not_double_count(self):
-        from pdf_mcp.server import _merge_doc_match_counts
+        from pdf_mcp.tools.corpus_tools import _merge_doc_match_counts
 
         # Both arms saw the same document; the count is "at least this many
         # pages matched", not the sum of two views of the same pages.
@@ -5229,7 +5253,7 @@ class TestHybridDocMatchCounts:
         assert out == {"a.pdf": 5}
 
     def test_semantic_wins_when_it_saw_more_pages(self):
-        from pdf_mcp.server import _merge_doc_match_counts
+        from pdf_mcp.tools.corpus_tools import _merge_doc_match_counts
 
         out = _merge_doc_match_counts({"a.pdf": 1}, [("a.pdf", 1), ("a.pdf", 2)])
         assert out == {"a.pdf": 2}
@@ -5244,7 +5268,9 @@ class TestCorpusCoverageScoring:
     """
 
     def test_query_terms_drop_function_words(self):
-        terms = server._corpus_query_terms(
+        from pdf_mcp.tools._search_common import _corpus_query_terms
+
+        terms = _corpus_query_terms(
             "does normalizing layer inputs converge at equal accuracy"
         )
         assert "normalizing" in terms and "accuracy" in terms
@@ -5253,13 +5279,17 @@ class TestCorpusCoverageScoring:
         assert "at" not in terms and "does" in terms
 
     def test_query_terms_are_lowercased_and_split_on_punctuation(self):
-        assert server._corpus_query_terms("Batch-Normalization, ReLU!") == {
+        from pdf_mcp.tools._search_common import _corpus_query_terms
+
+        assert _corpus_query_terms("Batch-Normalization, ReLU!") == {
             "batch",
             "normalization",
             "relu",
         }
 
     def test_rarer_terms_outweigh_ubiquitous_ones(self):
+        from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores
+
         # "transformer" is in every document; "grokking" in one. The
         # document with the single distinctive term must outrank the
         # documents with the common one.
@@ -5269,42 +5299,54 @@ class TestCorpusCoverageScoring:
             "c.pdf": {"transformer"},
             "d.pdf": {"grokking"},
         }
-        scores = server._corpus_coverage_scores(covered)
+        scores = _corpus_coverage_scores(covered)
         assert scores["d.pdf"] > scores["a.pdf"]
 
     def test_more_covered_terms_scores_higher_all_else_equal(self):
+        from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores
+
         covered = {"a.pdf": {"alpha", "bravo"}, "b.pdf": {"alpha"}}
-        scores = server._corpus_coverage_scores(covered)
+        scores = _corpus_coverage_scores(covered)
         assert scores["a.pdf"] > scores["b.pdf"]
 
     def test_document_covering_nothing_scores_zero(self):
-        scores = server._corpus_coverage_scores({"a.pdf": set(), "b.pdf": {"x"}})
+        from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores
+
+        scores = _corpus_coverage_scores({"a.pdf": set(), "b.pdf": {"x"}})
         assert scores["a.pdf"] == 0.0
         assert scores["b.pdf"] > 0.0
 
     def test_empty_input(self):
-        assert server._corpus_coverage_scores({}) == {}
+        from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores
+
+        assert _corpus_coverage_scores({}) == {}
 
     def test_scores_do_not_depend_on_document_names(self):
+        from pdf_mcp.tools.corpus_tools import _corpus_coverage_scores
+
         # The property both shipped bugs violated.
         covered = {"a.pdf": {"x", "y"}, "m.pdf": {"x"}, "z.pdf": {"y", "q"}}
         renamed = {"z9.pdf": {"x", "y"}, "m9.pdf": {"x"}, "a9.pdf": {"y", "q"}}
-        s1 = server._corpus_coverage_scores(covered)
-        s2 = server._corpus_coverage_scores(renamed)
+        s1 = _corpus_coverage_scores(covered)
+        s2 = _corpus_coverage_scores(renamed)
         assert s1["a.pdf"] == s2["z9.pdf"]
         assert s1["z.pdf"] == s2["a9.pdf"]
 
     def test_covered_terms_returns_empty_without_cache(self, monkeypatch):
-        monkeypatch.setattr(server, "cache", None)
-        assert server._doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
+        from pdf_mcp.tools.corpus_tools import _doc_covered_terms
+
+        monkeypatch.setattr(_core, "cache", None)
+        assert _doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
 
     def test_covered_terms_survives_a_cache_error(self, monkeypatch):
+        from pdf_mcp.tools.corpus_tools import _doc_covered_terms
+
         class Boom:
             def get_pages_text(self, *a, **k):
                 raise RuntimeError("cache unavailable")
 
-        monkeypatch.setattr(server, "cache", Boom())
-        assert server._doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
+        monkeypatch.setattr(_core, "cache", Boom())
+        assert _doc_covered_terms("x.pdf", [1], {"alpha"}) == set()
 
 
 class TestHTTPTransportEntryPoint:
@@ -5356,7 +5398,7 @@ class TestHTTPTransportEntryPoint:
         from starlette.testclient import TestClient
 
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
-        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(_core, "pdf_config", self._allowlisted_config(tmp_path))
         monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
 
         server.main_http()
@@ -5436,7 +5478,7 @@ class TestHTTPTransportEntryPoint:
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
         monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
         monkeypatch.setattr(
-            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+            _core, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
         )
         called = []
         monkeypatch.setattr(server.mcp, "run", lambda **kw: called.append(kw))
@@ -5451,7 +5493,7 @@ class TestHTTPTransportEntryPoint:
     def test_allowlist_present_starts(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
         monkeypatch.delenv("PDF_MCP_ALLOW_ANY_PATH", raising=False)
-        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(_core, "pdf_config", self._allowlisted_config(tmp_path))
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
 
@@ -5465,7 +5507,7 @@ class TestHTTPTransportEntryPoint:
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
         monkeypatch.setenv("PDF_MCP_ALLOW_ANY_PATH", "1")
         monkeypatch.setattr(
-            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+            _core, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
         )
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
@@ -5479,7 +5521,7 @@ class TestHTTPTransportEntryPoint:
 
         monkeypatch.delenv("PDF_MCP_AUTH_TOKEN", raising=False)
         monkeypatch.setattr(
-            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+            _core, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
         )
         monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
 
@@ -5492,7 +5534,7 @@ class TestHTTPTransportEntryPoint:
         from pdf_mcp.config import PDFConfig
 
         monkeypatch.setattr(
-            server, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
+            _core, "pdf_config", PDFConfig(config_path=tmp_path / "none.toml")
         )
         captured = {}
         monkeypatch.setattr(server.mcp, "run", lambda **kw: captured.update(kw))
@@ -5507,7 +5549,7 @@ class TestHTTPTransportEntryPoint:
         from starlette.testclient import TestClient
 
         monkeypatch.setenv("PDF_MCP_AUTH_TOKEN", "s3cret")
-        monkeypatch.setattr(server, "pdf_config", self._allowlisted_config(tmp_path))
+        monkeypatch.setattr(_core, "pdf_config", self._allowlisted_config(tmp_path))
         monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
 
         server.main_http()
@@ -5556,8 +5598,10 @@ class TestOcrLangCacheThrash:
             calls.append(lang)
             return page_num, f"text produced by {lang}"
 
-        monkeypatch.setattr(server, "check_tesseract_available", lambda: None)
-        monkeypatch.setattr(server, "_ocr_page_worker", fake_worker)
+        from pdf_mcp.tools import read as read_tools
+
+        monkeypatch.setattr(_core, "check_tesseract_available", lambda: None)
+        monkeypatch.setattr(read_tools, "_ocr_page_worker", fake_worker)
 
     def test_alternating_languages_still_hit_cache(
         self, isolated_server, sample_pdf_synthetic_scan, monkeypatch
@@ -5688,7 +5732,7 @@ class TestExcerptWindow:
             unlink_quietly(path)
 
     def test_expand_window_helper(self):
-        from pdf_mcp.server import _expand_block_window
+        from pdf_mcp.tools._search_common import _expand_block_window
 
         sizes = [10, 10, 10, 10, 10]  # token cost per block
         assert _expand_block_window(sizes, anchor=0, budget=25) == (0, 1)
@@ -5757,7 +5801,7 @@ class TestCorpusExcerptStyleAuto:
         return d
 
     def test_rule_mapping_is_the_harness_rule(self):
-        from pdf_mcp.server import _route_evidence_unit
+        from pdf_mcp.tools._search_common import _route_evidence_unit
 
         assert _route_evidence_unit(0) == "paragraph"
         assert _route_evidence_unit(1) == "window"
@@ -6182,7 +6226,7 @@ class TestBestSpanLexicalBackoff:
         import numpy as np
 
         import pdf_mcp.embedder as emb
-        from pdf_mcp.server import _best_span_in_text
+        from pdf_mcp.tools._search_common import _best_span_in_text
 
         decoy = "decoy citation soup robust markov scaling. " * 12  # ~500 chars
         middle = "neutral filler text about nothing in particular. " * 10
@@ -6211,7 +6255,7 @@ class TestBestSpanLexicalBackoff:
         import numpy as np
 
         import pdf_mcp.embedder as emb
-        from pdf_mcp.server import _best_span_in_text
+        from pdf_mcp.tools._search_common import _best_span_in_text
 
         a = "alpha section text. " * 15
         b = "bravo section text. " * 15
@@ -6246,7 +6290,7 @@ class TestRound3Refinements:
         import numpy as np
 
         import pdf_mcp.embedder as emb
-        from pdf_mcp.server import _best_span_in_text
+        from pdf_mcp.tools._search_common import _best_span_in_text
 
         text = (
             "Unrelated preamble sentence that runs on for a while here. "
@@ -6274,7 +6318,7 @@ class TestRound3Refinements:
         import numpy as np
 
         import pdf_mcp.embedder as emb
-        from pdf_mcp.server import _best_span_in_text
+        from pdf_mcp.tools._search_common import _best_span_in_text
 
         # Term sits at the very start of the window; any forward snap
         # would lose it, so the original window must be kept.
@@ -6296,7 +6340,8 @@ class TestRound3Refinements:
 
     # -- (2) union-of-blocks bbox --------------------------------------
     def test_spanning_excerpt_gets_union_bbox(self, isolated_server):
-        from pdf_mcp.server import _attach_snippet_geometry, open_pdf
+        from pdf_mcp.tools._search_common import _attach_snippet_geometry
+        from pdf_mcp.docopen import open_pdf
         import tempfile
         from pathlib import Path
 
@@ -6340,7 +6385,8 @@ class TestRound3Refinements:
 
     # -- (3) unlocatable flag ------------------------------------------
     def test_unlocatable_excerpt_carries_marker(self, isolated_server):
-        from pdf_mcp.server import _attach_snippet_geometry, open_pdf
+        from pdf_mcp.tools._search_common import _attach_snippet_geometry
+        from pdf_mcp.docopen import open_pdf
         import tempfile
         from pathlib import Path
 
@@ -6426,7 +6472,7 @@ class TestRound3Refinements:
                 continue
             checked += 1
             from pdf_mcp.backend.geometry import Rect as GeomRect
-            from pdf_mcp.server import open_pdf
+            from pdf_mcp.docopen import open_pdf
 
             doc = open_pdf(m["path"])
             try:
@@ -6569,15 +6615,17 @@ class TestLazySemanticSpan:
 
     @staticmethod
     def _count_spans(monkeypatch):
+        from pdf_mcp.tools import _search_common
+
         TestSingleDocSnippetSemanticAnchoring._zonkey_embedder(monkeypatch)
-        real = server._semantic_snippet_excerpt
+        real = _search_common._semantic_snippet_excerpt
         calls: list[int] = []
 
         def counting(*args, **kwargs):
             calls.append(1)
             return real(*args, **kwargs)
 
-        monkeypatch.setattr(server, "_semantic_snippet_excerpt", counting)
+        monkeypatch.setattr(_search_common, "_semantic_snippet_excerpt", counting)
         return calls
 
     @staticmethod
@@ -6724,9 +6772,11 @@ class TestSemanticSnippetWholeTokens:
     )
 
     def _run(self, monkeypatch, span, chunk=None):
-        monkeypatch.setattr(server.cache, "get_page_text", lambda p, n: self.PAGE)
-        monkeypatch.setattr(server, "_best_span_in_text", lambda *a, **k: span)
-        return server._semantic_snippet_excerpt(
+        from pdf_mcp.tools import _search_common
+
+        monkeypatch.setattr(_core.cache, "get_page_text", lambda p, n: self.PAGE)
+        monkeypatch.setattr(_search_common, "_best_span_in_text", lambda *a, **k: span)
+        return _search_common._semantic_snippet_excerpt(
             "doc.pdf", 0, "attention heads", None, "fake", 60, chunk
         )
 

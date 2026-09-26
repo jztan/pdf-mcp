@@ -254,7 +254,8 @@ def run_arm_p(
     that record.
     """
     from benchmark_corpus_modes import build_ranked, grade_query
-    from pdf_mcp.server import _corpus_keyword_rankings, pdf_corpus_search
+    from pdf_mcp.server import pdf_corpus_search
+    from pdf_mcp.tools.corpus_tools import _corpus_keyword_rankings
 
     rows: dict[str, dict] = {}
     for q in queries:

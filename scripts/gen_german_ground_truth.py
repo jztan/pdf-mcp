@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_mcp.docopen import open_pdf  # noqa: E402
 from pdf_mcp.extractor import extract_text_from_page  # noqa: E402
-from pdf_mcp.server import _resolve_path  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
 
 try:
     from bench_env import environment

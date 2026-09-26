@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-import pdf_mcp.server as server
+from pdf_mcp import _core
 from pdf_mcp.backend.bytesopen import clear_lock_memo
 from pdf_mcp.server import (
     pdf_corpus_overview,
@@ -80,7 +80,7 @@ def test_locked_calls_write_nothing_to_cache(locked_pdf, isolated_server):
 
 def test_url_source_returns_password_required(locked_pdf, isolated_server):
     url = "https://example.com/statement.pdf"
-    with patch.object(server.url_fetcher, "fetch", return_value=locked_pdf):
+    with patch.object(_core.url_fetcher, "fetch", return_value=locked_pdf):
         result = pdf_info(url)
     assert result["error_code"] == "password_required"
     assert result["error"] == f"PDF is password-protected: {url}"

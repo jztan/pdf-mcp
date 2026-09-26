@@ -1,6 +1,6 @@
 [project]
 name = "pdf-mcp"
-version = "3.3.0"
+version = "3.4.0"
 description = "Gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic + keyword search, selective page reads, tables, images, TOC, OCR, chart data, and CJK/vertical-script support, with SQLite caching."
 readme = "README.md"
 license = { text = "MIT" }
@@ -235,7 +235,7 @@ module = "pymupdf4llm.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder"]
+module = ["pdf_mcp.extractor", "pdf_mcp.server", "pdf_mcp.embedder", "pdf_mcp._core", "pdf_mcp.tools.*"]
 disallow_untyped_calls = false
 warn_unused_ignores = false
 

@@ -45,8 +45,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 # touches the developer's real SQLite cache.
 os.environ.setdefault("PDF_MCP_CACHE_DIR", tempfile.mkdtemp(prefix="ocr_corpus_cache_"))
 
+from pdf_mcp import _core  # noqa: E402
 from pdf_mcp.extractor import check_tesseract_available  # noqa: E402
-from pdf_mcp.server import cache, pdf_read_pages  # noqa: E402
+from pdf_mcp.server import pdf_read_pages  # noqa: E402
 
 ISRI_CACHE = Path(__file__).parent.parent / "benchmark_data" / ".isri_cache"
 
@@ -123,7 +124,7 @@ def build_pdf(tifs: list[str], out_path: str) -> None:
 def ocr_pages(path: str, n_pages: int, workers: int) -> tuple[float, list[str]]:
     """Cache-cold pdf_read_pages(ocr=True); returns (wall_seconds, per-page text)."""
     os.environ["PDF_MCP_MAX_WORKERS"] = str(workers)
-    cache.clear_all()
+    _core.cache.clear_all()
     pages = ",".join(str(i + 1) for i in range(n_pages))
     start = time.perf_counter()
     result = pdf_read_pages(path, pages, ocr=True)

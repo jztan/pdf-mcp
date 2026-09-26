@@ -8,10 +8,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pdf_mcp import __version__
+from pdf_mcp import _core
 from pdf_mcp import embedder, extractor
-from pdf_mcp import server
 from pdf_mcp.config import PDFConfig
-from pdf_mcp.server import server_info, _detect_features, _document_roots
+from pdf_mcp._core import _detect_features
+from pdf_mcp.server import server_info
+from pdf_mcp.tools.admin import _document_roots
 
 
 def _string_leaves(obj, path=()):
@@ -102,9 +104,9 @@ class TestServerInfo:
         result = server_info()
         cfg = result["config"]
         assert isinstance(cfg["max_workers"], int) and cfg["max_workers"] >= 1
-        assert cfg["max_response_bytes"] == server.pdf_config.max_response_bytes
-        assert cfg["cache_ttl_hours"] == server.cache.ttl_hours
-        assert cfg["cache_dir"] == str(server.cache.cache_dir)
+        assert cfg["max_response_bytes"] == _core.pdf_config.max_response_bytes
+        assert cfg["cache_ttl_hours"] == _core.cache.ttl_hours
+        assert cfg["cache_dir"] == str(_core.cache.cache_dir)
 
     def test_server_info_corpus_block(self):
         """corpus feature block advertises the cap, budget clamp, and
@@ -154,7 +156,7 @@ class TestServerInfo:
             encoding="utf-8",
         )
         remote_config = PDFConfig(config_path=cfg)
-        monkeypatch.setattr(server, "pdf_config", remote_config)
+        monkeypatch.setattr(_core, "pdf_config", remote_config)
         with patch.object(embedder, "check_available", return_value=None):
             feats = _detect_features()
         search = feats["search"]
@@ -217,7 +219,7 @@ class TestServerInfoDocumentsBlock:
             body += f"deny = {deny!r}\n".replace("'", '"')
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(body, encoding="utf-8")
-        monkeypatch.setattr(server, "pdf_config", PDFConfig(cfg_file))
+        monkeypatch.setattr(_core, "pdf_config", PDFConfig(cfg_file))
 
     def test_allowlist_mode_reports_usable_roots(self, tmp_path, monkeypatch):
         corpus = tmp_path / "pdfs"
@@ -280,7 +282,7 @@ class TestDocumentRootsAreConsumable:
             f'[paths]\nallow = ["{Path(corpus_dir).as_posix()}/**"]\n',
             encoding="utf-8",
         )
-        monkeypatch.setattr(server, "pdf_config", PDFConfig(cfg_file))
+        monkeypatch.setattr(_core, "pdf_config", PDFConfig(cfg_file))
 
         roots = server_info()["documents"]["roots"]
         assert roots, "an allow-listed existing directory must yield a root"
@@ -302,7 +304,7 @@ class TestDocumentRootsAreConsumable:
             encoding="utf-8",
         )
         config = PDFConfig(cfg_file)
-        monkeypatch.setattr(server, "pdf_config", config)
+        monkeypatch.setattr(_core, "pdf_config", config)
 
         for root in server_info()["documents"]["roots"]:
             # check_path matches resolved FILE paths, so probe with a member.
@@ -326,49 +328,50 @@ class TestStorageCapabilities:
         assert server_info()["storage"]["sqlite_version"] == sqlite3.sqlite_version
 
     def test_reports_journal_mode(self):
-        from pdf_mcp.server import cache
-
-        assert server_info()["storage"]["journal_mode"] == cache.journal_mode
+        assert server_info()["storage"]["journal_mode"] == _core.cache.journal_mode
 
     def test_reports_keyword_search_ranking(self):
         """False means keyword hits are unranked substring matches."""
-        from pdf_mcp.server import cache
-
-        assert server_info()["storage"]["keyword_search_ranked"] is cache.fts_available
+        assert (
+            server_info()["storage"]["keyword_search_ranked"]
+            is _core.cache.fts_available
+        )
 
 
 def test_server_info_ocr_flag_is_live(monkeypatch):
     """The OCR flag follows the resolver at call time, not a startup probe."""
     from pdf_mcp import server
+    from pdf_mcp.tools import admin
 
-    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    monkeypatch.setattr(admin, "find_tesseract", lambda: None)
     assert server.server_info()["features"]["extraction"]["ocr"]["available"] is False
-    monkeypatch.setattr(server, "find_tesseract", lambda: "/x/tesseract")
+    monkeypatch.setattr(admin, "find_tesseract", lambda: "/x/tesseract")
     assert server.server_info()["features"]["extraction"]["ocr"]["available"] is True
 
 
 def test_server_info_ocr_source(monkeypatch):
     """A bundle install reports OCR available before the first download."""
     from pdf_mcp import portable_tesseract, server
+    from pdf_mcp.tools import admin
 
     def ocr():
         return server.server_info()["features"]["extraction"]["ocr"]
 
     monkeypatch.setattr(portable_tesseract, "installed_binary", lambda: "/c/tesseract")
-    monkeypatch.setattr(server, "find_tesseract", lambda: "/usr/bin/tesseract")
+    monkeypatch.setattr(admin, "find_tesseract", lambda: "/usr/bin/tesseract")
     assert ocr()["source"] == "system"
-    monkeypatch.setattr(server, "find_tesseract", lambda: "/c/tesseract")
+    monkeypatch.setattr(admin, "find_tesseract", lambda: "/c/tesseract")
     assert ocr()["source"] == "portable"
 
-    monkeypatch.setattr(server, "find_tesseract", lambda: None)
+    monkeypatch.setattr(admin, "find_tesseract", lambda: None)
     monkeypatch.setattr(portable_tesseract, "platform_key", lambda: "darwin-arm64")
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", True)
+    monkeypatch.setattr(_core, "_OCR_AUTO_INSTALL", True)
     assert ocr() | {"description": ""} == {
         "available": True,
         "source": "on_first_use",
         "description": "",
     }
-    monkeypatch.setattr(server, "_OCR_AUTO_INSTALL", False)
+    monkeypatch.setattr(_core, "_OCR_AUTO_INSTALL", False)
     assert ocr()["source"] == "none" and ocr()["available"] is False
 
 
@@ -385,7 +388,7 @@ def test_main_runs_without_banner(monkeypatch):
 def test_server_info_update_is_null_when_check_off(monkeypatch):
     from pdf_mcp import server
 
-    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    monkeypatch.setattr(_core, "_UPDATE_CHECK_ENABLED", False)
     assert server.server_info()["update"] is None
 
 
@@ -396,7 +399,7 @@ def test_server_info_update_block_when_on(monkeypatch, isolated_server):
     (cache.cache_dir / updates.CACHE_FILENAME).write_text(
         json.dumps({"latest": "999.0.0", "checked_at": 0.0})
     )
-    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    monkeypatch.setattr(_core, "_UPDATE_CHECK_ENABLED", True)
     block = server.server_info()["update"]
     assert block["latest"] == "999.0.0" and block["update_available"] is True
 
@@ -409,9 +412,9 @@ def test_main_starts_check_only_when_on(monkeypatch):
         updates, "start_background_refresh", lambda d: started.append(d)
     )
     monkeypatch.setattr(server.mcp, "run", lambda **kw: None)
-    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", False)
+    monkeypatch.setattr(_core, "_UPDATE_CHECK_ENABLED", False)
     server.main()
     assert started == []  # pip/uvx default: zero update-check requests
-    monkeypatch.setattr(server, "_UPDATE_CHECK_ENABLED", True)
+    monkeypatch.setattr(_core, "_UPDATE_CHECK_ENABLED", True)
     server.main()
-    assert started == [server.cache.cache_dir]
+    assert started == [_core.cache.cache_dir]

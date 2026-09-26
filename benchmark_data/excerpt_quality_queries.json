@@ -348,6 +348,33 @@
           "page": 5,
           "answer": "100",
           "answer_label": "Pin 7 Leakage"
+        },
+        {
+          "id": "d07",
+          "category": "table",
+          "query": "astable drift with temperature ppm",
+          "page": 5,
+          "answer": "150",
+          "answer_label": "Drift with Temperature",
+          "answer_column": "TYP"
+        },
+        {
+          "id": "d08",
+          "category": "table",
+          "query": "monostable drift with temperature ppm",
+          "page": 5,
+          "answer": "50",
+          "answer_label": "Drift with Temperature",
+          "answer_column": "TYP"
+        },
+        {
+          "id": "d09",
+          "category": "table",
+          "query": "astable initial accuracy timing error",
+          "page": 5,
+          "answer": "2.25",
+          "answer_label": "Initial Accuracy",
+          "answer_column": "TYP"
         }
       ]
     },

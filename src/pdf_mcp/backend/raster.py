@@ -295,7 +295,7 @@ def ocr_page_text(
     rasterised at 200 dpi, then OCRed at 300): 0.79s for PyMuPDF against
     1.24s through pytesseract, so 1.56x, for 332 words either way and a
     98.8% word-set overlap. Both drive the same Tesseract binary, and
-    server.py already parallelises OCR across pages.
+    tools/read.py already parallelises OCR across pages.
     """
     if not full:
         existing = _text_layer(pdf_path, page_num)

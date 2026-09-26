@@ -239,13 +239,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
     cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
-    server_module.cache = cache
+    _core.cache = cache
 
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
     path_by_id = {d["id"]: str(REPO / d["path"]) for d in manifest["docs"]}

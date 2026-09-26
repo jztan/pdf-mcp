@@ -61,7 +61,7 @@ def build_read_payload(search_payload: str, pages: list[int], read_result: dict)
 
 
 def main(argv: list[str] | None = None) -> int:
-    import pdf_mcp.server as server_module
+    from pdf_mcp import _core
 
     from eval_financial_answerability import (
         DEFAULT_MODEL,
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    server_module.cache = PDFCache(
+    _core.cache = PDFCache(
         cache_dir=REPO / "benchmark_data" / ".answerability_cache", ttl_hours=24 * 30
     )
 

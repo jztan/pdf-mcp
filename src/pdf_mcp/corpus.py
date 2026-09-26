@@ -23,6 +23,7 @@ from typing import Any, Callable
 
 
 from .backend.bytesopen import is_password_locked
+from .concurrency import yield_pdf_access
 from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
@@ -30,6 +31,7 @@ from .parallel import resolve_workers
 
 __all__ = [
     "CORPUS_MAX_FILES",
+    "CORPUS_LISTING_MAX",
     "CORPUS_RRF_K",
     "CORPUS_DOC_ARM_WEIGHT",
     "PROFILE_HEAD_CHARS",
@@ -57,9 +59,15 @@ logger = logging.getLogger(__name__)
 # of silently truncating.
 CORPUS_MAX_FILES = 100
 
-# RRF constant for cross-document fusion; matches server._RRF_K so corpus
-# fusion and single-doc hybrid fusion share one k. Design decided by the
-# stage-2 ranking benchmark: per-document fusion, not corpus-wide FTS.
+# Most names an over-cap error lists back. A folder above the cap cannot be
+# surveyed by the corpus tools, and no tool lists files, so the error itself
+# carries the names; this bounds that payload (about 20 to 60 KB).
+CORPUS_LISTING_MAX = 1000
+
+# RRF constant for cross-document fusion; matches tools/search.py's
+# _RRF_K so corpus fusion and single-doc hybrid fusion share one k.
+# Design decided by the stage-2 ranking benchmark: per-document fusion,
+# not corpus-wide FTS.
 CORPUS_RRF_K = 60
 
 # Weight of the document arm in hybrid corpus fusion. Measured on the 500-doc
@@ -73,8 +81,9 @@ CORPUS_DOC_ARM_WEIGHT = 0.25
 # arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
 PROFILE_HEAD_CHARS = 1500
 PROFILE_TERM_LIMIT = 200
-# Latin word tokens. Shared with server._corpus_query_terms so profile terms
-# and query terms agree on what a term is; 4+ chars filters function words.
+# Latin word tokens. Shared with tools/_search_common.py's
+# _corpus_query_terms so profile terms and query terms agree on what a
+# term is; 4+ chars filters function words.
 CORPUS_TERM_RE = re.compile(r"[a-z0-9]+")
 
 # Concurrent-warm pool sizing (benchmark: warm_concurrency_results.md).
@@ -97,7 +106,7 @@ def _validate_file(
     """Validate one corpus entry.
 
     Returns (resolved_path, None) on success or (None, reason).
-    Mirrors the local branch of server._resolve_path: absolute-ise,
+    Mirrors the local branch of _core.py's _resolve_path: absolute-ise,
     resolve symlinks, extension check, config allow/deny, existence.
     URLs are rejected outright (corpus calls are local-only).
     """
@@ -124,6 +133,51 @@ def _validate_file(
     return str(resolved), None
 
 
+def _over_cap_error(
+    n_files: int,
+    names: list[str] | None,
+    root: Path | None,
+    recursive: bool,
+    skipped: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Inline error for a corpus above CORPUS_MAX_FILES.
+
+    Directory mode (``root`` set) lists the validated PDFs relative to
+    ``root`` so a caller without a shell can pass a subset back, plus
+    per-subfolder counts when recursive. Explicit-list mode adds nothing:
+    the caller already holds the list.
+    """
+    cap = CORPUS_MAX_FILES
+    err: dict[str, Any] = {
+        "error": f"Corpus has {n_files} PDFs, above the {cap}-file cap",
+    }
+    if root is None or names is None:
+        err["hint"] = (
+            f"Pass up to {cap} of these paths per call. Scores from separate"
+            " calls are not comparable, so run one query over one subset."
+        )
+        err["skipped"] = skipped
+        return err
+    names = sorted(names)
+    err["hint"] = (
+        f"Pass up to {cap} of these as an explicit list (join each name to"
+        " root), or narrow to a subfolder. Scores from separate calls are"
+        " not comparable, so run one query over one subset."
+    )
+    err["root"] = str(root)
+    err["files"] = names[:CORPUS_LISTING_MAX]
+    err["files_truncated"] = len(names) > CORPUS_LISTING_MAX
+    if recursive:
+        counts: dict[str, int] = {}
+        for name in names:
+            head, sep, _ = name.partition("/")
+            key = head if sep else "."
+            counts[key] = counts.get(key, 0) + 1
+        err["subfolders"] = dict(sorted(counts.items()))
+    err["skipped"] = skipped
+    return err
+
+
 def resolve_corpus(
     paths: str | list[str],
     recursive: bool = False,
@@ -133,11 +187,13 @@ def resolve_corpus(
 
     Returns ``{"files": [...], "skipped": [{"path", "reason"}]}`` on
     success, or an inline ``{"error", "hint"}`` payload (missing
-    directory, empty corpus, cap exceeded). Directory mode is
+    directory, empty corpus, cap exceeded; over the cap, directory mode
+    also lists the folder's PDFs, see ``_over_cap_error``). Directory mode is
     non-recursive by default and matches ``*.pdf`` case-insensitively;
     results are sorted for determinism.
     """
     skipped: list[dict[str, str]] = []
+    root: Path | None = None
 
     if isinstance(paths, str):
         if "://" in paths:
@@ -169,6 +225,7 @@ def resolve_corpus(
         candidates = list(paths)
 
     files: list[str] = []
+    names: list[str] = []
     seen: set[str] = set()
     for entry in candidates:
         resolved, reason = _validate_file(entry, check_path)
@@ -177,6 +234,10 @@ def resolve_corpus(
         elif resolved not in seen:
             seen.add(resolved)
             files.append(resolved)
+            if root is not None:
+                # Name as found in the folder, before symlink resolution:
+                # always under root, and root/name resolves to this file.
+                names.append(Path(entry).relative_to(root).as_posix())
 
     if not files:
         return {
@@ -187,16 +248,13 @@ def resolve_corpus(
             "skipped": skipped,
         }
     if len(files) > CORPUS_MAX_FILES:
-        return {
-            "error": (
-                f"Corpus has {len(files)} PDFs, above the"
-                f" {CORPUS_MAX_FILES}-file cap"
-            ),
-            "hint": (
-                "Corpus tools target tens of documents. Narrow the"
-                " directory or pass an explicit subset."
-            ),
-        }
+        return _over_cap_error(
+            len(files),
+            names if root is not None else None,
+            root,
+            recursive,
+            skipped,
+        )
     return {"files": files, "skipped": skipped}
 
 
@@ -396,9 +454,9 @@ def backfill_sections(
     Covers a corpus warmed before ``sections=True`` was requested (or
     before section warming existed): a `pdf_search(granularity="section")`
     call used to build this on that document's first section-mode query
-    (server.py's ``_pdf_search_section_mode``) regardless of how warm the
-    rest of the cache was, which is the gap this closes. Reads only the
-    PDF itself via ``derive_sections`` (no cache text dependency, no
+    (tools/search.py's ``_pdf_search_section_mode``) regardless of how
+    warm the rest of the cache was, which is the gap this closes. Reads
+    only the PDF itself via ``derive_sections`` (no cache text dependency, no
     embed callback); a doc whose detection raises is logged and skipped
     so the rest still land. Returns ``(written, deferred)``: how many
     docs were (re-)indexed, and which of ``paths`` were never attempted
@@ -418,7 +476,8 @@ def backfill_sections(
     coverage 0 cannot distinguish "never indexed" from "indexed, no
     sections found" -- a genuinely section-less doc gets re-derived on
     every call that requests sections. Pre-existing behaviour (the same
-    ambiguity server.py's lazy path already has), not introduced here.
+    ambiguity tools/search.py's lazy path already has), not introduced
+    here.
 
     A doc with coverage != 0 is skipped even if its underlying file has
     since changed: the section tables carry no mtime (unlike page_text),
@@ -433,6 +492,10 @@ def backfill_sections(
 
     written = 0
     for i, path in enumerate(paths):
+        if i:
+            # Let calls queued behind this backfill run between documents,
+            # same reason as _warm_sequential's between-documents yield.
+            yield_pdf_access()
         if clock() > deadline:
             return written, paths[i:]
         if cache.get_section_fts_coverage(path) != 0:
@@ -534,7 +597,7 @@ def _finalize_doc(
     is indexed via ``cache.index_sections`` as its own write, outside the
     metadata/text transaction above -- matching how the live
     ``pdf_search(granularity="section")`` path already writes it
-    (server.py's ``_pdf_search_section_mode``), which is a separate,
+    (tools/search.py's ``_pdf_search_section_mode``), which is a separate,
     non-atomic call too. None means either sections were not requested
     for this warm, or they were requested but detection failed -- in
     both cases nothing is written, so a doc's previously-indexed sections
@@ -685,6 +748,10 @@ def _warm_sequential(
     budget_exhausted = False
     deadline = start + budget_seconds
     for i, (path, _pages) in enumerate(pending):
+        if i:
+            # Let calls queued behind this warm run between documents, so
+            # a quick pdf_info never waits out a whole corpus warm.
+            yield_pdf_access()
         if clock() - start > budget_seconds:
             unprocessed = [p for p, _ in pending[i:]]
             budget_exhausted = True
@@ -851,32 +918,38 @@ def _warm_concurrent(
                     except Exception as e:
                         handled.add(path)
                         skipped.append({"path": path, "reason": f"warm failed: {e}"})
-                        continue
-                    handled.add(path)
-                    if not _complete:
-                        docs.append(
-                            {
-                                "path": path,
-                                "status": "partial",
-                                "pages": page_count,
-                                "embeddings_cached": False,
-                                "embedded_pages": _embedded,
-                                "text_coverage": _doc_coverage_label(path, cache),
-                            }
-                        )
-                        unprocessed.append(path)
-                        budget_exhausted = True
-                        continue
-                    warmed += 1
-                    docs.append(
-                        {
-                            "path": path,
-                            "status": "warmed",
-                            "pages": page_count,
-                            "embeddings_cached": emb_cached(path),
-                            "text_coverage": _doc_coverage_label(path, cache),
-                        }
-                    )
+                    else:
+                        handled.add(path)
+                        if not _complete:
+                            docs.append(
+                                {
+                                    "path": path,
+                                    "status": "partial",
+                                    "pages": page_count,
+                                    "embeddings_cached": False,
+                                    "embedded_pages": _embedded,
+                                    "text_coverage": _doc_coverage_label(path, cache),
+                                }
+                            )
+                            unprocessed.append(path)
+                            budget_exhausted = True
+                        else:
+                            warmed += 1
+                            docs.append(
+                                {
+                                    "path": path,
+                                    "status": "warmed",
+                                    "pages": page_count,
+                                    "embeddings_cached": emb_cached(path),
+                                    "text_coverage": _doc_coverage_label(path, cache),
+                                }
+                            )
+                    # Let calls queued behind this warm run between
+                    # documents, so a quick pdf_info never waits out a
+                    # whole corpus warm. BrokenProcessPool/OSError above
+                    # re-raise before reaching here, which is correct: the
+                    # pool is being torn down, not paused between docs.
+                    yield_pdf_access()
     except (BrokenProcessPool, OSError):
         # Leaving the `with` block joins in-flight workers (shutdown(wait=
         # True)); their partial results are discarded and those docs are

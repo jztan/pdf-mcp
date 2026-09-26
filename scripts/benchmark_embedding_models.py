@@ -31,10 +31,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import pdf_mcp.server as server_module  # noqa: E402
+from pdf_mcp import _core  # noqa: E402
 from bench_env import environment  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
-from pdf_mcp.server import _resolve_path  # noqa: E402
+from pdf_mcp._core import _resolve_path  # noqa: E402
 from pdf_mcp.server import pdf_search  # noqa: E402
 
 # ── Models under test ───────────────────────────────────────────────
@@ -232,23 +232,24 @@ def run_latency_probe(
 class _ConfigStub:
     """Minimal stand-in for PDFConfig that returns a fixed embedding model.
 
-    Used to swap server_module.pdf_config per-run. Path/URL access checks
+    Used to swap _core.pdf_config per-run. Path/URL access checks
     are no-ops because the benchmark only reads public arxiv PDFs that the
     real config already permits.
 
-    The stub has to carry every attribute server.py reads off `pdf_config`
-    on the pdf_search path. A missing one raises inside pdf_search, which
-    returns it as an `{"error": ...}` dict rather than propagating -- so the
-    benchmark used to score such a model 0.0 and report it as a real,
-    successful measurement. `run_model` now checks the warm-up search's
-    result (see below) so that failure mode is loud, and
-    `confidence_threshold` mirrors server.py's own default so the
-    semantic/hybrid confidence annotation behaves as it does in production.
+    The stub has to carry every attribute tools/search.py reads off
+    `pdf_config` on the pdf_search path. A missing one raises inside
+    pdf_search, which returns it as an `{"error": ...}` dict rather than
+    propagating -- so the benchmark used to score such a model 0.0 and
+    report it as a real, successful measurement. `run_model` now checks
+    the warm-up search's result (see below) so that failure mode is
+    loud, and `confidence_threshold` mirrors `_core.py`'s own default so
+    the semantic/hybrid confidence annotation behaves as it does in
+    production.
     """
 
     def __init__(self, model_name: str) -> None:
         self.embedding_model = model_name
-        self.confidence_threshold = server_module._SEMANTIC_CONFIDENCE_THRESHOLD
+        self.confidence_threshold = _core._SEMANTIC_CONFIDENCE_THRESHOLD
 
     def check_path(self, path: str) -> None:  # noqa: D401
         pass
@@ -267,7 +268,7 @@ def run_model(
     """
     Run all scenarios in the ground truth against a single embedding model.
 
-    Side-effects: swaps server_module.pdf_config and server_module.cache
+    Side-effects: swaps _core.pdf_config and _core.cache
     for the duration of the call; both are restored on exit (even on error).
 
     score_pages: which ground-truth field to score against.
@@ -297,12 +298,12 @@ def run_model(
         raise ValueError(
             f"score_pages must be 'relevant' or 'target', got {score_pages!r}"
         )
-    original_config = server_module.pdf_config
-    original_cache = server_module.cache
+    original_config = _core.pdf_config
+    original_cache = _core.cache
     try:
-        server_module.pdf_config = _ConfigStub(model_name)
+        _core.pdf_config = _ConfigStub(model_name)
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            server_module.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
+            _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=1)
 
             # Pre-resolve paths and warm embed cache per PDF (cold-time recorded).
             # A PDF with no scenarios yet (e.g. ground_truth.json entries
@@ -392,8 +393,8 @@ def run_model(
                 "mrr": mrr,
             }
     finally:
-        server_module.pdf_config = original_config
-        server_module.cache = original_cache
+        _core.pdf_config = original_config
+        _core.cache = original_cache
 
 
 def compute_verdict(

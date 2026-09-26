@@ -335,13 +335,14 @@ def time_read_pages_render(path: str, n_pages: int, max_workers: int) -> float:
     actually ships render parallelism -- not render-in-isolation."""
     import time
 
-    from pdf_mcp.server import cache, pdf_read_pages
+    from pdf_mcp import _core
+    from pdf_mcp.server import pdf_read_pages
 
     os.environ["PDF_MCP_MAX_WORKERS"] = str(max_workers)
     # NOTE: clears the module-level cache. PDF_MCP_CACHE_DIR must be set to a
     # temp dir before this script imports anything from pdf_mcp.server (done in
     # main() below) so the real user cache is never touched.
-    cache.clear_all()
+    _core.cache.clear_all()
     pages = ",".join(str(i + 1) for i in range(n_pages))
     start = time.perf_counter()
     pdf_read_pages(path, pages, render_dpi=200)

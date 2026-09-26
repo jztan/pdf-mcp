@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import pymupdf  # noqa: E402
 
 from pdf_mcp.cache import PDFCache  # noqa: E402
-from pdf_mcp.server import _python_search  # noqa: E402
+from pdf_mcp.tools._search_common import _python_search  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Terminal colours (degrade gracefully when not a tty)

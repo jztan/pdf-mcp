@@ -105,7 +105,7 @@ class PDFConfig:
     def disable_remote_embedding_backend(self) -> None:
         """Force the local fastembed default for the rest of this process.
 
-        Called exactly once, by server.py's startup safety check
+        Called exactly once, by `_core.py`'s startup safety check
         (`remote_embedding_check`, issue #42), when a configured
         ``[embedding].backend = "openai"`` endpoint fails the cosine-parity
         check against stored fastembed reference vectors -- wrong model,

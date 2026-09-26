@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-09-26
+### Added
+
+- **Search hits say where they sit.** `pdf_search` and `pdf_corpus_search`
+  hits now carry `section_path`, the PDF's own outline entries enclosing the
+  hit, and `lead_in`, the sentence printed just above a table or list that
+  introduces it. A bare table row no longer reads like the headline figure
+  when it is a segment result or a pro forma number: the JPMorgan segment
+  page reads `CONSUMER & COMMUNITY BANKING`, the consolidated statement
+  reads `Consolidated statements of income`, and Microsoft's pro forma table
+  carries its "on an unaudited pro forma basis" sentence. Both fields are
+  absent when they do not apply (no outline, a prose hit).
+  ([#66](https://github.com/jztan/pdf-mcp/issues/66))
+
+### Changed
+
+- **A folder over the corpus cap can now be split without a shell.** When a
+  directory passed to `pdf_corpus_warm`, `pdf_corpus_overview` or
+  `pdf_corpus_search` holds more than 100 PDFs, the error lists them
+  (`root`, `files`, plus `subfolders` counts on recursive calls) so an agent
+  can pass a subset back, and it says that scores from separate calls
+  cannot be compared. ([#68](https://github.com/jztan/pdf-mcp/issues/68))
+- **`tools/list` order: `pdf_get_toc` is now listed second, right after
+  `pdf_info`** (it was fifth). Tool names, descriptions, input and output
+  schemas, and responses are unchanged, so a client that picks tools by name
+  sees no difference; one that relies on list position sees the new order.
+
+- **Log records now come from per-module loggers.** Records that used to be
+  emitted under `pdf_mcp.server` come from `pdf_mcp._core` or
+  `pdf_mcp.tools.<module>` (for example `pdf_mcp.tools.search`). A filter or
+  level set on the `pdf_mcp.server` logger no longer matches them; set it on
+  `pdf_mcp` to cover every module.
+
+### Fixed
+
+- **Tables no longer put a value under the wrong column while reporting
+  `columns_reliable: true`.** A single value in a cell merged across two
+  columns came back under the first column rather than the one it is printed
+  under (the TI LM555 18 V supply limit read as MIN instead of MAX); it now
+  lands in the printed column. A table whose header row holds money amounts
+  (its real header sits above the detected region, so the first row returned
+  is data) is now flagged `columns_reliable: false`, in `pdf_read_pages`
+  tables and in `pdf_search` `table_context`. Cached tables re-extract once
+  on the next read. ([#63](https://github.com/jztan/pdf-mcp/issues/63))
+
+- **Parallel tool calls no longer crash the server.** Since 3.0.0, two tool
+  calls running at the same time could crash the server or leave it unable
+  to open any PDF until it was restarted, because the PDF engine is not safe
+  to use from several threads at once. Calls that open a PDF now take turns
+  on the engine instead of running at the same time. Long calls (corpus
+  warms, a cold search of a large document, `pdf_read_all`) let waiting calls
+  run between documents or pages, so a quick call does not wait for a long
+  one to finish. A corpus warm's time budget includes the time it spends
+  letting other calls run, so under heavy parallel use it can return more
+  documents in `unprocessed`.
+  ([#61](https://github.com/jztan/pdf-mcp/issues/61))
+
 ## [3.3.0] - 2026-09-19
 ### Added
 
@@ -192,6 +249,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SSRF deny list, alongside RFC 1918/loopback/link-local. It also feeds the
   `[embedding].base_url` private-address check above, so a Tailscale-reached
   endpoint is treated the same as any other private address.
+
+- Bumped transitive `anyio` 4.13.0 → 4.15.1 to clear CVE-2026-64847 and
+  CVE-2026-63374. Reached via `fastmcp`, `mcp` and `httpx`, none of which cap
+  it, so the bump is lockfile-only with no change to `pyproject.toml`
+  constraints. The Claude Desktop bundle installs the locked versions, so
+  bundle installs of 3.3.0 already carry the fix.
 
 ### Contributors
 

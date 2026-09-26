@@ -107,10 +107,11 @@ def main() -> int:
         fixtures = _build_fixtures(workdir)
 
         # Import AFTER the cache env var is set.
+        from pdf_mcp import _core
         import pdf_mcp.server as server
         from pdf_mcp.cache import PDFCache
 
-        server.cache = PDFCache(cache_dir=workdir / "cache")
+        _core.cache = PDFCache(cache_dir=workdir / "cache")
 
         results["open_cold"] = _timed(lambda: server.pdf_info(fixtures["big"]))
         results["info_warm"] = _timed(lambda: server.pdf_info(fixtures["big"]))
@@ -146,7 +147,7 @@ def main() -> int:
         warm = corpus_mod.warm_docs(
             files,
             budget_seconds=120,
-            cache=server.cache,
+            cache=_core.cache,
             embeddings=False,
             model_name=None,
             embed=None,
@@ -189,7 +190,7 @@ def main() -> int:
                 corpus_mod.warm_docs(
                     files_t,
                     budget_seconds=300,
-                    cache=server.cache,
+                    cache=_core.cache,
                     embeddings=False,
                     model_name=None,
                     embed=None,
@@ -211,7 +212,7 @@ def main() -> int:
         timings: dict[str, float] = {}
 
         def _instrument(name: str):
-            real = getattr(server.cache, name)
+            real = getattr(_core.cache, name)
 
             def wrapper(*a, **k):
                 t = time.perf_counter()
@@ -234,9 +235,9 @@ def main() -> int:
             "save_pages_hidden_flag",
         ):
             originals[_name], _w = _instrument(_name)
-            setattr(server.cache, _name, _w)
+            setattr(_core.cache, _name, _w)
 
-        real_tx = server.cache.write_transaction
+        real_tx = _core.cache.write_transaction
 
         @_ctx.contextmanager
         def timed_tx():
@@ -255,7 +256,7 @@ def main() -> int:
                 timings.get("tx_commit", 0.0) + time.perf_counter() - t_commit, 3
             )
 
-        server.cache.write_transaction = timed_tx
+        _core.cache.write_transaction = timed_tx
         try:
             files_i = _fresh_corpus("instrumented")
             os.environ["PDF_MCP_MAX_WORKERS"] = "1"
@@ -263,7 +264,7 @@ def main() -> int:
             corpus_mod.warm_docs(
                 files_i,
                 budget_seconds=300,
-                cache=server.cache,
+                cache=_core.cache,
                 embeddings=False,
                 model_name=None,
                 embed=None,
@@ -272,8 +273,8 @@ def main() -> int:
         finally:
             os.environ.pop("PDF_MCP_MAX_WORKERS", None)
             for _name, _real in originals.items():
-                setattr(server.cache, _name, _real)
-            server.cache.write_transaction = real_tx
+                setattr(_core.cache, _name, _real)
+            _core.cache.write_transaction = real_tx
         results["warm_write_breakdown"] = timings
 
         extract_files = _fresh_corpus("extract")

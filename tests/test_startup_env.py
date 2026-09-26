@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from pdf_mcp.cache import PDFCache
-from pdf_mcp.server import _cache_dir_from_env, _ttl_hours_from_env
+from pdf_mcp._core import _cache_dir_from_env, _ttl_hours_from_env
 
 
 class TestCacheDirEnv:

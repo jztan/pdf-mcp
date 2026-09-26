@@ -115,7 +115,15 @@ def _cells(paragraph=1.0, snippet=1.0, bbox=1.0):
     }
 
 
-def _row(rid, snip, para, known_fail=None, bbox_present=1, bbox_contains=1):
+def _row(
+    rid,
+    snip,
+    para,
+    known_fail=None,
+    bbox_present=1,
+    bbox_contains=1,
+    column_correct=None,
+):
     return {
         "id": rid,
         "snippet_contains": snip,
@@ -123,6 +131,7 @@ def _row(rid, snip, para, known_fail=None, bbox_present=1, bbox_contains=1):
         "bbox_present": bbox_present,
         "bbox_contains": bbox_contains,
         "known_fail": known_fail,
+        "paragraph_column_correct": column_correct,
     }
 
 
@@ -599,3 +608,101 @@ def test_header_naming_uses_row_shape_not_a_length_constant():
         }
     }
     assert _resolves_via_context(caption, "13,973.3") is False
+
+
+# --- answer_column: the value must sit under the RIGHT column -------------
+
+_TI_EC_HEADER = ["PARAMETER", "TEST CONDITIONS", "MIN", "TYP", "MAX", "UNIT"]
+
+
+def _drift(cells):
+    return {
+        "table_context": {
+            "header": _TI_EC_HEADER,
+            "rows": [["Drift with Temperature", "", *cells, "ppm/°C"]],
+            "columns_reliable": False,
+        }
+    }
+
+
+def test_column_correct_requires_the_named_column():
+    """TI LM555 p5: 150 printed under TYP, filed under MIN before the fix.
+
+    `_resolves_via_context` passes both, since MIN is a named column; only
+    the gold column tells a right answer from a confidently wrong one.
+    """
+    from scripts.benchmark_excerpt_quality import (
+        _column_correct,
+        _resolves_via_context,
+    )
+
+    right, wrong = _drift(["", "150", ""]), _drift(["150", "", ""])
+    assert _resolves_via_context(wrong, "150") is True
+    assert _column_correct(right, "150", "TYP") is True
+    assert _column_correct(wrong, "150", "TYP") is False
+
+
+def test_column_correct_is_case_insensitive_and_needs_context():
+    from scripts.benchmark_excerpt_quality import _column_correct
+
+    assert _column_correct(_drift(["", "150", ""]), "150", "typ") is True
+    assert _column_correct({}, "150", "TYP") is False
+    # A value repeated in two cells resolves to no column at all.
+    assert _column_correct(_drift(["150", "150", ""]), "150", "TYP") is False
+
+
+def test_load_queries_accepts_answer_column_on_a_table_query(tmp_path):
+    path = _query_file(
+        tmp_path,
+        {
+            "id": "d07",
+            "category": "table",
+            "query": "astable drift with temperature ppm",
+            "page": 5,
+            "answer": "150",
+            "answer_label": "Drift with Temperature",
+            "answer_column": "TYP",
+        },
+    )
+    assert load_queries(path)["doc"]["queries"][0]["answer_column"] == "TYP"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"category": "table", "answer_label": "Drift", "answer_column": " "},
+        {"category": "prose", "answer_column": "TYP"},
+    ],
+)
+def test_load_queries_rejects_bad_answer_column(tmp_path, extra):
+    query = {"id": "d07", "query": "drift", "page": 5, "answer": "150", **extra}
+    with pytest.raises(ValueError, match="answer_column"):
+        load_queries(_query_file(tmp_path, query))
+
+
+def test_wrong_column_fails_clause_5():
+    rows = [_row("d07", 1, 1, column_correct=0), _row("d08", 1, 1)]
+    verdict = evaluate_gate(_cells(), rows)
+    assert verdict["clause_5_column_correct"]["pass"] is False
+    assert verdict["clause_5_column_correct"]["ids"] == ["d07"]
+    assert verdict["pass"] is False
+
+
+def test_right_column_and_ungraded_rows_pass_clause_5():
+    rows = [_row("d07", 1, 1, column_correct=1), _row("d08", 1, 1)]
+    verdict = evaluate_gate(_cells(), rows)
+    assert verdict["clause_5_column_correct"]["pass"] is True
+    assert verdict["pass"] is True
+
+
+def test_frozen_wrong_column_passes_until_it_is_fixed():
+    frozen = {"cell": "column_correct", "reason": "value filed under MIN"}
+    verdict = evaluate_gate(
+        _cells(), [_row("d07", 1, 1, known_fail=frozen, column_correct=0)]
+    )
+    assert verdict["clause_5_column_correct"]["pass"] is True
+    fixed = evaluate_gate(
+        _cells(), [_row("d07", 1, 1, known_fail=frozen, column_correct=1)]
+    )
+    assert fixed["clause_4_stale_known_fail"]["ids"] == ["d07"]
+    assert fixed["pass"] is False

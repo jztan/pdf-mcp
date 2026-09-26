@@ -1,7 +1,11 @@
 """Tests for the corpus-search ranking spike harness (pure logic only)."""
 
+import json
 import sqlite3
 
+import pytest
+
+from scripts import benchmark_corpus_search as bcs
 from scripts._corpus_ranking import (
     evaluate_decision,
     grade_ranking,
@@ -236,6 +240,127 @@ class TestValidation:
             page_text_lookup=lambda d, p: "We analyze the IO\ncomplexity here.",
         )
         assert errors == []
+
+    def test_validate_queries_raises_when_a_page_is_not_cached(self):
+        # A lookup returning None means the corpus is not warm. That is a
+        # setup error, not a bad label, so it must not read as "evidence
+        # not found".
+        with pytest.raises(bcs.CorpusNotWarm, match="d1 p2"):
+            validate_queries(_MANIFEST, _queries("anything"), lambda d, p: None)
+
+    def test_ligature_label_fails_against_cached_text(self):
+        # The harnesses score against cached text, where extraction writes
+        # "ff" for the ligature. A label quoting the ligature can never score.
+        errors = validate_queries(
+            _MANIFEST,
+            _queries("Delocalization Eﬀects"),
+            lambda d, p: "Static Screening and Delocalization Effects",
+        )
+        assert len(errors) == 1 and "d1 p2" in errors[0]
+
+
+_MANIFEST = {"docs": [{"id": "d1", "path": "x.pdf", "lang": "en"}]}
+
+
+def _queries(evidence: str) -> dict:
+    return {
+        "queries": [
+            {
+                "id": "q1",
+                "class": "needle",
+                "query": "anything",
+                "labels": [{"doc": "d1", "page": 2, "gain": 2, "evidence": evidence}],
+            }
+        ]
+    }
+
+
+class TestCachedLookup:
+    def _warm(self, tmp_path, text="We analyze the IO\ncomplexity here."):
+        from pdf_mcp.cache import PDFCache
+
+        pdf = tmp_path / "x.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        cache_dir = tmp_path / "cache"
+        cache = PDFCache(cache_dir=cache_dir)
+        cache.save_metadata(str(pdf), 2, {}, [])
+        cache.save_page_text(str(pdf), 1, text)
+        return pdf, cache_dir
+
+    def test_reads_the_cached_page_not_the_pdf(self, tmp_path):
+        # The stub is not a parseable PDF: any re-extraction would fail.
+        pdf, cache_dir = self._warm(tmp_path)
+        lookup = bcs.cached_page_text_lookup(
+            {"d1": str(pdf)}, bcs.open_validation_cache(cache_dir)
+        )
+        assert lookup("d1", 2) == "We analyze the IO\ncomplexity here."
+        assert lookup("d1", 1) is None
+
+    def test_opening_the_cache_does_not_purge_old_rows(self, tmp_path):
+        # PDFCache purges rows older than its TTL (24 h by default) on open.
+        # Validating a warm cache from an earlier day must not empty it.
+        pdf, cache_dir = self._warm(tmp_path)
+        with sqlite3.connect(cache_dir / "cache.db") as conn:
+            conn.execute("UPDATE pdf_metadata SET accessed_at = '2020-01-01 00:00:00'")
+        lookup = bcs.cached_page_text_lookup(
+            {"d1": str(pdf)}, bcs.open_validation_cache(cache_dir)
+        )
+        assert lookup("d1", 2) is not None
+
+
+class TestDebrisWarnings:
+    def test_flags_table_and_number_run_evidence(self):
+        q = _queries("Table 2: Wilcoxon Signed-Rank Test Results")
+        q["queries"][0]["labels"].append(
+            {"doc": "d1", "page": 3, "gain": 1, "evidence": "Loss 6 5 3 108 1010 Par"}
+        )
+        warnings = bcs.label_debris_warnings(q)
+        assert len(warnings) == 2
+        assert "d1 p2" in warnings[0] and "d1 p3" in warnings[1]
+
+    def test_prose_with_a_number_is_not_debris(self):
+        q = _queries("There are five sentiment labels in SST, 0 to 4.")
+        assert bcs.label_debris_warnings(q) == []
+
+
+class TestValidateExitCodes:
+    def _setup(self, tmp_path, monkeypatch, evidence, warm=True):
+        pdf = tmp_path / "x.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        out = tmp_path / "corpus_search"
+        out.mkdir()
+        manifest = {"docs": [{"id": "d1", "path": str(pdf), "lang": "en"}]}
+        (out / "manifest.json").write_text(json.dumps(manifest))
+        (out / "queries.json").write_text(json.dumps(_queries(evidence)))
+        monkeypatch.setattr(bcs, "OUT_DIR", out)
+        cache_dir = tmp_path / "cache"
+        monkeypatch.setenv("PDF_MCP_CACHE_DIR", str(cache_dir))
+        if warm:
+            from pdf_mcp.cache import PDFCache
+
+            cache = PDFCache(cache_dir=cache_dir)
+            cache.save_metadata(str(pdf), 2, {}, [])
+            cache.save_page_text(str(pdf), 1, "We analyze the IO complexity.")
+
+    def test_exit_0_when_every_label_is_in_the_cache(self, tmp_path, monkeypatch):
+        self._setup(tmp_path, monkeypatch, "IO complexity")
+        assert bcs.main(["--validate"]) == 0
+
+    def test_exit_1_on_a_failing_label(self, tmp_path, monkeypatch, capsys):
+        self._setup(tmp_path, monkeypatch, "not on the page")
+        assert bcs.main(["--validate"]) == 1
+        assert "INVALID: q1" in capsys.readouterr().out
+
+    def test_exit_2_when_the_corpus_is_not_warm(self, tmp_path, monkeypatch, capsys):
+        self._setup(tmp_path, monkeypatch, "IO complexity", warm=False)
+        assert bcs.main(["--validate"]) == 2
+        assert "not warm" in capsys.readouterr().out
+
+    def test_debris_warns_without_failing(self, tmp_path, monkeypatch, capsys):
+        self._setup(tmp_path, monkeypatch, "IO complexity")
+        monkeypatch.setattr(bcs, "label_debris_warnings", lambda q: ["WARN x"])
+        assert bcs.main(["--validate"]) == 0
+        assert "WARN x" in capsys.readouterr().out
 
 
 class TestWriteResultsMdGuard:

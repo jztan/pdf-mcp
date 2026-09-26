@@ -147,9 +147,9 @@ def test_render_oversized_on_missing_file(call, isolated_server, monkeypatch):
     """When a render PNG exceeds the transport byte budget, the tool must
     drop the image block, flag render_oversized=True on the response, and
     not raise — rather than silently omitting the flag or crashing."""
-    from pdf_mcp import server
+    from pdf_mcp import _core
 
-    monkeypatch.setattr(server, "RENDER_RESULT_BYTE_BUDGET", 10)
+    monkeypatch.setattr(_core, "RENDER_RESULT_BYTE_BUDGET", 10)
 
     result = call(path=str(SYN / "decoy_diagram.pdf"), page=1)
     r = result[0]

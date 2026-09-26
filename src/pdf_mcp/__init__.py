@@ -22,7 +22,7 @@ Usage with Claude Desktop:
 # Defined before the .server import so server.py can reach it without
 # triggering a circular import during package initialisation. FastMCP
 # uses this value as serverInfo.version in the MCP initialize handshake.
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 
 from .cache import PDFCache  # noqa: E402
 
@@ -31,7 +31,7 @@ __all__ = ["mcp", "PDFCache", "__version__"]
 
 # PEP 562 module-level __getattr__: expose `mcp` lazily so importing a submodule
 # (e.g. a spawned worker importing extractor) does not build FastMCP or construct
-# the module-level PDFCache in server.py.
+# the module-level PDFCache in _core.py.
 def __getattr__(name: str) -> object:
     if name == "mcp":
         from .server import mcp

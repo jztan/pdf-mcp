@@ -5,11 +5,11 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Project Status
 
-- **Current version:** v3.4.0 (released 2026-09-26): optional CUDA embedding ([#39](https://github.com/jztan/pdf-mcp/pull/39)), faster and leaner CPU embedding, page-batched `pdf_corpus_warm` embedding commits, and semantic snippet excerpts anchored on the matching passage in every mode. Nothing on develop is unreleased.
-- **MCP Registry:** published (v3.2.0)
+- **Current version:** v3.4.0 (released 2026-09-26): search hits carry their outline section and table lead-in ([#66](https://github.com/jztan/pdf-mcp/issues/66)), parallel tool calls no longer crash the server ([#61](https://github.com/jztan/pdf-mcp/issues/61)), merged-cell table values land in their printed column ([#63](https://github.com/jztan/pdf-mcp/issues/63)), and the over-cap corpus error lists the folder's PDFs ([#68](https://github.com/jztan/pdf-mcp/issues/68)). Nothing user-facing on develop is unreleased.
+- **MCP Registry:** published (v3.4.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release
-- **Tests:** 2031, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
+- **Tests:** 2529, on Linux (Python 3.10 to 3.14) and Windows (3.10, 3.13). The release gate runs `pytest -m "not slow"`.
 
 ---
 
@@ -38,14 +38,15 @@ Ordered by leverage ÷ effort. Evidence, prior attempts and gates for each are i
 
 ### P0: ship next
 
-_Nothing queued._
+- [ ] **Check the unconfirmed agent-tryout reports**: possible wrong signals such as `page_match_counts` counting terms rather than pages, and `warm_complete` disagreeing between the corpus overview and corpus search. Each one that reproduces gets an issue and a fix
+- [ ] **Better document titles**: documents with empty metadata fall back to the filename, and some junk titles slip through; fall back to the largest text on page 1 first
 
 ### P1: high-value, well-scoped
 
 - [x] **Within-document page ranking on deep-page paraphrase queries**: closed as measured on 2026-09-17. Sharper embedding windows lift the returned page (hybrid described page NDCG@10 +0.09, CI excluding zero) but not, on their own, what an agent can answer from the response (answerable-in-full unchanged on described). The best configuration, sharper windows with a query-term-first excerpt picker, raised described answerable-in-full by 6 points, inside the noise floor, while needle, spread and trap each moved down by about one query in every harness; that mixed trade was not shipped. LLM-written page context did not reach the twelve queries no arm ranks in the top ten. The corpus-search latency work found on the way shipped on its own: hybrid search on 100 documents went from about 1.0 to 0.3 s per query
-- [ ] **Portable Tesseract for zero-install OCR**, so the one-click bundle covers scanned pages without an admin installer; gated on a static-build spike
-- [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985; about 3 s/query before the 2026-09-17 latency work, not yet re-measured, and the remaining cost at that size is per-document keyword work); 1,000 waits on the 900-distractor rung. Open precondition: the cap error hint, tool descriptions and tool reference must say that a corpus of hundreds of files warms across several re-issued calls
-- [ ] **Teach keyword-mode query shape in the tool descriptions**, since AND-joined terms silently return nothing
+- [x] **Portable Tesseract for zero-install OCR**: shipped in v3.3.0 with the one-click bundle (English only; other OCR languages still need a Tesseract install)
+- [ ] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: described doc-hit@3 0.68, needle 1.000, trap 0.985; about 3 s/query before the 2026-09-17 latency work, not yet re-measured, and the remaining cost at that size is per-document keyword work); 1,000 waits on the 900-distractor rung. Since v3.4.0 the over-cap error lists the folder's PDFs so an agent can split it. Open precondition: the cap error hint, tool descriptions and tool reference must say that a corpus of hundreds of files warms across several re-issued calls
+- [ ] **Teach mode choice in the tool descriptions** (when to use keyword vs semantic); AND-matching and the OR retry on zero hits are already described
 - [ ] **Calibrate the semantic confidence threshold**; 0.5 is a guess and gibberish scores 0.54
 
 ### P2: investigate before committing
@@ -70,4 +71,4 @@ work.
 
 ---
 
-**Last Updated:** 2026-09-12 (status refresh after v3.2.0; deep-page ranking and portable Tesseract added from the backlog)
+**Last Updated:** 2026-09-26 (status refresh after v3.4.0; tryout verification and document titles queued as P0; portable Tesseract marked shipped)

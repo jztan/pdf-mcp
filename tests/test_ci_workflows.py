@@ -1,4 +1,6 @@
-"""ci.yml and docs.yml must partition pushes the same way.
+"""Workflow invariants that GitHub itself never checks.
+
+1. ci.yml and docs.yml must partition pushes the same way.
 
 ci.yml skips its seven-job matrix on pushes that touch only prose, and
 docs.yml runs the doc-reading tests on exactly those pushes. The two
@@ -6,8 +8,13 @@ workflows carry the same path list, once as `paths-ignore` and once as
 `paths`. If they drift, a path lands in neither workflow (a doc-reading
 test silently stops running on it) or in both (the matrix runs for
 nothing again). Nothing in GitHub checks this, so this test does.
+
+2. Every workflow installs from uv.lock and runs pytest under `uv run`, so
+no job tests against dependency versions CI never saw (see the block at
+the end of this file).
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -60,3 +67,63 @@ def test_workflow_files_are_never_treated_as_prose() -> None:
     merge unexercised."""
     assert not any(p.startswith(".github/workflows") for p in DOC_PATHS)
     assert ".github/**" not in DOC_PATHS
+
+
+# --- Every workflow tests against the lockfile ---------------------------
+#
+# The v3.4.0 publish run failed at tag time: publish-pypi.yml's test job ran
+# `pip install -e .[dev]`, which ignores uv.lock, so it installed fastembed
+# 0.8.1 over the locked 0.8.0 and the RRF gate refused the version change,
+# while ci.yml (uv sync --frozen) stayed green on the same commit. These
+# checks fail the PR that introduces such a job instead of the release.
+
+_PROJECT_PIP_INSTALL = re.compile(
+    r"\bpip\s+install\b[^\n]*?(?:\s-e\s+|\s)\.(?:\[|\s|$)"
+)
+
+
+def _steps() -> list[tuple[str, str, list[dict]]]:
+    """(workflow, job, steps) for every job in every workflow file."""
+    out = []
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        with path.open(encoding="utf-8") as fh:
+            doc = yaml.safe_load(fh)
+        for job_name, job in (doc.get("jobs") or {}).items():
+            out.append((path.name, job_name, job.get("steps") or []))
+    return out
+
+
+def test_project_pip_install_pattern() -> None:
+    for cmd in ("pip install -e .[dev]", "pip install .", "pip install -e ."):
+        assert _PROJECT_PIP_INSTALL.search(cmd), cmd
+    for cmd in ("pip install build twine", "pip install --upgrade pip"):
+        assert not _PROJECT_PIP_INSTALL.search(cmd), cmd
+
+
+def test_no_workflow_installs_the_project_with_pip() -> None:
+    offenders = [
+        f"{wf}:{job}"
+        for wf, job, steps in _steps()
+        for step in steps
+        if _PROJECT_PIP_INSTALL.search(step.get("run", ""))
+    ]
+    assert not offenders, (
+        f"{offenders} install the project with pip, which ignores uv.lock; "
+        "use `uv sync --frozen` as ci.yml does"
+    )
+
+
+def test_pytest_runs_only_under_a_frozen_uv_sync() -> None:
+    offenders = []
+    for wf, job, steps in _steps():
+        synced = False
+        for step in steps:
+            run = step.get("run", "")
+            if "uv sync --frozen" in run:
+                synced = True
+            for line in run.splitlines():
+                if re.search(r"\bpytest\b", line) and not (
+                    synced and re.search(r"\buv run pytest\b", line)
+                ):
+                    offenders.append(f"{wf}:{job}: {line.strip()}")
+    assert not offenders, offenders

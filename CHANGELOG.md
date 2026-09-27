@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `score` is now comparable across documents. In hybrid mode a page the
   keyword arm found on partial matches alone counts as a semantic hit for
   its excerpt and `low_confidence`. CJK queries and German FTS mode keep
-  the per-document ranking.
+  the per-document ranking. ([#70](https://github.com/jztan/pdf-mcp/issues/70))
 
 ## [3.4.0] - 2026-09-26
 ### Added

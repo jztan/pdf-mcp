@@ -1246,9 +1246,13 @@ def pdf_corpus_search(
     )[: top_k * 3]
     doc_list = [(p, best_page[p]) for p, _c in doc_ranked]
 
+    # A full keyword match (phrase or every term) outweighs the semantic
+    # lists; without this each doc-arm page outranks keyword's rank 1.
+    # See corpus.CORPUS_KW_FULL_WEIGHT.
+    kw_weight = 1.0 if kw_partial else corpus.CORPUS_KW_FULL_WEIGHT
     fused_scored = corpus.rrf_fuse_rankings_scored(
         [
-            (kw_fused, 1.0),
+            (kw_fused, kw_weight),
             (sem_ranking, 1.0),
             (doc_list, corpus.CORPUS_DOC_ARM_WEIGHT),
         ],

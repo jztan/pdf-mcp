@@ -4858,9 +4858,10 @@ class TestPdfCorpusSearchSemanticAuto:
     def test_hybrid_wires_doc_arm_into_rrf_fusion(
         self, corpus_dir, isolated_server, monkeypatch
     ):
-        """Pins the call site at server.py: three arms, in order, at
-        weights (1.0, 1.0, CORPUS_DOC_ARM_WEIGHT); a substituted weight
-        or a swapped list here would slip past every other test."""
+        """Pins the call site: three arms, in order, at weights
+        (CORPUS_KW_FULL_WEIGHT, 1.0, CORPUS_DOC_ARM_WEIGHT) when every
+        query term matched; a substituted weight or a swapped list here
+        would slip past every other test."""
         from pdf_mcp import corpus
 
         self._fake_embedder(monkeypatch)
@@ -4882,7 +4883,11 @@ class TestPdfCorpusSearchSemanticAuto:
         rankings = captured["rankings"]
         assert len(rankings) == 3
         weights = tuple(w for _list, w in rankings)
-        assert weights == (1.0, 1.0, corpus.CORPUS_DOC_ARM_WEIGHT)
+        assert weights == (
+            corpus.CORPUS_KW_FULL_WEIGHT,
+            1.0,
+            corpus.CORPUS_DOC_ARM_WEIGHT,
+        )
         kw_list, sem_list, doc_list = (r for r, _w in rankings)
 
         # Third arm: one best page per profiled doc, no duplicate docs.
@@ -4906,6 +4911,52 @@ class TestPdfCorpusSearchSemanticAuto:
         # doc-level one (distinguishes it from the doc arm at a glance).
         assert len(sem_list) > len(doc_list)
         assert all(isinstance(page, int) and page >= 1 for _p, page in sem_list)
+
+    def test_partial_keyword_match_keeps_equal_keyword_weight(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """No document holds all three terms (partial matching needs three
+        or more), so the keyword arm falls back to partial matches, which
+        rank pages but are weak evidence: the keyword list keeps weight
+        1.0. Weighting partial matches up cost paraphrase-query routing
+        (described doc-hit@3 -0.096)."""
+        from pdf_mcp import corpus
+
+        self._fake_embedder(monkeypatch)
+        real_fuse = corpus.rrf_fuse_rankings_scored
+        captured: dict[str, Any] = {}
+
+        def spy(rankings, k=corpus.CORPUS_RRF_K, top_k=None):
+            captured["rankings"] = rankings
+            return real_fuse(rankings, k=k, top_k=top_k)
+
+        monkeypatch.setattr(corpus, "rrf_fuse_rankings_scored", spy)
+
+        result = pdf_corpus_search(
+            str(corpus_dir), "budget zzqxunmatched yyqwmissing", mode="auto"
+        )
+        assert result["search_mode"] == "hybrid"
+        kw_list, kw_weight = captured["rankings"][0]
+        assert kw_list, "partial tier should still rank the 'budget' pages"
+        assert kw_weight == 1.0
+
+    def test_full_keyword_match_outranks_doc_arm_pages(self):
+        """The mechanism behind CORPUS_KW_FULL_WEIGHT: at equal weight a
+        semantic page carrying the doc-arm bonus beats keyword's rank 1;
+        at the full-match weight keyword's rank 1 wins."""
+        from pdf_mcp import corpus
+
+        kw = [("k.pdf", 1)]
+        sem = [(f"s{i}.pdf", 1) for i in range(10)]
+        doc = list(sem)
+
+        def top(kw_weight):
+            return corpus.rrf_fuse_rankings_scored(
+                [(kw, kw_weight), (sem, 1.0), (doc, corpus.CORPUS_DOC_ARM_WEIGHT)]
+            )[0][0]
+
+        assert top(1.0) == ("s0.pdf", 1)
+        assert top(corpus.CORPUS_KW_FULL_WEIGHT) == ("k.pdf", 1)
 
     def test_doc_arm_changes_the_fused_order(
         self, corpus_dir, isolated_server, monkeypatch

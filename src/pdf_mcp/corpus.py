@@ -34,6 +34,7 @@ __all__ = [
     "CORPUS_LISTING_MAX",
     "CORPUS_RRF_K",
     "CORPUS_DOC_ARM_WEIGHT",
+    "CORPUS_KW_FULL_WEIGHT",
     "PROFILE_HEAD_CHARS",
     "PROFILE_TERM_LIMIT",
     "CORPUS_TERM_RE",
@@ -77,6 +78,16 @@ CORPUS_RRF_K = 60
 # third list dilutes needles the page arms had already nailed. Not a tool
 # parameter: re-measure, never tune.
 CORPUS_DOC_ARM_WEIGHT = 0.25
+# Weight of the keyword list in hybrid corpus fusion when the keyword arm
+# matched the phrase or every term (partial matches keep 1.0). At equal
+# weight, a document's best semantic page plus its doc-arm bonus
+# (1/(60+r) + 0.25/(60+d), about 0.019) outranks the keyword arm's rank 1
+# (1/60, about 0.0167) even when semantic found nothing relevant. Measured
+# 2026-09-27 on the 184-query set, paired: page NDCG@10 +0.022, spread
+# +0.073 at 100 docs; +0.023, spread +0.058, needle +0.065 at 500 docs;
+# paraphrase queries are partial-tier and unchanged. Weighting partial
+# matches too cost described doc-hit@3 0.096. Not a tool parameter.
+CORPUS_KW_FULL_WEIGHT = 2.0
 # Head text = page 1's first N characters: title, authors and abstract on
 # arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
 PROFILE_HEAD_CHARS = 1500
@@ -1387,9 +1398,10 @@ def rrf_fuse_rankings_scored(
     Each entry is (ranking, weight); an item's score is the sum of
     weight / (k + rank) over every list it appears in (Cormack et al.
     2009, with the per-list weight extension). Hybrid corpus search
-    passes [(keyword, 1.0), (semantic, 1.0), (doc_arm,
-    CORPUS_DOC_ARM_WEIGHT)]. Ties break by (doc_path, page), so a
-    document rename never reorders results except at exact ties.
+    passes [(keyword, 1.0 or CORPUS_KW_FULL_WEIGHT on a full match),
+    (semantic, 1.0), (doc_arm, CORPUS_DOC_ARM_WEIGHT)]. Ties break by
+    (doc_path, page), so a document rename never reorders results except
+    at exact ties.
     """
     scores: dict[tuple[str, int], float] = {}
     for ranking, weight in rankings:

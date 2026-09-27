@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keyword arm found on partial matches alone counts as a semantic hit for
   its excerpt and `low_confidence`. CJK queries and German FTS mode keep
   the per-document ranking. ([#70](https://github.com/jztan/pdf-mcp/issues/70))
+- **`pdf_corpus_search` hybrid mode trusts a full keyword match more.** When
+  the keyword arm matched the query as a phrase or every term, its ranking
+  now counts double in fusion. Before, each document's best semantic page
+  outranked the keyword arm's top page, even when semantic search found
+  nothing relevant, so a page matching every term could fall to eighth.
+  Partial keyword matches keep equal weight, so question-shaped queries rank
+  exactly as before. On the 184-query corpus benchmark, page NDCG@10 rose
+  +0.022 (CI [+0.011, +0.034]) and +0.073 on multi-document queries (CI
+  [+0.039, +0.109]); with 400 extra distractor documents, +0.023 overall,
+  +0.058 multi-document and +0.065 exact-term, all with CIs excluding zero.
+  Answer-span recall in the default excerpts rose on multi-document queries
+  (0.622 to 0.689) and no query lost evidence. ([#72](https://github.com/jztan/pdf-mcp/issues/72))
 
 ## [3.4.0] - 2026-09-26
 ### Added

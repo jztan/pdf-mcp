@@ -155,6 +155,7 @@ class TestBuildDocProfile:
 
     def test_constants(self):
         assert corpus.CORPUS_DOC_ARM_WEIGHT == 0.25
+        assert corpus.CORPUS_KW_FULL_WEIGHT == 2.0
         assert corpus.PROFILE_HEAD_CHARS == 1500
         assert corpus.CORPUS_TERM_RE.findall("a1 b-c") == ["a1", "b", "c"]
 

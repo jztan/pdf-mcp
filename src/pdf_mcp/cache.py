@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sqlite3
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -238,6 +239,68 @@ def _fts5_or_fallback(query: str) -> str | None:
     if len(tokens) < 3:
         return None
     return " OR ".join(tokens)
+
+
+# Function words dropped from the corpus-wide partial-match tier. BM25's
+# IDF already discounts them, but a page matching ONLY "how does the" would
+# still enter the ranking; dropping them keeps every partial match on at
+# least one content term.
+_PARTIAL_MATCH_STOPWORDS = frozenset(
+    "a an the of in on for to and or with by from as at is are was were be"
+    " been this that these those it its which what how why when where who"
+    " whom do does did can could should would will may might into about"
+    " over than then there their they them we our you your i".split()
+)
+
+
+def _fts5_corpus_tiers(query: str) -> tuple[str | None, str | None, str | None]:
+    """(phrase, all_terms, partial) FTS5 expressions for corpus-wide search.
+
+    `phrase` is the whole query as one FTS5 phrase (None for a one-token
+    query, where it equals `all_terms`). `all_terms` is `_escape_fts5_query`'s
+    AND form. `partial` ORs the non-stopword tokens and follows
+    `_fts5_or_fallback`'s rule: None for queries of fewer than three tokens,
+    where the conjunction is deliberate. Any of the three is None when the
+    query has no usable tokens.
+    """
+    tokens = [
+        cleaned for raw in query.split() if (cleaned := _FTS_TOKEN_STRIP.sub("", raw))
+    ]
+    if not tokens:
+        return None, None, None
+    phrase = '"' + " ".join(tokens) + '"' if len(tokens) > 1 else None
+    all_terms = " ".join(f'"{t}"' for t in tokens)
+    partial = None
+    if len(tokens) >= 3:
+        content = [
+            t
+            for t in tokens
+            if t.strip(".,;:!?'").lower() not in _PARTIAL_MATCH_STOPWORDS
+        ] or tokens
+        partial = " OR ".join(f'"{t}"' for t in content)
+    return phrase, all_terms, partial
+
+
+@dataclass
+class CorpusKeywordResult:
+    """What `PDFCache.search_fts_corpus` returns.
+
+    `matches` are best-first dicts with path, page (1-indexed), excerpt and
+    score. `doc_match_counts` counts matching pages per document for the tier
+    that produced `matches` (capped at max_results each);
+    `and_doc_match_counts` counts only pages carrying every term, and
+    `and_doc_count` is how many documents have one. `partial` is True when
+    `matches` came from the partial-match tier (no page held every term).
+    """
+
+    matches: list[dict[str, Any]] = field(default_factory=list)
+    doc_match_counts: dict[str, int] = field(default_factory=dict)
+    and_doc_match_counts: dict[str, int] = field(default_factory=dict)
+    partial: bool = False
+
+    @property
+    def and_doc_count(self) -> int:
+        return len(self.and_doc_match_counts)
 
 
 def _escape_fts5_query_cjk(query: str) -> str:
@@ -2877,6 +2940,122 @@ class PDFCache:
             }
             for page_num, excerpt, score, text in rows
         ]
+
+    def search_fts_corpus(
+        self,
+        paths: list[str],
+        query: str,
+        max_results: int,
+        context_chars: int,
+    ) -> CorpusKeywordResult | None:
+        """Rank pages across ``paths`` with ONE BM25 query on ``pdf_search_fts``.
+
+        ``search_fts`` scores each document against its own temp index, so
+        its scores cannot be compared across documents; corpus search had to
+        fuse per-document rank lists, which gives every document's best page
+        the same fused score. Here IDF comes from the shared table (every
+        cached document), so a document that matches clearly better can hold
+        several top slots.
+
+        Tiers, best first: pages holding the query as an exact phrase, then
+        pages holding every term, and only when NO listed document holds
+        every term, pages holding any non-stopword term. Mixing partial
+        matches in next to full ones was measured to push exact needle hits
+        down after fusion, so the partial tier is a fallback, not a tail.
+
+        Returns None when the shared index cannot answer faithfully and the
+        caller should use the per-document path: FTS5 unavailable, a CJK
+        query or German mode (their own tokenisation and tables), or a
+        listed document whose pages are not all in ``pdf_search_fts``.
+        """
+        if not self.fts_available or not paths:
+            return None
+        if _contains_cjk(query) or self.fts_language == "de":
+            return None
+        phrase, all_terms, partial = _fts5_corpus_tiers(query)
+        if all_terms is None:
+            return CorpusKeywordResult()
+
+        num_tokens = max(4, min(64, context_chars // 5))
+        placeholders = ",".join("?" * len(paths))
+        in_paths = f"file_path IN ({placeholders})"
+        rank_sql = (
+            "SELECT file_path, page_num,"
+            " snippet(pdf_search_fts, 2, '', '', '...', ?),"
+            " -bm25(pdf_search_fts), text"
+            " FROM pdf_search_fts"
+            f" WHERE pdf_search_fts MATCH ? AND {in_paths}"
+            " ORDER BY bm25(pdf_search_fts) LIMIT ?"
+        )
+        count_sql = (
+            "SELECT file_path, COUNT(*) FROM pdf_search_fts"
+            f" WHERE pdf_search_fts MATCH ? AND {in_paths} GROUP BY file_path"
+        )
+
+        with self._connect() as conn:
+            try:
+                indexed = dict(
+                    conn.execute(
+                        "SELECT file_path, COUNT(*) FROM pdf_search_fts"
+                        f" WHERE {in_paths} GROUP BY file_path",
+                        paths,
+                    ).fetchall()
+                )
+                cached = dict(
+                    conn.execute(
+                        "SELECT file_path, COUNT(DISTINCT page_num) FROM page_text"
+                        f" WHERE {in_paths} GROUP BY file_path",
+                        paths,
+                    ).fetchall()
+                )
+                if any(indexed.get(p, 0) != cached.get(p, 0) for p in paths):
+                    return None
+
+                def ranked(expr: str) -> list[tuple[Any, ...]]:
+                    return conn.execute(
+                        rank_sql, (num_tokens, expr, *paths, max_results)
+                    ).fetchall()
+
+                def counts(expr: str) -> dict[str, int]:
+                    return {
+                        path: min(int(n), max_results)
+                        for path, n in conn.execute(
+                            count_sql, (expr, *paths)
+                        ).fetchall()
+                    }
+
+                and_counts = counts(all_terms)
+                used_partial = False
+                if and_counts:
+                    rows = (ranked(phrase) if phrase else []) + ranked(all_terms)
+                    tier_counts = and_counts
+                elif partial is not None:
+                    rows = ranked(partial)
+                    tier_counts = counts(partial)
+                    used_partial = bool(rows)
+                else:
+                    rows, tier_counts = [], {}
+            except sqlite3.OperationalError:
+                return None
+
+        matches: list[dict[str, Any]] = []
+        seen: set[tuple[str, int]] = set()
+        for path, page_num, excerpt, score, text in rows:
+            key = (path, int(page_num))
+            if key in seen:
+                continue
+            seen.add(key)
+            matches.append(
+                {
+                    "path": path,
+                    "page": int(page_num) + 1,
+                    "excerpt": _whole_token_snippet(excerpt or "", text or ""),
+                    "score": float(score),
+                }
+            )
+            if len(matches) == max_results:
+                break
+        return CorpusKeywordResult(matches, tier_counts, and_counts, used_partial)
 
     def get_fts_page_counts(self, path: str, query: str) -> dict[int, int]:
         """

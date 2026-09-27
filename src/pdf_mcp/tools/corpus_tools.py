@@ -444,6 +444,77 @@ def _corpus_keyword_rankings(
     return rank_lists, doc_match_counts, payload
 
 
+def _corpus_keyword_arm(
+    files: list[str],
+    query: str,
+    top_k: int,
+    context_chars: int,
+    mode: str,
+) -> tuple[
+    list[tuple[str, int]],
+    dict[str, int],
+    dict[tuple[str, int], dict[str, Any]],
+    int,
+    bool,
+]:
+    """The keyword arm's ranking for `pdf_corpus_search`.
+
+    Returns (ranked, doc_match_counts, payload, and_doc_count, partial): the
+    top_k (path, page) keyword ranking, per-doc match counts (capped at
+    top_k), raw match dicts by (path, page), how many documents carry every
+    query term, and whether the ranking came from partial matches only.
+
+    Preferred path: one corpus-wide BM25 query (`search_fts_corpus`), whose
+    scores compare across documents. Measured on the 184-query corpus set,
+    hybrid page NDCG@10 0.408 -> 0.462 [+0.030, +0.080], doc-hit@3
+    unchanged. Its partial-match tier runs in both modes; that was measured
+    to hurt hybrid only when per-document rankings were fused by RRF, which
+    this path does not do. In hybrid mode the counts stay full-match only, so
+    `doc_match_counts` does not list every document that shares one word.
+
+    Fallback (CJK query, German mode, no FTS5, or a document missing from
+    the shared index): per-document search fused by RRF, below.
+    """
+    if _core.cache.fts_available:
+        res = _core.cache.search_fts_corpus(files, query, top_k * 3, context_chars)
+        if res is not None:
+            counts = (
+                res.doc_match_counts if mode == "keyword" else res.and_doc_match_counts
+            )
+            return (
+                [(m["path"], m["page"]) for m in res.matches[:top_k]],
+                {p: min(n, top_k) for p, n in counts.items()},
+                {(m["path"], m["page"]): m for m in res.matches},
+                res.and_doc_count,
+                res.partial,
+            )
+
+    rank_lists, doc_match_counts, payload = _corpus_keyword_rankings(
+        files,
+        query,
+        top_k,
+        context_chars,
+        allow_or_fallback=(mode == "keyword"),
+    )
+    # Break the cross-document tie (every document's rank-1 page scores
+    # 1/(k+0)) by how many distinct query terms the document actually
+    # carries. Without this the whole top of the ranking is ordered by
+    # filename. See _doc_term_coverage and rrf_fuse_doc_rankings.
+    kw_terms = _corpus_query_terms(query)
+    kw_covered = {
+        hits[0][0]: _doc_covered_terms(hits[0][0], [p for _d, p in hits], kw_terms)
+        for hits in rank_lists
+    }
+    kw_doc_scores = _corpus_coverage_scores(kw_covered)
+    kw_scores = {
+        item: kw_doc_scores.get(hits[0][0], 0.0) for hits in rank_lists for item in hits
+    }
+    fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k, scores=kw_scores)
+    # In mode="auto" the per-document arm runs without the OR fallback, so
+    # this is the full-match document count.
+    return fused, doc_match_counts, payload, len(doc_match_counts), False
+
+
 def _merge_doc_match_counts(
     kw_counts: dict[str, int],
     sem_ranking: list[tuple[str, int]],
@@ -700,9 +771,10 @@ def _finalize_corpus_matches(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
         " Auto-warms uncached docs up to a time budget. Keyword terms"
-        " are AND-matched independently, so prefer short specific"
-        " terms (1-3 words, e.g. entity names); a longer query that"
-        " matches nothing is retried with its terms OR-joined."
+        " are AND-matched and ranked by BM25 across the whole corpus,"
+        " so prefer short specific terms (1-3 words, e.g. entity"
+        " names); a longer query that no document fully matches is"
+        " retried with its terms OR-joined."
         " IMPORTANT for questions spanning several documents"
         " (comparing two companies, a trend across years): one"
         " ranked list of top_k hits cannot carry every document's"
@@ -738,11 +810,12 @@ def pdf_corpus_search(
             paths. URLs are not accepted. Corpora are capped at 100
             files; over the cap, a directory's error lists its PDFs so
             a subset can be passed.
-        query: Text to search for. In keyword mode terms are
-            AND-matched independently per document (FTS5); prefer
-            short, specific terms (1-3 words) over a full question, and
-            drop rare extra words that any single doc might not
-            contain, or the result can come back empty.
+        query: Text to search for. The keyword arm ranks pages that
+            hold the query as a phrase first, then pages holding every
+            term. Only when no document holds every term does it rank
+            pages by the terms they do hold (queries of 3+ words;
+            common function words ignored), so a full question still
+            finds pages, but short, specific terms rank most precisely.
         mode: 'auto' (default, hybrid keyword+semantic when embeddings
             are available, else degrades to keyword), 'keyword', or
             'semantic'.
@@ -776,21 +849,24 @@ def pdf_corpus_search(
           hit's table or list) when they apply, same as pdf_search,
           plus geometry fields when excerpt_style is 'paragraph' or
           'window' ('window' adds `window_blocks` and `anchor` too).
-          Keyword-mode hits also carry `score` (per-doc BM25,
-          comparable only within that hit's own document). Semantic-
+          Keyword-mode hits also carry `score` (BM25 over the
+          corpus, comparable across documents; per-document BM25 for
+          CJK queries and German mode, comparable only within that
+          hit's own document). Semantic-
           mode hits carry `score` (cosine, rounded 4dp) and
           `low_confidence` (cosine below `confidence_threshold`) -
           same fields as single-doc `pdf_search(mode="semantic")`.
           Hybrid (auto, embeddings available) hits carry `score` (the
           fused RRF score, rounded 4dp), `semantic_score` (cosine,
           rounded 4dp; 0.0 when the page had no cached embedding), and
-          `low_confidence` (page absent from the keyword arm's hits
-          AND `semantic_score` below `confidence_threshold`) - same
+          `low_confidence` (page holds no match of every keyword
+          term AND `semantic_score` below `confidence_threshold`) - same
           shape as single-doc `pdf_search(mode="auto")`'s hybrid hits.
           The ORDER of `matches` is governed by Reciprocal Rank Fusion
-          (see `corpus.rrf_fuse_doc_rankings`,
-          `corpus.rrf_fuse_two_rankings_scored`, `corpus.CORPUS_RRF_K`)
-          except in pure semantic mode, which ranks by cosine directly.
+          in hybrid mode (see `corpus.rrf_fuse_rankings_scored`,
+          `corpus.CORPUS_RRF_K`); keyword mode ranks by that BM25
+          score (per-document lists fused by RRF for CJK queries and
+          German mode); pure semantic mode ranks by cosine directly.
         - total_matches: len(matches)
         - doc_match_counts: per-doc hit count, keyed by path -- which
           documents hold content for this query, INCLUDING documents
@@ -801,8 +877,9 @@ def pdf_corpus_search(
           recovers only about half of a multi-document answer. For a
           single-document question, follow up on the best match only.
           In keyword mode this counts the keyword
-          arm's per-doc FTS hits, capped at top_k per document; in
-          hybrid mode it merges both arms (max per document), so a
+          arm's matching pages, capped at top_k per document; in
+          hybrid mode it merges both arms (max per document, keyword
+          pages holding every term only), so a
           question-shaped query the keyword arm cannot match still
           reports what the semantic arm found (independent
           of which pages the fused ranking selects). In pure semantic
@@ -1047,36 +1124,15 @@ def pdf_corpus_search(
         }
 
     # ── mode="keyword" or mode="auto" (both need the keyword arm) ─────
-    rank_lists, kw_doc_match_counts, kw_payload = _corpus_keyword_rankings(
-        ready_paths,
-        query,
-        top_k,
-        context_chars,
-        allow_or_fallback=(mode == "keyword"),
+    kw_fused, kw_doc_match_counts, kw_payload, kw_and_doc_count, kw_partial = (
+        _corpus_keyword_arm(ready_paths, query, top_k, context_chars, mode)
     )
-    # Break the cross-document tie (every document's rank-1 page scores
-    # 1/(k+0)) by how many distinct query terms the document actually
-    # carries. Without this the whole top of the ranking is ordered by
-    # filename. See _doc_term_coverage and rrf_fuse_doc_rankings.
-    kw_terms = _corpus_query_terms(query)
-    kw_covered = {
-        hits[0][0]: _doc_covered_terms(hits[0][0], [p for _d, p in hits], kw_terms)
-        for hits in rank_lists
-    }
-    kw_doc_scores = _corpus_coverage_scores(kw_covered)
-    kw_scores = {
-        item: kw_doc_scores.get(hits[0][0], 0.0) for hits in rank_lists for item in hits
-    }
-    kw_fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k, scores=kw_scores)
     kw_excerpts_by_doc = _group_excerpts_by_doc(kw_payload)
-    # excerpt_style="auto" is validated above to mode="auto", where the
-    # keyword arm runs without the OR fallback, so this count is the
-    # AND document count the routing rule was measured on.
+    # The routing rule was measured on the number of documents carrying
+    # every keyword term, so it keys on that count, never on partial matches.
     routing: dict[str, Any] | None = None
     if excerpt_style == "auto":
-        excerpt_style, routing = _route_excerpt_auto(
-            len(kw_doc_match_counts), window_tokens
-        )
+        excerpt_style, routing = _route_excerpt_auto(kw_and_doc_count, window_tokens)
 
     # mode="semantic" already returned above, so only "keyword"/"auto"
     # reach here. For "auto" with embeddings available, encode the query
@@ -1200,11 +1256,18 @@ def pdf_corpus_search(
     )
     fused = [item for item, _s in fused_scored]
     rrf_score_map = dict(fused_scored)
-    keyword_pages_set = set(kw_payload.keys())
+    # Partial keyword matches rank pages but do not anchor excerpts or
+    # confidence: their FTS snippet sits on whichever single term matched
+    # (often a common word), so the paragraph built from it missed the
+    # answer. Measured on the described class, gold pages inside the token
+    # budget whose excerpt missed the evidence doubled (9 -> 18) until these
+    # pages went back to the semantic excerpt path.
+    anchor_payload = {} if kw_partial else kw_payload
+    keyword_pages_set = set(anchor_payload.keys())
 
     def _hybrid_build(path: str, page: int, idx: int) -> dict[str, Any]:
-        if (path, page) in kw_payload:
-            excerpt_fields = {"excerpt": kw_payload[(path, page)]["excerpt"]}
+        if (path, page) in anchor_payload:
+            excerpt_fields = {"excerpt": anchor_payload[(path, page)]["excerpt"]}
         else:
             excerpt_fields = _semantic_excerpt_fields(
                 excerpt_style,
@@ -1220,7 +1283,8 @@ def pdf_corpus_search(
         # A hybrid match is low-confidence when (a) it has no keyword
         # hit on the page AND (b) the underlying semantic cosine is
         # below the confidence threshold. Keyword-hit pages always
-        # count as confident: the query terms literally appear.
+        # count as confident: every query term literally appears (a
+        # partial keyword match does not count as a keyword hit here).
         low_confidence = (
             path,
             page,
@@ -1243,7 +1307,7 @@ def pdf_corpus_search(
         _hybrid_build,
         excerpt_style,
         query,
-        kw_excerpts_by_doc,
+        _group_excerpts_by_doc(anchor_payload),
         window_tokens=window_tokens,
         best_chunks=hybrid_best_chunks,
         attach_geometry=routing is not None,

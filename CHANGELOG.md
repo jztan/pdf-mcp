@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+
+- **`pdf_corpus_search` ranks keyword hits across the whole corpus.** The
+  keyword arm used to rank pages inside each document and interleave the
+  lists, so the top of the ranking held one page per document and a
+  document that clearly matched best could not take a second slot. It now
+  runs one BM25 ranking over every page of the corpus: pages holding the
+  query as a phrase first, then pages holding every term, and, only when
+  no document holds every term, pages holding some of them. On the
+  184-query corpus benchmark, hybrid page NDCG@10 went from 0.408 to 0.462
+  (+0.054, CI [+0.030, +0.080]) with document routing unchanged (doc-hit@3
+  0.848 vs 0.842, CI includes zero); keyword mode went from 0.338 to 0.465.
+  The evidence an agent reads moved less: with the default paragraph
+  excerpts at a 2,000-token budget, answer-span recall rose on
+  question-shaped queries (0.289 to 0.313) and exact-term queries (0.806 to
+  0.839) and held on the other two classes, all within noise. Queries are
+  faster (0.31 to 0.20 s/query hybrid on 100 documents), and keyword
+  `score` is now comparable across documents. In hybrid mode a page the
+  keyword arm found on partial matches alone counts as a semantic hit for
+  its excerpt and `low_confidence`. CJK queries and German FTS mode keep
+  the per-document ranking. ([#70](https://github.com/jztan/pdf-mcp/issues/70))
+
 ## [3.4.0] - 2026-09-26
 ### Added
 

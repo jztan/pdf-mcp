@@ -6854,3 +6854,130 @@ class TestSemanticSnippetWholeTokens:
 
     def test_unlocatable_span_is_returned_unchanged(self, monkeypatch):
         assert self._run(monkeypatch, "text from elsewhere") == "text from elsewhere"
+
+
+class TestCorpusSearchSemanticPending:
+    _fake_embedder = staticmethod(TestPdfCorpusSearchSemanticAuto._fake_embedder)
+
+    @staticmethod
+    def _failing_encoder(monkeypatch):
+        import pdf_mcp.embedder as emb
+
+        def boom(texts, model):
+            raise RuntimeError("remote embedding backend died")
+
+        def no_query(text, model):
+            raise AssertionError("query must not be encoded while pending")
+
+        monkeypatch.setattr(emb, "encode", boom)
+        monkeypatch.setattr(emb, "encode_query", no_query)
+
+    def test_pending_branch_on_encode_failure(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert "error" not in r
+        assert r["search_mode"] == "keyword"
+        assert r["semantic_pending"] is True
+        assert "semantic_unavailable" not in r
+        assert r["coverage"]["searched"] == 3
+        assert r["matches"]
+        assert r["unprocessed"] == []
+        assert r["skipped"] == []
+        assert r["warm_complete"] is False
+        assert r["unwarmed"] == 3
+        assert len(r["semantic_unprocessed"]) == 3
+        assert r["keyword_match"] == "full"
+        assert r["hint"].startswith("Keyword-only ranking: 3 of 3 documents")
+        assert r["embeddings_pending"]["docs"] == 3
+        assert r["embeddings_pending"]["pages"] == 7
+        assert "est_seconds" not in r["embeddings_pending"]
+        assert r["next_call"] == {
+            "tool": "pdf_corpus_warm",
+            "args": {
+                "paths": str(corpus_dir),
+                "recursive": False,
+                "embeddings": True,
+                "budget_seconds": 300,
+            },
+        }
+
+    def test_partial_and_none_tiers(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        partial = pdf_corpus_search(
+            str(corpus_dir), "budget zebra quantum", mode="auto"
+        )
+        assert partial["keyword_match"] == "partial"
+        assert "no page matched every query term" in partial["hint"]
+        assert "following up per document" in partial["hint"]
+        none = pdf_corpus_search(str(corpus_dir), "zzqxv", mode="auto")
+        assert none["keyword_match"] == "none"
+        assert none["matches"] == []
+
+    def test_next_call_echoes_recursive(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", recursive=True)
+        assert r["next_call"]["args"]["recursive"] is True
+
+    def test_converges_to_hybrid(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        first = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert first["semantic_pending"] is True
+        self._fake_embedder(monkeypatch)  # encoder healthy again
+        second = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert second["search_mode"] == "hybrid"
+        assert second["warm_complete"] is True
+
+    def test_fully_embedded_has_no_pending_keys(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert r["search_mode"] == "hybrid"
+        for key in (
+            "semantic_pending",
+            "keyword_match",
+            "hint",
+            "embeddings_pending",
+            "next_call",
+        ):
+            assert key not in r
+
+    def test_semantic_mode_ignores_slice(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        # negative, not 0.0: a coarse clock (Windows, ~15 ms) can read an
+        # elapsed 0.0 and let a zero slice embed after all
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert r["search_mode"] == "semantic"
+        assert r["semantic_unprocessed"] == []
+
+    def test_cold_auto_takes_the_slice(self, corpus_dir, isolated_server, monkeypatch):
+        from pdf_mcp import corpus
+
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        # a negative slice embeds nothing on the extracting call
+        assert r["search_mode"] == "keyword"
+        assert r["semantic_pending"] is True
+
+    def test_excerpt_auto_routes_on_pending_branch(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="auto", excerpt_style="auto"
+        )
+        assert "excerpt_routing" in r
+        assert r["semantic_pending"] is True

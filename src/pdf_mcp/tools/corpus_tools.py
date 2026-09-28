@@ -766,6 +766,63 @@ def _finalize_corpus_matches(
     return matches
 
 
+def _semantic_pending_fields(
+    paths: str | list[str],
+    recursive: bool,
+    pending: list[str],
+    searched: int,
+    kw_partial: bool,
+    has_hits: bool,
+    embed_stats: dict[str, Any],
+    model_name: str,
+) -> dict[str, Any]:
+    """Agent-facing signals for a keyword-only answer while embeddings are
+    pending. Worded from a consumer tryout (2026-09-28): agents asked for a
+    per-query reliability signal, an ETA and a structured next call; a
+    weaker model followed up per document on off-topic keyword hits
+    unless told not to."""
+    if not has_hits:
+        match = "none"
+    elif kw_partial:
+        match = "partial"
+    else:
+        match = "full"
+    if match == "full":
+        hint = (
+            f"Keyword-only ranking: {len(pending)} of {searched} documents have"
+            " no embeddings yet. Every hit matched all query terms; semantic"
+            " ranking may add pages that paraphrase them."
+        )
+    else:
+        hint = (
+            "Keyword-only ranking, and no page matched every query term:"
+            " results are likely unreliable for this query. Call next_call,"
+            " then search again, before answering or following up per"
+            " document."
+        )
+    pages = sum(corpus.pending_embed_pages(p, _core.cache, model_name) for p in pending)
+    pending_info: dict[str, Any] = {"docs": len(pending), "pages": pages}
+    done, seconds = int(embed_stats["pages"]), float(embed_stats["seconds"])
+    if done > 0 and seconds > 0:
+        pending_info["est_seconds"] = math.ceil(pages / (done / seconds))
+    return {
+        "semantic_pending": True,
+        "semantic_unprocessed": pending,
+        "keyword_match": match,
+        "hint": hint,
+        "embeddings_pending": pending_info,
+        "next_call": {
+            "tool": "pdf_corpus_warm",
+            "args": {
+                "paths": paths,
+                "recursive": recursive,
+                "embeddings": True,
+                "budget_seconds": 300,
+            },
+        },
+    }
+
+
 @mcp.tool(
     description=_tool_description(
         "Search across a folder (or list) of local PDFs and return a"
@@ -1011,9 +1068,17 @@ def pdf_corpus_search(
         embeddings=embeddings_needed,
         model_name=embed_model if embeddings_needed else None,
         embed=embed_fn,
+        cold_embed_slice_seconds=(
+            corpus.SEARCH_EMBED_SLICE_SECONDS if mode == "auto" else None
+        ),
     )
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
+    emb_pending = list(warm.get("emb_pending", []))
+    # Pending docs were searched (keyword arm); `unprocessed` means not searched.
+    pending_set = set(emb_pending)
+    unprocessed = [p for p in warm["unprocessed"] if p not in pending_set]
+    semantic_pending = mode == "auto" and embeddings_needed and bool(emb_pending)
 
     # Scanned-doc signal (2026-09-03 spec): a zero-hit search over docs
     # with little or no extractable text must read as "unknown", not
@@ -1113,7 +1178,7 @@ def pdf_corpus_search(
             "all_results_low_confidence": all_results_low_confidence,
             "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
             "model_name": embed_model,
-            "unprocessed": warm["unprocessed"],
+            "unprocessed": unprocessed,
             "semantic_unprocessed": semantic_unprocessed,
             "skipped": skipped,
             "corpus_size": len(res["files"]),
@@ -1142,14 +1207,14 @@ def pdf_corpus_search(
     # semantic_unavailable/semantic_unavailable_reason path used when
     # fastembed itself was never available -- instead of raising.
     query_vec = None
-    if embeddings_needed:
+    if embeddings_needed and not semantic_pending:
         try:
             query_vec = _embedder.encode_query(query, embed_model)
         except Exception as exc:
             embeddings_needed = False
             semantic_unavailable_reason = f"embedding model load/encode failed: {exc}"
 
-    if mode == "keyword" or not embeddings_needed:
+    if mode == "keyword" or not embeddings_needed or semantic_pending:
 
         def _kw_build(path: str, page: int, idx: int) -> dict[str, Any]:
             m = kw_payload[(path, page)]
@@ -1193,7 +1258,7 @@ def pdf_corpus_search(
             "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
             "low_text_coverage": low_text_coverage,
             "hidden_text_detected": hidden_text_detected,
-            "unprocessed": warm["unprocessed"],
+            "unprocessed": unprocessed,
             "skipped": skipped,
             "corpus_size": len(res["files"]),
             "warmed_this_call": warm["warmed_this_call"],
@@ -1201,7 +1266,21 @@ def pdf_corpus_search(
             **_corpus_completeness(warm["unprocessed"], skipped),
             "content_warning": content_warning,
         }
-        if mode == "auto":
+        if semantic_pending:
+            assert embed_model is not None
+            response.update(
+                _semantic_pending_fields(
+                    paths,
+                    recursive,
+                    emb_pending,
+                    len(ready_paths),
+                    kw_partial,
+                    bool(matches),
+                    warm["embed_stats"],
+                    embed_model,
+                )
+            )
+        elif mode == "auto":
             response["semantic_unavailable"] = True
             response["semantic_unavailable_reason"] = semantic_unavailable_reason
         return response
@@ -1349,7 +1428,7 @@ def pdf_corpus_search(
         "hidden_text_detected": hidden_text_detected,
         "all_results_low_confidence": all_results_low_confidence,
         "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
-        "unprocessed": warm["unprocessed"],
+        "unprocessed": unprocessed,
         "semantic_unprocessed": semantic_unprocessed,
         "skipped": skipped,
         "corpus_size": len(res["files"]),

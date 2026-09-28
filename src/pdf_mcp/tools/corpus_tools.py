@@ -104,8 +104,12 @@ def pdf_corpus_warm(
             Pass this when you know section-granularity search is coming.
 
     Returns:
-        - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
-          pages, embeddings_cached, text_coverage}. A very large
+        - docs: per-doc rows {path, status:
+          "warmed"|"cached"|"partial"|"text_only", pages,
+          embeddings_cached, text_coverage}. With embeddings=True, text
+          is warmed for every document before any is embedded; a doc
+          whose embeddings have not started yet is "text_only" (it is
+          searchable by keyword) and stays in `unprocessed`. A very large
           document may not finish embedding inside one budget: it is
           reported with status "partial" plus embedded_pages (how many
           pages hold embeddings so far), stays in `unprocessed`, and
@@ -766,6 +770,67 @@ def _finalize_corpus_matches(
     return matches
 
 
+def _semantic_pending_fields(
+    paths: str | list[str],
+    recursive: bool,
+    pending: list[str],
+    searched: int,
+    kw_partial: bool,
+    has_hits: bool,
+    embed_stats: dict[str, Any],
+    model_name: str,
+    last_error: str | None = None,
+) -> dict[str, Any]:
+    """Agent-facing signals for a keyword-only answer while embeddings are
+    pending. Worded from a consumer tryout (2026-09-28): agents asked for a
+    per-query reliability signal, an ETA and a structured next call; a
+    weaker model followed up per document on off-topic keyword hits
+    unless told not to."""
+    if not has_hits:
+        match = "none"
+    elif kw_partial:
+        match = "partial"
+    else:
+        match = "full"
+    if match == "full":
+        hint = (
+            f"Keyword-only ranking: {len(pending)} of {searched} documents have"
+            " no embeddings yet. Every hit matched all query terms; semantic"
+            " ranking may add pages that paraphrase them."
+        )
+    else:
+        hint = (
+            "Keyword-only ranking, and no page matched every query term:"
+            " results are likely unreliable for this query. Call next_call,"
+            " then search again, before answering or following up per"
+            " document."
+        )
+    pages = sum(corpus.pending_embed_pages(p, _core.cache, model_name) for p in pending)
+    pending_info: dict[str, Any] = {"docs": len(pending), "pages": pages}
+    done, seconds = int(embed_stats["pages"]), float(embed_stats["seconds"])
+    if done > 0 and seconds > 0:
+        pending_info["est_seconds"] = math.ceil(pages / (done / seconds))
+    if last_error:
+        # next_call will likely fail the same way; say why up front.
+        pending_info["last_error"] = last_error
+    return {
+        "semantic_pending": True,
+        "semantic_unprocessed": pending,
+        "keyword_match": match,
+        "hint": hint,
+        "embeddings_pending": pending_info,
+        "next_call": {
+            "tool": "pdf_corpus_warm",
+            "args": {
+                "paths": paths,
+                "recursive": recursive,
+                "embeddings": True,
+                "budget_seconds": 300,
+            },
+        },
+    }
+
+
 @mcp.tool(
     description=_tool_description(
         "Search across a folder (or list) of local PDFs and return a"
@@ -787,6 +852,9 @@ def _finalize_corpus_matches(
         " documents typically recovers only about half of a"
         " multi-document answer. For a single-document question,"
         " follow up on the best match only."
+        " Exception: when `semantic_pending` is true and `keyword_match`"
+        " is 'partial' or 'none', run `next_call` and search again before"
+        " answering or re-asking documents."
     )
 )
 @pdf_access
@@ -905,12 +973,27 @@ def pdf_corpus_search(
           carries text invisible to a human reader
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted, warm_complete, unwarmed: same envelope
-          as pdf_corpus_warm. Results only cover the documents that
-          are warm, so a false `warm_complete` means the ranking was
-          computed over an incomplete corpus
+          as pdf_corpus_warm, except that `unprocessed` lists only
+          documents not searched at all; `warm_complete` and `unwarmed`
+          also count documents still waiting for embeddings. A false
+          `warm_complete` means the ranking was computed over an
+          incomplete corpus, or by keyword only
         - semantic_unprocessed: (semantic/hybrid only) paths that were
           warmed/cached but had no cached embeddings (e.g. warm raced
           the embeddings budget); additive to `unprocessed`
+        - semantic_pending, keyword_match, hint, embeddings_pending,
+          next_call: (auto mode only) present when some searched
+          documents have text but no embeddings yet. The answer is then
+          keyword-only (`search_mode: 'keyword'`) over every searched
+          document; `semantic_unprocessed` lists the pending ones.
+          `keyword_match` is 'full' (some document holds every term),
+          'partial' (hits matched only some terms) or 'none'; `hint`
+          says in one sentence whether the keyword answer is reliable
+          for this query. `embeddings_pending` = {docs, pages,
+          est_seconds (only when this call measured an embedding
+          rate), last_error (when embedding failed this call)}.
+          `next_call` is the pdf_corpus_warm call that finishes the
+          embeddings; `warm_complete` stays false until it has.
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
           profiled < searched means the document arm ran partially
           (profiles still backfilling, or page 1 has no text); a
@@ -1011,9 +1094,27 @@ def pdf_corpus_search(
         embeddings=embeddings_needed,
         model_name=embed_model if embeddings_needed else None,
         embed=embed_fn,
+        cold_embed_slice_seconds=(
+            corpus.SEARCH_EMBED_SLICE_SECONDS if mode == "auto" else None
+        ),
+        # Semantic mode cannot use text alone, so it keeps the single pass
+        # per doc and spends its whole budget reaching embedded docs.
+        text_first=mode != "semantic",
+        keep_failed_pending=mode == "auto",
     )
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
+    emb_pending = list(warm.get("emb_pending", []))
+    semantic_pending = mode == "auto" and embeddings_needed and bool(emb_pending)
+    # On the keyword-first answer the pending docs were searched by keyword,
+    # so `unprocessed` (not searched at all) leaves them out. Every other
+    # branch reports the warm envelope as is: a partial doc in semantic mode
+    # has some embeddings, is missing from semantic_unprocessed, and must
+    # stay visible here.
+    unprocessed = list(warm["unprocessed"])
+    if semantic_pending:
+        pending_set = set(emb_pending)
+        unprocessed = [p for p in unprocessed if p not in pending_set]
 
     # Scanned-doc signal (2026-09-03 spec): a zero-hit search over docs
     # with little or no extractable text must read as "unknown", not
@@ -1113,7 +1214,7 @@ def pdf_corpus_search(
             "all_results_low_confidence": all_results_low_confidence,
             "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
             "model_name": embed_model,
-            "unprocessed": warm["unprocessed"],
+            "unprocessed": unprocessed,
             "semantic_unprocessed": semantic_unprocessed,
             "skipped": skipped,
             "corpus_size": len(res["files"]),
@@ -1142,14 +1243,14 @@ def pdf_corpus_search(
     # semantic_unavailable/semantic_unavailable_reason path used when
     # fastembed itself was never available -- instead of raising.
     query_vec = None
-    if embeddings_needed:
+    if embeddings_needed and not semantic_pending:
         try:
             query_vec = _embedder.encode_query(query, embed_model)
         except Exception as exc:
             embeddings_needed = False
             semantic_unavailable_reason = f"embedding model load/encode failed: {exc}"
 
-    if mode == "keyword" or not embeddings_needed:
+    if mode == "keyword" or not embeddings_needed or semantic_pending:
 
         def _kw_build(path: str, page: int, idx: int) -> dict[str, Any]:
             m = kw_payload[(path, page)]
@@ -1193,7 +1294,7 @@ def pdf_corpus_search(
             "coverage": {"searched": len(ready_paths), "corpus": len(res["files"])},
             "low_text_coverage": low_text_coverage,
             "hidden_text_detected": hidden_text_detected,
-            "unprocessed": warm["unprocessed"],
+            "unprocessed": unprocessed,
             "skipped": skipped,
             "corpus_size": len(res["files"]),
             "warmed_this_call": warm["warmed_this_call"],
@@ -1201,7 +1302,29 @@ def pdf_corpus_search(
             **_corpus_completeness(warm["unprocessed"], skipped),
             "content_warning": content_warning,
         }
-        if mode == "auto":
+        if semantic_pending:
+            assert embed_model is not None
+            response.update(
+                _semantic_pending_fields(
+                    paths,
+                    recursive,
+                    emb_pending,
+                    len(ready_paths),
+                    kw_partial,
+                    bool(matches),
+                    warm["embed_stats"],
+                    embed_model,
+                    next(
+                        (
+                            str(d["embed_error"])
+                            for d in warm["docs"]
+                            if d.get("embed_error")
+                        ),
+                        None,
+                    ),
+                )
+            )
+        elif mode == "auto":
             response["semantic_unavailable"] = True
             response["semantic_unavailable_reason"] = semantic_unavailable_reason
         return response
@@ -1349,7 +1472,7 @@ def pdf_corpus_search(
         "hidden_text_detected": hidden_text_detected,
         "all_results_low_confidence": all_results_low_confidence,
         "confidence_threshold": _SEMANTIC_CONFIDENCE_THRESHOLD,
-        "unprocessed": warm["unprocessed"],
+        "unprocessed": unprocessed,
         "semantic_unprocessed": semantic_unprocessed,
         "skipped": skipped,
         "corpus_size": len(res["files"]),

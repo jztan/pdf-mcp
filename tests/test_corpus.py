@@ -1907,3 +1907,343 @@ class TestScannedDocWarmSignals:
         (row,) = out["docs"]
         assert row["text_coverage"] == "none"
         assert row["embeddings_cached"] is True
+
+
+class _StubMatrix:
+    nbytes = 8
+
+
+class TestTwoPhaseWarm:
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?" for _ in texts]
+
+    def test_all_text_extracted_before_any_embedding(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        files = _files(corpus_dir)
+        # one doc already text-warm: it is a resume doc and must still wait
+        corpus.warm_docs([files[0]], 600, cache, clock=SteppingClock(0))
+        events = []
+        real_extract = corpus._warm_extract_worker
+
+        def spy_extract(path, *a, **k):
+            events.append(("extract", path))
+            return real_extract(path, *a, **k)
+
+        def spy_embed(texts):
+            events.append(("embed", len(texts)))
+            return self._embed(texts)
+
+        monkeypatch.setattr(corpus, "_warm_extract_worker", spy_extract)
+        out = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0),
+        )
+        kinds = [k for k, _ in events]
+        assert kinds.count("extract") == 2
+        first_embed = kinds.index("embed")
+        assert all(k == "embed" for k in kinds[first_embed:])
+        assert out["warm_complete"] is True
+        assert out["emb_pending"] == []
+        assert out["extracted_this_call"] == 2
+
+    def test_expiry_in_phase2_leaves_text_everywhere(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(
+            files,
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        # every doc has text (searchable by keyword) ...
+        for p in files:
+            assert corpus._cached_pages(p, cache, False, "fake-model") is not None
+        # ... emb_pending is exactly the docs whose embeddings are incomplete
+        incomplete = [
+            p
+            for p in files
+            if corpus._cached_pages(p, cache, True, "fake-model") is None
+        ]
+        assert incomplete, "clock step too small: phase 2 finished; raise the step"
+        assert sorted(out["emb_pending"]) == sorted(incomplete)
+        assert out["warm_complete"] is False
+        rows = {d["path"]: d for d in out["docs"]}
+        for p in incomplete:
+            assert rows[p]["status"] in ("text_only", "partial")
+
+    def test_warm_unprocessed_still_lists_pending(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(
+            files,
+            2.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.3),
+        )
+        assert out["emb_pending"]
+        assert set(out["emb_pending"]) <= set(out["unprocessed"])
+
+    def test_partial_doc_is_pending(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        big = str(corpus_dir / "bravo.pdf")  # 4 pages
+        corpus.warm_docs([big], 600, cache, clock=SteppingClock(0))
+        texts = cache.get_pages_text(big, [0, 1, 2, 3])
+        corpus._embed_doc_batched(
+            big,
+            texts,
+            cache,
+            "fake-model",
+            self._embed,
+            deadline=-1.0,
+            clock=lambda: 0.0,
+        )  # one page embedded
+        out = corpus.warm_docs(
+            [big],
+            0.0,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.01),
+        )
+        assert out["emb_pending"] == [big]
+        assert corpus.pending_embed_pages(big, cache, "fake-model") == 3
+
+    def test_phase2_encode_failure_keeps_doc_searchable(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+
+        def boom(texts):
+            raise RuntimeError("remote embedding backend died")
+
+        out = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=boom,
+            clock=SteppingClock(0),
+            keep_failed_pending=True,
+        )
+        assert out["skipped"] == []
+        assert sorted(out["emb_pending"]) == sorted(files)
+        assert {d["status"] for d in out["docs"]} == {"text_only"}
+        assert all("died" in d["embed_error"] for d in out["docs"])
+        assert out["warm_complete"] is False
+
+    def test_phase2_encode_failure_skips_by_default(self, corpus_dir, cache):
+        # pdf_corpus_warm, pdf-mcp-warm and the harnesses loop on
+        # `unprocessed`: a doc whose embedding always fails must leave it
+        # (land in skipped, with the reason) or those loops never end.
+        files = _files(corpus_dir)
+
+        def boom(texts):
+            raise RuntimeError("remote embedding backend died")
+
+        out = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=boom,
+            clock=SteppingClock(0),
+        )
+        assert out["unprocessed"] == []
+        assert out["emb_pending"] == []
+        assert sorted(s["path"] for s in out["skipped"]) == sorted(files)
+        assert all("died" in s["reason"] for s in out["skipped"])
+        assert out["warm_complete"] is False
+
+    def test_text_first_false_keeps_single_pass(self, corpus_dir, cache, monkeypatch):
+        files = _files(corpus_dir)
+        events = []
+        real_extract = corpus._warm_extract_worker
+
+        def spy_extract(path, *a, **k):
+            events.append("extract")
+            return real_extract(path, *a, **k)
+
+        def spy_embed(texts):
+            events.append("embed")
+            return self._embed(texts)
+
+        monkeypatch.setattr(corpus, "_warm_extract_worker", spy_extract)
+        out = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0),
+            text_first=False,
+        )
+        assert out["warm_complete"] is True
+        # one pass per doc: an embed happens before the last extraction
+        assert events.index("embed") < len(events) - 1 - events[::-1].index("extract")
+
+    def test_embedding_evicts_cached_matrix(self, corpus_dir, cache):
+        from pdf_mcp.vector_cache import CACHE
+
+        path = str(corpus_dir / "bravo.pdf")
+        corpus.warm_docs([path], 600, cache, clock=SteppingClock(0))
+        key = (path, 0.0, "fake-model", 0)
+        CACHE.get(key, lambda: _StubMatrix())
+        assert key in CACHE._d
+        texts = cache.get_pages_text(path, [0, 1, 2, 3])
+        corpus._embed_doc_batched(
+            path, texts, cache, "fake-model", self._embed, deadline=float("inf")
+        )
+        assert not any(k[0] == path for k in CACHE._d)
+
+    def test_two_phase_through_the_pool(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        files = _files(corpus_dir)
+        cold = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.01),
+            cold_embed_slice_seconds=0.0,
+        )
+        assert cold["extracted_this_call"] == 3
+        assert {d["status"] for d in cold["docs"]} == {"text_only"}
+        done = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.01),
+        )
+        assert done["warm_complete"] is True
+
+    def test_two_phase_broken_pool_falls_back(self, corpus_dir, cache, monkeypatch):
+        monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+
+        class BrokenPool:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def submit(self, fn, *args):
+                raise BrokenProcessPool("worker died")
+
+        monkeypatch.setattr(corpus, "ProcessPoolExecutor", BrokenPool)
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0),
+        )
+        assert out["warm_complete"] is True
+        assert out["skipped"] == []
+
+    def test_embed_stats_counts_pages_embedded_this_call(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0),
+        )
+        # corpus_dir: 2 + 4 + 1 non-empty pages
+        assert out["embed_stats"]["pages"] == 7
+        again = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0),
+        )
+        assert again["embed_stats"]["pages"] == 0
+
+    def test_text_only_call_unchanged(self, corpus_dir, cache):
+        out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
+        assert out["emb_pending"] == []
+        assert all(d["status"] in ("warmed", "cached") for d in out["docs"])
+        assert out["warmed_this_call"] == 3
+
+    def test_slice_only_when_extracted(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        calls = []
+
+        def spy_embed(texts):
+            calls.append(len(texts))
+            return self._embed(texts)
+
+        cold = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0.01),
+            cold_embed_slice_seconds=0.0,
+        )
+        assert cold["extracted_this_call"] == 3
+        assert calls == []  # the slice spent nothing on embeddings
+        assert sorted(cold["emb_pending"]) == sorted(files)
+        # next call extracts nothing, so the slice does not apply
+        warm = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0.01),
+            cold_embed_slice_seconds=0.0,
+        )
+        assert warm["extracted_this_call"] == 0
+        assert warm["warm_complete"] is True
+
+    def test_no_slice_embeds_fully(self, corpus_dir, tmp_path):
+        from pdf_mcp.cache import PDFCache
+
+        fresh = PDFCache(cache_dir=tmp_path / "c2", ttl_hours=1)
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            600,
+            fresh,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.01),
+        )
+        assert out["warm_complete"] is True

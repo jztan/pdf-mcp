@@ -223,47 +223,6 @@
         }
       ]
     },
-    "aws_exam": {
-      "path": "docs_internal/sample_pdfs/misc/AWS AIP-C01 107.pdf",
-      "title": "AWS AI Practitioner Exam Guide",
-      "queries": [
-        {
-          "id": "a01",
-          "category": "structured",
-          "query": "prompt engineering best practices",
-          "page": 50,
-          "answer": "prompt"
-        },
-        {
-          "id": "a02",
-          "category": "structured",
-          "query": "responsible AI fairness toxicity",
-          "page": 46,
-          "answer": "responsible"
-        },
-        {
-          "id": "a03",
-          "category": "structured",
-          "query": "Amazon Bedrock Knowledge Bases",
-          "page": 11,
-          "answer": "Bedrock"
-        },
-        {
-          "id": "a04",
-          "category": "structured",
-          "query": "model evaluation metrics accuracy",
-          "page": 28,
-          "answer": "evaluation"
-        },
-        {
-          "id": "a05",
-          "category": "structured",
-          "query": "generative AI use cases business",
-          "page": 114,
-          "answer": "generative"
-        }
-      ]
-    },
     "bayesian_nn_2col": {
       "path": "benchmark_data/.reading_order_pdfs/1811.03679.pdf",
       "title": "Practical Bayesian Neural Networks via Adaptive Optimization Methods",
@@ -566,6 +525,49 @@
           "page": 6,
           "answer": "1.99% to 8.99%",
           "answer_label": "Company A"
+        },
+        {
+          "id": "f01",
+          "category": "structured",
+          "query": "what the study checked on lender websites before asking for personal details",
+          "page": 5,
+          "answer": "asked to supply personal or business information",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "bullet-list loss: the answer is the second of three one-line bullets; the picker returns the next prose block ('Lenders vary significantly in the level of upfront product information...'), which shares more query tokens (websites, study). Snippet mode finds the bullet. Added 2026-09-28 with the query, not a regression."
+          }
+        },
+        {
+          "id": "f02",
+          "category": "structured",
+          "query": "focus group quote about lenders avoiding the word interest",
+          "page": 7,
+          "answer": "dress it up in other ways",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "bullet-list loss: the answer is the second of four quote bullets; the picker returns the lead-in prose block ('Three of the websites reviewed in the study convey information about product costs using nonstandard terminology...'), which also carries 'interest'. Snippet mode finds the bullet. Added 2026-09-28 with the query, not a regression."
+          }
+        },
+        {
+          "id": "f03",
+          "category": "structured",
+          "query": "what the Essential tracker category includes",
+          "page": 10,
+          "answer": "tag managers, privacy notices"
+        },
+        {
+          "id": "f04",
+          "category": "structured",
+          "query": "why Asian-owned firms are omitted from the approval figure",
+          "page": 17,
+          "answer": "limited number of observations"
+        },
+        {
+          "id": "f05",
+          "category": "structured",
+          "query": "median household income cutoff for the lowest income quartile zip codes",
+          "page": 25,
+          "answer": "$41,563"
         }
       ]
     },

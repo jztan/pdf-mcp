@@ -6894,6 +6894,7 @@ class TestCorpusSearchSemanticPending:
         assert r["embeddings_pending"]["docs"] == 3
         assert r["embeddings_pending"]["pages"] == 7
         assert "est_seconds" not in r["embeddings_pending"]
+        assert "died" in r["embeddings_pending"]["last_error"]
         assert r["next_call"] == {
             "tool": "pdf_corpus_warm",
             "args": {
@@ -6981,3 +6982,57 @@ class TestCorpusSearchSemanticPending:
         )
         assert "excerpt_routing" in r
         assert r["semantic_pending"] is True
+
+    def test_semantic_mode_uses_single_pass_warm(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        seen = {}
+        real = corpus.warm_docs
+
+        def spy(*a, **k):
+            seen.update(k)
+            return real(*a, **k)
+
+        monkeypatch.setattr(corpus, "warm_docs", spy)
+        self._fake_embedder(monkeypatch)
+        pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert seen["text_first"] is False
+        pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert seen["text_first"] is True
+
+    def test_semantic_mode_never_hides_a_partial_doc(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import time as _time
+
+        from pdf_mcp import corpus
+
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        self._fake_embedder(monkeypatch)
+        import pdf_mcp.embedder as emb
+
+        fast = emb.encode
+
+        def slow(texts, model):
+            _time.sleep(0.4)
+            return fast(texts, model)
+
+        monkeypatch.setattr(emb, "encode", slow)
+        r = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="semantic", budget_seconds=1
+        )
+        model = r["model_name"]
+        from pdf_mcp import _core
+
+        incomplete = [
+            p
+            for p in (
+                str(corpus_dir / n) for n in ("alpha.pdf", "bravo.pdf", "charlie.pdf")
+            )
+            if corpus._cached_pages(p, _core.cache, True, model) is None
+        ]
+        assert incomplete
+        for p in incomplete:
+            assert p in r["unprocessed"] or p in r["semantic_unprocessed"], p

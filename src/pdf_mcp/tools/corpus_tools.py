@@ -779,6 +779,7 @@ def _semantic_pending_fields(
     has_hits: bool,
     embed_stats: dict[str, Any],
     model_name: str,
+    last_error: str | None = None,
 ) -> dict[str, Any]:
     """Agent-facing signals for a keyword-only answer while embeddings are
     pending. Worded from a consumer tryout (2026-09-28): agents asked for a
@@ -809,6 +810,9 @@ def _semantic_pending_fields(
     done, seconds = int(embed_stats["pages"]), float(embed_stats["seconds"])
     if done > 0 and seconds > 0:
         pending_info["est_seconds"] = math.ceil(pages / (done / seconds))
+    if last_error:
+        # next_call will likely fail the same way; say why up front.
+        pending_info["last_error"] = last_error
     return {
         "semantic_pending": True,
         "semantic_unprocessed": pending,
@@ -987,8 +991,9 @@ def pdf_corpus_search(
           says in one sentence whether the keyword answer is reliable
           for this query. `embeddings_pending` = {docs, pages,
           est_seconds (only when this call measured an embedding
-          rate)}. `next_call` is the pdf_corpus_warm call that finishes
-          the embeddings; `warm_complete` stays false until it has.
+          rate), last_error (when embedding failed this call)}.
+          `next_call` is the pdf_corpus_warm call that finishes the
+          embeddings; `warm_complete` stays false until it has.
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
           profiled < searched means the document arm ran partially
           (profiles still backfilling, or page 1 has no text); a
@@ -1092,14 +1097,24 @@ def pdf_corpus_search(
         cold_embed_slice_seconds=(
             corpus.SEARCH_EMBED_SLICE_SECONDS if mode == "auto" else None
         ),
+        # Semantic mode cannot use text alone, so it keeps the single pass
+        # per doc and spends its whole budget reaching embedded docs.
+        text_first=mode != "semantic",
+        keep_failed_pending=mode == "auto",
     )
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
     emb_pending = list(warm.get("emb_pending", []))
-    # Pending docs were searched (keyword arm); `unprocessed` means not searched.
-    pending_set = set(emb_pending)
-    unprocessed = [p for p in warm["unprocessed"] if p not in pending_set]
     semantic_pending = mode == "auto" and embeddings_needed and bool(emb_pending)
+    # On the keyword-first answer the pending docs were searched by keyword,
+    # so `unprocessed` (not searched at all) leaves them out. Every other
+    # branch reports the warm envelope as is: a partial doc in semantic mode
+    # has some embeddings, is missing from semantic_unprocessed, and must
+    # stay visible here.
+    unprocessed = list(warm["unprocessed"])
+    if semantic_pending:
+        pending_set = set(emb_pending)
+        unprocessed = [p for p in unprocessed if p not in pending_set]
 
     # Scanned-doc signal (2026-09-03 spec): a zero-hit search over docs
     # with little or no extractable text must read as "unknown", not
@@ -1299,6 +1314,14 @@ def pdf_corpus_search(
                     bool(matches),
                     warm["embed_stats"],
                     embed_model,
+                    next(
+                        (
+                            str(d["embed_error"])
+                            for d in warm["docs"]
+                            if d.get("embed_error")
+                        ),
+                        None,
+                    ),
                 )
             )
         elif mode == "auto":

@@ -294,6 +294,11 @@ def clear_warm_memo() -> None:
 def forget_warm_verdict(path: str) -> None:
     for key in [k for k in _WARM_MEMO if k[0] == path]:
         _WARM_MEMO.pop(key, None)
+    # A write to the doc's warm state also invalidates its stacked vector
+    # matrix (same key across a partial -> complete embedding).
+    from .vector_cache import CACHE
+
+    CACHE.forget(path)
 
 
 def _warm_memo_key(
@@ -1061,6 +1066,8 @@ def warm_docs(
     clock: Callable[[], float] = time.monotonic,
     sections: bool = False,
     cold_embed_slice_seconds: float | None = None,
+    text_first: bool = True,
+    keep_failed_pending: bool = False,
 ) -> dict[str, Any]:
     """Budgeted warm loop over a resolved corpus.
 
@@ -1073,6 +1080,12 @@ def warm_docs(
     least one doc, caps the embedding phase at that many seconds so a
     cold search can answer by keyword quickly; a call that extracts
     nothing keeps its full budget for embeddings.
+    ``text_first=False`` keeps the single pass per doc (extract, then
+    embed) for callers that cannot use text alone (semantic search).
+    ``keep_failed_pending``: an embedding failure normally files the doc
+    under ``skipped`` with its reason, so callers looping on
+    ``unprocessed`` terminate; a keyword-first search passes True to keep
+    the doc searchable as a ``text_only`` row carrying ``embed_error``.
 
     ``sections``, when true, also builds the section-granularity FTS5
     index (see ``backfill_sections`` and ``extractor._warm_extract_worker``'s
@@ -1193,7 +1206,9 @@ def warm_docs(
 
     extracted_this_call = 0
     embed_stats: dict[str, Any] = {"pages": 0, "seconds": 0.0}
-    two_phase = embeddings and embed is not None and model_name is not None
+    two_phase = (
+        text_first and embeddings and embed is not None and model_name is not None
+    )
     if two_phase and not budget_exhausted:
         assert embed is not None and model_name is not None
         # Phase 1: text for every cold doc, text worker cap, no embeddings.
@@ -1246,12 +1261,18 @@ def warm_docs(
             sections,
         )
         embed_stats["seconds"] = round(max(0.0, clock() - p2_start), 3)
-        for err in p2_errors:
-            # The text is cached and keyword-searchable: an embedding
-            # failure leaves the doc pending, never skipped.
-            logger.warning("embedding failed for %s: %s", err["path"], err["reason"])
-            p2_unproc.append(err["path"])
-        by_path: dict[str, dict[str, Any]] = {str(r["path"]): r for r in text_rows}
+        embed_errors = {e["path"]: e["reason"] for e in p2_errors}
+        for path_err, reason in embed_errors.items():
+            logger.warning("embedding failed for %s: %s", path_err, reason)
+        if keep_failed_pending:
+            # The text is cached and keyword-searchable: keep the doc
+            # pending (with the reason) so the search still covers it.
+            p2_unproc += list(embed_errors)
+        else:
+            skipped.extend(p2_errors)
+        by_path: dict[str, dict[str, Any]] = {
+            str(r["path"]): r for r in text_rows if r["path"] not in embed_errors
+        }
         for r in emb_rows:
             by_path[str(r["path"])] = r
         for p in p2_unproc:
@@ -1263,6 +1284,8 @@ def warm_docs(
                     "embeddings_cached": False,
                     "text_coverage": _doc_coverage_label(p, cache),
                 }
+            if p in embed_errors:
+                by_path[p]["embed_error"] = embed_errors[p]
         docs.extend(by_path.values())
         unprocessed += p1_unproc + [p for p in p2_unproc if p not in unprocessed]
         budget_exhausted = budget_exhausted or p2_exhausted

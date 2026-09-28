@@ -131,6 +131,14 @@ class MatrixCache:
         self._d.clear()
         self._bytes = 0
 
+    def forget(self, path: str) -> None:
+        """Drop every matrix of `path` (all mtimes, models, versions). Called
+        when the doc's embeddings are written: the key does not change when
+        a partial doc gains pages, so a cached partial matrix would
+        otherwise be served after the doc completes."""
+        for key in [k for k in self._d if k and k[0] == path]:
+            self._bytes -= self._d.pop(key).nbytes
+
     def stats(self) -> dict[str, int]:
         return {
             "entries": len(self._d),

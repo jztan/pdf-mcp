@@ -382,6 +382,18 @@ def _embedded_pages_count(path: str, cache: Any, model_name: str) -> int | None:
     return len(non_empty) - len(_missing_embed_pages(texts, stored))
 
 
+def pending_embed_pages(path: str, cache: Any, model_name: str) -> int:
+    """Non-empty pages of a text-warm doc still needing embeddings (0 when
+    the doc's text is not fully cached: nothing is known to embed yet)."""
+    pages = _cached_pages(path, cache, False, model_name)
+    if pages is None:
+        return 0
+    texts = cache.get_pages_text(path, list(range(pages)))
+    non_empty = sorted(pn for pn, t in texts.items() if t.strip())
+    stored = cache.get_page_embeddings(path, non_empty, model_name)
+    return len(_missing_embed_pages(texts, stored))
+
+
 def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     """Top PROFILE_TERM_LIMIT tokens (4+ chars, lowercase) by count across
     all pages. Ties break by term so the result is deterministic."""
@@ -985,6 +997,55 @@ def _warm_concurrent(
     return unprocessed, budget_exhausted, warmed
 
 
+def _warm_batch(
+    items: list[tuple[str, int]],
+    budget_seconds: float,
+    start: float,
+    clock: Callable[[], float],
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+    docs: list[dict[str, Any]],
+    skipped: list[dict[str, str]],
+    emb_cached: Callable[[str], bool],
+    sections: bool,
+) -> tuple[list[str], bool, int]:
+    """Warm `items` sequentially or in the spawn pool (worker count from
+    the mode-dependent cap). Returns (unprocessed, budget_exhausted, warmed)."""
+    workers = _warm_worker_count(len(items), embeddings)
+    if workers <= 1:
+        return _warm_sequential(
+            items,
+            budget_seconds,
+            start,
+            clock,
+            cache,
+            embeddings,
+            model_name,
+            embed,
+            docs,
+            skipped,
+            emb_cached,
+            sections,
+        )
+    return _warm_concurrent(
+        items,
+        workers,
+        budget_seconds,
+        start,
+        clock,
+        cache,
+        embeddings,
+        model_name,
+        embed,
+        docs,
+        skipped,
+        emb_cached,
+        sections,
+    )
+
+
 def warm_docs(
     files: list[str],
     budget_seconds: float,
@@ -1114,30 +1175,108 @@ def warm_docs(
     ]
     cold = [item for item in uncached if item not in resume]
 
-    if resume and not budget_exhausted:
-        # Resume docs first: they need no extraction, so they never go
-        # to the pool, and finishing an interrupted giant is the
-        # natural convergence order.
-        unprocessed, budget_exhausted, warmed = _warm_sequential(
-            resume,
+    extracted_this_call = 0
+    embed_stats: dict[str, Any] = {"pages": 0, "seconds": 0.0}
+    two_phase = embeddings and embed is not None and model_name is not None
+    if two_phase and not budget_exhausted:
+        assert embed is not None and model_name is not None
+        # Phase 1: text for every cold doc, text worker cap, no embeddings.
+        # Keyword search needs only text, so text always takes the budget
+        # first (cold first-call spike 2026-09-28: 42 of 100 docs searched
+        # when text and embeddings shared one pass per doc).
+        text_rows: list[dict[str, Any]] = []
+        p1_unproc, budget_exhausted, _ = _warm_batch(
+            cold,
             budget_seconds,
             start,
             clock,
             cache,
-            embeddings,
+            False,
             model_name,
-            embed,
-            docs,
+            None,
+            text_rows,
             skipped,
             _emb_cached,
             sections,
         )
-    elif resume:
-        unprocessed += [p for p, _ in resume]
-    if cold and not budget_exhausted:
-        workers = _warm_worker_count(len(cold), embeddings)
-        if workers <= 1:
-            more_unproc, budget_exhausted, more_warmed = _warm_sequential(
+        extracted = [(str(r["path"]), int(r["pages"])) for r in text_rows]
+        extracted_this_call = len(extracted)
+        pages_of = dict(resume + extracted)
+        # Phase 2: embed resume docs and the docs Phase 1 just extracted,
+        # smallest first, from cached text (the resume branch of
+        # _warm_sequential; no re-extraction).
+        to_embed = sorted(resume + extracted, key=lambda item: item[1])
+        p2_start = clock()
+        p2_budget = max(0.0, budget_seconds - (p2_start - start))
+        before = {
+            p: _embedded_pages_count(p, cache, model_name) or 0 for p, _ in to_embed
+        }
+        emb_rows: list[dict[str, Any]] = []
+        p2_errors: list[dict[str, str]] = []
+        p2_unproc, p2_exhausted, _ = _warm_sequential(
+            to_embed,
+            p2_budget,
+            p2_start,
+            clock,
+            cache,
+            True,
+            model_name,
+            embed,
+            emb_rows,
+            p2_errors,
+            _emb_cached,
+            sections,
+        )
+        embed_stats["seconds"] = round(max(0.0, clock() - p2_start), 3)
+        for err in p2_errors:
+            # The text is cached and keyword-searchable: an embedding
+            # failure leaves the doc pending, never skipped.
+            logger.warning("embedding failed for %s: %s", err["path"], err["reason"])
+            p2_unproc.append(err["path"])
+        by_path: dict[str, dict[str, Any]] = {str(r["path"]): r for r in text_rows}
+        for r in emb_rows:
+            by_path[str(r["path"])] = r
+        for p in p2_unproc:
+            if by_path.get(p, {}).get("status") != "partial":
+                by_path[p] = {
+                    "path": p,
+                    "status": "text_only",
+                    "pages": pages_of.get(p, 0),
+                    "embeddings_cached": False,
+                    "text_coverage": _doc_coverage_label(p, cache),
+                }
+        docs.extend(by_path.values())
+        unprocessed += p1_unproc + [p for p in p2_unproc if p not in unprocessed]
+        budget_exhausted = budget_exhausted or p2_exhausted
+        embed_stats["pages"] = sum(
+            max(0, (_embedded_pages_count(p, cache, model_name) or 0) - before[p])
+            for p, _ in to_embed
+        )
+    elif two_phase:
+        unprocessed += [p for p, _ in resume + cold]
+    else:
+        if resume and not budget_exhausted:
+            # Resume docs first: they need no extraction, so they never go
+            # to the pool, and finishing an interrupted giant is the
+            # natural convergence order.
+            unprocessed, budget_exhausted, warmed = _warm_sequential(
+                resume,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+                sections,
+            )
+        elif resume:
+            unprocessed += [p for p, _ in resume]
+        if cold and not budget_exhausted:
+            more_unproc, budget_exhausted, more_warmed = _warm_batch(
                 cold,
                 budget_seconds,
                 start,
@@ -1151,26 +1290,10 @@ def warm_docs(
                 _emb_cached,
                 sections,
             )
-        else:
-            more_unproc, budget_exhausted, more_warmed = _warm_concurrent(
-                cold,
-                workers,
-                budget_seconds,
-                start,
-                clock,
-                cache,
-                embeddings,
-                model_name,
-                embed,
-                docs,
-                skipped,
-                _emb_cached,
-                sections,
-            )
-        unprocessed += more_unproc
-        warmed += more_warmed
-    elif cold:
-        unprocessed += [p for p, _ in cold]
+            unprocessed += more_unproc
+            warmed += more_warmed
+        elif cold:
+            unprocessed += [p for p, _ in cold]
 
     # Verification pass. Every row above is a claim about which branch
     # ran, not about what landed in SQLite, so a write that never became
@@ -1201,6 +1324,13 @@ def warm_docs(
             row["embedded_pages"] = count
             verified.append(row)
             continue
+        if row["status"] == "text_only":
+            # Text-ready, embeddings pending: verified against the text
+            # only. A doc whose text vanished drops its row; it is already
+            # in unprocessed.
+            if _cached_pages(row_path, cache, False, model_name) is not None:
+                verified.append(row)
+            continue
         if _cached_pages(row_path, cache, embeddings, model_name) is not None:
             verified.append(row)
             continue
@@ -1215,6 +1345,10 @@ def warm_docs(
         else:
             unprocessed.append(row_path)
 
+    emb_pending = sorted(
+        str(r["path"]) for r in verified if r["status"] in ("partial", "text_only")
+    )
+    warmed = sum(1 for r in verified if r["status"] == "warmed")
     unwarmed = len(unprocessed) + len(skipped)
     return {
         "docs": sorted(verified, key=lambda d: str(d["path"])),
@@ -1222,6 +1356,9 @@ def warm_docs(
         "skipped": skipped,
         "warmed_this_call": warmed,
         "budget_exhausted": budget_exhausted,
+        "emb_pending": emb_pending,
+        "extracted_this_call": extracted_this_call,
+        "embed_stats": embed_stats,
         # Authoritative "is this corpus usable now" signal, read from the
         # cache rather than inferred. `unprocessed` alone answers only
         # "did the budget run out".

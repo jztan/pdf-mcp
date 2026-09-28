@@ -1311,6 +1311,71 @@ def count_query_tokens(text: str, query: str) -> int:
     return sum(1 for t in tokens if _fold_for_match(t) in folded)
 
 
+# A block that is one list item: a bullet glyph, or a short enumerator
+# ("1.", "a)", "(iv)"). Numbered items alone are weak evidence, because
+# footnotes open the same way, so `find_list_groups` needs a colon on
+# their lead-in.
+_LIST_GLYPH_RE = re.compile(r"^\s*[•●▪◦‣∙·■□➢►✓–\-*]\s*")
+_LIST_NUMBERED_RE = re.compile(r"^\s*\(?(?:\d{1,2}|[a-z]|[ivx]{1,4})[.)]\s+")
+
+
+def list_item_kind(text: str) -> str | None:
+    """'glyph' or 'numbered' when *text* opens as a list item, else None."""
+    if _LIST_GLYPH_RE.match(text):
+        return "glyph"
+    if _LIST_NUMBERED_RE.match(text):
+        return "numbered"
+    return None
+
+
+def find_list_groups(
+    texts: list[str], skippable: frozenset[str] | set[str] = frozenset()
+) -> list[list[int]]:
+    """Lists on a page: a lead-in block followed by consecutive item blocks.
+
+    Returns one index list per list, lead-in first. PyMuPDF (and the
+    cached layout) often emits one block per bullet, so the lead-in that
+    introduces a list outscores any single item on query tokens and the
+    answer-bearing item is lost (excerpt gate f02, 2026-09-28). A
+    qualifying lead-in ends with ':' or introduces glyph bullets only;
+    numbered items without a colon lead-in are left alone, because
+    page-bottom footnotes open the same way.
+
+    Blocks in *skippable* (whitespace-normalised text, e.g. a running
+    footer the layout placed mid-list) are passed over when another item
+    follows them, and are not members of the list.
+    """
+    groups: list[list[int]] = []
+    n = len(texts)
+    i = 0
+    while i < n - 1:
+        lead = texts[i].strip()
+        if not lead or list_item_kind(lead) is not None:
+            i += 1
+            continue
+        members = [i]
+        kinds: set[str] = set()
+        j = i + 1
+        while j < n:
+            kind = list_item_kind(texts[j])
+            if kind is not None:
+                kinds.add(kind)
+                members.append(j)
+            elif not (
+                " ".join(texts[j].split()) in skippable
+                and j + 1 < n
+                and list_item_kind(texts[j + 1]) is not None
+            ):
+                break
+            j += 1
+        if len(members) > 1 and (lead.endswith(":") or kinds == {"glyph"}):
+            groups.append(members)
+            i = j
+        else:
+            i += 1
+    return groups
+
+
 def get_best_paragraph_for_query(
     page: Any,
     query: str,

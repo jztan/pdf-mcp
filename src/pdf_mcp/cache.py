@@ -25,6 +25,25 @@ from pdf_mcp.section_detector import Section
 
 logger = logging.getLogger(__name__)
 
+
+def _unlink_quietly(path: str) -> None:
+    """Best-effort delete of a cached image or render file.
+
+    Losing the file is never worth failing the caller for: a second server
+    starting on the same cache deletes the same expired files at the same
+    moment, and on Windows the loser gets PermissionError (WinError 5), not
+    FileNotFoundError, which used to abort startup during import (#74). A
+    file another process holds open (WinError 32) is also left behind; the
+    DB rows go regardless, so the cost is one orphan PNG.
+    """
+    if path == "__sentinel__":
+        return
+    try:
+        Path(path).unlink()
+    except OSError as exc:
+        logger.debug("Could not delete cached file %s: %s", path, exc)
+
+
 # FTS5 virtual table schema for full-text search with Porter stemmer.
 # Must be created in a separate conn.execute() call (not inside executescript)
 # so that FTS5 unavailability can be caught in isolation.
@@ -741,10 +760,7 @@ class PDFCache:
                 for (stale,) in conn.execute(
                     "SELECT file_path_on_disk FROM page_renders"
                 ).fetchall():
-                    try:
-                        Path(stale).unlink()
-                    except OSError:
-                        pass
+                    _unlink_quietly(stale)
                 conn.execute("DROP TABLE IF EXISTS page_renders")
 
             conn.executescript("""
@@ -1093,7 +1109,15 @@ class PDFCache:
             self.fts_available,
         )
 
-        self.clear_expired()
+        # Startup cleanup is best-effort: a server that cannot prune expired
+        # entries still serves correctly, while one that raises here exits
+        # during import before answering initialize (#74).
+        # pdf_cache_clear calls clear_expired() unguarded, so a real fault
+        # still surfaces when a user asks for cleanup.
+        try:
+            self.clear_expired()
+        except Exception:
+            logger.warning("startup cache cleanup failed; continuing", exc_info=True)
 
     def _backfill_cjk_tables(self, conn: sqlite3.Connection) -> None:
         """One-time rebuild of CJK FTS tables from already-cached text.
@@ -1847,11 +1871,7 @@ class PDFCache:
                     (path, page_num),
                 ).fetchall()
                 for row in old_rows:
-                    if row[0] != "__sentinel__":
-                        try:
-                            Path(row[0]).unlink()
-                        except FileNotFoundError:
-                            pass
+                    _unlink_quietly(row[0])
                 conn.execute(
                     "DELETE FROM page_images" " WHERE file_path = ? AND page_num = ?",
                     (path, page_num),
@@ -1878,11 +1898,7 @@ class PDFCache:
 
             # Delete orphan files from disk
             for orphan_path in orphans:
-                if orphan_path != "__sentinel__":
-                    try:
-                        Path(orphan_path).unlink()
-                    except FileNotFoundError:
-                        pass
+                _unlink_quietly(orphan_path)
 
             # Clear existing DB rows for this page
             conn.execute(
@@ -2272,10 +2288,7 @@ class PDFCache:
                 (path, page_num, dpi, codec, quality),
             ).fetchone()
             if existing and existing[0] != render_dict["file_path_on_disk"]:
-                try:
-                    Path(existing[0]).unlink()
-                except FileNotFoundError:
-                    pass
+                _unlink_quietly(existing[0])
             conn.execute(
                 """INSERT OR REPLACE INTO page_renders
                    (file_path, page_num, file_mtime, dpi, codec, quality,
@@ -2366,11 +2379,7 @@ class PDFCache:
                 (path,),
             ).fetchall()
             for row in rows:
-                if row[0] != "__sentinel__":
-                    try:
-                        Path(row[0]).unlink()
-                    except FileNotFoundError:
-                        pass
+                _unlink_quietly(row[0])
 
             # Delete render PNG files before removing DB rows
             render_rows = conn.execute(
@@ -2378,10 +2387,7 @@ class PDFCache:
                 (path,),
             ).fetchall()
             for (render_path,) in render_rows:
-                try:
-                    Path(render_path).unlink()
-                except FileNotFoundError:
-                    pass
+                _unlink_quietly(render_path)
             conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
             conn.execute("DELETE FROM page_charts WHERE file_path = ?", (path,))
 
@@ -2434,11 +2440,7 @@ class PDFCache:
                     expired_paths,
                 ).fetchall()
                 for row in img_rows:
-                    if row[0] != "__sentinel__":
-                        try:
-                            Path(row[0]).unlink()
-                        except FileNotFoundError:
-                            pass
+                    _unlink_quietly(row[0])
 
                 conn.execute(
                     f"DELETE FROM pdf_metadata WHERE file_path IN ({placeholders})",
@@ -2490,10 +2492,7 @@ class PDFCache:
                     expired_paths,
                 ).fetchall()
                 for (render_path,) in render_rows:
-                    try:
-                        Path(render_path).unlink()
-                    except FileNotFoundError:
-                        pass
+                    _unlink_quietly(render_path)
                 conn.execute(
                     f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
                     expired_paths,
@@ -2520,10 +2519,7 @@ class PDFCache:
                         (rpath,),
                     ).fetchall()
                     for (fp,) in stale_render_rows:
-                        try:
-                            Path(fp).unlink()
-                        except FileNotFoundError:
-                            pass
+                        _unlink_quietly(fp)
                     conn2.execute(
                         "DELETE FROM page_renders WHERE file_path = ?", (rpath,)
                     )

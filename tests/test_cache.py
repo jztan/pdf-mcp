@@ -1640,3 +1640,133 @@ class TestChunkedEmbeddings:
             sample_pdf, {0: [b"a" * 4, b"b" * 4, b"c" * 4]}, self.MODEL
         )
         assert cache.get_stats()["embedding_pages"] == 1
+
+
+def _deny_unlink(monkeypatch):
+    """Make every Path.unlink fail the way Windows does when another
+    process is deleting (or holds open) the same file (WinError 5/32)."""
+
+    def deny(self, missing_ok=False):
+        raise PermissionError(13, "Access is denied", str(self))
+
+    monkeypatch.setattr(Path, "unlink", deny)
+
+
+def _seed_expired_image(cache, pdf_path, png):
+    png.write_bytes(b"\x89PNG")
+    cache.save_metadata(pdf_path, 1, {}, [])
+    cache.save_page_images(
+        pdf_path,
+        0,
+        [
+            {
+                "index": 0,
+                "width": 10,
+                "height": 10,
+                "format": "rgb",
+                "path": str(png),
+                "size_bytes": 4,
+            }
+        ],
+    )
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute("UPDATE pdf_metadata SET accessed_at = '2020-01-01T00:00:00'")
+
+
+class TestUnlinkRace:
+    """Issue #74: a second server starting on the same cache lost the race
+    to delete an expired image and exited during import with
+    PermissionError (WinError 5). File cleanup is best-effort."""
+
+    def test_startup_survives_permission_error_on_expired_image(
+        self, temp_cache_dir, sample_pdf, tmp_path, monkeypatch
+    ):
+        first = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        _seed_expired_image(first, sample_pdf, tmp_path / "held.png")
+
+        _deny_unlink(monkeypatch)
+        second = PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+
+        with sqlite3.connect(second.db_path) as conn:
+            meta = conn.execute("SELECT COUNT(*) FROM pdf_metadata").fetchone()[0]
+            imgs = conn.execute("SELECT COUNT(*) FROM page_images").fetchone()[0]
+        assert (meta, imgs) == (0, 0)
+
+    def test_clear_expired_survives_permission_error(
+        self, cache, sample_pdf, tmp_path, monkeypatch
+    ):
+        _seed_expired_image(cache, sample_pdf, tmp_path / "held.png")
+        _deny_unlink(monkeypatch)
+        assert cache.clear_expired() == 1
+
+    def test_invalidate_file_survives_permission_error(
+        self, cache, sample_pdf, tmp_path, monkeypatch
+    ):
+        _seed_expired_image(cache, sample_pdf, tmp_path / "held.png")
+        _deny_unlink(monkeypatch)
+        cache._invalidate_file(sample_pdf)
+        with sqlite3.connect(cache.db_path) as conn:
+            imgs = conn.execute("SELECT COUNT(*) FROM page_images").fetchone()[0]
+        assert imgs == 0
+
+    def test_startup_cleanup_failure_is_logged_not_fatal(
+        self, temp_cache_dir, monkeypatch, caplog
+    ):
+        def boom(self):
+            raise sqlite3.OperationalError("database is locked")
+
+        monkeypatch.setattr(PDFCache, "clear_expired", boom)
+        with caplog.at_level("WARNING", logger="pdf_mcp.cache"):
+            PDFCache(cache_dir=temp_cache_dir, ttl_hours=1)
+        assert "startup cache cleanup failed" in caplog.text
+
+
+def _build_cache_in_child(cache_dir, start_at, results):
+    while time.time() < start_at:
+        pass
+    try:
+        PDFCache(cache_dir=cache_dir, ttl_hours=1)
+        results.put("ok")
+    except Exception as exc:  # pragma: no cover - the failure being guarded
+        results.put(f"{type(exc).__name__}: {exc}")
+
+
+def test_two_processes_starting_on_one_expired_cache_both_start(tmp_path):
+    """Issue #74 end to end: two servers open a cache full of expired image
+    rows at the same instant. Before the fix this failed 3 of 3 on Windows
+    (the loser raised WinError 5 from clear_expired during import)."""
+    import multiprocessing as mp
+
+    seeder = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+    images = tmp_path / "images"
+    images.mkdir(exist_ok=True)
+    with sqlite3.connect(seeder.db_path) as conn:
+        for i in range(500):
+            pdf = str(tmp_path / f"doc{i}.pdf")
+            png = images / f"doc{i}_p1_i1.png"
+            png.write_bytes(b"\x89PNG" + b"0" * 1024)
+            conn.execute(
+                "INSERT INTO pdf_metadata (file_path, file_mtime, file_size,"
+                " page_count, accessed_at) VALUES (?, 0, 0, 1, '2000-01-01')",
+                (pdf,),
+            )
+            conn.execute(
+                "INSERT INTO page_images (file_path, page_num, image_index,"
+                " file_mtime, width, height, format, file_path_on_disk,"
+                " size_bytes) VALUES (?, 0, 0, 0, 1, 1, 'png', ?, 1)",
+                (pdf, str(png)),
+            )
+
+    ctx = mp.get_context("spawn")
+    results = ctx.Queue()
+    start_at = time.time() + 2
+    procs = [
+        ctx.Process(target=_build_cache_in_child, args=(tmp_path, start_at, results))
+        for _ in range(2)
+    ]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(timeout=60)
+    assert [results.get(timeout=5) for _ in procs] == ["ok", "ok"]
+    assert not list(images.glob("*.png"))

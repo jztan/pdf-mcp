@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 
+- **Paragraph excerpts keep the answer when it sits in a list.** With
+  `excerpt_style="paragraph"` (the default for `pdf_search` and
+  `pdf_corpus_search`), a question answered by one bullet often got the
+  sentence that introduces the list instead, because that sentence shares
+  more of the query's words. A list's lead-in and its items now count as
+  one unit: when the lead-in wins, or the list as a whole matches the
+  query better than the block that won, the excerpt is the lead-in plus
+  the items, with one `bbox` covering them. A single matching item is
+  still returned alone. On 22 list questions over public-domain government
+  reports, paragraph excerpts held the answer for 17 instead of 13, with no
+  question lost; those excerpts are longer, since they carry the whole
+  list.
 - **A first `pdf_corpus_search` over a new folder searches every
   document.** It used to search only the documents whose embeddings
   finished inside the time budget: on a 100-PDF test set, a cold first

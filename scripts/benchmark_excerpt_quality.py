@@ -576,8 +576,53 @@ def _frozen_for(row: dict, cell: str) -> bool:
     return bool(kf) and kf.get("cell") == cell
 
 
-def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
-    """Evaluate the five-clause gate.
+def _row_key(row: dict) -> str:
+    # Query ids repeat across PDFs (g01-g03 are both gpt3 and the Fed report).
+    return f"{row.get('pdf')}:{row['id']}"
+
+
+def compare_to_baseline(rows: list[dict], baseline_rows: list[dict]) -> dict:
+    """Clause 6: per-row ratchet of paragraph containment against the baseline.
+
+    Clauses 1 and 2 compare paragraph with snippet on the same run, so a
+    change that loses a row in both styles passes them. A live row whose
+    paragraph excerpt contained the answer in the baseline must still
+    contain it. A deliberate trade is recorded with a `known_fail` block,
+    as for clause 2. A live row absent from the baseline is ungated, so it
+    fails too until the baseline is regenerated with --update-baseline.
+    Baseline rows the run did not score (--pdfs/--categories) are ignored.
+    """
+    base = {_row_key(r): r for r in baseline_rows}
+    regressed: list[str] = []
+    improved: list[str] = []
+    unbaselined: list[str] = []
+    for r in rows:
+        if _frozen_for(r, "paragraph"):
+            continue
+        key = _row_key(r)
+        b = base.get(key)
+        if b is None:
+            unbaselined.append(key)
+        elif b["paragraph_contains"] == 1 and r["paragraph_contains"] == 0:
+            regressed.append(key)
+        elif b["paragraph_contains"] == 0 and r["paragraph_contains"] == 1:
+            improved.append(key)
+    return {
+        "pass": not regressed and not unbaselined,
+        "regressed": regressed,
+        "unbaselined": unbaselined,
+        "improved": improved,
+        "action": (
+            "freeze a deliberate loss with known_fail; after adding queries "
+            "or an improvement, run with --update-baseline"
+        ),
+    }
+
+
+def evaluate_gate(
+    cells: dict, rows: list[dict], baseline_rows: list[dict] | None = None
+) -> dict:
+    """Evaluate the gate.
 
     Clause 1: paragraph overall containment >= snippet.
     Clause 2: zero regressions (no query where snippet contains
@@ -595,6 +640,10 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     Clause 4: no frozen (`known_fail`) row now passes its frozen cell.
     Clause 5: every live query carrying `answer_column` finds its value
               under that column in the attached table context.
+    Clause 6: no live row loses paragraph containment against the
+              committed baseline (`compare_to_baseline`). main() always
+              supplies the baseline; None skips the clause for unit tests
+              of the other five.
     """
     # Clause 1 is scoped to live (unfrozen) rows, matching clause 2. A
     # frozen row scores 0 on paragraph by definition and cannot regress
@@ -648,12 +697,19 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
     # ever zeroed bbox emission across the whole corpus.
     clause_3_pass = len(bbox_rows) > 0 and scoped_bbox >= scoped_excerpt
 
+    clause_6 = (
+        compare_to_baseline(rows, baseline_rows)
+        if baseline_rows is not None
+        else {"pass": True, "skipped": "no baseline supplied"}
+    )
+
     return {
         "pass": clause_1_pass
         and clause_2_pass
         and clause_3_pass
         and clause_4_pass
-        and clause_5_pass,
+        and clause_5_pass
+        and clause_6["pass"],
         "clause_1_containment": {
             "pass": clause_1_pass,
             "snippet": live_snippet,
@@ -687,6 +743,7 @@ def evaluate_gate(cells: dict, rows: list[dict]) -> dict:
                 1 for r in rows if r.get("paragraph_column_correct") is not None
             ),
         },
+        "clause_6_baseline": clause_6,
     }
 
 
@@ -788,6 +845,7 @@ def print_gate_verdict(verdict: dict) -> None:
         "clause_3_bbox_fidelity",
         "clause_4_stale_known_fail",
         "clause_5_column_correct",
+        "clause_6_baseline",
     ):
         c = verdict[clause_key]
         marker = "✓" if c["pass"] else "✗"
@@ -824,6 +882,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default="benchmark_data/excerpt_quality_queries.json",
         help="Path to the query corpus file.",
     )
+    p.add_argument(
+        "--baseline",
+        default="benchmark_data/excerpt_quality_baseline.json",
+        help="Per-row baseline for clause 6 (a prior --output-json).",
+    )
+    p.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help=(
+            "Write this run as the new baseline. Refused on a filtered run "
+            "and whenever the gate fails, so the bar only moves up."
+        ),
+    )
     return p
 
 
@@ -844,6 +915,25 @@ def main(argv: list[str] | None = None) -> int:
         cats = set(args.categories.split(","))
         for v in all_pdfs.values():
             v["queries"] = [q for q in v["queries"] if q["category"] in cats]
+
+    if args.update_baseline and (args.pdfs or args.categories or args.calibrate):
+        print(
+            "ERROR: --update-baseline needs a full gated run "
+            "(no --pdfs, --categories or --calibrate).",
+            file=sys.stderr,
+        )
+        return 2
+    baseline_path = Path(args.baseline)
+    baseline_rows: list[dict] | None = None
+    if baseline_path.exists():
+        baseline_rows = json.loads(baseline_path.read_text(encoding="utf-8"))["rows"]
+    elif not (args.update_baseline or args.calibrate):
+        print(
+            f"ERROR: no baseline at {baseline_path}; create one with "
+            "--update-baseline on a clean checkout.",
+            file=sys.stderr,
+        )
+        return 2
 
     total_q = sum(len(v["queries"]) for v in all_pdfs.values())
     if total_q == 0:
@@ -875,7 +965,29 @@ def main(argv: list[str] | None = None) -> int:
         print("\n[--calibrate] Skipping gate. No exit-code gating.")
         return 0
 
-    verdict = evaluate_gate(cells, rows)
+    verdict = evaluate_gate(cells, rows, baseline_rows)
+    if args.update_baseline:
+        # New or improved rows are why the baseline is being rewritten, so
+        # "unbaselined" alone does not block the write; every other clause,
+        # and any row that got worse, does.
+        c6 = verdict["clause_6_baseline"]
+        blocked = [
+            k
+            for k, c in verdict.items()
+            if k.startswith("clause_") and k != "clause_6_baseline" and not c["pass"]
+        ]
+        if c6.get("regressed"):
+            blocked.append("clause_6_baseline")
+        if blocked:
+            print_gate_verdict(verdict)
+            print(f"\nRefusing --update-baseline: failing {blocked}.")
+            return 1
+        baseline_path.write_text(
+            json.dumps({"cells": cells, "rows": rows}, indent=2, default=str) + "\n",
+            encoding="utf-8",
+        )
+        print(f"\nWrote baseline {baseline_path} ({len(rows)} rows).")
+        return 0
     print_gate_verdict(verdict)
     return 0 if verdict["pass"] else 1
 

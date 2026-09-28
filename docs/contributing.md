@@ -131,7 +131,7 @@ These come from real review rounds, so meeting them up front is the fastest way 
 
 Features that change search or extraction quality must follow: **fix → benchmark → corpus expand → re-benchmark**. The initial small-sample benchmark overstates the gap; expanding the corpus narrows it to honest numbers and surfaces ground-truth errors. Don't skip steps.
 
-The gate for search and excerpt changes is the excerpt gate, `scripts/benchmark_excerpt_quality.py` (exit 0 pass, 1 regression, 2 setup error); run it before and after your change.
+The gate for search and excerpt changes is the excerpt gate, `scripts/benchmark_excerpt_quality.py` (exit 0 pass, 1 regression, 2 setup error); run it before and after your change. Besides comparing paragraph with snippet, it checks every query against `benchmark_data/excerpt_quality_baseline.json`: a query whose paragraph excerpt held the answer there must still hold it. If your change adds queries or fixes some, rerun with `--update-baseline` and commit the new baseline with the change; the flag refuses to write while anything regressed.
 
 ## Coherence eval harness
 

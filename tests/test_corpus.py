@@ -2068,3 +2068,53 @@ class TestTwoPhaseWarm:
         assert out["emb_pending"] == []
         assert all(d["status"] in ("warmed", "cached") for d in out["docs"])
         assert out["warmed_this_call"] == 3
+
+    def test_slice_only_when_extracted(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        calls = []
+
+        def spy_embed(texts):
+            calls.append(len(texts))
+            return self._embed(texts)
+
+        cold = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0.01),
+            cold_embed_slice_seconds=0.0,
+        )
+        assert cold["extracted_this_call"] == 3
+        assert calls == []  # the slice spent nothing on embeddings
+        assert sorted(cold["emb_pending"]) == sorted(files)
+        # next call extracts nothing, so the slice does not apply
+        warm = corpus.warm_docs(
+            files,
+            600,
+            cache,
+            embeddings=True,
+            model_name="fake-model",
+            embed=spy_embed,
+            clock=SteppingClock(0.01),
+            cold_embed_slice_seconds=0.0,
+        )
+        assert warm["extracted_this_call"] == 0
+        assert warm["warm_complete"] is True
+
+    def test_no_slice_embeds_fully(self, corpus_dir, tmp_path):
+        from pdf_mcp.cache import PDFCache
+
+        fresh = PDFCache(cache_dir=tmp_path / "c2", ttl_hours=1)
+        out = corpus.warm_docs(
+            _files(corpus_dir),
+            600,
+            fresh,
+            embeddings=True,
+            model_name="fake-model",
+            embed=self._embed,
+            clock=SteppingClock(0.01),
+        )
+        assert out["warm_complete"] is True

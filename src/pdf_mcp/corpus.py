@@ -110,6 +110,11 @@ WARM_EMBED_CAP = 4
 # One batch is the overshoot bound and the per-call progress floor.
 WARM_EMBED_BATCH_PAGES = 24
 
+# A cold pdf_corpus_search spends at most this long embedding after it has
+# extracted text, then answers by keyword (cold first-call spike
+# 2026-09-28). A later call that extracts nothing gets its full budget.
+SEARCH_EMBED_SLICE_SECONDS = 5.0
+
 
 def _validate_file(
     entry: str, check_path: Callable[[str], None] | None
@@ -1055,8 +1060,19 @@ def warm_docs(
     embed: Callable[[list[str]], list[bytes]] | None = None,
     clock: Callable[[], float] = time.monotonic,
     sections: bool = False,
+    cold_embed_slice_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Budgeted warm loop over a resolved corpus.
+
+    With ``embeddings`` (and an encoder) the warm runs in two phases:
+    text for every cold doc first, then embeddings for the resume docs
+    and the docs just extracted, from cached text. Docs left without
+    complete embeddings come back in ``emb_pending`` (rows ``text_only``
+    or ``partial``) and stay in ``unprocessed``.
+    ``cold_embed_slice_seconds``, when set and this call extracted at
+    least one doc, caps the embedding phase at that many seconds so a
+    cold search can answer by keyword quickly; a call that extracts
+    nothing keeps its full budget for embeddings.
 
     ``sections``, when true, also builds the section-granularity FTS5
     index (see ``backfill_sections`` and ``extractor._warm_extract_worker``'s
@@ -1208,6 +1224,8 @@ def warm_docs(
         to_embed = sorted(resume + extracted, key=lambda item: item[1])
         p2_start = clock()
         p2_budget = max(0.0, budget_seconds - (p2_start - start))
+        if cold_embed_slice_seconds is not None and extracted_this_call:
+            p2_budget = min(p2_budget, cold_embed_slice_seconds)
         before = {
             p: _embedded_pages_count(p, cache, model_name) or 0 for p, _ in to_embed
         }

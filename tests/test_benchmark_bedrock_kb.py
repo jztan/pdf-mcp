@@ -617,8 +617,8 @@ class TestReuseBedrockRows:
     querying AWS. The happy path must work with boto3 AND botocore made
     unimportable, proving the offline claim rather than asserting it."""
 
-    def _row(self, cls, status="exact"):
-        return {
+    def _row(self, cls, status="exact", kept_text=True):
+        row = {
             "class": cls,
             "kept": [],
             "realized_k": 3,
@@ -631,6 +631,9 @@ class TestReuseBedrockRows:
             "dochit3": 1,
             "seconds": 0.1,
         }
+        if kept_text:
+            row["kept_text"] = []
+        return row
 
     def _setup(
         self,
@@ -643,6 +646,7 @@ class TestReuseBedrockRows:
         manifest_hash=None,
         canonical=False,
         write_prior=True,
+        kept_text=True,
     ):
         import hashlib
 
@@ -689,7 +693,10 @@ class TestReuseBedrockRows:
                 },
             },
             "per_query": {
-                "B0": {q: self._row("needle", "missing") for q in (prior_qids or qids)}
+                "B0": {
+                    q: self._row("needle", "missing", kept_text=kept_text)
+                    for q in (prior_qids or qids)
+                }
             },
         }
         prior_path = (
@@ -782,6 +789,16 @@ class TestReuseBedrockRows:
         )
         assert rc == 2
         assert "--live" in capsys.readouterr().out
+
+    def test_refuses_rows_it_cannot_regrade(self, tmp_path, monkeypatch, capsys):
+        """A row without kept_text keeps containment graded against whatever
+        labels were current when it was queried, so pairing it with a local
+        arm graded on today's labels compares two label sets. Refuse, and
+        name the classes to re-query."""
+        d, o, p = self._setup(tmp_path, monkeypatch, kept_text=False)
+        assert bm.main(self._argv(d, o, p)) == 2
+        out = capsys.readouterr().out
+        assert "--live-classes needle" in out
 
     def test_live_and_reuse_from_are_mutually_exclusive(self, tmp_path, monkeypatch):
         d, o, prior = self._setup(tmp_path, monkeypatch)

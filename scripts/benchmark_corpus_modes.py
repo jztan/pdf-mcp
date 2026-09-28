@@ -41,6 +41,46 @@ import _retrieval_metrics as rm  # noqa: E402
 DEFAULT_DATA = REPO / "benchmark_data" / "corpus_search"
 TOP_K = 10
 MODES = ("keyword", "semantic", "auto")
+#: The `search_mode` each requested mode must echo. `auto` answers by keyword
+#: alone while embeddings are pending (#73); scoring that as hybrid is wrong.
+EXPECTED_SEARCH_MODE = {"keyword": "keyword", "semantic": "semantic", "auto": "hybrid"}
+
+
+def degraded_mode_error(mode: str, res: dict) -> str | None:
+    """Error text when a response did not run the mode it is graded as."""
+    got = res.get("search_mode")
+    if got != EXPECTED_SEARCH_MODE[mode] or res.get("semantic_pending"):
+        return (
+            f"mode={mode} answered as search_mode={got}"
+            f" semantic_pending={bool(res.get('semantic_pending'))}"
+        )
+    return None
+
+
+def warm_corpus(paths: list[str], budget_seconds: int = 900) -> dict:
+    """Warm text and embeddings into the ACTIVE cache, looping until nothing
+    is unprocessed. The caller must still check `warm_incomplete_error`: a
+    doc whose embedding fails is skipped, not left unprocessed."""
+    from pdf_mcp.server import pdf_corpus_warm
+
+    warm = pdf_corpus_warm(paths, budget_seconds=budget_seconds, embeddings=True)
+    while warm.get("unprocessed"):
+        warm = pdf_corpus_warm(paths, budget_seconds=budget_seconds, embeddings=True)
+    return warm
+
+
+def warm_incomplete_error(warm: dict) -> str | None:
+    """Error text unless the warm envelope says every doc is fully warm.
+
+    Looping on `unprocessed` alone is not enough: a doc whose embedding fails
+    goes to `skipped`, the loop ends, and auto mode then searches it by
+    keyword only."""
+    if warm.get("warm_complete") is not True:
+        return (
+            f"warm incomplete: warm_complete={warm.get('warm_complete')} "
+            f"unwarmed={warm.get('unwarmed')} skipped={warm.get('skipped')}"
+        )
+    return None
 
 
 def class_names(queries: dict) -> list[str]:
@@ -459,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     # which would empty a warm cache before --validate could read it.
     from pdf_mcp import _core
     from pdf_mcp.cache import PDFCache
-    from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
+    from pdf_mcp.server import pdf_corpus_search
 
     paths = [p for p in id_by_path if Path(p).exists()]
     if len(paths) != len(manifest["docs"]):
@@ -491,10 +531,12 @@ def main(argv: list[str] | None = None) -> int:
         _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
         try:
             t0 = time.perf_counter()
-            warm = pdf_corpus_warm(paths, budget_seconds=300, embeddings=True)
-            while warm.get("unprocessed"):
-                warm = pdf_corpus_warm(paths, budget_seconds=300, embeddings=True)
+            warm = warm_corpus(paths, budget_seconds=300)
             warm_s = time.perf_counter() - t0
+            err = warm_incomplete_error(warm)
+            if err:
+                print(f"ERROR: {err}. Refusing to score a partial corpus.")
+                return 2
             print(
                 f"warmed {len(paths)} docs (text+embeddings) in {warm_s:.0f}s"
                 f" ({len(warm.get('skipped', []))} skipped)"
@@ -513,6 +555,10 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"ERROR {mode} {q['id']}: {res['error']}")
                         return 2
                     reported_mode.add(res["search_mode"])
+                    err = degraded_mode_error(mode, res)
+                    if err:
+                        print(f"ERROR {q['id']}: {err}")
+                        return 2
                     if res["coverage"]["searched"] != len(paths):
                         print(
                             f"ERROR {mode} {q['id']}: partial coverage "

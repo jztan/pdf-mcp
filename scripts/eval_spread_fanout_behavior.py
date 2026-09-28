@@ -176,10 +176,16 @@ def main(argv: list[str] | None = None) -> int:
 
     from pdf_mcp import _core
 
-    from pdf_mcp.cache import PDFCache
+    from benchmark_corpus_modes import (
+        degraded_mode_error,
+        warm_corpus,
+        warm_incomplete_error,
+    )
+    from benchmark_corpus_search import open_validation_cache
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    # A kept cache: never purge it by age on open (it is weeks old).
+    _core.cache = open_validation_cache(SPIKE_CACHE)
     corpus_doc = (pdf_corpus_search.__doc__ or "").strip()
     if args.arm in ("new", "new2"):
         repl = NEW_INSTRUCTION if args.arm == "new" else NEW_INSTRUCTION_V2
@@ -212,11 +218,21 @@ def main(argv: list[str] | None = None) -> int:
                 if r.get("old_query"):
                     emitted.setdefault(r["id"], r["old_query"])
 
+    # Keyword-first warm (#73): an unwarmed corpus answers auto by keyword
+    # alone, and the caller would be shown a keyword response as hybrid.
+    err = warm_incomplete_error(warm_corpus(paths))
+    if err:
+        print(f"ERROR: {err}")
+        return 2
+
     cache = _load_cache()
 
     def run_one(q: dict) -> tuple[str, str | None, dict]:
         text = emitted[q["id"]]
         r = pdf_corpus_search(paths, text, mode="auto", top_k=10)
+        degraded = degraded_mode_error("auto", r)
+        if degraded:
+            raise RuntimeError(f"{q['id']}: {degraded}")
         compact = {
             "matches": [
                 {

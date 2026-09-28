@@ -104,8 +104,12 @@ def pdf_corpus_warm(
             Pass this when you know section-granularity search is coming.
 
     Returns:
-        - docs: per-doc rows {path, status: "warmed"|"cached"|"partial",
-          pages, embeddings_cached, text_coverage}. A very large
+        - docs: per-doc rows {path, status:
+          "warmed"|"cached"|"partial"|"text_only", pages,
+          embeddings_cached, text_coverage}. With embeddings=True, text
+          is warmed for every document before any is embedded; a doc
+          whose embeddings have not started yet is "text_only" (it is
+          searchable by keyword) and stays in `unprocessed`. A very large
           document may not finish embedding inside one budget: it is
           reported with status "partial" plus embedded_pages (how many
           pages hold embeddings so far), stays in `unprocessed`, and
@@ -844,6 +848,9 @@ def _semantic_pending_fields(
         " documents typically recovers only about half of a"
         " multi-document answer. For a single-document question,"
         " follow up on the best match only."
+        " Exception: when `semantic_pending` is true and `keyword_match`"
+        " is 'partial' or 'none', run `next_call` and search again before"
+        " answering or re-asking documents."
     )
 )
 @pdf_access
@@ -962,12 +969,26 @@ def pdf_corpus_search(
           carries text invisible to a human reader
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted, warm_complete, unwarmed: same envelope
-          as pdf_corpus_warm. Results only cover the documents that
-          are warm, so a false `warm_complete` means the ranking was
-          computed over an incomplete corpus
+          as pdf_corpus_warm, except that `unprocessed` lists only
+          documents not searched at all; `warm_complete` and `unwarmed`
+          also count documents still waiting for embeddings. A false
+          `warm_complete` means the ranking was computed over an
+          incomplete corpus, or by keyword only
         - semantic_unprocessed: (semantic/hybrid only) paths that were
           warmed/cached but had no cached embeddings (e.g. warm raced
           the embeddings budget); additive to `unprocessed`
+        - semantic_pending, keyword_match, hint, embeddings_pending,
+          next_call: (auto mode only) present when some searched
+          documents have text but no embeddings yet. The answer is then
+          keyword-only (`search_mode: 'keyword'`) over every searched
+          document; `semantic_unprocessed` lists the pending ones.
+          `keyword_match` is 'full' (some document holds every term),
+          'partial' (hits matched only some terms) or 'none'; `hint`
+          says in one sentence whether the keyword answer is reliable
+          for this query. `embeddings_pending` = {docs, pages,
+          est_seconds (only when this call measured an embedding
+          rate)}. `next_call` is the pdf_corpus_warm call that finishes
+          the embeddings; `warm_complete` stays false until it has.
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
           profiled < searched means the document arm ran partially
           (profiles still backfilling, or page 1 has no text); a

@@ -407,6 +407,25 @@ class TestRunArmBedrockRerankOrdering:
         assert rows["q1"]["realized_k"] == 1
 
 
+def test_run_arm_p_refuses_a_keyword_only_answer(monkeypatch):
+    """Keyword-first warm (#73): auto can answer by keyword while embeddings
+    are pending. Arm P is graded as hybrid, so that must abort the run."""
+    import pdf_mcp.server as pdf_mcp_server
+
+    def fake(paths, q, mode="auto", top_k=25, excerpt_style="paragraph"):
+        return {
+            "matches": [],
+            "coverage": {"searched": len(paths)},
+            "search_mode": "keyword",
+            "semantic_pending": True,
+        }
+
+    monkeypatch.setattr(pdf_mcp_server, "pdf_corpus_search", fake)
+    query = {"id": "q1", "class": "needle", "query": "x", "labels": []}
+    with pytest.raises(RuntimeError, match="search_mode=keyword"):
+        run_arm_p(["/abs/a.pdf"], [query], {"/abs/a.pdf": "A"}, budget_tokens=100)
+
+
 class TestRunArmBedrockRowShapeParity:
     def test_row_keys_match_real_run_arm_p_output(self, monkeypatch):
         # Compare against a REAL run_arm_p row, not the hand-written _row()
@@ -438,6 +457,7 @@ class TestRunArmBedrockRowShapeParity:
                     {"path": "/abs/a.pdf", "page": 1, "excerpt": "hello world"}
                 ],
                 "coverage": {"searched": len(paths)},
+                "search_mode": "hybrid",
             }
 
         monkeypatch.setattr(pdf_mcp_server, "pdf_corpus_search", fake_pdf_corpus_search)

@@ -37,6 +37,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 OUT_DIR = DATA / "c2_rewrite"
@@ -76,7 +77,12 @@ def mcp_config(project_dir: str) -> str:
                 "pdf-mcp": {
                     "command": "uv",
                     "args": ["run", "--project", project_dir, "pdf-mcp"],
-                    "env": {"PDF_MCP_CACHE_DIR": str(SPIKE_CACHE)},
+                    # The kept cache must survive the server's purge-on-open
+                    # (24 h default; 8760 is the env maximum).
+                    "env": {
+                        "PDF_MCP_CACHE_DIR": str(SPIKE_CACHE),
+                        "PDF_MCP_CACHE_TTL": "8760",
+                    },
                 }
             }
         }
@@ -159,11 +165,13 @@ def main(argv: list[str] | None = None) -> int:
 
     from pdf_mcp import _core
 
-    from pdf_mcp.cache import PDFCache
+    from benchmark_corpus_modes import warm_corpus, warm_incomplete_error
+    from benchmark_corpus_search import open_validation_cache
     from pdf_mcp.extractor import parse_page_range  # noqa: F401
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    # A kept cache: never purge it by age on open (it is weeks old).
+    _core.cache = open_validation_cache(SPIKE_CACHE)
     stream_dir = STREAM_DIR if not args.tag else Path(str(STREAM_DIR) + "_" + args.tag)
     stream_dir.mkdir(exist_ok=True)
 
@@ -179,6 +187,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.ids:
         wanted = {i.strip() for i in args.ids.split(",")}
         queries = [q for q in queries if q["id"] in wanted]
+
+    # Keyword-first warm (#73): sessions against an unwarmed cache get
+    # keyword-only answers from auto, so warm it fully before any session.
+    paths = [
+        str(REPO / d["path"]) for d in manifest["docs"] if (REPO / d["path"]).exists()
+    ]
+    err = warm_incomplete_error(warm_corpus(paths))
+    if err:
+        print(f"ERROR: {err}")
+        return 2
 
     def get_stream(q: dict) -> tuple[str, str | None]:
         path = stream_dir / f"{q['id']}.jsonl"

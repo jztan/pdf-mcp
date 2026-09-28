@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call took about 50 s and searched 42 of the 100. Text is now warmed for
   every document before any is embedded, and while embeddings are still
   pending, `mode="auto"` answers by keyword across all of them, in about
-  20 s. On the 184-query corpus benchmark that first answer's page
+  23 s. On the 184-query corpus benchmark that first answer's page
   NDCG@10 rose from 0.260 to 0.468 (+0.208, CI [+0.150, +0.266]) and
   doc-hit@3 from 0.446 to 0.777. The response says so: `semantic_pending`,
   `keyword_match` (whether any document holds every query term), a
@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_corpus_warm` call that finishes the embeddings. Once every document
   is embedded the ranking is the same hybrid one as before, and
   `warm_complete` stays `false` until then. `pdf_corpus_warm` reports a
-  document whose embeddings have not started as `"text_only"`.
+  document whose embeddings have not started as `"text_only"`
+  ([#73](https://github.com/jztan/pdf-mcp/issues/73)).
 - **`pdf_corpus_search` ranks keyword hits across the whole corpus.** The
   keyword arm used to rank pages inside each document and interleave the
   lists, so the top of the ranking held one page per document and a

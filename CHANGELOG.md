@@ -80,6 +80,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cleanup at startup is logged instead of stopping the server
   ([#74](https://github.com/jztan/pdf-mcp/issues/74)).
 
+### Security
+
+- Bumped transitive `urllib3` 2.7.0 → 2.8.0 (CVE-2026-97687, -97688,
+  -97689; reached via `requests` and `fastembed`) and `pyjwt` 2.13.0 →
+  2.15.1 (CVE-2026-101917, -101918, -102265 to -102274; reached via
+  `mcp[crypto]`). Lockfile-only, no change to `pyproject.toml`
+  constraints; the Claude Desktop bundle installs the locked versions.
+
 ### Contributors
 
 - @bbulkow: reported the startup crash when two instances clean one cache, with a reproduction script ([#74](https://github.com/jztan/pdf-mcp/issues/74))

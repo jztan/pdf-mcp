@@ -68,6 +68,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Answer-span recall in the default excerpts rose on multi-document queries
   (0.622 to 0.689) and no query lost evidence. ([#72](https://github.com/jztan/pdf-mcp/issues/72))
 
+### Fixed
+
+- **The server no longer exits at startup when a second instance starts
+  on the same cache.** Claude Desktop launches the server twice at once.
+  On Windows, when both removed the same expired image files, the one
+  that lost the race got `PermissionError` and exited before answering
+  `initialize`, so the client reported "Couldn't start". Removing a cached
+  image or render file is now best-effort everywhere (a file that cannot
+  be deleted is left behind while its cache rows still go), and a failed
+  cleanup at startup is logged instead of stopping the server
+  ([#74](https://github.com/jztan/pdf-mcp/issues/74)).
+
+### Contributors
+
+- @bbulkow: reported the startup crash when two instances clean one cache, with a reproduction script ([#74](https://github.com/jztan/pdf-mcp/issues/74))
+
+
 ## [3.4.0] - 2026-09-26
 ### Added
 

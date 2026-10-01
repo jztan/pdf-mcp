@@ -136,6 +136,27 @@ def build(out_dir: str) -> list[tuple[str, str]]:
         "attack",
     )
 
+    # --- white text on filled bands (Fed consumer-context p7 pattern) ---
+    save(
+        _raw_page(
+            b"0 0.447 0.737 rg 36 300 340 21 re f"
+            b" 1 1 1 rg BT /helv 9 Tf 42 306 Td"
+            b" (Table 2. Estimated APRs for select products) Tj ET"
+        ),
+        "clean_white_on_band.pdf",
+        "clean",
+    )
+    save(
+        _raw_page(
+            b"BT /helv 12 Tf 72 500 Td (ordinary visible cover text) Tj ET"
+            b" 0.97 0.97 0.97 rg 36 300 340 21 re f"
+            b" 1 1 1 rg BT /helv 9 Tf 42 306 Td"
+            b" (white on light secret payload) Tj ET"
+        ),
+        "attack_white_on_light_band.pdf",
+        "attack",
+    )
+
     return specs
 
 

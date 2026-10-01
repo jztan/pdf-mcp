@@ -52,18 +52,51 @@ def _is_light(color: Any) -> bool:
         return False
 
 
+def _drawing_rect(d: dict[str, Any]) -> Rect | None:
+    """Bounding rect of one drawing. PyMuPDF dicts carry 'rect'; the pdfium
+    backend's carry only 'items' ('re' Rect, 'qu' Quad, 'l'/'c' Points).
+    None when the drawing has no usable geometry."""
+    if d.get("rect") is not None:
+        return Rect(*d["rect"])
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in d.get("items") or ():
+        for part in item[1:]:
+            if isinstance(part, Rect):
+                xs += [part.x0, part.x1]
+                ys += [part.y0, part.y1]
+            elif hasattr(part, "ul"):  # Quad
+                for p in (part.ul, part.ur, part.ll, part.lr):
+                    xs.append(p.x)
+                    ys.append(p.y)
+            elif hasattr(part, "x") and hasattr(part, "y"):
+                xs.append(part.x)
+                ys.append(part.y)
+    if not xs:
+        return None
+    return Rect(min(xs), min(ys), max(xs), max(ys))
+
+
 def _page_fills(page: Any) -> list[tuple[Rect, Any]]:
-    """Filled vector drawings as (rect, fill_color), in paint order. Best-effort:
-    returns [] on any PyMuPDF error so a flaky page never breaks detection."""
+    """Filled vector drawings as (rect, fill_color), in paint order.
+    Best-effort per drawing: one malformed path is skipped, it never
+    empties the list (a whole-loop except did, on every pdfium page)."""
     try:
-        out: list[tuple[Rect, Any]] = []
-        for d in page.get_drawings():
-            fill = d.get("fill")
-            if fill is not None:
-                out.append((Rect(*d["rect"]), fill))
-        return out
-    except (RuntimeError, AttributeError, KeyError, TypeError, ValueError):
+        drawings = page.get_drawings()
+    except (RuntimeError, AttributeError, TypeError, ValueError):
         return []
+    out: list[tuple[Rect, Any]] = []
+    for d in drawings:
+        try:
+            fill = d.get("fill")
+            if fill is None:
+                continue
+            rect = _drawing_rect(d)
+        except (AttributeError, KeyError, TypeError, ValueError, IndexError):
+            continue
+        if rect is not None:
+            out.append((rect, fill))
+    return out
 
 
 def _bg_is_light(span_rect: Rect, fills: list[tuple[Rect, Any]]) -> bool:

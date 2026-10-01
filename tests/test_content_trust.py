@@ -416,3 +416,22 @@ def test_summarize_empty_phrases_matches_today_behavior():
     assert block["injection_in_hidden"] == scan["injection_in_hidden"]
     assert block["injection_in_hidden"] >= 1
     doc.close()
+
+
+def test_drawing_rect_from_items_when_rect_key_missing():
+    """pdfium drawing dicts carry no 'rect' (only items); PyMuPDF's do.
+    Missing it made _page_fills return [] on every production page."""
+    from pdf_mcp.backend.geometry import Point, Quad, Rect
+    from pdf_mcp.content_trust import _drawing_rect
+
+    assert _drawing_rect({"items": [("re", Rect(36, 521, 376, 542), 0)]}) == Rect(
+        36, 521, 376, 542
+    )
+    curve = ("c", Point(0, 0), Point(1, 1), Point(2, 2), Point(40, 50))
+    line = ("l", Point(10, 20), Point(30, 5))
+    assert _drawing_rect({"items": [line, curve]}) == Rect(0, 0, 40, 50)
+    q = Quad(Point(1, 2), Point(9, 2), Point(1, 8), Point(9, 8))
+    assert _drawing_rect({"items": [("qu", q)]}) == Rect(1, 2, 9, 8)
+    assert _drawing_rect({"rect": (5, 6, 7, 8), "items": []}) == Rect(5, 6, 7, 8)
+    assert _drawing_rect({"items": []}) is None
+    assert _drawing_rect({"items": [("zz", object())]}) is None

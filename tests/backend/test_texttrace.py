@@ -38,6 +38,7 @@ ATTACKS = [
     "attack_offpage_en",
     "attack_offpage_cjk",
     "attack_tiny_scaled",
+    "attack_white_on_light_band",
 ]
 CONTROLS = [
     "clean_plain",
@@ -45,7 +46,11 @@ CONTROLS = [
     "clean_stray_glyph",
     "clean_prose_about_injection",
     "clean_scaled_font",
+    "clean_white_on_band",
 ]
+# The _Page stub has no drawings, so fill-dependent controls run only on
+# real backend pages (test_backend_page_leaves_controls_clean).
+STUB_CONTROLS = [n for n in CONTROLS if n != "clean_white_on_band"]
 
 
 def _load_generate():
@@ -220,7 +225,7 @@ def test_detector_flags_every_attack(name):
     assert all(s["reasons"] for s in spans)
 
 
-@pytest.mark.parametrize("name", CONTROLS)
+@pytest.mark.parametrize("name", STUB_CONTROLS)
 def test_detector_leaves_controls_clean(name):
     """A detector that flags everything catches every attack and is
     useless. Both halves have to hold."""

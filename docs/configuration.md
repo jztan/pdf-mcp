@@ -79,6 +79,23 @@ trigger. A non-list value aborts startup. Phrases are matched independently, so
 one that is a substring of another (or of a built-in) can each contribute to the
 count — the result is a hint, not an exact tally.
 
+## Language support
+
+Most of pdf-mcp is language-neutral, but search and OCR are tuned for English
+by default. What works per language, and what you have to turn on:
+
+| Capability | Out of the box | Needs config | Untested |
+|---|---|---|---|
+| Text extraction (PDFs with a text layer) | Any Unicode script; multi-column reading order | | Right-to-left scripts (Arabic, Hebrew) |
+| Vertical script (tategaki) | Japanese, auto-detected | | Traditional Chinese (expected to work by the same path) |
+| Keyword search | English (stemmed). Other Latin-script languages match whole words with accents ignored (`resume` finds `résumé`), without stemming. Chinese, Japanese and Korean have their own character-level index | German stemming: `[fts] language = "de"` (above) | Unspaced scripts outside CJK (Thai, Lao, Khmer) |
+| Semantic search | English (`BAAI/bge-small-en-v1.5`) | A multilingual model via `[embedding] model`, e.g. `intfloat/multilingual-e5-small` | Every multilingual model: none has been benchmarked here, see [embedding-models.md](embedding-models.md) |
+| OCR (scanned pages) | English | Any Tesseract language: install its language pack and pass `ocr_lang` to `pdf_read_pages` (e.g. `"fra"`, `"khm+eng"`). The portable Tesseract the one-click bundle downloads is English-only | |
+| Hidden-text injection hint | English phrases | Your own phrases in any language: `[content_trust] injection_phrases` (above) | |
+
+For a mostly non-English collection, consider a multilingual
+`[embedding] model`, and check it on your own documents before relying on it.
+
 ## Environment variables
 
 ```bash

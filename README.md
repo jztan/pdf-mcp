@@ -77,7 +77,9 @@ For VS Code, Cursor, Codex CLI, Kiro or any other MCP client, see
 **[docs/clients.md](docs/clients.md)**. Then ask your agent to read a PDF.
 
 Search, the corpus tools, tables and multi-column and CJK reading order work
-out of the box. OCR on scanned pages also needs Tesseract:
+out of the box. For non-English documents, see
+[language support](docs/configuration.md#language-support). OCR on scanned
+pages also needs Tesseract:
 
 ```bash
 brew install tesseract                             # macOS

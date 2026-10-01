@@ -19,6 +19,18 @@ def _invisible(page, text, render_mode=3, opacity=1.0):
     tw.write_text(page, render_mode=render_mode, opacity=opacity)
 
 
+def _raw_page(stream: bytes) -> "pymupdf.Document":
+    """One-page doc whose content is exactly `stream`. A seed insert_text
+    registers the Helvetica resource as /helv, then the content stream is
+    replaced wholesale. insert_text cannot emit a scaled 1 pt font or an
+    invisible copy far from its twin, which the real-filing fixtures need."""
+    d = pymupdf.open()
+    pg = d.new_page()
+    pg.insert_text((72, 72), "seed", fontsize=12)
+    d.update_stream(pg.get_contents()[0], stream)
+    return d
+
+
 def build(out_dir: str) -> list[tuple[str, str]]:
     os.makedirs(out_dir, exist_ok=True)
     specs: list[tuple[str, str]] = []
@@ -103,6 +115,26 @@ def build(out_dir: str) -> list[tuple[str, str]]:
     pg.insert_text((72, 72), "visible body", fontsize=12)
     _invisible(pg, "hi")
     save(d, "clean_stray_glyph.pdf", "clean")
+
+    # --- scaled fonts: 1 pt Tf scaled by Tm (MSFT/Starbucks 10-K pattern) ---
+    save(
+        _raw_page(
+            b"BT /helv 1 Tf 10 0 0 10 72 700 Tm"
+            b" (an ordinary scaled body line) Tj ET"
+        ),
+        "clean_scaled_font.pdf",
+        "clean",
+    )
+    # tiny AFTER scaling: 0.1 pt x 5 = 0.5 pt effective
+    save(
+        _raw_page(
+            b"BT /helv 12 Tf 72 300 Td (ordinary visible cover text) Tj ET"
+            b" BT /helv 0.1 Tf 5 0 0 5 72 700 Tm"
+            b" (tiny injected secret payload text) Tj ET"
+        ),
+        "attack_tiny_scaled.pdf",
+        "attack",
+    )
 
     return specs
 

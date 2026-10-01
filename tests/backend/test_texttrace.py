@@ -26,25 +26,53 @@ _WHITE = str(_CORPUS / "attack_white_en.pdf")
 _CLEAN = str(_CORPUS / "clean_plain.pdf")
 
 
+ATTACKS = [
+    "attack_invisible_en",
+    "attack_invisible_cjk",
+    "attack_transparent_en",
+    "attack_transparent_cjk",
+    "attack_tiny_en",
+    "attack_tiny_cjk",
+    "attack_white_en",
+    "attack_white_cjk",
+    "attack_offpage_en",
+    "attack_offpage_cjk",
+    "attack_tiny_scaled",
+]
+CONTROLS = [
+    "clean_plain",
+    "clean_ocr_layer",
+    "clean_stray_glyph",
+    "clean_prose_about_injection",
+    "clean_scaled_font",
+]
+
+
+def _load_generate():
+    spec = importlib.util.spec_from_file_location(
+        "_ct_generate", _CORPUS / "generate.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture(scope="module", autouse=True)
 def _corpus():
-    """Build the attack corpus if absent (0.12s for all 14 fixtures).
+    """Build the attack corpus if any fixture is absent (~0.1s for all).
 
     The PDFs are generated artifacts and gitignored, so a clean checkout
     has only generate.py. Building rather than skipping is deliberate:
     this module tests a SAFETY detector whose failure mode is reporting
     a hidden-text attack as clean, and a skip on CI would have looked
     exactly like a pass. That is how these tests reached CI green
-    locally and red on a clean checkout.
+    locally and red on a clean checkout. Every listed fixture is checked,
+    not one sentinel, so a corpus built before a fixture was added is
+    rebuilt rather than failing on a missing file.
     """
-    if (_CORPUS / "attack_invisible_en.pdf").is_file():
+    if all((_CORPUS / f"{n}.pdf").is_file() for n in ATTACKS + CONTROLS):
         return
-    spec = importlib.util.spec_from_file_location(
-        "_ct_generate", _CORPUS / "generate.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.build(str(_CORPUS))
+    _load_generate().build(str(_CORPUS))
 
 
 def test_chars_carry_integer_codepoints():
@@ -175,26 +203,6 @@ class _Page:
         return []
 
 
-ATTACKS = [
-    "attack_invisible_en",
-    "attack_invisible_cjk",
-    "attack_transparent_en",
-    "attack_transparent_cjk",
-    "attack_tiny_en",
-    "attack_tiny_cjk",
-    "attack_white_en",
-    "attack_white_cjk",
-    "attack_offpage_en",
-    "attack_offpage_cjk",
-]
-CONTROLS = [
-    "clean_plain",
-    "clean_ocr_layer",
-    "clean_stray_glyph",
-    "clean_prose_about_injection",
-]
-
-
 @pytest.mark.parametrize("name", ATTACKS)
 def test_detector_flags_every_attack(name):
     """The consumer-level check. The spike's 14/14 was vacuous: it read
@@ -225,3 +233,49 @@ def test_detector_leaves_controls_clean(name):
 
     spans = _scan_page_geometry(_Page(path, 0, rect), 0)
     assert spans == [], f"{name} flagged: {[s['reasons'] for s in spans]}"
+
+
+def _backend_page_spans(name: str) -> list[dict]:
+    """Detector output on a REAL pdfium backend page, the path the server
+    runs. PyMuPDF pages and the _Page stub both hid the 3.0.0 regressions
+    (nominal font size, no drawing rects)."""
+    from pdf_mcp.backend.page import open_document
+    from pdf_mcp.content_trust import _scan_page_geometry
+
+    doc = open_document(f"{_CORPUS}/{name}.pdf")
+    try:
+        return _scan_page_geometry(doc[0], 0)
+    finally:
+        doc.close()
+
+
+@pytest.mark.parametrize("name", ATTACKS)
+def test_backend_page_flags_every_attack(name):
+    spans = _backend_page_spans(name)
+    assert_non_empty(spans, f"{name}: detector found no hidden span")
+
+
+@pytest.mark.parametrize("name", CONTROLS)
+def test_backend_page_leaves_controls_clean(name):
+    spans = _backend_page_spans(name)
+    assert spans == [], f"{name} flagged: {[s['reasons'] for s in spans]}"
+
+
+def test_scaled_font_size_is_effective():
+    """1 pt Tf x 10 Tm reads as 10 pt (MSFT FY2024 p50 pattern)."""
+    spans = get_texttrace(f"{_CORPUS}/clean_scaled_font.pdf", 0)
+    assert_non_empty(spans, "spans")
+    assert all(abs(s["size"] - 10.0) < 0.01 for s in spans), [s["size"] for s in spans]
+
+
+def test_rotated_scaled_font_size_uses_determinant(tmp_path):
+    """A 90-degree rotated 10 pt line is 10 pt, not 0 or 1."""
+    path = tmp_path / "rot.pdf"
+    d = _load_generate()._raw_page(
+        b"BT /helv 1 Tf 0 10 -10 0 300 300 Tm (rotated scaled body line) Tj ET"
+    )
+    d.save(str(path))
+    d.close()
+    spans = get_texttrace(str(path), 0)
+    assert_non_empty(spans, "spans")
+    assert all(abs(s["size"] - 10.0) < 0.01 for s in spans), [s["size"] for s in spans]

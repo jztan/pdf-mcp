@@ -13,7 +13,7 @@ assumed): `chars`, `type` (render mode), `opacity`, `size`, `color`,
 | field | pdfium source |
 | --- | --- |
 | `type` | `FPDFTextObj_GetTextRenderMode` |
-| `size` | `FPDFTextObj_GetFontSize` |
+| `size` | `FPDFTextObj_GetFontSize` x sqrt(abs(det(`FPDFPageObj_GetMatrix`))) |
 | `color` + `opacity` | `FPDFPageObj_GetFillColor` (alpha carries ExtGState `ca`) |
 | `bbox` | `FPDFPageObj_GetBounds`, y-flipped |
 | `chars` | `FPDFTextObj_GetText` via a page-level text handle |
@@ -47,6 +47,20 @@ def _bounds(obj: Any) -> tuple[float, float, float, float]:
         ctypes.byref(top),
     )
     return (left.value, bottom.value, right.value, top.value)
+
+
+def _effective_size(obj: Any, nominal: float) -> float:
+    """Font size as rendered: nominal Tf size times the object matrix
+    scale. Pdfium's object matrix already folds in Tm and cm (checked on
+    generated fixtures), and PyMuPDF's span size, which content_trust was
+    written against, is the transformed size. MSFT and Starbucks 10-Ks
+    set 1 pt fonts scaled to 8-10 pt; nominal size flagged every line as
+    tiny_font. sqrt(|det|) keeps rotated text at its real size."""
+    matrix = pdfium_c.FS_MATRIX()
+    if not pdfium_c.FPDFPageObj_GetMatrix(obj, ctypes.byref(matrix)):
+        return nominal
+    scale = abs(matrix.a * matrix.d - matrix.b * matrix.c) ** 0.5
+    return nominal * scale if scale > 0 else nominal
 
 
 def _fill_rgba(obj: Any) -> tuple[int, int, int, int]:
@@ -102,7 +116,7 @@ def _spans_for_page(page: Any) -> list[dict[str, Any]]:
                 # the same PDF `Tr` numbering (3 == invisible), which is the
                 # value content_trust.py compares against.
                 "type": int(mode),
-                "size": float(size.value),
+                "size": _effective_size(obj, float(size.value)),
                 # PyMuPDF gives colour as 0..1 floats and opacity separately.
                 # pdfium folds ExtGState `ca` into the fill alpha channel, so
                 # alpha/255 reconstructs `opacity`.

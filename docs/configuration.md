@@ -88,8 +88,8 @@ by default. What works per language, and what you have to turn on:
 |---|---|---|---|
 | Text extraction (PDFs with a text layer) | Any Unicode script; multi-column reading order | | Right-to-left scripts (Arabic, Hebrew) |
 | Vertical script (tategaki) | Japanese, auto-detected | | Traditional Chinese (expected to work by the same path) |
-| Keyword search | English (stemmed). Other Latin-script languages match whole words with accents ignored (`resume` finds `résumé`), without stemming. Chinese, Japanese and Korean have their own character-level index | German stemming: `[fts] language = "de"` (above) | Unspaced scripts outside CJK (Thai, Lao, Khmer) |
-| Semantic search | English (`BAAI/bge-small-en-v1.5`) | A multilingual model via `[embedding] model`, e.g. `intfloat/multilingual-e5-small` | Every multilingual model: none has been benchmarked here, see [embedding-models.md](embedding-models.md) |
+| Keyword search | English (stemmed). Other Latin-script languages match with accents ignored (`resume` finds `résumé`) and English stemming rules, which fold simple endings like a plural -s but not that language's own inflection. Chinese, Japanese and Korean have their own character-level index | German stemming: `[fts] language = "de"` (above) | Unspaced scripts outside CJK (Thai, Lao, Khmer) |
+| Semantic search | English (`BAAI/bge-small-en-v1.5`) | A multilingual model via `[embedding] model`, e.g. `intfloat/multilingual-e5-large` (2.2 GB, about 6x slower to warm than the default) | Benchmarked on German only: `multilingual-e5-large` beat the default on one German corpus ([results](../benchmark_data/german_embedding_results.md)). Every other language |
 | OCR (scanned pages) | English | Any Tesseract language: install its language pack and pass `ocr_lang` to `pdf_read_pages` (e.g. `"fra"`, `"khm+eng"`). The portable Tesseract the one-click bundle downloads is English-only | |
 | Hidden-text injection hint | English phrases | Your own phrases in any language: `[content_trust] injection_phrases` (above) | |
 

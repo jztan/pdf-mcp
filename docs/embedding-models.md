@@ -57,7 +57,7 @@ Known gotchas we've already hit:
 - **`nomic-ai/nomic-embed-text-v1.5`** (520 MB, 768-dim, 8192-token context) — fastembed's default `batch_size=256` makes the model OOM/hang when embedding PDFs with ~75+ pages of long text on commodity hardware. Lowering `batch_size` helps but didn't make it reliable in our tests.
 - **`mixedbread-ai/mxbai-embed-large-v1`** (640 MB, 1024-dim) — not run against the live corpus.
 - **`BAAI/bge-large-en-v1.5`** (1.2 GB, 1024-dim) — not run against the live corpus.
-- **`intfloat/multilingual-e5-small`** (384-dim, 100+ languages) — not run against the live corpus.
+- **`intfloat/multilingual-e5-small`**: not in fastembed 0.8's catalogue, so the config rejects it; use `multilingual-e5-large` or one of the `paraphrase-multilingual` models instead.
 - **`intfloat/multilingual-e5-large`** (2.2 GB, 1024-dim, 100+ languages) — not run against the live corpus.
 - **`jinaai/jina-embeddings-v2-base-de`** (320 MB, 768-dim, German) — **does not load under pdf-mcp today.** fastembed hardcodes onnxruntime's `ORT_ENABLE_ALL` graph-optimization level and this model's exported graph fails a fusion pass there. The German benchmark harness works around it process-locally (`--patch-onnx-graph-opt`); `embedder.py` has no per-model session-options override, so configuring this model via BYOM fails at load.
 

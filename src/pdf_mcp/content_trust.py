@@ -19,7 +19,9 @@ from .backend.geometry import Rect
 
 # Detection-logic version. Bump when geometry rules / thresholds change so the
 # cache layer (cache.py) re-scans. See cache._TRUST_VERSION wiring.
-_TRUST_VERSION = 3
+# 4 (2026-10-01): matrix-scaled font size, fill rects from path items,
+# invisible duplicates of visible text exempt.
+_TRUST_VERSION = 4
 
 # Tuned in the benchmark loop (scripts/benchmark_content_trust.py).
 # CJK text is split into short per-font spans by PyMuPDF (e.g. 4-char runs);

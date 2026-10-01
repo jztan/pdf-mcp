@@ -489,3 +489,11 @@ def test_span_with_other_reasons_never_dropped():
     ]
     visible = [("Derivatives gains recorded", Rect(256, 111, 534, 118))]
     assert _drop_invisible_duplicates(spans, visible) == spans
+
+
+def test_trust_version_bumped_for_detector_fixes():
+    """Cached hidden-text flags from the 3.0.0-3.4.0 detector are wrong on
+    most filings; version 4 makes every cache recompute them."""
+    from pdf_mcp import content_trust
+
+    assert content_trust._TRUST_VERSION >= 4

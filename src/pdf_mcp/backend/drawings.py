@@ -144,7 +144,12 @@ def _subpath_to_items(points: list[tuple[int, _Point, bool]]) -> list[tuple[Any,
     closed = points[-1][2] or (len(verts) > 2 and verts[0] == verts[-1])
     unique_verts = verts[:-1] if (len(verts) > 1 and verts[0] == verts[-1]) else verts
 
-    if closed:
+    # Rect/quad recognition only for straight-edged subpaths: with a curve
+    # in it, unique_verts holds Bezier CONTROL points, and a thin curve
+    # came back as a large quad (content_trust then read it as a dark
+    # background). PyMuPDF reports such a path as 'c'/'l' items.
+    has_curve = any(t == pdfium_c.FPDF_SEGMENT_BEZIERTO for t, _, _ in points)
+    if closed and not has_curve:
         rect = _is_axis_aligned_rect(unique_verts)
         if rect is not None:
             return [("re", rect, 0)]
@@ -228,6 +233,7 @@ def get_drawings(page: pdfium.PdfPage) -> list[dict[str, Any]]:
             )
 
         fill = None
+        fill_opacity = 1.0
         if has_fill:
             r, g, b, a = (ctypes.c_uint() for _ in range(4))
             pdfium_c.FPDFPageObj_GetFillColor(
@@ -238,6 +244,10 @@ def get_drawings(page: pdfium.PdfPage) -> list[dict[str, Any]]:
                 round(g.value / 255, 3),
                 round(b.value / 255, 3),
             )
+            # pdfium folds ExtGState `ca` into the fill alpha. PyMuPDF names
+            # it fill_opacity; content_trust needs it so a transparent shape
+            # cannot pose as a dark background behind white text.
+            fill_opacity = round(a.value / 255, 4)
 
         width = None
         if has_stroke:
@@ -265,6 +275,7 @@ def get_drawings(page: pdfium.PdfPage) -> list[dict[str, Any]]:
                 "type": dtype,
                 "color": color,
                 "fill": fill,
+                "fill_opacity": fill_opacity,
                 "width": width,
                 "dashes": dashes,
                 "items": items,

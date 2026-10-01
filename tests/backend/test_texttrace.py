@@ -40,6 +40,10 @@ ATTACKS = [
     "attack_tiny_scaled",
     "attack_white_on_light_band",
     "attack_invisible_over_other",
+    "attack_tiny_squashed",
+    "attack_white_on_clear_fill",
+    "attack_white_on_zero_area_path",
+    "attack_white_on_curve_sliver",
 ]
 CONTROLS = [
     "clean_plain",

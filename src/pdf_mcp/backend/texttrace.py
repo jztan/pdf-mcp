@@ -13,7 +13,7 @@ assumed): `chars`, `type` (render mode), `opacity`, `size`, `color`,
 | field | pdfium source |
 | --- | --- |
 | `type` | `FPDFTextObj_GetTextRenderMode` |
-| `size` | `FPDFTextObj_GetFontSize` x sqrt(abs(det(`FPDFPageObj_GetMatrix`))) |
+| `size` | `FPDFTextObj_GetFontSize` x smallest scale of `FPDFPageObj_GetMatrix` |
 | `color` + `opacity` | `FPDFPageObj_GetFillColor` (alpha carries ExtGState `ca`) |
 | `bbox` | `FPDFPageObj_GetBounds`, y-flipped |
 | `chars` | `FPDFTextObj_GetText` via a page-level text handle |
@@ -50,17 +50,22 @@ def _bounds(obj: Any) -> tuple[float, float, float, float]:
 
 
 def _effective_size(obj: Any, nominal: float) -> float:
-    """Font size as rendered: nominal Tf size times the object matrix
-    scale. Pdfium's object matrix already folds in Tm and cm (checked on
-    generated fixtures), and PyMuPDF's span size, which content_trust was
-    written against, is the transformed size. MSFT and Starbucks 10-Ks
-    set 1 pt fonts scaled to 8-10 pt; nominal size flagged every line as
-    tiny_font. sqrt(|det|) keeps rotated text at its real size."""
-    matrix = pdfium_c.FS_MATRIX()
-    if not pdfium_c.FPDFPageObj_GetMatrix(obj, ctypes.byref(matrix)):
+    """Font size as rendered: nominal Tf size times the smallest scale the
+    object matrix applies. Pdfium's object matrix already folds in Tm and
+    cm (checked on generated fixtures). MSFT and Starbucks 10-Ks set 1 pt
+    fonts scaled to 8-10 pt; nominal size flagged every line as tiny_font.
+    The smallest singular value, not sqrt(|det|): an area scale let glyphs
+    0.05 pt tall pass as 1.7 pt when stretched 60x wide (review probe,
+    2026-10-01). Rotation and mirroring leave it unchanged."""
+    m = pdfium_c.FS_MATRIX()
+    if not pdfium_c.FPDFPageObj_GetMatrix(obj, ctypes.byref(m)):
         return nominal
-    scale = abs(matrix.a * matrix.d - matrix.b * matrix.c) ** 0.5
-    return nominal * scale if scale > 0 else nominal
+    a, b, c, d = float(m.a), float(m.b), float(m.c), float(m.d)
+    sq = a * a + b * b + c * c + d * d
+    det = a * d - b * c
+    disc = max(sq * sq - 4.0 * det * det, 0.0) ** 0.5
+    smallest: float = max((sq - disc) / 2.0, 0.0) ** 0.5
+    return nominal * smallest
 
 
 def _fill_rgba(obj: Any) -> tuple[int, int, int, int]:

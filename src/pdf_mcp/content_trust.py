@@ -33,6 +33,7 @@ _WHITE_THRESHOLD = 0.95  # min per-channel value to call a color "white-ish"
 _OCR_COVERAGE_RATIO = 0.8  # image coverage of an invisible span => OCR layer
 _LIGHT_BG_THRESHOLD = 0.85  # min per-channel value for a "light" background fill
 _BG_COVERAGE_RATIO = 0.5  # fill must cover >= this fraction of a span to count
+_SOLID_FILL_RATIO = 0.5  # traced polygon area / bbox area for a path to count as a fill
 _DUP_COVERAGE_RATIO = 0.8  # visible twin must cover this much of an invisible span
 
 HiddenSpan = dict[str, Any]
@@ -80,10 +81,37 @@ def _drawing_rect(d: dict[str, Any]) -> Rect | None:
     return Rect(min(xs), min(ys), max(xs), max(ys))
 
 
+def _is_solid(d: dict[str, Any], rect: Rect) -> bool:
+    """Does this drawing actually paint its bbox? Rect and quad items do.
+    A path of lines and curves counts only if the polygon through its
+    on-curve points covers at least _SOLID_FILL_RATIO of the bbox: a
+    zero-area line, or a thin curve whose control points span the text,
+    must not pose as a dark background (review probes, 2026-10-01)."""
+    items = d.get("items") or ()
+    if any(item and item[0] in ("re", "qu") for item in items):
+        return True
+    pts: list[tuple[float, float]] = []
+    for item in items:
+        if not item:
+            continue
+        ends = (item[1], item[2]) if item[0] == "l" else (item[1], item[-1])
+        for p in ends:
+            xy = (float(p.x), float(p.y))
+            if not pts or pts[-1] != xy:
+                pts.append(xy)
+    area = rect.get_area()
+    if len(pts) < 3 or area <= 0:
+        return False
+    twice = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+    return abs(twice) / 2.0 >= _SOLID_FILL_RATIO * area
+
+
 def _page_fills(page: Any) -> list[tuple[Rect, Any]]:
     """Filled vector drawings as (rect, fill_color), in paint order.
     Best-effort per drawing: one malformed path is skipped, it never
-    empties the list (a whole-loop except did, on every pdfium page)."""
+    empties the list (a whole-loop except did, on every pdfium page).
+    Transparent and non-solid fills are left out, so they cannot make a
+    span's background read as dark."""
     try:
         drawings = page.get_drawings()
     except (RuntimeError, AttributeError, TypeError, ValueError):
@@ -94,11 +122,15 @@ def _page_fills(page: Any) -> list[tuple[Rect, Any]]:
             fill = d.get("fill")
             if fill is None:
                 continue
+            opacity = d.get("fill_opacity")
+            if opacity is not None and float(opacity) <= _OPACITY_EPS:
+                continue
             rect = _drawing_rect(d)
+            if rect is None or not _is_solid(d, rect):
+                continue
         except (AttributeError, KeyError, TypeError, ValueError, IndexError):
             continue
-        if rect is not None:
-            out.append((rect, fill))
+        out.append((rect, fill))
     return out
 
 

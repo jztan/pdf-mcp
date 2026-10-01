@@ -87,6 +87,22 @@ def _python_search(
     return matches, page_counts
 
 
+def _keyword_match_label(matches: list[dict[str, Any]]) -> str:
+    """'full', 'partial' or 'none' for a keyword ranking, consuming the
+    ``_partial`` marker `PDFCache.search_fts` puts on OR-recovered hits.
+
+    'partial' means no page held every query term and the hits came from
+    the OR retry (queries of three or more words), so a hit may lack some
+    of the terms. Pops the marker so it never reaches a response.
+    """
+    partial = False
+    for m in matches:
+        partial = bool(m.pop("_partial", False)) or partial
+    if not matches:
+        return "none"
+    return "partial" if partial else "full"
+
+
 class _LayoutPage:
     """Page stand-in built from the cached blocks shape.
 

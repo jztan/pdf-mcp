@@ -23,6 +23,7 @@ from ._search_common import (
     _attach_snippet_geometry,
     _corpus_query_terms,
     _expand_excerpts_to_windows,
+    _keyword_match_label,
     _python_search,
     _route_excerpt_auto,
     _semantic_excerpt_fields,
@@ -514,9 +515,11 @@ def _corpus_keyword_arm(
         item: kw_doc_scores.get(hits[0][0], 0.0) for hits in rank_lists for item in hits
     }
     fused = corpus.rrf_fuse_doc_rankings(rank_lists, top_k=top_k, scores=kw_scores)
-    # In mode="auto" the per-document arm runs without the OR fallback, so
-    # this is the full-match document count.
-    return fused, doc_match_counts, payload, len(doc_match_counts), False
+    # Only keyword mode's relaxed retry marks hits; in mode="auto" the
+    # per-document arm runs without the OR fallback, so this stays False
+    # there and the count below is the full-match document count.
+    partial = _keyword_match_label(list(payload.values())) == "partial"
+    return fused, doc_match_counts, payload, len(doc_match_counts), partial
 
 
 def _merge_doc_match_counts(
@@ -770,6 +773,15 @@ def _finalize_corpus_matches(
     return matches
 
 
+def _corpus_keyword_match(has_hits: bool, partial: bool) -> str:
+    """`keyword_match` for a keyword-only corpus answer: 'full' when some
+    document holds every query term, 'partial' when the hits came from the
+    partial-match tier, 'none' when there are no hits."""
+    if not has_hits:
+        return "none"
+    return "partial" if partial else "full"
+
+
 def _semantic_pending_fields(
     paths: str | list[str],
     recursive: bool,
@@ -786,12 +798,7 @@ def _semantic_pending_fields(
     per-query reliability signal, an ETA and a structured next call; a
     weaker model followed up per document on off-topic keyword hits
     unless told not to."""
-    if not has_hits:
-        match = "none"
-    elif kw_partial:
-        match = "partial"
-    else:
-        match = "full"
+    match = _corpus_keyword_match(has_hits, kw_partial)
     if match == "full":
         hint = (
             f"Keyword-only ranking: {len(pending)} of {searched} documents have"
@@ -981,13 +988,14 @@ def pdf_corpus_search(
         - semantic_unprocessed: (semantic/hybrid only) paths that were
           warmed/cached but had no cached embeddings (e.g. warm raced
           the embeddings budget); additive to `unprocessed`
-        - semantic_pending, keyword_match, hint, embeddings_pending,
-          next_call: (auto mode only) present when some searched
-          documents have text but no embeddings yet. The answer is then
-          keyword-only (`search_mode: 'keyword'`) over every searched
-          document; `semantic_unprocessed` lists the pending ones.
-          `keyword_match` is 'full' (some document holds every term),
-          'partial' (hits matched only some terms) or 'none'; `hint`
+        - keyword_match: (whenever search_mode is 'keyword') 'full'
+          (some document holds every term), 'partial' (no document did;
+          hits matched only some terms of a 3+ word query) or 'none'
+        - semantic_pending, hint, embeddings_pending, next_call: (auto
+          mode only) present when some searched documents have text but
+          no embeddings yet. The answer is then keyword-only
+          (`search_mode: 'keyword'`) over every searched document;
+          `semantic_unprocessed` lists the pending ones. `hint`
           says in one sentence whether the keyword answer is reliable
           for this query. `embeddings_pending` = {docs, pages,
           est_seconds (only when this call measured an embedding
@@ -1280,6 +1288,7 @@ def pdf_corpus_search(
             "total_matches": len(matches),
             "doc_match_counts": kw_doc_match_counts,
             "search_mode": "keyword",
+            "keyword_match": _corpus_keyword_match(bool(matches), kw_partial),
             "excerpt_style": excerpt_style,
             **(
                 {

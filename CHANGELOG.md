@@ -79,6 +79,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be deleted is left behind while its cache rows still go), and a failed
   cleanup at startup is logged instead of stopping the server
   ([#74](https://github.com/jztan/pdf-mcp/issues/74)).
+- **`hidden_text` no longer fires on ordinary visible text.** Since 3.0.0
+  the flag (and `hidden_text_detected`, and the `pdf_info(content_trust=true)`
+  counts) was true on most pages of many documents: every hit for "total
+  revenue" in Microsoft's FY2024 10-K, and every page of some federal
+  reports. Four causes are fixed: a font set at 1 pt and scaled up read as
+  unreadably small, white text on a coloured band was compared against a
+  white page because fill shapes were never read, a header drawn twice
+  (once visible, once invisible) counted as hidden, and runs of blank
+  spaces counted as off-page text. Across 27 real PDFs (24 10-K filings,
+  an annual report, a Federal Reserve report and a statute), flagged pages
+  fell from 1,092 to 37. Every hidden-text attack in the test corpus is still
+  caught. Cached flags are recomputed on first use.
 
 ### Security
 

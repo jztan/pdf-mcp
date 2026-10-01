@@ -39,6 +39,7 @@ ATTACKS = [
     "attack_offpage_cjk",
     "attack_tiny_scaled",
     "attack_white_on_light_band",
+    "attack_invisible_over_other",
 ]
 CONTROLS = [
     "clean_plain",
@@ -47,6 +48,7 @@ CONTROLS = [
     "clean_prose_about_injection",
     "clean_scaled_font",
     "clean_white_on_band",
+    "clean_invisible_duplicate",
 ]
 # The _Page stub has no drawings, so fill-dependent controls run only on
 # real backend pages (test_backend_page_leaves_controls_clean).

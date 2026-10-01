@@ -31,6 +31,7 @@ _WHITE_THRESHOLD = 0.95  # min per-channel value to call a color "white-ish"
 _OCR_COVERAGE_RATIO = 0.8  # image coverage of an invisible span => OCR layer
 _LIGHT_BG_THRESHOLD = 0.85  # min per-channel value for a "light" background fill
 _BG_COVERAGE_RATIO = 0.5  # fill must cover >= this fraction of a span to count
+_DUP_COVERAGE_RATIO = 0.8  # visible twin must cover this much of an invisible span
 
 HiddenSpan = dict[str, Any]
 
@@ -141,12 +142,43 @@ def _covered_by_image(span_rect: Rect, images: list[Rect]) -> bool:
     return False
 
 
+def _norm_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _drop_invisible_duplicates(
+    spans: list[HiddenSpan], visible: list[tuple[str, Rect]]
+) -> list[HiddenSpan]:
+    """Drop spans flagged ONLY invisible_render whose text a visible span at
+    the same place already shows (JPM FY2023 p251 draws headers twice, once
+    in render mode 3). It cannot hide new content: the invisible text must
+    equal visible text. Any other reason keeps the span."""
+    if not visible:
+        return spans
+    kept: list[HiddenSpan] = []
+    for s in spans:
+        if s["reasons"] == ["invisible_render"]:
+            text = _norm_text(s["text"])
+            rect = Rect(*s["bbox"])
+            area = rect.get_area()
+            if area > 0 and any(
+                _norm_text(vtext) == text
+                and (rect & vrect).get_area() / area >= _DUP_COVERAGE_RATIO
+                for vtext, vrect in visible
+            ):
+                continue
+        kept.append(s)
+    return kept
+
+
 def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
     """Return hidden spans on one page. page_index is 0-indexed."""
     page_rect = page.rect
     images = _image_bboxes(page)
     fills: list[tuple[Rect, Any]] | None = None  # lazy: only if needed
     spans: list[HiddenSpan] = []
+    # (text, rect) of drawn, non-transparent spans, for the duplicate check.
+    visible: list[tuple[str, Rect]] = []
 
     for s in page.get_texttrace():
         chars = s.get("chars", [])
@@ -159,6 +191,8 @@ def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
         color = s.get("color", (0.0, 0.0, 0.0))
         bbox = tuple(float(c) for c in s.get("bbox", (0, 0, 0, 0)))
         span_rect = Rect(*bbox)
+        if stype in (0, 2) and opacity > _OPACITY_EPS:
+            visible.append(("".join(chr(c[0]) for c in chars), span_rect))
 
         reasons: list[str] = []
 
@@ -198,7 +232,7 @@ def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
             }
         )
 
-    return spans
+    return _drop_invisible_duplicates(spans, visible)
 
 
 _SPAN_CAP = 200

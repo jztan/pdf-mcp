@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **Keyword searches say when they matched only part of the query.** A
+  keyword query of three or more words that no page fully matches is
+  retried with its words OR-joined, and until now nothing in the response
+  said so: hits for "Microsoft cloud revenue zyzzyvaword" looked exactly
+  like hits that held every word. Every keyword-mode response from
+  `pdf_search` and `pdf_corpus_search` now carries `keyword_match`:
+  `"full"`, `"partial"` (hits may lack some of the words) or `"none"`. It
+  appears whenever `search_mode` is `"keyword"`, including `mode="auto"`
+  answered by keyword. Ranking is unchanged.
+
 ### Changed
 
 - **Paragraph excerpts keep the answer when it sits in a list.** With

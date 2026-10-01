@@ -2809,6 +2809,9 @@ class PDFCache:
 
         Returns at most max_results results sorted by descending BM25 relevance.
         Each result has keys: page (1-indexed), excerpt (str), score (float >= 0).
+        Results recovered by the OR retry also carry ``_partial: True`` (they
+        may lack some query terms); callers report it as ``keyword_match``
+        and drop the key before returning matches.
         Returns [] when fts_available is False or no matches found.
 
         Args:
@@ -2866,6 +2869,7 @@ class PDFCache:
                 try:
                     self._build_temp_page_fts(conn, path, cjk=False, de=True)
                     rows = conn.execute(sql, (escaped, max_results)).fetchall()
+                    partial = False
                     if not rows and allow_or_fallback:
                         # Mirror the default path's OR retry (an unmatched
                         # multi-word query keeps one absent stem from
@@ -2878,6 +2882,7 @@ class PDFCache:
                         alt = _fts5_or_fallback_de(query)
                         if alt is not None:
                             rows = conn.execute(sql, (alt, max_results)).fetchall()
+                            partial = bool(rows)
                 except sqlite3.OperationalError:
                     return []
             out = []
@@ -2896,6 +2901,7 @@ class PDFCache:
                         "page": int(page_num) + 1,
                         "excerpt": excerpt,
                         "score": float(score),
+                        **({"_partial": True} if partial else {}),
                     }
                 )
             return out
@@ -2917,6 +2923,7 @@ class PDFCache:
                     " LIMIT ?"
                 )
                 rows = conn.execute(sql, (num_tokens, escaped, max_results)).fetchall()
+                partial = False
                 if not rows and allow_or_fallback:
                     # Every AND token must share a page; one absent word
                     # zeroes an otherwise precise question-shaped query.
@@ -2925,6 +2932,7 @@ class PDFCache:
                         rows = conn.execute(
                             sql, (num_tokens, alt, max_results)
                         ).fetchall()
+                        partial = bool(rows)
             except sqlite3.OperationalError:
                 return []
 
@@ -2933,6 +2941,7 @@ class PDFCache:
                 "page": int(page_num) + 1,
                 "excerpt": _whole_token_snippet(excerpt or "", text or ""),
                 "score": float(score),
+                **({"_partial": True} if partial else {}),
             }
             for page_num, excerpt, score, text in rows
         ]

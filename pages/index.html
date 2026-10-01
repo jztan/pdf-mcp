@@ -1886,6 +1886,8 @@ estimated_tokens: 925</pre>
       total_matches: matches.length,
       doc_match_counts: docMatchCounts,
       search_mode: "keyword",
+      // The demo matches AND-only (no OR retry), so never "partial".
+      keyword_match: matches.length ? "full" : "none",
       excerpt_style: "snippet",
       coverage: { searched: corpusState.docs.length, corpus: corpusState.docs.length },
       low_text_coverage: Object.fromEntries(
@@ -2505,6 +2507,8 @@ estimated_tokens: 925</pre>
       searched_pages: pageTexts.length,
       hidden_text_detected: false,
       search_mode: "keyword",
+      // The demo matches AND-only (no OR retry), so never "partial".
+      keyword_match: matches.length ? "full" : "none",
       excerpt_style: "snippet"
     };
 

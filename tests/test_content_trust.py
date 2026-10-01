@@ -497,3 +497,48 @@ def test_trust_version_bumped_for_detector_fixes():
     from pdf_mcp import content_trust
 
     assert content_trust._TRUST_VERSION >= 4
+
+
+class _TracePage:
+    """Page stub feeding fixed texttrace spans to _scan_page_geometry."""
+
+    def __init__(self, spans):
+        self._spans = spans
+        self.rect = pymupdf.Rect(0, 0, 612, 792)
+
+    def get_texttrace(self):
+        return self._spans
+
+    def get_image_info(self):
+        return []
+
+    def get_drawings(self):
+        return []
+
+
+def _trace_span(text, bbox, stype=0, size=10.0):
+    return {
+        "chars": [(ord(c), 0.0, 0.0, 0.0) for c in text],
+        "type": stype,
+        "opacity": 1.0,
+        "size": size,
+        "color": (0.0, 0.0, 0.0),
+        "bbox": bbox,
+    }
+
+
+def test_whitespace_only_span_never_flagged():
+    """AAPL FY2023 p1 and the BGB carry runs of NBSP / figure spaces with a
+    zero-height bbox, which read as offpage. Whitespace cannot hide content."""
+    page = _TracePage(
+        [
+            _trace_span("\xa0" * 12 + " ", (327, 234, 355, 234)),
+            _trace_span(" " * 6, (326, 173, 351, 173), stype=3),
+        ]
+    )
+    assert _scan_page_geometry(page, 0) == []
+
+
+def test_offpage_text_with_content_still_flagged():
+    page = _TracePage([_trace_span("4-3 v6 printer mark", (518, -31, 540, -25))])
+    assert "offpage" in _reasons(_scan_page_geometry(page, 0))

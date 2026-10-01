@@ -186,6 +186,10 @@ def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
         chars = s.get("chars", [])
         if len(chars) < _MIN_HIDDEN_CHARS:
             continue
+        if not "".join(chr(c[0]) for c in chars).strip():
+            # Whitespace-only runs (NBSP / figure-space padding, often with
+            # a zero-height bbox that reads as offpage) cannot hide content.
+            continue
 
         stype = s.get("type", 0)
         opacity = float(s.get("opacity", 1.0))

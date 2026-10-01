@@ -665,10 +665,10 @@ hits measurably lowers result quality. Every keyword-mode response says
 which case it is in `keyword_match`, so a retried answer cannot pass for a
 full match.
 
-> **CJK queries (Japanese/Chinese/Korean):** FTS5 keyword matching is unreliable
-> on unspaced CJK text, so `mode='auto'`/`'keyword'` may miss embedded terms. The
-> tool attaches a `cjk_keyword_warning` advisory and steers you to
-> `mode='semantic'` (`pip install 'pdf-mcp[cjk]'`).
+> **CJK queries (Japanese/Chinese/Korean):** keyword matching runs on a
+> separate character-level index, so terms embedded in unspaced CJK text are
+> found. See [language support](configuration.md#language-support) for other
+> languages.
 
 > **German queries:** the default keyword index uses an English (porter)
 > stemmer, so it does not unify German inflection (`kündigen`/`Kündigung`) or

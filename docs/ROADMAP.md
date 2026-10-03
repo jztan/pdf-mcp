@@ -5,7 +5,7 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Project Status
 
-- **Current version:** v3.4.0 (released 2026-09-26): search hits carry their outline section and table lead-in ([#66](https://github.com/jztan/pdf-mcp/issues/66)), parallel tool calls no longer crash the server ([#61](https://github.com/jztan/pdf-mcp/issues/61)), merged-cell table values land in their printed column ([#63](https://github.com/jztan/pdf-mcp/issues/63)), and the over-cap corpus error lists the folder's PDFs ([#68](https://github.com/jztan/pdf-mcp/issues/68)). Nothing user-facing on develop is unreleased.
+- **Current version:** v3.5.0 (released 2026-10-03): search hits carry their outline section and table lead-in ([#66](https://github.com/jztan/pdf-mcp/issues/66)), parallel tool calls no longer crash the server ([#61](https://github.com/jztan/pdf-mcp/issues/61)), merged-cell table values land in their printed column ([#63](https://github.com/jztan/pdf-mcp/issues/63)), and the over-cap corpus error lists the folder's PDFs ([#68](https://github.com/jztan/pdf-mcp/issues/68)). Nothing user-facing on develop is unreleased.
 - **MCP Registry:** published (v3.4.0)
 - **Tools:** 13 released (`pdf_info`, `pdf_read_pages`, `pdf_read_all`, `pdf_search`, `pdf_get_toc`, `pdf_render_pages`, `pdf_extract_chart`, `pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`, `pdf_cache_stats`, `pdf_cache_clear`, `server_info`)
 - **Transports:** STDIO (`pdf-mcp`) and single-tenant HTTP (`pdf-mcp-http`); multi-arch Docker images at `ghcr.io/jztan/pdf-mcp`, tagged per release

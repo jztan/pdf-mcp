@@ -2016,7 +2016,10 @@ def _table_spans_full_page(bbox: Any, page_rect: Any) -> bool:
 #: tables whose values were all in the wrong field.
 #: Thousands separators are part of the number. Without them "4,350.4"
 #: reads as two tokens, which made a clean financial cell look merged.
-_NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
+#: So is a raised-dot decimal mark (U+00B7, "5·4" in older British
+#: journals): read as two numbers, it flagged a clean table unreliable
+#: (#77). Only unspaced: "5 · 4" stays two values.
+_NUMBER_TOKEN = re.compile(r"\d+(?:,\d{3})*(?:[.\u00b7]\d+)?")
 
 
 #: A currency symbol or a thousands-grouped amount. Marks a cell as data
@@ -2055,7 +2058,10 @@ def _columns_reliable(rows: list[list[str]], header: list[str] | None = None) ->
 #: column it is printed under (counted in `split_cells`), and a header row
 #: carrying money forces `columns_reliable` False. Version-5 rows hold the
 #: value under the wrong column and the old flag, so they are re-extracted.
-TABLE_EXTRACTION_VERSION = 6
+#: 7: a raised-dot decimal ("5·4") counts as one number, so it no longer
+#: forces `columns_reliable` False or reads as a packed cell. Version-6
+#: rows carry the old flag, so they are re-extracted.
+TABLE_EXTRACTION_VERSION = 7
 
 
 def _extract_tables_worker(

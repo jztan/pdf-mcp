@@ -116,9 +116,9 @@ def test_extraction_emits_one_bbox_per_row(ruled_table_pdf):
     assert tops == sorted(tops)
 
 
-def test_table_extraction_version_is_6():
-    """Packed-cell split changes the cached table shape (columns_reliable)."""
-    assert TABLE_EXTRACTION_VERSION == 6
+def test_table_extraction_version_is_7():
+    """Raised-dot decimals changed columns_reliable and the packed split."""
+    assert TABLE_EXTRACTION_VERSION == 7
 
 
 def test_every_table_carries_columns_reliable_and_split_cells(ruled_table_pdf):
@@ -143,6 +143,8 @@ def test_ambiguity_trigger():
     assert _excerpt_is_ambiguous("Maximum forward voltage 1.1 V") is False
     # One number cannot be confused with anything.
     assert _excerpt_is_ambiguous("Total Capacitance CT 2.0 pF") is False
+    # Nor can one raised-dot decimal (#77).
+    assert _excerpt_is_ambiguous("Sepal length of the sixth plant 5·4 cm") is False
     # Prose with no numbers must never trigger a subprocess.
     assert _excerpt_is_ambiguous("we vary the number of attention heads") is False
 

@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   full-page image now includes `scan_text_layer_pages` and a short `hint`
   to compare against a render or retry with `force_ocr`.
 
+### Fixed
+
+- **Tables with raised-dot decimals are no longer flagged unreliable.** A
+  value printed with a raised dot (`5·4`, U+00B7, common in older British
+  journals) was read as two numbers, so a correctly extracted table came
+  back `columns_reliable: false`. It now counts as one number; cached
+  tables re-extract once on the next read ([#77](https://github.com/jztan/pdf-mcp/issues/77), reported by
+  @phinnphace)
+
 ## [3.5.0] - 2026-10-03
 ### Added
 

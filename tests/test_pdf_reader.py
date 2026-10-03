@@ -340,6 +340,21 @@ class TestRaisedDotDecimals:
         assert len(tables) == 1
         assert tables[0]["header"] == RAISED_DOT_ROWS[0]
         assert tables[0]["rows"] == RAISED_DOT_ROWS[1:]
+        # One value per cell, so the columns are trustworthy (#77).
+        assert tables[0]["columns_reliable"] is True
+        assert tables[0]["split_cells"] == 0
+
+    def test_raised_dot_decimal_is_one_number(self):
+        assert extractor._NUMBER_TOKEN.findall("5·4") == ["5·4"]
+        assert extractor._NUMBER_TOKEN.findall("1,234·56") == ["1,234·56"]
+        # Spaced, it is a separator between two values, not a decimal.
+        assert extractor._NUMBER_TOKEN.findall("5 · 4") == ["5", "4"]
+
+    def test_columns_reliable_on_raised_dot_rows(self):
+        from tests.conftest import RAISED_DOT_ROWS
+
+        assert extractor._columns_reliable(RAISED_DOT_ROWS[1:]) is True
+        assert extractor._columns_reliable([["5·1 3·5"]]) is False
 
 
 # ============================================================================

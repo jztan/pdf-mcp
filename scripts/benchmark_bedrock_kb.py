@@ -641,6 +641,14 @@ def main(argv: list[str] | None = None) -> int:
         help="comma list of arm ids; default: P plus every Bedrock arm in config.json",
     )
     ap.add_argument("--budget", type=int, default=BUDGET_TOKENS)
+    ap.add_argument(
+        "--allow-mixed-cache",
+        action="store_true",
+        help=(
+            "score arm P even when the active cache holds documents outside"
+            " the corpus (refused by default: they shift corpus BM25 scores)"
+        ),
+    )
     ap.add_argument("--limit", type=int, default=None, help="pilot: first N queries")
     ap.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
@@ -718,6 +726,16 @@ def main(argv: list[str] | None = None) -> int:
             f"warmed {len(id_by_path)} docs (text+embeddings) in "
             f"{time.perf_counter() - t0:.0f}s ({len(warm.get('skipped', []))} skipped)"
         )
+        from bench_env import mixed_cache_gate
+        from pdf_mcp import _core
+
+        cache_comp, err = mixed_cache_gate(
+            _core.cache.db_path, list(id_by_path), args.allow_mixed_cache
+        )
+        if err:
+            print(f"ERROR: {err}")
+            return 2
+        config["cache"] = cache_comp
     for arm in local_arms:
         rows_by_arm[arm] = run_arm_p(
             list(id_by_path),

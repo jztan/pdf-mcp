@@ -87,3 +87,72 @@ def test_markdown_line_names_interpreter_and_sqlite():
     line = bench_env.markdown_line(_env())
     assert "Python 3.13.1" in line and "SQLite 3.51.0" in line
     assert "arm64" in line
+
+
+# Corpus keyword and hybrid search take BM25 word rarity from every
+# document in the cache's shared FTS table, not only the searched ones, so a
+# corpus benchmark scored on a cache that also holds unrelated PDFs is not
+# comparable with a corpus-only run (84 unrelated filings moved the Bedrock
+# anchor's described class from 0.325 to 0.289 on identical code). The
+# harnesses that score corpus search on the active cache check the index
+# first and refuse a mixed cache unless told otherwise.
+
+
+def _fts_db(tmp_path, paths):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    db = tmp_path / "cache.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE VIRTUAL TABLE pdf_search_fts USING fts5("
+        "file_path UNINDEXED, page_num UNINDEXED, text)"
+    )
+    conn.executemany(
+        "INSERT INTO pdf_search_fts VALUES (?, ?, ?)",
+        [(p, n, "some text") for p in paths for n in (0, 1)],
+    )
+    conn.commit()
+    conn.close()
+    return db
+
+
+def test_keyword_index_docs_lists_distinct_paths(tmp_path):
+    db = _fts_db(tmp_path, ["/c/a.pdf", "/c/b.pdf"])
+    assert bench_env.keyword_index_docs(db) == {"/c/a.pdf", "/c/b.pdf"}
+
+
+def test_corpus_only_cache_passes(tmp_path):
+    db = _fts_db(tmp_path, ["/c/a.pdf", "/c/b.pdf"])
+    comp, err = bench_env.mixed_cache_gate(db, ["/c/a.pdf", "/c/b.pdf"], allow=False)
+    assert err is None
+    assert comp["indexed_docs"] == 2 and comp["extra_docs"] == 0
+    assert comp["mixed_allowed"] is False and len(comp["digest"]) == 16
+
+
+def test_searched_docs_not_yet_indexed_are_not_extra(tmp_path):
+    db = _fts_db(tmp_path, ["/c/a.pdf"])
+    comp, err = bench_env.mixed_cache_gate(db, ["/c/a.pdf", "/c/b.pdf"], allow=False)
+    assert err is None and comp["extra_docs"] == 0
+
+
+def test_mixed_cache_is_refused_and_names_examples(tmp_path):
+    db = _fts_db(tmp_path, ["/c/a.pdf", "/x/f1.pdf", "/x/f2.pdf"])
+    comp, err = bench_env.mixed_cache_gate(db, ["/c/a.pdf"], allow=False)
+    assert comp["extra_docs"] == 2 and comp["extra_sample"] == ["f1.pdf", "f2.pdf"]
+    assert err is not None
+    assert "2 documents outside" in err and "--allow-mixed-cache" in err
+
+
+def test_mixed_cache_allowed_is_recorded_not_refused(tmp_path):
+    db = _fts_db(tmp_path, ["/c/a.pdf", "/x/f1.pdf"])
+    comp, err = bench_env.mixed_cache_gate(db, ["/c/a.pdf"], allow=True)
+    assert err is None and comp["mixed_allowed"] is True and comp["extra_docs"] == 1
+
+
+def test_digest_changes_with_cache_contents(tmp_path):
+    a = bench_env.mixed_cache_gate(
+        _fts_db(tmp_path / "a", ["/c/a.pdf"]), ["/c/a.pdf"], allow=False
+    )[0]["digest"]
+    b = bench_env.mixed_cache_gate(
+        _fts_db(tmp_path / "b", ["/c/b.pdf"]), ["/c/b.pdf"], allow=False
+    )[0]["digest"]
+    assert a != b

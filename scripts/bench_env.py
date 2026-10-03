@@ -15,11 +15,14 @@ only wall-clock numbers do.
 
 from __future__ import annotations
 
+import hashlib
 import platform
 import sqlite3
 import sys
+from contextlib import closing
 from importlib import metadata
-from typing import Any
+from pathlib import Path
+from typing import Any, Iterable
 
 # The packages whose versions move a pdf-mcp timing: the engine, the
 # encoder stack, and the numeric layer under both.
@@ -81,4 +84,53 @@ def markdown_line(env: dict[str, Any]) -> str:
     return (
         f"Environment: {env['implementation']} Python {env['python']},"
         f" SQLite {env['sqlite']}, {env['machine']} ({env['platform']}); {pkgs}."
+    )
+
+
+# Corpus keyword and hybrid search run one BM25 query on the cache's shared
+# FTS table, filtered to the searched files; FTS5 takes word rarity (IDF)
+# from the whole table. So the documents a cache holds besides the corpus
+# move corpus scores: 84 unrelated filings in a shared cache moved the
+# Bedrock anchor's described class from 0.325 to 0.289 on identical code,
+# and it read as a regression. Harnesses that score corpus search on the
+# active cache gate on the index before scoring and record what it held.
+
+
+def keyword_index_docs(db_path: str | Path) -> set[str]:
+    """Distinct file paths in the cache's shared keyword index, read-only."""
+    uri = f"file:{Path(db_path)}?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True)) as conn:
+        rows = conn.execute("SELECT DISTINCT file_path FROM pdf_search_fts")
+        return {r[0] for r in rows}
+
+
+def mixed_cache_gate(
+    db_path: str | Path, searched: Iterable[str], allow: bool
+) -> tuple[dict[str, Any], str | None]:
+    """What the keyword index holds against the searched corpus, and an
+    error unless the index holds only searched documents or `allow` is set.
+
+    The composition goes into the results either way, so two runs can be
+    checked for the same cache contents before their scores are compared."""
+    indexed = keyword_index_docs(db_path)
+    wanted = {str(Path(p).resolve()) for p in searched}
+    extra = sorted(p for p in indexed if str(Path(p).resolve()) not in wanted)
+    comp: dict[str, Any] = {
+        "indexed_docs": len(indexed),
+        "searched_docs": len(wanted),
+        "extra_docs": len(extra),
+        "extra_sample": [Path(p).name for p in extra[:5]],
+        "digest": hashlib.sha256("\n".join(sorted(indexed)).encode()).hexdigest()[:16],
+        "mixed_allowed": bool(extra) and allow,
+    }
+    if not extra or allow:
+        return comp, None
+    return comp, (
+        f"the cache's keyword index holds {len(extra)} documents outside the"
+        f" searched corpus (e.g. {', '.join(comp['extra_sample'])}). Corpus"
+        " keyword and hybrid scores take word rarity from every indexed"
+        " document, so this run would not be comparable with a corpus-only"
+        " one. Score on a cache that holds only the corpus (PDF_MCP_CACHE_DIR"
+        " where the harness reads it), or pass --allow-mixed-cache to score"
+        " anyway (recorded in the output)."
     )

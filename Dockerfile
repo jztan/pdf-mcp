@@ -15,7 +15,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FASTEMBED_CACHE_PATH=/opt/fastembed
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# uv comes from Docker Hub, not ghcr.io: the arm64 GitHub runner pool shares
+# an egress address that GHCR throttles (429 on both v3.5.0 publish attempts).
+# Pinned so the builder stage is reproducible.
+COPY --from=docker.io/astral/uv:0.12.22 /uv /usr/local/bin/uv
 
 WORKDIR /app
 

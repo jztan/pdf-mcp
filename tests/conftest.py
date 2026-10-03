@@ -780,3 +780,85 @@ def raised_dot_table_vendor_ocr_pdf(tmp_path):
         invisible_text="Iris vwsiwlor 5-1 3-5 1-4 0*2 4-9 30 1-4 6.4 3-9 1-7 0-4",
     )
     return str(path.resolve())
+
+
+# The first 12 rows of Fisher's Table I, I. setosa (UCI bezdekIris.data,
+# which matches the 1936 print). Values only.
+FISHER_SETOSA_12 = [
+    ["5.1", "3.5", "1.4", "0.2"],
+    ["4.9", "3.0", "1.4", "0.2"],
+    ["4.7", "3.2", "1.3", "0.2"],
+    ["4.6", "3.1", "1.5", "0.2"],
+    ["5.0", "3.6", "1.4", "0.2"],
+    ["5.4", "3.9", "1.7", "0.4"],
+    ["4.6", "3.4", "1.4", "0.3"],
+    ["5.0", "3.4", "1.5", "0.2"],
+    ["4.4", "2.9", "1.4", "0.2"],
+    ["4.9", "3.1", "1.5", "0.1"],
+    ["5.4", "3.7", "1.5", "0.2"],
+    ["4.8", "3.4", "1.6", "0.2"],
+]
+
+# Cells the fixture's OCR layer misreads, by (row, col), with the kinds of
+# error the publisher's layer on the real Fisher scan made. The last is a
+# wrong digit in a well-formed cell: the column check cannot see it.
+FISHER_OCR_ERRORS = {
+    (1, 1): "3-0",  # hyphen for the decimal mark
+    (4, 1): "3-6",
+    (2, 0): "47",  # mark dropped
+    (5, 2): "1 7",  # mark read as a space: two words
+    (6, 0): "4- 6",  # hyphen plus space: two words
+    (9, 3): "O.1",  # letter O for zero
+    (10, 0): "6.4",  # wrong digit, well-formed (5.4 on the page)
+}
+# What the column check should flag: every error except the well-formed one,
+# split cells rejoined.
+FISHER_FLAGGED = {"3-0", "3-6", "47", "17", "4-6", "O.1"}
+
+
+def _make_scan_with_ocr_layer(path: Path, rows, errors, visible: bool) -> None:
+    """A table page; with visible=False, a 300 dpi scan under an invisible
+    OCR layer (as a digitiser writes it), else born-digital with the same
+    text printed."""
+    x0, y0, col_w, row_h = 60, 60, 70, 18
+    layer = [
+        [errors.get((r, c), v) for c, v in enumerate(row)] for r, row in enumerate(rows)
+    ]
+    doc = pymupdf.open()
+    page = doc.new_page()
+    if not visible:
+        art = pymupdf.open()
+        art_page = art.new_page()
+        for r, row in enumerate(rows):
+            for c, v in enumerate(row):
+                art_page.insert_text(
+                    (x0 + c * col_w, y0 + r * row_h), v.replace(".", "·")
+                )
+        pix = art_page.get_pixmap(dpi=300)
+        art.close()
+        page.insert_image(page.rect, stream=pix.tobytes("png"))
+    for r, row in enumerate(layer):
+        for c, v in enumerate(row):
+            page.insert_text(
+                (x0 + c * col_w, y0 + r * row_h),
+                v,
+                render_mode=0 if visible else 3,
+            )
+    doc.save(str(path))
+    doc.close()
+
+
+@pytest.fixture
+def fisher_scan_ocr_layer_pdf(tmp_path):
+    """A scanned Fisher table whose embedded OCR layer has the real errors."""
+    path = tmp_path / "fisher_scan_ocr_layer.pdf"
+    _make_scan_with_ocr_layer(path, FISHER_SETOSA_12, FISHER_OCR_ERRORS, False)
+    return str(path.resolve())
+
+
+@pytest.fixture
+def fisher_born_digital_garbled_pdf(tmp_path):
+    """The same garbled cells as born-digital text: never to be audited."""
+    path = tmp_path / "fisher_born_digital_garbled.pdf"
+    _make_scan_with_ocr_layer(path, FISHER_SETOSA_12, FISHER_OCR_ERRORS, True)
+    return str(path.resolve())

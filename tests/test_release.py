@@ -386,6 +386,45 @@ def test_recovery_instructions_say_rerun_only_helps_when_flaky(tmp_path, capsys)
     assert "git push origin :refs/tags/v1.2.0" in out
 
 
+# The v3.4.0 notes were hand-written because the generated ones put the
+# crash fix under the metadata feature, duplicated every highlight in a
+# `## Changes` list, and told every reader to `pip install -U` (the README
+# leads with the Claude Desktop bundle, and Homebrew and Debian refuse a
+# system-wide pip). These pin the structure the hand-written notes had.
+
+
+def test_prompt_orders_highlights_by_user_loss_and_links_issues():
+    prompt = release.RELEASE_NOTES_PROMPT
+    assert "crash" in prompt and "comes first" in prompt
+    assert "end the heading with it" in prompt
+    assert "## Also in this release" in prompt
+    assert "## After upgrading" in prompt
+    assert "## Changes" not in prompt
+    # Narrowing rule: "money amounts" must not become "data".
+    assert "exactly as narrow" in prompt
+    assert "Do not add Upgrading" in prompt
+
+
+def test_upgrading_tail_leads_with_the_bundle_and_never_bare_pip():
+    tail = release._upgrading_and_links_section("1.1.0")
+    assert tail.startswith("## Upgrading")
+    bundle = "https://github.com/jztan/pdf-mcp/releases/download/v1.1.0/pdf-mcp.mcpb"
+    assert bundle in tail
+    assert tail.index("Claude Desktop") < tail.index("uv tool upgrade pdf-mcp")
+    assert "pipx upgrade pdf-mcp" in tail
+    assert "pip install pdf-mcp==" not in tail
+    assert "virtual environment" in tail
+    # The registry search for "pdf-mcp" lands on other vendors' servers.
+    assert "search=io.github.jztan/pdf-mcp" in tail
+    assert "—" not in tail
+
+
+def test_raw_fallback_body_carries_the_same_tail():
+    body = release.build_raw_release_body("### Added\n- thing", "1.1.0")
+    assert body.startswith("## What's New in v1.1.0")
+    assert "## Upgrading" in body and "uv tool upgrade pdf-mcp" in body
+
+
 def test_prompt_forbids_victory_claims_in_headlines():
     # The context flags drop CLAUDE.md, so the benchmark-wording rule has
     # to live in the prompt: a hinted draft once offered "ahead of Bedrock".
@@ -443,7 +482,8 @@ def test_dry_run_saves_the_draft_with_every_title_candidate(tmp_path):
     # The alternates are a drafting aid; they never reach the published body.
     assert "v1.1.0: Two" not in body
     assert body.startswith("## Highlights")
-    assert "pip install pdf-mcp==1.1.0" in body
+    assert "## Upgrading" in body
+    assert "uv tool upgrade pdf-mcp" in body
 
 
 def test_dry_run_never_overwrites_an_existing_draft(tmp_path):

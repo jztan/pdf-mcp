@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedded text is the scanner's own, poor OCR it returned that same text,
   and nothing could make it run Tesseract. `force_ocr` does, returns
   `source="ocr"`, and caches the result for `pdf_search`. The default is
-  unchanged.
+  unchanged ([#76](https://github.com/jztan/pdf-mcp/issues/76), reported by
+  @phinnphace)
 - **`pdf_read_pages` flags scanned pages whose text came from the
   scanner.** With `ocr` off, a response whose pages carry text over a
   full-page image now includes `scan_text_layer_pages` and a short `hint`

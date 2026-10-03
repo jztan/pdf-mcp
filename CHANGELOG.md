@@ -111,6 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2.15.1 (CVE-2026-101917, -101918, -102265 to -102274; reached via
   `mcp[crypto]`). Lockfile-only, no change to `pyproject.toml`
   constraints; the Claude Desktop bundle installs the locked versions.
+- Bumped `pypdf` 6.16.1 → 6.19.0 (PYSEC-2026-4153 to -4160; a direct
+  dependency, used to read content streams on tiling-pattern pages).
+  Lockfile-only, the `pyproject.toml` floor (`>=5.0`) is unchanged.
 
 ### Contributors
 

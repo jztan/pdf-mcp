@@ -685,3 +685,98 @@ def owner_only_pdf(tmp_path):
         permissions=pymupdf.PDF_PERM_PRINT,
     )
     return path
+
+
+# The first rows of Table I in Fisher (1936), Annals of Eugenics 7, which
+# prints its decimals with a raised dot (U+00B7): "5·4", not "5.4". Values
+# only; the scan itself is not redistributable and stays out of the repo.
+RAISED_DOT_ROWS = [
+    ["Sepal length", "Sepal width", "Petal length", "Petal width"],
+    ["5·1", "3·5", "1·4", "0·2"],
+    ["4·9", "3·0", "1·4", "0·2"],
+    ["4·7", "3·2", "1·3", "0·2"],
+    ["4·6", "3·1", "1·5", "0·2"],
+    ["5·4", "3·9", "1·7", "0·4"],
+]
+
+
+def _make_raised_dot_table_pdf(path: Path, ruled: bool) -> None:
+    """One born-digital page holding RAISED_DOT_ROWS as a table."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    x0, y0, col_w, row_h = 50, 50, 110, 24
+    for r, row in enumerate(RAISED_DOT_ROWS):
+        for c, cell in enumerate(row):
+            if ruled:
+                page.draw_rect(
+                    pymupdf.Rect(
+                        x0 + c * col_w,
+                        y0 + r * row_h,
+                        x0 + (c + 1) * col_w,
+                        y0 + (r + 1) * row_h,
+                    ),
+                    color=(0, 0, 0),
+                )
+            page.insert_text((x0 + c * col_w + 6, y0 + r * row_h + 16), cell)
+    doc.save(str(path))
+    doc.close()
+
+
+def _rasterise_first_page(src: Path, dst: Path, invisible_text: str = "") -> None:
+    """Replace src's page with a 300 dpi image of itself (a scan).
+
+    ``invisible_text`` adds a render-mode-3 text layer over the image, the
+    way a scanner's built-in OCR does.
+    """
+    src_doc = pymupdf.open(str(src))
+    pix = src_doc[0].get_pixmap(dpi=300)
+    rect = src_doc[0].rect
+    src_doc.close()
+    doc = pymupdf.open()
+    page = doc.new_page(width=rect.width, height=rect.height)
+    page.insert_image(page.rect, stream=pix.tobytes("png"))
+    if invisible_text:
+        page.insert_text((56, 66), invisible_text, render_mode=3)
+    doc.save(str(dst))
+    doc.close()
+
+
+@pytest.fixture
+def raised_dot_table_pdf(tmp_path):
+    """Born-digital raised-dot table, ruled so find_tables detects it."""
+    path = tmp_path / "raised_dot_table.pdf"
+    _make_raised_dot_table_pdf(path, ruled=True)
+    return str(path.resolve())
+
+
+@pytest.fixture
+def raised_dot_table_scan_pdf(tmp_path):
+    """The raised-dot table as an image with no text layer.
+
+    Unruled on purpose. With the cell grid, Tesseract (5.5) returned only
+    the header row and dropped every number, which tests nothing about the
+    dot; Fisher's Table I has no vertical rules either.
+    """
+    digital = tmp_path / "raised_dot_unruled.pdf"
+    _make_raised_dot_table_pdf(digital, ruled=False)
+    path = tmp_path / "raised_dot_table_scan.pdf"
+    _rasterise_first_page(digital, path)
+    return str(path.resolve())
+
+
+@pytest.fixture
+def raised_dot_table_vendor_ocr_pdf(tmp_path):
+    """The scan plus an invisible, garbled text layer, as a scanner writes.
+
+    Mirrors the Fisher download: decimal marks read as hyphens and one
+    species name mangled ("Iris vwsiwlor").
+    """
+    digital = tmp_path / "raised_dot_unruled.pdf"
+    _make_raised_dot_table_pdf(digital, ruled=False)
+    path = tmp_path / "raised_dot_table_vendor_ocr.pdf"
+    _rasterise_first_page(
+        digital,
+        path,
+        invisible_text="Iris vwsiwlor 5-1 3-5 1-4 0*2 4-9 30 1-4 6.4 3-9 1-7 0-4",
+    )
+    return str(path.resolve())

@@ -2693,7 +2693,7 @@ class TestPdfReadPagesOcr:
             with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
         assert len(captured) == 1
-        # args = (local_path, page_num, ocr_lang, dpi, tessdata)
+        # args = (local_path, page_num, ocr_lang, dpi, tessdata, full)
         assert captured[0][2] == "fra"
 
     def test_ocr_text_searchable_via_pdf_search(
@@ -3408,6 +3408,107 @@ class TestSearchGeometry:
         hit = res["matches"][0]
         assert "bbox" in hit and len(hit["bbox"]) == 4
         assert hit["bbox"][2] > hit["bbox"][0] and hit["bbox"][3] > hit["bbox"][1]
+
+
+class TestForceOcrAndScanHint:
+    """force_ocr re-OCRs pages that have a text layer; the scan hint says when.
+
+    Motivating case: a journal scan (Fisher 1936) whose embedded text was
+    the vendor's poor OCR. ocr=True returned that layer unchanged.
+    """
+
+    def _force(self, path, worker):
+        from unittest.mock import patch
+
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", worker):
+                return pdf_read_pages(path, "1", force_ocr=True)
+
+    def test_force_ocr_requests_full_ocr_and_records_source(
+        self, raised_dot_table_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        pdf_read_pages(raised_dot_table_pdf, "1")  # caches the text layer
+        captured = []
+
+        def worker(args):
+            captured.append(args)
+            return (args[1], "tesseract text")
+
+        result = self._force(raised_dot_table_pdf, worker)
+        # args = (local_path, page_num, ocr_lang, dpi, tessdata, full)
+        assert captured and captured[0][5] is True
+        page = result["pages"][0]
+        assert page["source"] == "ocr"
+        assert page["text"] == "tesseract text"
+        rows = _core.cache.get_pages_source(raised_dot_table_pdf, [0], "eng")
+        langs = _core.cache.get_pages_ocr_lang(raised_dot_table_pdf, [0], "eng")
+        # The extracted row still wins a plain lookup; the OCR row sits
+        # beside it under its language.
+        assert rows[0] == "extracted" and langs[0] is None
+        texts = _core.cache.get_pages_text(raised_dot_table_pdf, [0])
+        assert texts[0] == "tesseract text"  # latest row, as pdf_search sees
+
+    def test_force_ocr_ignores_cached_ocr_row(
+        self, raised_dot_table_pdf, isolated_server, monkeypatch
+    ):
+        """ocr=True on a page with a text layer caches the LAYER as 'ocr';
+        force_ocr must not serve that back."""
+        from unittest.mock import patch
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.tools.read._ocr_page_worker",
+                side_effect=lambda args: (args[1], "vendor layer 5-4"),
+            ):
+                pdf_read_pages(raised_dot_table_pdf, "1", ocr=True)
+        calls = []
+
+        def worker(args):
+            calls.append(args)
+            return (args[1], "fresh 5·4")
+
+        result = self._force(raised_dot_table_pdf, worker)
+        assert len(calls) == 1
+        assert result["pages"][0]["text"] == "fresh 5·4"
+        assert result["cache_hits"] == 0
+
+    def test_hint_fires_on_scan_with_vendor_text_layer(
+        self, raised_dot_table_vendor_ocr_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_vendor_ocr_pdf, "1")
+        assert result["scan_text_layer_pages"] == [1]
+        assert "force_ocr" in result["hint"]
+        # content_trust still reads an invisible layer over a scan as an
+        # OCR layer, not as hidden text.
+        assert result["pages"][0]["hidden_text"] is False
+        assert result["hidden_text_detected"] is False
+
+    def test_hint_quiet_on_born_digital_pages(
+        self, raised_dot_table_pdf, sample_pdf_with_images, isolated_server
+    ):
+        for path in (raised_dot_table_pdf, sample_pdf_with_images):
+            result = pdf_read_pages(path, "1")
+            assert "scan_text_layer_pages" not in result
+            assert "hint" not in result
+
+    def test_hint_quiet_on_scan_without_text_layer(
+        self, raised_dot_table_scan_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_scan_pdf, "1")
+        assert "scan_text_layer_pages" not in result
+
+    def test_hint_absent_when_ocr_requested(
+        self, raised_dot_table_vendor_ocr_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        result = self._force(
+            raised_dot_table_vendor_ocr_pdf,
+            lambda args: (args[1], "Iris versicolor 5·4"),
+        )
+        assert result["pages"][0]["source"] == "ocr"
+        assert "scan_text_layer_pages" not in result
 
 
 class TestOcrParallelOrchestration:
@@ -5645,7 +5746,7 @@ class TestOcrLangCacheThrash:
         """
 
         def fake_worker(args):
-            path, page_num, lang, dpi, tessdata = args
+            path, page_num, lang, dpi, tessdata, _full = args
             calls.append(lang)
             return page_num, f"text produced by {lang}"
 

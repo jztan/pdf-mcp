@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+
+- **`pdf_read_pages(force_ocr=true)` re-OCRs a page that already has a
+  text layer.** `ocr=true` only OCRs pages without one, so on a scan whose
+  embedded text is the scanner's own, poor OCR it returned that same text,
+  and nothing could make it run Tesseract. `force_ocr` does, returns
+  `source="ocr"`, and caches the result for `pdf_search`. The default is
+  unchanged.
+- **`pdf_read_pages` flags scanned pages whose text came from the
+  scanner.** With `ocr` off, a response whose pages carry text over a
+  full-page image now includes `scan_text_layer_pages` and a short `hint`
+  to compare against a render or retry with `force_ocr`.
+
 ## [3.5.0] - 2026-10-03
 ### Added
 

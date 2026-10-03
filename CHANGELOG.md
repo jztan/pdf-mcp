@@ -5,6 +5,121 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-10-03
+### Added
+
+- **Keyword searches say when they matched only part of the query.** A
+  keyword query of three or more words that no page fully matches is
+  retried with its words OR-joined, and until now nothing in the response
+  said so: hits for "Microsoft cloud revenue zyzzyvaword" looked exactly
+  like hits that held every word. Every keyword-mode response from
+  `pdf_search` and `pdf_corpus_search` now carries `keyword_match`:
+  `"full"`, `"partial"` (hits may lack some of the words) or `"none"`. It
+  appears whenever `search_mode` is `"keyword"`, including `mode="auto"`
+  answered by keyword. Ranking is unchanged.
+
+### Changed
+
+- **Paragraph excerpts keep the answer when it sits in a list.** With
+  `excerpt_style="paragraph"` (the default for `pdf_search` and
+  `pdf_corpus_search`), a question answered by one bullet often got the
+  sentence that introduces the list instead, because that sentence shares
+  more of the query's words. A list's lead-in and its items now count as
+  one unit: when the lead-in wins, or the list as a whole matches the
+  query better than the block that won, the excerpt is the lead-in plus
+  the items, with one `bbox` covering them. A single matching item is
+  still returned alone. On 22 list questions over public-domain government
+  reports, paragraph excerpts held the answer for 17 instead of 13, with no
+  question lost; those excerpts are longer, since they carry the whole
+  list.
+- **A first `pdf_corpus_search` over a new folder searches every
+  document.** It used to search only the documents whose embeddings
+  finished inside the time budget: on a 100-PDF test set, a cold first
+  call took about 50 s and searched 42 of the 100. Text is now warmed for
+  every document before any is embedded, and while embeddings are still
+  pending, `mode="auto"` answers by keyword across all of them, in about
+  23 s. On the 184-query corpus benchmark that first answer's page
+  NDCG@10 rose from 0.260 to 0.468 (+0.208, CI [+0.150, +0.266]) and
+  doc-hit@3 from 0.446 to 0.777. The response says so: `semantic_pending`,
+  `keyword_match` (whether any document holds every query term), a
+  one-line `hint`, `embeddings_pending`, and `next_call`, the
+  `pdf_corpus_warm` call that finishes the embeddings. Once every document
+  is embedded the ranking is the same hybrid one as before, and
+  `warm_complete` stays `false` until then. `pdf_corpus_warm` reports a
+  document whose embeddings have not started as `"text_only"`
+  ([#73](https://github.com/jztan/pdf-mcp/issues/73)).
+- **`pdf_corpus_search` ranks keyword hits across the whole corpus.** The
+  keyword arm used to rank pages inside each document and interleave the
+  lists, so the top of the ranking held one page per document and a
+  document that clearly matched best could not take a second slot. It now
+  runs one BM25 ranking over every page of the corpus: pages holding the
+  query as a phrase first, then pages holding every term, and, only when
+  no document holds every term, pages holding some of them. On the
+  184-query corpus benchmark, hybrid page NDCG@10 went from 0.408 to 0.462
+  (+0.054, CI [+0.030, +0.080]) with document routing unchanged (doc-hit@3
+  0.848 vs 0.842, CI includes zero); keyword mode went from 0.338 to 0.465.
+  The evidence an agent reads moved less: with the default paragraph
+  excerpts at a 2,000-token budget, answer-span recall rose on
+  question-shaped queries (0.289 to 0.313) and exact-term queries (0.806 to
+  0.839) and held on the other two classes, all within noise. Queries are
+  faster (0.31 to 0.20 s/query hybrid on 100 documents), and keyword
+  `score` is now comparable across documents. In hybrid mode a page the
+  keyword arm found on partial matches alone counts as a semantic hit for
+  its excerpt and `low_confidence`. CJK queries and German FTS mode keep
+  the per-document ranking. ([#70](https://github.com/jztan/pdf-mcp/issues/70))
+- **`pdf_corpus_search` hybrid mode trusts a full keyword match more.** When
+  the keyword arm matched the query as a phrase or every term, its ranking
+  now counts double in fusion. Before, each document's best semantic page
+  outranked the keyword arm's top page, even when semantic search found
+  nothing relevant, so a page matching every term could fall to eighth.
+  Partial keyword matches keep equal weight, so question-shaped queries rank
+  exactly as before. On the 184-query corpus benchmark, page NDCG@10 rose
+  +0.022 (CI [+0.011, +0.034]) and +0.073 on multi-document queries (CI
+  [+0.039, +0.109]); with 400 extra distractor documents, +0.023 overall,
+  +0.058 multi-document and +0.065 exact-term, all with CIs excluding zero.
+  Answer-span recall in the default excerpts rose on multi-document queries
+  (0.622 to 0.689) and no query lost evidence. ([#72](https://github.com/jztan/pdf-mcp/issues/72))
+
+### Fixed
+
+- **The server no longer exits at startup when a second instance starts
+  on the same cache.** Claude Desktop launches the server twice at once.
+  On Windows, when both removed the same expired image files, the one
+  that lost the race got `PermissionError` and exited before answering
+  `initialize`, so the client reported "Couldn't start". Removing a cached
+  image or render file is now best-effort everywhere (a file that cannot
+  be deleted is left behind while its cache rows still go), and a failed
+  cleanup at startup is logged instead of stopping the server
+  ([#74](https://github.com/jztan/pdf-mcp/issues/74)).
+- **`hidden_text` no longer fires on ordinary visible text.** Since 3.0.0
+  the flag (and `hidden_text_detected`, and the `pdf_info(content_trust=true)`
+  counts) was true on most pages of many documents: every hit for "total
+  revenue" in Microsoft's FY2024 10-K, and every page of some federal
+  reports. Four causes are fixed: a font set at 1 pt and scaled up read as
+  unreadably small, white text on a coloured band was compared against a
+  white page because fill shapes were never read, a header drawn twice
+  (once visible, once invisible) counted as hidden, and runs of blank
+  spaces counted as off-page text. Across 27 real PDFs (24 10-K filings,
+  an annual report, a Federal Reserve report and a statute), flagged pages
+  fell from 1,092 to 37. Every hidden-text attack in the test corpus is still
+  caught. Cached flags are recomputed on first use.
+
+### Security
+
+- Bumped transitive `urllib3` 2.7.0 → 2.8.0 (CVE-2026-97687, -97688,
+  -97689; reached via `requests` and `fastembed`) and `pyjwt` 2.13.0 →
+  2.15.1 (CVE-2026-101917, -101918, -102265 to -102274; reached via
+  `mcp[crypto]`). Lockfile-only, no change to `pyproject.toml`
+  constraints; the Claude Desktop bundle installs the locked versions.
+- Bumped `pypdf` 6.16.1 → 6.19.0 (PYSEC-2026-4153 to -4160; a direct
+  dependency, used to read content streams on tiling-pattern pages).
+  Lockfile-only, the `pyproject.toml` floor (`>=5.0`) is unchanged.
+
+### Contributors
+
+- @bbulkow: reported the startup crash when two instances clean one cache, with a reproduction script ([#74](https://github.com/jztan/pdf-mcp/issues/74))
+
+
 ## [3.4.0] - 2026-09-26
 ### Added
 

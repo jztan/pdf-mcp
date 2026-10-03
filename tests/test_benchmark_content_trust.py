@@ -2,8 +2,7 @@ import importlib.util
 import os
 import tempfile
 
-import pymupdf
-
+from pdf_mcp.backend.page import open_document
 from pdf_mcp.content_trust import scan_document
 
 
@@ -25,7 +24,11 @@ def test_corpus_has_zero_misclassifications():
     gen = _gen()
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         for name, label in gen.build(d):
-            doc = pymupdf.open(os.path.join(d, name))
+            # The production pdfium backend, not PyMuPDF: PyMuPDF is a
+            # dev-only, unsupported runtime, and scanning it is what hid
+            # the 3.0.0 detector regressions (nominal font size, no fill
+            # rects) for four releases.
+            doc = open_document(os.path.join(d, name))
             try:
                 suspicious = scan_document(doc)["suspicious"]
             finally:

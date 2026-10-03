@@ -5,7 +5,10 @@ from typing import Any, Callable
 from ..backend.geometry import Rect as GeomRect
 from .. import corpus
 from ..extractor import (
+    _PARAGRAPH_MAX_CHARS,
     block_bbox_for_index,
+    count_query_tokens,
+    find_list_groups,
     get_best_paragraph_for_query,
 )
 from .. import _core
@@ -84,6 +87,22 @@ def _python_search(
     return matches, page_counts
 
 
+def _keyword_match_label(matches: list[dict[str, Any]]) -> str:
+    """'full', 'partial' or 'none' for a keyword ranking, consuming the
+    ``_partial`` marker `PDFCache.search_fts` puts on OR-recovered hits.
+
+    'partial' means no page held every query term and the hits came from
+    the OR retry (queries of three or more words), so a hit may lack some
+    of the terms. Pops the marker so it never reaches a response.
+    """
+    partial = False
+    for m in matches:
+        partial = bool(m.pop("_partial", False)) or partial
+    if not matches:
+        return "none"
+    return "partial" if partial else "full"
+
+
 class _LayoutPage:
     """Page stand-in built from the cached blocks shape.
 
@@ -127,6 +146,73 @@ def _layout_page(doc: Any, page_num_0: int) -> Any:
         return doc[page_num_0]
 
 
+def _running_furniture(doc: Any, page_num_0: int, texts: list[str]) -> set[str]:
+    """Blocks on this page whose exact text also appears on an adjacent
+    page: running headers and footers, which the layout can place in the
+    middle of a list."""
+    norm = [" ".join(t.split()) for t in texts]
+    neighbours: set[str] = set()
+    for other in (page_num_0 - 1, page_num_0 + 1):
+        if 0 <= other < len(doc):
+            page = _layout_page(doc, other)
+            neighbours |= {
+                " ".join(b[4].split())
+                for b in page.get_text("blocks", sort=True)
+                if b[6] == 0
+            }
+    return {t for t in norm if t} & neighbours
+
+
+def _union_bbox(
+    page: Any, members: list[int]
+) -> tuple[float, float, float, float] | None:
+    """Bounding box over the given text blocks (one block: its own bbox)."""
+    boxes = [b for k in members if (b := block_bbox_for_index(page, k)) is not None]
+    if not boxes:
+        return None
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
+def _widen_to_list(
+    doc: Any, page: Any, page_num_0: int, query: str, block_idx: int
+) -> tuple[str, list[int]] | None:
+    """Return (text, member block indices) when the chosen block should
+    give way to a whole list, else None.
+
+    Two cases. The chosen block is a list's lead-in: the lead-in names
+    the topic, the items carry the content, so the list is returned (a
+    superset, so nothing the lead-in held is lost). Or a list outside the
+    chosen block covers strictly more query tokens than it does. A chosen
+    list ITEM is kept as is: it already is the specific answer, and
+    widening it would multiply the excerpt for nothing. Lists over the
+    paragraph cap are never returned.
+    """
+    blocks = page.get_text("blocks", sort=True)
+    texts = [b[4] for b in blocks if b[6] == 0]
+    groups = find_list_groups(texts, _running_furniture(doc, page_num_0, texts))
+    if not groups:
+        return None
+    chosen_score = count_query_tokens(texts[block_idx], query)
+    best: tuple[int, str, list[int]] | None = None
+    for members in groups:
+        text = "\n".join(texts[k].strip() for k in members)
+        if len(text) > _PARAGRAPH_MAX_CHARS:
+            continue
+        if members[0] == block_idx:
+            return text, members
+        if block_idx in members:
+            continue
+        score = count_query_tokens(text, query)
+        if score > chosen_score and (best is None or score > best[0]):
+            best = (score, text, members)
+    return (best[1], best[2]) if best else None
+
+
 def _upgrade_excerpts_to_paragraphs(
     matches: list[dict[str, Any]],
     doc: Any,
@@ -154,7 +240,7 @@ def _upgrade_excerpts_to_paragraphs(
     back to the original snippet when the block exceeds the cap or
     can't be located.
     """
-    from ..extractor import _PARAGRAPH_MIN_CHARS, count_query_tokens
+    from ..extractor import _PARAGRAPH_MIN_CHARS
 
     seen: dict[tuple[int, int], int] = {}  # (page, block_idx) -> index in upgraded
     upgraded: list[dict[str, Any]] = []
@@ -203,9 +289,16 @@ def _upgrade_excerpts_to_paragraphs(
             ):
                 block_text, block_idx = alt_text, alt_idx
 
+        members = [block_idx] if block_idx is not None else []
+        if block_text is not None and block_idx is not None:
+            widened = _widen_to_list(doc, page, page_num_0, query, block_idx)
+            if widened is not None:
+                block_text, members = widened
+                block_idx = members[0]
+
         if block_text is not None and block_idx is not None:
             geom: dict[str, Any] = {}
-            bbox = block_bbox_for_index(page, block_idx)
+            bbox = _union_bbox(page, members)
             if bbox is not None:
                 r = page.rect
                 page_rect = [

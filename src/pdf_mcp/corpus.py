@@ -34,6 +34,7 @@ __all__ = [
     "CORPUS_LISTING_MAX",
     "CORPUS_RRF_K",
     "CORPUS_DOC_ARM_WEIGHT",
+    "CORPUS_KW_FULL_WEIGHT",
     "PROFILE_HEAD_CHARS",
     "PROFILE_TERM_LIMIT",
     "CORPUS_TERM_RE",
@@ -77,6 +78,16 @@ CORPUS_RRF_K = 60
 # third list dilutes needles the page arms had already nailed. Not a tool
 # parameter: re-measure, never tune.
 CORPUS_DOC_ARM_WEIGHT = 0.25
+# Weight of the keyword list in hybrid corpus fusion when the keyword arm
+# matched the phrase or every term (partial matches keep 1.0). At equal
+# weight, a document's best semantic page plus its doc-arm bonus
+# (1/(60+r) + 0.25/(60+d), about 0.019) outranks the keyword arm's rank 1
+# (1/60, about 0.0167) even when semantic found nothing relevant. Measured
+# 2026-09-27 on the 184-query set, paired: page NDCG@10 +0.022, spread
+# +0.073 at 100 docs; +0.023, spread +0.058, needle +0.065 at 500 docs;
+# paraphrase queries are partial-tier and unchanged. Weighting partial
+# matches too cost described doc-hit@3 0.096. Not a tool parameter.
+CORPUS_KW_FULL_WEIGHT = 2.0
 # Head text = page 1's first N characters: title, authors and abstract on
 # arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
 PROFILE_HEAD_CHARS = 1500
@@ -98,6 +109,11 @@ WARM_EMBED_CAP = 4
 # machine (measured 0.197s/page, 5 units/page, bge-small, 2026-09-03).
 # One batch is the overshoot bound and the per-call progress floor.
 WARM_EMBED_BATCH_PAGES = 24
+
+# A cold pdf_corpus_search spends at most this long embedding after it has
+# extracted text, then answers by keyword (cold first-call spike
+# 2026-09-28). A later call that extracts nothing gets its full budget.
+SEARCH_EMBED_SLICE_SECONDS = 5.0
 
 
 def _validate_file(
@@ -278,6 +294,11 @@ def clear_warm_memo() -> None:
 def forget_warm_verdict(path: str) -> None:
     for key in [k for k in _WARM_MEMO if k[0] == path]:
         _WARM_MEMO.pop(key, None)
+    # A write to the doc's warm state also invalidates its stacked vector
+    # matrix (same key across a partial -> complete embedding).
+    from .vector_cache import CACHE
+
+    CACHE.forget(path)
 
 
 def _warm_memo_key(
@@ -369,6 +390,18 @@ def _embedded_pages_count(path: str, cache: Any, model_name: str) -> int | None:
     non_empty = {pn: t for pn, t in texts.items() if t.strip()}
     stored = cache.get_page_embeddings(path, sorted(non_empty), model_name)
     return len(non_empty) - len(_missing_embed_pages(texts, stored))
+
+
+def pending_embed_pages(path: str, cache: Any, model_name: str) -> int:
+    """Non-empty pages of a text-warm doc still needing embeddings (0 when
+    the doc's text is not fully cached: nothing is known to embed yet)."""
+    pages = _cached_pages(path, cache, False, model_name)
+    if pages is None:
+        return 0
+    texts = cache.get_pages_text(path, list(range(pages)))
+    non_empty = sorted(pn for pn, t in texts.items() if t.strip())
+    stored = cache.get_page_embeddings(path, non_empty, model_name)
+    return len(_missing_embed_pages(texts, stored))
 
 
 def profile_terms(texts: dict[int, str]) -> dict[str, int]:
@@ -974,6 +1007,55 @@ def _warm_concurrent(
     return unprocessed, budget_exhausted, warmed
 
 
+def _warm_batch(
+    items: list[tuple[str, int]],
+    budget_seconds: float,
+    start: float,
+    clock: Callable[[], float],
+    cache: Any,
+    embeddings: bool,
+    model_name: str | None,
+    embed: Callable[[list[str]], list[bytes]] | None,
+    docs: list[dict[str, Any]],
+    skipped: list[dict[str, str]],
+    emb_cached: Callable[[str], bool],
+    sections: bool,
+) -> tuple[list[str], bool, int]:
+    """Warm `items` sequentially or in the spawn pool (worker count from
+    the mode-dependent cap). Returns (unprocessed, budget_exhausted, warmed)."""
+    workers = _warm_worker_count(len(items), embeddings)
+    if workers <= 1:
+        return _warm_sequential(
+            items,
+            budget_seconds,
+            start,
+            clock,
+            cache,
+            embeddings,
+            model_name,
+            embed,
+            docs,
+            skipped,
+            emb_cached,
+            sections,
+        )
+    return _warm_concurrent(
+        items,
+        workers,
+        budget_seconds,
+        start,
+        clock,
+        cache,
+        embeddings,
+        model_name,
+        embed,
+        docs,
+        skipped,
+        emb_cached,
+        sections,
+    )
+
+
 def warm_docs(
     files: list[str],
     budget_seconds: float,
@@ -983,8 +1065,27 @@ def warm_docs(
     embed: Callable[[list[str]], list[bytes]] | None = None,
     clock: Callable[[], float] = time.monotonic,
     sections: bool = False,
+    cold_embed_slice_seconds: float | None = None,
+    text_first: bool = True,
+    keep_failed_pending: bool = False,
 ) -> dict[str, Any]:
     """Budgeted warm loop over a resolved corpus.
+
+    With ``embeddings`` (and an encoder) the warm runs in two phases:
+    text for every cold doc first, then embeddings for the resume docs
+    and the docs just extracted, from cached text. Docs left without
+    complete embeddings come back in ``emb_pending`` (rows ``text_only``
+    or ``partial``) and stay in ``unprocessed``.
+    ``cold_embed_slice_seconds``, when set and this call extracted at
+    least one doc, caps the embedding phase at that many seconds so a
+    cold search can answer by keyword quickly; a call that extracts
+    nothing keeps its full budget for embeddings.
+    ``text_first=False`` keeps the single pass per doc (extract, then
+    embed) for callers that cannot use text alone (semantic search).
+    ``keep_failed_pending``: an embedding failure normally files the doc
+    under ``skipped`` with its reason, so callers looping on
+    ``unprocessed`` terminate; a keyword-first search passes True to keep
+    the doc searchable as a ``text_only`` row carrying ``embed_error``.
 
     ``sections``, when true, also builds the section-granularity FTS5
     index (see ``backfill_sections`` and ``extractor._warm_extract_worker``'s
@@ -1103,47 +1204,104 @@ def warm_docs(
     ]
     cold = [item for item in uncached if item not in resume]
 
-    if resume and not budget_exhausted:
-        # Resume docs first: they need no extraction, so they never go
-        # to the pool, and finishing an interrupted giant is the
-        # natural convergence order.
-        unprocessed, budget_exhausted, warmed = _warm_sequential(
-            resume,
+    extracted_this_call = 0
+    embed_stats: dict[str, Any] = {"pages": 0, "seconds": 0.0}
+    two_phase = (
+        text_first and embeddings and embed is not None and model_name is not None
+    )
+    if two_phase and not budget_exhausted:
+        assert embed is not None and model_name is not None
+        # Phase 1: text for every cold doc, text worker cap, no embeddings.
+        # Keyword search needs only text, so text always takes the budget
+        # first (cold first-call spike 2026-09-28: 42 of 100 docs searched
+        # when text and embeddings shared one pass per doc).
+        text_rows: list[dict[str, Any]] = []
+        p1_unproc, budget_exhausted, _ = _warm_batch(
+            cold,
             budget_seconds,
             start,
             clock,
             cache,
-            embeddings,
+            False,
             model_name,
-            embed,
-            docs,
+            None,
+            text_rows,
             skipped,
             _emb_cached,
             sections,
         )
-    elif resume:
-        unprocessed += [p for p, _ in resume]
-    if cold and not budget_exhausted:
-        workers = _warm_worker_count(len(cold), embeddings)
-        if workers <= 1:
-            more_unproc, budget_exhausted, more_warmed = _warm_sequential(
-                cold,
-                budget_seconds,
-                start,
-                clock,
-                cache,
-                embeddings,
-                model_name,
-                embed,
-                docs,
-                skipped,
-                _emb_cached,
-                sections,
-            )
+        extracted = [(str(r["path"]), int(r["pages"])) for r in text_rows]
+        extracted_this_call = len(extracted)
+        pages_of = dict(resume + extracted)
+        # Phase 2: embed resume docs and the docs Phase 1 just extracted,
+        # smallest first, from cached text (the resume branch of
+        # _warm_sequential; no re-extraction).
+        to_embed = sorted(resume + extracted, key=lambda item: item[1])
+        p2_start = clock()
+        p2_budget = max(0.0, budget_seconds - (p2_start - start))
+        if cold_embed_slice_seconds is not None and extracted_this_call:
+            p2_budget = min(p2_budget, cold_embed_slice_seconds)
+        before = {
+            p: _embedded_pages_count(p, cache, model_name) or 0 for p, _ in to_embed
+        }
+        emb_rows: list[dict[str, Any]] = []
+        p2_errors: list[dict[str, str]] = []
+        p2_unproc, p2_exhausted, _ = _warm_sequential(
+            to_embed,
+            p2_budget,
+            p2_start,
+            clock,
+            cache,
+            True,
+            model_name,
+            embed,
+            emb_rows,
+            p2_errors,
+            _emb_cached,
+            sections,
+        )
+        embed_stats["seconds"] = round(max(0.0, clock() - p2_start), 3)
+        embed_errors = {e["path"]: e["reason"] for e in p2_errors}
+        for path_err, reason in embed_errors.items():
+            logger.warning("embedding failed for %s: %s", path_err, reason)
+        if keep_failed_pending:
+            # The text is cached and keyword-searchable: keep the doc
+            # pending (with the reason) so the search still covers it.
+            p2_unproc += list(embed_errors)
         else:
-            more_unproc, budget_exhausted, more_warmed = _warm_concurrent(
-                cold,
-                workers,
+            skipped.extend(p2_errors)
+        by_path: dict[str, dict[str, Any]] = {
+            str(r["path"]): r for r in text_rows if r["path"] not in embed_errors
+        }
+        for r in emb_rows:
+            by_path[str(r["path"])] = r
+        for p in p2_unproc:
+            if by_path.get(p, {}).get("status") != "partial":
+                by_path[p] = {
+                    "path": p,
+                    "status": "text_only",
+                    "pages": pages_of.get(p, 0),
+                    "embeddings_cached": False,
+                    "text_coverage": _doc_coverage_label(p, cache),
+                }
+            if p in embed_errors:
+                by_path[p]["embed_error"] = embed_errors[p]
+        docs.extend(by_path.values())
+        unprocessed += p1_unproc + [p for p in p2_unproc if p not in unprocessed]
+        budget_exhausted = budget_exhausted or p2_exhausted
+        embed_stats["pages"] = sum(
+            max(0, (_embedded_pages_count(p, cache, model_name) or 0) - before[p])
+            for p, _ in to_embed
+        )
+    elif two_phase:
+        unprocessed += [p for p, _ in resume + cold]
+    else:
+        if resume and not budget_exhausted:
+            # Resume docs first: they need no extraction, so they never go
+            # to the pool, and finishing an interrupted giant is the
+            # natural convergence order.
+            unprocessed, budget_exhausted, warmed = _warm_sequential(
+                resume,
                 budget_seconds,
                 start,
                 clock,
@@ -1156,10 +1314,27 @@ def warm_docs(
                 _emb_cached,
                 sections,
             )
-        unprocessed += more_unproc
-        warmed += more_warmed
-    elif cold:
-        unprocessed += [p for p, _ in cold]
+        elif resume:
+            unprocessed += [p for p, _ in resume]
+        if cold and not budget_exhausted:
+            more_unproc, budget_exhausted, more_warmed = _warm_batch(
+                cold,
+                budget_seconds,
+                start,
+                clock,
+                cache,
+                embeddings,
+                model_name,
+                embed,
+                docs,
+                skipped,
+                _emb_cached,
+                sections,
+            )
+            unprocessed += more_unproc
+            warmed += more_warmed
+        elif cold:
+            unprocessed += [p for p, _ in cold]
 
     # Verification pass. Every row above is a claim about which branch
     # ran, not about what landed in SQLite, so a write that never became
@@ -1190,6 +1365,13 @@ def warm_docs(
             row["embedded_pages"] = count
             verified.append(row)
             continue
+        if row["status"] == "text_only":
+            # Text-ready, embeddings pending: verified against the text
+            # only. A doc whose text vanished drops its row; it is already
+            # in unprocessed.
+            if _cached_pages(row_path, cache, False, model_name) is not None:
+                verified.append(row)
+            continue
         if _cached_pages(row_path, cache, embeddings, model_name) is not None:
             verified.append(row)
             continue
@@ -1204,6 +1386,10 @@ def warm_docs(
         else:
             unprocessed.append(row_path)
 
+    emb_pending = sorted(
+        str(r["path"]) for r in verified if r["status"] in ("partial", "text_only")
+    )
+    warmed = sum(1 for r in verified if r["status"] == "warmed")
     unwarmed = len(unprocessed) + len(skipped)
     return {
         "docs": sorted(verified, key=lambda d: str(d["path"])),
@@ -1211,6 +1397,9 @@ def warm_docs(
         "skipped": skipped,
         "warmed_this_call": warmed,
         "budget_exhausted": budget_exhausted,
+        "emb_pending": emb_pending,
+        "extracted_this_call": extracted_this_call,
+        "embed_stats": embed_stats,
         # Authoritative "is this corpus usable now" signal, read from the
         # cache rather than inferred. `unprocessed` alone answers only
         # "did the budget run out".
@@ -1387,9 +1576,10 @@ def rrf_fuse_rankings_scored(
     Each entry is (ranking, weight); an item's score is the sum of
     weight / (k + rank) over every list it appears in (Cormack et al.
     2009, with the per-list weight extension). Hybrid corpus search
-    passes [(keyword, 1.0), (semantic, 1.0), (doc_arm,
-    CORPUS_DOC_ARM_WEIGHT)]. Ties break by (doc_path, page), so a
-    document rename never reorders results except at exact ties.
+    passes [(keyword, 1.0 or CORPUS_KW_FULL_WEIGHT on a full match),
+    (semantic, 1.0), (doc_arm, CORPUS_DOC_ARM_WEIGHT)]. Ties break by
+    (doc_path, page), so a document rename never reorders results except
+    at exact ties.
     """
     scores: dict[tuple[str, int], float] = {}
     for ranking, weight in rankings:

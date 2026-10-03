@@ -135,3 +135,27 @@ def test_dashes_are_reported():
 
 def test_tiling_pattern_detection_is_negative_on_a_plain_chart():
     assert page_uses_tiling_pattern(f"{_SYN}/bar_simple.pdf", 0) is False
+
+
+def test_closed_curve_is_not_reported_as_a_quad(tmp_path):
+    """A closed path with a Bezier segment and four distinct points (start,
+    two control points, end) once came back as a 'qu' item whose corners
+    were the CONTROL points: a thin curve read as a 464 x 100 pt
+    parallelogram, which content_trust took for a dark background behind
+    white text. PyMuPDF reports the curve as a 'c' item; so must we."""
+    path = tmp_path / "curve.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "seed", fontsize=12)
+    doc.update_stream(
+        page.get_contents()[0],
+        b"0 0 0 rg 36 300 m 36 400 500 200 500 300 c 36 300 l h f",
+    )
+    doc.save(str(path))
+    doc.close()
+
+    drawings = get_drawings(str(path), 0)
+    assert_non_empty(drawings, "drawings")
+    verbs = verb_counts(drawings)
+    assert "qu" not in verbs, verbs
+    assert verbs.get("c") == 1, verbs

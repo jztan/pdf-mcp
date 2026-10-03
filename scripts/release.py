@@ -679,24 +679,51 @@ def notes_file_path(project_root: Path, new_version: str) -> Path:
     return project_root / f"release_notes_v{new_version}.md"
 
 
-def _install_and_links_section(new_version: str) -> str:
-    """Deterministic Installation/Links tail shared by all notes formats."""
-    return f"""## Installation
+def stable_mcpb_release_url(version: str) -> str:
+    """The release's own copy of the stable-named bundle. The README links
+    releases/latest/download, which moves to the next release; notes link
+    the asset attached to this one."""
+    return (
+        f"https://github.com/jztan/pdf-mcp/releases/download/v{version}/"
+        f"{build_mcpb.STABLE_FILENAME}"
+    )
+
+
+def _upgrading_and_links_section(new_version: str) -> str:
+    """Deterministic Upgrading/Links tail shared by all notes formats.
+
+    Leads with the Claude Desktop bundle, the install path the README
+    leads with, then the tool installers. Bare pip is a venv-only note:
+    Homebrew's Python and recent Debian refuse it system-wide, and the
+    v3.4.0 notes told every reader to run it."""
+    bundle = f"[{build_mcpb.STABLE_FILENAME}]({stable_mcpb_release_url(new_version)})"
+    registry = (
+        "https://registry.modelcontextprotocol.io/v0/servers"
+        "?search=io.github.jztan/pdf-mcp"
+    )
+    return f"""## Upgrading
+
+**Claude Desktop:** download {bundle} again and drag it onto
+Settings > Extensions. It replaces the installed version in place.
+
+**Claude Code and other MCP clients:**
 
 ```bash
-pip install pdf-mcp=={new_version}
+uv tool upgrade pdf-mcp     # or: pipx upgrade pdf-mcp
 ```
+
+(`pip install -U pdf-mcp` also works inside a virtual environment.)
 
 ## Links
 - [PyPI Package](https://pypi.org/project/pdf-mcp/{new_version}/)
-- [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=pdf-mcp)
+- [MCP Registry]({registry})
 - [Full Changelog](https://github.com/jztan/pdf-mcp/blob/master/CHANGELOG.md)
 """
 
 
 def build_release_body(generated: str, new_version: str) -> str:
     """Compose final notes: Claude-generated sections + deterministic tail."""
-    return f"{generated.strip()}\n\n{_install_and_links_section(new_version)}"
+    return f"{generated.strip()}\n\n{_upgrading_and_links_section(new_version)}"
 
 
 def build_raw_release_body(changelog_section: str, new_version: str) -> str:
@@ -706,7 +733,7 @@ def build_raw_release_body(changelog_section: str, new_version: str) -> str:
 
 {changelog_section}
 
-{_install_and_links_section(new_version)}"""
+{_upgrading_and_links_section(new_version)}"""
 
 
 NOTES_GENERATION_TIMEOUT = 120
@@ -750,13 +777,26 @@ Output contract (follow exactly):
   bullet happens to come first. Prefer naming the surface a user installs
   this for over a slogan. No colon-then-explainer, no dashes, no
   superlatives that the changelog does not measure.
-- Then a `## Highlights` section: 2-4 short paragraphs, at most 150 words
-  total. Lead with what is new and why a user would care; keep measurable
-  wins (speedups, accuracy numbers).
-- Then a `## Changes` section: condensed one-line bullets grouped under
-  `### Added` / `### Fixed` / `### Changed` / `### Security` (omit empty
-  groups). No internal mechanics: no PRAGMA names, no source file paths,
-  no helper function names.
+- Then a `## Highlights` section: one `###` heading per headline change,
+  2-4 of them, each followed by one or two short paragraphs of at most
+  100 words. Lead each with what is new and why a user would care; keep
+  measurable wins (speedups, accuracy numbers). When the changelog entry
+  carries an issue or PR link, end the heading with it in parentheses.
+- Order the highlights by what a reader loses by not upgrading: a fix for
+  a crash, a hang, or wrong data that can hit every user comes first, even
+  when the headline names a feature. Then the headline change, then the
+  rest by size.
+- Then a `## Also in this release` section: one-line bullets for every
+  changelog entry that is not a highlight, grouped under `### Added` /
+  `### Fixed` / `### Changed` / `### Security` (omit empty groups). Omit
+  the whole section when every entry is a highlight. Never restate a
+  highlight here. No internal mechanics: no PRAGMA names, no source file
+  paths, no helper function names.
+- Then a `## After upgrading` section: one bullet per thing a user may
+  notice on the first run after upgrading (a cache that re-extracts once,
+  a changed `tools/list` order, renamed loggers, a response field that
+  moved, a call that may need repeating). Omit the section when the
+  changelog names nothing of the kind.
 - If the changelog section has a `### Contributors` block, reproduce it as a
   final `## Contributors` section. Keep every `@handle`, description, and
   issue/PR link exactly as written; do not drop, rename, or summarize any
@@ -767,13 +807,16 @@ Hard rules:
 - Use only facts present in the changelog section. Never invent features,
   benefits, or numbers.
 - Keep every number exactly as written in the changelog.
+- Keep every condition exactly as narrow as the changelog states it: a
+  check that fires on "money amounts" is not one that fires on "data", and
+  a field read from "a table or list" is not one read from "a table".
 - Benchmark comparisons are reported, never won: say "measured against"
   or "compared with", never "ahead of", "beats", or "outperforms", in the
   headlines and the body alike. The changelog records where a comparison
   is unresolved or lost; keep that wording.
 - Never drop the Contributors block when one is present.
-- Plain markdown only. No H1 headings. Do not add Installation or Links
-  sections (they are appended separately).
+- Plain markdown only. No H1 headings. Do not add Upgrading, Installation
+  or Links sections (they are appended separately).
 
 Changelog section for {tag}:
 

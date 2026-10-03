@@ -706,3 +706,117 @@ def test_frozen_wrong_column_passes_until_it_is_fixed():
     )
     assert fixed["clause_4_stale_known_fail"]["ids"] == ["d07"]
     assert fixed["pass"] is False
+
+
+# Clause 6: per-row ratchet against the committed baseline. Clauses 1 and 2
+# compare paragraph with snippet on the same run, so a change that makes both
+# worse passes them; the baseline is the only fixed bar.
+
+
+def _brow(rid, para, pdf="doc", known_fail=None):
+    row = _row(rid, 1, para, known_fail=known_fail)
+    row["pdf"] = pdf
+    return row
+
+
+def test_clause_6_fails_when_a_baselined_pass_now_misses():
+    baseline = [_brow("q1", 1), _brow("q2", 1)]
+    rows = [_brow("q1", 1), _brow("q2", 0)]
+    rows[1]["snippet_contains"] = 0  # both styles worse: clauses 1-2 blind
+    verdict = evaluate_gate(_cells(), rows, baseline_rows=baseline)
+    assert verdict["clause_2_regressions"]["pass"] is True
+    assert verdict["clause_6_baseline"]["pass"] is False
+    assert verdict["clause_6_baseline"]["regressed"] == ["doc:q2"]
+    assert verdict["pass"] is False
+
+
+def test_clause_6_keys_rows_on_pdf_and_id():
+    """Query ids repeat across PDFs; a pass on one must not cover the other."""
+    baseline = [_brow("g01", 1, pdf="gpt3"), _brow("g01", 0, pdf="fed")]
+    rows = [_brow("g01", 0, pdf="gpt3"), _brow("g01", 1, pdf="fed")]
+    for r in rows:
+        r["snippet_contains"] = 0
+    verdict = evaluate_gate(_cells(), rows, baseline_rows=baseline)
+    assert verdict["clause_6_baseline"]["regressed"] == ["gpt3:g01"]
+
+
+def test_clause_6_ignores_frozen_rows():
+    baseline = [_brow("d01", 1)]
+    rows = [_brow("d01", 0, known_fail=FROZEN)]
+    rows[0]["snippet_contains"] = 0
+    verdict = evaluate_gate(_cells(), rows, baseline_rows=baseline)
+    assert verdict["clause_6_baseline"]["pass"] is True
+
+
+def test_clause_6_fails_on_a_row_missing_from_the_baseline():
+    """A new query must land with a regenerated baseline, or it is ungated."""
+    verdict = evaluate_gate(
+        _cells(), [_brow("q1", 1), _brow("q9", 1)], baseline_rows=[_brow("q1", 1)]
+    )
+    assert verdict["clause_6_baseline"]["pass"] is False
+    assert verdict["clause_6_baseline"]["unbaselined"] == ["doc:q9"]
+
+
+def test_clause_6_allows_improvement_and_extra_baseline_rows():
+    """Filtered runs (--pdfs) score a subset; baseline rows beyond it are fine."""
+    baseline = [_brow("q1", 0), _brow("q2", 1)]
+    verdict = evaluate_gate(_cells(), [_brow("q1", 1)], baseline_rows=baseline)
+    assert verdict["clause_6_baseline"]["pass"] is True
+    assert verdict["clause_6_baseline"]["improved"] == ["doc:q1"]
+
+
+def _patch_run(monkeypatch, rows):
+    import scripts.benchmark_excerpt_quality as beq
+
+    monkeypatch.setattr(beq, "load_queries", lambda _p: {"doc": {"queries": [1]}})
+    monkeypatch.setattr(beq, "run_all_cells", lambda _p: (_cells(), rows))
+    monkeypatch.setattr(beq, "print_report", lambda *a: None)
+
+
+def test_main_returns_2_when_the_baseline_is_missing(tmp_path, monkeypatch):
+    _patch_run(monkeypatch, [_brow("q1", 1)])
+    assert main(["--baseline", str(tmp_path / "none.json")]) == 2
+
+
+def test_main_fails_on_a_baseline_regression(tmp_path, monkeypatch):
+    base = tmp_path / "b.json"
+    base.write_text(json.dumps({"cells": {}, "rows": [_brow("q1", 1)]}))
+    row = _brow("q1", 0)
+    row["snippet_contains"] = 0
+    _patch_run(monkeypatch, [row])
+    assert main(["--baseline", str(base)]) == 1
+
+
+def test_update_baseline_writes_on_a_clean_run(tmp_path, monkeypatch):
+    base = tmp_path / "b.json"
+    base.write_text(json.dumps({"cells": {}, "rows": [_brow("q1", 1)]}))
+    _patch_run(monkeypatch, [_brow("q1", 1), _brow("q2", 1)])
+    assert main(["--baseline", str(base), "--update-baseline"]) == 0
+    written = json.loads(base.read_text())
+    assert [r["id"] for r in written["rows"]] == ["q1", "q2"]
+
+
+def test_update_baseline_refuses_to_lower_the_bar(tmp_path, monkeypatch):
+    base = tmp_path / "b.json"
+    before = json.dumps({"cells": {}, "rows": [_brow("q1", 1)]})
+    base.write_text(before)
+    row = _brow("q1", 0)
+    row["snippet_contains"] = 0
+    _patch_run(monkeypatch, [row])
+    assert main(["--baseline", str(base), "--update-baseline"]) == 1
+    assert base.read_text() == before
+
+
+def test_update_baseline_refuses_a_filtered_run(tmp_path, monkeypatch):
+    """A --pdfs subset written as the baseline would silently drop the rest."""
+    base = tmp_path / "b.json"
+    _patch_run(monkeypatch, [_brow("q1", 1)])
+    assert main(["--baseline", str(base), "--update-baseline", "--pdfs", "doc"]) == 2
+    assert not base.exists()
+
+
+def test_update_baseline_may_create_the_first_baseline(tmp_path, monkeypatch):
+    base = tmp_path / "b.json"
+    _patch_run(monkeypatch, [_brow("q1", 1)])
+    assert main(["--baseline", str(base), "--update-baseline"]) == 0
+    assert base.exists()

@@ -77,7 +77,9 @@ For VS Code, Cursor, Codex CLI, Kiro or any other MCP client, see
 **[docs/clients.md](docs/clients.md)**. Then ask your agent to read a PDF.
 
 Search, the corpus tools, tables and multi-column and CJK reading order work
-out of the box. OCR on scanned pages also needs Tesseract:
+out of the box. For non-English documents, see
+[language support](docs/configuration.md#language-support). OCR on scanned
+pages also needs Tesseract:
 
 ```bash
 brew install tesseract                             # macOS
@@ -211,7 +213,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo) · [@bbulkow](https://github.com/bbulkow)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">
@@ -266,3 +268,4 @@ Background, benchmarks, and design notes from building pdf-mcp:
 - [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-llm-free-qa-mcp-server): Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
 - [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-multi-column-pdf-reading-order): Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both
 - [How I Fixed Vertical Japanese PDF Extraction](https://blog.jztan.com/vertical-japanese-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-vertical-japanese-pdf-reading-order): Tategaki pages extract scrambled because reading order is geometric, not stored; rebuilding it from glyph positions (columns right to left, characters top to bottom), with no OCR and no new dependency
+- [Extract Chart Data From PDFs: An MCP Tool That Won't Guess](https://blog.jztan.com/extract-chart-data-from-pdfs/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-extract-chart-data-from-pdfs): Reading exact chart values straight from a PDF's vector geometry, then handing the ambiguous judgment calls back to the LLM instead of guessing

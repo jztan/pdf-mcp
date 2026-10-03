@@ -253,7 +253,7 @@ def run_arm_p(
     run; a future change to the tool's default must not silently falsify
     that record.
     """
-    from benchmark_corpus_modes import build_ranked, grade_query
+    from benchmark_corpus_modes import build_ranked, degraded_mode_error, grade_query
     from pdf_mcp.server import pdf_corpus_search
     from pdf_mcp.tools.corpus_tools import _corpus_keyword_rankings
 
@@ -292,6 +292,9 @@ def run_arm_p(
         secs = time.perf_counter() - t0
         if "error" in res:
             raise RuntimeError(f"arm P {q['id']}: {res['error']}")
+        degraded = degraded_mode_error("auto", res)
+        if degraded:
+            raise RuntimeError(f"arm P {q['id']}: {degraded}")
         if res["coverage"]["searched"] != len(paths):
             raise RuntimeError(f"arm P {q['id']}: partial coverage {res['coverage']}")
         if product_auto:
@@ -625,12 +628,9 @@ def warm_corpus(paths: list[str]) -> dict:
     once. Loops until nothing is unprocessed. The caller must check
     warm_complete: scoring a partially warmed corpus is the silent-partial-warm
     trap, and pdf_corpus_search would report partial coverage anyway."""
-    from pdf_mcp.server import pdf_corpus_warm
+    from benchmark_corpus_modes import warm_corpus as _warm
 
-    warm = pdf_corpus_warm(paths, budget_seconds=900, embeddings=True)
-    while warm.get("unprocessed"):
-        warm = pdf_corpus_warm(paths, budget_seconds=900, embeddings=True)
-    return warm
+    return _warm(paths, budget_seconds=900)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -822,7 +822,28 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             # Rows that carry the kept unit texts are re-graded against the
             # CURRENT labels, so a label revision never needs Bedrock again.
-            # Older rows (no texts) keep their stored containment.
+            # A row without texts would keep containment graded on the labels
+            # of its query date while arm P is graded on today's: refuse
+            # unless --live-classes is about to replace it.
+            stale_classes = sorted(
+                {
+                    row["class"]
+                    for row in rows.values()
+                    if "kept_text" not in row and row["class"] not in live_classes
+                }
+            )
+            if stale_classes:
+                n_stale = sum(
+                    1
+                    for row in rows.values()
+                    if "kept_text" not in row and row["class"] not in live_classes
+                )
+                print(
+                    f"ERROR: {n_stale} stored rows for {arm} carry no kept_text, "
+                    "so they cannot be re-graded against the current labels. "
+                    f"Re-query them: --live --live-classes {','.join(stale_classes)}"
+                )
+                return 2
             regraded = 0
             for qid, row in rows.items():
                 if "kept_text" in row and qid in query_by_id:

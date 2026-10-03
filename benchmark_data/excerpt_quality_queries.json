@@ -223,47 +223,6 @@
         }
       ]
     },
-    "aws_exam": {
-      "path": "docs_internal/sample_pdfs/misc/AWS AIP-C01 107.pdf",
-      "title": "AWS AI Practitioner Exam Guide",
-      "queries": [
-        {
-          "id": "a01",
-          "category": "structured",
-          "query": "prompt engineering best practices",
-          "page": 50,
-          "answer": "prompt"
-        },
-        {
-          "id": "a02",
-          "category": "structured",
-          "query": "responsible AI fairness toxicity",
-          "page": 46,
-          "answer": "responsible"
-        },
-        {
-          "id": "a03",
-          "category": "structured",
-          "query": "Amazon Bedrock Knowledge Bases",
-          "page": 11,
-          "answer": "Bedrock"
-        },
-        {
-          "id": "a04",
-          "category": "structured",
-          "query": "model evaluation metrics accuracy",
-          "page": 28,
-          "answer": "evaluation"
-        },
-        {
-          "id": "a05",
-          "category": "structured",
-          "query": "generative AI use cases business",
-          "page": 114,
-          "answer": "generative"
-        }
-      ]
-    },
     "bayesian_nn_2col": {
       "path": "benchmark_data/.reading_order_pdfs/1811.03679.pdf",
       "title": "Practical Bayesian Neural Networks via Adaptive Optimization Methods",
@@ -566,6 +525,59 @@
           "page": 6,
           "answer": "1.99% to 8.99%",
           "answer_label": "Company A"
+        },
+        {
+          "id": "f01",
+          "category": "structured",
+          "query": "what the study checked on lender websites before asking for personal details",
+          "page": 5,
+          "answer": "asked to supply personal or business information",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "list loss: the answer is one of three bullets that the layout merges into one list block, whose lead-in sits on the previous page; the picker returns the prose block after the list ('Lenders vary significantly in the level of upfront product information...'), which shares more query tokens (websites, study). The list-unit rule cannot reach it: there is no lead-in on this page. Snippet mode finds the bullet. Added 2026-09-28 with the query, not a regression."
+          }
+        },
+        {
+          "id": "f02",
+          "category": "structured",
+          "query": "focus group quote about lenders avoiding the word interest",
+          "page": 7,
+          "answer": "dress it up in other ways"
+        },
+        {
+          "id": "f03",
+          "category": "structured",
+          "query": "what the Essential tracker category includes",
+          "page": 10,
+          "answer": "tag managers, privacy notices"
+        },
+        {
+          "id": "f04",
+          "category": "structured",
+          "query": "why Asian-owned firms are omitted from the approval figure",
+          "page": 17,
+          "answer": "limited number of observations"
+        },
+        {
+          "id": "f05",
+          "category": "structured",
+          "query": "median household income cutoff for the lowest income quartile zip codes",
+          "page": 25,
+          "answer": "$41,563"
+        },
+        {
+          "id": "u01",
+          "category": "structured",
+          "query": "main difference in bank approval between minority-owned and white-owned firms",
+          "page": 14,
+          "answer": "less likely overall to be approved for financing"
+        },
+        {
+          "id": "u02",
+          "category": "structured",
+          "query": "did black and Hispanic owned firms use online lenders less than white-owned firms after controls",
+          "page": 14,
+          "answer": "are just as likely to"
         }
       ]
     },
@@ -842,6 +854,157 @@
           "page": 4,
           "answer": "120",
           "answer_label": "CS"
+        }
+      ]
+    },
+    "nist_zero_trust": {
+      "path": "pages/corpus/nist-zero-trust.pdf",
+      "sha256": "0290d6ece24874287316f4bf430fef770aa4ec08a2227c8f2c1e5b2ff975e03d",
+      "title": "NIST SP 800-207: Zero Trust Architecture",
+      "queries": [
+        {
+          "id": "z01",
+          "category": "structured",
+          "query": "how is access to individual enterprise resources granted in zero trust",
+          "page": 15,
+          "answer": "per-session basis"
+        },
+        {
+          "id": "z02",
+          "category": "structured",
+          "query": "is the enterprise private network treated as a trusted zone",
+          "page": 17,
+          "answer": "not considered an implicit trust zone"
+        },
+        {
+          "id": "z03",
+          "category": "structured",
+          "query": "what should remote subjects assume about their local network connection",
+          "page": 17,
+          "answer": "network is hostile"
+        },
+        {
+          "id": "z04",
+          "category": "structured",
+          "query": "which data source keeps the enterprise compliant with regulations",
+          "page": 19,
+          "answer": "Industry compliance system"
+        },
+        {
+          "id": "z05",
+          "category": "structured",
+          "query": "which trust algorithm input identifies who is requesting access",
+          "page": 27,
+          "answer": "Subject database"
+        },
+        {
+          "id": "z06",
+          "category": "structured",
+          "query": "can the enterprise see every packet on the network",
+          "page": 30,
+          "answer": "records packets seen on"
+        },
+        {
+          "id": "z07",
+          "category": "structured",
+          "query": "should remote assets have to route back through the enterprise network",
+          "page": 31,
+          "answer": "needing to traverse enterprise network infrastructure first"
+        },
+        {
+          "id": "z08",
+          "category": "structured",
+          "query": "question to ask a candidate zero trust solution about logging",
+          "page": 49,
+          "answer": "log interactions for analysis"
+        },
+        {
+          "id": "z09",
+          "category": "structured",
+          "query": "identified gap about dependence on vendors",
+          "page": 55,
+          "answer": "vendor APIs"
+        },
+        {
+          "id": "z10",
+          "category": "structured",
+          "query": "deployment gap about shared terminology for ZTA",
+          "page": 55,
+          "answer": "framework and vocabulary",
+          "known_fail": {
+            "cell": "paragraph",
+            "reason": "list-in-table loss: the answer is a bullet in the Identified Gaps column of Table B-1, which the layout merges with its neighbours into one bullet block; the picker returns the survey intro paragraph ('Multiple vendors were invited to present their products...'), which covers 4 query tokens (deployment, gap, for, zta) against the table list's 3. No colon lead-in, so the list-unit rule does not reach it. Snippet mode finds the bullet. Added 2026-09-28 with the query, not a regression."
+          }
+        }
+      ]
+    },
+    "nist_router_security": {
+      "path": "pages/corpus/nist-router-security.pdf",
+      "sha256": "a7c3f92ed9b4323f738ddddb858b8c668626199eb30bb852797908df671fccbf",
+      "title": "NIST IR 8425A: Cybersecurity Requirements for Consumer-Grade Routers",
+      "queries": [
+        {
+          "id": "r01",
+          "category": "structured",
+          "query": "requirement on how many login sessions a user may have",
+          "page": 25,
+          "answer": "only one active login session at a time"
+        },
+        {
+          "id": "r02",
+          "category": "structured",
+          "query": "what counts as a mobile application in the router software crosswalk",
+          "page": 35,
+          "answer": "installed on handheld or"
+        }
+      ]
+    },
+    "usda_agri_policy": {
+      "path": "pages/corpus/usda-agri-policy.pdf",
+      "sha256": "2809bba0bf78128943478a13ab02778bc8a93ec2a71bd1dd11d90121025dbdd8",
+      "title": "USDA ERS: U.S. Agricultural Policy Review, 2023",
+      "queries": [
+        {
+          "id": "a01",
+          "category": "structured",
+          "query": "financial assistance program for borrowers who faced discrimination in USDA farm lending",
+          "page": 6,
+          "answer": "$2.2 billion"
+        },
+        {
+          "id": "a02",
+          "category": "structured",
+          "query": "assistance for borrowers whose interest owed exceeded principal",
+          "page": 17,
+          "answer": "equal to outstanding"
+        },
+        {
+          "id": "a03",
+          "category": "structured",
+          "query": "extraordinary measures that qualified borrowers for assistance",
+          "page": 17,
+          "answer": "deferring a non-FSA loan"
+        },
+        {
+          "id": "a04",
+          "category": "structured",
+          "query": "quality loss option for specialty crops number of crops covered",
+          "page": 20,
+          "answer": "available to 24"
+        },
+        {
+          "id": "a05",
+          "category": "structured",
+          "query": "where is the kiwifruit insurance program available",
+          "page": 21,
+          "answer": "available in 12 counties"
+        },
+        {
+          "id": "a06",
+          "category": "structured",
+          "query": "Margin Protection plan expansion for soybeans number of counties",
+          "page": 21,
+          "answer": "1,255 new counties"
         }
       ]
     }

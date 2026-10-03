@@ -166,16 +166,28 @@ def main(argv: list[str] | None = None) -> int:
 
     from pdf_mcp import _core
 
-    from pdf_mcp.cache import PDFCache
+    from benchmark_corpus_modes import (
+        degraded_mode_error,
+        warm_corpus,
+        warm_incomplete_error,
+    )
+    from benchmark_corpus_search import open_validation_cache
     from pdf_mcp.server import pdf_corpus_search
 
-    _core.cache = PDFCache(cache_dir=SPIKE_CACHE, ttl_hours=24 * 30)
+    # A kept cache: never purge it by age on open (it is weeks old).
+    _core.cache = open_validation_cache(SPIKE_CACHE)
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))["queries"]
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     subjects = [q for q in queries if q["class"] in classes]
+    # Keyword-first warm (#73): an unwarmed corpus answers auto by keyword
+    # alone, which this eval would score as hybrid routing.
+    err = warm_incomplete_error(warm_corpus(paths))
+    if err:
+        print(f"ERROR: {err}")
+        return 2
 
     cache = _load_cache()
     jobs: list[tuple[str, dict]] = [(arm, q) for arm in arms for q in subjects]
@@ -203,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
         r = pdf_corpus_search(paths, query_text, mode="auto", top_k=TOP_K)
         if "error" in r and r.get("matches") is None:
             return []
+        degraded = degraded_mode_error("auto", r)
+        if degraded:
+            raise RuntimeError(degraded)
         docs: list[str] = []
         for m in r.get("matches", []):
             did = id_by_path[m["path"]]

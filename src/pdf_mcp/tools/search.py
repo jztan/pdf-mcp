@@ -21,6 +21,7 @@ from ._search_common import (
     _WINDOW_TOKENS_DEFAULT,
     _best_subchunk_text,
     _expand_excerpts_to_windows,
+    _keyword_match_label,
     _python_search,
     _semantic_excerpt_fields,
     _upgrade_excerpts_to_paragraphs,
@@ -259,6 +260,11 @@ def pdf_search(
               `confidence_threshold` are present in both semantic and
               hybrid modes.
             - total_matches, page_match_counts, search_mode, searched_pages
+            - keyword_match ('full' | 'partial' | 'none'): keyword mode
+              only (search_mode='keyword'). 'partial' means no page held
+              every query term, so a 3+ word query was retried with its
+              terms OR-joined and a hit may lack some of them; check the
+              excerpt before relying on it.
             - text_coverage ('full' | 'partial' | 'none') — how much of the
               document has extractable text. Page mode only. If this is
               not 'full' and matches are empty, read the result as
@@ -634,6 +640,8 @@ def pdf_search(
                     page_texts_kw, query, kw_limit, context_chars
                 )
 
+        keyword_match = _keyword_match_label(kw_matches)
+
         # total_matches is len(matches) across every mode (schema parity);
         # page_match_counts carries the per-page intensity signal (token
         # occurrences per page) so keyword mode keeps its recall info.
@@ -678,6 +686,7 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "hidden_text_detected": hidden_detected,
                 "search_mode": "keyword",
+                "keyword_match": keyword_match,
             }
             response["excerpt_style"] = excerpt_style
             return response
@@ -726,6 +735,7 @@ def pdf_search(
                 "searched_pages": doc_pages,
                 "hidden_text_detected": hidden_detected,
                 "search_mode": "keyword",
+                "keyword_match": keyword_match,
             }
             response["excerpt_style"] = excerpt_style
             if reason is not None:

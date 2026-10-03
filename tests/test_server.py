@@ -4858,9 +4858,10 @@ class TestPdfCorpusSearchSemanticAuto:
     def test_hybrid_wires_doc_arm_into_rrf_fusion(
         self, corpus_dir, isolated_server, monkeypatch
     ):
-        """Pins the call site at server.py: three arms, in order, at
-        weights (1.0, 1.0, CORPUS_DOC_ARM_WEIGHT); a substituted weight
-        or a swapped list here would slip past every other test."""
+        """Pins the call site: three arms, in order, at weights
+        (CORPUS_KW_FULL_WEIGHT, 1.0, CORPUS_DOC_ARM_WEIGHT) when every
+        query term matched; a substituted weight or a swapped list here
+        would slip past every other test."""
         from pdf_mcp import corpus
 
         self._fake_embedder(monkeypatch)
@@ -4882,7 +4883,11 @@ class TestPdfCorpusSearchSemanticAuto:
         rankings = captured["rankings"]
         assert len(rankings) == 3
         weights = tuple(w for _list, w in rankings)
-        assert weights == (1.0, 1.0, corpus.CORPUS_DOC_ARM_WEIGHT)
+        assert weights == (
+            corpus.CORPUS_KW_FULL_WEIGHT,
+            1.0,
+            corpus.CORPUS_DOC_ARM_WEIGHT,
+        )
         kw_list, sem_list, doc_list = (r for r, _w in rankings)
 
         # Third arm: one best page per profiled doc, no duplicate docs.
@@ -4906,6 +4911,52 @@ class TestPdfCorpusSearchSemanticAuto:
         # doc-level one (distinguishes it from the doc arm at a glance).
         assert len(sem_list) > len(doc_list)
         assert all(isinstance(page, int) and page >= 1 for _p, page in sem_list)
+
+    def test_partial_keyword_match_keeps_equal_keyword_weight(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        """No document holds all three terms (partial matching needs three
+        or more), so the keyword arm falls back to partial matches, which
+        rank pages but are weak evidence: the keyword list keeps weight
+        1.0. Weighting partial matches up cost paraphrase-query routing
+        (described doc-hit@3 -0.096)."""
+        from pdf_mcp import corpus
+
+        self._fake_embedder(monkeypatch)
+        real_fuse = corpus.rrf_fuse_rankings_scored
+        captured: dict[str, Any] = {}
+
+        def spy(rankings, k=corpus.CORPUS_RRF_K, top_k=None):
+            captured["rankings"] = rankings
+            return real_fuse(rankings, k=k, top_k=top_k)
+
+        monkeypatch.setattr(corpus, "rrf_fuse_rankings_scored", spy)
+
+        result = pdf_corpus_search(
+            str(corpus_dir), "budget zzqxunmatched yyqwmissing", mode="auto"
+        )
+        assert result["search_mode"] == "hybrid"
+        kw_list, kw_weight = captured["rankings"][0]
+        assert kw_list, "partial tier should still rank the 'budget' pages"
+        assert kw_weight == 1.0
+
+    def test_full_keyword_match_outranks_doc_arm_pages(self):
+        """The mechanism behind CORPUS_KW_FULL_WEIGHT: at equal weight a
+        semantic page carrying the doc-arm bonus beats keyword's rank 1;
+        at the full-match weight keyword's rank 1 wins."""
+        from pdf_mcp import corpus
+
+        kw = [("k.pdf", 1)]
+        sem = [(f"s{i}.pdf", 1) for i in range(10)]
+        doc = list(sem)
+
+        def top(kw_weight):
+            return corpus.rrf_fuse_rankings_scored(
+                [(kw, kw_weight), (sem, 1.0), (doc, corpus.CORPUS_DOC_ARM_WEIGHT)]
+            )[0][0]
+
+        assert top(1.0) == ("s0.pdf", 1)
+        assert top(corpus.CORPUS_KW_FULL_WEIGHT) == ("k.pdf", 1)
 
     def test_doc_arm_changes_the_fused_order(
         self, corpus_dir, isolated_server, monkeypatch
@@ -6803,3 +6854,185 @@ class TestSemanticSnippetWholeTokens:
 
     def test_unlocatable_span_is_returned_unchanged(self, monkeypatch):
         assert self._run(monkeypatch, "text from elsewhere") == "text from elsewhere"
+
+
+class TestCorpusSearchSemanticPending:
+    _fake_embedder = staticmethod(TestPdfCorpusSearchSemanticAuto._fake_embedder)
+
+    @staticmethod
+    def _failing_encoder(monkeypatch):
+        import pdf_mcp.embedder as emb
+
+        def boom(texts, model):
+            raise RuntimeError("remote embedding backend died")
+
+        def no_query(text, model):
+            raise AssertionError("query must not be encoded while pending")
+
+        monkeypatch.setattr(emb, "encode", boom)
+        monkeypatch.setattr(emb, "encode_query", no_query)
+
+    def test_pending_branch_on_encode_failure(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert "error" not in r
+        assert r["search_mode"] == "keyword"
+        assert r["semantic_pending"] is True
+        assert "semantic_unavailable" not in r
+        assert r["coverage"]["searched"] == 3
+        assert r["matches"]
+        assert r["unprocessed"] == []
+        assert r["skipped"] == []
+        assert r["warm_complete"] is False
+        assert r["unwarmed"] == 3
+        assert len(r["semantic_unprocessed"]) == 3
+        assert r["keyword_match"] == "full"
+        assert r["hint"].startswith("Keyword-only ranking: 3 of 3 documents")
+        assert r["embeddings_pending"]["docs"] == 3
+        assert r["embeddings_pending"]["pages"] == 7
+        assert "est_seconds" not in r["embeddings_pending"]
+        assert "died" in r["embeddings_pending"]["last_error"]
+        assert r["next_call"] == {
+            "tool": "pdf_corpus_warm",
+            "args": {
+                "paths": str(corpus_dir),
+                "recursive": False,
+                "embeddings": True,
+                "budget_seconds": 300,
+            },
+        }
+
+    def test_partial_and_none_tiers(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        partial = pdf_corpus_search(
+            str(corpus_dir), "budget zebra quantum", mode="auto"
+        )
+        assert partial["keyword_match"] == "partial"
+        assert "no page matched every query term" in partial["hint"]
+        assert "following up per document" in partial["hint"]
+        none = pdf_corpus_search(str(corpus_dir), "zzqxv", mode="auto")
+        assert none["keyword_match"] == "none"
+        assert none["matches"] == []
+
+    def test_next_call_echoes_recursive(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", recursive=True)
+        assert r["next_call"]["args"]["recursive"] is True
+
+    def test_converges_to_hybrid(self, corpus_dir, isolated_server, monkeypatch):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        first = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert first["semantic_pending"] is True
+        self._fake_embedder(monkeypatch)  # encoder healthy again
+        second = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert second["search_mode"] == "hybrid"
+        assert second["warm_complete"] is True
+
+    def test_fully_embedded_has_no_pending_keys(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert r["search_mode"] == "hybrid"
+        for key in (
+            "semantic_pending",
+            "keyword_match",
+            "hint",
+            "embeddings_pending",
+            "next_call",
+        ):
+            assert key not in r
+
+    def test_semantic_mode_ignores_slice(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        # negative, not 0.0: a coarse clock (Windows, ~15 ms) can read an
+        # elapsed 0.0 and let a zero slice embed after all
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert r["search_mode"] == "semantic"
+        assert r["semantic_unprocessed"] == []
+
+    def test_cold_auto_takes_the_slice(self, corpus_dir, isolated_server, monkeypatch):
+        from pdf_mcp import corpus
+
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        self._fake_embedder(monkeypatch)
+        r = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        # a negative slice embeds nothing on the extracting call
+        assert r["search_mode"] == "keyword"
+        assert r["semantic_pending"] is True
+
+    def test_excerpt_auto_routes_on_pending_branch(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        self._fake_embedder(monkeypatch)
+        self._failing_encoder(monkeypatch)
+        r = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="auto", excerpt_style="auto"
+        )
+        assert "excerpt_routing" in r
+        assert r["semantic_pending"] is True
+
+    def test_semantic_mode_uses_single_pass_warm(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        seen = {}
+        real = corpus.warm_docs
+
+        def spy(*a, **k):
+            seen.update(k)
+            return real(*a, **k)
+
+        monkeypatch.setattr(corpus, "warm_docs", spy)
+        self._fake_embedder(monkeypatch)
+        pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
+        assert seen["text_first"] is False
+        pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert seen["text_first"] is True
+
+    def test_semantic_mode_never_hides_a_partial_doc(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        import time as _time
+
+        from pdf_mcp import corpus
+
+        monkeypatch.setattr(corpus, "WARM_EMBED_BATCH_PAGES", 1)
+        self._fake_embedder(monkeypatch)
+        import pdf_mcp.embedder as emb
+
+        fast = emb.encode
+
+        def slow(texts, model):
+            _time.sleep(0.4)
+            return fast(texts, model)
+
+        monkeypatch.setattr(emb, "encode", slow)
+        r = pdf_corpus_search(
+            str(corpus_dir), "budget", mode="semantic", budget_seconds=1
+        )
+        model = r["model_name"]
+        from pdf_mcp import _core
+
+        incomplete = [
+            p
+            for p in (
+                str(corpus_dir / n) for n in ("alpha.pdf", "bravo.pdf", "charlie.pdf")
+            )
+            if corpus._cached_pages(p, _core.cache, True, model) is None
+        ]
+        assert incomplete
+        for p in incomplete:
+            assert p in r["unprocessed"] or p in r["semantic_unprocessed"], p

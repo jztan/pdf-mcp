@@ -19,7 +19,9 @@ from .backend.geometry import Rect
 
 # Detection-logic version. Bump when geometry rules / thresholds change so the
 # cache layer (cache.py) re-scans. See cache._TRUST_VERSION wiring.
-_TRUST_VERSION = 3
+# 4 (2026-10-01): matrix-scaled font size, fill rects from path items,
+# invisible duplicates of visible text exempt.
+_TRUST_VERSION = 4
 
 # Tuned in the benchmark loop (scripts/benchmark_content_trust.py).
 # CJK text is split into short per-font spans by PyMuPDF (e.g. 4-char runs);
@@ -31,6 +33,8 @@ _WHITE_THRESHOLD = 0.95  # min per-channel value to call a color "white-ish"
 _OCR_COVERAGE_RATIO = 0.8  # image coverage of an invisible span => OCR layer
 _LIGHT_BG_THRESHOLD = 0.85  # min per-channel value for a "light" background fill
 _BG_COVERAGE_RATIO = 0.5  # fill must cover >= this fraction of a span to count
+_SOLID_FILL_RATIO = 0.5  # traced polygon area / bbox area for a path to count as a fill
+_DUP_COVERAGE_RATIO = 0.8  # visible twin must cover this much of an invisible span
 
 HiddenSpan = dict[str, Any]
 
@@ -52,18 +56,82 @@ def _is_light(color: Any) -> bool:
         return False
 
 
+def _drawing_rect(d: dict[str, Any]) -> Rect | None:
+    """Bounding rect of one drawing. PyMuPDF dicts carry 'rect'; the pdfium
+    backend's carry only 'items' ('re' Rect, 'qu' Quad, 'l'/'c' Points).
+    None when the drawing has no usable geometry."""
+    if d.get("rect") is not None:
+        return Rect(*d["rect"])
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in d.get("items") or ():
+        for part in item[1:]:
+            if isinstance(part, Rect):
+                xs += [part.x0, part.x1]
+                ys += [part.y0, part.y1]
+            elif hasattr(part, "ul"):  # Quad
+                for p in (part.ul, part.ur, part.ll, part.lr):
+                    xs.append(p.x)
+                    ys.append(p.y)
+            elif hasattr(part, "x") and hasattr(part, "y"):
+                xs.append(part.x)
+                ys.append(part.y)
+    if not xs:
+        return None
+    return Rect(min(xs), min(ys), max(xs), max(ys))
+
+
+def _is_solid(d: dict[str, Any], rect: Rect) -> bool:
+    """Does this drawing actually paint its bbox? Rect and quad items do.
+    A path of lines and curves counts only if the polygon through its
+    on-curve points covers at least _SOLID_FILL_RATIO of the bbox: a
+    zero-area line, or a thin curve whose control points span the text,
+    must not pose as a dark background (review probes, 2026-10-01)."""
+    items = d.get("items") or ()
+    if any(item and item[0] in ("re", "qu") for item in items):
+        return True
+    pts: list[tuple[float, float]] = []
+    for item in items:
+        if not item:
+            continue
+        ends = (item[1], item[2]) if item[0] == "l" else (item[1], item[-1])
+        for p in ends:
+            xy = (float(p.x), float(p.y))
+            if not pts or pts[-1] != xy:
+                pts.append(xy)
+    area = rect.get_area()
+    if len(pts) < 3 or area <= 0:
+        return False
+    twice = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+    return abs(twice) / 2.0 >= _SOLID_FILL_RATIO * area
+
+
 def _page_fills(page: Any) -> list[tuple[Rect, Any]]:
-    """Filled vector drawings as (rect, fill_color), in paint order. Best-effort:
-    returns [] on any PyMuPDF error so a flaky page never breaks detection."""
+    """Filled vector drawings as (rect, fill_color), in paint order.
+    Best-effort per drawing: one malformed path is skipped, it never
+    empties the list (a whole-loop except did, on every pdfium page).
+    Transparent and non-solid fills are left out, so they cannot make a
+    span's background read as dark."""
     try:
-        out: list[tuple[Rect, Any]] = []
-        for d in page.get_drawings():
-            fill = d.get("fill")
-            if fill is not None:
-                out.append((Rect(*d["rect"]), fill))
-        return out
-    except (RuntimeError, AttributeError, KeyError, TypeError, ValueError):
+        drawings = page.get_drawings()
+    except (RuntimeError, AttributeError, TypeError, ValueError):
         return []
+    out: list[tuple[Rect, Any]] = []
+    for d in drawings:
+        try:
+            fill = d.get("fill")
+            if fill is None:
+                continue
+            opacity = d.get("fill_opacity")
+            if opacity is not None and float(opacity) <= _OPACITY_EPS:
+                continue
+            rect = _drawing_rect(d)
+            if rect is None or not _is_solid(d, rect):
+                continue
+        except (AttributeError, KeyError, TypeError, ValueError, IndexError):
+            continue
+        out.append((rect, fill))
+    return out
 
 
 def _bg_is_light(span_rect: Rect, fills: list[tuple[Rect, Any]]) -> bool:
@@ -108,16 +176,51 @@ def _covered_by_image(span_rect: Rect, images: list[Rect]) -> bool:
     return False
 
 
+def _norm_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _drop_invisible_duplicates(
+    spans: list[HiddenSpan], visible: list[tuple[str, Rect]]
+) -> list[HiddenSpan]:
+    """Drop spans flagged ONLY invisible_render whose text a visible span at
+    the same place already shows (JPM FY2023 p251 draws headers twice, once
+    in render mode 3). It cannot hide new content: the invisible text must
+    equal visible text. Any other reason keeps the span."""
+    if not visible:
+        return spans
+    kept: list[HiddenSpan] = []
+    for s in spans:
+        if s["reasons"] == ["invisible_render"]:
+            text = _norm_text(s["text"])
+            rect = Rect(*s["bbox"])
+            area = rect.get_area()
+            if area > 0 and any(
+                _norm_text(vtext) == text
+                and (rect & vrect).get_area() / area >= _DUP_COVERAGE_RATIO
+                for vtext, vrect in visible
+            ):
+                continue
+        kept.append(s)
+    return kept
+
+
 def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
     """Return hidden spans on one page. page_index is 0-indexed."""
     page_rect = page.rect
     images = _image_bboxes(page)
     fills: list[tuple[Rect, Any]] | None = None  # lazy: only if needed
     spans: list[HiddenSpan] = []
+    # (text, rect) of drawn, non-transparent spans, for the duplicate check.
+    visible: list[tuple[str, Rect]] = []
 
     for s in page.get_texttrace():
         chars = s.get("chars", [])
         if len(chars) < _MIN_HIDDEN_CHARS:
+            continue
+        if not "".join(chr(c[0]) for c in chars).strip():
+            # Whitespace-only runs (NBSP / figure-space padding, often with
+            # a zero-height bbox that reads as offpage) cannot hide content.
             continue
 
         stype = s.get("type", 0)
@@ -126,6 +229,8 @@ def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
         color = s.get("color", (0.0, 0.0, 0.0))
         bbox = tuple(float(c) for c in s.get("bbox", (0, 0, 0, 0)))
         span_rect = Rect(*bbox)
+        if stype in (0, 2) and opacity > _OPACITY_EPS:
+            visible.append(("".join(chr(c[0]) for c in chars), span_rect))
 
         reasons: list[str] = []
 
@@ -165,7 +270,7 @@ def _scan_page_geometry(page: Any, page_index: int) -> list[HiddenSpan]:
             }
         )
 
-    return spans
+    return _drop_invisible_duplicates(spans, visible)
 
 
 _SPAN_CAP = 200

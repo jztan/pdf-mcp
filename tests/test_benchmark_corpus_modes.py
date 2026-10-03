@@ -5,12 +5,14 @@ from scripts.benchmark_corpus_modes import (
     agg,
     class_names,
     content_tokens,
+    degraded_mode_error,
     grade_query,
     nonlatin_ids,
     stem,
     validate_described_queries,
     validate_fidelity_questions,
     validate_queries,
+    warm_incomplete_error,
 )
 
 
@@ -426,3 +428,30 @@ class TestValidateFidelityQuestions:
             _question(expect_doc="d2"), QUERIES, lookup
         )
         assert any("no page labels" in e for e in errors)
+
+
+class TestKeywordFirstGuards:
+    """Since keyword-first warm (#73) `auto` can answer by keyword alone while
+    embeddings are pending, and a doc whose embedding fails is skipped rather
+    than left unprocessed. Either would score a keyword run as hybrid."""
+
+    def test_auto_must_report_hybrid(self):
+        err = degraded_mode_error("auto", {"search_mode": "keyword"})
+        assert err and "keyword" in err
+
+    def test_auto_with_semantic_pending_is_an_error(self):
+        res = {"search_mode": "hybrid", "semantic_pending": True}
+        assert degraded_mode_error("auto", res)
+
+    def test_each_mode_accepts_its_own_search_mode(self):
+        assert degraded_mode_error("auto", {"search_mode": "hybrid"}) is None
+        assert degraded_mode_error("keyword", {"search_mode": "keyword"}) is None
+        assert degraded_mode_error("semantic", {"search_mode": "semantic"}) is None
+
+    def test_semantic_reporting_keyword_is_an_error(self):
+        assert degraded_mode_error("semantic", {"search_mode": "keyword"})
+
+    def test_warm_must_be_complete(self):
+        assert warm_incomplete_error({"warm_complete": False, "unwarmed": 2})
+        assert warm_incomplete_error({"unprocessed": []})  # field absent
+        assert warm_incomplete_error({"warm_complete": True, "unwarmed": 0}) is None

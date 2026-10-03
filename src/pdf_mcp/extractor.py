@@ -1799,13 +1799,15 @@ def ocr_page(
     lang: str = "eng",
     dpi: int = 300,
     tessdata: str | None = None,
+    full: bool = False,
 ) -> str:
     """
     OCR a PDF page via the backend (pytesseract over a pdfium render).
 
     Mirrors PyMuPDF's get_textpage_ocr(full=False) semantics: a page with
     a usable text layer returns that text without OCRing, which is both
-    parity and faster.
+    parity and faster. ``full=True`` OCRs the render regardless, for a
+    scan whose existing layer is the scanner vendor's poor OCR.
 
     Args:
         doc: backend Document (any object with a ``.name`` file path)
@@ -1813,17 +1815,20 @@ def ocr_page(
         lang: Tesseract language code (default 'eng')
         dpi: Internal render DPI for OCR
         tessdata: Explicit tessdata directory path.
+        full: OCR even when the page has a text layer.
 
     Returns:
         Extracted text string (empty string if OCR produces nothing)
     """
     from .backend.raster import ocr_page_text
 
-    return ocr_page_text(doc.name, page_num, lang=lang, dpi=dpi, tessdata=tessdata)
+    return ocr_page_text(
+        doc.name, page_num, lang=lang, dpi=dpi, tessdata=tessdata, full=full
+    )
 
 
 def _ocr_page_worker(
-    args: tuple[str, int, str, int, str | None],
+    args: tuple[str, int, str, int, str | None, bool],
 ) -> tuple[int, "str | PageError"]:
     """Picklable OCR worker for ProcessPoolExecutor.
 
@@ -1832,18 +1837,18 @@ def _ocr_page_worker(
     never crashes the batch. Lives in extractor.py (not _core.py) so spawn
     re-imports only PyMuPDF, never FastMCP.
 
-    Args tuple: (path, page_num, lang, dpi, tessdata)
+    Args tuple: (path, page_num, lang, dpi, tessdata, full)
 
     The tuple unpack is inside the try so a malformed tuple (e.g. from a
     stale caller) produces a PageError instead of crashing the whole batch.
     """
     page_num = args[1]  # safe fallback when unpack fails
     try:
-        path, page_num, lang, dpi, tessdata = args
+        path, page_num, lang, dpi, tessdata, full = args
         doc = open_pdf(path)
         try:
             return page_num, ocr_page(
-                doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata
+                doc, page_num, lang=lang, dpi=dpi, tessdata=tessdata, full=full
             )
         finally:
             doc.close()

@@ -47,6 +47,38 @@ MAX_OCR_PAGES_LIMIT = 20
 _OCR_PARALLEL_GATE = 2
 _RENDER_PARALLEL_GATE = 16
 
+# A raster image covering this share of the page, under a text layer, is
+# what a scanner with built-in OCR produces. Born-digital pages almost never
+# carry one, so this is the scan_text_layer_pages signal.
+_SCAN_COVERAGE_RATIO = 0.9
+
+
+def _is_scan_with_text_layer(
+    text: str, images: list[dict[str, Any]], page_rect: list[float]
+) -> bool:
+    """True when the page has text AND a near-full-page raster image.
+
+    That text was almost certainly written by the scanner's own OCR, which
+    can be poor (journal archive scans especially), and ocr=True alone
+    returns it unchanged. Geometry, not text quality, so it stays quiet on
+    born-digital pages in any language.
+    """
+    if not text.strip():
+        return False
+    page_area = (page_rect[2] - page_rect[0]) * (page_rect[3] - page_rect[1])
+    if page_area <= 0:
+        return False
+    for img in images:
+        bbox = img.get("bbox")
+        if not bbox:
+            continue
+        x0, y0 = max(bbox[0], page_rect[0]), max(bbox[1], page_rect[1])
+        x1, y1 = min(bbox[2], page_rect[2]), min(bbox[3], page_rect[3])
+        if x1 > x0 and y1 > y0:
+            if (x1 - x0) * (y1 - y0) / page_area >= _SCAN_COVERAGE_RATIO:
+                return True
+    return False
+
 
 def _is_ocr_cache_hit(
     cached_src: str | None,
@@ -139,6 +171,7 @@ def pdf_read_pages(
     ocr_lang: str = "eng",
     render_dpi: int | None = None,
     detect_charts: bool = False,
+    force_ocr: bool = False,
 ) -> dict[str, Any]:
     """
     Read text content and images from specific pages of a PDF.
@@ -166,8 +199,14 @@ def pdf_read_pages(
             are ignored, but ORDER is significant ('khm+eng' and 'eng+khm'
             are different requests, because Tesseract's output depends on
             it), so keep this string stable across calls for one document.
-            Pages that have a real text layer are never OCR'd, whatever is
-            requested.
+            Pages that have a real text layer are not OCR'd unless
+            force_ocr=True.
+        force_ocr: If True, run Tesseract over every requested page even
+            when it already has a text layer, and return source='ocr'.
+            Implies ocr=True. Use it on a scan whose embedded text is the
+            scanner's own, garbled OCR (see scan_text_layer_pages). Always
+            re-runs OCR, and the result replaces the cached OCR text for
+            that language, so pdf_search finds it.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
             Each page dict carries an opaque `render_id` (basename only,
             never an absolute path). To obtain the rendered PNG bytes,
@@ -192,6 +231,10 @@ def pdf_read_pages(
         - cache_hits: Number of pages served from cache
         - total_images: Total number of images across all pages
         - total_tables: Total number of tables across all pages
+        - scan_text_layer_pages / hint: present only when ocr is off and
+            some pages carry a text layer over a full-page scan. That text
+            came from the scanner and may be garbled; compare it with a
+            render, and retry with force_ocr=True if it looks wrong.
 
     Error contract: path/URL validation failures (file not found,
     invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
@@ -200,6 +243,7 @@ def pdf_read_pages(
     `error` key on the response before reading other fields rather than
     handling a raised exception.
     """
+    ocr = ocr or force_ocr
     if ocr:
         missing = _ocr_unavailable(ocr_lang)
         if missing is not None:
@@ -260,10 +304,14 @@ def pdf_read_pages(
         # helper drives the in-loop hit branch, so the two stay in sync.
         ocr_results: dict[int, Any] = {}
         if ocr:
+            # force_ocr never reads the cache: an earlier ocr=True call on a
+            # page with a text layer cached that LAYER under source='ocr',
+            # and serving it here would return the very text being replaced.
             ocr_miss_pages = [
                 n
                 for n in page_nums
-                if not _is_ocr_cache_hit(
+                if force_ocr
+                or not _is_ocr_cache_hit(
                     cached_sources.get(n),
                     cached_texts,
                     n,
@@ -279,7 +327,7 @@ def pdf_read_pages(
                         len(ocr_miss_pages), _OCR_PARALLEL_GATE, _MAX_PARALLEL_WORKERS
                     )
                     ocr_args = [
-                        (local_path, n, ocr_lang, 300, _TESSDATA_PATH)
+                        (local_path, n, ocr_lang, 300, _TESSDATA_PATH, force_ocr)
                         for n in ocr_miss_pages
                     ]
                     for n, res in zip(
@@ -311,6 +359,7 @@ def pdf_read_pages(
                                     n,
                                     lang=ocr_lang,
                                     tessdata=_TESSDATA_PATH,
+                                    full=force_ocr,
                                 )
                                 ocr_results[n] = txt
                             finally:
@@ -378,6 +427,7 @@ def pdf_read_pages(
                     _core.cache.save_page_tables(local_path, n, extracted)
 
         results = []
+        scan_layer_pages: list[int] = []
         cache_hits = 0
         total_chars = 0
         total_images = 0
@@ -388,7 +438,7 @@ def pdf_read_pages(
 
             if ocr:
                 cached_src = cached_sources.get(page_num)
-                if _is_ocr_cache_hit(
+                if not force_ocr and _is_ocr_cache_hit(
                     cached_src,
                     cached_texts,
                     page_num,
@@ -518,6 +568,10 @@ def pdf_read_pages(
             }
             if page_source is not None:
                 page_result["source"] = page_source
+            if not ocr and _is_scan_with_text_layer(
+                text, sanitized_images, page_rect_list
+            ):
+                scan_layer_pages.append(page_num + 1)
 
             if clamped_dpi is not None:
                 if page_num in render_cached:
@@ -576,6 +630,19 @@ def pdf_read_pages(
             "total_images": total_images,
             "total_tables": total_tables,
             **({"truncated_ocr": True} if ocr_truncated else {}),
+            **(
+                {
+                    "scan_text_layer_pages": scan_layer_pages,
+                    "hint": (
+                        "These pages are scans whose text came from the"
+                        " scanner's own OCR, which can be garbled (digits,"
+                        " decimal marks, rare words). Check it against"
+                        " pdf_render_pages, or retry with force_ocr=true."
+                    ),
+                }
+                if scan_layer_pages
+                else {}
+            ),
             **(
                 {"render_failed_pages": render_failed_pages}
                 if render_failed_pages

@@ -63,6 +63,14 @@ dependencies = [
     # Do not declare a new Python version in classifiers/CI before
     # fastembed/onnxruntime ship wheels for it.
     "fastembed>=0.7,<1.0",
+    # Pulled in transitively via pdfminer.six and authlib. cryptography ships
+    # no Intel-macOS wheels from 49.0.0 on, so without this cap an Intel Mac
+    # compiles it from source (needs Rust; issue #81). 48.0.1 carries
+    # CVE-2026-69247/69248/69249 (PKCS#7 decryption, X.509 path validation),
+    # code pdf-mcp never calls. scripts/audit.sh does not see them: pip-audit
+    # evaluates markers for the host, so this Intel-Mac-only pin is skipped.
+    # Drop the cap when cryptography ships Intel-Mac wheels again.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.

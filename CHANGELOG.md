@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_search`. It is not a fix for scanned tables, which Tesseract can
   drop entirely. The default is unchanged.
 
+### Fixed
+
+- **Installing on an Intel Mac no longer compiles `cryptography` from
+  source.** cryptography stopped shipping Intel-Mac wheels at 49.0.0, so
+  the Claude Desktop bundle (and `pip install` on an Intel Mac) built it
+  from source, which needs a Rust toolchain: it failed on a Mac without
+  one and took about three minutes on a Mac with one. Intel Macs now get
+  cryptography 48.0.1, the last release with those wheels. Its known
+  advisories are in PKCS#7 decryption and certificate path validation,
+  which pdf-mcp does not use. Other platforms keep 50.0.0
+  ([#81](https://github.com/jztan/pdf-mcp/issues/81)).
+
 ## [3.5.0] - 2026-10-03
 ### Added
 

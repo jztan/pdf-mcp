@@ -209,8 +209,16 @@ class TestPDFCache:
         so cache_size_bytes doesn't report megabytes of residual after a
         full clear."""
         filler = "corpus filler text for vacuum sizing " * 200
-        for i in range(200):
-            cache.save_page_text(sample_pdf, i, f"page {i} {filler}")
+        # One transaction: 200 single-page commits cost 52 s on Windows CI
+        # (one fsync each) for the same bytes on disk.
+        cache.save_pages_text(sample_pdf, {i: f"page {i} {filler}" for i in range(200)})
+        # Move the WAL into cache.db so the size below sees the data; the
+        # per-page commits used to cross the auto-checkpoint threshold.
+        conn = cache._connect()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            conn.close()
         pre = os.path.getsize(cache.db_path)
 
         cache.clear_all()

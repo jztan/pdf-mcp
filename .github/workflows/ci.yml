@@ -3,7 +3,7 @@ name: CI
 # Prose-only pushes skip this matrix. The `paths-ignore` list below is
 # the set of files nothing here reads; every push that touches anything
 # else (a mixed docs-plus-code push included, GitHub evaluates the filter
-# against the whole push) still runs all seven jobs. The docs that ARE
+# against the whole push) still runs every job. The docs that ARE
 # read by tests (README, CHANGELOG, ROADMAP, docs/, the fusion block in
 # pages/index.html) get their own one-job check in docs.yml, which
 # triggers on exactly this list. tests/test_ci_workflows.py holds the two
@@ -50,7 +50,45 @@ on:
 permissions:
   contents: read
 
+# A push to a feature branch and the pull_request event for the same commit
+# both start this workflow, and on 2026-10-03/04 one branch ran the full
+# matrix three times on two commits. Grouping by commit lets the later run
+# cancel the earlier one. Distinct commits never share a group, so every
+# commit still gets one complete run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
+  # Audit, lint, format and type-check give the same answer on every Python
+  # version: mypy is pinned to python_version 3.10 in pyproject.toml and the
+  # audit reads uv.lock, not the interpreter. They ran in all five test legs
+  # until 2026-10-04 (~70 s each, ahead of pytest); once is enough.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Audit dependencies for known vulnerabilities
+        # Ignore list lives in scripts/audit.sh so local preflight and CI stay in sync.
+        run: uv run bash scripts/audit.sh
+      - name: Run linter
+        run: uv run flake8 src/ scripts/ tests/
+      - name: Check formatting
+        run: uv run black --check src/ scripts/ tests/
+      - name: Run type checker
+        # Intentionally src/-only: test and script bodies are untyped and
+        # would need per-module relaxations. Tracked in docs_internal/backlog.md.
+        run: uv run mypy src/
+
   test:
     runs-on: ubuntu-latest
     env:
@@ -73,17 +111,6 @@ jobs:
           version: "latest"
       - name: Install dependencies
         run: uv sync --frozen --extra dev
-      - name: Audit dependencies for known vulnerabilities
-        # Ignore list lives in scripts/audit.sh so local preflight and CI stay in sync.
-        run: uv run bash scripts/audit.sh
-      - name: Run linter
-        run: uv run flake8 src/ scripts/ tests/
-      - name: Check formatting
-        run: uv run black --check src/ scripts/ tests/
-      - name: Run type checker
-        # Intentionally src/-only: test and script bodies are untyped and
-        # would need per-module relaxations. Tracked in docs_internal/backlog.md.
-        run: uv run mypy src/
       - name: Restore the embedding model cache
         # bge-small lives only on Hugging Face Hub (fastembed has no mirror
         # for it). Downloading it on every job made the gate depend on that
@@ -115,10 +142,45 @@ jobs:
         # builds or opens a PDF), so it parallelises well. xdist workers are
         # separate processes, so the gates that swap module-level state (the
         # isolated corpus cache) stay isolated per worker rather than racing.
-        run: uv run pytest tests/ -v -n auto
+        # The slow marker runs once, in the slow-gates job below.
+        run: uv run pytest tests/ -v -m "not slow" -n auto
 
-  # (see test-windows below for why the slow marker is deselected there
-  # but not here)
+  # The slow marker holds the retrieval-quality gates. They measure ranking,
+  # not interpreter behaviour, and one of them,
+  # test_rrf_v2_no_regression_vs_baseline, took 228 s of the 266 s pytest
+  # step, so running it in all five Linux legs made it the floor of every
+  # leg. It runs here once, alongside them. Billed and local-corpus tests in
+  # the same marker skip themselves on a runner, as they did before.
+  slow-gates:
+    runs-on: ubuntu-latest
+    env:
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+      - name: Restore the embedding model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.fastembed_cache
+          key: fastembed-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            fastembed-model-${{ runner.os }}-
+      - name: Warm the embedding model cache
+        timeout-minutes: 3
+        run: >
+          uv run python -c
+          "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
+          encode(['warm the model cache'], DEFAULT_MODEL)"
+      - name: Run the slow gates
+        run: uv run pytest tests/ -v -m slow
 
   # Windows is ~40% of PyPI downloads and had no coverage at all until the
   # PyMuPDF replacement, which swapped the PDF engine under every user. The
@@ -207,11 +269,11 @@ jobs:
           "from pdf_mcp.embedder import encode, DEFAULT_MODEL;
           encode(['warm the model cache'], DEFAULT_MODEL)"
       - name: Run tests
-        # Deselect the slow marker here, unlike the Linux job. It covers
-        # the retrieval-quality gates, which measure ranking rather than
-        # platform behaviour and cannot fail on Windows alone -- and one
-        # of them, test_rrf_v2_no_regression_vs_baseline, took 8.5 of
-        # this job's 20 minutes. What this job is for is the
+        # Deselect the slow marker, as the Linux legs do (it runs once in
+        # slow-gates). It covers the retrieval-quality gates, which measure
+        # ranking rather than platform behaviour and cannot fail on Windows
+        # alone -- and one of them, test_rrf_v2_no_regression_vs_baseline,
+        # took 8.5 of this job's 20 minutes. What this job is for is the
         # platform-divergent surfaces above, and those are not marked
         # slow.
         run: uv run pytest tests/ -v -m "not slow" -n auto

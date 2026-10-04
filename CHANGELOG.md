@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decimals whose text breaks the column's format, each with a `clip` to
   render. On that table it named all 51 and none of the 548 correct cells;
   a wrong digit in a well-formed cell (there was one) is not caught
-  ([#76](https://github.com/jztan/pdf-mcp/issues/76), reported by
+  ([#76](https://github.com/jztan/pdf-mcp/issues/76),
+  [#79](https://github.com/jztan/pdf-mcp/issues/79), reported by
   @phinnphace)
 - **`pdf_read_pages(force_ocr=true)` re-OCRs a page that already has a
   text layer.** `ocr=true` only OCRs pages without one, so a page whose

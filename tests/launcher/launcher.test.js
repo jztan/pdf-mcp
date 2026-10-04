@@ -253,16 +253,25 @@ test('pruneVenvs does not block the event loop (a 250 MB venv took 12 s)', async
   const root = tmpdir();
   fs.mkdirSync(path.join(root, 'old'));
   let released;
-  const slowRm = () => new Promise((r) => { released = r; });
+  let rmCalled;
+  const called = new Promise((r) => { rmCalled = r; });
+  const slowRm = () => { rmCalled(); return new Promise((r) => { released = r; }); };
   const pending = L.pruneVenvs(root, 'new', { rm: slowRm });
   assert.ok(pending instanceof Promise);
+  let settled = false;
+  pending.then(() => { settled = true; });
+  // rm runs after a real readdir, whose completion can take many event-loop
+  // turns on a loaded Windows runner (a 1000-turn wait failed there in
+  // 113 ms), so wait for the call itself, with a deadline instead of a hang.
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('rm was never called')), 10000);
+  });
+  await Promise.race([called, deadline]);
+  clearTimeout(timer);
   // The event loop keeps turning while the delete is in flight.
-  let turns = 0;
-  while (!released && turns < 1000) { await new Promise((r) => setImmediate(r)); turns += 1; }
-  assert.ok(released, 'rm was never called');
-  const before = turns;
-  await new Promise((r) => setImmediate(r));
-  assert.ok(turns >= before);
+  for (let i = 0; i < 10; i += 1) await new Promise((r) => setImmediate(r));
+  assert.strictEqual(settled, false, 'prune finished before its delete did');
   released();
   await pending;
 });

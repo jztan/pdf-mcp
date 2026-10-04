@@ -8,17 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
-- **`pdf_read_pages(force_ocr=true)` re-OCRs a page that already has a
-  text layer.** `ocr=true` only OCRs pages without one, so on a scan whose
-  embedded text is the scanner's own, poor OCR it returned that same text,
-  and nothing could make it run Tesseract. `force_ocr` does, returns
-  `source="ocr"`, and caches the result for `pdf_search`. The default is
-  unchanged ([#76](https://github.com/jztan/pdf-mcp/issues/76), reported by
+- **`pdf_read_pages` points at the cells a scan's OCR layer probably
+  misread.** Many scanned PDFs carry text from an OCR pass made when they
+  were digitised, and it can be wrong in ways that look like data: in one
+  1936 journal table, 51 of 600 decimal marks were misread (`5-4`, `5 4`,
+  `54`). With `ocr` off, a response whose pages carry text over a
+  full-page image now includes `scan_text_layer_pages` and a `hint`, and
+  each such page lists `suspect_cells`: cells in a column of fixed-format
+  decimals whose text breaks the column's format, each with a `clip` to
+  render. On that table it named all 51 and none of the 548 correct cells;
+  a wrong digit in a well-formed cell (there was one) is not caught
+  ([#76](https://github.com/jztan/pdf-mcp/issues/76),
+  [#79](https://github.com/jztan/pdf-mcp/issues/79), reported by
   @phinnphace)
-- **`pdf_read_pages` flags scanned pages whose text came from the
-  scanner.** With `ocr` off, a response whose pages carry text over a
-  full-page image now includes `scan_text_layer_pages` and a short `hint`
-  to compare against a render or retry with `force_ocr`.
+- **`pdf_read_pages(force_ocr=true)` re-OCRs a page that already has a
+  text layer.** `ocr=true` only OCRs pages without one, so a page whose
+  embedded text does not decode could not be OCR'd. `force_ocr` runs
+  Tesseract anyway, returns `source="ocr"`, and caches the result for
+  `pdf_search`. It is not a fix for scanned tables, which Tesseract can
+  drop entirely. The default is unchanged.
 
 ## [3.5.0] - 2026-10-03
 ### Added

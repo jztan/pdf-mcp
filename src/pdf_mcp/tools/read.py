@@ -32,6 +32,7 @@ from .._core import (
     _tool_description,
     mcp,
 )
+from ..suspect_cells import find_suspect_cells
 from ._render import _bbox_to_clip
 
 logger = logging.getLogger(__name__)
@@ -58,10 +59,11 @@ def _is_scan_with_text_layer(
 ) -> bool:
     """True when the page has text AND a near-full-page raster image.
 
-    That text was almost certainly written by the scanner's own OCR, which
-    can be poor (journal archive scans especially), and ocr=True alone
-    returns it unchanged. Geometry, not text quality, so it stays quiet on
-    born-digital pages in any language.
+    That text was almost certainly written by an OCR pass when the PDF was
+    made (the digitiser's, not ours), which can be poor (journal archive
+    scans especially), and ocr=True alone returns it unchanged. Geometry,
+    not text quality, so it stays quiet on born-digital pages in any
+    language.
     """
     if not text.strip():
         return False
@@ -203,8 +205,10 @@ def pdf_read_pages(
             force_ocr=True.
         force_ocr: If True, run Tesseract over every requested page even
             when it already has a text layer, and return source='ocr'.
-            Implies ocr=True. Use it on a scan whose embedded text is the
-            scanner's own, garbled OCR (see scan_text_layer_pages). Always
+            Implies ocr=True. Use it when a page's embedded text is
+            unreadable (undecodable fonts, or an OCR layer that is mostly
+            wrong). Not for a scanned table: Tesseract can drop a ruled
+            table entirely, returning less than the stored layer. Always
             re-runs OCR, and the result replaces the cached OCR text for
             that language, so pdf_search finds it.
         render_dpi: If set, render each page as a PNG at this DPI (clamped to 72–400).
@@ -233,8 +237,13 @@ def pdf_read_pages(
         - total_tables: Total number of tables across all pages
         - scan_text_layer_pages / hint: present only when ocr is off and
             some pages carry a text layer over a full-page scan. That text
-            came from the scanner and may be garbled; compare it with a
-            render, and retry with force_ocr=True if it looks wrong.
+            is an OCR layer stored in the PDF and may be wrong; check
+            numbers against a render.
+        - pages[].suspect_cells: on those pages only, cells in a column of
+            fixed-format decimals (5.1, 3.0, ...) whose text breaks the
+            column's format (5-1, 51, O.1): [{text, bbox, expected, clip}].
+            Render each clip to read the true value. A wrong digit in a
+            well-formed cell is not flagged.
 
     Error contract: path/URL validation failures (file not found,
     invalid extension, blocked URL, HTTP fetch error, allow/deny rule)
@@ -428,6 +437,7 @@ def pdf_read_pages(
 
         results = []
         scan_layer_pages: list[int] = []
+        suspect_total = 0
         cache_hits = 0
         total_chars = 0
         total_images = 0
@@ -572,6 +582,14 @@ def pdf_read_pages(
                 text, sanitized_images, page_rect_list
             ):
                 scan_layer_pages.append(page_num + 1)
+                # Scanner OCR is the text worth auditing: a column of
+                # fixed-format decimals shows which cells it misread.
+                suspects = find_suspect_cells(doc[page_num].get_text("words"))
+                if suspects:
+                    for cell in suspects:
+                        cell["clip"] = _bbox_to_clip(cell["bbox"], page_rect_list)
+                    page_result["suspect_cells"] = suspects
+                    suspect_total += len(suspects)
 
             if clamped_dpi is not None:
                 if page_num in render_cached:
@@ -634,10 +652,23 @@ def pdf_read_pages(
                 {
                     "scan_text_layer_pages": scan_layer_pages,
                     "hint": (
-                        "These pages are scans whose text came from the"
-                        " scanner's own OCR, which can be garbled (digits,"
-                        " decimal marks, rare words). Check it against"
-                        " pdf_render_pages, or retry with force_ocr=true."
+                        "These pages are scans whose text is an OCR layer"
+                        " stored in the PDF, which can be wrong in ways that"
+                        " look like data (digits, decimal marks, rare words)."
+                        " Check numbers against pdf_render_pages before"
+                        " relying on them."
+                        + (
+                            f" {suspect_total} cells in fixed-format decimal"
+                            " columns do not match their column; each is in"
+                            " its page's suspect_cells with a clip to render."
+                            " A wrong digit in a well-formed cell is not"
+                            " flagged."
+                            if suspect_total
+                            else ""
+                        )
+                        + " Use force_ocr=true only if most of the text is"
+                        " unreadable: it can return less than the stored"
+                        " layer, and drop tables entirely."
                     ),
                 }
                 if scan_layer_pages

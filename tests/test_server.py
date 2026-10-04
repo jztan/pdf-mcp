@@ -3511,6 +3511,59 @@ class TestForceOcrAndScanHint:
         assert "scan_text_layer_pages" not in result
 
 
+class TestSuspectCells:
+    """A scan's OCR layer: cells that break their decimal column are named.
+
+    The fixture reproduces the error kinds in the publisher's OCR layer of
+    Fisher (1936) Table I, where this check flagged 51 of 51 malformed cells
+    and none of the 548 correct ones.
+    """
+
+    def test_flags_exactly_the_malformed_cells(
+        self, fisher_scan_ocr_layer_pdf, isolated_server
+    ):
+        from tests.conftest import FISHER_FLAGGED
+
+        result = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1")
+        cells = result["pages"][0]["suspect_cells"]
+        assert {c["text"] for c in cells} == FISHER_FLAGGED
+        for c in cells:
+            assert c["expected"] == "9.9"
+            assert all(0.0 <= v <= 1.0 for v in c["clip"])
+        assert f"{len(FISHER_FLAGGED)} cells" in result["hint"]
+
+    def test_hint_puts_the_render_before_force_ocr(
+        self, fisher_scan_ocr_layer_pdf, isolated_server
+    ):
+        # force_ocr returned 0 of 600 values on the real Fisher scan, where
+        # the stored layer had 548 exact: it must not read as the fix.
+        hint = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1")["hint"]
+        assert hint.index("pdf_render_pages") < hint.index("force_ocr")
+        assert "only if most of the text is unreadable" in hint
+
+    def test_never_checks_born_digital_text(
+        self, fisher_born_digital_garbled_pdf, isolated_server
+    ):
+        # Same garbled cells, printed: born-digital text is the truth.
+        result = pdf_read_pages(fisher_born_digital_garbled_pdf, "1")
+        assert "suspect_cells" not in result["pages"][0]
+        assert "hint" not in result
+
+    def test_absent_when_ocr_ran(
+        self, fisher_scan_ocr_layer_pdf, isolated_server, monkeypatch
+    ):
+        from unittest.mock import patch
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.tools.read._ocr_page_worker",
+                side_effect=lambda args: (args[1], "5.1 4.9 4.7"),
+            ):
+                result = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1", force_ocr=True)
+        assert "suspect_cells" not in result["pages"][0]
+
+
 class TestOcrParallelOrchestration:
     def _two_page_scanned(self, tmp_path):
         import base64

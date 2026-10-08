@@ -1,7 +1,7 @@
 """Tests for the corpus-modes benchmark runner (pure logic only)."""
 
 from scripts.benchmark_corpus_modes import (
-    MIN_DESCRIBED_TOKENS,
+    MIN_PARAPHRASE_TOKENS,
     agg,
     class_names,
     content_tokens,
@@ -9,7 +9,7 @@ from scripts.benchmark_corpus_modes import (
     grade_query,
     nonlatin_ids,
     stem,
-    validate_described_queries,
+    validate_paraphrase_queries,
     validate_fidelity_questions,
     validate_queries,
     warm_incomplete_error,
@@ -20,22 +20,26 @@ class TestClassNames:
     def test_sorted_unique_classes_from_queries(self):
         queries = {
             "queries": [
-                {"id": "a", "class": "trap"},
-                {"id": "b", "class": "needle"},
-                {"id": "c", "class": "trap"},
+                {"id": "a", "class": "lexical_distractor"},
+                {"id": "b", "class": "exact_match"},
+                {"id": "c", "class": "lexical_distractor"},
             ]
         }
-        assert class_names(queries) == ["needle", "trap"]
+        assert class_names(queries) == ["exact_match", "lexical_distractor"]
 
-    def test_reproduces_the_legacy_hardcoded_order(self):
+    def test_all_three_classes_sort_alphabetically(self):
         queries = {
             "queries": [
-                {"id": "a", "class": "spread"},
-                {"id": "b", "class": "needle"},
-                {"id": "c", "class": "trap"},
+                {"id": "a", "class": "multi_doc"},
+                {"id": "b", "class": "exact_match"},
+                {"id": "c", "class": "lexical_distractor"},
             ]
         }
-        assert class_names(queries) == ["needle", "spread", "trap"]
+        assert class_names(queries) == [
+            "exact_match",
+            "lexical_distractor",
+            "multi_doc",
+        ]
 
 
 class TestNonlatinIds:
@@ -53,17 +57,27 @@ class TestNonlatinIds:
 class TestAgg:
     def test_means_and_count(self):
         rows = {
-            "q1": {"ndcg": 1.0, "doc_ndcg": 0.5, "dochit3": 1, "class": "needle"},
-            "q2": {"ndcg": 0.0, "doc_ndcg": 0.5, "dochit3": 0, "class": "trap"},
+            "q1": {"ndcg": 1.0, "doc_ndcg": 0.5, "dochit3": 1, "class": "exact_match"},
+            "q2": {
+                "ndcg": 0.0,
+                "doc_ndcg": 0.5,
+                "dochit3": 0,
+                "class": "lexical_distractor",
+            },
         }
         assert agg(rows) == {"ndcg": 0.5, "doc_ndcg": 0.5, "dochit3": 0.5, "n": 2}
 
     def test_filtered_selection(self):
         rows = {
-            "q1": {"ndcg": 1.0, "doc_ndcg": 1.0, "dochit3": 1, "class": "needle"},
-            "q2": {"ndcg": 0.0, "doc_ndcg": 0.0, "dochit3": 0, "class": "trap"},
+            "q1": {"ndcg": 1.0, "doc_ndcg": 1.0, "dochit3": 1, "class": "exact_match"},
+            "q2": {
+                "ndcg": 0.0,
+                "doc_ndcg": 0.0,
+                "dochit3": 0,
+                "class": "lexical_distractor",
+            },
         }
-        out = agg(rows, lambda r: r["class"] == "needle")
+        out = agg(rows, lambda r: r["class"] == "exact_match")
         assert out["n"] == 1 and out["ndcg"] == 1.0
 
     def test_empty_selection_is_zeroed(self):
@@ -79,7 +93,7 @@ class TestGradeQuery:
     def test_page_labels_produce_page_level_ndcg(self):
         q = {
             "id": "n1",
-            "class": "needle",
+            "class": "exact_match",
             "labels": [{"doc": "a", "page": 3, "gain": 2}],
         }
         perfect = grade_query(q, [("a", 3), ("b", 1)], 10)
@@ -103,7 +117,7 @@ class TestGradeQuery:
     def test_doc_ndcg_dedupes_docs_and_takes_best_gain(self):
         q = {
             "id": "s1",
-            "class": "spread",
+            "class": "multi_doc",
             "labels": [
                 {"doc": "a", "page": 1, "gain": 1},
                 {"doc": "a", "page": 5, "gain": 2},
@@ -120,7 +134,7 @@ class TestGradeQuery:
 class TestAggSkipsRouteQueries:
     def test_none_ndcg_rows_are_excluded_from_the_page_mean(self):
         rows = {
-            "q1": {"ndcg": 1.0, "doc_ndcg": 1.0, "dochit3": 1, "class": "needle"},
+            "q1": {"ndcg": 1.0, "doc_ndcg": 1.0, "dochit3": 1, "class": "exact_match"},
             "q2": {"ndcg": None, "doc_ndcg": 0.0, "dochit3": 0, "class": "route"},
         }
         out = agg(rows)
@@ -137,7 +151,7 @@ class TestValidateQueries:
             "queries": [
                 {
                     "id": "n1",
-                    "class": "needle",
+                    "class": "exact_match",
                     "labels": [
                         {"doc": "a", "page": 2, "gain": 2, "evidence": "Total  revenue"}
                     ],
@@ -154,7 +168,7 @@ class TestValidateQueries:
             "queries": [
                 {
                     "id": "n1",
-                    "class": "needle",
+                    "class": "exact_match",
                     "labels": [{"doc": "a", "page": 2, "gain": 2, "evidence": "nope"}],
                 }
             ]
@@ -169,7 +183,7 @@ class TestValidateQueries:
             "queries": [
                 {
                     "id": "t1",
-                    "class": "trap",
+                    "class": "lexical_distractor",
                     "labels": [
                         {"doc": "a", "page": 1, "gain": 2, "evidence": "Eﬀects"}
                     ],
@@ -283,28 +297,28 @@ class TestValidateDescribedQueries:
             "queries": [
                 {
                     "id": "described-01",
-                    "class": "described",
+                    "class": "paraphrase",
                     "query": "does this method need labeled data at inference",
                     "labels": [{"doc": "d1", "page": 4, "gain": 2}],
                 }
             ]
         }
         lookup = self._lookup("the method needs labeled data at test time")
-        assert validate_described_queries(queries, lookup) == []
+        assert validate_paraphrase_queries(queries, lookup) == []
 
     def test_rejects_query_whose_every_token_is_present(self):
         queries = {
             "queries": [
                 {
                     "id": "described-02",
-                    "class": "described",
+                    "class": "paraphrase",
                     "query": "does this method need labeled data at inference",
                     "labels": [{"doc": "d1", "page": 4, "gain": 2}],
                 }
             ]
         }
         lookup = self._lookup("method need labeled data inference")
-        errors = validate_described_queries(queries, lookup)
+        errors = validate_paraphrase_queries(queries, lookup)
         assert len(errors) == 1
         assert "lifted" in errors[0]
 
@@ -313,14 +327,14 @@ class TestValidateDescribedQueries:
             "queries": [
                 {
                     "id": "described-03",
-                    "class": "described",
+                    "class": "paraphrase",
                     "query": "why did revenue declines follow supplier changes",
                     "labels": [{"doc": "d1", "page": 1, "gain": 2}],
                 }
             ]
         }
         lookup = self._lookup("revenue decline followed supplier change")
-        errors = validate_described_queries(queries, lookup)
+        errors = validate_paraphrase_queries(queries, lookup)
         assert len(errors) == 1
         assert "lifted" in errors[0]
 
@@ -329,21 +343,21 @@ class TestValidateDescribedQueries:
             "queries": [
                 {
                     "id": "described-04",
-                    "class": "described",
+                    "class": "paraphrase",
                     "query": "splitting families noetherian",
                     "labels": [{"doc": "d1", "page": 1, "gain": 2}],
                 }
             ]
         }
-        errors = validate_described_queries(queries, self._lookup("unrelated"))
-        assert any(str(MIN_DESCRIBED_TOKENS) in e for e in errors)
+        errors = validate_paraphrase_queries(queries, self._lookup("unrelated"))
+        assert any(str(MIN_PARAPHRASE_TOKENS) in e for e in errors)
 
-    def test_rejects_multi_document_described_query(self):
+    def test_rejects_multi_document_paraphrase_query(self):
         queries = {
             "queries": [
                 {
                     "id": "described-05",
-                    "class": "described",
+                    "class": "paraphrase",
                     "query": "does this method need labeled data at inference",
                     "labels": [
                         {"doc": "d1", "page": 1, "gain": 2},
@@ -352,28 +366,28 @@ class TestValidateDescribedQueries:
                 }
             ]
         }
-        errors = validate_described_queries(queries, self._lookup("unrelated"))
+        errors = validate_paraphrase_queries(queries, self._lookup("unrelated"))
         assert any("single-gold-document" in e for e in errors)
 
-    def test_ignores_non_described_classes(self):
+    def test_ignores_non_paraphrase_classes(self):
         queries = {
             "queries": [
                 {
                     "id": "needle-01",
-                    "class": "needle",
+                    "class": "exact_match",
                     "query": "short lifted phrase",
                     "labels": [{"doc": "d1", "page": 1, "gain": 2}],
                 }
             ]
         }
-        assert validate_described_queries(queries, self._lookup("short lifted")) == []
+        assert validate_paraphrase_queries(queries, self._lookup("short lifted")) == []
 
 
 QUERIES = {
     "queries": [
         {
             "id": "described-01",
-            "class": "described",
+            "class": "paraphrase",
             "query": "does this method need labeled data at inference",
             "labels": [{"doc": "d1", "page": 4, "gain": 2}],
         }

@@ -37,6 +37,12 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _retrieval_metrics as rm  # noqa: E402
+from _query_classes import (  # noqa: E402
+    PARAPHRASE,
+    legend_lines,
+    normalize_class,
+    normalize_rows,
+)
 
 DEFAULT_DATA = REPO / "benchmark_data" / "corpus_search"
 TOP_K = 10
@@ -85,7 +91,7 @@ def warm_incomplete_error(warm: dict) -> str | None:
 
 def class_names(queries: dict) -> list[str]:
     """Query classes present in the dataset, sorted. Data-driven replacement
-    for the hardcoded (needle, spread, trap) tuple."""
+    for a hardcoded class tuple."""
     return sorted({q["class"] for q in queries["queries"]})
 
 
@@ -190,7 +196,7 @@ def grade_query(query: dict, ranked: list[tuple[str, int]], top_k: int) -> dict:
 
 def single_doc_queries(queries: dict) -> list[tuple[str, str]]:
     """(query_id, doc_id) pairs eligible for the single-doc arm: queries with
-    page-level labels concentrated in exactly one gold doc. Multi-doc spread
+    page-level labels concentrated in exactly one gold doc. Multi-doc
     queries have no single 'the' document to search, and route queries carry
     no page labels to grade against."""
     out: list[tuple[str, str]] = []
@@ -212,12 +218,12 @@ def normalize(text: str) -> str:
     return _WS.sub(" ", text).strip().casefold()
 
 
-MIN_DESCRIBED_TOKENS = 5
+MIN_PARAPHRASE_TOKENS = 5
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 # Small closed list: enough to stop function words counting toward the
-# described-query floor without pulling in a dependency.
+# paraphrase-query floor without pulling in a dependency.
 _STOPWORDS = {
     "about",
     "after",
@@ -273,7 +279,7 @@ def stem(token: str) -> str:
     inflection pair the crude rules here miss, e.g. "companies"/"company",
     "coding"/"code"), which is the wrong direction for a gate whose job is
     to reject lifted queries -- a lifted query using such a pair could be
-    wrongly admitted as "described". All 25 shipped queries were
+    wrongly admitted as "paraphrase". All 25 shipped queries were
     re-verified against real porter and none has a true margin of 0, so
     none is misclassified today; this is a documentation-accuracy note,
     not a behaviour change.
@@ -297,10 +303,10 @@ def content_tokens(text: str) -> list[str]:
     ]
 
 
-def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
-    """Enforce the described-not-named property mechanically.
+def validate_paraphrase_queries(queries: dict, page_text_lookup) -> list[str]:
+    """Enforce the paraphrased-not-named property mechanically.
 
-    A described query must (a) carry at least MIN_DESCRIBED_TOKENS content
+    A paraphrase query must (a) carry at least MIN_PARAPHRASE_TOKENS content
     tokens and (b) have at least one content token that appears on none of
     its labeled pages. (b) is the AND-cliff condition: the financial case
     that exposed it was "decline" against a filing saying "decreased".
@@ -308,23 +314,23 @@ def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
     """
     errors: list[str] = []
     for q in queries["queries"]:
-        if q.get("class") != "described":
+        if normalize_class(q.get("class", "")) != PARAPHRASE:
             continue
         toks = content_tokens(q["query"])
-        if len(toks) < MIN_DESCRIBED_TOKENS:
+        if len(toks) < MIN_PARAPHRASE_TOKENS:
             errors.append(
                 f"{q['id']}: {len(toks)} content tokens, need"
-                f" {MIN_DESCRIBED_TOKENS}: {toks}"
+                f" {MIN_PARAPHRASE_TOKENS}: {toks}"
             )
         docs = {lb["doc"] for lb in q["labels"]}
         if len(docs) > 1:
             errors.append(
-                f"{q['id']}: described queries must be single-gold-document,"
+                f"{q['id']}: paraphrase queries must be single-gold-document,"
                 f" got {sorted(docs)}"
             )
         paged = [lb for lb in q["labels"] if "page" in lb]
         if not paged:
-            errors.append(f"{q['id']}: described query has no page labels")
+            errors.append(f"{q['id']}: paraphrase query has no page labels")
             continue
         page_toks = set()
         for lb in paged:
@@ -334,7 +340,7 @@ def validate_described_queries(queries: dict, page_text_lookup) -> list[str]:
         if toks and all(stem(t) in page_toks for t in toks):
             errors.append(
                 f"{q['id']}: every content token appears on a labeled page;"
-                " query is lifted, not described"
+                " query is lifted, not paraphrased"
             )
     return errors
 
@@ -412,7 +418,7 @@ def validate_queries(manifest: dict, queries: dict, page_text_lookup) -> list[st
 
 def _run_validate(data: Path, manifest: dict, queries: dict, lookup) -> int:
     errors = validate_queries(manifest, queries, lookup)
-    errors += validate_described_queries(queries, lookup)
+    errors += validate_paraphrase_queries(queries, lookup)
     fidelity_path = data / "fidelity_questions.json"
     n_questions = 0
     if fidelity_path.exists():
@@ -462,7 +468,9 @@ def main(argv: list[str] | None = None) -> int:
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
-    queries = json.loads((data / "queries.json").read_text(encoding="utf-8"))
+    queries = normalize_rows(
+        json.loads((data / "queries.json").read_text(encoding="utf-8"))
+    )
     classes = class_names(queries)
     subset_ids = nonlatin_ids(manifest)
     id_by_path = {str((REPO / d["path"]).resolve()): d["id"] for d in manifest["docs"]}
@@ -673,6 +681,7 @@ def main(argv: list[str] | None = None) -> int:
         " called per query on a warmed isolated cache, so numbers measure the"
         " agent-facing contract end to end.",
         "",
+        *legend_lines(classes),
         f"| mode | overall NDCG@10 | {class_header} | doc-hit@3 | s/query |",
         "|---|---|" + "---|" * len(classes) + "---|---|",
     ]
@@ -706,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     if subset_ids:
         lines += [
             "",
-            "## CJK subset (5 needle queries on Japanese docs; embedding model is"
+            "## CJK subset (5 exact_match queries on Japanese docs; embedding model is"
             " English bge-small, so the semantic arm is expected to be weak"
             " there)",
             "",

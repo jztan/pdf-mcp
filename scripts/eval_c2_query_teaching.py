@@ -8,11 +8,11 @@ rewriting? Two arms differ ONLY in the query-parameter docstring:
     new: the C2 teaching text (terms of art, verbatim-distinctive,
          don't-guess-names)
 
-For each of the 25 described + 14 needle benchmark questions, `claude -p`
+For each of the 25 paraphrase + 14 exact_match benchmark questions, `claude -p`
 simulates the caller and replies with ONLY the query string it would
 pass. Grading is DETERMINISTIC, no judge: each emitted query runs through
 the real `pdf_corpus_search` (hybrid, warmed cache) and is scored by gold
-doc-hit@1/@3. Needle is the do-no-harm control: the new text must not
+doc-hit@1/@3. exact_match is the do-no-harm control: the new text must not
 cause paraphrasing of already-distinctive queries.
 
 Costs: 78 caller calls (one per question per arm, cached across reruns in
@@ -38,6 +38,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _query_classes import normalize_classes, normalize_rows  # noqa: E402
 from eval_financial_answerability import JUDGE_CONTEXT_FLAGS  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
@@ -146,8 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument(
         "--classes",
-        default="described,needle",
-        help="comma-separated query classes to run (default: described,needle)",
+        default="paraphrase,exact_match",
+        help="comma-separated query classes to run (default: paraphrase,exact_match)",
     )
     ap.add_argument(
         "--arms",
@@ -160,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         help="output filename under c2_rewrite/ (default:" " caller_eval_results.json)",
     )
     args = ap.parse_args(argv)
-    classes = tuple(c.strip() for c in args.classes.split(",") if c.strip())
+    classes = tuple(normalize_classes(args.classes))
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
     assert all(a in ("old", "new") for a in arms), arms
 
@@ -178,7 +179,9 @@ def main(argv: list[str] | None = None) -> int:
     _core.cache = open_validation_cache(SPIKE_CACHE)
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
-    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))["queries"]
+    queries = normalize_rows(
+        json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+    )["queries"]
     id_by_path = {str(REPO / d["path"]): d["id"] for d in manifest["docs"]}
     paths = [p for p in id_by_path if Path(p).exists()]
     subjects = [q for q in queries if q["class"] in classes]

@@ -1,8 +1,8 @@
-"""Measure the DESIGNED spread workflow end-to-end: search, then fan out.
+"""Measure the DESIGNED multi_doc workflow end-to-end: search, then fan out.
 
 The tool description tells callers with a multi-document question to
 re-ask per document, using `doc_match_counts` to decide which. Every
-prior spread number measured a single call (gold-page delivery 48%);
+prior multi_doc number measured a single call (gold-page delivery 48%);
 this is the first measurement of the workflow itself.
 
 Hop 1: `pdf_corpus_search` (hybrid, top_k=10) with the caller-emitted
@@ -20,13 +20,13 @@ Metrics per query, against multi-doc gold labels:
     calls           1 + K searches
 
 NOT the rejected two-hop (§8 item 8): that was a routing workaround for
-single-gold described questions, capped by routing order. This feeds on
-doc_match_counts (93% gold-doc coverage on spread) and asks whether the
+single-gold paraphrase questions, capped by routing order. This feeds on
+doc_match_counts (93% gold-doc coverage on multi_doc) and asks whether the
 documented multi-document workflow assembles the answer.
 
 Free and deterministic. Uses the warmed spike cache.
 
-Run:  uv run python scripts/spike_spread_fanout.py
+Run:  uv run python scripts/spike_multi_doc_fanout.py
 """
 
 from __future__ import annotations
@@ -38,6 +38,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import MULTI_DOC, normalize_class  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 SPIKE_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
@@ -63,7 +65,7 @@ def main() -> int:
         for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
             "queries"
         ]
-        if q["class"] == "spread"
+        if normalize_class(q["class"]) == MULTI_DOC
     ]
     emitted = {
         r["id"]: r["old_query"]
@@ -129,7 +131,7 @@ def main() -> int:
     )
     print(f"wrote {out}\n")
     n = len(rows)
-    print(f"SPREAD FAN-OUT WORKFLOW (n={n}, caller-emitted queries, hybrid)")
+    print(f"MULTI_DOC FAN-OUT WORKFLOW (n={n}, caller-emitted queries, hybrid)")
     print("single-call baselines: gold-page delivery 48%, doc coverage 75%\n")
     print(f"{'policy':<8}{'k':>3}{'calls':>7}{'part coverage':>15}{'complete':>10}")
     for policy in ("fused", "named"):

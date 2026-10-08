@@ -32,1288 +32,1288 @@
    "rows": {
     "snippet": {
      "needle-01": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "59d46c1ea2db"
      },
      "needle-02": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f966f25d8453"
      },
      "needle-03": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3c8cb5269abc"
      },
      "needle-04": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "0ceb7fad58d2"
      },
      "needle-05": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "0b0aaa464763"
      },
      "needle-06": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5ad843383cca"
      },
      "needle-07": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2c2db4606595"
      },
      "needle-08": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2597d29b1398"
      },
      "needle-09": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "63bddd13d9ec"
      },
      "needle-10": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "658e5c4f9a30"
      },
      "needle-11": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3820ff2c76ef"
      },
      "needle-12": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "e5ab5f1e9c21"
      },
      "needle-13": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "14e224d0145b"
      },
      "needle-14": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "f469aead48b0"
      },
      "spread-01": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "20fbb9d87d18"
      },
      "spread-02": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.1480409554829326,
       "realized_k": 25,
       "excerpt_digest": "19bf14c2f31f"
      },
      "spread-03": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "38f62ca33c3d"
      },
      "spread-04": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 25,
       "excerpt_digest": "b30680ed4a87"
      },
      "spread-05": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.48247555939075504,
       "realized_k": 25,
       "excerpt_digest": "0ee96c787439"
      },
      "spread-06": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.23719771276929622,
       "realized_k": 25,
       "excerpt_digest": "efe1cffdca3a"
      },
      "spread-07": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 25,
       "excerpt_digest": "cc63e1522c19"
      },
      "spread-08": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "0b220b09eb14"
      },
      "spread-09": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.23463936301137822,
       "realized_k": 25,
       "excerpt_digest": "c70875aa18c7"
      },
      "spread-10": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "efaf1f73cfc7"
      },
      "trap-01": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "0c094b7e60d9"
      },
      "trap-02": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3a2e78074187"
      },
      "trap-03": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "0b7a4119d8b7"
      },
      "trap-04": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f7067b9caf03"
      },
      "trap-05": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "a6fc037305c5"
      },
      "trap-06": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "9dcd6354187a"
      },
      "trap-07": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "b66204db4bb9"
      },
      "trap-08": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "9026a3f4d258"
      },
      "trap-09": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c6a20ee737f9"
      },
      "trap-10": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "78275bc56d47"
      },
      "trap-11": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "37343f6fbbb7"
      },
      "trap-12": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "7466be72725f"
      },
      "spread-11": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "6af4dd2cf279"
      },
      "spread-12": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "eea4ff74f4e4"
      },
      "spread-13": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8670870086853021,
       "realized_k": 25,
       "excerpt_digest": "85bd4721ce61"
      },
      "spread-14": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "cfefe9bcdce1"
      },
      "spread-15": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6461369845040973,
       "realized_k": 25,
       "excerpt_digest": "ef830ff69a77"
      },
      "spread-16": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "22e3d5abbe66"
      },
      "spread-17": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.762346330035624,
       "realized_k": 25,
       "excerpt_digest": "b079f6b9226f"
      },
      "spread-18": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8935349950641011,
       "realized_k": 25,
       "excerpt_digest": "4cdd276579bc"
      },
      "spread-19": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.7601875334318685,
       "realized_k": 25,
       "excerpt_digest": "1741df082475"
      },
      "spread-20": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8800937667159342,
       "realized_k": 25,
       "excerpt_digest": "12ed9a28f92f"
      },
      "spread-21": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c681fdbb36ae"
      },
      "spread-22": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6934264036172708,
       "realized_k": 25,
       "excerpt_digest": "eb9d64740ba0"
      },
      "spread-23": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.6344874928748538,
       "realized_k": 25,
       "excerpt_digest": "80a0e291f996"
      },
      "spread-24": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "b0cc093ef70c"
      },
      "spread-25": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.7601875334318685,
       "realized_k": 25,
       "excerpt_digest": "4de866afa26c"
      },
      "trap-13": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "5c1d468cb0e4"
      },
      "trap-14": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "e30e38af9d37"
      },
      "trap-15": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "6896fd3776c6"
      },
      "trap-16": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f69cdcf4262f"
      },
      "trap-17": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c36209571138"
      },
      "trap-18": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "a5dc2d958aa2"
      },
      "trap-19": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "89af9130a6a7"
      },
      "trap-20": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d5dad70ea053"
      },
      "trap-21": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5c5c73b9cd52"
      },
      "trap-22": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d81cf081876e"
      },
      "trap-23": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "08f0675e58d7"
      },
      "trap-24": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "435a681d89e3"
      },
      "trap-25": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "944f4ff1eb78"
      },
      "described-01": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "e524a930f5be"
      },
      "described-02": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d81cb084b621"
      },
      "described-03": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "ccbd2d6321e8"
      },
      "described-04": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "20e71e4b178a"
      },
      "described-05": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d74ae109e38d"
      },
      "described-06": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "ca65c662f8e7"
      },
      "described-07": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "d02a950c4e79"
      },
      "described-08": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3e2d386c5dd4"
      },
      "described-09": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "9febef92c7bf"
      },
      "described-10": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "4c029cc466d4"
      },
      "described-11": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3fb2862fe0b6"
      },
      "described-12": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "97b2f62e47d0"
      },
      "described-13": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "37cbf6648579"
      },
      "described-14": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "cc0a118773e8"
      },
      "described-15": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "96e5aa505d13"
      },
      "described-16": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "8249aa6c5478"
      },
      "described-17": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "bf7621ecf429"
      },
      "described-18": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 25,
       "excerpt_digest": "72b74b0fc863"
      },
      "described-19": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 25,
       "excerpt_digest": "6fc48cc1275a"
      },
      "described-20": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5d9d9865f435"
      },
      "described-21": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5fc74686f9f2"
      },
      "described-22": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "fbd51f99af38"
      },
      "described-23": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "ae6fe015d860"
      },
      "described-24": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "33951cc60427"
      },
      "described-25": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "17c78f370d2b"
      },
      "described-26": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "9704944597f5"
      },
      "described-27": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "8385e7e3025c"
      },
      "described-28": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "77bb1b5728c1"
      },
      "described-29": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.31546487678572877,
       "realized_k": 25,
       "excerpt_digest": "5c0c62f75b19"
      },
      "described-30": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "cd728dd99349"
      },
      "described-31": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 25,
       "excerpt_digest": "2b22bc531b68"
      },
      "described-33": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "01f48df7d4f3"
      },
      "described-34": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "295b69748dea"
      },
      "described-36": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "08003c5c4a45"
      },
      "described-37": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "da6f87775977"
      },
      "described-38": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "0cf709f7435c"
      },
      "described-39": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 25,
       "excerpt_digest": "576d5c4573a9"
      },
      "described-40": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "084ffdd5dcf6"
      },
      "described-41": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "223c121471f4"
      },
      "described-42": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "9a57332ca055"
      },
      "described-43": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 25,
       "excerpt_digest": "2e7a11fc2288"
      },
      "described-44": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "21b799904d40"
      },
      "described-45": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "b7a479aeae76"
      },
      "described-46": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "6ba884b8a8e8"
      },
      "described-47": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d1226c0d973f"
      },
      "described-48": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "40b474ec9219"
      },
      "described-49": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "21f4fdca47a7"
      },
      "described-50": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f0cd9ab56489"
      },
      "described-51": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f1a8381d60a4"
      },
      "described-52": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "c0a2d0e07304"
      },
      "described-53": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "a0f830b5ca82"
      },
      "described-54": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "61d6fa5375f5"
      },
      "described-55": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "1cb104414293"
      },
      "described-56": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "eb118c6e7102"
      },
      "described-57": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "616997988bf7"
      },
      "described-58": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5ae78dace607"
      },
      "described-59": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "7cafe3b0c80e"
      },
      "described-60": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c0cbf974c257"
      },
      "described-61": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "dd6dbb2987ed"
      },
      "described-62": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "e13960961973"
      },
      "described-63": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "df62d9911739"
      },
      "described-64": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "dfaff96b5e7e"
      },
      "described-66": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "488a30400b57"
      },
      "described-67": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c322bf0f088d"
      },
      "described-68": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "fa3490f5c118"
      },
      "described-70": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "3014cc2b2f4c"
      },
      "described-71": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "8690955564f4"
      },
      "described-72": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "8e4403af1432"
      },
      "described-73": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "eb118c6e7102"
      },
      "described-74": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "f3edbc1f358d"
      },
      "described-75": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "96875a89a899"
      },
      "described-76": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2d59dd854074"
      },
      "described-77": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3dbadfcc432f"
      },
      "described-78": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 25,
       "excerpt_digest": "f4aff5c4c579"
      },
      "described-79": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "1d3ce5b6c2fb"
      },
      "described-80": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "4b6a861b0fe6"
      },
      "described-81": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 25,
       "excerpt_digest": "5aa1712629ec"
      },
      "described-82": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "c053947cb39c"
      },
      "described-83": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "757da90ddae8"
      },
      "described-84": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "8a1768b6a248"
      },
      "described-85": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "58a108212247"
      },
      "described-86": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "337082ab9bdb"
      },
      "described-87": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "2e5b0219d7ed"
      },
      "needle-15": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "ca8433bd8be2"
      },
      "needle-16": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 25,
       "excerpt_digest": "7dd6b15013d0"
      },
      "needle-17": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "436d92d1125d"
      },
      "needle-18": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "63619f7ddd4a"
      },
      "needle-19": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "f45e9c94771f"
      },
      "needle-20": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "cb4f3dec2a0f"
      },
      "needle-21": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 25,
       "excerpt_digest": "1794a40650c7"
      },
      "needle-22": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "8345e787adbc"
      },
      "needle-23": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "aacd3475dd80"
      },
      "needle-24": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "95ab38edc6b6"
      },
      "needle-25": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.3562071871080222,
       "realized_k": 25,
       "excerpt_digest": "21a209bb2d14"
      },
      "needle-26": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "3296395ff2db"
      },
      "needle-27": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "c2fe8e43428f"
      },
      "needle-28": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2e80faa0aa5b"
      },
      "needle-29": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "b98366fb0c79"
      },
      "needle-30": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "af49197755a0"
      },
      "needle-31": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "eeb3d5c3dfaf"
      },
      "spread-26": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6934264036172708,
       "realized_k": 25,
       "excerpt_digest": "fcb8330507b3"
      },
      "spread-27": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 25,
       "excerpt_digest": "3159743e4d7e"
      },
      "spread-28": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2af1dbb583b2"
      },
      "spread-29": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.48247555939075504,
       "realized_k": 25,
       "excerpt_digest": "48a952a08c3e"
      },
      "spread-30": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 25,
       "excerpt_digest": "49910ecb1c1b"
      },
      "spread-31": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "a67ae4967cd3"
      },
      "spread-33": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "b4574fc65465"
      },
      "spread-34": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "2588f405e673"
      },
      "spread-35": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 25,
       "excerpt_digest": "3166049a09db"
      },
      "spread-36": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 25,
       "excerpt_digest": "a45e7ba9ab04"
      },
      "spread-37": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.45560514958746035,
       "realized_k": 25,
       "excerpt_digest": "e16a11aa7302"
      },
      "spread-38": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6052602440527057,
       "realized_k": 25,
       "excerpt_digest": "748f6ef65fdb"
      },
      "spread-39": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 25,
       "excerpt_digest": "5a054d266467"
      },
      "spread-40": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.9197207891481876,
       "realized_k": 25,
       "excerpt_digest": "3c2a6c1478e2"
      },
      "spread-41": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.4911492931622974,
       "realized_k": 25,
       "excerpt_digest": "da1a93857034"
      },
      "spread-42": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 25,
       "excerpt_digest": "ee9a9b8ebef5"
      },
      "spread-43": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 25,
       "excerpt_digest": "c2b2c9d16cd0"
      },
      "spread-44": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.23719771276929622,
       "realized_k": 25,
       "excerpt_digest": "40f70ec21686"
      },
      "spread-45": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8315546295836225,
       "realized_k": 25,
       "excerpt_digest": "5ba7ba934f26"
      },
      "spread-46": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 25,
@@ -1322,1288 +1322,1288 @@
     },
     "paragraph": {
      "needle-01": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "5f6fd47fd412"
      },
      "needle-02": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 20,
       "excerpt_digest": "9f442a8c7a79"
      },
      "needle-03": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "c3ed5c2be66d"
      },
      "needle-04": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "a889e87ace6c"
      },
      "needle-05": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d65995f7f411"
      },
      "needle-06": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 6,
       "excerpt_digest": "01c1f9e29324"
      },
      "needle-07": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "fcdfdd8d873f"
      },
      "needle-08": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 14,
       "excerpt_digest": "1c6cc7f1e2cb"
      },
      "needle-09": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "71c34a0d5e15"
      },
      "needle-10": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "135971728cea"
      },
      "needle-11": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "68a74bf441e9"
      },
      "needle-12": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "048f25e5727a"
      },
      "needle-13": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "39a7986aa508"
      },
      "needle-14": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "e1faf39e4511"
      },
      "spread-01": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "b7d0fe15ebc1"
      },
      "spread-02": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.1480409554829326,
       "realized_k": 11,
       "excerpt_digest": "7b12408f4f97"
      },
      "spread-03": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.0,
       "realized_k": 14,
       "excerpt_digest": "77c28ad62359"
      },
      "spread-04": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 25,
       "excerpt_digest": "852e97e84603"
      },
      "spread-05": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.48247555939075504,
       "realized_k": 11,
       "excerpt_digest": "5c4bc95139b4"
      },
      "spread-06": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.23719771276929622,
       "realized_k": 15,
       "excerpt_digest": "3fe3f7c7d4ec"
      },
      "spread-07": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 10,
       "excerpt_digest": "24a214b27b31"
      },
      "spread-08": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 11,
       "excerpt_digest": "2f3f6c987323"
      },
      "spread-09": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.23463936301137822,
       "realized_k": 13,
       "excerpt_digest": "805ac603e2b9"
      },
      "spread-10": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.0,
       "realized_k": 16,
       "excerpt_digest": "38ba45b4994e"
      },
      "trap-01": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "5e8a79cfa55c"
      },
      "trap-02": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "2d54fb7eebd3"
      },
      "trap-03": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 17,
       "excerpt_digest": "5f0082ce2c32"
      },
      "trap-04": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "cdd5baf4f1c1"
      },
      "trap-05": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "c242b4f9c355"
      },
      "trap-06": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "0c4c110739ca"
      },
      "trap-07": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "d97837f06ff4"
      },
      "trap-08": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 22,
       "excerpt_digest": "0efec21a95ce"
      },
      "trap-09": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "a9250e749b30"
      },
      "trap-10": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "8d9491e763f9"
      },
      "trap-11": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "baf76075025d"
      },
      "trap-12": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 7,
       "excerpt_digest": "79acf1f51048"
      },
      "spread-11": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "4059bfe64ff0"
      },
      "spread-12": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "71fc906284b9"
      },
      "spread-13": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8670870086853021,
       "realized_k": 9,
       "excerpt_digest": "f9fde7d338b1"
      },
      "spread-14": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "2c0612434697"
      },
      "spread-15": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.6461369845040973,
       "realized_k": 10,
       "excerpt_digest": "284d91d6c9ca"
      },
      "spread-16": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "9d7e4141b963"
      },
      "spread-17": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.762346330035624,
       "realized_k": 8,
       "excerpt_digest": "97dd213e1bf1"
      },
      "spread-18": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8935349950641011,
       "realized_k": 9,
       "excerpt_digest": "6219a3d8886e"
      },
      "spread-19": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.7601875334318685,
       "realized_k": 16,
       "excerpt_digest": "a80cf3ef2c55"
      },
      "spread-20": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8800937667159342,
       "realized_k": 12,
       "excerpt_digest": "3a1f9539dfcf"
      },
      "spread-21": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "9c90f47cf8f4"
      },
      "spread-22": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6934264036172708,
       "realized_k": 14,
       "excerpt_digest": "8fc1b6518565"
      },
      "spread-23": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6344874928748538,
       "realized_k": 7,
       "excerpt_digest": "a7e9e7d3c356"
      },
      "spread-24": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "0e91f5f3eb15"
      },
      "spread-25": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.7601875334318685,
       "realized_k": 15,
       "excerpt_digest": "11ae669d70c4"
      },
      "trap-13": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 18,
       "excerpt_digest": "7bb05fce3fcb"
      },
      "trap-14": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "252158832305"
      },
      "trap-15": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "b7384e261003"
      },
      "trap-16": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 17,
       "excerpt_digest": "5290d23c38f9"
      },
      "trap-17": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "9fed6fdeb402"
      },
      "trap-18": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "b7bbee264893"
      },
      "trap-19": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "1185a410ca9d"
      },
      "trap-20": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "32b23bf31611"
      },
      "trap-21": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "ac221b36848e"
      },
      "trap-22": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 17,
       "excerpt_digest": "fcccf901bdee"
      },
      "trap-23": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 20,
       "excerpt_digest": "e4e4e4ed9624"
      },
      "trap-24": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "06bf7692ab30"
      },
      "trap-25": {
-      "class": "trap",
+      "class": "lexical_distractor",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "66218a84dcfa"
      },
      "described-01": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "64cc4042349f"
      },
      "described-02": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "d27f34ba8042"
      },
      "described-03": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "2efa86624fb0"
      },
      "described-04": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "48c682b48ad8"
      },
      "described-05": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "68fe1e6c3b7e"
      },
      "described-06": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "a720ecc4c008"
      },
      "described-07": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 13,
       "excerpt_digest": "80e6ada43c50"
      },
      "described-08": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "9a9e03634556"
      },
      "described-09": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "ad7aa23719fe"
      },
      "described-10": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.5,
       "realized_k": 8,
       "excerpt_digest": "5286be45c695"
      },
      "described-11": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "35aa208cbeb7"
      },
      "described-12": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 10,
       "excerpt_digest": "9f9f49900426"
      },
      "described-13": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 11,
       "excerpt_digest": "9e491b087793"
      },
      "described-14": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "765b56a26fb3"
      },
      "described-15": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "92693d48ff97"
      },
      "described-16": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 9,
       "excerpt_digest": "ab3c53bacfc1"
      },
      "described-17": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 13,
       "excerpt_digest": "00c01a1f6368"
      },
      "described-18": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 12,
       "excerpt_digest": "e5f3d962dec1"
      },
      "described-19": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 16,
       "excerpt_digest": "c64c53062e18"
      },
      "described-20": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "a3ce2842386f"
      },
      "described-21": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "bd08fd96cb9d"
      },
      "described-22": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "25c8b5935ce4"
      },
      "described-23": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "d81f0e7eb4ed"
      },
      "described-24": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 13,
       "excerpt_digest": "66be5aec2288"
      },
      "described-25": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "2bb0ce3f5825"
      },
      "described-26": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "ed01ab61b3e9"
      },
      "described-27": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 14,
       "excerpt_digest": "01c90ca08603"
      },
      "described-28": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 7,
       "excerpt_digest": "13d4041bac0a"
      },
      "described-29": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.31546487678572877,
       "realized_k": 9,
       "excerpt_digest": "7fe12a99a8e1"
      },
      "described-30": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 17,
       "excerpt_digest": "a7eca78314ad"
      },
      "described-31": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 8,
       "excerpt_digest": "df7fb0eb40de"
      },
      "described-33": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "0af4bd208c30"
      },
      "described-34": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 9,
       "excerpt_digest": "0e6144ef5a58"
      },
      "described-36": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 13,
       "excerpt_digest": "b6c6c9b7c1d4"
      },
      "described-37": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "f5d4daa15ad7"
      },
      "described-38": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "d5969c9e1e55"
      },
      "described-39": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 10,
       "excerpt_digest": "df3ea39d8d34"
      },
      "described-40": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 7,
       "excerpt_digest": "ac65a7799b7a"
      },
      "described-41": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 14,
       "excerpt_digest": "d8875bc2c7f9"
      },
      "described-42": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "3250a51fa1a4"
      },
      "described-43": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 12,
       "excerpt_digest": "21b9384f1d97"
      },
      "described-44": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 16,
       "excerpt_digest": "3cc9accaf89d"
      },
      "described-45": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "849f01fc4087"
      },
      "described-46": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 15,
       "excerpt_digest": "552c8b74e48d"
      },
      "described-47": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 7,
       "excerpt_digest": "2fa63bd60fe6"
      },
      "described-48": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 13,
       "excerpt_digest": "7b8b03985d35"
      },
      "described-49": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "2a03a1340bd5"
      },
      "described-50": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "4aa61425f4d8"
      },
      "described-51": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "a8b5e0a82dca"
      },
      "described-52": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 16,
       "excerpt_digest": "2498ceb2252d"
      },
      "described-53": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "cce7b6e1bf60"
      },
      "described-54": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 13,
       "excerpt_digest": "c57f62393797"
      },
      "described-55": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 7,
       "excerpt_digest": "3538f09a68ea"
      },
      "described-56": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 6,
       "excerpt_digest": "a2d5658c1e22"
      },
      "described-57": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 9,
       "excerpt_digest": "2ddde6d7975e"
      },
      "described-58": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "f171b0512f9b"
      },
      "described-59": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 10,
       "excerpt_digest": "7b83af0500a2"
      },
      "described-60": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "c4b189f63f95"
      },
      "described-61": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "381b0b5683f8"
      },
      "described-62": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "3bdf7a916d25"
      },
      "described-63": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 11,
       "excerpt_digest": "5b96e1a237d6"
      },
      "described-64": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 9,
       "excerpt_digest": "b47d66f01ef3"
      },
      "described-66": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 15,
       "excerpt_digest": "db2fef815b88"
      },
      "described-67": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "63a8b438a58a"
      },
      "described-68": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 9,
       "excerpt_digest": "a7eb30b9d4b4"
      },
      "described-70": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 14,
       "excerpt_digest": "cc69497e200b"
      },
      "described-71": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "97b25a53dd53"
      },
      "described-72": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 13,
       "excerpt_digest": "ab2b5561c17b"
      },
      "described-73": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 6,
       "excerpt_digest": "a2d5658c1e22"
      },
      "described-74": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 8,
       "excerpt_digest": "1f7c49f8be42"
      },
      "described-75": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 7,
       "excerpt_digest": "377f313b812a"
      },
      "described-76": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 17,
       "excerpt_digest": "8177e5806c42"
      },
      "described-77": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "6ad60bc7f766"
      },
      "described-78": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 15,
       "excerpt_digest": "e6684dfec7f2"
      },
      "described-79": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 13,
       "excerpt_digest": "06660249a7d9"
      },
      "described-80": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 16,
       "excerpt_digest": "40a23478ade1"
      },
      "described-81": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.43067655807339306,
       "realized_k": 8,
       "excerpt_digest": "7eb40a5738c7"
      },
      "described-82": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 8,
       "excerpt_digest": "725d00c6848c"
      },
      "described-83": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 16,
       "excerpt_digest": "495675099cee"
      },
      "described-84": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 8,
       "excerpt_digest": "298d09757f20"
      },
      "described-85": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 8,
       "excerpt_digest": "4431a1319a85"
      },
      "described-86": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "5be034fe40fe"
      },
      "described-87": {
-      "class": "described",
+      "class": "paraphrase",
       "span_recall": 0.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 11,
       "excerpt_digest": "29eef5df1b9a"
      },
      "needle-15": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 12,
       "excerpt_digest": "cd385e4f50c0"
      },
      "needle-16": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.5,
       "realized_k": 15,
       "excerpt_digest": "762420b6f28e"
      },
      "needle-17": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "77597491d84b"
      },
      "needle-18": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "207448a2007a"
      },
      "needle-19": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 18,
       "excerpt_digest": "9f29e74bdca1"
      },
      "needle-20": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.3333333333333333,
       "realized_k": 25,
       "excerpt_digest": "590264e38c1c"
      },
      "needle-21": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 0.0,
       "realized_k": 16,
       "excerpt_digest": "2969450e8e7d"
      },
      "needle-22": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 10,
       "excerpt_digest": "22ed0345dcb4"
      },
      "needle-23": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 12,
       "excerpt_digest": "48aa0ff0fc30"
      },
      "needle-24": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 14,
       "excerpt_digest": "17f95786acf9"
      },
      "needle-25": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.3562071871080222,
       "realized_k": 24,
       "excerpt_digest": "1719206bfc33"
      },
      "needle-26": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "42abf078f9bc"
      },
      "needle-27": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 0.6309297535714575,
       "realized_k": 25,
       "excerpt_digest": "243285458df7"
      },
      "needle-28": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "32398deb76bb"
      },
      "needle-29": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 25,
       "excerpt_digest": "cb5e89ee394b"
      },
      "needle-30": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "0e1efdff8349"
      },
      "needle-31": {
-      "class": "needle",
+      "class": "exact_match",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "d9989aa5cfcb"
      },
      "spread-26": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6934264036172708,
       "realized_k": 9,
       "excerpt_digest": "08f15db623c1"
      },
      "spread-27": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 12,
       "excerpt_digest": "fcd727b6f4ec"
      },
      "spread-28": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 18,
       "excerpt_digest": "9e376e62d75e"
      },
      "spread-29": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.48247555939075504,
       "realized_k": 14,
       "excerpt_digest": "064589168c2e"
      },
      "spread-30": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 14,
       "excerpt_digest": "90ddc29934eb"
      },
      "spread-31": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 8,
       "excerpt_digest": "11edb64bee20"
      },
      "spread-33": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 1.0,
       "realized_k": 13,
       "excerpt_digest": "16da2c42bbd2"
      },
      "spread-34": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 1.0,
       "realized_k": 11,
       "excerpt_digest": "20a2a9681b92"
      },
      "spread-35": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 14,
       "excerpt_digest": "c8e46d99cf08"
      },
      "spread-36": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.8772153153380493,
       "realized_k": 10,
       "excerpt_digest": "7a02363460f1"
      },
      "spread-37": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.45560514958746035,
       "realized_k": 9,
       "excerpt_digest": "a652302c71ba"
      },
      "spread-38": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6052602440527057,
       "realized_k": 14,
       "excerpt_digest": "169cdf2a1414"
      },
      "spread-39": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 14,
       "excerpt_digest": "1112b5b8ad76"
      },
      "spread-40": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 1.0,
       "doc_ndcg": 0.9197207891481876,
       "realized_k": 10,
       "excerpt_digest": "361645152626"
      },
      "spread-41": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.4911492931622974,
       "realized_k": 12,
       "excerpt_digest": "1324fc68b511"
      },
      "spread-42": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 17,
       "excerpt_digest": "0ae1523d0105"
      },
      "spread-43": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.38685280723454163,
       "realized_k": 14,
       "excerpt_digest": "0f3ce9ca798f"
      },
      "spread-44": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.23719771276929622,
       "realized_k": 13,
       "excerpt_digest": "a5089ce79c90"
      },
      "spread-45": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.8315546295836225,
       "realized_k": 10,
       "excerpt_digest": "a3a183c02e12"
      },
      "spread-46": {
-      "class": "spread",
+      "class": "multi_doc",
       "span_recall": 0.0,
       "doc_ndcg": 0.6131471927654584,
       "realized_k": 11,

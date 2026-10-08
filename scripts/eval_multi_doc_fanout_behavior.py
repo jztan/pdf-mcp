@@ -1,11 +1,11 @@
-"""Measure the unobserved variable in the spread width curve: caller k.
+"""Measure the unobserved variable in the multi_doc width curve: caller k.
 
 The coverage-vs-width table (spread_fanout_verdict.md) runs 56% at 3
 docs to 87% at everything-named, but how many documents a real agent
 actually re-searches after a corpus response has never been observed
 (the trap recorded in what-we-tried §6). This eval measures it.
 
-For each of the 25 spread questions, `claude -p` simulates the caller:
+For each of the 25 multi_doc questions, `claude -p` simulates the caller:
 it sees the REAL `pdf_corpus_search` docstring, the question, and the
 real corpus response (matches with trimmed excerpts + doc_match_counts),
 and lists the follow-up `pdf_search` calls it would make. Grading is
@@ -17,12 +17,12 @@ iterative hop-conditioning - a live agent could do better after reading
 results; noted as a floor).
 
 Registered prior (2026-07-29, before first run): k lands at 2-4,
-putting field-realistic spread coverage near the bottom of the curve.
+putting field-realistic multi_doc coverage near the bottom of the curve.
 
 Billed: 25 caller calls, cached in fanout_behavior_cache.jsonl,
 JUDGE_CONTEXT_FLAGS + per-call budget cap per CLAUDE.md eval rules.
 
-Run:  uv run python scripts/eval_spread_fanout_behavior.py
+Run:  uv run python scripts/eval_multi_doc_fanout_behavior.py
 """
 
 from __future__ import annotations
@@ -41,6 +41,12 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _query_classes import (  # noqa: E402
+    LEGACY_PREFIX,
+    MULTI_DOC,
+    normalize_classes,
+    normalize_rows,
+)
 from eval_financial_answerability import JUDGE_CONTEXT_FLAGS  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
@@ -155,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--arm", default="old", choices=["old", "new", "new2"])
-    ap.add_argument("--classes", default="spread")
+    ap.add_argument("--classes", default=MULTI_DOC)
     ap.add_argument(
         "--data-dir",
         default="benchmark_data/corpus_search",
@@ -172,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         help="use raw query strings (no cached caller emissions)",
     )
     args = ap.parse_args(argv)
-    wanted = tuple(c.strip() for c in args.classes.split(",") if c.strip())
+    wanted = tuple(normalize_classes(args.classes))
 
     from pdf_mcp import _core
 
@@ -201,9 +207,9 @@ def main(argv: list[str] | None = None) -> int:
     paths = [p for p in id_by_path if Path(p).exists()]
     queries = [
         q
-        for q in json.loads((data_dir / args.queries_file).read_text(encoding="utf-8"))[
-            "queries"
-        ]
+        for q in normalize_rows(
+            json.loads((data_dir / args.queries_file).read_text(encoding="utf-8"))
+        )["queries"]
         if q["class"] in wanted
     ]
     if args.raw:
@@ -319,8 +325,9 @@ def main(argv: list[str] | None = None) -> int:
     ks = sorted(r["k"] for r in rows)
     suffix = (
         ""
-        if (args.arm == "old" and wanted == ("spread",))
-        else (f"_{args.arm}_{'-'.join(wanted)}")
+        if (args.arm == "old" and wanted == (MULTI_DOC,))
+        # result filenames keep the pre-rename class prefix (earlier runs)
+        else (f"_{args.arm}_{'-'.join(LEGACY_PREFIX.get(c, c) for c in wanted)}")
     )
     out = OUT_DIR / f"fanout_behavior_results{suffix}.json"
     out.write_text(

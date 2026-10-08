@@ -60,6 +60,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(REPO / "src"))
 
+from _query_classes import legend_lines, normalize_rows  # noqa: E402
 from benchmark_bedrock_kb import (  # noqa: E402
     BUDGET_TOKENS,
     bootstrap_diff_ci,
@@ -107,9 +108,9 @@ def corpus_arm(data_dir: Path, limit: int | None = None) -> dict:
     from pdf_mcp.server import pdf_corpus_search
 
     manifest = json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
-    queries = json.loads((data_dir / "queries.json").read_text(encoding="utf-8"))[
-        "queries"
-    ]
+    queries = normalize_rows(
+        json.loads((data_dir / "queries.json").read_text(encoding="utf-8"))
+    )["queries"]
     if limit:
         queries = queries[:limit]
     id_by_path = {str((REPO / d["path"]).resolve()): d["id"] for d in manifest["docs"]}
@@ -459,6 +460,13 @@ def render_markdown(run: dict, summary: dict, verdict: dict | None) -> str:
     ]
     if run.get("environment"):
         lines += [markdown_line(run["environment"]), ""]
+    corpus_classes = [
+        c
+        for arm in summary.values()
+        for style in arm["styles"].values()
+        for c in style["classes"]
+    ]
+    lines += legend_lines(list(dict.fromkeys(corpus_classes)))
     if run["config"].get("limit"):
         lines += [f"**Pilot run: first {run['config']['limit']} queries only.**", ""]
     for arm, s in summary.items():
@@ -594,7 +602,11 @@ def main(
     baseline = None
     if not args.calibrate and not args.limit:
         if args.baseline.exists():
-            baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+            # A baseline written before the 2026-10-05 class rename carries
+            # old labels; map them so per-class comparisons still pair up.
+            baseline = normalize_rows(
+                json.loads(args.baseline.read_text(encoding="utf-8"))
+            )
         elif not args.update_baseline:
             print(
                 f"ERROR: no baseline at {args.baseline}. Run with"

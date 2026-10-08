@@ -1,6 +1,6 @@
 """Multi-turn caller behavior: real agent sessions over the real server.
 
-Every prior behavioral number (k median 2, field spread coverage 56%)
+Every prior behavioral number (k median 2, field multi_doc coverage 56%)
 came from SINGLE-TURN planning: the caller listed follow-up calls
 without seeing their results. This eval removes that floor: `claude -p`
 runs full agentic sessions with pdf-mcp mounted as a real MCP server
@@ -38,6 +38,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
+
+from _query_classes import MULTI_DOC, normalize_rows  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 OUT_DIR = DATA / "c2_rewrite"
@@ -179,10 +181,10 @@ def main(argv: list[str] | None = None) -> int:
     id_by_name = {Path(d["path"]).name: d["id"] for d in manifest["docs"]}
     queries = [
         q
-        for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
-            "queries"
-        ]
-        if q["class"] == "spread"
+        for q in normalize_rows(
+            json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+        )["queries"]
+        if q["class"] == MULTI_DOC
     ]
     if args.ids:
         wanted = {i.strip() for i in args.ids.split(",")}

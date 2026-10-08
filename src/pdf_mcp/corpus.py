@@ -73,20 +73,20 @@ CORPUS_RRF_K = 60
 
 # Weight of the document arm in hybrid corpus fusion. Measured on the 500-doc
 # distractor rung (spike 2026-08-26, race 2): head vector at 0.25 and 0.5 are
-# indistinguishable (described hit@3 0.68, needle 1.000, trap 0.985); 0.25 is
-# the lighter touch and keeps 100-doc doc-NDCG flat. An equal-weight (1.0)
-# third list dilutes needles the page arms had already nailed. Not a tool
-# parameter: re-measure, never tune.
+# indistinguishable (paraphrase hit@3 0.68, exact_match 1.000,
+# lexical_distractor 0.985); 0.25 is the lighter touch and keeps 100-doc
+# doc-NDCG flat. An equal-weight (1.0) third list dilutes needles the page
+# arms had already nailed. Not a tool parameter: re-measure, never tune.
 CORPUS_DOC_ARM_WEIGHT = 0.25
 # Weight of the keyword list in hybrid corpus fusion when the keyword arm
 # matched the phrase or every term (partial matches keep 1.0). At equal
 # weight, a document's best semantic page plus its doc-arm bonus
 # (1/(60+r) + 0.25/(60+d), about 0.019) outranks the keyword arm's rank 1
 # (1/60, about 0.0167) even when semantic found nothing relevant. Measured
-# 2026-09-27 on the 184-query set, paired: page NDCG@10 +0.022, spread
-# +0.073 at 100 docs; +0.023, spread +0.058, needle +0.065 at 500 docs;
-# paraphrase queries are partial-tier and unchanged. Weighting partial
-# matches too cost described doc-hit@3 0.096. Not a tool parameter.
+# 2026-09-27 on the 184-query set, paired: page NDCG@10 +0.022, multi_doc
+# +0.073 at 100 docs; +0.023, multi_doc +0.058, exact_match +0.065 at 500
+# docs; paraphrase queries are partial-tier and unchanged. Weighting partial
+# matches too cost paraphrase doc-hit@3 0.096. Not a tool parameter.
 CORPUS_KW_FULL_WEIGHT = 2.0
 # Head text = page 1's first N characters: title, authors and abstract on
 # arXiv papers; cover plus summary on a 10-K. From the spike; not tuned.
@@ -1543,14 +1543,14 @@ def rrf_fuse_doc_rankings(
     order, which carries no relevance at all: a query matching 98 of 100
     documents returned the 10 alphabetically-first ones and scored 0.000
     doc-NDCG, and the same degeneracy silently inflated the stage-2
-    spike's spread class, whose labelled documents sorted early.
+    spike's multi_doc class, whose labelled documents sorted early.
 
     BM25 here is computed per document, so scores are not calibrated
     across documents the way a corpus-wide index would calibrate them.
     They are still a real signal -- a document where the query terms are
     rare scores above one where they are boilerplate -- and any relevance
     signal beats sorting by filename. Ranking quality is measured by the
-    `described` class in `benchmark_data/corpus_search`.
+    `paraphrase` class in `benchmark_data/corpus_search`.
 
     Ties in `scores` (and missing entries, which sort last) fall back to
     (doc_path, page) so the result stays deterministic.

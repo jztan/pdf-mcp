@@ -6,8 +6,8 @@ agreement/strength signals available at fusion time, and measures how
 well each signal predicts routing failure (gold document absent from the
 top of the fused doc ranking). This is the offline calibration step for
 the `routing_confidence` response field: the signal must discriminate
-(AUC), and the chosen threshold must flag described-class failures
-without punishing needle/trap successes.
+(AUC), and the chosen threshold must flag paraphrase-class failures
+without punishing exact_match/lexical_distractor successes.
 
 Free and deterministic (no LLM). Uses a persistent spike cache so the
 100-doc warm (~3 min with embeddings) happens once.
@@ -38,6 +38,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import (  # noqa: E402
+    LEXICAL_DISTRACTOR,
+    EXACT_MATCH,
+    PARAPHRASE,
+    normalize_class,
+)  # noqa: E402
 
 DEFAULT_DATA = REPO / "benchmark_data" / "corpus_search"
 DEFAULT_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
@@ -242,11 +249,15 @@ def main(argv: list[str] | None = None) -> int:
     # ── calibration report ────────────────────────────────────────────
     signal_names = list(rows[0]["signals"].keys())
     print(f"\nAUC (signal predicts routing hit@3; n={len(rows)}):")
-    print(f"{'signal':<14}{'all':>8}{'described':>11}{'non-desc':>10}")
+    print(f"{'signal':<14}{'all':>8}{'paraphrase':>11}{'non-para':>10}")
     for name in signal_names:
         allp = [(r["signals"][name], r["hit3"]) for r in rows]
-        desc = [p for p, r in zip(allp, rows) if r["class"] == "described"]
-        rest = [p for p, r in zip(allp, rows) if r["class"] != "described"]
+        desc = [
+            p for p, r in zip(allp, rows) if normalize_class(r["class"]) == PARAPHRASE
+        ]
+        rest = [
+            p for p, r in zip(allp, rows) if normalize_class(r["class"]) != PARAPHRASE
+        ]
 
         def fmt(v: float | None) -> str:
             return f"{v:.3f}" if v is not None else "  n/a"
@@ -258,12 +269,17 @@ def main(argv: list[str] | None = None) -> int:
     print("\nYouden threshold per signal (flag = signal < t, outcome hit@3):")
     print(
         f"{'signal':<14}{'t':>8}{'flags fail%':>12}{'flags succ%':>12}"
-        f"{'ndl/trap FP':>12}"
+        f"{'em/dist FP':>12}"
     )
     for name in signal_names:
         allp = [(r["signals"][name], r["hit3"]) for r in rows]
         t, tpr, fpr = youden_threshold(allp)
-        nt = [r for r in rows if r["class"] in ("needle", "trap") and r["hit3"]]
+        nt = [
+            r
+            for r in rows
+            if normalize_class(r["class"]) in (EXACT_MATCH, LEXICAL_DISTRACTOR)
+            and r["hit3"]
+        ]
         nt_fp = sum(1 for r in nt if r["signals"][name] < t) / len(nt) if nt else 0.0
         print(f"{name:<14}{t:>8.3f}{tpr:>11.0%}{fpr:>12.0%}{nt_fp:>12.0%}")
     return 0

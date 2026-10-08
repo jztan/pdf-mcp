@@ -1,6 +1,6 @@
 """Grouped-vs-flat A/B for the corpus response shape (research doc C6).
 
-The spread decomposition showed the ranking layer finds 93% of gold
+The multi_doc decomposition showed the ranking layer finds 93% of gold
 documents while the flat top-10 response carries 75%. The measurable
 core of a grouped response is a per-document quota: within the SAME
 response budget, cap how many slots one document may take, so documents
@@ -11,8 +11,8 @@ Arms (same 10-hit budget):
     grouped   fused ranking taken deep (top_k=30), 10 slots filled in
               fused order with at most PER_DOC_CAP hits per document
 
-Queries: caller-emitted where available (described, needle, spread from
-the cached caller evals), raw benchmark strings otherwise (trap).
+Queries: caller-emitted where available (paraphrase, exact_match, multi_doc
+from the cached caller evals), raw benchmark strings otherwise (lexical_distractor).
 Metrics per query, against gold labels:
     doc-cov    fraction of gold docs with >=1 hit in the response
     page-hit   fraction of gold docs with a hit on a labeled gold page
@@ -33,6 +33,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import (  # noqa: E402
+    LEXICAL_DISTRACTOR,
+    EXACT_MATCH,
+    MULTI_DOC,
+    PARAPHRASE,
+    normalize_class,
+)  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 SPIKE_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
@@ -175,12 +183,12 @@ def main() -> int:
         f"GROUPED vs FLAT (budget={BUDGET}, deep_k={DEEP_K},"
         f" per-doc cap={PER_DOC_CAP})"
     )
-    header = f"{'class':<11}{'n':>3}{'src':>7}"
+    header = f"{'class':<13}{'n':>3}{'src':>7}"
     for arm in ("flat", "grouped", "docmajor", "docmajor_kw"):
         header += f" | {arm}: {'doc-cov':>7}{'page-hit':>9}{'hit1':>6}"
     print(header)
-    for cls in ("needle", "trap", "spread", "described"):
-        sub = [r for r in rows if r["class"] == cls]
+    for cls in (EXACT_MATCH, LEXICAL_DISTRACTOR, MULTI_DOC, PARAPHRASE):
+        sub = [r for r in rows if normalize_class(r["class"]) == cls]
         n = len(sub)
         src = sub[0]["source"] if sub else "?"
 
@@ -192,7 +200,7 @@ def main() -> int:
                 else f"{sum(bool(v) for v in vals)}/{n}"
             )
 
-        line = f"{cls:<11}{n:>3}{src:>7}"
+        line = f"{cls:<13}{n:>3}{src:>7}"
         for arm in ("flat", "grouped", "docmajor", "docmajor_kw"):
             line += (
                 f" |       {m(arm, 'doc_cov'):>7}{m(arm, 'page_hit'):>9}"

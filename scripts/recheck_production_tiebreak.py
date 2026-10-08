@@ -13,12 +13,12 @@ relevance is invariant; one that moves is reporting filename order.
 
 Both bugs found on 2026-07-27 were exactly this failure, so the drift
 numbers here are the acceptance gate for any change to cross-document
-ranking. Needle is a built-in control: a needle query matches one
+ranking. exact_match is a built-in control: an exact_match query matches one
 document, nothing ties, and its drift must stay 0.000.
 
 REQUIRES the cache it points at to hold text AND embeddings for the whole
 corpus, or the semantic arm silently contributes nothing and the "hybrid"
-columns are really keyword-only. The needle/described columns will read
+columns are really keyword-only. The exact_match/paraphrase columns will read
 0.000 if that happens -- treat that as a broken run, not a result.
 
 Free and deterministic. Writes nothing.
@@ -36,6 +36,7 @@ from statistics import mean
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import CLASS_NAMES, normalize_rows  # noqa: E402
 from pdf_mcp import _core  # noqa: E402
 from pdf_mcp import corpus, embedder as E  # noqa: E402
 from pdf_mcp.cache import PDFCache  # noqa: E402
@@ -51,7 +52,9 @@ E.check_available(model)
 man = json.load(open(REPO / "benchmark_data/corpus_search/manifest.json"))
 paths = [str((REPO / d["path"]).resolve()) for d in man["docs"]]
 pbid = {d["id"]: str((REPO / d["path"]).resolve()) for d in man["docs"]}
-Q = json.load(open(REPO / "benchmark_data/corpus_search/queries.json"))["queries"]
+Q = normalize_rows(json.load(open(REPO / "benchmark_data/corpus_search/queries.json")))[
+    "queries"
+]
 TOP = 10
 
 
@@ -111,9 +114,9 @@ for use, label in ((False, "OLD alphabetical"), (True, "NEW coverage x IDF")):
     real = ev(None, use)
     perms = [ev(s, use) for s in range(1, 5)]
     print(f"\n{label}  (mode=auto, end-to-end)")
-    for cls in ("described", "needle", "spread", "trap", "OVERALL"):
+    for cls in (*CLASS_NAMES, "OVERALL"):
         p = [x[cls] for x in perms]
         print(
-            f"  {cls:10s} real={real[cls]:.3f}"
+            f"  {cls:12s} real={real[cls]:.3f}"
             f"  perm mean={mean(p):.3f}  drift={mean(p) - real[cls]:+.3f}"
         )

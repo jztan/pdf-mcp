@@ -91,7 +91,7 @@ def markdown_line(env: dict[str, Any]) -> str:
 # FTS table, filtered to the searched files; FTS5 takes word rarity (IDF)
 # from the whole table. So the documents a cache holds besides the corpus
 # move corpus scores: 84 unrelated filings in a shared cache moved the
-# Bedrock anchor's described class from 0.325 to 0.289 on identical code,
+# Bedrock anchor's paraphrase class from 0.325 to 0.289 on identical code,
 # and it read as a regression. Harnesses that score corpus search on the
 # active cache gate on the index before scoring and record what it held.
 

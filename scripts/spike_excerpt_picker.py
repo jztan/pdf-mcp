@@ -15,7 +15,7 @@ Variants (cumulative where noted):
   V3  V1 + tie-break by sentence count (prose-ness)
   V4  V1 + tie-break by block length
 
-Metric: on each described question's span-bearing gold page, does the
+Metric: on each paraphrase question's span-bearing gold page, does the
 variant's chosen block contain the answer span (block-level fidelity
 proxy for the semantic-excerpt upgrade path)? Reported for the 7 known
 misses and the other 18 (do-no-harm within the set). The end-to-end
@@ -38,6 +38,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import PARAPHRASE, normalize_class  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 MISS_IDS = {
@@ -116,7 +117,7 @@ def main() -> int:
                 encoding="utf-8"
             )
         )["rows"]
-        if r["class"] == "described" and r.get("old_query")
+        if normalize_class(r["class"]) == PARAPHRASE and r.get("old_query")
     }
 
     variants = ("V0", "V1", "V2", "V3", "V4")

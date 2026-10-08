@@ -15,7 +15,7 @@ from scripts.benchmark_semantic_excerpts import (
 )
 
 
-def _corpus_rows(values: dict[str, float], cls: str = "needle") -> dict:
+def _corpus_rows(values: dict[str, float], cls: str = "exact_match") -> dict:
     return {
         q: {
             "class": cls,
@@ -141,13 +141,13 @@ class TestEvaluateRatchet:
 
 class TestSummarize:
     def test_per_class_means_and_invariants(self):
-        rows = _corpus_rows({"a": 1.0, "b": 0.0}, cls="needle")
-        rows.update(_corpus_rows({"c": 0.5}, cls="trap"))
+        rows = _corpus_rows({"a": 1.0, "b": 0.0}, cls="exact_match")
+        rows.update(_corpus_rows({"c": 0.5}, cls="lexical_distractor"))
         s = summarize(_run(corpus=rows))
         snip = s["corpus"]["styles"]["snippet"]
         assert snip["classes"]["all"] == {"n": 3, "mean": 0.5}
-        assert snip["classes"]["needle"] == {"n": 2, "mean": 0.5}
-        assert snip["classes"]["trap"] == {"n": 1, "mean": 0.5}
+        assert snip["classes"]["exact_match"] == {"n": 2, "mean": 0.5}
+        assert snip["classes"]["lexical_distractor"] == {"n": 1, "mean": 0.5}
         assert snip["doc_ndcg"] == 0.8
         assert s["corpus"]["seconds_per_query"]["paragraph"] == 1.5
 
@@ -219,6 +219,15 @@ class TestMain:
         run = _run(single=_single_rows({q: 1 for q in IDS}))
         main(self._paths(tmp_path) + ["--update-baseline"], runner=lambda *a: run)
         assert main(self._paths(tmp_path), runner=lambda *a: run) == 0
+
+    def test_baseline_with_old_class_labels_still_pairs(self, tmp_path):
+        """A baseline written before the 2026-10-05 class rename. The gate
+        pairs rows by query id and takes classes from the current run."""
+        values = {q: 0.5 for q in IDS}
+        old = _run(corpus=_corpus_rows(values, cls="needle"))
+        (tmp_path / "baseline.json").write_text(json.dumps(old), encoding="utf-8")
+        cur = _run(corpus=_corpus_rows(values))
+        assert main(self._paths(tmp_path), runner=lambda *a: cur) == 0
 
     def test_id_mismatch_is_a_setup_error(self, tmp_path):
         base = _run(single=_single_rows({q: 1 for q in IDS}))

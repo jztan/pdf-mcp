@@ -1,6 +1,6 @@
-"""Is the spread class a ranking problem or a response-shape problem?
+"""Is the multi_doc class a ranking problem or a response-shape problem?
 
-The ledger's open question, answered deterministically. For each spread
+The ledger's open question, answered deterministically. For each multi_doc
 query, compare three views of the same hybrid corpus-search response:
 
   flat-cov  fraction of gold docs represented in the flat `matches` list
@@ -14,7 +14,7 @@ ranking work, is the fix.
 
 Free and deterministic. Uses the warmed spike cache.
 
-Run:  uv run python scripts/spike_spread_shape.py
+Run:  uv run python scripts/spike_multi_doc_shape.py
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import MULTI_DOC, normalize_class  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 SPIKE_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
@@ -59,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
             "queries"
         ]
-        if q["class"] == "spread"
+        if normalize_class(q["class"]) == MULTI_DOC
     ]
 
     label = "raw strings"
@@ -103,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         encoding="utf-8",
     )
     print(f"wrote {out}\n")
-    print(f"SPREAD DECOMPOSITION (n={n}, {label}, hybrid, top_k={TOP_K})")
+    print(f"MULTI_DOC DECOMPOSITION (n={n}, {label}, hybrid, top_k={TOP_K})")
     for key, label in (
         ("flat_cov", "gold docs represented in flat matches"),
         ("dmc_cov", "gold docs present in doc_match_counts"),

@@ -305,7 +305,7 @@ class TestDataDirAndCacheDirFlags:
         from pathlib import Path
 
         assert ns.data_dir == Path("/tmp/x") and ns.cache_dir == Path("/tmp/c")
-        assert ns.limit == 5 and ns.classes == ["described", "needle"]
+        assert ns.limit == 5 and ns.classes == ["paraphrase", "exact_match"]
 
     def test_defaults_keep_the_financial_set(self):
         from scripts import eval_financial_answerability as ev

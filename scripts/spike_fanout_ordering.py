@@ -1,4 +1,4 @@
-"""Race fan-out document orderings on the spread selection deficiency.
+"""Race fan-out document orderings on the multi_doc selection deficiency.
 
 Deficiency (spread_fanout_verdict.md): selection@5 = 73% — 17 of 62 gold
 answer-parts sit at position 6+ or unnamed in the current fan-out order
@@ -21,7 +21,7 @@ Candidates (corpus-routing-research.md §7, three-stream sweep):
 Gates (pre-registered): selection@3/@5 over the 62 gold parts;
 permutation invariance (document input order must not change any
 ordering); end-to-end part coverage at k=5 for the winner. Constants are
-knob-free or literature defaults; the 25 spread queries are IN-SAMPLE —
+knob-free or literature defaults; the 25 multi_doc queries are IN-SAMPLE —
 corpus expansion is the quality loop's next step, not skipped silently.
 
 Free and deterministic. Uses the warmed spike cache.
@@ -38,6 +38,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+from _query_classes import MULTI_DOC, normalize_class  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "corpus_search"
 SPIKE_CACHE = REPO / "benchmark_data" / ".spike_confidence_cache"
@@ -153,7 +155,7 @@ def main() -> int:
         for q in json.loads((DATA / "queries.json").read_text(encoding="utf-8"))[
             "queries"
         ]
-        if q["class"] == "spread"
+        if normalize_class(q["class"]) == MULTI_DOC
     ]
     emitted = {
         r["id"]: r["old_query"]
@@ -263,7 +265,7 @@ def main() -> int:
 
     gold_by_q = {r["id"]: r["gold"] for r in rows}
     total = sum(len(g) for g in gold_by_q.values())
-    print(f"FAN-OUT ORDERING RACE (n=25 spread queries, {total} gold parts)")
+    print(f"FAN-OUT ORDERING RACE (n=25 multi_doc queries, {total} gold parts)")
     print(f"{'variant':<10}{'sel@3':>8}{'sel@5':>8}{'cov@5':>8}{'perm':>6}")
     results = {}
     for v in variants:

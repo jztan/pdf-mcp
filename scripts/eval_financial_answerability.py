@@ -50,6 +50,9 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
+
+from _query_classes import normalize_class, normalize_classes  # noqa: E402
 
 DATA = REPO / "benchmark_data" / "financial_reports"
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -407,7 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--classes",
-        type=lambda v: [c.strip() for c in v.split(",") if c.strip()],
+        type=normalize_classes,
         default=None,
         help="comma list of question types to keep (the 'type' field)",
     )
@@ -467,6 +470,10 @@ def main(argv: list[str] | None = None) -> int:
         (args.data_dir / "answerability_questions.json").read_text(encoding="utf-8")
     )
     qs = questions["questions"]
+    # Question sets written before the 2026-10-05 class rename carry old labels.
+    for q in qs:
+        if "type" in q:
+            q["type"] = normalize_class(q["type"])
     if args.classes:
         qs = [q for q in qs if q.get("type") in args.classes]
     if args.limit:

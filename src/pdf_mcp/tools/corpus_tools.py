@@ -323,7 +323,7 @@ def _doc_covered_terms(path: str, pages: list[int], terms: set[str]) -> set[str]
     FTS index, so BM25's IDF is computed within that document: a paper
     genuinely about the query mentions its terms on many pages, which
     LOWERS its within-document IDF and its score. Measured on the
-    described-query class, per-document BM25 ranked the gold document 86th
+    paraphrase-query class, per-document BM25 ranked the gold document 86th
     of 98 while term coverage ranked it 1st; across ten queries the median
     gold rank was 39.5 by BM25 against 2.5 by coverage.
 
@@ -1362,8 +1362,9 @@ def pdf_corpus_search(
     # each mapped to its best semantic page. The page arms draw a 30-page
     # shortlist from every page vector in the corpus, so under distractor
     # pressure gold page-1s fall off it; one vector per document competes
-    # among N docs instead of N*pages. Measured: 500-doc described
-    # doc-hit@3 0.48 -> 0.68, needle/trap unchanged (spec 2026-08-26).
+    # among N docs instead of N*pages. Measured: 500-doc paraphrase
+    # doc-hit@3 0.48 -> 0.68, exact_match/lexical_distractor unchanged
+    # (spec 2026-08-26).
     try:
         corpus.backfill_doc_profiles(ready_paths, _core.cache, embed_model, embed_fn)
     except Exception as exc:  # noqa: BLE001 - arm runs on what it has
@@ -1395,7 +1396,7 @@ def pdf_corpus_search(
     # Partial keyword matches rank pages but do not anchor excerpts or
     # confidence: their FTS snippet sits on whichever single term matched
     # (often a common word), so the paragraph built from it missed the
-    # answer. Measured on the described class, gold pages inside the token
+    # answer. Measured on the paraphrase class, gold pages inside the token
     # budget whose excerpt missed the evidence doubled (9 -> 18) until these
     # pages went back to the semantic excerpt path.
     anchor_payload = {} if kw_partial else kw_payload

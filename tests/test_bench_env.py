@@ -93,7 +93,7 @@ def test_markdown_line_names_interpreter_and_sqlite():
 # document in the cache's shared FTS table, not only the searched ones, so a
 # corpus benchmark scored on a cache that also holds unrelated PDFs is not
 # comparable with a corpus-only run (84 unrelated filings moved the Bedrock
-# anchor's described class from 0.325 to 0.289 on identical code). The
+# anchor's paraphrase class from 0.325 to 0.289 on identical code). The
 # harnesses that score corpus search on the active cache check the index
 # first and refuse a mixed cache unless told otherwise.
 

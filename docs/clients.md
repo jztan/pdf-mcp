@@ -3,7 +3,7 @@
 Configuration for each MCP client pdf-mcp is known to work with. Claude
 Desktop can install everything itself (see its one-click install below).
 Every other client runs the `pdf-mcp` command, so install it first (Python
-3.10 or later):
+3.11 or later):
 
 ```bash
 uv tool install pdf-mcp     # or: pipx install pdf-mcp

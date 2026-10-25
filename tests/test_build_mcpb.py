@@ -5,12 +5,11 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 import zipfile
 from pathlib import Path
 
 import pytest
-
-tomllib = pytest.importorskip("tomllib")  # stdlib from 3.11; CI also runs 3.10
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -35,7 +34,7 @@ def test_pyproject_pins_exact_version_and_caps_python():
     files = build_mcpb.render_files("9.8.7", pins=[])
     data = tomllib.loads(files["pyproject.toml"].decode())
     assert data["project"]["dependencies"] == ["pdf-mcp==9.8.7"]
-    assert data["project"]["requires-python"] == ">=3.10,<3.14"
+    assert data["project"]["requires-python"] == ">=3.11,<3.14"
     assert "build-system" not in data
 
 

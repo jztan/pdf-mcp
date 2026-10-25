@@ -1490,7 +1490,7 @@ estimated_tokens: 925</pre>
     }
     const totalBytes = pdfs.reduce((a, f) => a + f.size, 0);
     if (pdfs.length > CORPUS_MAX_FILES || totalBytes > CORPUS_MAX_BYTES) {
-      showToast(`Demo cap: up to ${CORPUS_MAX_FILES} PDFs / 100 MB per drop (the installed server takes up to 100 files).`);
+      showToast(`Demo cap: up to ${CORPUS_MAX_FILES} PDFs / 100 MB per drop (the installed server takes up to 500 files).`);
       return;
     }
     if (pdfs.length === 0) { showToast("No PDFs in that drop."); return; }

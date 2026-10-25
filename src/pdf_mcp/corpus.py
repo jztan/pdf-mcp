@@ -55,10 +55,20 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-# Hard ceiling on corpus size: the tens-of-docs design boundary made
-# explicit. Beyond this, corpus tools return an inline error instead
-# of silently truncating.
-CORPUS_MAX_FILES = 100
+# Hard ceiling on corpus size. Beyond this, corpus tools return an inline
+# error instead of silently truncating. Raised from 100 to 500 once the
+# document arm held described-query recall flat at the 500-doc rung; 1,000
+# waits on the 900-distractor rung (hybrid latency grows with corpus size).
+CORPUS_MAX_FILES = 500
+
+# Appended to every over-cap hint: a corpus near the cap cannot warm inside
+# one client call, and an empty `unprocessed` only means the budget held.
+_MULTI_CALL_WARM = (
+    " A corpus of hundreds of files warms over several calls (500 docs with"
+    " embeddings took about 8 minutes): re-issue pdf_corpus_warm with the"
+    " same paths until warm_complete is true; an empty unprocessed is not"
+    " enough."
+)
 
 # Most names an over-cap error lists back. A folder above the cap cannot be
 # surveyed by the corpus tools, and no tool lists files, so the error itself
@@ -171,6 +181,7 @@ def _over_cap_error(
         err["hint"] = (
             f"Pass up to {cap} of these paths per call. Scores from separate"
             " calls are not comparable, so run one query over one subset."
+            + _MULTI_CALL_WARM
         )
         err["skipped"] = skipped
         return err
@@ -178,7 +189,7 @@ def _over_cap_error(
     err["hint"] = (
         f"Pass up to {cap} of these as an explicit list (join each name to"
         " root), or narrow to a subfolder. Scores from separate calls are"
-        " not comparable, so run one query over one subset."
+        " not comparable, so run one query over one subset." + _MULTI_CALL_WARM
     )
     err["root"] = str(root)
     err["files"] = names[:CORPUS_LISTING_MAX]

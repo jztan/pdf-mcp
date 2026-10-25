@@ -794,7 +794,8 @@ Shared envelope (both tools):
 **Error contract:** call-level failures (missing directory, empty corpus, corpus above the file cap, embeddings requested with an unavailable embedding model) return an inline `{"error": "...", "hint": "..."}` payload instead of raising. Check for an `error` key before reading other fields.
 
 **Limitations (both tools):**
-- Corpora are capped at 100 files; a larger corpus returns an inline error rather than truncating silently. For a directory, that error also carries `root`, `files` (the validated PDFs as names relative to `root`, sorted, at most 1,000, with `files_truncated`), `subfolders` (PDF count per top-level subfolder, `"."` for `root` itself; recursive calls only) and `skipped`, so a caller can pass up to 100 names joined to `root` as an explicit list. Scores from separate calls are not comparable: run one query over one subset. An explicit list above the cap gets `skipped` but no listing.
+- Corpora are capped at 500 files; a larger corpus returns an inline error rather than truncating silently. For a directory, that error also carries `root`, `files` (the validated PDFs as names relative to `root`, sorted, at most 1,000, with `files_truncated`), `subfolders` (PDF count per top-level subfolder, `"."` for `root` itself; recursive calls only) and `skipped`, so a caller can pass up to 500 names joined to `root` as an explicit list. Scores from separate calls are not comparable: run one query over one subset. An explicit list above the cap gets `skipped` but no listing.
+- A corpus of hundreds of files warms over several re-issued calls, not one: 500 documents with embeddings took about 8 minutes, far past any client's per-call timeout. Re-issue `pdf_corpus_warm` with the same paths until `warm_complete` is `true`; an empty `unprocessed` is not enough (see `warm_complete` above).
 - URLs are not accepted; fetch a remote PDF via a single-doc tool first, then point a corpus tool at its local path. Note that the fetched copy lands in the URL cache, not in a corpus directory, so this assembles a corpus only where you can also write to that directory. Over the HTTP transport a caller cannot, which is why a remote corpus is pre-placed under an allow-listed root by the operator.
 - `budget_seconds` is clamped to 1-300 regardless of what's passed in.
 
@@ -816,13 +817,13 @@ Warms a folder or explicit list of local PDFs into the cache: text extraction, a
 - With `sections=True`, already-cached documents also get their section index backfilled, checked against `budget_seconds` between docs (unlike the document-profile backfill above, which is cheap enough to run unconditionally): a doc the deadline cuts off here lands in `unprocessed` and `warm_complete: false`, and finishes on a later call. `docs` rows carry no per-doc section-coverage field (unlike `embeddings_cached`); the only way to check is a `pdf_search(granularity="section")` call.
 
 **Limitations:**
-- The 100-file cap, budget clamp, and URL rejection described above apply.
+- The 500-file cap, budget clamp, and URL rejection described above apply.
 - For text extraction the budget is checked between docs, not within one, so a very large PDF's extraction can push the call past `budget_seconds`. Embedding work is finer-grained: it commits in page batches with the clock checked between batches, so embedding overshoot is bounded by one batch (a few seconds).
 - Warming runs extraction in a small process pool on larger corpora (sequential below 4 uncached documents). When the budget expires, documents already being extracted still complete and are written, so a call can overshoot `budget_seconds` by up to the worker count's worth of in-flight documents rather than a single document.
 - Repeat calls continue warming from where the previous call's budget stopped; already-warmed docs come back as `"cached"` and don't re-extract. Re-issue until `warm_complete` is `true`; stopping when `unprocessed` empties can leave documents missing, because a per-document failure lands in `skipped`, not `unprocessed`.
 - Some MCP clients (and proxies/bridges) enforce their own per-call timeout, commonly ~60s, independent of `budget_seconds`. A budget at or above that ceiling guarantees a client-visible timeout error even while warming succeeds: docs finished before the cutoff are already committed to the cache, so treat the timeout as a partial run and re-issue the call rather than as a failure. Keep `budget_seconds` under the client's timeout to get a graceful partial return (`unprocessed` + `budget_exhausted` + `warm_complete: false`) instead of an error.
 - A document larger than one budget's embedding work warms across several re-issued calls; each call commits its progress durably (text lands atomically first, then embeddings in page batches), so a several-hundred-page PDF converges even through a ~60s timeout-bounded bridge. Its interim rows report `status: "partial"` with `embedded_pages`; keep re-issuing until `warm_complete` is `true`.
-- For a corpus you know you want fully warm before a chat session even starts — more than 100 files, or one that would take many re-issued calls to converge — `pdf-mcp-warm` (a separate command-line entry point installed alongside `pdf-mcp`, run outside any MCP client) warms a whole folder to completion in one run: no 100-file cap, no budget ceiling. See [Offline prewarm](configuration.md#offline-prewarm-pdf-mcp-warm).
+- For a corpus you know you want fully warm before a chat session even starts (more than 500 files, or one that would take many re-issued calls to converge), `pdf-mcp-warm` (a separate command-line entry point installed alongside `pdf-mcp`, run outside any MCP client) warms a whole folder to completion in one run: no 500-file cap, no budget ceiling. See [Offline prewarm](configuration.md#offline-prewarm-pdf-mcp-warm).
 
 **Example:**
 
@@ -863,7 +864,7 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - Shared envelope fields above (`unprocessed`, `skipped`, `corpus_size`, `warmed_this_call`, `budget_exhausted`, `warm_complete`, `unwarmed`).
 
 **Limitations:**
-- The 100-file cap, budget clamp, and URL rejection described above apply.
+- The 500-file cap, budget clamp, and URL rejection described above apply.
 - Cards carry no per-page arrays and no content excerpts; follow up with `pdf_info(path, detail=True)` for per-page detail on a single document of interest.
 - `title` is untrusted PDF metadata when present; junk detection is heuristic, so unrecognized junk titles (e.g. EDGAR accession numbers) pass through as-is.
 - A doc whose cache entry is invalidated between warming and card-building (e.g. the file changed mid-call) is dropped from `docs` and reported in `skipped` with reason `"cache invalidated during call"` (pdf_corpus_overview only).
@@ -943,7 +944,7 @@ Searches a folder or explicit list of local PDFs and returns one relevance-ranke
 - Page granularity only; there is no section-level mode.
 - On a folder searched for the first time, `mode="auto"` answers by keyword while embeddings are pending. A call that had to extract text spends at most 5 seconds embedding before it answers; a later call with nothing left to extract spends its whole budget on embeddings. Hybrid ranking arrives only once every searched document is embedded, never over a subset, so the ranking does not favour whichever documents happened to embed first.
 - Keyword-mode `score` is per-document BM25 and is comparable only within that hit's own document, not across documents. Cross-document order is governed entirely by RRF, not by comparing raw scores between docs.
-- The 100-file cap, budget clamp, and URL rejection shared with `pdf_corpus_warm`/`pdf_corpus_overview` apply.
+- The 500-file cap, budget clamp, and URL rejection shared with `pdf_corpus_warm`/`pdf_corpus_overview` apply.
 - The keyword arm's BM25 statistics come from every document in the local cache, not only the searched corpus, so the same query over the same corpus can rank slightly differently after unrelated PDFs are cached. Measured with 400 extra cached documents: hybrid page NDCG@10 moved by -0.005 and doc-hit@3 by -0.016 (both CIs include zero).
 - Semantic and hybrid modes require fastembed (included in the default install) and, for hybrid to actually fuse (rather than degrade to keyword), warmed embeddings; call `pdf_corpus_warm(paths, embeddings=True)` first to warm a corpus outside this call's budget.
 - The document arm reads page 1 only; a document whose first page is a blank cover or an image gets no profile and is ranked by the page arms alone.
@@ -1064,7 +1065,7 @@ Reports which optional features are installed and which configuration values are
   - `search.embedding_backend` (string, conditional) — `"fastembed"` or `"openai"`; present under the same condition as `embedding_model`. See `docs/configuration.md` for `[embedding].backend`.
   - `search.embedding_endpoint` (string, conditional) — `host[:port]` of the remote endpoint; present only when `embedding_backend` is `"openai"`. Never includes credentials or userinfo.
   - `corpus.tools` (array) — the multi-document tools (`pdf_corpus_warm`, `pdf_corpus_overview`, `pdf_corpus_search`).
-  - `corpus.max_files` (int) — corpus size cap (100).
+  - `corpus.max_files` (int): corpus size cap (500).
   - `corpus.budget_seconds_range` (array) — clamp range for `budget_seconds` on the corpus tools (`[1, 300]`).
   - `corpus.modes_available` (array) — corpus search modes; mirrors `search.modes_available` (same embedding availability).
 - `documents` (object): which PDFs this server is willing to open. Use it to find a starting path when you were not given one, which is the normal situation over the HTTP transport.
@@ -1103,7 +1104,7 @@ server_info()
 #     },
 #     "corpus": {
 #       "tools": ["pdf_corpus_warm", "pdf_corpus_overview", "pdf_corpus_search"],
-#       "max_files": 100,
+#       "max_files": 500,
 #       "budget_seconds_range": [1, 300],
 #       "modes_available": ["keyword", "semantic", "auto"]
 #     }

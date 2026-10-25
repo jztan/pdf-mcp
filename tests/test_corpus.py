@@ -187,6 +187,30 @@ class TestOverCapListing:
         res = corpus.resolve_corpus(str(folder))
         assert res["files"] == ["a.pdf", "b.pdf", "link.pdf"]
 
+    def test_cap_is_500(self):
+        # Raised from 100 (2026-10-25): blind agent runs split 120- and
+        # 130-file folders into separate calls despite the hint that
+        # scores from separate calls are not comparable. 1,000 waits on
+        # the 900-distractor benchmark rung.
+        assert corpus.CORPUS_MAX_FILES == 500
+
+    @pytest.mark.parametrize("mode", ["directory", "explicit"])
+    def test_hint_says_a_large_corpus_warms_over_several_calls(
+        self, tmp_path, monkeypatch, mode
+    ):
+        monkeypatch.setattr(corpus, "CORPUS_MAX_FILES", 2)
+        _stub_pdfs(tmp_path, ["a.pdf", "b.pdf", "c.pdf"])
+        if mode == "directory":
+            res = corpus.resolve_corpus(str(tmp_path))
+        else:
+            res = corpus.resolve_corpus(
+                [str(tmp_path / n) for n in ["a.pdf", "b.pdf", "c.pdf"]]
+            )
+        hint = res["hint"]
+        assert "several" in hint
+        assert "warm_complete" in hint
+        assert "unprocessed" in hint
+
 
 class SteppingClock:
     """Fake monotonic clock: advances a fixed step on every call."""

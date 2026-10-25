@@ -459,7 +459,7 @@ default.
 ## Offline prewarm (`pdf-mcp-warm`)
 
 `pdf_corpus_warm` (the MCP tool) is built to fit inside one client-side
-tool call: it caps at 100 files and `budget_seconds <= 300` per call (see
+tool call: it caps at 500 files and `budget_seconds <= 300` per call (see
 [tool-reference.md](tool-reference.md#pdf_corpus_warm)), so a folder that
 does not fit either limit means re-issuing the same call by hand,
 possibly many times, from inside a chat session — and a query against a

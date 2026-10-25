@@ -43,6 +43,12 @@ from urllib.parse import urlparse
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _query_classes import (  # noqa: E402
+    legend_lines,
+    normalize_classes,
+    normalize_rows,
+)
+
 DEFAULT_DATA = REPO / "benchmark_data" / "corpus_search"
 OUT_DIR = REPO / "benchmark_data" / "bedrock_kb"
 
@@ -545,6 +551,7 @@ def render_markdown(
         "not a subject; any result is acceptable. Never average across classes. "
         "See [ANALYSIS.md](ANALYSIS.md) for the interpretation.",
         "",
+        *legend_lines(list(summary["per_class"])),
     ]
     if n_flagged:
         out += [
@@ -683,8 +690,8 @@ def main(argv: list[str] | None = None) -> int:
     from benchmark_corpus_modes import class_names
 
     manifest = json.loads((args.data_dir / "manifest.json").read_text(encoding="utf-8"))
-    queries_doc = json.loads(
-        (args.data_dir / "queries.json").read_text(encoding="utf-8")
+    queries_doc = normalize_rows(
+        json.loads((args.data_dir / "queries.json").read_text(encoding="utf-8"))
     )
     queries = (
         queries_doc["queries"][: args.limit] if args.limit else queries_doc["queries"]
@@ -788,7 +795,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--reuse-bedrock-from PATH to point at a prior results.json."
             )
             return 2
-    live_classes = {c.strip() for c in args.live_classes.split(",") if c.strip()}
+    live_classes = set(normalize_classes(args.live_classes))
     if live_classes and not args.live:
         print("ERROR: --live-classes needs --live")
         return 2
@@ -799,7 +806,8 @@ def main(argv: list[str] | None = None) -> int:
         # instead. Four offline refusals stand in for the live drift guard.
         if reuse_path is None:
             reuse_path = OUT_DIR / "results.json"
-        prior = json.loads(reuse_path.read_text(encoding="utf-8"))
+        # Rows stored before the 2026-10-05 class rename carry old labels.
+        prior = normalize_rows(json.loads(reuse_path.read_text(encoding="utf-8")))
         prior_cfg = prior.get("config", {})
         manifest_sha = hashlib.sha256(
             (args.data_dir / "manifest.json").read_bytes()

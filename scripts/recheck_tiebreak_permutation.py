@@ -49,11 +49,18 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _query_classes import (  # noqa: E402
+    LEXICAL_DISTRACTOR,
+    EXACT_MATCH,
+    MULTI_DOC,
+    normalize_rows,
+)
+
 DATA = REPO / "benchmark_data" / "corpus_search"
 
-# The stage-2 spike predates the `described` class, so grading it here
+# The stage-2 spike predates the paraphrase class, so grading it here
 # would compare against a published table that never included it.
-SPIKE_CLASSES = ("needle", "spread", "trap")
+SPIKE_CLASSES = (EXACT_MATCH, MULTI_DOC, LEXICAL_DISTRACTOR)
 
 
 def alias(seed: int, doc_id: str) -> str:
@@ -108,7 +115,9 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.corpus import warm_docs
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
-    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+    queries = normalize_rows(
+        json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+    )
     qs = [q for q in queries["queries"] if q["class"] in SPIKE_CLASSES]
 
     paths = [
@@ -192,18 +201,18 @@ def main(argv: list[str] | None = None) -> int:
     published = score_arm_b(None)
     runs = [score_arm_b(s) for s in range(1, args.seeds + 1)]
 
-    head = f"{'run':>8s}" + "".join(f"{(c or 'OVERALL'):>9s}" for c in classes)
+    head = f"{'run':>8s}" + "".join(f"{(c or 'OVERALL'):>12s}" for c in classes)
     print(head)
     print("-" * len(head))
-    print(f"{'arm A':>8s}" + "".join(f"{cmean(arm_a, c):9.3f}" for c in classes))
+    print(f"{'arm A':>8s}" + "".join(f"{cmean(arm_a, c):12.3f}" for c in classes))
     print(
         f"{'arm B':>8s}"
-        + "".join(f"{cmean(published, c):9.3f}" for c in classes)
+        + "".join(f"{cmean(published, c):12.3f}" for c in classes)
         + "   <- real filenames (published)"
     )
     for i, r in enumerate(runs, 1):
         print(
-            f"{'perm ' + str(i):>8s}" + "".join(f"{cmean(r, c):9.3f}" for c in classes)
+            f"{'perm ' + str(i):>8s}" + "".join(f"{cmean(r, c):12.3f}" for c in classes)
         )
 
     print()
@@ -217,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         if (real > a) != (mean(perm) > a):
             flip = "  ** ARM ORDER FLIPS **"
         print(
-            f"{name:8s} armA={a:.3f}  armB real={real:.3f}"
+            f"{name:12s} armA={a:.3f}  armB real={real:.3f}"
             f"  permuted mean={mean(perm):.3f}"
             f" [{min(perm):.3f}, {max(perm):.3f}]  real is {outside}"
             f" the permuted range{flip}"

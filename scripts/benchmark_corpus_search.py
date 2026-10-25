@@ -43,6 +43,7 @@ from pdf_mcp.cache import (  # noqa: E402
 )
 
 import _corpus_ranking as cr  # noqa: E402
+from _query_classes import legend_lines, normalize_rows  # noqa: E402
 
 OUT_DIR = REPO / "benchmark_data" / "corpus_search"
 EN_PDF_DIR = REPO / "benchmark_data" / ".reading_order_pdfs"
@@ -234,7 +235,9 @@ def load_manifest() -> dict:
 
 
 def load_queries() -> dict:
-    return json.loads((OUT_DIR / "queries.json").read_text(encoding="utf-8"))
+    return normalize_rows(
+        json.loads((OUT_DIR / "queries.json").read_text(encoding="utf-8"))
+    )
 
 
 _WS = re.compile(r"\s+")
@@ -491,6 +494,7 @@ def _write_results_md(results: dict, force: bool = False) -> None:
         "",
         "## Per-class NDCG@10",
         "",
+        *legend_lines(sorted(results["class_ndcg_temp_fts"])),
         "| class | temp-fts (A) | rrf-fusion (B) |",
         "|---|---|---|",
     ]
@@ -517,7 +521,7 @@ def _write_results_md(results: dict, force: bool = False) -> None:
 
 # Everything below the spike's own generated sections is hand-written:
 # the interpretation, and later arms appended by other benchmarks (the
-# described-query arm lives in this same file). A blind overwrite silently
+# paraphrase-query arm lives in this same file). A blind overwrite silently
 # destroys all of it, so refuse unless the caller says otherwise.
 _GENERATED_MARKER = "# Cross-Doc Keyword Ranking Spike: Results"
 

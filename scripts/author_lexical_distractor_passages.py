@@ -1,23 +1,25 @@
 #!/usr/bin/env python
 """
-scripts/author_trap_passages.py
+scripts/author_lexical_distractor_passages.py
 
-Add a body-text passage label to every trap query, blind to all arms.
+Add a body-text passage label to every lexical_distractor query, blind to all arms.
 
-The trap class was authored to test lexical trapping (the query's terms
+The lexical_distractor class was authored to test lexical trapping (the query's terms
 are boilerplate in most documents and meaningful in one), but every gold
 span ended up being that document's page-1 title. Span containment then
 measured "did the excerpt include the title", which one raw top-of-page
 chunk always satisfies and a selected paragraph rarely does. This script
-drafts, for each trap query, ONE verbatim body sentence (abstract or
+drafts, for each lexical_distractor query, ONE verbatim body sentence (abstract or
 introduction, pages 1 to 3) where the query's concept is actually stated,
 and emits it as a second label alongside the title. The title label is
 kept, so the old reading stays reproducible; the harness scores a query
 as found if ANY label is found.
 
 Usage:
-    python scripts/author_trap_passages.py          # -> candidates_trap_passages.json
-    python scripts/author_trap_passages.py --merge  # append accepted labels
+    # -> candidates_trap_passages.json
+    python scripts/author_lexical_distractor_passages.py
+    # append accepted labels
+    python scripts/author_lexical_distractor_passages.py --merge
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 DATA = REPO / "benchmark_data" / "corpus_search"
 
+from _query_classes import LEXICAL_DISTRACTOR, normalize_rows  # noqa: E402
 from author_corpus_queries import (  # noqa: E402
     DEFAULT_MODEL,
     ask,
@@ -76,7 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     path_by_id = {d["id"]: REPO / d["path"] for d in manifest["docs"]}
     qfile = DATA / "queries.json"
-    queries = json.loads(qfile.read_text(encoding="utf-8"))
+    queries = normalize_rows(json.loads(qfile.read_text(encoding="utf-8")))
+    # Output, cache and cache keys keep the pre-rename "trap" prefix so
+    # earlier billed drafts still hit.
     out_path = DATA / "candidates_trap_passages.json"
     cache_path = DATA / "author_cache_trap_passages.jsonl"
     cache: dict[str, dict] = {}
@@ -109,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     accepted: list[dict] = []
     rejected: list[dict] = []
     for q in queries["queries"]:
-        if q["class"] != "trap":
+        if q["class"] != LEXICAL_DISTRACTOR:
             continue
         gold = [lb for lb in q["labels"] if lb.get("gain", 0) >= 2][0]
         doc = gold["doc"]

@@ -7,8 +7,13 @@ them on synthetic data.
 
 from __future__ import annotations
 
+try:
+    from _query_classes import LEXICAL_DISTRACTOR, normalize_keys
+except ImportError:  # imported as scripts._corpus_ranking (tests)
+    from scripts._query_classes import LEXICAL_DISTRACTOR, normalize_keys
+
 # Pre-committed decision-rule constants (from the multi-doc design spec).
-TRAP_GAIN_MIN = 0.05
+LEXICAL_DISTRACTOR_GAIN_MIN = 0.05
 CLASS_REGRESS_MAX = 0.02
 ARM_A_QUERY_BUDGET_S = 1.0
 RRF_K = 60  # matches production _RRF_K
@@ -54,20 +59,31 @@ def evaluate_decision(
     """Apply the pre-committed decision rule.
 
     Arm A = corpus-wide temp FTS, arm B = RRF fusion. A wins iff its
-    trap-class NDCG@10 beats B's by >= TRAP_GAIN_MIN, no other class
-    regresses by > CLASS_REGRESS_MAX, and A's mean per-query cost is
-    < ARM_A_QUERY_BUDGET_S. Otherwise (including ties) B wins.
+    lexical_distractor-class NDCG@10 beats B's by >=
+    LEXICAL_DISTRACTOR_GAIN_MIN, no other class regresses by >
+    CLASS_REGRESS_MAX, and A's mean per-query cost is < ARM_A_QUERY_BUDGET_S.
+    Otherwise (including ties) B wins.
     """
     reasons: list[str] = []
-    trap_delta = class_ndcg_a.get("trap", 0.0) - class_ndcg_b.get("trap", 0.0)
-    if trap_delta >= TRAP_GAIN_MIN - _EPS:
-        reasons.append(f"trap-class NDCG delta {trap_delta:+.3f} >= {TRAP_GAIN_MIN}")
+    class_ndcg_a = normalize_keys(class_ndcg_a)
+    class_ndcg_b = normalize_keys(class_ndcg_b)
+    gain = class_ndcg_a.get(LEXICAL_DISTRACTOR, 0.0) - class_ndcg_b.get(
+        LEXICAL_DISTRACTOR, 0.0
+    )
+    if gain >= LEXICAL_DISTRACTOR_GAIN_MIN - _EPS:
+        reasons.append(
+            f"lexical_distractor-class NDCG delta {gain:+.3f}"
+            f" >= {LEXICAL_DISTRACTOR_GAIN_MIN}"
+        )
         win = True
     else:
-        reasons.append(f"trap-class NDCG delta {trap_delta:+.3f} < {TRAP_GAIN_MIN}")
+        reasons.append(
+            f"lexical_distractor-class NDCG delta {gain:+.3f}"
+            f" < {LEXICAL_DISTRACTOR_GAIN_MIN}"
+        )
         win = False
 
-    for cls in sorted((set(class_ndcg_a) | set(class_ndcg_b)) - {"trap"}):
+    for cls in sorted((set(class_ndcg_a) | set(class_ndcg_b)) - {LEXICAL_DISTRACTOR}):
         regress = class_ndcg_b.get(cls, 0.0) - class_ndcg_a.get(cls, 0.0)
         if regress > CLASS_REGRESS_MAX + _EPS:
             reasons.append(f"{cls}-class regresses {regress:.3f} > {CLASS_REGRESS_MAX}")

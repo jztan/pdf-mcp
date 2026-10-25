@@ -15,7 +15,7 @@ interpreter accepts.
 
 import shutil
 import subprocess
-import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -24,15 +24,10 @@ from packaging.requirements import Requirement
 from packaging.tags import compatible_tags, cpython_tags, mac_platforms
 from packaging.utils import canonicalize_name, parse_wheel_filename
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
 REPO = Path(__file__).resolve().parent.parent
 
 # The bundle caps Python below 3.14 on Intel Macs (pyproject [tool.uv]).
-INTEL_MAC_PYTHONS = [(3, 10), (3, 11), (3, 12), (3, 13)]
+INTEL_MAC_PYTHONS = [(3, 11), (3, 12), (3, 13)]
 
 # Oldest macOS the current GitHub Intel runner and supported Intel Macs run.
 _PLATFORMS = list(mac_platforms(version=(13, 0), arch="x86_64"))

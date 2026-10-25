@@ -4,7 +4,7 @@ version = "3.5.0"
 description = "Gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic + keyword search, selective page reads, tables, images, TOC, OCR, chart data, and CJK/vertical-script support, with SQLite caching."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Kevin Tan", email = "6021013+jztan@users.noreply.github.com" }
 ]
@@ -31,7 +31,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -71,6 +70,10 @@ dependencies = [
     # evaluates markers for the host, so this Intel-Mac-only pin is skipped.
     # Drop the cap when cryptography ships Intel-Mac wheels again.
     "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Everywhere else, floor past those CVEs. Without it uv's resolver may
+    # settle on 48.0.1 for every platform (it did once the 3.10 fork went),
+    # which the audit then rightly flags.
+    "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
@@ -84,7 +87,6 @@ dependencies = [
     # Version comparison for the bundle's update check. Already installed
     # transitively; declared because pdf_mcp.updates imports it.
     "packaging>=23.0",
-    "tomli>=2.0; python_version < '3.11'",
     # Permissive PDF backend (src/pdf_mcp/backend/). These replace pymupdf,
     # which is dual-licensed AGPL-3.0 / Artifex Commercial and therefore
     # contradicts the MIT licence this package declares.
@@ -98,7 +100,11 @@ dependencies = [
     "pytesseract>=0.3.10",
     # Runtime since the backend swap: pypdfium2 renders to a Pillow image and
     # image/render output is written as PNG through it.
-    "pillow>=12.3.0",
+    # Floor 13.0.0 clears 41 advisories in 12.3.0's image parsers and encoders.
+    "pillow>=13.0.0",
+    # Pulled in transitively via huggingface-hub; floor to clear
+    # CVE-2026-112907, CVE-2026-112913 and CVE-2026-112940.
+    "filelock>=4.2.1",
     # Pure-Python Snowball stemmers (no C extension), used by the optional
     # [fts].language = "de" German FTS mirror index in cache.py.
     "snowballstemmer>=2.2.0",
@@ -203,10 +209,10 @@ markers = [
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true

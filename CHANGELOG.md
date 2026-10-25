@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_search`. It is not a fix for scanned tables, which Tesseract can
   drop entirely. The default is unchanged.
 
+### Removed
+
+- **Python 3.10 is no longer supported; pdf-mcp now needs Python 3.11 or
+  later.** 3.10 reached end of life on 2026-10-01 and gets no more
+  security fixes, and the fixes for 44 dependency advisories (Pillow
+  13.0.0, filelock 4.2.1) no longer install on it. The Claude Desktop
+  bundle runs Python 3.11 to 3.13.
+
 ### Fixed
 
 - **Installing on an Intel Mac no longer compiles `cryptography` from
@@ -37,8 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one and took about three minutes on a Mac with one. Intel Macs now get
   cryptography 48.0.1, the last release with those wheels. Its known
   advisories are in PKCS#7 decryption and certificate path validation,
-  which pdf-mcp does not use. Other platforms keep 50.0.0
+  which pdf-mcp does not use. Every other platform gets 50.0.2
   ([#81](https://github.com/jztan/pdf-mcp/issues/81)).
+
+### Security
+
+- Bumped dependencies to clear newly published advisories: Pillow 12.3.0
+  to 13.0.0 (41 advisories in its image parsers and encoders), pypdf
+  6.19.0 to 6.21.2 (11), filelock 3.25.2 to 4.2.4 (3, reached via
+  `huggingface-hub`), certifi to 2026.10.23, and one each in fastmcp
+  (3.2.4 to 3.4.11), mcp (1.28.1 to 1.30.0) and opentelemetry-api (1.40.0
+  to 1.45.1). fastembed moves from 0.8.0 to 0.9.1 to allow Pillow 13; it
+  produces byte-identical embeddings, so search results do not change.
+  The Claude Desktop bundle installs the locked versions.
 
 ## [3.5.0] - 2026-10-03
 ### Added

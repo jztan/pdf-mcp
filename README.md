@@ -1,7 +1,7 @@
 # pdf-mcp
 
 [![PyPI version](https://img.shields.io/pypi/v/pdf-mcp)](https://pypi.org/project/pdf-mcp/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Issues](https://img.shields.io/github/issues/jztan/pdf-mcp)](https://github.com/jztan/pdf-mcp/issues)
 [![CI](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml)
@@ -57,7 +57,7 @@ in [docs/clients.md](docs/clients.md).
 
 ### Claude Code and other MCP clients
 
-Needs Python 3.10 or later. Install the `pdf-mcp` command with
+Needs Python 3.11 or later. Install the `pdf-mcp` command with
 [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```bash

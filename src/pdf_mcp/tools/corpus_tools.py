@@ -65,7 +65,9 @@ def _corpus_completeness(
         " not run out). Keep budget_seconds below your client's per-call"
         " timeout: a client-side timeout does not undo progress (each"
         " finished doc is already committed), so treat it as a partial"
-        " run and re-issue the same call."
+        " run and re-issue the same call. A corpus of hundreds of files"
+        " takes several such calls (500 docs with embeddings took about"
+        " 8 minutes): loop on `warm_complete`, not on `unprocessed`."
     )
 )
 @pdf_access
@@ -82,7 +84,7 @@ def pdf_corpus_warm(
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
             paths. URLs are not accepted (fetch via a single-doc tool
-            first). Corpora are capped at 100 files; over the cap, a
+            first). Corpora are capped at 500 files; over the cap, a
             directory's error lists its PDFs so a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300). Cached docs are free. Docs that do not
@@ -206,7 +208,9 @@ def pdf_corpus_warm(
         "Get a per-document triage card (title, pages, top TOC entries,"
         " text coverage) for every PDF in a folder or list. Auto-warms"
         " uncached docs up to a time budget; unready docs appear in"
-        " `unprocessed`; call again to continue."
+        " `unprocessed`; call again to continue. A corpus of hundreds of"
+        " files warms over several calls: loop until `warm_complete` is"
+        " true, not until `unprocessed` is empty."
     )
 )
 @pdf_access
@@ -220,7 +224,7 @@ def pdf_corpus_overview(
 
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
-            paths. URLs are not accepted. Corpora are capped at 100
+            paths. URLs are not accepted. Corpora are capped at 500
             files; over the cap, a directory's error lists its PDFs so
             a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
@@ -842,7 +846,10 @@ def _semantic_pending_fields(
     description=_tool_description(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
-        " Auto-warms uncached docs up to a time budget. Keyword terms"
+        " Auto-warms uncached docs up to a time budget. A corpus of"
+        " hundreds of files warms over several calls (500 docs with"
+        " embeddings took about 8 minutes): warm it first with"
+        " pdf_corpus_warm until `warm_complete` is true. Keyword terms"
         " are AND-matched and ranked by BM25 across the whole corpus,"
         " so prefer short specific terms (1-3 words, e.g. entity"
         " names); a longer query that no document fully matches is"
@@ -882,7 +889,7 @@ def pdf_corpus_search(
 
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
-            paths. URLs are not accepted. Corpora are capped at 100
+            paths. URLs are not accepted. Corpora are capped at 500
             files; over the cap, a directory's error lists its PDFs so
             a subset can be passed.
         query: Text to search for. The keyword arm ranks pages that

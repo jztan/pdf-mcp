@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pdf_search`. It is not a fix for scanned tables, which Tesseract can
   drop entirely. The default is unchanged.
 
+### Changed
+
+- **Corpus tools take up to 500 PDFs per call, up from 100.**
+  `pdf_corpus_warm`, `pdf_corpus_overview` and `pdf_corpus_search` now
+  accept a folder or list of up to 500 files, so a corpus of a few hundred
+  documents is ranked in one call instead of being split into calls whose
+  scores cannot be compared. A corpus that size warms over several calls
+  (500 documents with embeddings took about 8 minutes); the over-cap error,
+  the tool descriptions and the tool reference now say so, and say to
+  re-issue `pdf_corpus_warm` until `warm_complete` is true rather than
+  until `unprocessed` is empty. Search time grows with corpus size: about
+  0.3 s per hybrid query at 100 documents, up to about 3 s at 500.
+  `pdf-mcp-warm`'s default `--batch-size` follows the cap
+
 ### Fixed
 
 - **Installing on an Intel Mac no longer compiles `cryptography` from

@@ -279,7 +279,7 @@ def main(argv: "list[str] | None" = None) -> int:
     total_warmed = total_skipped = total_unprocessed = 0
     t0 = time.monotonic()
     # Clamped to CORPUS_MAX_FILES: resolve_corpus rejects a larger batch
-    # outright (its own 100-file cap, meant for one MCP tool call), so a
+    # outright (its own per-call cap, meant for one MCP tool call), so a
     # bigger --batch-size here would make every batch fail with "error"
     # and every file land in skipped instead of being warmed.
     batch_size = max(1, min(args.batch_size, corpus.CORPUS_MAX_FILES))

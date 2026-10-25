@@ -61,7 +61,7 @@ concurrency:
 
 jobs:
   # Audit, lint, format and type-check give the same answer on every Python
-  # version: mypy is pinned to python_version 3.10 in pyproject.toml and the
+  # version: mypy is pinned to python_version 3.11 in pyproject.toml and the
   # audit reads uv.lock, not the interpreter. They ran in all five test legs
   # until 2026-10-04 (~70 s each, ahead of pytest); once is enough.
   lint:
@@ -98,7 +98,7 @@ jobs:
       FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed_cache
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
       fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -203,7 +203,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        python-version: ['3.10', '3.13']
+        python-version: ['3.11', '3.13']
       fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

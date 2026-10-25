@@ -6,9 +6,9 @@
 name = "pdf-mcp-desktop-bundle"
 version = "{version}"
 description = "Claude Desktop bundle for pdf-mcp"
-# Capped below the package's own >=3.10: onnxruntime (via fastembed) ships
+# Capped below the package's own >=3.11: onnxruntime (via fastembed) ships
 # no Intel macOS wheels for 3.14+, and uv would otherwise pick 3.14.
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
 {dependencies}
 ]

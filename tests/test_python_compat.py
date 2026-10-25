@@ -1,14 +1,15 @@
 """Guard against constructs newer than the minimum supported Python.
 
-`pyproject.toml` declares `requires-python = ">=3.10"` and CI runs 3.10
-through 3.14, but development happens on one interpreter, so a 3.11+
-construct passes every local check and only fails in CI. An unguarded
-`import tomllib` (3.11+) did exactly that: because it fails at *collection*,
+`pyproject.toml` declares `requires-python = ">=3.11"` and CI runs 3.11
+through 3.14, but development happens on one interpreter, so a construct
+newer than the floor passes every local check and only fails in CI. An
+unguarded `import tomllib` did exactly that while the floor was 3.10:
+because it fails at *collection*,
 one bad import took the whole suite down with exit 2 rather than failing a
 single test.
 
 This checks statically, so it costs milliseconds and needs no second
-interpreter. It cannot catch everything a real 3.10 run would (new syntax,
+interpreter. It cannot catch everything a real floor-version run would (new syntax,
 new methods on existing types); it catches the import-level case, which is
 the one that kills collection.
 """
@@ -25,7 +26,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Only modules newer than any version this package still supports need an
 # entry; extend when raising or when a newer stdlib module gets used.
 STDLIB_ADDED_IN = {
-    "tomllib": (3, 11),
     "annotationlib": (3, 14),
 }
 
@@ -56,7 +56,7 @@ def _unguarded_top_level_modules(tree: ast.Module) -> set[tuple[str, int]]:
 
     Two forms count as guarded. The idiom this repo uses is a version test
     (`if sys.version_info >= (3, 11): import tomllib / else: import tomli as
-    tomllib`, as in src/pdf_mcp/config.py); `try: import ... / except
+    tomllib`, used while the floor was 3.10); `try: import ... / except
     ImportError:` is accepted too, since it fails over the same way.
     """
     guarded: set[int] = set()
@@ -101,7 +101,7 @@ def test_no_stdlib_imports_newer_than_requires_python() -> None:
                     f"{rel}:{lineno}: `import {module}` needs Python "
                     f"{added[0]}.{added[1]}+, but this package supports "
                     f"{minimum[0]}.{minimum[1]}+. Gate it on a version "
-                    f"check with a backport, as src/pdf_mcp/config.py does: "
+                    f"check with a backport: "
                     f"`if sys.version_info >= ({added[0]}, {added[1]}): "
                     f"import {module} / else: import <backport> as {module}`."
                 )
@@ -131,17 +131,3 @@ def test_the_guard_actually_sees_an_unguarded_import(tmp_path: Path) -> None:
     )
     modules = {name for name, _ in _unguarded_top_level_modules(try_gated)}
     assert "tomllib" not in modules
-
-
-def test_known_backport_sites_stay_guarded() -> None:
-    """The three real call sites use the fallback idiom. If one is
-    'simplified' to a bare import, that is the regression this file exists
-    to catch."""
-    for rel in (
-        "src/pdf_mcp/config.py",
-        "tests/test_docker_contract.py",
-        "tests/test_docs_consistency.py",
-    ):
-        tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
-        modules = {name for name, _ in _unguarded_top_level_modules(tree)}
-        assert "tomllib" not in modules, f"{rel} imports tomllib unguarded"

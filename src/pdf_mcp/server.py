@@ -11,6 +11,7 @@ Usage:
 import os
 from typing import Any
 from . import __version__
+from . import cancel_guard
 from . import updates
 from . import _core
 from ._core import mcp
@@ -83,6 +84,7 @@ class _UpdateNoticeMiddleware(Middleware):
 
 
 mcp.add_middleware(_UpdateNoticeMiddleware())
+cancel_guard.install()
 
 
 def main() -> None:

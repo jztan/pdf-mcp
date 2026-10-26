@@ -61,6 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advisories are in PKCS#7 decryption and certificate path validation,
   which pdf-mcp does not use. Every other platform gets 50.0.2
   ([#81](https://github.com/jztan/pdf-mcp/issues/81)).
+- **A bookmark with no destination no longer breaks section search on its
+  PDF.** Since 3.0.0, one such bookmark made section detection fail for the
+  whole document: `pdf_search(granularity="section")` raised an error
+  instead of returning sections, and corpus warming logged `section
+  detection failed for <file>: -2` and indexed no sections for it.
+  Bookmarks that point outside the document are now skipped, and a PDF
+  whose bookmarks all do falls back to heading detection
+  ([#82](https://github.com/jztan/pdf-mcp/issues/82), reported by
+  @HillsCloud).
 
 ### Security
 

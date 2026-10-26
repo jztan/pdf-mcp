@@ -313,6 +313,21 @@ def _detect_boundaries_from_lines(
     return sections
 
 
+def _usable_toc_entries(
+    toc: list[tuple[int, str, int]] | list[list[Any]],
+    total_pages: int,
+) -> list[Any]:
+    """
+    Drop TOC entries whose page is outside 1..total_pages.
+
+    A bookmark with no destination comes back with page -1 (and an
+    unresolvable one can point past the end). Left in, its start page
+    becomes a negative page index and its bogus start cuts the previous
+    entry's end_page short (issue #82).
+    """
+    return [entry for entry in toc if 1 <= entry[2] <= total_pages]
+
+
 def _toc_entries_to_sections(
     toc: list[tuple[int, str, int]] | list[list[Any]],
     total_pages: int,
@@ -363,9 +378,9 @@ def extract_toc_sections(doc: Any) -> list[Section]:
 
     Caller is responsible for opening and closing the document.
 
-    Raises ValueError if doc.get_toc() is empty.
+    Raises ValueError if the TOC has no entry pointing inside the document.
     """
-    toc = doc.get_toc()
+    toc = _usable_toc_entries(doc.get_toc(), total_pages=len(doc))
     sections = _toc_entries_to_sections(toc, total_pages=len(doc))
     for s in sections:
         if s.start_page > s.end_page:
@@ -474,7 +489,7 @@ def derive_sections(pdf_path: str) -> list[Section]:
     """
     doc = open_pdf(pdf_path)
     try:
-        if doc.get_toc():
+        if _usable_toc_entries(doc.get_toc(), total_pages=len(doc)):
             return extract_toc_sections(doc)
     finally:
         doc.close()

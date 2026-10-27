@@ -3,6 +3,7 @@
 import os
 import pickle
 import sqlite3
+import threading
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
@@ -2322,3 +2323,94 @@ class TestTwoPhaseWarm:
             clock=SteppingClock(0.01),
         )
         assert out["warm_complete"] is True
+
+
+class TestBackgroundEmbedder:
+    """Issue #89: docs a warm call left with text but no embeddings keep
+    embedding between calls, and stop for any warm call."""
+
+    MODEL = "fake-model"
+
+    @staticmethod
+    def _embed(texts):
+        return [b"\x00\x00\x80?\x00\x00\x00@" for _ in texts]
+
+    @pytest.fixture(autouse=True)
+    def _enabled(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "1")
+        yield
+        corpus.BACKGROUND_EMBED.stop()
+        corpus.BACKGROUND_EMBED.join(5)
+
+    def _text_warm(self, corpus_dir, cache):
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(files, 60, cache, clock=SteppingClock(0))
+        return [(d["path"], d["pages"]) for d in out["docs"]]
+
+    def _embedded(self, path, cache):
+        return corpus._cached_pages(path, cache, True, self.MODEL) is not None
+
+    def test_embeds_text_only_docs_after_the_call(self, corpus_dir, cache):
+        docs = self._text_warm(corpus_dir, cache)
+        assert not any(self._embedded(p, cache) for p, _ in docs)
+        started = corpus.BACKGROUND_EMBED.start(docs, cache, self.MODEL, self._embed)
+        assert started == len(docs)
+        assert corpus.BACKGROUND_EMBED.join(10)
+        assert all(self._embedded(p, cache) for p, _ in docs)
+        assert corpus.BACKGROUND_EMBED.pending() == []
+
+    def test_a_warm_call_stops_it_before_it_writes(self, corpus_dir, cache):
+        docs = self._text_warm(corpus_dir, cache)
+        entered, release = threading.Event(), threading.Event()
+
+        def slow_embed(texts):
+            entered.set()
+            release.wait(5)
+            return self._embed(texts)
+
+        corpus.BACKGROUND_EMBED.start(docs, cache, self.MODEL, slow_embed)
+        assert entered.wait(5)
+        corpus.warm_docs(
+            [],
+            1,
+            cache,
+            embeddings=True,
+            model_name=self.MODEL,
+            embed=self._embed,
+            clock=SteppingClock(0),
+        )
+        release.set()
+        assert corpus.BACKGROUND_EMBED.join(5)
+        assert not any(self._embedded(p, cache) for p, _ in docs)
+
+    def test_a_text_only_warm_call_leaves_it_running(self, corpus_dir, cache):
+        docs = self._text_warm(corpus_dir, cache)
+        entered, release = threading.Event(), threading.Event()
+
+        def slow_embed(texts):
+            entered.set()
+            release.wait(5)
+            return self._embed(texts)
+
+        corpus.BACKGROUND_EMBED.start(docs, cache, self.MODEL, slow_embed)
+        assert entered.wait(5)
+        corpus.warm_docs([], 1, cache, clock=SteppingClock(0))
+        release.set()
+        assert corpus.BACKGROUND_EMBED.join(10)
+        assert all(self._embedded(p, cache) for p, _ in docs)
+
+    def test_skips_a_doc_whose_text_is_no_longer_cached(self, corpus_dir, cache):
+        docs = self._text_warm(corpus_dir, cache)
+        changed = docs[0][0]
+        st = os.stat(changed)
+        os.utime(changed, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+        corpus.BACKGROUND_EMBED.start(docs, cache, self.MODEL, self._embed)
+        assert corpus.BACKGROUND_EMBED.join(10)
+        assert not self._embedded(changed, cache)
+        assert all(self._embedded(p, cache) for p, _ in docs[1:])
+
+    def test_off_when_disabled(self, corpus_dir, cache, monkeypatch):
+        docs = self._text_warm(corpus_dir, cache)
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "0")
+        assert corpus.BACKGROUND_EMBED.start(docs, cache, self.MODEL, self._embed) == 0
+        assert corpus.BACKGROUND_EMBED.pending() == []

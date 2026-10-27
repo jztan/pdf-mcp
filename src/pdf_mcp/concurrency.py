@@ -18,6 +18,11 @@ the client's timeout (issue #82, where Claude Desktop cancelled two queued
 calls at 4 minutes). A waiter that gives up leaves its ticket behind;
 the lock skips abandoned tickets when it moves to the next one.
 
+Background work (issue #89, embeddings between warm calls) holds the same
+lock but never queues for it: it takes the lock only when no call holds it
+or waits for it (``background_access``), and inside it every yield gives
+the lock up until the waiting calls are all done.
+
 Stdlib only: imported by ``corpus`` (pure logic) and by every tool module.
 """
 
@@ -27,10 +32,15 @@ import functools
 import inspect
 import threading
 import time
-from typing import Callable, ParamSpec, TypeVar
+from contextlib import contextmanager
+from typing import Callable, Iterator, ParamSpec, TypeVar
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+
+class BackgroundStopped(Exception):
+    """A background job was stopped while it waited for the lock."""
 
 
 class FairLock:
@@ -131,6 +141,54 @@ class FairLock:
             self._owner = me
             self._depth = depth
 
+    def acquire_when_idle(self, stop: threading.Event, poll: float = 0.05) -> bool:
+        """Take the lock once nobody holds it or waits for it.
+
+        For background work: it never takes a ticket while a call is
+        active, so a call never queues behind it. False once ``stop`` is
+        set, without the lock.
+        """
+        me = threading.get_ident()
+        with self._cond:
+            while not stop.is_set():
+                queued = self._next_ticket - self._serving - len(self._abandoned)
+                if self._owner is None and queued == 0:
+                    # Every ticket left in the range was abandoned.
+                    self._abandoned.clear()
+                    self._serving = self._next_ticket
+                    self._next_ticket += 1
+                    self._owner = me
+                    self._depth = 1
+                    return True
+                self._cond.wait(poll)
+            return False
+
+    def yield_to_waiters(self, stop: threading.Event) -> None:
+        """``yield_turn`` for background work: when anyone waits, release
+        and take the lock back only once it is idle again, so a call that
+        yields mid-way (between pages) finishes before background work
+        resumes. Raises BackgroundStopped, without the lock, once ``stop``
+        is set.
+        """
+        me = threading.get_ident()
+        with self._cond:
+            if self._owner != me:
+                raise RuntimeError(
+                    "yield_to_waiters by a thread that does not hold the lock"
+                )
+            waiting = self._next_ticket - self._serving - len(self._abandoned) - 1
+            if waiting <= 0 and not stop.is_set():
+                return
+            depth = self._depth
+            self._owner = None
+            self._depth = 0
+            self._advance()
+            self._cond.notify_all()
+        if not self.acquire_when_idle(stop):
+            raise BackgroundStopped
+        with self._cond:
+            self._depth = depth
+
 
 PDF_ACCESS = FairLock()
 
@@ -209,4 +267,30 @@ def yield_pdf_access() -> None:
     ``pdf-mcp-warm`` CLI calls the same loops without it) or nobody waits.
     """
     if PDF_ACCESS.held_by_current_thread():
-        PDF_ACCESS.yield_turn()
+        stop = getattr(_background, "stop", None)
+        if stop is None:
+            PDF_ACCESS.yield_turn()
+        else:
+            PDF_ACCESS.yield_to_waiters(stop)
+
+
+_background = threading.local()
+
+
+@contextmanager
+def background_access(stop: threading.Event) -> Iterator[None]:
+    """Hold ``PDF_ACCESS`` for one piece of background work.
+
+    Taken only when the lock is idle, and every ``yield_pdf_access`` inside
+    gives it up until waiting calls are done. Raises BackgroundStopped once
+    ``stop`` is set, at the start or at any yield.
+    """
+    if not PDF_ACCESS.acquire_when_idle(stop):
+        raise BackgroundStopped
+    _background.stop = stop
+    try:
+        yield
+    finally:
+        _background.stop = None
+        if PDF_ACCESS.held_by_current_thread():
+            PDF_ACCESS.release()

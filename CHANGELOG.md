@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- **Embeddings keep going between corpus calls.** Embedding used to stop
+  whenever a call returned, so a 500-PDF folder needed 35 `pdf_corpus_warm`
+  calls (about 28 minutes) for its embeddings, and any pause between calls
+  was lost. Documents a call leaves with text but no embeddings now keep
+  embedding in the server after it returns, and the next call finds them
+  cached. `pdf_corpus_warm` reports how many in `embedding_in_background`,
+  and `pdf_corpus_search`'s `embeddings_pending` carries `in_background`.
+  The work runs only while no tool call is running or waiting; a call
+  that arrives mid-way waits for the current encode step (up to about
+  half a second measured). It stops for the next embedding warm call, `pdf_cache_clear` and server exit.
+  `PDF_MCP_BACKGROUND_EMBED=0` turns it off
+  ([#89](https://github.com/jztan/pdf-mcp/issues/89))
 - **`pdf_read_pages` points at the cells a scan's OCR layer probably
   misread.** Many scanned PDFs carry text from an OCR pass made when they
   were digitised, and it can be wrong in ways that look like data: in one

@@ -14,6 +14,7 @@ import os
 import logging
 import math
 import re
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, wait
 from concurrent.futures.process import BrokenProcessPool
@@ -22,7 +23,7 @@ from typing import Any, Callable
 
 
 from .backend.bytesopen import is_password_locked
-from .concurrency import yield_pdf_access
+from .concurrency import BackgroundStopped, background_access, yield_pdf_access
 from .docopen import open_pdf
 
 from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
@@ -585,8 +586,10 @@ def _embed_doc_batched(
     done = len(non_empty) - len(missing)
     idx = 0
     while idx < len(missing):
-        if idx > 0 and clock() > deadline:
-            return False, done
+        if idx > 0:
+            yield_pdf_access()
+            if clock() > deadline:
+                return False, done
         batch = missing[idx : idx + WARM_EMBED_BATCH_PAGES]
         per_page = {pn: page_embedding_units(non_empty[pn]) for pn in batch}
         flat = [c for pn in batch for c in per_page[pn]]
@@ -1087,6 +1090,121 @@ def _collect_background(cache: Any) -> None:
             logger.warning("background extraction of %s failed: %s", path, exc)
 
 
+class BackgroundEmbedder:
+    """Embeds, between calls, the docs a warm call left text-only (#89).
+
+    A 500-doc warm had its text in 90 s but needed 35 more calls (about
+    28 minutes) for embeddings, because embedding stopped whenever a call
+    returned. After a call, this thread keeps embedding those docs from
+    cached text, smallest first, in the same durable batches.
+
+    It writes from the server process under ``PDF_ACCESS`` like any call,
+    but takes the lock only when no call holds or waits for it and gives
+    it up at every yield until waiting calls are done (``background_access``).
+    Any embedding warm call, ``pdf_cache_clear`` and server exit stop it; a batch
+    encoded after the stop is dropped, never written.
+    ``PDF_MCP_BACKGROUND_EMBED=0`` turns it off.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._stop: threading.Event | None = None
+        self._thread: threading.Thread | None = None
+        self._pending: list[str] = []
+
+    @staticmethod
+    def enabled() -> bool:
+        return os.environ.get("PDF_MCP_BACKGROUND_EMBED", "1").strip() != "0"
+
+    def start(
+        self,
+        docs: list[tuple[str, int]],
+        cache: Any,
+        model_name: str,
+        embed: Callable[[list[str]], list[bytes]],
+    ) -> int:
+        """Embed ``docs`` ((path, pages) pairs) in the background; returns
+        how many were handed over (0 when off or nothing is pending)."""
+        self.stop()
+        if not docs or not self.enabled():
+            return 0
+        order = [p for p, _ in sorted(docs, key=lambda d: (d[1], d[0]))]
+        stop = threading.Event()
+        thread = threading.Thread(
+            target=self._run,
+            args=(order, cache, model_name, embed, stop),
+            name="pdf-mcp-background-embed",
+            daemon=True,
+        )
+        with self._lock:
+            self._stop = stop
+            self._thread = thread
+            self._pending = list(order)
+        thread.start()
+        return len(order)
+
+    def stop(self) -> None:
+        """Ask the thread to stop. Never waits: the caller may hold the
+        lock the thread needs to finish its current step."""
+        with self._lock:
+            if self._stop is not None:
+                self._stop.set()
+            self._stop = None
+            self._pending = []
+
+    def pending(self) -> list[str]:
+        with self._lock:
+            return list(self._pending)
+
+    def join(self, timeout: float) -> bool:
+        """Wait for the thread to end (tests, shutdown); True if it did."""
+        with self._lock:
+            thread = self._thread
+        if thread is None:
+            return True
+        thread.join(timeout)
+        return not thread.is_alive()
+
+    def _done(self, stop: threading.Event, path: str) -> None:
+        with self._lock:
+            if self._stop is stop and path in self._pending:
+                self._pending.remove(path)
+
+    def _run(
+        self,
+        paths: list[str],
+        cache: Any,
+        model_name: str,
+        embed: Callable[[list[str]], list[bytes]],
+        stop: threading.Event,
+    ) -> None:
+        def guarded(texts: list[str]) -> list[bytes]:
+            vecs = embed(texts)
+            if stop.is_set():
+                raise BackgroundStopped
+            return vecs
+
+        for path in paths:
+            if stop.is_set():
+                return
+            try:
+                with background_access(stop):
+                    pages = _cached_pages(path, cache, False, model_name)
+                    if pages is not None:
+                        texts = cache.get_pages_text(path, list(range(pages)))
+                        _embed_doc_batched(
+                            path, texts, cache, model_name, guarded, float("inf")
+                        )
+            except BackgroundStopped:
+                return
+            except Exception as exc:  # noqa: BLE001 - one doc; a call retries it
+                logger.warning("background embedding of %s failed: %s", path, exc)
+            self._done(stop, path)
+
+
+BACKGROUND_EMBED = BackgroundEmbedder()
+
+
 def _warm_batch(
     items: list[tuple[str, int]],
     budget_seconds: float,
@@ -1215,6 +1333,11 @@ def warm_docs(
     docs: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
     uncached: list[tuple[str, int]] = []
+    if embeddings and embed is not None:
+        # This call embeds now; the tool hands what is still pending back
+        # to the background thread when it returns. A text-only call leaves
+        # it running: it only works while no call holds the lock anyway.
+        BACKGROUND_EMBED.stop()
     _collect_background(cache)
 
     for path in files:

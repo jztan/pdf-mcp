@@ -176,6 +176,12 @@ _PER_DOC_TABLES = (
     "pdf_section_fts_cjk",
     "pdf_section_fts_de",
 )
+# Days a cached PDF may be missing before its rows are purged. Long enough
+# that an external or network drive unplugged over a week keeps its cache.
+_MISSING_GRACE_DAYS = 7
+_SECTION_FTS_TABLES = frozenset(
+    ("pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de")
+)
 # Paths per DELETE ... IN (...): under the 999-variable limit of old SQLite.
 _PURGE_CHUNK = 500
 
@@ -619,7 +625,8 @@ class PDFCache:
     def __init__(
         self,
         cache_dir: Path | None = None,
-        ttl_hours: int = 24,
+        ttl_hours: int | None = None,
+        max_bytes: int | None = None,
         images_dir: Path | None = None,
         fts_language: str | None = None,
     ):
@@ -628,7 +635,10 @@ class PDFCache:
 
         Args:
             cache_dir: Directory to store cache database. Defaults to ~/.cache/pdf-mcp
-            ttl_hours: Time-to-live for cache entries in hours
+            ttl_hours: Opt-in time expiry: drop a document not accessed for
+                this many hours. None (default) keeps it while its PDF exists.
+            max_bytes: Size cap; over it the sweep evicts least recently
+                used documents. None (default) means no cap.
             images_dir: Directory to store extracted images.
                 Defaults to cache_dir/images
             fts_language: None (default porter/English FTS) or "de" to
@@ -649,6 +659,7 @@ class PDFCache:
         os.chmod(str(self.cache_dir), 0o700)
         self.db_path = self.cache_dir / "cache.db"
         self.ttl_hours = ttl_hours
+        self.max_bytes = max_bytes
         self.images_dir = images_dir or (self.cache_dir / "images")
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
@@ -799,7 +810,8 @@ class PDFCache:
                     toc JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    content_trust_json TEXT DEFAULT NULL
+                    content_trust_json TEXT DEFAULT NULL,
+                    missing_since TIMESTAMP DEFAULT NULL
                 );
 
                 -- Global content-trust version stamp (single row, id=0).
@@ -993,6 +1005,14 @@ class PDFCache:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
+                )
+
+            # pdf_metadata: when the sweep first found the PDF gone (#88)
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "missing_since" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata"
+                    " ADD COLUMN missing_since TIMESTAMP DEFAULT NULL"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -2395,13 +2415,20 @@ class PDFCache:
 
     # ==================== Cache Management ====================
 
-    def _purge_paths(self, conn: sqlite3.Connection, paths: list[str]) -> None:
+    def _purge_paths(
+        self, conn: sqlite3.Connection, paths: list[str], changed: bool = False
+    ) -> None:
         """Delete every cached row and file for ``paths``.
 
         The one place a document leaves the cache, so a table added later
         only has to be listed in ``_PER_DOC_TABLES``. Tables that a cache
         may not have (FTS5 missing, ``page_blocks`` created on first write,
         the German pair) are skipped.
+
+        ``changed=True`` is for a PDF that still exists but changed on disk:
+        its section index is kept, because those tables carry no mtime and
+        the next warm replaces them only when re-detection succeeds (a failed
+        detection must not wipe a good index).
         """
         if not paths:
             return
@@ -2423,6 +2450,8 @@ class PDFCache:
                 ).fetchall():
                     _unlink_quietly(on_disk)
             for table in _PER_DOC_TABLES:
+                if changed and table in _SECTION_FTS_TABLES:
+                    continue
                 if table in present:
                     conn.execute(
                         f"DELETE FROM {table} WHERE file_path IN ({placeholders})",
@@ -2432,30 +2461,87 @@ class PDFCache:
     def _invalidate_file(self, path: str) -> None:
         """Remove all cache entries for a file."""
         with self._connect() as conn:
-            self._purge_paths(conn, [path])
+            self._purge_paths(conn, [path], changed=True)
 
     def clear_expired(self) -> int:
         """
-        Remove expired cache entries.
+        Remove cache entries that can no longer be served or are not wanted.
+
+        A document's rows stay while its PDF exists unchanged. The sweep
+        drops a document whose PDF changed on disk, or has been missing for
+        ``_MISSING_GRACE_DAYS`` (the wait spares an unmounted drive), or was
+        not accessed within ``ttl_hours`` when that is set.
 
         Returns:
             Number of files cleared
         """
         with self._connect() as conn:
-            # Get expired file paths. Compute the cutoff with SQLite's own
-            # clock — accessed_at is written via CURRENT_TIMESTAMP (UTC,
-            # "YYYY-MM-DD HH:MM:SS"), so comparing it against a Python
-            # datetime.now().isoformat() (local timezone, "T" separator)
-            # mis-sorts fresh rows as expired. datetime('now', ?) keeps both
-            # sides in the same clock and format.
-            expired = conn.execute(
-                "SELECT file_path FROM pdf_metadata"
-                " WHERE accessed_at < datetime('now', ?)",
-                (f"-{self.ttl_hours} hours",),
-            ).fetchall()
+            purged: list[str] = []
+            changed: list[str] = []
+            present: list[str] = []
+            missing: list[str] = []
+            for path, cached_mtime in conn.execute(
+                "SELECT file_path, file_mtime FROM pdf_metadata"
+            ).fetchall():
+                try:
+                    mtime, _ = self._get_file_info(path)
+                except OSError:
+                    # Not found, or unreadable for now (permissions, a
+                    # flaky network share): both wait out the grace period.
+                    missing.append(path)
+                    continue
+                if mtime == cached_mtime:
+                    present.append(path)
+                else:
+                    changed.append(path)  # rows can never be served
+            for start in range(0, len(missing), _PURGE_CHUNK):
+                chunk = missing[start : start + _PURGE_CHUNK]
+                marks = ",".join("?" * len(chunk))
+                conn.execute(
+                    "UPDATE pdf_metadata SET missing_since = CURRENT_TIMESTAMP"
+                    f" WHERE missing_since IS NULL AND file_path IN ({marks})",
+                    chunk,
+                )
+                # Same clock and format as CURRENT_TIMESTAMP (see TTL below).
+                purged.extend(
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT file_path FROM pdf_metadata"
+                        " WHERE missing_since < datetime('now', ?)"
+                        f" AND file_path IN ({marks})",
+                        [f"-{_MISSING_GRACE_DAYS} days", *chunk],
+                    ).fetchall()
+                )
+            for start in range(0, len(present), _PURGE_CHUNK):
+                chunk = present[start : start + _PURGE_CHUNK]
+                marks = ",".join("?" * len(chunk))
+                conn.execute(
+                    "UPDATE pdf_metadata SET missing_since = NULL"
+                    f" WHERE missing_since IS NOT NULL AND file_path IN ({marks})",
+                    chunk,
+                )
 
-            expired_paths = [row[0] for row in expired]
-            self._purge_paths(conn, expired_paths)
+            if self.ttl_hours is not None:
+                # Compute the cutoff with SQLite's own clock: accessed_at is
+                # written via CURRENT_TIMESTAMP (UTC, "YYYY-MM-DD HH:MM:SS"),
+                # so comparing it against a Python datetime.now().isoformat()
+                # (local timezone, "T" separator) mis-sorts fresh rows as
+                # expired. datetime('now', ?) keeps both sides in the same
+                # clock and format.
+                purged.extend(
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT file_path FROM pdf_metadata"
+                        " WHERE accessed_at < datetime('now', ?)",
+                        (f"-{self.ttl_hours} hours",),
+                    ).fetchall()
+                )
+
+            removed = set(purged)
+            self._purge_paths(conn, list(removed))
+            changed = [p for p in changed if p not in removed]
+            self._purge_paths(conn, changed, changed=True)
+            expired_paths = [*removed, *changed]
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
         with self._connect() as conn2:

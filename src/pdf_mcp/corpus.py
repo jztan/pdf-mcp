@@ -64,10 +64,11 @@ CORPUS_MAX_FILES = 500
 # Appended to every over-cap hint: a corpus near the cap cannot warm inside
 # one client call, and an empty `unprocessed` only means the budget held.
 _MULTI_CALL_WARM = (
-    " A corpus of hundreds of files warms over several calls (500 docs with"
-    " embeddings took about 30 minutes): re-issue pdf_corpus_warm with the"
-    " same paths until warm_complete is true; an empty unprocessed is not"
-    " enough."
+    " A corpus of hundreds of files warms over several calls (500 docs: text"
+    " about 90 s, so keyword search works almost at once; embeddings for"
+    " hybrid and semantic search about 30 minutes): re-issue pdf_corpus_warm"
+    " with the same paths until warm_complete is true; an empty unprocessed"
+    " is not enough."
 )
 
 # Most names an over-cap error lists back. A folder above the cap cannot be

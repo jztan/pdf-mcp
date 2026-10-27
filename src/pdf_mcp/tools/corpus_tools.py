@@ -80,8 +80,8 @@ def _corpus_busy(waited: float) -> dict[str, Any]:
         " timeout: a client-side timeout does not undo progress (each"
         " finished doc is already committed), so treat it as a partial"
         " run and re-issue the same call. A corpus of hundreds of files"
-        " takes several such calls (500 docs with embeddings took about"
-        " 30 minutes): loop on `warm_complete`, not on `unprocessed`."
+        " takes several such calls (500 docs: text about 90 s, embeddings"
+        " about 30 minutes): loop on `warm_complete`, not on `unprocessed`."
     )
 )
 @pdf_access_within("budget_seconds", _corpus_busy)
@@ -863,8 +863,9 @@ def _semantic_pending_fields(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
         " Auto-warms uncached docs up to a time budget. A corpus of"
-        " hundreds of files warms over several calls (500 docs with"
-        " embeddings took about 30 minutes): warm it first with"
+        " hundreds of files warms over several calls (500 docs: text about"
+        " 90 s, embeddings about 30 minutes; mode='auto' answers by keyword"
+        " until embeddings finish): warm it first with"
         " pdf_corpus_warm until `warm_complete` is true. Keyword terms"
         " are AND-matched and ranked by BM25 across the whole corpus,"
         " so prefer short specific terms (1-3 words, e.g. entity"

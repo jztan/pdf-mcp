@@ -91,6 +91,7 @@ def pdf_corpus_warm(
     embeddings: bool = False,
     recursive: bool = False,
     sections: bool = False,
+    detail: bool = False,
 ) -> dict[str, Any]:
     """
     Warm a corpus of local PDFs into the cache within a time budget.
@@ -119,11 +120,18 @@ def pdf_corpus_warm(
             exceed a timeout-bounded MCP client's budget on a large
             document, even though the corpus was otherwise fully warmed.
             Pass this when you know section-granularity search is coming.
+        detail: Also list a row for every already-cached doc. Off by
+            default: on a large corpus each resume call would repeat
+            hundreds of unchanged "cached" rows.
 
     Returns:
         - docs: per-doc rows {path, status:
           "warmed"|"cached"|"partial"|"text_only", pages,
-          embeddings_cached, text_coverage}. With embeddings=True, text
+          embeddings_cached, text_coverage} for the docs this call
+          changed. Already-cached docs are counted in cached_docs
+          instead; one with text_coverage 'none' is still listed, since
+          it needs OCR to become searchable. detail=True lists every
+          cached doc as well. With embeddings=True, text
           is warmed for every document before any is embedded; a doc
           whose embeddings have not started yet is "text_only" (it is
           searchable by keyword) and stays in `unprocessed`. A very large
@@ -152,6 +160,11 @@ def pdf_corpus_warm(
           reported, and an empty `unprocessed` on its own means only
           that the budget did not run out, not that the corpus is warm
         - unwarmed: how many files are not warm (unprocessed + skipped)
+        - cached_docs: docs that were already cached when this call
+          started, listed in docs or not; cached_without_embeddings: how
+          many of them hold no embeddings for the configured model, so
+          a text-only call still answers whether an embeddings pass is
+          needed
         - corpus_size, warmed_this_call, budget_exhausted
 
     Error contract: call-level failures (missing directory, empty
@@ -202,8 +215,24 @@ def pdf_corpus_warm(
         embed=embed_fn,
         sections=sections,
     )
+    # Issue #86: a 500-doc warm took 37 calls and returned a row per doc on
+    # each (73 to 124 KB a call, 3.7 MB in all). Cached rows carry nothing
+    # new after the first call, so they are counted, except a doc with no
+    # extractable text, which the caller must OCR.
+    cached = [d for d in warm["docs"] if d["status"] == "cached"]
+    docs = warm["docs"]
+    if not detail:
+        docs = [
+            d
+            for d in docs
+            if d["status"] != "cached" or d.get("text_coverage") == "none"
+        ]
     return {
-        "docs": warm["docs"],
+        "docs": docs,
+        "cached_docs": len(cached),
+        "cached_without_embeddings": sum(
+            1 for d in cached if not d.get("embeddings_cached")
+        ),
         "unprocessed": warm["unprocessed"],
         "skipped": res["skipped"] + warm["skipped"],
         "corpus_size": len(res["files"]),

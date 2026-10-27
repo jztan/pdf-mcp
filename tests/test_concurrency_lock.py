@@ -495,7 +495,8 @@ def test_pdf_access_within_reports_the_time_spent_queueing(monkeypatch):
     time.sleep(0.3)
     lock.release()
     t.join(timeout=10)
-    assert 0.3 <= result[0]["waited"] < 5
+    # Lower bound below the 0.3 s sleep: Windows ticks monotonic() at ~15.6 ms.
+    assert 0.2 <= result[0]["waited"] < 5
     assert concurrency.lock_wait_seconds() == 0.0
 
 

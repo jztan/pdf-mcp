@@ -2812,6 +2812,27 @@ class TestPdfSearchSectionMode:
         for key in ("section_id", "title", "start_page", "end_page", "score"):
             assert key in sec
 
+    def test_dangling_bookmark_does_not_break_section_search(
+        self, isolated_server, tmp_path
+    ):
+        """A bookmark with no destination raised IndexError(-2) out of the
+        tool instead of returning sections (issue #82)."""
+        path = tmp_path / "dangling.pdf"
+        doc = pymupdf.open()
+        for body in ("intro text", "cover note text", "graph attention body"):
+            doc.new_page().insert_text((50, 100), body, fontsize=11)
+        doc.set_toc([[1, "Intro", 1], [1, "Cover note", 2], [1, "Methods", 3]])
+        xref = doc.get_outline_xrefs()[1]
+        doc.xref_set_key(xref, "Dest", "null")
+        doc.xref_set_key(xref, "A", "null")
+        doc.save(str(path))
+        doc.close()
+
+        result = pdf_search(str(path), "graph attention", granularity="section")
+        assert "error" not in result
+        assert [s["title"] for s in result["sections"]] == ["Methods"]
+        assert result["total_sections"] == 2
+
     def test_no_keyword_match_returns_empty_sections(
         self, isolated_server, sample_pdf_with_toc_sections
     ):

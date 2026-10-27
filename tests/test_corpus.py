@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pymupdf
 
-from pdf_mcp import corpus, extractor
+from pdf_mcp import corpus, extractor, warm_pool
 from pdf_mcp.extractor import _warm_extract_worker
 import pytest
 
@@ -493,8 +493,16 @@ class TestWarmPartialVerification:
 
 
 class TestWarmWorkerCount:
-    def test_below_gate_is_sequential(self):
-        assert corpus._warm_worker_count(3, embeddings=False) == 1
+    def test_one_cold_doc_goes_to_the_pool(self, monkeypatch):
+        # Issue #82: in-process extraction cannot stop at the deadline,
+        # so even a single cold doc extracts in the pool by default.
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        assert corpus._warm_in_process(1) is False
+        assert corpus._warm_worker_count(1, embeddings=False) == 1
+
+    def test_env_1_keeps_extraction_in_process(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        assert corpus._warm_in_process(100) is True
 
     def test_text_cap_is_8(self, monkeypatch):
         monkeypatch.setattr("pdf_mcp.parallel.os.cpu_count", lambda: 16)
@@ -532,13 +540,13 @@ class TestConcurrentWarm:
         # sequential-vs-sequential (and stay green) if _force_pool's
         # monkeypatching ever stops taking effect.
         pool_calls = []
-        real_pool = corpus.ProcessPoolExecutor
+        real_pool = warm_pool.ProcessPoolExecutor
 
         def spy(*args, **kwargs):
             pool_calls.append((args, kwargs))
             return real_pool(*args, **kwargs)
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", spy)
         out = corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
 
         assert pool_calls, "expected _warm_concurrent to create a pool"
@@ -650,13 +658,13 @@ class TestConcurrentWarm:
         corpus.warm_docs(files, 600, seq_cache, clock=SteppingClock(0))
         self._force_pool(monkeypatch)
         pool_calls = []
-        real_pool = corpus.ProcessPoolExecutor
+        real_pool = warm_pool.ProcessPoolExecutor
 
         def spy(*args, **kwargs):
             pool_calls.append(1)
             return real_pool(*args, **kwargs)
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", spy)
         corpus.warm_docs(files, 600, con_cache, clock=SteppingClock(0))
 
         assert pool_calls, "expected the concurrent path to create a pool"
@@ -670,24 +678,24 @@ class TestConcurrentWarm:
     def test_pool_uses_spawn_context(self, corpus_dir, cache, monkeypatch):
         self._force_pool(monkeypatch)
         captured = {}
-        real_pool = corpus.ProcessPoolExecutor
+        real_pool = warm_pool.ProcessPoolExecutor
 
         def spy(*args, **kwargs):
             captured.update(kwargs)
             return real_pool(*args, **kwargs)
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", spy)
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", spy)
         corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
         assert captured["mp_context"].get_start_method() == "spawn"
 
-    def test_small_corpus_never_creates_pool(self, corpus_dir, cache, monkeypatch):
-        # 3 docs < WARM_DOC_GATE (4): must stay sequential.
-        def boom(*args, **kwargs):
-            raise AssertionError("pool created for a small corpus")
-
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+    def test_small_corpus_uses_the_pool(self, corpus_dir, cache, monkeypatch):
+        # Production default (no gate patch): 3 cold docs still go to the
+        # pool, so the deadline can stop waiting for them (issue #82).
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        sent = self._spy_submissions(monkeypatch)
         out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
         assert out["warmed_this_call"] == 3
+        assert sorted(sent) == ["alpha.pdf", "bravo.pdf", "charlie.pdf"]
 
     def test_env_1_forces_sequential(self, corpus_dir, cache, monkeypatch):
         monkeypatch.setattr(corpus, "WARM_DOC_GATE", 1)
@@ -696,29 +704,61 @@ class TestConcurrentWarm:
         def boom(*args, **kwargs):
             raise AssertionError("pool created despite PDF_MCP_MAX_WORKERS=1")
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", boom)
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", boom)
         out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
         assert out["warmed_this_call"] == 3
 
-    def test_budget_trip_stops_submissions(self, corpus_dir, cache, monkeypatch):
-        # Clock steps 6s/call, budget 10s: submit-checks read 6 (charlie,
-        # 1p) then 12 (> 10, stop). Exactly the sequential expectations.
-        self._force_pool(monkeypatch)
-        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
-        assert out["warmed_this_call"] == 1
-        assert len(out["unprocessed"]) == 2
-        assert out["budget_exhausted"] is True
-        warmed = [d for d in out["docs"] if d["status"] == "warmed"]
-        assert Path(warmed[0]["path"]).name == "charlie.pdf"
+    def _spy_submissions(self, monkeypatch):
+        """Paths actually sent to a worker (adopted jobs are not resent)."""
+        sent: list[str] = []
+        real_pool = warm_pool.ProcessPoolExecutor
 
-    def test_in_flight_docs_drain_after_trip(self, corpus_dir, cache, monkeypatch):
-        # Steps 4s, budget 10s: checks read 4 (submit charlie), 8 (submit
-        # alpha), 12 (trip). Both in-flight docs still finalize.
+        class SpyPool(real_pool):
+            def submit(self, fn, path, *args):
+                sent.append(Path(path).name)
+                return super().submit(fn, path, *args)
+
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", SpyPool)
+        return sent
+
+    def test_budget_trip_stops_submissions(self, corpus_dir, cache, monkeypatch):
+        # Clock steps 6s/call, budget 10s: the submit check reads 6
+        # (charlie, 1p), then 12 (> 10, stop). charlie is still in flight
+        # at the deadline, so it is reported unprocessed, not waited for.
         self._force_pool(monkeypatch)
-        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(4))
-        assert out["warmed_this_call"] == 2
-        assert [Path(p).name for p in out["unprocessed"]] == ["bravo.pdf"]
+        sent = self._spy_submissions(monkeypatch)
+        out = corpus.warm_docs(_files(corpus_dir), 10, cache, clock=SteppingClock(6))
+        assert sent == ["charlie.pdf"]
+        assert out["warmed_this_call"] == 0
+        assert len(out["unprocessed"]) == 3
         assert out["budget_exhausted"] is True
+
+    def test_in_flight_docs_are_left_to_the_next_call(
+        self, corpus_dir, cache, monkeypatch
+    ):
+        """Issue #82: the deadline does not wait for in-flight extractions.
+
+        Steps 4s, budget 10s: checks read 4 (submit charlie), 8 (submit
+        alpha), 12 (trip). The call returns with all three unprocessed;
+        the next call collects or adopts charlie and alpha instead of
+        extracting them again, and sends only bravo to a worker.
+        """
+        self._force_pool(monkeypatch)
+        sent = self._spy_submissions(monkeypatch)
+        files = _files(corpus_dir)
+        out = corpus.warm_docs(files, 10, cache, clock=SteppingClock(4))
+        assert sent == ["charlie.pdf", "alpha.pdf"]
+        assert out["warmed_this_call"] == 0
+        assert sorted(Path(p).name for p in out["unprocessed"]) == [
+            "alpha.pdf",
+            "bravo.pdf",
+            "charlie.pdf",
+        ]
+        assert out["budget_exhausted"] is True
+
+        done = corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
+        assert done["warm_complete"] is True
+        assert sent == ["charlie.pdf", "alpha.pdf", "bravo.pdf"]
 
     def test_resume_completes_after_trip(self, corpus_dir, cache, monkeypatch):
         self._force_pool(monkeypatch)
@@ -786,7 +826,10 @@ class TestConcurrentWarm:
             def submit(self, fn, *args):
                 raise BrokenProcessPool("worker died")
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", BrokenPool)
+            def shutdown(self, *args, **kwargs):
+                pass
+
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", BrokenPool)
         out = corpus.warm_docs(_files(corpus_dir), 600, cache, clock=SteppingClock(0))
         assert out["warmed_this_call"] == 3
         assert out["skipped"] == []
@@ -840,9 +883,14 @@ class TestConcurrentWarm:
             return [b"\x00\x00\x80?" for _ in texts]
 
         files = _files(corpus_dir)
+        # Text cached, embeddings pending: the state a budget trip leaves.
+        # Reached with a text-only warm rather than a short fake-clock
+        # budget, because the pool waits in real seconds and a slow spawn
+        # (Windows CI) used to miss a 2 s fake-clock window entirely.
+        corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
         first = corpus.warm_docs(
             files,
-            2.0,
+            0.5,
             cache,
             embeddings=True,
             model_name="fake-model",
@@ -2179,7 +2227,10 @@ class TestTwoPhaseWarm:
             def submit(self, fn, *args):
                 raise BrokenProcessPool("worker died")
 
-        monkeypatch.setattr(corpus, "ProcessPoolExecutor", BrokenPool)
+            def shutdown(self, *args, **kwargs):
+                pass
+
+        monkeypatch.setattr(warm_pool, "ProcessPoolExecutor", BrokenPool)
         out = corpus.warm_docs(
             _files(corpus_dir),
             600,

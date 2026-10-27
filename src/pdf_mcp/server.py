@@ -11,6 +11,8 @@ Usage:
 import os
 from typing import Any
 from . import __version__
+from . import cancel_guard
+from . import corpus
 from . import updates
 from . import _core
 from ._core import mcp
@@ -83,6 +85,7 @@ class _UpdateNoticeMiddleware(Middleware):
 
 
 mcp.add_middleware(_UpdateNoticeMiddleware())
+cancel_guard.install()
 
 
 def main() -> None:
@@ -101,7 +104,12 @@ def main() -> None:
     if _core._UPDATE_CHECK_ENABLED:
         updates.start_background_refresh(_core.cache.cache_dir)
     # show_banner=False: fastmcp's banner also checks PyPI for a newer fastmcp.
-    mcp.run(transport="stdio", show_banner=False)
+    try:
+        mcp.run(transport="stdio", show_banner=False)
+    finally:
+        # A warm call may have left an extraction running (issue #82);
+        # it must not keep the exiting server alive.
+        corpus.WARM_POOL.shutdown_now()
 
 
 def main_http() -> None:
@@ -168,7 +176,10 @@ def main_http() -> None:
     port = int(os.environ.get("PDF_MCP_HTTP_PORT", "8000"))
     path = os.environ.get("PDF_MCP_HTTP_PATH", "/mcp")
 
-    mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
+    try:
+        mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
+    finally:
+        corpus.WARM_POOL.shutdown_now()
 
 
 if __name__ == "__main__":

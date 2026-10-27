@@ -105,8 +105,10 @@ PDF_MCP_CACHE_DIR=/path/to/cache
 # Cache TTL in hours (default: 24)
 PDF_MCP_CACHE_TTL=48
 
-# Max worker processes for parallel OCR / rendering in pdf_read_pages
-# (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
+# Max worker processes for parallel OCR / rendering in pdf_read_pages and
+# for corpus warm extraction (default: auto = min(cpu_count, pages, 8)).
+# Set to 1 to force sequential; corpus warm then extracts in-process and
+# cannot stop mid-document at its time budget.
 PDF_MCP_MAX_WORKERS=8
 
 # Memory budget in MB for embedding vectors kept in memory between searches

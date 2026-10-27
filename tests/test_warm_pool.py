@@ -87,12 +87,15 @@ class TestWarmPool:
         while not fut.running() and time.monotonic() < deadline:
             time.sleep(0.05)
         procs = list(p._pool._processes.values())
-        start = time.monotonic()
         p.shutdown_now()
-        for proc in procs:
-            proc.join(timeout=30)
-            assert not proc.is_alive()
-        assert time.monotonic() - start < 30
+        # Poll the exit code instead of join()/is_alive(): the executor's
+        # management thread reaps its own workers, and the loser of that
+        # race reads a stale "alive" (seen on Linux CI).
+        end = time.monotonic() + 60
+        while any(proc.exitcode is None for proc in procs):
+            assert time.monotonic() < end, "worker still running after shutdown"
+            time.sleep(0.1)
+        assert all(proc.exitcode != 0 for proc in procs)
         assert p.running() == []
 
 

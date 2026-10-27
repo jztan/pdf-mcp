@@ -883,9 +883,14 @@ class TestConcurrentWarm:
             return [b"\x00\x00\x80?" for _ in texts]
 
         files = _files(corpus_dir)
+        # Text cached, embeddings pending: the state a budget trip leaves.
+        # Reached with a text-only warm rather than a short fake-clock
+        # budget, because the pool waits in real seconds and a slow spawn
+        # (Windows CI) used to miss a 2 s fake-clock window entirely.
+        corpus.warm_docs(files, 600, cache, clock=SteppingClock(0))
         first = corpus.warm_docs(
             files,
-            2.0,
+            0.5,
             cache,
             embeddings=True,
             model_name="fake-model",

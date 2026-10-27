@@ -65,7 +65,7 @@ CORPUS_MAX_FILES = 500
 # one client call, and an empty `unprocessed` only means the budget held.
 _MULTI_CALL_WARM = (
     " A corpus of hundreds of files warms over several calls (500 docs with"
-    " embeddings took about 8 minutes): re-issue pdf_corpus_warm with the"
+    " embeddings took about 30 minutes): re-issue pdf_corpus_warm with the"
     " same paths until warm_complete is true; an empty unprocessed is not"
     " enough."
 )

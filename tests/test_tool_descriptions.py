@@ -129,7 +129,7 @@ class TestSearchGuidanceInDescriptions:
 
 
 def test_corpus_tools_say_a_large_corpus_warms_over_several_calls():
-    """Hundreds of files (500 with embeddings took about 8 minutes) cannot
+    """Hundreds of files (500 with embeddings took about 30 minutes) cannot
     warm inside one client call, so every corpus tool must say the warm
     spans re-issued calls and that `warm_complete`, not an empty
     `unprocessed`, ends the loop."""

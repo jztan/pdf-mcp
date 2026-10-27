@@ -99,6 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to 1.45.1). fastembed moves from 0.8.0 to 0.9.1 to allow Pillow 13; it
   produces byte-identical embeddings, so search results do not change.
   The Claude Desktop bundle installs the locked versions.
+- Bumped transitive `fsspec` 2026.3.0 → 2026.9.0 (CVE-2026-104851;
+  reached via `huggingface-hub`). Lockfile-only.
+
+### Contributors
+
+- @HillsCloud: reported the server crash on a cancelled tool call, the corpus calls that ran past their budget, and the bookmark that broke section search ([#82](https://github.com/jztan/pdf-mcp/issues/82))
+- @phinnphace: reported the scanned table whose OCR layer misread decimal marks ([#76](https://github.com/jztan/pdf-mcp/issues/76))
 
 ## [3.5.0] - 2026-10-03
 ### Added

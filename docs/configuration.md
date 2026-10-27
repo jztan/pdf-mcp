@@ -106,9 +106,11 @@ PDF_MCP_CACHE_DIR=/path/to/cache
 PDF_MCP_CACHE_TTL=48
 
 # Max worker processes for parallel OCR / rendering in pdf_read_pages and
-# for corpus warm extraction (default: auto = min(cpu_count, pages, 8)).
-# Set to 1 to force sequential; corpus warm then extracts in-process and
-# cannot stop mid-document at its time budget.
+# for corpus warm extraction. Default: auto = min(cpu_count, pages, 16) for
+# OCR / rendering; corpus warm extracts at most 8 docs at a time for text and
+# 4 with embeddings (also bounded by cpu_count). A value can lower these caps
+# but not raise them. Set to 1 to force sequential; corpus warm then extracts
+# in-process and cannot stop mid-document at its time budget.
 PDF_MCP_MAX_WORKERS=8
 
 # Memory budget in MB for embedding vectors kept in memory between searches
@@ -127,6 +129,12 @@ PDF_MCP_CUDA=1
 # English-only Tesseract on the first OCR call (the Claude Desktop bundle
 # sets this); unset = never. [ocr] auto_install in the config file wins.
 PDF_MCP_OCR_AUTO_INSTALL=1
+
+# Tesseract's own language-data variable. When set to an existing directory,
+# OCR looks for *.traineddata there first (in the directory itself, or in
+# its tessdata/ subfolder if you point it at the Tesseract install root).
+# Unset = use the tessdata beside the tesseract binary, or ask Tesseract.
+TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
@@ -569,8 +577,8 @@ pdf-mcp works offline except for these:
   shipped in pdf-mcp, and unpacks it into `<cache dir>/tesseract/`.
   Windows x64 and macOS (Apple Silicon and Intel) only. A Tesseract you
   installed yourself is always used first, and nothing downloads until OCR
-  is asked for. pip and uvx installs never download it unless the config
-  says so. Turn it off in `~/.config/pdf-mcp/config.toml`:
+  is asked for. pip and uvx installs never download it unless
+  `PDF_MCP_OCR_AUTO_INSTALL=1` is set or the config turns it on. Turn it off in `~/.config/pdf-mcp/config.toml`:
 
   ```toml
   [ocr]

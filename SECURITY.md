@@ -4,11 +4,11 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.x     | ✅        |
-| 1.x     | ❌        |
-| < 1.0   | ❌        |
+| 3.x     | ✅        |
+| 2.x     | ❌        |
+| < 2.0   | ❌        |
 
-Only the latest minor release on the 2.x line receives security updates. Fixes may be back-ported to the final 1.x release at the maintainer's discretion if the issue is severe and the gap is small.
+Only the latest minor release on the 3.x line receives security updates. Fixes may be back-ported to the final 2.x release at the maintainer's discretion if the issue is severe and the gap is small.
 
 ## Reporting a Vulnerability
 

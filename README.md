@@ -109,7 +109,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | Tool | What it does |
 |------|--------------|
 | `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
-| `pdf_search` | Hybrid search (keyword + semantic), page or section granularity, paragraph or context-window excerpts with source coordinates, the enclosing outline section and a table's lead-in sentence |
+| `pdf_search` | Hybrid search (keyword + semantic) by page or section; hits carry an excerpt, source coordinates, the enclosing outline section and a table's lead-in sentence |
 | `pdf_read_pages` | Read specific pages or ranges, with OCR on demand, tables, and embedded images |
 | `pdf_read_all` | Read a whole document in one call, byte-capped |
 | `pdf_get_toc` | Full table of contents for documents with many bookmarks |
@@ -117,7 +117,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
 | `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
 | `pdf_corpus_overview` | Per-document triage cards for a folder |
-| `pdf_corpus_search` | Search across a folder, with document and page provenance; `excerpt_style="auto"` picks the excerpt unit per query |
+| `pdf_corpus_search` | Search across a folder; hits carry document and page provenance |
 | `pdf_cache_stats` | Per-document cache breakdown and total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
 | `server_info` | Which optional features and config are active |
@@ -213,7 +213,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo) · [@bbulkow](https://github.com/bbulkow)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo) · [@bbulkow](https://github.com/bbulkow) · [@HillsCloud](https://github.com/HillsCloud) · [@phinnphace](https://github.com/phinnphace)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">

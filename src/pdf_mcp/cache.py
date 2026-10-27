@@ -182,6 +182,12 @@ _MISSING_GRACE_DAYS = 7
 _SECTION_FTS_TABLES = frozenset(
     ("pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de")
 )
+# On-disk bytes per byte of _doc_size_estimates content: B-tree pages,
+# indexes and FTS5 structure. Measured 1.27 on a 500-document warm cache
+# (estimate 240.6 MB, file 305.2 MB). A constant, not a live ratio: FTS5
+# deletes free almost no pages, so a ratio read from the file would grow
+# after every eviction and evict more on every restart.
+_ESTIMATE_TO_DISK = 1.3
 # Paths per DELETE ... IN (...): under the 999-variable limit of old SQLite.
 _PURGE_CHUNK = 500
 
@@ -2470,7 +2476,8 @@ class PDFCache:
         A document's rows stay while its PDF exists unchanged. The sweep
         drops a document whose PDF changed on disk, or has been missing for
         ``_MISSING_GRACE_DAYS`` (the wait spares an unmounted drive), or was
-        not accessed within ``ttl_hours`` when that is set.
+        not accessed within ``ttl_hours`` when that is set. Then, over
+        ``max_bytes``, it evicts least recently used documents.
 
         Returns:
             Number of files cleared
@@ -2541,7 +2548,8 @@ class PDFCache:
             self._purge_paths(conn, list(removed))
             changed = [p for p in changed if p not in removed]
             self._purge_paths(conn, changed, changed=True)
-            expired_paths = [*removed, *changed]
+            evicted = self._evict_over_cap(conn)
+            expired_paths = [*removed, *changed, *evicted]
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
         with self._connect() as conn2:
@@ -2566,6 +2574,86 @@ class PDFCache:
                     )
 
         return len(expired_paths)
+
+    def _evict_over_cap(self, conn: sqlite3.Connection) -> list[str]:
+        """Evict least recently used documents until under ``max_bytes``.
+
+        One pass driven by the content estimate, never by re-measuring the
+        file (see ``_ESTIMATE_TO_DISK``). Live bytes only gate the pass: they
+        never read below the content, so under the cap means nothing to do.
+        """
+        if self.max_bytes is None or self._live_bytes(conn) <= self.max_bytes:
+            return []
+        order = [
+            row[0]
+            for row in conn.execute(
+                "SELECT file_path FROM pdf_metadata ORDER BY accessed_at, file_path"
+            ).fetchall()
+        ]
+        est = self._doc_size_estimates(conn)
+        total = sum(est.get(path, 0) for path in order)
+        victims: list[str] = []
+        for path in order:
+            if total * _ESTIMATE_TO_DISK <= self.max_bytes:
+                break
+            victims.append(path)
+            total -= est.get(path, 0)
+        self._purge_paths(conn, victims)
+        return victims
+
+    def _live_bytes(self, conn: sqlite3.Connection) -> int:
+        """Bytes in use: SQLite pages holding data plus image/render files."""
+        page_count = conn.execute("PRAGMA page_count").fetchone()[0]
+        free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+        return int((page_count - free) * page_size) + self._files_bytes()
+
+    def _files_bytes(self) -> int:
+        """Bytes of extracted images and renders on disk."""
+        try:
+            images = sum(f.stat().st_size for f in self.images_dir.glob("*.png"))
+        except FileNotFoundError:
+            images = 0
+        try:
+            # "*" not "*.png": render_pages also writes ".jpg" files
+            # (the JPEG fallback ladder), which "*.png" silently missed.
+            renders = sum(
+                f.stat().st_size for f in self.renders_dir.glob("*") if f.is_file()
+            )
+        except FileNotFoundError:
+            renders = 0
+        return images + renders
+
+    def _doc_size_estimates(self, conn: sqlite3.Connection) -> dict[str, int]:
+        """Estimated content bytes per cached document.
+
+        Text counts three times (the row plus the porter and CJK indexes);
+        everything else once. ``_ESTIMATE_TO_DISK`` turns this into file size.
+        """
+        queries = [
+            "SELECT file_path, 3 * SUM(length(CAST(text AS BLOB)))"
+            " FROM page_text GROUP BY file_path",
+            "SELECT file_path, SUM(length(embedding))"
+            " FROM page_embeddings GROUP BY file_path",
+            "SELECT file_path, SUM(length(embedding))"
+            " FROM section_embeddings GROUP BY file_path",
+            "SELECT file_path, SUM(length(CAST(data AS BLOB)))"
+            " FROM page_tables GROUP BY file_path",
+            "SELECT file_path, SUM(size_bytes) FROM page_images GROUP BY file_path",
+            "SELECT file_path, SUM(size_bytes) FROM page_renders GROUP BY file_path",
+        ]
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'page_blocks'"
+        ).fetchone():
+            queries.append(
+                "SELECT file_path, SUM(length(CAST(blocks AS BLOB)))"
+                " FROM page_blocks GROUP BY file_path"
+            )
+        est: dict[str, int] = {}
+        for sql in queries:
+            for path, size in conn.execute(sql).fetchall():
+                est[path] = est.get(path, 0) + int(size or 0)
+        return est
 
     def clear_all(self) -> int:
         """Clear entire cache. Returns number of files cleared."""
@@ -2674,20 +2762,7 @@ class PDFCache:
             stats["total_text_chars"] = row[0] or 0
 
             # Database file size + image directory size + renders directory size
-            try:
-                images_size = sum(
-                    f.stat().st_size for f in self.images_dir.glob("*.png")
-                )
-            except FileNotFoundError:
-                images_size = 0
-            try:
-                # "*" not "*.png": render_pages also writes ".jpg" files
-                # (the JPEG fallback ladder), which "*.png" silently missed.
-                renders_size = sum(
-                    f.stat().st_size for f in self.renders_dir.glob("*") if f.is_file()
-                )
-            except FileNotFoundError:
-                renders_size = 0
+            files_size = self._files_bytes()
             # Fold the WAL back into the main database before sizing it.
             # Summing cache.db* instead would report a number that moves with
             # checkpoint timing: the -wal sidecar grows as pages are written
@@ -2704,7 +2779,7 @@ class PDFCache:
                 for f in self.cache_dir.glob(self.db_path.name + "*")
                 if f.is_file()
             )
-            stats["cache_size_bytes"] = db_size + images_size + renders_size
+            stats["cache_size_bytes"] = db_size + files_size
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats

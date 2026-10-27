@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`pdf_corpus_warm` lists only the documents a call changed.**
+  Already-cached documents are now counted in `cached_docs` (with
+  `cached_without_embeddings`) instead of returned as one row each, so the
+  calls that resume a large warm stay small: warming 500 PDFs took 37
+  calls, and each returned a row for every document (73 to 124 KB, about
+  3.7 MB in all). A cached document with no extractable text is still
+  listed, since it needs OCR. `detail=true` returns the full list.
+  `warm_complete`, `unwarmed`, `unprocessed` and `skipped` are unchanged
+  ([#86](https://github.com/jztan/pdf-mcp/issues/86))
 - **Corpus tools take up to 500 PDFs per call, up from 100.**
   `pdf_corpus_warm`, `pdf_corpus_overview` and `pdf_corpus_search` now
   accept a folder or list of up to 500 files, so a corpus of a few hundred

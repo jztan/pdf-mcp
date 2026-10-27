@@ -4571,7 +4571,33 @@ class TestPdfCorpusWarm:
         pdf_corpus_warm(str(corpus_dir))
         result = pdf_corpus_warm(str(corpus_dir))
         assert result["warmed_this_call"] == 0
+        # Cached docs are counted, not listed (issue #86).
+        assert result["docs"] == []
+        assert result["cached_docs"] == 3
+        assert result["cached_without_embeddings"] == 3
+        assert result["warm_complete"] is True
+
+    def test_detail_lists_cached_rows(self, corpus_dir, isolated_server):
+        pdf_corpus_warm(str(corpus_dir))
+        result = pdf_corpus_warm(str(corpus_dir), detail=True)
+        assert len(result["docs"]) == 3
         assert {d["status"] for d in result["docs"]} == {"cached"}
+        assert result["cached_docs"] == 3
+
+    def test_resume_lists_only_what_this_call_changed(
+        self, corpus_dir, isolated_server
+    ):
+        """A 500-doc warm returned a row per doc on each of its 37 calls
+        (3.7 MB in all); a resume call now lists only the docs it warmed."""
+        pdf_corpus_warm([str(corpus_dir / "alpha.pdf")])
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert sorted(Path(d["path"]).name for d in result["docs"]) == [
+            "bravo.pdf",
+            "charlie.pdf",
+        ]
+        assert {d["status"] for d in result["docs"]} == {"warmed"}
+        assert result["cached_docs"] == 1
+        assert result["corpus_size"] == 3
 
     def test_missing_directory_inline_error(self, isolated_server):
         result = pdf_corpus_warm("/nonexistent-dir-for-corpus")
@@ -6739,11 +6765,19 @@ class TestScannedDocSignals:
         assert by_path[str(corpus_dir / "alpha.pdf")]["text_coverage"] == "full"
         assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
 
-        # cached rows (second call) carry the label too
+        # A cached doc with no extractable text stays listed: it needs
+        # OCR, and the count alone would hide that.
         again = pdf_corpus_warm(paths)
         by_path = {d["path"]: d for d in again["docs"]}
         assert {d["status"] for d in again["docs"]} == {"cached"}
+        assert list(by_path) == [sample_pdf_scanned]
         assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
+        assert again["cached_docs"] == 2
+
+        # detail=True lists the full-text cached doc with its label too
+        full = pdf_corpus_warm(paths, detail=True)
+        by_path = {d["path"]: d for d in full["docs"]}
+        assert by_path[str(corpus_dir / "alpha.pdf")]["text_coverage"] == "full"
 
     def test_corpus_search_flags_low_text_coverage(
         self, corpus_dir, sample_pdf_scanned, isolated_server

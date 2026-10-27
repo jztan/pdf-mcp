@@ -67,7 +67,8 @@ CORPUS_MAX_FILES = 500
 _MULTI_CALL_WARM = (
     " A corpus of hundreds of files warms over several calls (500 docs: text"
     " about 90 s, so keyword search works almost at once; embeddings for"
-    " hybrid and semantic search about 30 minutes): re-issue pdf_corpus_warm"
+    " hybrid and semantic search about 27 minutes, which continue in the"
+    " server between calls): re-issue pdf_corpus_warm"
     " with the same paths until warm_complete is true; an empty unprocessed"
     " is not enough."
 )
@@ -1094,7 +1095,7 @@ class BackgroundEmbedder:
     """Embeds, between calls, the docs a warm call left text-only (#89).
 
     A 500-doc warm had its text in 90 s but needed 35 more calls (about
-    28 minutes) for embeddings, because embedding stopped whenever a call
+    27 minutes) for embeddings, because embedding stopped whenever a call
     returned. After a call, this thread keeps embedding those docs from
     cached text, smallest first, in the same durable batches.
 

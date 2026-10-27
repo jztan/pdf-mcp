@@ -10,14 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Embeddings keep going between corpus calls.** Embedding used to stop
   whenever a call returned, so a 500-PDF folder needed 35 `pdf_corpus_warm`
-  calls (about 28 minutes) for its embeddings, and any pause between calls
+  calls (about 27 minutes) for its embeddings, and any pause between calls
   was lost. Documents a call leaves with text but no embeddings now keep
   embedding in the server after it returns, and the next call finds them
   cached. `pdf_corpus_warm` reports how many in `embedding_in_background`,
   and `pdf_corpus_search`'s `embeddings_pending` carries `in_background`.
-  The work runs only while no tool call is running or waiting; a call
-  that arrives mid-way waits for the current encode step (up to about
-  half a second measured). It stops for the next embedding warm call, `pdf_cache_clear` and server exit.
+  On 500 PDFs, one embedding call followed by no further calls finished
+  every document in about 27 minutes, the same time the 35 back-to-back
+  calls took before. The work runs only while no tool call is running or
+  waiting; a call that arrives mid-way waits for the current encode step
+  (up to about half a second measured). It stops for the next embedding
+  warm call, `pdf_cache_clear` and server exit.
   `PDF_MCP_BACKGROUND_EMBED=0` turns it off
   ([#89](https://github.com/jztan/pdf-mcp/issues/89))
 - **`pdf_read_pages` points at the cells a scan's OCR layer probably
@@ -56,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accept a folder or list of up to 500 files, so a corpus of a few hundred
   documents is ranked in one call instead of being split into calls whose
   scores cannot be compared. A corpus that size warms over several calls
-  (for 500 documents, text took about 90 s and embeddings about 30 minutes); the over-cap error,
+  (for 500 documents, text took about 90 s and embeddings about 27 minutes); the over-cap error,
   the tool descriptions and the tool reference now say so, and say to
   re-issue `pdf_corpus_warm` until `warm_complete` is true rather than
   until `unprocessed` is empty. Search time grows with corpus size: about

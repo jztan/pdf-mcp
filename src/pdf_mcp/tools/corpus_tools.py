@@ -99,9 +99,9 @@ def _embed_in_background(
         " finished doc is already committed), so treat it as a partial"
         " run and re-issue the same call. A corpus of hundreds of files"
         " takes several such calls (500 docs: text about 90 s, embeddings"
-        " about 30 minutes): loop on `warm_complete`, not on `unprocessed`."
+        " about 27 minutes): loop on `warm_complete`, not on `unprocessed`."
         " With embeddings=True, embedding continues in the server between"
-        " calls, so time between calls is not lost."
+        " calls, so one call starts it and a later call finds it done."
     )
 )
 @pdf_access_within("budget_seconds", _corpus_busy)
@@ -924,7 +924,7 @@ def _semantic_pending_fields(
         " single relevance-ranked hit list spanning every document."
         " Auto-warms uncached docs up to a time budget. A corpus of"
         " hundreds of files warms over several calls (500 docs: text about"
-        " 90 s, embeddings about 30 minutes; mode='auto' answers by keyword"
+        " 90 s, embeddings about 27 minutes; mode='auto' answers by keyword"
         " until embeddings finish): warm it first with"
         " pdf_corpus_warm until `warm_complete` is true. Keyword terms"
         " are AND-matched and ranked by BM25 across the whole corpus,"

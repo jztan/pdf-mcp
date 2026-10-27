@@ -1770,3 +1770,67 @@ def test_two_processes_starting_on_one_expired_cache_both_start(tmp_path):
         p.join(timeout=60)
     assert [results.get(timeout=5) for _ in procs] == ["ok", "ok"]
     assert not list(images.glob("*.png"))
+
+
+def _file_path_tables(conn: sqlite3.Connection) -> list[str]:
+    """Every table in the cache that holds per-document rows."""
+    names = [
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    ]
+    return [n for n in names if "file_path" in _get_columns(conn, n)]
+
+
+def _populate_every_table(cache: PDFCache, path: str) -> None:
+    from pdf_mcp.section_detector import Section
+
+    cache.save_metadata(path, 2, {}, [])
+    cache.save_pages_text(path, {0: "alpha beta", 1: "中文测试 text"})
+    cache.save_page_embeddings(path, {0: [b"\x00\x01"], 1: [b"\x02"]}, "m")
+    cache.save_page_blocks(path, {0: ([[0, 0, 10, 10, "alpha beta"]], (612, 792))})
+    cache.save_page_tables(path, 0, [{"rows": [["a"]]}])
+    cache.save_doc_profile(path, 10, b"\x00", {"alpha": 1}, "m")
+    cache.save_section_embeddings(path, {0: b"\x00"}, {0: "k"}, "m")
+    cache.index_sections(path, [Section("Intro", 1, 2, "alpha 中文 body")])
+
+
+def _rows_left(cache: PDFCache, path: str) -> dict[str, int]:
+    with sqlite3.connect(cache.db_path) as conn:
+        left = {
+            t: conn.execute(
+                f"SELECT COUNT(*) FROM {t} WHERE file_path = ?", (path,)
+            ).fetchone()[0]
+            for t in _file_path_tables(conn)
+        }
+    return {t: n for t, n in left.items() if n}
+
+
+class TestPurgeCompleteness:
+    """A purge leaves no row for the path in any per-document table (#88)."""
+
+    @pytest.fixture
+    def full_cache(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1, fts_language="de")
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        _populate_every_table(cache, sample_pdf)
+        assert _rows_left(cache, sample_pdf), "fixture wrote nothing"
+        return cache
+
+    def test_invalidate_file_leaves_no_rows(self, full_cache, sample_pdf):
+        full_cache._invalidate_file(sample_pdf)
+        assert _rows_left(full_cache, sample_pdf) == {}
+
+    def test_clear_expired_leaves_no_rows(self, full_cache, sample_pdf):
+        with sqlite3.connect(full_cache.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET accessed_at = datetime('now', '-2 hours')"
+            )
+        assert full_cache.clear_expired() == 1
+        assert _rows_left(full_cache, sample_pdf) == {}
+
+    def test_clear_all_leaves_no_rows(self, full_cache, sample_pdf):
+        full_cache.clear_all()
+        assert _rows_left(full_cache, sample_pdf) == {}

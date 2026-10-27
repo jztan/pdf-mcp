@@ -72,6 +72,23 @@ def _no_fsync_in_tests():
 _FSYNC_DISABLED = True
 
 
+@pytest.fixture(autouse=True)
+def _warm_in_process(monkeypatch):
+    """Warm in-process by default, and leave no pool job behind.
+
+    Production sends every cold doc to the shared spawn pool
+    (corpus.WARM_POOL), where a monkeypatched extractor does not reach
+    and each test would pay the spawn cost. Tests that exercise the pool
+    call ``monkeypatch.delenv("PDF_MCP_MAX_WORKERS")``. Jobs outlive the
+    call that started them, so the pool is reset after every test.
+    """
+    from pdf_mcp import corpus
+
+    monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+    yield
+    corpus.WARM_POOL.shutdown_now()
+
+
 @pytest.fixture
 def real_fsync():
     """Let production SQLite pragmas take effect for one test.

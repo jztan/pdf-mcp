@@ -11,13 +11,22 @@ to waiting calls between documents (``yield_pdf_access``), and with an
 unfair lock the yielding thread usually wins it straight back. It is
 re-entrant because tool bodies share helpers.
 
+A corpus call waits for the lock no longer than its own budget
+(``pdf_access_within``): queued behind another corpus call, it would
+otherwise sit out that call's budget before starting its own and reach
+the client's timeout (issue #82, where Claude Desktop cancelled two queued
+calls at 4 minutes). A waiter that gives up leaves its ticket behind;
+the lock skips abandoned tickets when it moves to the next one.
+
 Stdlib only: imported by ``corpus`` (pure logic) and by every tool module.
 """
 
 from __future__ import annotations
 
 import functools
+import inspect
 import threading
+import time
 from typing import Callable, ParamSpec, TypeVar
 
 P = ParamSpec("P")
@@ -33,22 +42,42 @@ class FairLock:
         self._serving = 0
         self._owner: int | None = None
         self._depth = 0
+        self._abandoned: set[int] = set()
 
-    def _wait_for(self, ticket: int) -> None:
+    def _wait_for(self, ticket: int, deadline: float | None = None) -> bool:
         while not (self._owner is None and self._serving == ticket):
-            self._cond.wait()
+            if deadline is None:
+                self._cond.wait()
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self._cond.wait(remaining)
+        return True
 
-    def acquire(self) -> None:
+    def _advance(self) -> None:
+        """Serve the next ticket, skipping ones whose waiter gave up."""
+        self._serving += 1
+        while self._serving in self._abandoned:
+            self._abandoned.discard(self._serving)
+            self._serving += 1
+
+    def acquire(self, timeout: float | None = None) -> bool:
+        """Take the lock in arrival order; False if ``timeout`` ran out."""
         me = threading.get_ident()
         with self._cond:
             if self._owner == me:
                 self._depth += 1
-                return
+                return True
             ticket = self._next_ticket
             self._next_ticket += 1
-            self._wait_for(ticket)
+            deadline = None if timeout is None else time.monotonic() + timeout
+            if not self._wait_for(ticket, deadline):
+                self._abandoned.add(ticket)
+                return False
             self._owner = me
             self._depth = 1
+            return True
 
     def release(self) -> None:
         with self._cond:
@@ -59,7 +88,7 @@ class FairLock:
             self._depth -= 1
             if self._depth == 0:
                 self._owner = None
-                self._serving += 1
+                self._advance()
                 self._cond.notify_all()
 
     def __enter__(self) -> FairLock:
@@ -76,7 +105,7 @@ class FairLock:
     def waiters(self) -> int:
         """Threads queued behind the holder (0 when free or uncontended)."""
         with self._cond:
-            queued = self._next_ticket - self._serving
+            queued = self._next_ticket - self._serving - len(self._abandoned)
             return queued - 1 if self._owner is not None else queued
 
     def yield_turn(self) -> None:
@@ -89,12 +118,12 @@ class FairLock:
         with self._cond:
             if self._owner != me:
                 raise RuntimeError("yield_turn by a thread that does not hold the lock")
-            if self._next_ticket - self._serving - 1 <= 0:
+            if self._next_ticket - self._serving - len(self._abandoned) - 1 <= 0:
                 return
             depth = self._depth
             self._owner = None
             self._depth = 0
-            self._serving += 1
+            self._advance()
             ticket = self._next_ticket
             self._next_ticket += 1
             self._cond.notify_all()
@@ -120,6 +149,57 @@ def pdf_access(fn: Callable[P, R]) -> Callable[P, R]:
 
     wrapper.__pdf_access__ = True  # type: ignore[attr-defined]
     return wrapper
+
+
+_wait = threading.local()
+
+
+def lock_wait_seconds() -> float:
+    """How long the current ``pdf_access_within`` call queued for the lock.
+
+    A corpus tool subtracts it from its budget, so queueing and warming
+    together stay within ``budget_seconds``.
+    """
+    return float(getattr(_wait, "seconds", 0.0))
+
+
+def pdf_access_within(
+    budget_param: str, busy: Callable[[float], R]
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """``pdf_access`` for a call with a time budget: wait no longer than it.
+
+    ``budget_param`` names the tool argument holding the budget in
+    seconds (clamped to 1..300, as the corpus tools clamp it). When the
+    lock is still taken at the end of the budget, the call returns
+    ``busy(waited_seconds)`` instead of running.
+    """
+
+    def decorate(fn: Callable[P, R]) -> Callable[P, R]:
+        signature = inspect.signature(fn)
+
+        @functools.wraps(fn)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            bound = signature.bind_partial(*args, **kwargs)
+            bound.apply_defaults()
+            try:
+                budget = float(bound.arguments[budget_param])
+            except (KeyError, TypeError, ValueError):
+                budget = 300.0
+            budget = min(max(budget, 1.0), 300.0)
+            began = time.monotonic()
+            if not PDF_ACCESS.acquire(timeout=budget):
+                return busy(time.monotonic() - began)
+            _wait.seconds = time.monotonic() - began
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                _wait.seconds = 0.0
+                PDF_ACCESS.release()
+
+        wrapper.__pdf_access__ = True  # type: ignore[attr-defined]
+        return wrapper
+
+    return decorate
 
 
 def yield_pdf_access() -> None:

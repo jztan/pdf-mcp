@@ -61,6 +61,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advisories are in PKCS#7 decryption and certificate path validation,
   which pdf-mcp does not use. Every other platform gets 50.0.2
   ([#81](https://github.com/jztan/pdf-mcp/issues/81)).
+- **A cancelled tool call no longer crashes the server.** When a client
+  cancelled a call that was still running (Claude Desktop does this after
+  4 minutes), the call's late result made the MCP SDK fail with
+  `AssertionError: Request already responded to`, and the server process
+  exited, taking every queued call with it. The late result is now
+  dropped ([#82](https://github.com/jztan/pdf-mcp/issues/82), reported
+  by @HillsCloud).
+- **Corpus calls return at `budget_seconds` even when a document is slow
+  to extract.** A long scanned PDF used to hold `pdf_corpus_warm`,
+  `pdf_corpus_overview` or `pdf_corpus_search` past its budget until the
+  extraction finished, and calls queued behind it waited out that time
+  before their own budget started. Now the call returns at the deadline
+  with the slow document in `unprocessed`, the extraction carries on in
+  the background, and the next corpus call picks up its result instead
+  of starting over. Time spent waiting behind another corpus call comes
+  out of the budget, and a call that waits out its whole budget returns
+  an inline error asking to retry
+  ([#82](https://github.com/jztan/pdf-mcp/issues/82)).
 - **A bookmark with no destination no longer breaks section search on its
   PDF.** Since 3.0.0, one such bookmark made section detection fail for the
   whole document: `pdf_search(granularity="section")` raised an error

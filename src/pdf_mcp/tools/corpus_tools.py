@@ -5,7 +5,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Callable
-from ..concurrency import pdf_access
+from ..concurrency import lock_wait_seconds, pdf_access_within
 from ..docopen import open_pdf
 from .. import corpus
 from .. import _core
@@ -50,6 +50,20 @@ def _corpus_completeness(
     return {"warm_complete": unwarmed == 0, "unwarmed": unwarmed}
 
 
+def _corpus_busy(waited: float) -> dict[str, Any]:
+    """Inline error for a corpus call that queued out its whole budget."""
+    return {
+        "error": (
+            f"Another call held the PDF engine for this call's whole budget"
+            f" ({waited:.0f} s), so this call did not run."
+        ),
+        "hint": (
+            "Re-issue the same call. The call ahead of it is still"
+            " warming, and the documents it finishes stay cached."
+        ),
+    }
+
+
 # ============================================================================
 # Tool: pdf_corpus_warm - warm a folder of PDFs into the cache
 # ============================================================================
@@ -70,7 +84,7 @@ def _corpus_completeness(
         " 8 minutes): loop on `warm_complete`, not on `unprocessed`."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_warm(
     paths: str | list[str],
     budget_seconds: int = 45,
@@ -144,7 +158,8 @@ def pdf_corpus_warm(
     corpus, cap exceeded, unavailable embedding model) return an
     inline {"error", "hint"} payload; check for an `error` key first.
     """
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path
     )
@@ -213,7 +228,7 @@ def pdf_corpus_warm(
         " true, not until `unprocessed` is empty."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_overview(
     paths: str | list[str],
     budget_seconds: int = 45,
@@ -251,7 +266,8 @@ def pdf_corpus_overview(
     Error contract: call-level failures return an inline
     {"error", "hint"} payload; check for an `error` key first.
     """
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path
     )
@@ -871,7 +887,7 @@ def _semantic_pending_fields(
         " answering or re-asking documents."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_search(
     paths: str | list[str],
     query: str,
@@ -1084,7 +1100,8 @@ def pdf_corpus_search(
 
     top_k = _clamp(top_k, 1, 100)
     context_chars = _clamp(context_chars, 50, 2000)
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
 
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path

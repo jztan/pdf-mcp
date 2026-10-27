@@ -1807,6 +1807,9 @@ def _rows_left(cache: PDFCache, path: str) -> dict[str, int]:
     return {t: n for t, n in left.items() if n}
 
 
+_SECTION_FTS = {"pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de"}
+
+
 class TestPurgeCompleteness:
     """A purge leaves no row for the path in any per-document table (#88)."""
 
@@ -1819,9 +1822,21 @@ class TestPurgeCompleteness:
         assert _rows_left(cache, sample_pdf), "fixture wrote nothing"
         return cache
 
-    def test_invalidate_file_leaves_no_rows(self, full_cache, sample_pdf):
+    def test_invalidate_file_keeps_only_the_section_index(self, full_cache, sample_pdf):
+        """A changed file keeps its section index (no mtime; a failed
+        re-detection must not wipe it, see TestSectionWarm) and nothing else."""
         full_cache._invalidate_file(sample_pdf)
-        assert _rows_left(full_cache, sample_pdf) == {}
+        assert set(_rows_left(full_cache, sample_pdf)) <= _SECTION_FTS
+        assert "pdf_section_fts" in _rows_left(full_cache, sample_pdf)
+
+    def test_sweep_of_changed_file_keeps_only_the_section_index(
+        self, full_cache, sample_pdf
+    ):
+        st = os.stat(sample_pdf)
+        os.utime(sample_pdf, (st.st_atime, st.st_mtime + 10))
+        assert full_cache.clear_expired() == 1
+        assert set(_rows_left(full_cache, sample_pdf)) <= _SECTION_FTS
+        assert "pdf_section_fts" in _rows_left(full_cache, sample_pdf)
 
     def test_clear_expired_leaves_no_rows(self, full_cache, sample_pdf):
         with sqlite3.connect(full_cache.db_path) as conn:
@@ -1834,3 +1849,108 @@ class TestPurgeCompleteness:
     def test_clear_all_leaves_no_rows(self, full_cache, sample_pdf):
         full_cache.clear_all()
         assert _rows_left(full_cache, sample_pdf) == {}
+
+
+def _missing_since(cache: PDFCache, path: str):
+    with sqlite3.connect(cache.db_path) as conn:
+        row = conn.execute(
+            "SELECT missing_since FROM pdf_metadata WHERE file_path = ?", (path,)
+        ).fetchone()
+    return row[0] if row else "no row"
+
+
+def _set_meta(cache: PDFCache, column: str, sql_value: str) -> None:
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute(f"UPDATE pdf_metadata SET {column} = {sql_value}")
+
+
+class TestExistenceSweep:
+    """Rows live while the PDF exists; 7 days missing purges them (#88)."""
+
+    @pytest.fixture
+    def cached(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_text(sample_pdf, 0, "page one")
+        return cache, sample_pdf
+
+    def test_ttl_is_off_by_default(self, tmp_path):
+        assert PDFCache(cache_dir=tmp_path).ttl_hours is None
+
+    def test_unchanged_pdf_survives_idle_days_without_ttl(self, cached):
+        cache, pdf = cached
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        assert cache.clear_expired() == 0
+        assert cache.get_metadata(pdf) is not None
+
+    def test_missing_pdf_kept_within_grace_and_marked(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is not None
+        with sqlite3.connect(cache.db_path) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0] == 1
+
+    def test_missing_pdf_purged_after_grace(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        cache.clear_expired()
+        _set_meta(cache, "missing_since", "datetime('now', '-8 days')")
+        assert cache.clear_expired() == 1
+        assert _rows_left(cache, pdf) == {}
+
+    def test_missing_pdf_not_purged_at_six_days(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        cache.clear_expired()
+        _set_meta(cache, "missing_since", "datetime('now', '-6 days')")
+        assert cache.clear_expired() == 0
+
+    def test_returning_pdf_clears_missing_since(self, cached, tmp_path):
+        cache, pdf = cached
+        away = tmp_path / "away.pdf"
+        os.replace(pdf, away)
+        cache.clear_expired()
+        assert _missing_since(cache, pdf) is not None
+        os.replace(away, pdf)  # rename keeps the mtime
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is None
+        assert cache.get_metadata(pdf) is not None
+
+    def test_changed_pdf_purged_on_sweep(self, cached):
+        cache, pdf = cached
+        st = os.stat(pdf)
+        os.utime(pdf, (st.st_atime, st.st_mtime + 10))
+        assert cache.clear_expired() == 1
+        assert _rows_left(cache, pdf) == {}
+
+    def test_stat_error_treated_as_missing(self, cached, monkeypatch):
+        cache, pdf = cached
+        real_stat = os.stat
+
+        def flaky_stat(p, *a, **kw):
+            if str(p) == pdf:
+                raise PermissionError(13, "denied", p)
+            return real_stat(p, *a, **kw)
+
+        monkeypatch.setattr(os, "stat", flaky_stat)
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is not None
+
+    def test_ttl_still_applies_when_set(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        _set_meta(cache, "accessed_at", "datetime('now', '-2 hours')")
+        assert cache.clear_expired() == 1
+
+    def test_old_db_gains_missing_since_column(self, tmp_path):
+        with sqlite3.connect(tmp_path / "cache.db") as conn:
+            conn.execute("""CREATE TABLE pdf_metadata (
+                file_path TEXT PRIMARY KEY, file_mtime REAL NOT NULL,
+                file_size INTEGER NOT NULL, page_count INTEGER NOT NULL,
+                metadata JSON, toc JSON,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        cache = PDFCache(cache_dir=tmp_path)
+        with sqlite3.connect(cache.db_path) as conn:
+            assert "missing_since" in _get_columns(conn, "pdf_metadata")

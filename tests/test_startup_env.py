@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from pdf_mcp.cache import PDFCache
-from pdf_mcp._core import _cache_dir_from_env, _ttl_hours_from_env
+from pdf_mcp._core import (
+    _cache_dir_from_env,
+    _max_bytes_from_env,
+    _ttl_hours_from_env,
+)
 
 
 class TestCacheDirEnv:
@@ -33,9 +37,13 @@ class TestCacheDirEnv:
 
 
 class TestTtlEnv:
-    def test_unset_returns_default(self, monkeypatch):
+    def test_unset_means_no_time_expiry(self, monkeypatch):
         monkeypatch.delenv("PDF_MCP_CACHE_TTL", raising=False)
-        assert _ttl_hours_from_env() == 24
+        assert _ttl_hours_from_env() is None
+
+    def test_empty_means_no_time_expiry(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_TTL", " ")
+        assert _ttl_hours_from_env() is None
 
     def test_valid_int_honored(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_CACHE_TTL", "48")
@@ -63,6 +71,30 @@ class TestTtlEnv:
         monkeypatch.setenv("PDF_MCP_CACHE_TTL", "9999")
         with pytest.raises(ValueError, match=r"must be in \[0, 8760\]"):
             _ttl_hours_from_env()
+
+
+class TestMaxMbEnv:
+    def test_default_is_2048_mb(self, monkeypatch):
+        monkeypatch.delenv("PDF_MCP_CACHE_MAX_MB", raising=False)
+        assert _max_bytes_from_env() == 2048 * 1024 * 1024
+
+    def test_valid_int_honored(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "512")
+        assert _max_bytes_from_env() == 512 * 1024 * 1024
+
+    def test_zero_means_no_cap(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "0")
+        assert _max_bytes_from_env() is None
+
+    def test_non_int_fails_loud(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "2GB")
+        with pytest.raises(ValueError, match="must be an integer"):
+            _max_bytes_from_env()
+
+    def test_negative_fails_loud(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "-1")
+        with pytest.raises(ValueError, match="0 or more"):
+            _max_bytes_from_env()
 
 
 class TestCacheDirPerms:

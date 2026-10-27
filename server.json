@@ -23,9 +23,14 @@
           "name": "PDF_MCP_CACHE_DIR"
         },
         {
-          "description": "Cache time-to-live in hours (default: 24)",
+          "description": "Optional time expiry in hours; unset keeps a document while its PDF exists",
           "format": "number",
           "name": "PDF_MCP_CACHE_TTL"
+        },
+        {
+          "description": "Cache size cap in MB, least recently used evicted first (default: 2048; 0 = no cap)",
+          "format": "number",
+          "name": "PDF_MCP_CACHE_MAX_MB"
         }
       ]
     },

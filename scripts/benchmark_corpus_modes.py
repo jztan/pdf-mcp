@@ -503,8 +503,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     # Imported after the validate branch on purpose: importing the server
-    # opens the active cache with the default 24 h TTL and purges older rows,
-    # which would empty a warm cache before --validate could read it.
+    # opens the active cache and runs its startup cleanup (any
+    # PDF_MCP_CACHE_TTL, the size cap), which could purge a warm cache
+    # before --validate read it.
     from pdf_mcp import _core
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search

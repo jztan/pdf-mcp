@@ -1037,7 +1037,7 @@ pdf_cache_stats()
 Removes expired or all cache entries. Use when cached content is stale or to free disk space.
 
 **Parameters:**
-- `expired_only` (bool, optional, default `true`) — When `true`, clear only entries past the TTL. When `false`, clear everything **including** the URL download cache.
+- `expired_only` (bool, optional, default `true`): When `true`, clear only expired entries: documents whose PDF changed or has been missing for 7 days, documents past `PDF_MCP_CACHE_TTL` when it is set, and the least recently used documents while the cache is over `PDF_MCP_CACHE_MAX_MB`. When `false`, clear everything **including** the URL download cache.
 
 **Returns:**
 - `expired_only` (bool) — Echoes the input.
@@ -1095,7 +1095,8 @@ Reports which optional features are installed and which configuration values are
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 16)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.
-  - `cache_ttl_hours` (int) — effective `PDF_MCP_CACHE_TTL`, or the default.
+  - `cache_ttl_hours` (int or null): effective `PDF_MCP_CACHE_TTL`; `null` when unset (no time expiry).
+  - `cache_max_mb` (int or null): effective `PDF_MCP_CACHE_MAX_MB` size cap; `null` when set to `0` (no cap).
   - `cache_dir` (string) — resolved cache directory. A local filesystem path (single-user STDIO deployment, per the `pdf_cache_stats` precedent).
 
 This tool does **not** return PDF-derived content; the untrusted-content preamble does not apply.
@@ -1138,7 +1139,8 @@ server_info()
 #   "config": {
 #     "max_workers": 8,
 #     "max_response_bytes": 200000,
-#     "cache_ttl_hours": 24,
+#     "cache_ttl_hours": null,
+#     "cache_max_mb": 2048,
 #     "cache_dir": "/home/user/.cache/pdf-mcp"
 #   }
 # }
@@ -1179,7 +1181,8 @@ Environment variables:
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `PDF_MCP_CACHE_DIR` | `~/.cache/pdf-mcp` | SQLite cache directory. `~` is expanded. Symlinks are not resolved. The directory is created if missing and `chmod`'d to `0o700`. |
-| `PDF_MCP_CACHE_TTL` | `24` | Cache time-to-live in hours. Must parse as an integer in `[0, 8760]`. Bad values (`"24h"`, negative, over-range) fail loud at startup rather than silently falling back. |
+| `PDF_MCP_CACHE_TTL` | unset | Optional time expiry in hours: documents not used for this long are removed at the next cleanup. Unset, a document stays while its PDF exists. Must parse as an integer in `[0, 8760]`. Bad values (`"24h"`, negative, over-range) fail loud at startup rather than silently falling back. |
+| `PDF_MCP_CACHE_MAX_MB` | `2048` | Cache size cap in MB. Over it, the cleanup at server start (or on `pdf_cache_clear()`) removes the least recently used documents first. `0` turns the cap off. Non-integer or negative values fail loud at startup. |
 | `PDF_MCP_MAX_WORKERS` | `min(cpu_count, 16)` for OCR/render; corpus warm caps at 8 (text) / 4 (embeddings) | Worker cap for parallel per-page OCR/render in `pdf_read_pages` and for corpus warm extraction. A value `<= 1` forces sequential (for corpus warm, in-process extraction that cannot stop mid-document at `budget_seconds`); a positive int caps the pool (cannot raise it above the computed default). Surfaced as `config.max_workers` by `server_info`. |
 
 For embedding model selection (validated models, MTEB scores, and BYOM gotchas), see [docs/embedding-models.md](embedding-models.md).

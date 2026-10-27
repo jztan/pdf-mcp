@@ -45,6 +45,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The cache no longer forgets an unchanged PDF after a day.** A
+  document used to drop out of the cache 24 hours after its last use, so
+  a 500-PDF folder warmed with embeddings (about 27 minutes) had to be
+  warmed again after any idle day. A document now stays cached while its
+  PDF exists unchanged. It is removed when the PDF changes, once the PDF
+  has been missing for 7 days (an unplugged external or network drive
+  keeps its cache for a week), or, with the cache over
+  `PDF_MCP_CACHE_MAX_MB` (2048 by default, `0` for no cap), least recently
+  used first. `PDF_MCP_CACHE_TTL` still sets a time expiry, but only when
+  it is set. `server_info` reports the cap as `config.cache_max_mb`, and
+  `config.cache_ttl_hours` is `null` unless a TTL is set. Removing a
+  document now also clears its layout and Chinese/Japanese/Korean keyword
+  rows, which used to stay behind
+  ([#88](https://github.com/jztan/pdf-mcp/issues/88))
 - **`pdf_corpus_warm` lists only the documents a call changed.**
   Already-cached documents are now counted in `cached_docs` (with
   `cached_without_embeddings`) instead of returned as one row each, so the

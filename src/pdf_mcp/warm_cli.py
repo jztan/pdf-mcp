@@ -50,13 +50,14 @@ from . import corpus
 from .cache import PDFCache
 from .config import PDFConfig
 
-# Mirrors _core.py's _cache_dir_from_env/_ttl_hours_from_env exactly
+# Mirrors _core.py's _cache_dir_from_env/_ttl_hours_from_env/
+# _max_bytes_from_env exactly
 # (same env vars, same defaults, same validation) without importing
 # server.py -- that module also builds the FastMCP app (_core.py) and
 # registers every tool at import time (tools/*.py), real weight this
 # standalone CLI has no use for. Kept in sync by hand; the pair is small
 # and rarely changes.
-_DEFAULT_CACHE_TTL_HOURS = 24
+_DEFAULT_CACHE_MAX_MB = 2048
 _MAX_CACHE_TTL_HOURS = 8760  # one year
 
 
@@ -67,10 +68,10 @@ def _cache_dir_from_env() -> "Path | None":
     return Path(raw).expanduser()
 
 
-def _ttl_hours_from_env() -> int:
+def _ttl_hours_from_env() -> "int | None":
     raw = os.environ.get("PDF_MCP_CACHE_TTL")
     if raw is None or raw.strip() == "":
-        return _DEFAULT_CACHE_TTL_HOURS
+        return None
     try:
         value = int(raw)
     except ValueError as exc:
@@ -81,6 +82,29 @@ def _ttl_hours_from_env() -> int:
             f"(up to one year; got {value})"
         )
     return value
+
+
+def _max_bytes_from_env() -> "int | None":
+    """Return PDF_MCP_CACHE_MAX_MB in bytes, None for 0 (no cap).
+
+    Unset or empty means the 2048 MB default. Fails loud like
+    PDF_MCP_CACHE_TTL on a non-integer or negative value.
+    """
+    raw = os.environ.get("PDF_MCP_CACHE_MAX_MB")
+    if raw is None or raw.strip() == "":
+        value = _DEFAULT_CACHE_MAX_MB
+    else:
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"PDF_MCP_CACHE_MAX_MB must be an integer (got {raw!r})"
+            ) from exc
+        if value < 0:
+            raise ValueError(
+                f"PDF_MCP_CACHE_MAX_MB must be 0 or more megabytes (got {value})"
+            )
+    return value * 1024 * 1024 if value else None
 
 
 def _discover_pdfs(paths: list[str], recursive: bool) -> list[str]:
@@ -199,6 +223,7 @@ def main(argv: "list[str] | None" = None) -> int:
         cache = PDFCache(
             cache_dir=_cache_dir_from_env(),
             ttl_hours=_ttl_hours_from_env(),
+            max_bytes=_max_bytes_from_env(),
             fts_language=pdf_config.fts_language,
         )
     except ValueError as exc:

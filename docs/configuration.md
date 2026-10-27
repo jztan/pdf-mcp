@@ -102,8 +102,13 @@ For a mostly non-English collection, consider a multilingual
 # Cache directory (default: ~/.cache/pdf-mcp)
 PDF_MCP_CACHE_DIR=/path/to/cache
 
-# Cache TTL in hours (default: 24)
+# Optional time expiry in hours (default: off). Unset, a document stays
+# cached while its PDF exists; set, documents not used for this long go too.
 PDF_MCP_CACHE_TTL=48
+
+# Cache size cap in MB (default: 2048, 0 = no cap). Over it, the least
+# recently used documents are removed first.
+PDF_MCP_CACHE_MAX_MB=2048
 
 # Max worker processes for parallel OCR / rendering in pdf_read_pages and
 # for corpus warm extraction. Default: auto = min(cpu_count, pages, 16) for
@@ -507,10 +512,10 @@ scratch, on its own, which can by itself exceed a timeout-bounded MCP
 client's budget even on an otherwise fully-warmed corpus. Progress and a
 final summary go to stderr; already-cached documents are free (see
 `pdf_corpus_warm` above), so re-running after an interrupt (Ctrl-C, a
-crash) resumes rather than redoing work. If your corpus is large enough
-to need this, also raise `PDF_MCP_CACHE_TTL` (below) — the default
-24-hour TTL will otherwise
-start expiring a prewarm you're not actively querying.
+crash) resumes rather than redoing work. A prewarm stays cached while its
+PDFs exist, however long it goes unqueried; for a corpus over about 3,500
+documents with embeddings, raise `PDF_MCP_CACHE_MAX_MB` (below) so the size
+cap does not evict part of it.
 
 ## Caching
 
@@ -551,10 +556,22 @@ substring matching; `server_info` reports this as
 | Embeddings | Instant semantic search after first indexing run |
 | Rendered PNGs | Skip re-rendering; shared between `pdf_render_pages` and `pdf_read_pages(render_dpi=…)` |
 
-**Cache invalidation:**
-- Automatic when file modification time changes
-- Manual via the `pdf_cache_clear` tool
-- TTL: 24 hours (configurable)
+**When entries leave the cache:** a document stays cached while its PDF
+exists unchanged, however long it goes unused. A cleanup pass at server
+start (and on `pdf_cache_clear()`) removes a document when:
+
+- its PDF changed on disk (a changed file is also re-read on next use)
+- its PDF has been missing for 7 days, so an unplugged external or network
+  drive keeps its cache for a week
+- the cache is over `PDF_MCP_CACHE_MAX_MB` (2048 by default): the least
+  recently used documents go first. The cap counts cached content; the
+  database file keeps its largest size and reuses the freed space
+- `PDF_MCP_CACHE_TTL` is set and the document was not used for that many
+  hours
+
+`pdf_cache_clear(expired_only=False)` empties the cache. A long-running
+server (HTTP transport) runs the cleanup only at start or on
+`pdf_cache_clear()`, so it can grow past the cap in between.
 
 ## Network requests
 

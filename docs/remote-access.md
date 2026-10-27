@@ -56,7 +56,7 @@ A value in `roots` can be passed straight to `pdf_corpus_overview` or `pdf_corpu
 | | stdio | HTTP |
 |---|---|---|
 | **What the boundary is** | The operating system's user boundary. If you can spawn the process, you were already that user. | A bearer token in a header, only as strong as the client config file that holds it. |
-| **How long state lives** | `PDFCache._init_db` ends by calling `clear_expired()`, so every conversation that spawns the server sweeps the TTL. | The process is long-lived, so a warmed corpus and its cache outlive any single session. The sweep runs at startup, and the process may then run for weeks without another. |
+| **How long state lives** | `PDFCache._init_db` ends by calling `clear_expired()`, so every conversation that spawns the server runs the cleanup (changed or long-missing PDFs, the size cap, an opt-in TTL). | The process is long-lived, so a warmed corpus and its cache outlive any single session. The cleanup runs at startup, and the process may then run for weeks without another, growing past `PDF_MCP_CACHE_MAX_MB` until a restart or `pdf_cache_clear()`. |
 | **What bounds local reads** | The user's own filesystem permissions. | The `[paths]` allow list, and nothing else. That is why its absence is a startup failure rather than a warning. |
 | **What the caller can fetch** | Same URL-fetching branch, but reachable only by someone who is already that user. | The token buys outbound HTTPS fetching too. `_resolve_path` treats an `https://` value as a download, governed by `[urls]`, which is empty (unrestricted) by default. |
 

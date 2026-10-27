@@ -306,8 +306,10 @@ _VALIDATION_TTL_HOURS = 100 * 8760  # a warm cache's age must never matter here
 def open_validation_cache(cache_dir: Path | None):
     """Open the cache the harnesses score against without purging it.
 
-    PDFCache drops rows older than its TTL (24 h by default) on open, which
-    empties a warm benchmark cache from an earlier day just by looking at it.
+    PDFCache drops rows older than its TTL on open when one is set (24 h by
+    default before #88), which emptied a warm benchmark cache from an
+    earlier day just by looking at it. Pinning a long TTL keeps this safe
+    whatever PDF_MCP_CACHE_TTL a caller passes through.
     """
     from pdf_mcp.cache import PDFCache
 

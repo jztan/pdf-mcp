@@ -204,7 +204,9 @@ def server_info() -> dict[str, Any]:
             writes are then several times slower on Windows (~57ms per page
             write against ~11ms under WAL).
         - config: {max_workers, max_response_bytes, cache_ttl_hours,
-                   cache_dir}. cache_dir is a local filesystem path
+                   cache_max_mb, cache_dir}. cache_ttl_hours is null unless
+                   PDF_MCP_CACHE_TTL is set; cache_max_mb is null when the
+                   size cap is off. cache_dir is a local filesystem path
                    (single-user STDIO deployment, per the pdf_cache_stats
                    precedent).
         - update: {current, latest, update_available, checked_at,
@@ -238,6 +240,11 @@ def server_info() -> dict[str, Any]:
             "max_workers": max_workers,
             "max_response_bytes": _core.pdf_config.max_response_bytes,
             "cache_ttl_hours": _core.cache.ttl_hours,
+            "cache_max_mb": (
+                None
+                if _core.cache.max_bytes is None
+                else _core.cache.max_bytes // (1024 * 1024)
+            ),
             "cache_dir": str(_core.cache.cache_dir),
         },
     }
@@ -254,7 +261,10 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
     Clear the PDF cache.
 
     Args:
-        expired_only: If True, only clear expired entries. If False, clear everything.
+        expired_only: If True, only clear expired entries: documents whose PDF
+            changed or has been missing for 7 days, past PDF_MCP_CACHE_TTL
+            when set, or least recently used ones over PDF_MCP_CACHE_MAX_MB.
+            If False, clear everything.
 
     Returns:
         - cleared_files: Number of files cleared from metadata cache

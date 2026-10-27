@@ -155,6 +155,31 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
 )
 
 
+# Every table that holds rows for one document, keyed by file_path. A purge
+# (file changed, file gone, TTL, size cap, invalidation) deletes from all of
+# them; a table missing here leaks rows past every purge.
+_PER_DOC_TABLES = (
+    "pdf_metadata",
+    "page_text",
+    "page_images",
+    "page_tables",
+    "page_embeddings",
+    "page_blocks",
+    "page_renders",
+    "page_charts",
+    "doc_profiles",
+    "section_embeddings",
+    "pdf_search_fts",
+    "pdf_search_fts_cjk",
+    "pdf_search_fts_de",
+    "pdf_section_fts",
+    "pdf_section_fts_cjk",
+    "pdf_section_fts_de",
+)
+# Paths per DELETE ... IN (...): under the 999-variable limit of old SQLite.
+_PURGE_CHUNK = 500
+
+
 def _is_cjk_char(ch: str) -> bool:
     o = ord(ch)
     return any(lo <= o <= hi for lo, hi in _CJK_RANGES)
@@ -2370,43 +2395,44 @@ class PDFCache:
 
     # ==================== Cache Management ====================
 
+    def _purge_paths(self, conn: sqlite3.Connection, paths: list[str]) -> None:
+        """Delete every cached row and file for ``paths``.
+
+        The one place a document leaves the cache, so a table added later
+        only has to be listed in ``_PER_DOC_TABLES``. Tables that a cache
+        may not have (FTS5 missing, ``page_blocks`` created on first write,
+        the German pair) are skipped.
+        """
+        if not paths:
+            return
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        for start in range(0, len(paths), _PURGE_CHUNK):
+            chunk = paths[start : start + _PURGE_CHUNK]
+            placeholders = ",".join("?" * len(chunk))
+            # Files on disk first: once the rows are gone nothing points at them.
+            for table in ("page_images", "page_renders"):
+                for (on_disk,) in conn.execute(
+                    f"SELECT file_path_on_disk FROM {table}"
+                    f" WHERE file_path IN ({placeholders})",
+                    chunk,
+                ).fetchall():
+                    _unlink_quietly(on_disk)
+            for table in _PER_DOC_TABLES:
+                if table in present:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE file_path IN ({placeholders})",
+                        chunk,
+                    )
+
     def _invalidate_file(self, path: str) -> None:
         """Remove all cache entries for a file."""
         with self._connect() as conn:
-            # Delete image files from disk before removing DB rows
-            rows = conn.execute(
-                "SELECT file_path_on_disk FROM page_images WHERE file_path = ?",
-                (path,),
-            ).fetchall()
-            for row in rows:
-                _unlink_quietly(row[0])
-
-            # Delete render PNG files before removing DB rows
-            render_rows = conn.execute(
-                "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
-                (path,),
-            ).fetchall()
-            for (render_path,) in render_rows:
-                _unlink_quietly(render_path)
-            conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_charts WHERE file_path = ?", (path,))
-
-            conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM doc_profiles WHERE file_path = ?", (path,))
-            conn.execute(
-                "DELETE FROM section_embeddings WHERE file_path = ?",
-                (path,),
-            )
-            if self.fts_available:
-                conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
-            if self._de_tables_exist:
-                conn.execute(
-                    "DELETE FROM pdf_search_fts_de WHERE file_path = ?", (path,)
-                )
+            self._purge_paths(conn, [path])
 
     def clear_expired(self) -> int:
         """
@@ -2429,78 +2455,7 @@ class PDFCache:
             ).fetchall()
 
             expired_paths = [row[0] for row in expired]
-
-            if expired_paths:
-                placeholders = ",".join("?" * len(expired_paths))
-
-                # Delete image files from disk
-                img_rows = conn.execute(
-                    f"SELECT file_path_on_disk FROM page_images"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                ).fetchall()
-                for row in img_rows:
-                    _unlink_quietly(row[0])
-
-                conn.execute(
-                    f"DELETE FROM pdf_metadata WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_text WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_images WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_embeddings"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM doc_profiles WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM section_embeddings"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                if self.fts_available:
-                    conn.execute(
-                        f"DELETE FROM pdf_search_fts"
-                        f" WHERE file_path IN ({placeholders})",
-                        expired_paths,
-                    )
-                if self._de_tables_exist:
-                    conn.execute(
-                        f"DELETE FROM pdf_search_fts_de"
-                        f" WHERE file_path IN ({placeholders})",
-                        expired_paths,
-                    )
-
-                # Delete render PNG files for expired paths
-                render_rows = conn.execute(
-                    f"SELECT file_path_on_disk FROM page_renders"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                ).fetchall()
-                for (render_path,) in render_rows:
-                    _unlink_quietly(render_path)
-                conn.execute(
-                    f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_charts WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
+            self._purge_paths(conn, expired_paths)
 
         # Sweep page_renders for stale-mtime entries (PDF file changed)
         with self._connect() as conn2:
@@ -2547,6 +2502,12 @@ class PDFCache:
             conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
             conn.execute("DELETE FROM page_charts")
+            # page_blocks is created on first write, so it may not exist yet.
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master"
+                " WHERE type = 'table' AND name = 'page_blocks'"
+            ).fetchone():
+                conn.execute("DELETE FROM page_blocks")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
                 conn.execute("DELETE FROM pdf_search_fts_cjk")

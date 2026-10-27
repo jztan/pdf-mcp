@@ -1954,3 +1954,87 @@ class TestExistenceSweep:
         cache = PDFCache(cache_dir=tmp_path)
         with sqlite3.connect(cache.db_path) as conn:
             assert "missing_since" in _get_columns(conn, "pdf_metadata")
+
+
+class TestSizeCap:
+    """Over max_bytes the sweep evicts least recently used documents (#88)."""
+
+    BLOB = 300_000
+
+    @pytest.fixture
+    def three_docs(self, tmp_path, sample_pdf):
+        import shutil
+
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        paths = []
+        for i, age in enumerate((3, 2, 1)):  # days since last access
+            p = str(tmp_path / f"d{i}.pdf")
+            shutil.copy2(sample_pdf, p)
+            cache.save_metadata(p, 1, {}, [])
+            cache.save_page_text(p, 0, f"doc {i}")
+            cache.save_page_embeddings(p, {0: [os.urandom(self.BLOB)]}, "m")
+            with sqlite3.connect(cache.db_path) as conn:
+                conn.execute(
+                    "UPDATE pdf_metadata SET accessed_at = datetime('now', ?)"
+                    " WHERE file_path = ?",
+                    (f"-{age} days", p),
+                )
+            paths.append(p)
+        return cache, paths
+
+    @staticmethod
+    def _cap_fitting_all_but_oldest(cache, paths):
+        from pdf_mcp.cache import _ESTIMATE_TO_DISK
+
+        with sqlite3.connect(cache.db_path) as conn:
+            est = cache._doc_size_estimates(conn)
+            live = cache._live_bytes(conn)
+        total = sum(est.values())
+        cap = int((total - est[paths[0]]) * _ESTIMATE_TO_DISK) + 1
+        assert total * _ESTIMATE_TO_DISK > cap and live > cap, (total, live, cap)
+        return cap
+
+    def test_under_cap_evicts_nothing(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = 100 * 1024 * 1024
+        assert cache.clear_expired() == 0
+
+    def test_over_cap_evicts_least_recently_used_first(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = self._cap_fitting_all_but_oldest(cache, paths)
+        assert cache.clear_expired() == 1
+        assert cache.get_metadata(paths[0]) is None
+        assert cache.get_metadata(paths[1]) is not None
+        assert cache.get_metadata(paths[2]) is not None
+
+    def test_eviction_does_not_cascade_past_cap(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = self._cap_fitting_all_but_oldest(cache, paths)
+        assert cache.clear_expired() == 1
+        assert cache.clear_expired() == 0
+        assert cache.get_metadata(paths[1]) is not None
+        assert cache.get_metadata(paths[2]) is not None
+
+    def test_single_doc_over_cap_is_evicted(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = 1
+        assert cache.clear_expired() == 3
+        assert cache.get_stats()["total_files"] == 0
+
+    def test_max_bytes_none_never_evicts(self, three_docs):
+        cache, paths = three_docs
+        assert cache.max_bytes is None
+        assert cache.clear_expired() == 0
+
+    def test_estimate_counts_blocks_tables_and_files(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 1, {}, [])
+        cache.save_page_text(sample_pdf, 0, "x" * 1000)
+        with sqlite3.connect(cache.db_path) as conn:
+            base = cache._doc_size_estimates(conn)[sample_pdf]
+        assert base == 3000
+        cache.save_page_blocks(sample_pdf, {0: ([["b" * 500]], (1, 1))})
+        cache.save_page_tables(sample_pdf, 0, [{"c": "t" * 200}])
+        with sqlite3.connect(cache.db_path) as conn:
+            grown = cache._doc_size_estimates(conn)[sample_pdf]
+        assert grown >= base + 700

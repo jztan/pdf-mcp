@@ -7245,3 +7245,69 @@ class TestCorpusSearchSemanticPending:
         assert incomplete
         for p in incomplete:
             assert p in r["unprocessed"] or p in r["semantic_unprocessed"], p
+
+
+class TestBackgroundEmbeddingAfterCorpusCalls:
+    """Issue #89: what a corpus call leaves text-only keeps embedding after
+    it returns, so the next call finds it embedded."""
+
+    @pytest.fixture(autouse=True)
+    def _enabled(self, monkeypatch):
+        from pdf_mcp import corpus
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "1")
+        # negative, not 0.0: a coarse clock (Windows) can read 0.0 elapsed
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        yield
+        corpus.BACKGROUND_EMBED.stop()
+        corpus.BACKGROUND_EMBED.join(5)
+
+    def test_auto_search_hands_pending_docs_to_the_background(
+        self, corpus_dir, isolated_server
+    ):
+        from pdf_mcp import corpus
+
+        first = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert first["semantic_pending"] is True
+        assert first["embeddings_pending"]["in_background"] == 3
+        assert corpus.BACKGROUND_EMBED.join(15)
+
+        again = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert "semantic_pending" not in again
+        assert again["search_mode"] == "hybrid"
+
+    def test_warm_reports_and_finishes_in_the_background(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        real = corpus._warm_sequential
+
+        def no_embed_budget(pending, budget_seconds, start, clock, cache, emb, *a):
+            # the embedding phase gets no time, as when text fills a budget
+            if emb:
+                budget_seconds = -1.0
+            return real(pending, budget_seconds, start, clock, cache, emb, *a)
+
+        monkeypatch.setattr(corpus, "_warm_sequential", no_embed_budget)
+        first = pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        assert first["warm_complete"] is False
+        assert first["embedding_in_background"] == 3
+        assert corpus.BACKGROUND_EMBED.join(15)
+
+        monkeypatch.setattr(corpus, "_warm_sequential", real)
+        again = pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        assert again["warm_complete"] is True
+        assert again["cached_without_embeddings"] == 0
+        assert again["embedding_in_background"] == 0
+
+    def test_cache_clear_stops_it(self, corpus_dir, isolated_server, monkeypatch):
+        from pdf_mcp import corpus
+
+        stopped = []
+        monkeypatch.setattr(
+            corpus.BACKGROUND_EMBED, "stop", lambda: stopped.append(True)
+        )
+        pdf_cache_clear(expired_only=False)
+        assert stopped == [True]

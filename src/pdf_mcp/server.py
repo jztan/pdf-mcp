@@ -108,7 +108,9 @@ def main() -> None:
         mcp.run(transport="stdio", show_banner=False)
     finally:
         # A warm call may have left an extraction running (issue #82);
-        # it must not keep the exiting server alive.
+        # it must not keep the exiting server alive. Background embedding
+        # (issue #89) stops before its next write.
+        corpus.BACKGROUND_EMBED.stop()
         corpus.WARM_POOL.shutdown_now()
 
 
@@ -179,6 +181,7 @@ def main_http() -> None:
     try:
         mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
     finally:
+        corpus.BACKGROUND_EMBED.stop()
         corpus.WARM_POOL.shutdown_now()
 
 

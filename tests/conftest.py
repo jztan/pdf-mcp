@@ -85,7 +85,12 @@ def _warm_in_process(monkeypatch):
     from pdf_mcp import corpus
 
     monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+    # Background embedding (issue #89) races the assertions that follow a
+    # call; tests that exercise it set PDF_MCP_BACKGROUND_EMBED=1.
+    monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "0")
     yield
+    corpus.BACKGROUND_EMBED.stop()
+    corpus.BACKGROUND_EMBED.join(5)
     corpus.WARM_POOL.shutdown_now()
 
 

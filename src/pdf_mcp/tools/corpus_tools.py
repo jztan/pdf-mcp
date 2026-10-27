@@ -64,6 +64,24 @@ def _corpus_busy(waited: float) -> dict[str, Any]:
     }
 
 
+def _embed_in_background(
+    warm: dict[str, Any],
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+) -> int:
+    """Issue #89: keep embedding the docs this call left text-only after it
+    returns. The thread waits for this call to release the PDF lock. Docs
+    whose encode just failed are left to the next call, which reports why.
+    """
+    pending = set(warm.get("emb_pending", []))
+    docs = [
+        (str(d["path"]), int(d["pages"]))
+        for d in warm["docs"]
+        if d["path"] in pending and not d.get("embed_error")
+    ]
+    return corpus.BACKGROUND_EMBED.start(docs, _core.cache, model_name, embed)
+
+
 # ============================================================================
 # Tool: pdf_corpus_warm - warm a folder of PDFs into the cache
 # ============================================================================
@@ -82,6 +100,8 @@ def _corpus_busy(waited: float) -> dict[str, Any]:
         " run and re-issue the same call. A corpus of hundreds of files"
         " takes several such calls (500 docs: text about 90 s, embeddings"
         " about 30 minutes): loop on `warm_complete`, not on `unprocessed`."
+        " With embeddings=True, embedding continues in the server between"
+        " calls, so time between calls is not lost."
     )
 )
 @pdf_access_within("budget_seconds", _corpus_busy)
@@ -165,6 +185,10 @@ def pdf_corpus_warm(
           many of them hold no embeddings for the configured model, so
           a text-only call still answers whether an embeddings pass is
           needed
+        - embedding_in_background: docs this call left text-only that the
+          server keeps embedding after it returns (0 without
+          embeddings=True); the next call finds them further along or
+          cached. It runs only while no tool call does.
         - corpus_size, warmed_this_call, budget_exhausted
 
     Error contract: call-level failures (missing directory, empty
@@ -215,6 +239,7 @@ def pdf_corpus_warm(
         embed=embed_fn,
         sections=sections,
     )
+    in_background = _embed_in_background(warm, model_name, embed_fn) if embed_fn else 0
     # Issue #86: a 500-doc warm took 37 calls and returned a row per doc on
     # each (73 to 124 KB a call, 3.7 MB in all). Cached rows carry nothing
     # new after the first call, so they are counted, except a doc with no
@@ -238,6 +263,7 @@ def pdf_corpus_warm(
         "corpus_size": len(res["files"]),
         "warmed_this_call": warm["warmed_this_call"],
         "budget_exhausted": warm["budget_exhausted"],
+        "embedding_in_background": in_background,
         **_corpus_completeness(warm["unprocessed"], res["skipped"] + warm["skipped"]),
     }
 
@@ -841,6 +867,7 @@ def _semantic_pending_fields(
     embed_stats: dict[str, Any],
     model_name: str,
     last_error: str | None = None,
+    in_background: int = 0,
 ) -> dict[str, Any]:
     """Agent-facing signals for a keyword-only answer while embeddings are
     pending. Worded from a consumer tryout (2026-09-28): agents asked for a
@@ -862,7 +889,11 @@ def _semantic_pending_fields(
             " document."
         )
     pages = sum(corpus.pending_embed_pages(p, _core.cache, model_name) for p in pending)
-    pending_info: dict[str, Any] = {"docs": len(pending), "pages": pages}
+    pending_info: dict[str, Any] = {
+        "docs": len(pending),
+        "pages": pages,
+        "in_background": in_background,
+    }
     done, seconds = int(embed_stats["pages"]), float(embed_stats["seconds"])
     if done > 0 and seconds > 0:
         pending_info["est_seconds"] = math.ceil(pages / (done / seconds))
@@ -1051,8 +1082,10 @@ def pdf_corpus_search(
           `semantic_unprocessed` lists the pending ones. `hint`
           says in one sentence whether the keyword answer is reliable
           for this query. `embeddings_pending` = {docs, pages,
-          est_seconds (only when this call measured an embedding
-          rate), last_error (when embedding failed this call)}.
+          in_background (how many keep embedding in the server after
+          this call returns), est_seconds (only when this call measured
+          an embedding rate), last_error (when embedding failed this
+          call)}.
           `next_call` is the pdf_corpus_warm call that finishes the
           embeddings; `warm_complete` stays false until it has.
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
@@ -1167,6 +1200,9 @@ def pdf_corpus_search(
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
     emb_pending = list(warm.get("emb_pending", []))
+    in_background = 0
+    if embed_fn is not None and embed_model is not None:
+        in_background = _embed_in_background(warm, embed_model, embed_fn)
     semantic_pending = mode == "auto" and embeddings_needed and bool(emb_pending)
     # On the keyword-first answer the pending docs were searched by keyword,
     # so `unprocessed` (not searched at all) leaves them out. Every other
@@ -1385,6 +1421,7 @@ def pdf_corpus_search(
                         ),
                         None,
                     ),
+                    in_background,
                 )
             )
         elif mode == "auto":

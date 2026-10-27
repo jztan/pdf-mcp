@@ -119,6 +119,12 @@ PDF_MCP_MAX_WORKERS=8
 # documents are dropped past the budget. 0 disables the in-memory copy.
 PDF_MCP_VECTOR_CACHE_MB=256
 
+# Background embedding (default: on). When a corpus call returns with
+# documents that have text but no embeddings yet, the server keeps embedding
+# them between calls, only while no tool call is running. 0 turns it off, so
+# embeddings progress only during calls.
+PDF_MCP_BACKGROUND_EMBED=1
+
 # Embedding device. 1 = use the GPU and warn if it is not available;
 # 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
 # Needs onnxruntime-gpu and a CUDA runtime; see "GPU embedding (NVIDIA

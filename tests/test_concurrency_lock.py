@@ -525,3 +525,95 @@ def test_a_corpus_call_queued_past_its_budget_returns_busy(tmp_path):
     assert not t.is_alive()
     assert "error" in result[0] and "hint" in result[0]
     assert "budget" in result[0]["error"]
+
+
+# Background work (issue #89): a background job takes the lock only when no
+# tool call holds it or waits for it, and gives it up to any call that
+# arrives, so tool calls never queue behind it.
+
+
+def test_background_access_waits_until_the_lock_is_idle():
+    lock = FairLock()
+    stop = threading.Event()
+    events = []
+    lock.acquire()
+
+    def background():
+        assert lock.acquire_when_idle(stop)
+        events.append("background ran")
+        lock.release()
+
+    t = _start(background)
+    time.sleep(0.1)
+    assert events == []  # never queued a ticket: the holder sees no waiter
+    assert lock.waiters() == 0
+    events.append("holder done")
+    lock.release()
+    t.join(timeout=5)
+    assert events == ["holder done", "background ran"]
+
+
+def test_background_access_returns_false_once_stopped():
+    lock = FairLock()
+    stop = threading.Event()
+    result = []
+    lock.acquire()
+    t = _start(lambda: result.append(lock.acquire_when_idle(stop)))
+    time.sleep(0.05)
+    stop.set()
+    t.join(timeout=5)
+    lock.release()
+    assert result == [False]
+    assert not t.is_alive()
+
+
+def test_background_yield_lets_a_tool_call_finish_before_resuming():
+    """A plain yield_turn would hand the lock back after the tool call's
+    first own yield; the background yield waits until the call is done."""
+    lock = FairLock()
+    stop = threading.Event()
+    events = []
+    assert lock.acquire_when_idle(stop)
+
+    def tool_call():
+        with lock:
+            events.append("call start")
+            lock.yield_turn()  # e.g. between pages of pdf_read_all
+            events.append("call end")
+
+    t = _start(tool_call)
+    _wait_for_waiters(lock, 1)
+    lock.yield_to_waiters(stop)
+    events.append("background resumed")
+    assert lock.held_by_current_thread()
+    lock.release()
+    t.join(timeout=5)
+    assert events == ["call start", "call end", "background resumed"]
+
+
+def test_background_yield_raises_without_the_lock_once_stopped():
+    lock = FairLock()
+    stop = threading.Event()
+    assert lock.acquire_when_idle(stop)
+    stop.set()
+    with pytest.raises(concurrency.BackgroundStopped):
+        lock.yield_to_waiters(stop)
+    assert not lock.held_by_current_thread()
+    with lock:  # and the lock is free for everyone else
+        pass
+
+
+def test_module_yield_uses_the_background_rule_inside_background_access(
+    monkeypatch,
+):
+    lock = FairLock()
+    monkeypatch.setattr(concurrency, "PDF_ACCESS", lock)
+    stop = threading.Event()
+    with concurrency.background_access(stop):
+        assert lock.held_by_current_thread()
+        stop.set()
+        with pytest.raises(concurrency.BackgroundStopped):
+            yield_pdf_access()
+    assert not lock.held_by_current_thread()
+    with lock:
+        yield_pdf_access()  # a tool call's yield is unchanged

@@ -477,7 +477,8 @@ def test_pdf_access_within_returns_busy_instead_of_waiting_past_the_budget(
     t = _start(lambda: result.append(tool(budget_seconds=1)))
     t.join(timeout=10)
     lock.release()
-    assert "busy" in result[0] and result[0]["busy"] >= 1
+    # Not >= 1: Windows ticks monotonic() at ~15.6 ms.
+    assert "busy" in result[0] and result[0]["busy"] >= 0.9
 
 
 def test_pdf_access_within_reports_the_time_spent_queueing(monkeypatch):

@@ -282,6 +282,10 @@ def _resolve_path(
     assert local_path is not None
     if is_password_locked(local_path):
         return None, _password_required_payload(source)
+    # Every single-document tool resolves its path here, including the ones
+    # that read pages without get_metadata: mark the document used so the
+    # size cap and the TTL see it (#88). Throttled and best-effort.
+    cache.touch(local_path)
     return local_path, None
 
 

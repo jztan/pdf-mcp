@@ -2038,3 +2038,131 @@ class TestSizeCap:
         with sqlite3.connect(cache.db_path) as conn:
             grown = cache._doc_size_estimates(conn)[sample_pdf]
         assert grown >= base + 700
+
+
+class TestSweepReviewFixes:
+    """Final-review findings on the #88 sweep."""
+
+    def _with_render(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        png = cache.renders_dir / "r.png"
+        png.write_bytes(b"png")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            os.stat(sample_pdf).st_mtime,
+            72,
+            {"file_path_on_disk": str(png), "size_bytes": 3, "width": 1, "height": 1},
+        )
+        return cache, png
+
+    def _render_rows(self, cache):
+        with sqlite3.connect(cache.db_path) as conn:
+            return conn.execute("SELECT COUNT(*) FROM page_renders").fetchone()[0]
+
+    def test_missing_pdf_keeps_renders_within_grace(self, tmp_path, sample_pdf):
+        cache, png = self._with_render(tmp_path, sample_pdf)
+        away = tmp_path / "away.pdf"
+        os.replace(sample_pdf, away)
+        assert cache.clear_expired() == 0
+        assert self._render_rows(cache) == 1 and png.exists()
+        os.replace(away, sample_pdf)
+        assert cache.clear_expired() == 0
+        assert self._render_rows(cache) == 1 and png.exists()
+
+    def test_changed_pdf_still_drops_renders(self, tmp_path, sample_pdf):
+        cache, png = self._with_render(tmp_path, sample_pdf)
+        st = os.stat(sample_pdf)
+        os.utime(sample_pdf, (st.st_atime, st.st_mtime + 10))
+        cache.clear_expired()
+        assert self._render_rows(cache) == 0 and not png.exists()
+
+    def test_hung_stat_does_not_block_the_sweep(
+        self, tmp_path, sample_pdf, monkeypatch
+    ):
+        """A stat that never returns (dead hard-mounted share) is abandoned
+        at the deadline; its document is left as it was."""
+        import threading
+
+        import pdf_mcp.cache as cache_mod
+
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        release = threading.Event()
+        real_stat = os.stat
+
+        def hanging_stat(p, *a, **kw):
+            if str(p) == sample_pdf:
+                release.wait(30)
+            return real_stat(p, *a, **kw)
+
+        monkeypatch.setattr(cache_mod, "_STAT_DEADLINE_S", 0.2)
+        monkeypatch.setattr(os, "stat", hanging_stat)
+        try:
+            start = time.monotonic()
+            assert cache.clear_expired() == 0
+            assert time.monotonic() - start < 5
+            assert _missing_since(cache, sample_pdf) is None
+        finally:
+            release.set()
+        assert cache.get_metadata(sample_pdf) is not None
+
+
+def _accessed_age_hours(cache: PDFCache, path: str) -> float:
+    with sqlite3.connect(cache.db_path) as conn:
+        return conn.execute(
+            "SELECT (julianday('now') - julianday(accessed_at)) * 24"
+            " FROM pdf_metadata WHERE file_path = ?",
+            (path,),
+        ).fetchone()[0]
+
+
+class TestTouch:
+    """Reads that skip get_metadata still mark a document as used (#88)."""
+
+    def test_touch_refreshes_accessed_at(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        cache.touch(sample_pdf)
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1
+
+    def test_touch_is_throttled_per_process(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.touch(sample_pdf)
+        _set_meta(cache, "accessed_at", "datetime('now', '-2 days')")
+        cache.touch(sample_pdf)  # within the hour: no write
+        assert _accessed_age_hours(cache, sample_pdf) > 47
+
+    def test_touch_of_uncached_path_is_harmless(self, tmp_path):
+        PDFCache(cache_dir=tmp_path).touch("/no/such.pdf")
+
+    def test_touch_never_raises_on_a_locked_db(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        locker = sqlite3.connect(cache.db_path, timeout=0)
+        locker.execute("BEGIN EXCLUSIVE")
+        try:
+            import pdf_mcp.cache as cache_mod
+
+            orig = cache_mod._BUSY_TIMEOUT_MS
+            cache_mod._BUSY_TIMEOUT_MS = 10
+            try:
+                cache.touch(sample_pdf)
+            finally:
+                cache_mod._BUSY_TIMEOUT_MS = orig
+        finally:
+            locker.rollback()
+            locker.close()
+
+    def test_read_pages_marks_the_document_used(self, isolated_server, sample_pdf):
+        from pdf_mcp.server import pdf_info, pdf_read_pages
+
+        cache, _ = isolated_server
+        pdf_info(sample_pdf)  # writes the pdf_metadata row
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        cache._touched.clear()  # a new server process
+        pdf_read_pages(sample_pdf, "1")
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1

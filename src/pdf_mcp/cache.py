@@ -9,6 +9,8 @@ import os
 import re
 import shutil
 import sqlite3
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -188,6 +190,14 @@ _SECTION_FTS_TABLES = frozenset(
 # deletes free almost no pages, so a ratio read from the file would grow
 # after every eviction and evict more on every restart.
 _ESTIMATE_TO_DISK = 1.3
+# Wall-clock limit for stat-ing every cached path at startup. A stat on a
+# dead hard-mounted network share can block for minutes, and the sweep runs
+# before the server answers initialize; paths not stat-ed in time are left
+# exactly as they are until the next sweep.
+_STAT_DEADLINE_S = 5.0
+# Seconds between touch() writes for one path: least-recently-used order
+# only needs hour resolution, and a write per read would contend with warms.
+_TOUCH_INTERVAL_S = 3600.0
 # Paths per DELETE ... IN (...): under the 999-variable limit of old SQLite.
 _PURGE_CHUNK = 500
 
@@ -666,6 +676,8 @@ class PDFCache:
         self.db_path = self.cache_dir / "cache.db"
         self.ttl_hours = ttl_hours
         self.max_bytes = max_bytes
+        # path -> monotonic time of this process's last touch() write.
+        self._touched: dict[str, float] = {}
         self.images_dir = images_dir or (self.cache_dir / "images")
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
@@ -1320,6 +1332,36 @@ class PDFCache:
                     sec_inserts,
                 )
 
+    def _stat_mtimes(self, paths: list[str]) -> dict[str, float | None]:
+        """mtime per path, None when the stat failed (missing or unreadable).
+
+        Stats run in a daemon thread joined for ``_STAT_DEADLINE_S``; a path
+        whose stat has not returned by then is absent from the result
+        (unknown). A daemon thread stuck in a stat does not block exit.
+        """
+        found: dict[str, float | None] = {}
+
+        def run() -> None:
+            for path in paths:
+                try:
+                    found[path] = self._get_file_info(path)[0]
+                except OSError:
+                    found[path] = None
+
+        worker = threading.Thread(target=run, name="pdf-mcp-stat", daemon=True)
+        worker.start()
+        worker.join(_STAT_DEADLINE_S)
+        snapshot = dict(found)
+        if worker.is_alive():
+            logger.warning(
+                "cache sweep: %d of %d cached paths did not answer a stat"
+                " within %.0f s (unresponsive mount?); left as they are",
+                len(paths) - len(snapshot),
+                len(paths),
+                _STAT_DEADLINE_S,
+            )
+        return snapshot
+
     def _get_file_info(self, path: str) -> tuple[float, int]:
         """Get file modification time and size."""
         stat = os.stat(path)
@@ -1386,6 +1428,30 @@ class PDFCache:
                     else None
                 ),
             }
+
+    def touch(self, path: str) -> None:
+        """Mark a cached document as used, for the size cap and the TTL.
+
+        ``get_metadata`` already does this; tools that read pages, search or
+        render without it call this once per call. Throttled to one write
+        per path per ``_TOUCH_INTERVAL_S`` in this process, and best-effort:
+        a locked database never fails the caller's tool call.
+        """
+        now = time.monotonic()
+        last = self._touched.get(path)
+        if last is not None and now - last < _TOUCH_INTERVAL_S:
+            return
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE pdf_metadata SET accessed_at = CURRENT_TIMESTAMP"
+                    " WHERE file_path = ?",
+                    (path,),
+                )
+        except sqlite3.OperationalError:
+            logger.debug("touch(%s) skipped: database busy", path)
+            return
+        self._touched[path] = now
 
     @contextlib.contextmanager
     def write_transaction(self) -> Any:
@@ -2487,12 +2553,21 @@ class PDFCache:
             changed: list[str] = []
             present: list[str] = []
             missing: list[str] = []
-            for path, cached_mtime in conn.execute(
+            rows = conn.execute(
                 "SELECT file_path, file_mtime FROM pdf_metadata"
-            ).fetchall():
-                try:
-                    mtime, _ = self._get_file_info(path)
-                except OSError:
+            ).fetchall()
+            render_rows = conn.execute(
+                "SELECT file_path, MIN(file_mtime) FROM page_renders"
+                " GROUP BY file_path"
+            ).fetchall()
+            mtimes = self._stat_mtimes(
+                list(dict.fromkeys([r[0] for r in rows] + [r[0] for r in render_rows]))
+            )
+            for path, cached_mtime in rows:
+                if path not in mtimes:
+                    continue  # stat did not answer in time: leave it be
+                mtime = mtimes[path]
+                if mtime is None:
                     # Not found, or unreadable for now (permissions, a
                     # flaky network share): both wait out the grace period.
                     missing.append(path)
@@ -2551,27 +2626,20 @@ class PDFCache:
             evicted = self._evict_over_cap(conn)
             expired_paths = [*removed, *changed, *evicted]
 
-        # Sweep page_renders for stale-mtime entries (PDF file changed)
+        # Renders of a PDF that changed on disk, including renders of a
+        # document with no metadata row. A missing PDF keeps its renders:
+        # they follow the document's grace period above.
         with self._connect() as conn2:
-            stale_paths = conn2.execute(
-                "SELECT DISTINCT file_path FROM page_renders"
-            ).fetchall()
-            for (rpath,) in stale_paths:
-                sample_row = conn2.execute(
-                    "SELECT file_mtime FROM page_renders WHERE file_path = ? LIMIT 1",
+            for rpath, rmtime in render_rows:
+                current = mtimes.get(rpath)
+                if current is None or current == rmtime:
+                    continue
+                for (fp,) in conn2.execute(
+                    "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
                     (rpath,),
-                ).fetchone()
-                if sample_row and not self._is_cache_valid(rpath, sample_row[0]):
-                    stale_render_rows = conn2.execute(
-                        "SELECT file_path_on_disk FROM page_renders"
-                        " WHERE file_path = ?",
-                        (rpath,),
-                    ).fetchall()
-                    for (fp,) in stale_render_rows:
-                        _unlink_quietly(fp)
-                    conn2.execute(
-                        "DELETE FROM page_renders WHERE file_path = ?", (rpath,)
-                    )
+                ).fetchall():
+                    _unlink_quietly(fp)
+                conn2.execute("DELETE FROM page_renders WHERE file_path = ?", (rpath,))
 
         return len(expired_paths)
 

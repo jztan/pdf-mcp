@@ -1236,9 +1236,11 @@ class TestPageEmbeddingsByom:
                     PRIMARY KEY (file_path, page_num)
                 )
             """)
+            # The file's real mtime: the startup cleanup purges rows cached
+            # for a different mtime (#88).
             conn.execute(
-                "INSERT INTO page_embeddings VALUES (?, 0, 0.0, ?)",
-                (sample_pdf, b"\x00" * 1536),
+                "INSERT INTO page_embeddings VALUES (?, 0, ?, ?)",
+                (sample_pdf, os.stat(sample_pdf).st_mtime, b"\x00" * 1536),
             )
         PDFCache(cache_dir=temp_cache_dir)
         with sqlite3.connect(db_path) as conn:

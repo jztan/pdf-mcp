@@ -55,9 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PDF_MCP_CACHE_MAX_MB` (2048 by default, `0` for no cap), least recently
   used first. `PDF_MCP_CACHE_TTL` still sets a time expiry, but only when
   it is set. `server_info` reports the cap as `config.cache_max_mb`, and
-  `config.cache_ttl_hours` is `null` unless a TTL is set. Removing a
-  document now also clears its layout and Chinese/Japanese/Korean keyword
-  rows, which used to stay behind
+  `config.cache_ttl_hours` is `null` unless a TTL is set. These rules also
+  cover documents cached only by `pdf_read_pages`, `pdf_search` or
+  `pdf_render_pages`, whose rows used to stay in the cache indefinitely
+  because no expiry ever saw them. Removing a document now also clears its
+  layout and Chinese/Japanese/Korean keyword rows, which used to stay behind
   ([#88](https://github.com/jztan/pdf-mcp/issues/88))
 - **`pdf_corpus_warm` lists only the documents a call changed.**
   Already-cached documents are now counted in `cached_docs` (with

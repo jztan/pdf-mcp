@@ -162,6 +162,7 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
 # them; a table missing here leaks rows past every purge.
 _PER_DOC_TABLES = (
     "pdf_metadata",
+    "doc_usage",
     "page_text",
     "page_images",
     "page_tables",
@@ -181,9 +182,14 @@ _PER_DOC_TABLES = (
 # Days a cached PDF may be missing before its rows are purged. Long enough
 # that an external or network drive unplugged over a week keeps its cache.
 _MISSING_GRACE_DAYS = 7
-_SECTION_FTS_TABLES = frozenset(
-    ("pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de")
+# Kept when a PDF changed on disk (see _purge_paths): the section index,
+# and the document's usage record, which tracks use rather than content.
+_KEPT_WHEN_CHANGED = frozenset(
+    ("pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de", "doc_usage")
 )
+# Last use of a document: the later of the two access stamps. Used by the
+# TTL and the size cap over doc_usage u LEFT JOIN pdf_metadata m.
+_LAST_USED_SQL = "MAX(u.accessed_at, COALESCE(m.accessed_at, u.accessed_at))"
 # On-disk bytes per byte of _doc_size_estimates content: B-tree pages,
 # indexes and FTS5 structure. Measured 1.27 on a 500-document warm cache
 # (estimate 240.6 MB, file 305.2 MB). A constant, not a live ratio: FTS5
@@ -828,7 +834,18 @@ class PDFCache:
                     toc JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    content_trust_json TEXT DEFAULT NULL,
+                    content_trust_json TEXT DEFAULT NULL
+                );
+
+                -- One row per cached document, whichever tool cached it:
+                -- pdf_read_pages, pdf_search and pdf_render_pages cache page
+                -- rows without a pdf_metadata row. accessed_at is the last
+                -- use (with pdf_metadata.accessed_at, the later wins);
+                -- missing_since is when the cleanup first found the PDF
+                -- gone (#88).
+                CREATE TABLE IF NOT EXISTS doc_usage (
+                    file_path TEXT PRIMARY KEY,
+                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     missing_since TIMESTAMP DEFAULT NULL
                 );
 
@@ -1023,14 +1040,6 @@ class PDFCache:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
-                )
-
-            # pdf_metadata: when the sweep first found the PDF gone (#88)
-            cols = _get_columns(conn, "pdf_metadata")
-            if cols and "missing_since" not in cols:
-                conn.execute(
-                    "ALTER TABLE pdf_metadata"
-                    " ADD COLUMN missing_since TIMESTAMP DEFAULT NULL"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -1432,8 +1441,9 @@ class PDFCache:
     def touch(self, path: str) -> None:
         """Mark a cached document as used, for the size cap and the TTL.
 
-        ``get_metadata`` already does this; tools that read pages, search or
-        render without it call this once per call. Throttled to one write
+        ``get_metadata`` stamps ``pdf_metadata``; this stamps ``doc_usage``,
+        which also covers documents cached without a metadata row. Tools
+        call it once per call through ``_resolve_path``. Throttled to one write
         per path per ``_TOUCH_INTERVAL_S`` in this process, and best-effort:
         a locked database never fails the caller's tool call.
         """
@@ -1444,7 +1454,10 @@ class PDFCache:
         try:
             with self._connect() as conn:
                 conn.execute(
-                    "UPDATE pdf_metadata SET accessed_at = CURRENT_TIMESTAMP"
+                    "INSERT OR IGNORE INTO doc_usage (file_path) VALUES (?)", (path,)
+                )
+                conn.execute(
+                    "UPDATE doc_usage SET accessed_at = CURRENT_TIMESTAMP"
                     " WHERE file_path = ?",
                     (path,),
                 )
@@ -2500,7 +2513,8 @@ class PDFCache:
         ``changed=True`` is for a PDF that still exists but changed on disk:
         its section index is kept, because those tables carry no mtime and
         the next warm replaces them only when re-detection succeeds (a failed
-        detection must not wipe a good index).
+        detection must not wipe a good index). Its ``doc_usage`` row is kept
+        too, so the document stays tracked.
         """
         if not paths:
             return
@@ -2522,7 +2536,7 @@ class PDFCache:
                 ).fetchall():
                     _unlink_quietly(on_disk)
             for table in _PER_DOC_TABLES:
-                if changed and table in _SECTION_FTS_TABLES:
+                if changed and table in _KEPT_WHEN_CHANGED:
                     continue
                 if table in present:
                     conn.execute(
@@ -2553,17 +2567,15 @@ class PDFCache:
             changed: list[str] = []
             present: list[str] = []
             missing: list[str] = []
-            rows = conn.execute(
-                "SELECT file_path, file_mtime FROM pdf_metadata"
-            ).fetchall()
+            docs, cached_mtimes = self._cached_docs(conn)
             render_rows = conn.execute(
                 "SELECT file_path, MIN(file_mtime) FROM page_renders"
                 " GROUP BY file_path"
             ).fetchall()
             mtimes = self._stat_mtimes(
-                list(dict.fromkeys([r[0] for r in rows] + [r[0] for r in render_rows]))
+                list(dict.fromkeys(docs + [r[0] for r in render_rows]))
             )
-            for path, cached_mtime in rows:
+            for path in docs:
                 if path not in mtimes:
                     continue  # stat did not answer in time: leave it be
                 mtime = mtimes[path]
@@ -2572,7 +2584,8 @@ class PDFCache:
                     # flaky network share): both wait out the grace period.
                     missing.append(path)
                     continue
-                if mtime == cached_mtime:
+                cached_mtime = cached_mtimes.get(path)
+                if cached_mtime is None or mtime == cached_mtime:
                     present.append(path)
                 else:
                     changed.append(path)  # rows can never be served
@@ -2580,7 +2593,7 @@ class PDFCache:
                 chunk = missing[start : start + _PURGE_CHUNK]
                 marks = ",".join("?" * len(chunk))
                 conn.execute(
-                    "UPDATE pdf_metadata SET missing_since = CURRENT_TIMESTAMP"
+                    "UPDATE doc_usage SET missing_since = CURRENT_TIMESTAMP"
                     f" WHERE missing_since IS NULL AND file_path IN ({marks})",
                     chunk,
                 )
@@ -2588,7 +2601,7 @@ class PDFCache:
                 purged.extend(
                     row[0]
                     for row in conn.execute(
-                        "SELECT file_path FROM pdf_metadata"
+                        "SELECT file_path FROM doc_usage"
                         " WHERE missing_since < datetime('now', ?)"
                         f" AND file_path IN ({marks})",
                         [f"-{_MISSING_GRACE_DAYS} days", *chunk],
@@ -2598,7 +2611,7 @@ class PDFCache:
                 chunk = present[start : start + _PURGE_CHUNK]
                 marks = ",".join("?" * len(chunk))
                 conn.execute(
-                    "UPDATE pdf_metadata SET missing_since = NULL"
+                    "UPDATE doc_usage SET missing_since = NULL"
                     f" WHERE missing_since IS NOT NULL AND file_path IN ({marks})",
                     chunk,
                 )
@@ -2613,8 +2626,9 @@ class PDFCache:
                 purged.extend(
                     row[0]
                     for row in conn.execute(
-                        "SELECT file_path FROM pdf_metadata"
-                        " WHERE accessed_at < datetime('now', ?)",
+                        "SELECT u.file_path FROM doc_usage u"
+                        " LEFT JOIN pdf_metadata m USING (file_path)"
+                        f" WHERE {_LAST_USED_SQL} < datetime('now', ?)",
                         (f"-{self.ttl_hours} hours",),
                     ).fetchall()
                 )
@@ -2643,6 +2657,49 @@ class PDFCache:
 
         return len(expired_paths)
 
+    def _cached_docs(
+        self, conn: sqlite3.Connection
+    ) -> tuple[list[str], dict[str, float]]:
+        """Every document with cached rows, and the mtime they were cached at.
+
+        A document is any path in any per-document table, so one cached only
+        by pdf_read_pages, pdf_search or pdf_render_pages counts too. Each
+        gets a ``doc_usage`` row if it has none: from its metadata's last use
+        when it has metadata, else starting now (rows cached before the table
+        existed must not read as never used). The mtime comes from
+        ``pdf_metadata``, else the newest ``page_text`` or ``page_embeddings``
+        row; a document with neither is tracked by existence alone.
+        """
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        union = " UNION ".join(
+            f"SELECT file_path FROM {t}" for t in _PER_DOC_TABLES if t in present
+        )
+        docs = sorted(row[0] for row in conn.execute(union).fetchall())
+        # A document with metadata starts from its last recorded use.
+        conn.execute(
+            "INSERT OR IGNORE INTO doc_usage (file_path, accessed_at)"
+            " SELECT file_path, accessed_at FROM pdf_metadata"
+        )
+        conn.executemany(
+            "INSERT OR IGNORE INTO doc_usage (file_path) VALUES (?)",
+            [(path,) for path in docs],
+        )
+        cached: dict[str, float] = {}
+        for sql in (
+            "SELECT file_path, MAX(file_mtime) FROM page_embeddings"
+            " GROUP BY file_path",
+            "SELECT file_path, MAX(file_mtime) FROM page_text GROUP BY file_path",
+            "SELECT file_path, file_mtime FROM pdf_metadata",
+        ):
+            # Later queries win: metadata over text over embeddings.
+            cached.update(conn.execute(sql).fetchall())
+        return docs, cached
+
     def _evict_over_cap(self, conn: sqlite3.Connection) -> list[str]:
         """Evict least recently used documents until under ``max_bytes``.
 
@@ -2655,7 +2712,9 @@ class PDFCache:
         order = [
             row[0]
             for row in conn.execute(
-                "SELECT file_path FROM pdf_metadata ORDER BY accessed_at, file_path"
+                "SELECT u.file_path FROM doc_usage u"
+                " LEFT JOIN pdf_metadata m USING (file_path)"
+                f" ORDER BY {_LAST_USED_SQL}, u.file_path"
             ).fetchall()
         ]
         est = self._doc_size_estimates(conn)

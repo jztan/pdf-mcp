@@ -78,6 +78,12 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
     "joserfc>=1.6.7",
+    # Pulled in transitively via fastmcp; floor to clear CVE-2026-96760 and
+    # CVE-2026-114614 to CVE-2026-114620.
+    "authlib>=1.9.1",
+    # Pulled in transitively via pydantic[email] -> email-validator; floor to
+    # clear CVE-2026-114605.
+    "dnspython>=2.9.0",
     # Pulled in transitively via fastmcp -> typer/uvicorn; floor to clear
     # PYSEC-2026-2132.
     "click>=8.3.3",

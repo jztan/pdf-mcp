@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The Claude Desktop bundle installs the locked versions.
 - Bumped transitive `fsspec` 2026.3.0 → 2026.9.0 (CVE-2026-104851;
   reached via `huggingface-hub`). Lockfile-only.
+- Bumped transitive `authlib` 1.7.2 to 1.9.1 (8 advisories, reached via
+  `fastmcp`) and `dnspython` 2.8.0 to 2.9.0 (1, reached via
+  `email-validator`), with minimum versions so a fresh resolve cannot fall
+  back to them.
 
 ### Contributors
 

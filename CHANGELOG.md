@@ -129,6 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fastmcp`) and `dnspython` 2.8.0 to 2.9.0 (1, reached via
   `email-validator`), with minimum versions so a fresh resolve cannot fall
   back to them.
+- Bumped `pypdf` 6.21.2 to 6.21.4 (7 advisories) and transitive `joserfc`
+  1.7.1 to 1.7.7 (2, reached via `fastmcp`), with minimum versions so a
+  fresh resolve cannot fall back to them.
 
 ### Contributors
 

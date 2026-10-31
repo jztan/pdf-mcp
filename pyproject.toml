@@ -76,8 +76,9 @@ dependencies = [
     "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
-    # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
-    "joserfc>=1.6.7",
+    # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990,
+    # CVE-2026-119283 and CVE-2026-119284.
+    "joserfc>=1.7.6",
     # Pulled in transitively via fastmcp; floor to clear CVE-2026-96760 and
     # CVE-2026-114614 to CVE-2026-114620.
     "authlib>=1.9.1",
@@ -100,8 +101,9 @@ dependencies = [
     "pypdfium2>=4.30",
     # pdfplumber: MIT. Table detection.
     "pdfplumber>=0.11",
-    # pypdf: BSD-3. Content-stream access for tiling-pattern pages.
-    "pypdf>=5.0",
+    # pypdf: BSD-3. Content-stream access for tiling-pattern pages. Floor to clear
+    # CVE-2026-119203 to CVE-2026-119209.
+    "pypdf>=6.21.4",
     # pytesseract: Apache-2.0. OCR, replacing PyMuPDF's Tesseract binding.
     "pytesseract>=0.3.10",
     # Runtime since the backend swap: pypdfium2 renders to a Pillow image and

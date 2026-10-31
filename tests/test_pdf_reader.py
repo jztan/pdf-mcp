@@ -209,8 +209,16 @@ class TestPDFCache:
         so cache_size_bytes doesn't report megabytes of residual after a
         full clear."""
         filler = "corpus filler text for vacuum sizing " * 200
-        for i in range(200):
-            cache.save_page_text(sample_pdf, i, f"page {i} {filler}")
+        # One transaction: 200 single-page commits cost 52 s on Windows CI
+        # (one fsync each) for the same bytes on disk.
+        cache.save_pages_text(sample_pdf, {i: f"page {i} {filler}" for i in range(200)})
+        # Move the WAL into cache.db so the size below sees the data; the
+        # per-page commits used to cross the auto-checkpoint threshold.
+        conn = cache._connect()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            conn.close()
         pre = os.path.getsize(cache.db_path)
 
         cache.clear_all()
@@ -313,6 +321,33 @@ class TestExtractor:
         doc.close()
 
         assert images == []
+
+
+class TestRaisedDotDecimals:
+    """U+00B7 decimal marks (Fisher 1936 prints 5·4) survive extraction.
+
+    The text layer must come back byte-for-byte: normalising the dot to a
+    period, or dropping it, would turn 5·4 into 5.4 or 54 without a trace.
+    """
+
+    def test_text_keeps_middle_dot(self, raised_dot_table_pdf):
+        doc = open_pdf(raised_dot_table_pdf)
+        try:
+            text = extract_text_from_page(doc[0], sort_by_position=True)
+        finally:
+            doc.close()
+        assert "5·4" in text
+        assert "5.4" not in text
+        assert text.count("·") == 20  # 5 rows x 4 columns, none lost
+
+    def test_table_cells_keep_middle_dot(self, raised_dot_table_pdf):
+        from tests.conftest import RAISED_DOT_ROWS
+
+        out = extractor.extract_tables_for_pages(raised_dot_table_pdf, [0])
+        tables = out["tables"]["0"]
+        assert len(tables) == 1
+        assert tables[0]["header"] == RAISED_DOT_ROWS[0]
+        assert tables[0]["rows"] == RAISED_DOT_ROWS[1:]
 
 
 # ============================================================================

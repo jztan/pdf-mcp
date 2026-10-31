@@ -260,6 +260,9 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
         - cleared_files: Number of files cleared from metadata cache
         - cleared_urls: Number of downloaded URLs cleared
     """
+    # Background embedding (issue #89) must not write into a cache being
+    # cleared; the next embedding warm call starts it again.
+    corpus.BACKGROUND_EMBED.stop()
     if expired_only:
         cleared = _core.cache.clear_expired()
         corpus.clear_warm_memo()

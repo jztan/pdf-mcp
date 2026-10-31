@@ -236,6 +236,15 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_DATA,
         help="dataset directory holding manifest.json and a questions file",
     )
+    ap.add_argument(
+        "--allow-mixed-cache",
+        action="store_true",
+        help=(
+            "corpus and two-hop only: run even when the cache holds documents"
+            " outside this dataset (refused by default: they shift corpus"
+            " BM25 scores)"
+        ),
+    )
     args = ap.parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
@@ -255,6 +264,16 @@ def main(argv: list[str] | None = None) -> int:
         questions = [q for q in questions if q.id in keep]
 
     corpus_paths = [p for p in path_by_id.values() if Path(p).exists()]
+    cache_comp = None
+    if args.corpus or args.two_hop:
+        from bench_env import mixed_cache_gate
+
+        cache_comp, err = mixed_cache_gate(
+            cache.db_path, corpus_paths, args.allow_mixed_cache
+        )
+        if err:
+            print(f"ERROR: {err}")
+            return 2
 
     rows: list[dict[str, Any]] = []
     for q in questions:
@@ -430,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
                 "setting": setting,
                 "route_k": args.route_k if args.two_hop else None,
                 "corpus_docs": n_docs,
+                "cache": cache_comp,
                 "rows": rows,
             },
             indent=2,

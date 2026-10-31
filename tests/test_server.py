@@ -2693,7 +2693,7 @@ class TestPdfReadPagesOcr:
             with patch("pdf_mcp.tools.read._ocr_page_worker", mock_worker):
                 pdf_read_pages(sample_pdf, "1", ocr=True, ocr_lang="fra")
         assert len(captured) == 1
-        # args = (local_path, page_num, ocr_lang, dpi, tessdata)
+        # args = (local_path, page_num, ocr_lang, dpi, tessdata, full)
         assert captured[0][2] == "fra"
 
     def test_ocr_text_searchable_via_pdf_search(
@@ -2811,6 +2811,27 @@ class TestPdfSearchSectionMode:
         sec = sections[0]
         for key in ("section_id", "title", "start_page", "end_page", "score"):
             assert key in sec
+
+    def test_dangling_bookmark_does_not_break_section_search(
+        self, isolated_server, tmp_path
+    ):
+        """A bookmark with no destination raised IndexError(-2) out of the
+        tool instead of returning sections (issue #82)."""
+        path = tmp_path / "dangling.pdf"
+        doc = pymupdf.open()
+        for body in ("intro text", "cover note text", "graph attention body"):
+            doc.new_page().insert_text((50, 100), body, fontsize=11)
+        doc.set_toc([[1, "Intro", 1], [1, "Cover note", 2], [1, "Methods", 3]])
+        xref = doc.get_outline_xrefs()[1]
+        doc.xref_set_key(xref, "Dest", "null")
+        doc.xref_set_key(xref, "A", "null")
+        doc.save(str(path))
+        doc.close()
+
+        result = pdf_search(str(path), "graph attention", granularity="section")
+        assert "error" not in result
+        assert [s["title"] for s in result["sections"]] == ["Methods"]
+        assert result["total_sections"] == 2
 
     def test_no_keyword_match_returns_empty_sections(
         self, isolated_server, sample_pdf_with_toc_sections
@@ -3408,6 +3429,160 @@ class TestSearchGeometry:
         hit = res["matches"][0]
         assert "bbox" in hit and len(hit["bbox"]) == 4
         assert hit["bbox"][2] > hit["bbox"][0] and hit["bbox"][3] > hit["bbox"][1]
+
+
+class TestForceOcrAndScanHint:
+    """force_ocr re-OCRs pages that have a text layer; the scan hint says when.
+
+    Motivating case: a journal scan (Fisher 1936) whose embedded text was
+    the vendor's poor OCR. ocr=True returned that layer unchanged.
+    """
+
+    def _force(self, path, worker):
+        from unittest.mock import patch
+
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch("pdf_mcp.tools.read._ocr_page_worker", worker):
+                return pdf_read_pages(path, "1", force_ocr=True)
+
+    def test_force_ocr_requests_full_ocr_and_records_source(
+        self, raised_dot_table_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        pdf_read_pages(raised_dot_table_pdf, "1")  # caches the text layer
+        captured = []
+
+        def worker(args):
+            captured.append(args)
+            return (args[1], "tesseract text")
+
+        result = self._force(raised_dot_table_pdf, worker)
+        # args = (local_path, page_num, ocr_lang, dpi, tessdata, full)
+        assert captured and captured[0][5] is True
+        page = result["pages"][0]
+        assert page["source"] == "ocr"
+        assert page["text"] == "tesseract text"
+        rows = _core.cache.get_pages_source(raised_dot_table_pdf, [0], "eng")
+        langs = _core.cache.get_pages_ocr_lang(raised_dot_table_pdf, [0], "eng")
+        # The extracted row still wins a plain lookup; the OCR row sits
+        # beside it under its language.
+        assert rows[0] == "extracted" and langs[0] is None
+        texts = _core.cache.get_pages_text(raised_dot_table_pdf, [0])
+        assert texts[0] == "tesseract text"  # latest row, as pdf_search sees
+
+    def test_force_ocr_ignores_cached_ocr_row(
+        self, raised_dot_table_pdf, isolated_server, monkeypatch
+    ):
+        """ocr=True on a page with a text layer caches the LAYER as 'ocr';
+        force_ocr must not serve that back."""
+        from unittest.mock import patch
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.tools.read._ocr_page_worker",
+                side_effect=lambda args: (args[1], "vendor layer 5-4"),
+            ):
+                pdf_read_pages(raised_dot_table_pdf, "1", ocr=True)
+        calls = []
+
+        def worker(args):
+            calls.append(args)
+            return (args[1], "fresh 5·4")
+
+        result = self._force(raised_dot_table_pdf, worker)
+        assert len(calls) == 1
+        assert result["pages"][0]["text"] == "fresh 5·4"
+        assert result["cache_hits"] == 0
+
+    def test_hint_fires_on_scan_with_vendor_text_layer(
+        self, raised_dot_table_vendor_ocr_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_vendor_ocr_pdf, "1")
+        assert result["scan_text_layer_pages"] == [1]
+        assert "force_ocr" in result["hint"]
+        # content_trust still reads an invisible layer over a scan as an
+        # OCR layer, not as hidden text.
+        assert result["pages"][0]["hidden_text"] is False
+        assert result["hidden_text_detected"] is False
+
+    def test_hint_quiet_on_born_digital_pages(
+        self, raised_dot_table_pdf, sample_pdf_with_images, isolated_server
+    ):
+        for path in (raised_dot_table_pdf, sample_pdf_with_images):
+            result = pdf_read_pages(path, "1")
+            assert "scan_text_layer_pages" not in result
+            assert "hint" not in result
+
+    def test_hint_quiet_on_scan_without_text_layer(
+        self, raised_dot_table_scan_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_scan_pdf, "1")
+        assert "scan_text_layer_pages" not in result
+
+    def test_hint_absent_when_ocr_requested(
+        self, raised_dot_table_vendor_ocr_pdf, isolated_server, monkeypatch
+    ):
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        result = self._force(
+            raised_dot_table_vendor_ocr_pdf,
+            lambda args: (args[1], "Iris versicolor 5·4"),
+        )
+        assert result["pages"][0]["source"] == "ocr"
+        assert "scan_text_layer_pages" not in result
+
+
+class TestSuspectCells:
+    """A scan's OCR layer: cells that break their decimal column are named.
+
+    The fixture reproduces the error kinds in the publisher's OCR layer of
+    Fisher (1936) Table I, where this check flagged 51 of 51 malformed cells
+    and none of the 548 correct ones.
+    """
+
+    def test_flags_exactly_the_malformed_cells(
+        self, fisher_scan_ocr_layer_pdf, isolated_server
+    ):
+        from tests.conftest import FISHER_FLAGGED
+
+        result = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1")
+        cells = result["pages"][0]["suspect_cells"]
+        assert {c["text"] for c in cells} == FISHER_FLAGGED
+        for c in cells:
+            assert c["expected"] == "9.9"
+            assert all(0.0 <= v <= 1.0 for v in c["clip"])
+        assert f"{len(FISHER_FLAGGED)} cells" in result["hint"]
+
+    def test_hint_puts_the_render_before_force_ocr(
+        self, fisher_scan_ocr_layer_pdf, isolated_server
+    ):
+        # force_ocr returned 0 of 600 values on the real Fisher scan, where
+        # the stored layer had 548 exact: it must not read as the fix.
+        hint = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1")["hint"]
+        assert hint.index("pdf_render_pages") < hint.index("force_ocr")
+        assert "only if most of the text is unreadable" in hint
+
+    def test_never_checks_born_digital_text(
+        self, fisher_born_digital_garbled_pdf, isolated_server
+    ):
+        # Same garbled cells, printed: born-digital text is the truth.
+        result = pdf_read_pages(fisher_born_digital_garbled_pdf, "1")
+        assert "suspect_cells" not in result["pages"][0]
+        assert "hint" not in result
+
+    def test_absent_when_ocr_ran(
+        self, fisher_scan_ocr_layer_pdf, isolated_server, monkeypatch
+    ):
+        from unittest.mock import patch
+
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        with patch("pdf_mcp._core.check_tesseract_available"):
+            with patch(
+                "pdf_mcp.tools.read._ocr_page_worker",
+                side_effect=lambda args: (args[1], "5.1 4.9 4.7"),
+            ):
+                result = pdf_read_pages(fisher_scan_ocr_layer_pdf, "1", force_ocr=True)
+        assert "suspect_cells" not in result["pages"][0]
 
 
 class TestOcrParallelOrchestration:
@@ -4396,7 +4571,33 @@ class TestPdfCorpusWarm:
         pdf_corpus_warm(str(corpus_dir))
         result = pdf_corpus_warm(str(corpus_dir))
         assert result["warmed_this_call"] == 0
+        # Cached docs are counted, not listed (issue #86).
+        assert result["docs"] == []
+        assert result["cached_docs"] == 3
+        assert result["cached_without_embeddings"] == 3
+        assert result["warm_complete"] is True
+
+    def test_detail_lists_cached_rows(self, corpus_dir, isolated_server):
+        pdf_corpus_warm(str(corpus_dir))
+        result = pdf_corpus_warm(str(corpus_dir), detail=True)
+        assert len(result["docs"]) == 3
         assert {d["status"] for d in result["docs"]} == {"cached"}
+        assert result["cached_docs"] == 3
+
+    def test_resume_lists_only_what_this_call_changed(
+        self, corpus_dir, isolated_server
+    ):
+        """A 500-doc warm returned a row per doc on each of its 37 calls
+        (3.7 MB in all); a resume call now lists only the docs it warmed."""
+        pdf_corpus_warm([str(corpus_dir / "alpha.pdf")])
+        result = pdf_corpus_warm(str(corpus_dir))
+        assert sorted(Path(d["path"]).name for d in result["docs"]) == [
+            "bravo.pdf",
+            "charlie.pdf",
+        ]
+        assert {d["status"] for d in result["docs"]} == {"warmed"}
+        assert result["cached_docs"] == 1
+        assert result["corpus_size"] == 3
 
     def test_missing_directory_inline_error(self, isolated_server):
         result = pdf_corpus_warm("/nonexistent-dir-for-corpus")
@@ -5645,7 +5846,7 @@ class TestOcrLangCacheThrash:
         """
 
         def fake_worker(args):
-            path, page_num, lang, dpi, tessdata = args
+            path, page_num, lang, dpi, tessdata, _full = args
             calls.append(lang)
             return page_num, f"text produced by {lang}"
 
@@ -6564,11 +6765,19 @@ class TestScannedDocSignals:
         assert by_path[str(corpus_dir / "alpha.pdf")]["text_coverage"] == "full"
         assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
 
-        # cached rows (second call) carry the label too
+        # A cached doc with no extractable text stays listed: it needs
+        # OCR, and the count alone would hide that.
         again = pdf_corpus_warm(paths)
         by_path = {d["path"]: d for d in again["docs"]}
         assert {d["status"] for d in again["docs"]} == {"cached"}
+        assert list(by_path) == [sample_pdf_scanned]
         assert by_path[sample_pdf_scanned]["text_coverage"] == "none"
+        assert again["cached_docs"] == 2
+
+        # detail=True lists the full-text cached doc with its label too
+        full = pdf_corpus_warm(paths, detail=True)
+        by_path = {d["path"]: d for d in full["docs"]}
+        assert by_path[str(corpus_dir / "alpha.pdf")]["text_coverage"] == "full"
 
     def test_corpus_search_flags_low_text_coverage(
         self, corpus_dir, sample_pdf_scanned, isolated_server
@@ -7036,3 +7245,69 @@ class TestCorpusSearchSemanticPending:
         assert incomplete
         for p in incomplete:
             assert p in r["unprocessed"] or p in r["semantic_unprocessed"], p
+
+
+class TestBackgroundEmbeddingAfterCorpusCalls:
+    """Issue #89: what a corpus call leaves text-only keeps embedding after
+    it returns, so the next call finds it embedded."""
+
+    @pytest.fixture(autouse=True)
+    def _enabled(self, monkeypatch):
+        from pdf_mcp import corpus
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "1")
+        # negative, not 0.0: a coarse clock (Windows) can read 0.0 elapsed
+        monkeypatch.setattr(corpus, "SEARCH_EMBED_SLICE_SECONDS", -1.0)
+        TestPdfCorpusSearchSemanticAuto._fake_embedder(monkeypatch)
+        yield
+        corpus.BACKGROUND_EMBED.stop()
+        corpus.BACKGROUND_EMBED.join(5)
+
+    def test_auto_search_hands_pending_docs_to_the_background(
+        self, corpus_dir, isolated_server
+    ):
+        from pdf_mcp import corpus
+
+        first = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert first["semantic_pending"] is True
+        assert first["embeddings_pending"]["in_background"] == 3
+        assert corpus.BACKGROUND_EMBED.join(15)
+
+        again = pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
+        assert "semantic_pending" not in again
+        assert again["search_mode"] == "hybrid"
+
+    def test_warm_reports_and_finishes_in_the_background(
+        self, corpus_dir, isolated_server, monkeypatch
+    ):
+        from pdf_mcp import corpus
+
+        real = corpus._warm_sequential
+
+        def no_embed_budget(pending, budget_seconds, start, clock, cache, emb, *a):
+            # the embedding phase gets no time, as when text fills a budget
+            if emb:
+                budget_seconds = -1.0
+            return real(pending, budget_seconds, start, clock, cache, emb, *a)
+
+        monkeypatch.setattr(corpus, "_warm_sequential", no_embed_budget)
+        first = pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        assert first["warm_complete"] is False
+        assert first["embedding_in_background"] == 3
+        assert corpus.BACKGROUND_EMBED.join(15)
+
+        monkeypatch.setattr(corpus, "_warm_sequential", real)
+        again = pdf_corpus_warm(str(corpus_dir), embeddings=True)
+        assert again["warm_complete"] is True
+        assert again["cached_without_embeddings"] == 0
+        assert again["embedding_in_background"] == 0
+
+    def test_cache_clear_stops_it(self, corpus_dir, isolated_server, monkeypatch):
+        from pdf_mcp import corpus
+
+        stopped = []
+        monkeypatch.setattr(
+            corpus.BACKGROUND_EMBED, "stop", lambda: stopped.append(True)
+        )
+        pdf_cache_clear(expired_only=False)
+        assert stopped == [True]

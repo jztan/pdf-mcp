@@ -9,17 +9,12 @@ is bound.
 
 import fnmatch
 import re
-import sys
+import tomllib
 from pathlib import Path, PurePosixPath
 
 import pytest
 
 yaml = pytest.importorskip("yaml")
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 from pdf_mcp.config import _DEFAULT_CONFIG_PATH  # noqa: E402
 

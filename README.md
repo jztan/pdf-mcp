@@ -1,7 +1,7 @@
 # pdf-mcp
 
 [![PyPI version](https://img.shields.io/pypi/v/pdf-mcp)](https://pypi.org/project/pdf-mcp/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Issues](https://img.shields.io/github/issues/jztan/pdf-mcp)](https://github.com/jztan/pdf-mcp/issues)
 [![CI](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml)
@@ -57,7 +57,7 @@ in [docs/clients.md](docs/clients.md).
 
 ### Claude Code and other MCP clients
 
-Needs Python 3.10 or later. Install the `pdf-mcp` command with
+Needs Python 3.11 or later. Install the `pdf-mcp` command with
 [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```bash
@@ -109,7 +109,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | Tool | What it does |
 |------|--------------|
 | `pdf_info` | Page count, metadata, TOC summary, scanned-page detection. **Call first.** |
-| `pdf_search` | Hybrid search (keyword + semantic), page or section granularity, paragraph or context-window excerpts with source coordinates, the enclosing outline section and a table's lead-in sentence |
+| `pdf_search` | Hybrid search (keyword + semantic) by page or section; hits carry an excerpt, source coordinates, the enclosing outline section and a table's lead-in sentence |
 | `pdf_read_pages` | Read specific pages or ranges, with OCR on demand, tables, and embedded images |
 | `pdf_read_all` | Read a whole document in one call, byte-capped |
 | `pdf_get_toc` | Full table of contents for documents with many bookmarks |
@@ -117,7 +117,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
 | `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
 | `pdf_corpus_overview` | Per-document triage cards for a folder |
-| `pdf_corpus_search` | Search across a folder, with document and page provenance; `excerpt_style="auto"` picks the excerpt unit per query |
+| `pdf_corpus_search` | Search across a folder; hits carry document and page provenance |
 | `pdf_cache_stats` | Per-document cache breakdown and total size |
 | `pdf_cache_clear` | Clear expired or all cache entries |
 | `server_info` | Which optional features and config are active |
@@ -213,7 +213,7 @@ Contributions are welcome. See **[docs/contributing.md](docs/contributing.md)** 
 Thank you to everyone who has helped improve this project through code, reviews, testing, and feature requests:
 
 <!-- contributors:start -->
-[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo) · [@bbulkow](https://github.com/bbulkow)
+[@Summer907](https://github.com/Summer907) · [@ebbsanchez](https://github.com/ebbsanchez) · [@VooDisss](https://github.com/VooDisss) · [@DerDennisOP](https://github.com/DerDennisOP) · [@deepdmk](https://github.com/deepdmk) · [@TheSOV](https://github.com/TheSOV) · [@janLo](https://github.com/janLo) · [@bbulkow](https://github.com/bbulkow) · [@HillsCloud](https://github.com/HillsCloud) · [@phinnphace](https://github.com/phinnphace)
 <!-- contributors:end -->
 
 <a href="https://github.com/jztan/pdf-mcp/graphs/contributors">
@@ -268,4 +268,5 @@ Background, benchmarks, and design notes from building pdf-mcp:
 - [Your LLM Is Free QA for Your MCP Server](https://blog.jztan.com/llm-free-qa-mcp-server/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-llm-free-qa-mcp-server): Four Payload UX bugs in pdf-mcp that schema tests missed but Claude Desktop surfaced during real use
 - [Why Multi-Column PDFs Scramble Reading Order in RAG](https://blog.jztan.com/multi-column-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-multi-column-pdf-reading-order): Fixing two-column extraction (0.564 → 0.816 fidelity), the title-page author-grid regression it caused, and the aggregate metric that stayed blind to both
 - [How I Fixed Vertical Japanese PDF Extraction](https://blog.jztan.com/vertical-japanese-pdf-reading-order/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-vertical-japanese-pdf-reading-order): Tategaki pages extract scrambled because reading order is geometric, not stored; rebuilding it from glyph positions (columns right to left, characters top to bottom), with no OCR and no new dependency
+- [My AI Agent Stopped Using My Own PDF Tool: The 72 DPI Bug](https://blog.jztan.com/ai-agent-phone-scan-legibility/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-phone-scan-legibility): Phone scans silently downsampled to 72 DPI to fit the response byte budget made handwriting unreadable, so the agent routed around pdf_render_pages; the fix spends JPEG quality before resolution and makes the response say when a render is illegible and which clips to retry
 - [Extract Chart Data From PDFs: An MCP Tool That Won't Guess](https://blog.jztan.com/extract-chart-data-from-pdfs/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-extract-chart-data-from-pdfs): Reading exact chart values straight from a PDF's vector geometry, then handing the ambiguous judgment calls back to the LLM instead of guessing

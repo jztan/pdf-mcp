@@ -758,3 +758,83 @@ class TestDeriveSections:
         titles = [s.title for s in sections]
         assert "1 Introduction" in titles
         assert "2 Methods" in titles
+
+
+def _save_with_dangling_bookmarks(doc, path, toc, dangling):
+    """Save ``doc`` with ``toc``, then strip the destination from the
+    bookmarks at the given indices (issue #82). pdfium reports such a
+    bookmark's page as -1; PyMuPDF's set_toc cannot write one directly."""
+    doc.set_toc(toc)
+    xrefs = doc.get_outline_xrefs()
+    for i in dangling:
+        doc.xref_set_key(xrefs[i], "Dest", "null")
+        doc.xref_set_key(xrefs[i], "A", "null")
+    doc.save(str(path))
+    doc.close()
+
+
+class TestUsableTocEntries:
+    """Bookmarks whose page is outside the document are dropped before
+    section ranges are derived (issue #82)."""
+
+    def test_drops_entries_outside_the_document(self):
+        toc = [
+            [1, "Intro", 1],
+            [1, "No destination", -1],
+            [1, "Unresolved", 0],
+            [1, "Body", 3],
+            [1, "Past the end", 11],
+        ]
+        result = sd._usable_toc_entries(toc, total_pages=10)
+        assert [e[1] for e in result] == ["Intro", "Body"]
+
+    def test_keeps_first_and_last_page(self):
+        toc = [[1, "First", 1], [1, "Last", 10]]
+        assert sd._usable_toc_entries(toc, total_pages=10) == toc
+
+
+class TestDanglingBookmarks:
+    """A bookmark with no destination used to raise IndexError(-2) out of
+    derive_sections, losing the whole document's section index (issue #82)."""
+
+    def test_dangling_bookmark_is_skipped(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "dangling.pdf"
+        doc = pymupdf.open()
+        for i in range(4):
+            page = doc.new_page()
+            page.insert_text((50, 100), f"Body of page {i + 1}", fontsize=11)
+        _save_with_dangling_bookmarks(
+            doc,
+            path,
+            [[1, "Intro", 1], [1, "Cover note", 2], [1, "Body", 3]],
+            dangling=[1],
+        )
+
+        sections = sd.derive_sections(str(path))
+        spans = [(s.title, s.start_page, s.end_page) for s in sections]
+        # The dangling entry no longer cuts Intro short (its end_page was
+        # derived from the bogus -1 start and came out as -2).
+        assert spans == [("Intro", 1, 2), ("Body", 3, 4)]
+        assert "Body of page 2" in sections[0].text
+        assert "Body of page 4" in sections[1].text
+
+    def test_all_bookmarks_dangling_falls_back_to_heuristic(self, tmp_path):
+        import pymupdf
+
+        path = tmp_path / "all_dangling.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=600, height=800)
+        page.insert_text((50, 100), "1 Introduction", fontsize=14)
+        page.insert_text((50, 130), "Some intro body text.", fontsize=11)
+        page2 = doc.new_page(width=600, height=800)
+        page2.insert_text((50, 100), "2 Methods", fontsize=14)
+        page2.insert_text((50, 130), "Methods body.", fontsize=11)
+        _save_with_dangling_bookmarks(
+            doc, path, [[1, "A", 1], [1, "B", 2]], dangling=[0, 1]
+        )
+
+        titles = [s.title for s in sd.derive_sections(str(path))]
+        assert "1 Introduction" in titles
+        assert "2 Methods" in titles

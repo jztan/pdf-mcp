@@ -5,7 +5,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Callable
-from ..concurrency import pdf_access
+from ..concurrency import lock_wait_seconds, pdf_access_within
 from ..docopen import open_pdf
 from .. import corpus
 from .. import _core
@@ -50,6 +50,38 @@ def _corpus_completeness(
     return {"warm_complete": unwarmed == 0, "unwarmed": unwarmed}
 
 
+def _corpus_busy(waited: float) -> dict[str, Any]:
+    """Inline error for a corpus call that queued out its whole budget."""
+    return {
+        "error": (
+            f"Another call held the PDF engine for this call's whole budget"
+            f" ({waited:.0f} s), so this call did not run."
+        ),
+        "hint": (
+            "Re-issue the same call. The call ahead of it is still"
+            " warming, and the documents it finishes stay cached."
+        ),
+    }
+
+
+def _embed_in_background(
+    warm: dict[str, Any],
+    model_name: str,
+    embed: Callable[[list[str]], list[bytes]],
+) -> int:
+    """Issue #89: keep embedding the docs this call left text-only after it
+    returns. The thread waits for this call to release the PDF lock. Docs
+    whose encode just failed are left to the next call, which reports why.
+    """
+    pending = set(warm.get("emb_pending", []))
+    docs = [
+        (str(d["path"]), int(d["pages"]))
+        for d in warm["docs"]
+        if d["path"] in pending and not d.get("embed_error")
+    ]
+    return corpus.BACKGROUND_EMBED.start(docs, _core.cache, model_name, embed)
+
+
 # ============================================================================
 # Tool: pdf_corpus_warm - warm a folder of PDFs into the cache
 # ============================================================================
@@ -65,16 +97,21 @@ def _corpus_completeness(
         " not run out). Keep budget_seconds below your client's per-call"
         " timeout: a client-side timeout does not undo progress (each"
         " finished doc is already committed), so treat it as a partial"
-        " run and re-issue the same call."
+        " run and re-issue the same call. A corpus of hundreds of files"
+        " takes several such calls (500 docs: text about 90 s, embeddings"
+        " about 27 minutes): loop on `warm_complete`, not on `unprocessed`."
+        " With embeddings=True, embedding continues in the server between"
+        " calls, so one call starts it and a later call finds it done."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_warm(
     paths: str | list[str],
     budget_seconds: int = 45,
     embeddings: bool = False,
     recursive: bool = False,
     sections: bool = False,
+    detail: bool = False,
 ) -> dict[str, Any]:
     """
     Warm a corpus of local PDFs into the cache within a time budget.
@@ -82,7 +119,7 @@ def pdf_corpus_warm(
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
             paths. URLs are not accepted (fetch via a single-doc tool
-            first). Corpora are capped at 100 files; over the cap, a
+            first). Corpora are capped at 500 files; over the cap, a
             directory's error lists its PDFs so a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
             (clamped to 1-300). Cached docs are free. Docs that do not
@@ -103,11 +140,18 @@ def pdf_corpus_warm(
             exceed a timeout-bounded MCP client's budget on a large
             document, even though the corpus was otherwise fully warmed.
             Pass this when you know section-granularity search is coming.
+        detail: Also list a row for every already-cached doc. Off by
+            default: on a large corpus each resume call would repeat
+            hundreds of unchanged "cached" rows.
 
     Returns:
         - docs: per-doc rows {path, status:
           "warmed"|"cached"|"partial"|"text_only", pages,
-          embeddings_cached, text_coverage}. With embeddings=True, text
+          embeddings_cached, text_coverage} for the docs this call
+          changed. Already-cached docs are counted in cached_docs
+          instead; one with text_coverage 'none' is still listed, since
+          it needs OCR to become searchable. detail=True lists every
+          cached doc as well. With embeddings=True, text
           is warmed for every document before any is embedded; a doc
           whose embeddings have not started yet is "text_only" (it is
           searchable by keyword) and stays in `unprocessed`. A very large
@@ -136,13 +180,23 @@ def pdf_corpus_warm(
           reported, and an empty `unprocessed` on its own means only
           that the budget did not run out, not that the corpus is warm
         - unwarmed: how many files are not warm (unprocessed + skipped)
+        - cached_docs: docs that were already cached when this call
+          started, listed in docs or not; cached_without_embeddings: how
+          many of them hold no embeddings for the configured model, so
+          a text-only call still answers whether an embeddings pass is
+          needed
+        - embedding_in_background: docs this call left text-only that the
+          server keeps embedding after it returns (0 without
+          embeddings=True); the next call finds them further along or
+          cached. It runs only while no tool call does.
         - corpus_size, warmed_this_call, budget_exhausted
 
     Error contract: call-level failures (missing directory, empty
     corpus, cap exceeded, unavailable embedding model) return an
     inline {"error", "hint"} payload; check for an `error` key first.
     """
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path
     )
@@ -185,13 +239,31 @@ def pdf_corpus_warm(
         embed=embed_fn,
         sections=sections,
     )
+    in_background = _embed_in_background(warm, model_name, embed_fn) if embed_fn else 0
+    # Issue #86: a 500-doc warm took 37 calls and returned a row per doc on
+    # each (73 to 124 KB a call, 3.7 MB in all). Cached rows carry nothing
+    # new after the first call, so they are counted, except a doc with no
+    # extractable text, which the caller must OCR.
+    cached = [d for d in warm["docs"] if d["status"] == "cached"]
+    docs = warm["docs"]
+    if not detail:
+        docs = [
+            d
+            for d in docs
+            if d["status"] != "cached" or d.get("text_coverage") == "none"
+        ]
     return {
-        "docs": warm["docs"],
+        "docs": docs,
+        "cached_docs": len(cached),
+        "cached_without_embeddings": sum(
+            1 for d in cached if not d.get("embeddings_cached")
+        ),
         "unprocessed": warm["unprocessed"],
         "skipped": res["skipped"] + warm["skipped"],
         "corpus_size": len(res["files"]),
         "warmed_this_call": warm["warmed_this_call"],
         "budget_exhausted": warm["budget_exhausted"],
+        "embedding_in_background": in_background,
         **_corpus_completeness(warm["unprocessed"], res["skipped"] + warm["skipped"]),
     }
 
@@ -206,10 +278,12 @@ def pdf_corpus_warm(
         "Get a per-document triage card (title, pages, top TOC entries,"
         " text coverage) for every PDF in a folder or list. Auto-warms"
         " uncached docs up to a time budget; unready docs appear in"
-        " `unprocessed`; call again to continue."
+        " `unprocessed`; call again to continue. A corpus of hundreds of"
+        " files warms over several calls: loop until `warm_complete` is"
+        " true, not until `unprocessed` is empty."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_overview(
     paths: str | list[str],
     budget_seconds: int = 45,
@@ -220,7 +294,7 @@ def pdf_corpus_overview(
 
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
-            paths. URLs are not accepted. Corpora are capped at 100
+            paths. URLs are not accepted. Corpora are capped at 500
             files; over the cap, a directory's error lists its PDFs so
             a subset can be passed.
         budget_seconds: Wall-clock budget for warming uncached docs
@@ -247,7 +321,8 @@ def pdf_corpus_overview(
     Error contract: call-level failures return an inline
     {"error", "hint"} payload; check for an `error` key first.
     """
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path
     )
@@ -323,7 +398,7 @@ def _doc_covered_terms(path: str, pages: list[int], terms: set[str]) -> set[str]
     FTS index, so BM25's IDF is computed within that document: a paper
     genuinely about the query mentions its terms on many pages, which
     LOWERS its within-document IDF and its score. Measured on the
-    described-query class, per-document BM25 ranked the gold document 86th
+    paraphrase-query class, per-document BM25 ranked the gold document 86th
     of 98 while term coverage ranked it 1st; across ten queries the median
     gold rank was 39.5 by BM25 against 2.5 by coverage.
 
@@ -792,6 +867,7 @@ def _semantic_pending_fields(
     embed_stats: dict[str, Any],
     model_name: str,
     last_error: str | None = None,
+    in_background: int = 0,
 ) -> dict[str, Any]:
     """Agent-facing signals for a keyword-only answer while embeddings are
     pending. Worded from a consumer tryout (2026-09-28): agents asked for a
@@ -813,7 +889,11 @@ def _semantic_pending_fields(
             " document."
         )
     pages = sum(corpus.pending_embed_pages(p, _core.cache, model_name) for p in pending)
-    pending_info: dict[str, Any] = {"docs": len(pending), "pages": pages}
+    pending_info: dict[str, Any] = {
+        "docs": len(pending),
+        "pages": pages,
+        "in_background": in_background,
+    }
     done, seconds = int(embed_stats["pages"]), float(embed_stats["seconds"])
     if done > 0 and seconds > 0:
         pending_info["est_seconds"] = math.ceil(pages / (done / seconds))
@@ -842,7 +922,11 @@ def _semantic_pending_fields(
     description=_tool_description(
         "Search across a folder (or list) of local PDFs and return a"
         " single relevance-ranked hit list spanning every document."
-        " Auto-warms uncached docs up to a time budget. Keyword terms"
+        " Auto-warms uncached docs up to a time budget. A corpus of"
+        " hundreds of files warms over several calls (500 docs: text about"
+        " 90 s, embeddings about 27 minutes; mode='auto' answers by keyword"
+        " until embeddings finish): warm it first with"
+        " pdf_corpus_warm until `warm_complete` is true. Keyword terms"
         " are AND-matched and ranked by BM25 across the whole corpus,"
         " so prefer short specific terms (1-3 words, e.g. entity"
         " names); a longer query that no document fully matches is"
@@ -864,7 +948,7 @@ def _semantic_pending_fields(
         " answering or re-asking documents."
     )
 )
-@pdf_access
+@pdf_access_within("budget_seconds", _corpus_busy)
 def pdf_corpus_search(
     paths: str | list[str],
     query: str,
@@ -882,7 +966,7 @@ def pdf_corpus_search(
 
     Args:
         paths: Directory containing PDFs, or an explicit list of .pdf
-            paths. URLs are not accepted. Corpora are capped at 100
+            paths. URLs are not accepted. Corpora are capped at 500
             files; over the cap, a directory's error lists its PDFs so
             a subset can be passed.
         query: Text to search for. The keyword arm ranks pages that
@@ -998,8 +1082,10 @@ def pdf_corpus_search(
           `semantic_unprocessed` lists the pending ones. `hint`
           says in one sentence whether the keyword answer is reliable
           for this query. `embeddings_pending` = {docs, pages,
-          est_seconds (only when this call measured an embedding
-          rate), last_error (when embedding failed this call)}.
+          in_background (how many keep embedding in the server after
+          this call returns), est_seconds (only when this call measured
+          an embedding rate), last_error (when embedding failed this
+          call)}.
           `next_call` is the pdf_corpus_warm call that finishes the
           embeddings; `warm_complete` stays false until it has.
         - doc_profile_coverage: (hybrid only) {"profiled", "searched"};
@@ -1077,7 +1163,8 @@ def pdf_corpus_search(
 
     top_k = _clamp(top_k, 1, 100)
     context_chars = _clamp(context_chars, 50, 2000)
-    budget = _clamp(budget_seconds, 1, 300)
+    # Time spent queueing for the PDF lock comes out of the budget.
+    budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
 
     res = corpus.resolve_corpus(
         paths, recursive=recursive, check_path=_core.pdf_config.check_path
@@ -1113,6 +1200,9 @@ def pdf_corpus_search(
     skipped = list(res["skipped"]) + list(warm["skipped"])
     ready_paths = [row["path"] for row in warm["docs"]]
     emb_pending = list(warm.get("emb_pending", []))
+    in_background = 0
+    if embed_fn is not None and embed_model is not None:
+        in_background = _embed_in_background(warm, embed_model, embed_fn)
     semantic_pending = mode == "auto" and embeddings_needed and bool(emb_pending)
     # On the keyword-first answer the pending docs were searched by keyword,
     # so `unprocessed` (not searched at all) leaves them out. Every other
@@ -1331,6 +1421,7 @@ def pdf_corpus_search(
                         ),
                         None,
                     ),
+                    in_background,
                 )
             )
         elif mode == "auto":
@@ -1362,8 +1453,9 @@ def pdf_corpus_search(
     # each mapped to its best semantic page. The page arms draw a 30-page
     # shortlist from every page vector in the corpus, so under distractor
     # pressure gold page-1s fall off it; one vector per document competes
-    # among N docs instead of N*pages. Measured: 500-doc described
-    # doc-hit@3 0.48 -> 0.68, needle/trap unchanged (spec 2026-08-26).
+    # among N docs instead of N*pages. Measured: 500-doc paraphrase
+    # doc-hit@3 0.48 -> 0.68, exact_match/lexical_distractor unchanged
+    # (spec 2026-08-26).
     try:
         corpus.backfill_doc_profiles(ready_paths, _core.cache, embed_model, embed_fn)
     except Exception as exc:  # noqa: BLE001 - arm runs on what it has
@@ -1395,7 +1487,7 @@ def pdf_corpus_search(
     # Partial keyword matches rank pages but do not anchor excerpts or
     # confidence: their FTS snippet sits on whichever single term matched
     # (often a common word), so the paragraph built from it missed the
-    # answer. Measured on the described class, gold pages inside the token
+    # answer. Measured on the paraphrase class, gold pages inside the token
     # budget whose excerpt missed the evidence doubled (9 -> 18) until these
     # pages went back to the semantic excerpt path.
     anchor_payload = {} if kw_partial else kw_payload

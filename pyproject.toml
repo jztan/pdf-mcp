@@ -1,10 +1,10 @@
 [project]
 name = "pdf-mcp"
-version = "3.5.0"
+version = "3.6.0"
 description = "Gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic + keyword search, selective page reads, tables, images, TOC, OCR, chart data, and CJK/vertical-script support, with SQLite caching."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Kevin Tan", email = "6021013+jztan@users.noreply.github.com" }
 ]
@@ -31,7 +31,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -63,10 +62,29 @@ dependencies = [
     # Do not declare a new Python version in classifiers/CI before
     # fastembed/onnxruntime ship wheels for it.
     "fastembed>=0.7,<1.0",
+    # Pulled in transitively via pdfminer.six and authlib. cryptography ships
+    # no Intel-macOS wheels from 49.0.0 on, so without this cap an Intel Mac
+    # compiles it from source (needs Rust; issue #81). 48.0.1 carries
+    # CVE-2026-69247/69248/69249 (PKCS#7 decryption, X.509 path validation),
+    # code pdf-mcp never calls. scripts/audit.sh does not see them: pip-audit
+    # evaluates markers for the host, so this Intel-Mac-only pin is skipped.
+    # Drop the cap when cryptography ships Intel-Mac wheels again.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Everywhere else, floor past those CVEs. Without it uv's resolver may
+    # settle on 48.0.1 for every platform (it did once the 3.10 fork went),
+    # which the audit then rightly flags.
+    "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
-    # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990.
-    "joserfc>=1.6.7",
+    # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990,
+    # CVE-2026-119283 and CVE-2026-119284.
+    "joserfc>=1.7.6",
+    # Pulled in transitively via fastmcp; floor to clear CVE-2026-96760 and
+    # CVE-2026-114614 to CVE-2026-114620.
+    "authlib>=1.9.1",
+    # Pulled in transitively via pydantic[email] -> email-validator; floor to
+    # clear CVE-2026-114605.
+    "dnspython>=2.9.0",
     # Pulled in transitively via fastmcp -> typer/uvicorn; floor to clear
     # PYSEC-2026-2132.
     "click>=8.3.3",
@@ -76,7 +94,6 @@ dependencies = [
     # Version comparison for the bundle's update check. Already installed
     # transitively; declared because pdf_mcp.updates imports it.
     "packaging>=23.0",
-    "tomli>=2.0; python_version < '3.11'",
     # Permissive PDF backend (src/pdf_mcp/backend/). These replace pymupdf,
     # which is dual-licensed AGPL-3.0 / Artifex Commercial and therefore
     # contradicts the MIT licence this package declares.
@@ -84,13 +101,18 @@ dependencies = [
     "pypdfium2>=4.30",
     # pdfplumber: MIT. Table detection.
     "pdfplumber>=0.11",
-    # pypdf: BSD-3. Content-stream access for tiling-pattern pages.
-    "pypdf>=5.0",
+    # pypdf: BSD-3. Content-stream access for tiling-pattern pages. Floor to clear
+    # CVE-2026-119203 to CVE-2026-119209.
+    "pypdf>=6.21.4",
     # pytesseract: Apache-2.0. OCR, replacing PyMuPDF's Tesseract binding.
     "pytesseract>=0.3.10",
     # Runtime since the backend swap: pypdfium2 renders to a Pillow image and
     # image/render output is written as PNG through it.
-    "pillow>=12.3.0",
+    # Floor 13.0.0 clears 41 advisories in 12.3.0's image parsers and encoders.
+    "pillow>=13.0.0",
+    # Pulled in transitively via huggingface-hub; floor to clear
+    # CVE-2026-112907, CVE-2026-112913 and CVE-2026-112940.
+    "filelock>=4.2.1",
     # Pure-Python Snowball stemmers (no C extension), used by the optional
     # [fts].language = "de" German FTS mirror index in cache.py.
     "snowballstemmer>=2.2.0",
@@ -195,10 +217,10 @@ markers = [
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true

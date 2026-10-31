@@ -105,8 +105,12 @@ PDF_MCP_CACHE_DIR=/path/to/cache
 # Cache TTL in hours (default: 24)
 PDF_MCP_CACHE_TTL=48
 
-# Max worker processes for parallel OCR / rendering in pdf_read_pages
-# (default: auto = min(cpu_count, pages, 8)). Set to 1 to force sequential.
+# Max worker processes for parallel OCR / rendering in pdf_read_pages and
+# for corpus warm extraction. Default: auto = min(cpu_count, pages, 16) for
+# OCR / rendering; corpus warm extracts at most 8 docs at a time for text and
+# 4 with embeddings (also bounded by cpu_count). A value can lower these caps
+# but not raise them. Set to 1 to force sequential; corpus warm then extracts
+# in-process and cannot stop mid-document at its time budget.
 PDF_MCP_MAX_WORKERS=8
 
 # Memory budget in MB for embedding vectors kept in memory between searches
@@ -114,6 +118,12 @@ PDF_MCP_MAX_WORKERS=8
 # a query does not re-read them from the cache; the least recently used
 # documents are dropped past the budget. 0 disables the in-memory copy.
 PDF_MCP_VECTOR_CACHE_MB=256
+
+# Background embedding (default: on). When a corpus call returns with
+# documents that have text but no embeddings yet, the server keeps embedding
+# them between calls, only while no tool call is running. 0 turns it off, so
+# embeddings progress only during calls.
+PDF_MCP_BACKGROUND_EMBED=1
 
 # Embedding device. 1 = use the GPU and warn if it is not available;
 # 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).
@@ -125,6 +135,12 @@ PDF_MCP_CUDA=1
 # English-only Tesseract on the first OCR call (the Claude Desktop bundle
 # sets this); unset = never. [ocr] auto_install in the config file wins.
 PDF_MCP_OCR_AUTO_INSTALL=1
+
+# Tesseract's own language-data variable. When set to an existing directory,
+# OCR looks for *.traineddata there first (in the directory itself, or in
+# its tessdata/ subfolder if you point it at the Tesseract install root).
+# Unset = use the tessdata beside the tesseract binary, or ask Tesseract.
+TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
 # HTTP transport only (pdf-mcp-http); ignored by the stdio entry point.
 PDF_MCP_AUTH_TOKEN=<secret>       # required, no default
@@ -459,7 +475,7 @@ default.
 ## Offline prewarm (`pdf-mcp-warm`)
 
 `pdf_corpus_warm` (the MCP tool) is built to fit inside one client-side
-tool call: it caps at 100 files and `budget_seconds <= 300` per call (see
+tool call: it caps at 500 files and `budget_seconds <= 300` per call (see
 [tool-reference.md](tool-reference.md#pdf_corpus_warm)), so a folder that
 does not fit either limit means re-issuing the same call by hand,
 possibly many times, from inside a chat session — and a query against a
@@ -567,8 +583,8 @@ pdf-mcp works offline except for these:
   shipped in pdf-mcp, and unpacks it into `<cache dir>/tesseract/`.
   Windows x64 and macOS (Apple Silicon and Intel) only. A Tesseract you
   installed yourself is always used first, and nothing downloads until OCR
-  is asked for. pip and uvx installs never download it unless the config
-  says so. Turn it off in `~/.config/pdf-mcp/config.toml`:
+  is asked for. pip and uvx installs never download it unless
+  `PDF_MCP_OCR_AUTO_INSTALL=1` is set or the config turns it on. Turn it off in `~/.config/pdf-mcp/config.toml`:
 
   ```toml
   [ocr]

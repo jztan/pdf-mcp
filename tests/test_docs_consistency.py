@@ -12,13 +12,8 @@ Prose drift is out of scope; only mechanically checkable claims belong here.
 from __future__ import annotations
 
 import re
-import sys
+import tomllib
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # the tomli backport, declared for python_version < '3.11'
-    import tomli as tomllib
 
 from pdf_mcp.server import mcp
 

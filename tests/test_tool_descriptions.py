@@ -126,3 +126,16 @@ class TestSearchGuidanceInDescriptions:
         assert "re-ask every document listed here" in lowered
         assert "recovers only about half of a multi-document answer" in lowered
         assert "single-document question, follow up on the best match only" in lowered
+
+
+def test_corpus_tools_say_a_large_corpus_warms_over_several_calls():
+    """Hundreds of files (500: text about 90 s, embeddings about 27 minutes) cannot
+    warm inside one client call, so every corpus tool must say the warm
+    spans re-issued calls and that `warm_complete`, not an empty
+    `unprocessed`, ends the loop."""
+    tools = _registered_tools()
+    for name in ("pdf_corpus_warm", "pdf_corpus_overview", "pdf_corpus_search"):
+        desc = " ".join((getattr(tools[name], "description", "") or "").split())
+        assert "hundreds of files" in desc, name
+        assert "several" in desc, name
+        assert "warm_complete" in desc, name

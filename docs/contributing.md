@@ -4,7 +4,7 @@ Contributions are welcome — bug fixes, new features, documentation improvement
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - System Tesseract if working on OCR features (`brew install tesseract` / `apt install tesseract-ocr`)
 
@@ -48,11 +48,11 @@ OCR tests skip automatically when system Tesseract is absent. Benchmark tests (`
 
 Always pass the `tests/` path. A bare `pytest` walks the whole repository and also collects retired spikes under `scripts/archive/`, which no gate runs.
 
-The package supports Python 3.10 and up. CI runs 3.10 through 3.14 on Linux and 3.10 and 3.13 on Windows, but you are developing on one interpreter and one operating system. `tests/test_python_compat.py` catches the case that bites hardest: importing a stdlib module that does not exist on 3.10 (`tomllib`, added in 3.11) fails at *collection*, so it takes the entire suite down rather than failing one test. Gate such an import on a version check with a backport, the way `src/pdf_mcp/config.py` does. That check is static, so it cannot see new syntax or new methods on existing types. When a change leans on anything recent, run the suite on the floor version: `uv run --python 3.10 --extra dev pytest tests/ -m "not slow"`. Note that this rebuilds `.venv` on 3.10, so follow it with `uv sync --extra dev` to restore your normal environment.
+The package supports Python 3.11 and up. CI runs 3.11 through 3.14 on Linux and 3.11 and 3.13 on Windows, but you are developing on one interpreter and one operating system. `tests/test_python_compat.py` catches the case that bites hardest: importing a stdlib module that does not exist on the floor version fails at *collection*, so it takes the entire suite down rather than failing one test. Gate such an import on a version check with a backport. That check is static, so it cannot see new syntax or new methods on existing types. When a change leans on anything recent, run the suite on the floor version: `uv run --python 3.11 --extra dev pytest tests/ -m "not slow"`. Note that this rebuilds `.venv` on 3.11, so follow it with `uv sync --extra dev` to restore your normal environment.
 
-Tests marked `slow` are excluded from the release pre-flight gate (`scripts/release.py` runs `pytest tests/ -m "not slow"`). There are four: the billed coherence-regression guard (`test_eval_coherence.py`), which shells out to the real `claude` CLI, plus the RRF v2 retrieval gate (`test_benchmark_rrf_v2.py`), the CJK keyword recall gate (`test_benchmark_cjk_keyword.py`) and the pre-gate validation (`test_pregate_validation.py`). Tag any new billed or multi-minute test with `@pytest.mark.slow` so it stays out of the release gate.
+Tests marked `slow` are excluded from the release pre-flight gate (`scripts/release.py` runs `pytest tests/ -m "not slow"`). Six files carry them: the billed coherence-regression guard (`test_eval_coherence.py`), which shells out to the real `claude` CLI; the RRF v2 retrieval gate (`test_benchmark_rrf_v2.py`), the CJK keyword recall gate (`test_benchmark_cjk_keyword.py`) and the pre-gate validation (`test_pregate_validation.py`); and two runs against a live `llama-server` (`test_benchmark_bge_small_throughput.py`, `test_benchmark_bge_small_cosine_parity.py`), which skip when no server answers. Tag any new billed or multi-minute test with `@pytest.mark.slow` so it stays out of the release gate.
 
-**`-m "not slow"` is the release gate, not what CI runs.** The Linux CI job runs the whole suite with no marker filter, so a change that breaks only a slow-marked path passes locally and fails on push. That has happened twice. Before pushing, run the three unbilled slow tests as well:
+**`-m "not slow"` is not the whole of CI.** The Linux and Windows test legs run `-m "not slow"`, and the slow tests run once more in a separate `slow-gates` job (`-m slow`; billed and llama-server tests skip themselves there), so a change that breaks only a slow-marked path passes locally and fails on push. That has happened twice. Before pushing, run the three unbilled slow gates as well:
 
 ```bash
 uv run pytest tests/ -m "not slow"          # fast suite

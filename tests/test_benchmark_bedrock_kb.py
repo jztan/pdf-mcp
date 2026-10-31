@@ -92,7 +92,7 @@ class TestGradeContainment:
     def _q(self, *evidence: str):
         return {
             "id": "q",
-            "class": "spread",
+            "class": "multi_doc",
             "labels": [
                 {"doc": f"d{i}", "page": 1, "gain": 2, "evidence": e}
                 for i, e in enumerate(evidence)
@@ -109,7 +109,7 @@ class TestGradeContainment:
         g = grade_containment(self._q("Noetherian type"), kept)
         assert g == {"span_recall": 1.0, "fidelity_gap": 1.0, "status": "normalized"}
 
-    def test_any_label_suffices_for_spread(self):
+    def test_any_label_suffices_for_multi_doc(self):
         kept = [("d1", 1, "second span here")]
         g = grade_containment(self._q("first span", "second span"), kept)
         assert g["span_recall"] == 1.0
@@ -235,49 +235,61 @@ def _row(cls, status, k=3, doc_ndcg=1.0, dochit3=1):
 class TestSummarize:
     def test_per_class_means_and_paired_diffs(self):
         rows = {
-            "P": {"q1": _row("needle", "exact"), "q2": _row("needle", "missing")},
-            "B0": {"q1": _row("needle", "normalized"), "q2": _row("needle", "missing")},
+            "P": {
+                "q1": _row("exact_match", "exact"),
+                "q2": _row("exact_match", "missing"),
+            },
+            "B0": {
+                "q1": _row("exact_match", "normalized"),
+                "q2": _row("exact_match", "missing"),
+            },
         }
-        s = summarize(rows, ["needle"], anchor_arms=("B0",), ref_arm="P")
+        s = summarize(rows, ["exact_match"], anchor_arms=("B0",), ref_arm="P")
         # q2 is missing in every arm, so no_arm_found flags it and it is
         # excluded from every mean (per the flagged-exclusion contract
         # exercised below in test_flagged_queries_are_excluded_from_means).
         # Only q1 remains: P is exact (span_recall 1.0), B0 is normalized
         # (fidelity_gap 1.0).
-        assert s["per_class"]["needle"]["P"]["span_recall"] == 1.0
-        assert s["per_class"]["needle"]["B0"]["fidelity_gap"] == 1.0
-        assert s["per_class"]["needle"]["P"]["mean_k"] == 3.0
-        assert s["diffs"]["needle"]["B0"]["mean_diff"] == 0.0
+        assert s["per_class"]["exact_match"]["P"]["span_recall"] == 1.0
+        assert s["per_class"]["exact_match"]["B0"]["fidelity_gap"] == 1.0
+        assert s["per_class"]["exact_match"]["P"]["mean_k"] == 3.0
+        assert s["diffs"]["exact_match"]["B0"]["mean_diff"] == 0.0
         assert s["flagged"] == ["q2"]
 
     def test_flagged_queries_are_excluded_from_means(self):
         rows = {
-            "P": {"q1": _row("trap", "exact"), "q2": _row("trap", "missing")},
-            "B0": {"q1": _row("trap", "exact"), "q2": _row("trap", "missing")},
+            "P": {
+                "q1": _row("lexical_distractor", "exact"),
+                "q2": _row("lexical_distractor", "missing"),
+            },
+            "B0": {
+                "q1": _row("lexical_distractor", "exact"),
+                "q2": _row("lexical_distractor", "missing"),
+            },
         }
-        s = summarize(rows, ["trap"], anchor_arms=("B0",))
-        assert s["per_class"]["trap"]["P"]["n"] == 1
-        assert s["per_class"]["trap"]["P"]["span_recall"] == 1.0
+        s = summarize(rows, ["lexical_distractor"], anchor_arms=("B0",))
+        assert s["per_class"]["lexical_distractor"]["P"]["n"] == 1
+        assert s["per_class"]["lexical_distractor"]["P"]["span_recall"] == 1.0
 
 
 class TestRenderAndWrite:
     def test_markdown_has_one_table_per_class_and_no_aggregate(self):
         rows = {
-            "P": {"q1": _row("needle", "exact")},
-            "B0": {"q1": _row("needle", "exact")},
+            "P": {"q1": _row("exact_match", "exact")},
+            "B0": {"q1": _row("exact_match", "exact")},
         }
-        s = summarize(rows, ["needle"], anchor_arms=("B0",))
+        s = summarize(rows, ["exact_match"], anchor_arms=("B0",))
         md = render_markdown(s, {"budget_tokens": 2000})
-        assert "## needle" in md
+        assert "## exact_match" in md
         assert "realized k" in md
         assert "overall" not in md.lower()
 
     def test_write_results_creates_both_files(self, tmp_path: Path):
         rows = {
-            "P": {"q1": _row("needle", "exact")},
-            "B0": {"q1": _row("needle", "exact")},
+            "P": {"q1": _row("exact_match", "exact")},
+            "B0": {"q1": _row("exact_match", "exact")},
         }
-        s = summarize(rows, ["needle"], anchor_arms=("B0",))
+        s = summarize(rows, ["exact_match"], anchor_arms=("B0",))
         write_results(s, rows, {"budget_tokens": 2000}, tmp_path)
         assert (tmp_path / "results.json").exists()
         assert (tmp_path / "RESULTS.md").exists()
@@ -288,8 +300,8 @@ class TestRenderAndWrite:
         import json
         import sqlite3
 
-        rows = {"P": {"q1": _row("needle", "exact")}}
-        s = summarize(rows, ["needle"], anchor_arms=())
+        rows = {"P": {"q1": _row("exact_match", "exact")}}
+        s = summarize(rows, ["exact_match"], anchor_arms=())
         write_results(s, rows, {"budget_tokens": 2000}, tmp_path)
         env = json.loads((tmp_path / "results.json").read_text())["environment"]
         assert env["sqlite"] == sqlite3.sqlite_version
@@ -366,7 +378,7 @@ class TestRunArmBedrockDedupWindow:
         runtime = _FakeRuntime(results)
         query = {
             "id": "q1",
-            "class": "needle",
+            "class": "exact_match",
             "query": "test query",
             "labels": [{"doc": "B", "page": 5, "gain": 2}],
         }
@@ -394,7 +406,7 @@ class TestRunArmBedrockRerankOrdering:
         # capping.
         results = [_result("X", 1, "a" * 4000), _result("Y", 1, "b" * 4000)]
         runtime = _FakeRuntime(results, rerank_order=[1, 0])
-        query = {"id": "q1", "class": "needle", "query": "q", "labels": []}
+        query = {"id": "q1", "class": "exact_match", "query": "q", "labels": []}
         rows = run_arm_bedrock(
             runtime,
             "KB1234567890",
@@ -421,7 +433,7 @@ def test_run_arm_p_refuses_a_keyword_only_answer(monkeypatch):
         }
 
     monkeypatch.setattr(pdf_mcp_server, "pdf_corpus_search", fake)
-    query = {"id": "q1", "class": "needle", "query": "x", "labels": []}
+    query = {"id": "q1", "class": "exact_match", "query": "x", "labels": []}
     with pytest.raises(RuntimeError, match="search_mode=keyword"):
         run_arm_p(["/abs/a.pdf"], [query], {"/abs/a.pdf": "A"}, budget_tokens=100)
 
@@ -442,7 +454,7 @@ class TestRunArmBedrockRowShapeParity:
         # the same key names but changes what they hold is still caught.
         query = {
             "id": "q1",
-            "class": "needle",
+            "class": "exact_match",
             "query": "hello",
             "labels": [{"doc": "A", "page": 1, "gain": 2, "evidence": "hello"}],
         }
@@ -667,6 +679,8 @@ class TestReuseBedrockRows:
         canonical=False,
         write_prior=True,
         kept_text=True,
+        query_class="exact_match",
+        prior_class="exact_match",
     ):
         import hashlib
 
@@ -686,11 +700,11 @@ class TestReuseBedrockRows:
         qids = ["q1", "q2"]
         _write_json(
             data_dir / "queries.json",
-            {"queries": [{"id": q, "class": "needle", "labels": []} for q in qids]},
+            {"queries": [{"id": q, "class": query_class, "labels": []} for q in qids]},
         )
         # arm P stubbed: no corpus, no cache
         monkeypatch.setattr(
-            bm, "run_arm_p", lambda *a, **k: {q: self._row("needle") for q in qids}
+            bm, "run_arm_p", lambda *a, **k: {q: self._row("exact_match") for q in qids}
         )
         monkeypatch.setattr(
             bm,
@@ -714,7 +728,7 @@ class TestReuseBedrockRows:
             },
             "per_query": {
                 "B0": {
-                    q: self._row("needle", "missing", kept_text=kept_text)
+                    q: self._row(prior_class, "missing", kept_text=kept_text)
                     for q in (prior_qids or qids)
                 }
             },
@@ -750,12 +764,24 @@ class TestReuseBedrockRows:
         assert rc == 0
         res = json.loads((out_dir / "run" / "results.json").read_text())
         assert "B0" in res["per_query"] and "P" in res["per_query"]
-        assert "B0" in res["summary"]["diffs"]["needle"]
+        assert "B0" in res["summary"]["diffs"]["exact_match"]
         # P exact vs B0 missing on both queries -> P minus B0 = +1.0
-        assert res["summary"]["diffs"]["needle"]["B0"]["mean_diff"] == 1.0
+        assert res["summary"]["diffs"]["exact_match"]["B0"]["mean_diff"] == 1.0
         assert res["config"]["bedrock_live_check"] is False
         assert res["config"]["bedrock_rows_reused_from"] == str(prior)
         assert "arm_config_sha256" in res["config"]["index_stamps"]["B0"]
+
+    def test_rows_stored_under_old_class_labels_still_pair(self, tmp_path, monkeypatch):
+        """Queries and stored Bedrock rows written before the 2026-10-05
+        rename say `needle`. Reused rows take their class from the query
+        file on re-grade, so the query file's mapping is what this guards."""
+        data_dir, out_dir, prior = self._setup(
+            tmp_path, monkeypatch, query_class="needle", prior_class="needle"
+        )
+        assert bm.main(self._argv(data_dir, out_dir, prior)) == 0
+        res = json.loads((out_dir / "run" / "results.json").read_text())
+        assert list(res["summary"]["diffs"]) == ["exact_match"]
+        assert res["summary"]["diffs"]["exact_match"]["B0"]["mean_diff"] == 1.0
 
     def test_refuses_arm_config_drift(self, tmp_path, monkeypatch):
         d, o, p = self._setup(tmp_path, monkeypatch, arm_hash="stale")
@@ -818,7 +844,7 @@ class TestReuseBedrockRows:
         d, o, p = self._setup(tmp_path, monkeypatch, kept_text=False)
         assert bm.main(self._argv(d, o, p)) == 2
         out = capsys.readouterr().out
-        assert "--live-classes needle" in out
+        assert "--live-classes exact_match" in out
 
     def test_live_and_reuse_from_are_mutually_exclusive(self, tmp_path, monkeypatch):
         d, o, prior = self._setup(tmp_path, monkeypatch)
@@ -872,7 +898,7 @@ class TestMainWarmGate:
         _write_json(data_dir / "manifest.json", {"docs": []})
         _write_json(
             data_dir / "queries.json",
-            {"queries": [{"id": "q1", "class": "needle", "labels": []}]},
+            {"queries": [{"id": "q1", "class": "exact_match", "labels": []}]},
         )
         return data_dir, out_dir
 
@@ -894,7 +920,7 @@ class TestMainWarmGate:
     def test_complete_warm_proceeds(self, tmp_path, monkeypatch):
         d, o = self._setup(tmp_path, monkeypatch)
         row = {
-            "class": "needle",
+            "class": "exact_match",
             "kept": [],
             "realized_k": 1,
             "containment": {"span_recall": 1.0, "fidelity_gap": 0.0, "status": "exact"},

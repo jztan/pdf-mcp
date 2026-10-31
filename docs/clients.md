@@ -3,7 +3,7 @@
 Configuration for each MCP client pdf-mcp is known to work with. Claude
 Desktop can install everything itself (see its one-click install below).
 Every other client runs the `pdf-mcp` command, so install it first (Python
-3.10 or later):
+3.11 or later):
 
 ```bash
 uv tool install pdf-mcp     # or: pipx install pdf-mcp
@@ -202,11 +202,10 @@ With `uvx` (for isolated environments):
 
 ## Verify
 
-```bash
-pdf-mcp --help
-```
-
-If the server starts and your client lists the pdf-mcp tools, you are set.
+Restart your client and ask it to call the `server_info` tool. It returns the
+server version and which optional features (OCR, semantic search,
+column-aware extraction) are available. If your client lists the pdf-mcp tools
+and `server_info` answers, you are set.
 See [tool-reference.md](tool-reference.md) for what each tool does.
 
 ## OCR setup

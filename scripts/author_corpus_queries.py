@@ -5,8 +5,8 @@ scripts/author_corpus_queries.py
 Draft new graded queries for benchmark_data/corpus_search/queries.json,
 blind to every retrieval result.
 
-Why: the described class has 25 queries, 12 of which no arm can answer and
-all 25 of which have their gold on page 1, so a described verdict rests on
+Why: the paraphrase class had 25 queries, 12 of which no arm can answer and
+all 25 of which have their gold on page 1, so a paraphrase verdict rests on
 13 title-and-abstract lookups and its paired CI is about +/-0.24. Nothing
 of size 0.1 can be confirmed or denied there. This script grows the set to
 where a 0.1 effect resolves (about 75 scored queries per class) and moves
@@ -22,11 +22,11 @@ Protocol (fixed before any arm runs; never revise after seeing results):
      pdfium text of that page (not pdf-mcp's extraction, so labels cannot
      inherit pdf-mcp's bugs), copies ONE verbatim span stating a specific
      claim, then writes the query:
-       described: a paraphrase question, no proper nouns, no digits, at
+       paraphrase:  a paraphrase question, no proper nouns, no digits, at
                   most ONE content token in common with the span.
-       needle:    a 2-4 word literal query whose terms all occur in the
+       exact_match: a 2-4 word literal query whose terms all occur in the
                   span and in at most 3 documents of the corpus.
-       spread:    two documents paired by cached head-vector cosine (the
+       multi_doc:   two documents paired by cached head-vector cosine (the
                   seed doc's nearest neighbour), one page sampled in each;
                   the drafter names a 2-3 word topic both pages discuss and
                   copies one verbatim span per page; a query token must
@@ -40,10 +40,10 @@ eval_financial_answerability.py) and --max-budget-usd per call. Calls are
 cached in --cache keyed by (class, doc, page, seed) so a re-run is free.
 
 Usage:
-    python scripts/author_corpus_queries.py --klass described --n 80
-    python scripts/author_corpus_queries.py --klass needle --n 30
-    python scripts/author_corpus_queries.py --klass spread --n 45
-    python scripts/author_corpus_queries.py --klass described --n 80 --dry-run
+    python scripts/author_corpus_queries.py --klass paraphrase --n 80
+    python scripts/author_corpus_queries.py --klass exact_match --n 30
+    python scripts/author_corpus_queries.py --klass multi_doc --n 45
+    python scripts/author_corpus_queries.py --klass paraphrase --n 80 --dry-run
 """
 
 from __future__ import annotations
@@ -62,6 +62,14 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 DATA = REPO / "benchmark_data" / "corpus_search"
 
+from _query_classes import (  # noqa: E402
+    EXACT_MATCH,
+    LEGACY_PREFIX,
+    MULTI_DOC,
+    PARAPHRASE,
+    normalize_class,
+    normalize_rows,
+)
 from eval_financial_answerability import JUDGE_CONTEXT_FLAGS  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-4-8"
@@ -177,7 +185,7 @@ def draft_prompt(klass: str, text: str) -> str:
         "a definition. Copy it VERBATIM as `evidence`: 40 to 160 characters, "
         "exactly as printed, on one line, no ellipsis, no edits.\n"
     )
-    if klass == "described":
+    if klass == PARAPHRASE:
         rule = (
             "Step 2: write `query`: a natural-language question a reader would "
             "ask that this evidence answers, of at most 14 words, WITHOUT proper "
@@ -201,7 +209,7 @@ def draft_prompt(klass: str, text: str) -> str:
     return head + rule + tail + text[:PAGE_TEXT_CAP]
 
 
-def spread_prompt(two_pages: str) -> str:
+def multi_doc_prompt(two_pages: str) -> str:
     return (
         "You are authoring one graded cross-document retrieval query for a "
         "benchmark. Below are the raw texts of one page from each of TWO "
@@ -282,7 +290,7 @@ def check_candidate(
     if "..." in ev or "…" in ev:
         reasons.append("ellipsis in evidence")
     words = q.split()
-    if klass == "described":
+    if klass == PARAPHRASE:
         if len(words) > 16:
             reasons.append(f"query {len(words)} words")
         if re.search(r"\d", q):
@@ -303,16 +311,16 @@ def check_candidate(
         ]
         if pn:
             reasons.append(f"proper noun(s) {pn}")
-    elif klass == "spread":
+    elif klass == MULTI_DOC:
         if not (2 <= len(words) <= 4):
-            reasons.append(f"spread query {len(words)} words")
+            reasons.append(f"multi_doc query {len(words)} words")
         qtoks = content_tokens(q)
         for label, ev_text in (("a", ev), ("b", str(draft.get("evidence_b", "")))):
             if not (qtoks & content_tokens(ev_text)):
                 reasons.append(f"no query token in evidence_{label}")
     else:
         if not (2 <= len(words) <= 4):
-            reasons.append(f"needle query {len(words)} words")
+            reasons.append(f"exact_match query {len(words)} words")
         missing = [w for w in words if fold(w) not in fold(ev)]
         if missing:
             reasons.append(f"query words not in evidence {missing}")
@@ -371,7 +379,7 @@ def nearest_neighbours(docs: list[dict]) -> dict[str, str]:
 
 
 def build_doc_freq(docs: list[dict]) -> dict[str, int]:
-    """word -> number of documents whose raw text contains it (needle rarity)."""
+    """word -> number of documents whose raw text contains it (exact_match rarity)."""
     freq: dict[str, int] = {}
     for d in docs:
         path = REPO / d["path"]
@@ -390,7 +398,12 @@ def build_doc_freq(docs: list[dict]) -> dict[str, int]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--klass", choices=("described", "needle", "spread"), required=True)
+    ap.add_argument(
+        "--klass",
+        type=normalize_class,
+        choices=(PARAPHRASE, EXACT_MATCH, MULTI_DOC),
+        required=True,
+    )
     ap.add_argument("--n", type=int, required=True, help="pages to sample")
     ap.add_argument("--seed", type=int, default=20260830)
     ap.add_argument("--model", default=DEFAULT_MODEL)
@@ -400,14 +413,17 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
-    queries = json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+    queries = normalize_rows(
+        json.loads((DATA / "queries.json").read_text(encoding="utf-8"))
+    )
+    prefix = LEGACY_PREFIX[args.klass]
     docs = [d for d in manifest["docs"] if d.get("lang", "en") == "en"]
     labelled = {lab["doc"] for q in queries["queries"] for lab in q["labels"]}
     existing = [q["id"] for q in queries["queries"] if q["class"] == args.klass]
     next_num = 1 + max(int(i.split("-")[1]) for i in existing)
 
-    out_path = args.out or DATA / f"candidates_{args.klass}.json"
-    cache_path = args.cache or DATA / f"author_cache_{args.klass}.jsonl"
+    out_path = args.out or DATA / f"candidates_{prefix}.json"
+    cache_path = args.cache or DATA / f"author_cache_{prefix}.jsonl"
     cache: dict[str, dict] = {}
     if cache_path.exists():
         for line in cache_path.read_text(encoding="utf-8").splitlines():
@@ -426,8 +442,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {d} p{p}")
         return 0
 
-    doc_freq = build_doc_freq(docs) if args.klass == "needle" else None
-    neighbours = nearest_neighbours(docs) if args.klass == "spread" else {}
+    doc_freq = build_doc_freq(docs) if args.klass == EXACT_MATCH else None
+    neighbours = nearest_neighbours(docs) if args.klass == MULTI_DOC else {}
     path_by_id = {d["id"]: REPO / d["path"] for d in docs}
     accepted: list[dict] = []
     rejected: list[dict] = []
@@ -438,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
             skipped.append({"doc": doc_id, "page": page, "why": "thin or references"})
             continue
         partner: tuple[str, int, str] | None = None
-        if args.klass == "spread":
+        if args.klass == MULTI_DOC:
             nb = neighbours.get(doc_id)
             if nb is None:
                 skipped.append({"doc": doc_id, "page": page, "why": "no profile"})
@@ -452,12 +468,12 @@ def main(argv: list[str] | None = None) -> int:
                 skipped.append({"doc": nb, "page": nb_page, "why": "partner thin"})
                 continue
             partner = (nb, nb_page, nb_text)
-        key = f"{args.klass}|{doc_id}|{page}|{args.seed}"
+        key = f"{prefix}|{doc_id}|{page}|{args.seed}"
         if key in cache:
             raw = cache[key]["raw"]
         elif partner is not None:
             raw = ask(
-                spread_prompt(
+                multi_doc_prompt(
                     f"=== PAGE A ({doc_id} p{page}) ===\n{text[:PAGE_TEXT_CAP // 2]}"
                     f"\n\n=== PAGE B ({partner[0]} p{partner[1]}) ===\n"
                     f"{partner[2][:PAGE_TEXT_CAP // 2]}"
@@ -467,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             raw = ask(draft_prompt(args.klass, text), args.model)
         if key not in cache:
-            # cache every fresh call, whichever branch made it (the spread
+            # cache every fresh call, whichever branch made it (the multi_doc
             # branch once skipped this and re-drafted on every run)
             rec = {
                 "key": key,
@@ -527,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             ]
         cand = {
-            "id": f"{args.klass}-{next_num + len(accepted):02d}",
+            "id": f"{prefix}-{next_num + len(accepted):02d}",
             "class": args.klass,
             "query": str(draft.get("query", "")).strip(),
             "labels": labels,

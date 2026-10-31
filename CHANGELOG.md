@@ -5,6 +5,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-10-31
+### Added
+
+- **Embeddings keep going between corpus calls.** Embedding used to stop
+  whenever a call returned, so a 500-PDF folder needed 35 `pdf_corpus_warm`
+  calls (about 27 minutes) for its embeddings, and any pause between calls
+  was lost. Documents a call leaves with text but no embeddings now keep
+  embedding in the server after it returns, and the next call finds them
+  cached. `pdf_corpus_warm` reports how many in `embedding_in_background`,
+  and `pdf_corpus_search`'s `embeddings_pending` carries `in_background`.
+  On 500 PDFs, one embedding call followed by no further calls finished
+  every document in about 27 minutes, the same time the 35 back-to-back
+  calls took before. The work runs only while no tool call is running or
+  waiting; a call that arrives mid-way waits for the current encode step
+  (up to about half a second measured). It stops for the next embedding
+  warm call, `pdf_cache_clear` and server exit.
+  `PDF_MCP_BACKGROUND_EMBED=0` turns it off
+  ([#89](https://github.com/jztan/pdf-mcp/issues/89))
+- **`pdf_read_pages` points at the cells a scan's OCR layer probably
+  misread.** Many scanned PDFs carry text from an OCR pass made when they
+  were digitised, and it can be wrong in ways that look like data: in one
+  1936 journal table, 51 of 600 decimal marks were misread (`5-4`, `5 4`,
+  `54`). With `ocr` off, a response whose pages carry text over a
+  full-page image now includes `scan_text_layer_pages` and a `hint`, and
+  each such page lists `suspect_cells`: cells in a column of fixed-format
+  decimals whose text breaks the column's format, each with a `clip` to
+  render. On that table it named all 51 and none of the 548 correct cells;
+  a wrong digit in a well-formed cell (there was one) is not caught
+  ([#76](https://github.com/jztan/pdf-mcp/issues/76),
+  [#79](https://github.com/jztan/pdf-mcp/issues/79), reported by
+  @phinnphace)
+- **`pdf_read_pages(force_ocr=true)` re-OCRs a page that already has a
+  text layer.** `ocr=true` only OCRs pages without one, so a page whose
+  embedded text does not decode could not be OCR'd. `force_ocr` runs
+  Tesseract anyway, returns `source="ocr"`, and caches the result for
+  `pdf_search`. It is not a fix for scanned tables, which Tesseract can
+  drop entirely. The default is unchanged.
+
+### Changed
+
+- **`pdf_corpus_warm` lists only the documents a call changed.**
+  Already-cached documents are now counted in `cached_docs` (with
+  `cached_without_embeddings`) instead of returned as one row each, so the
+  calls that resume a large warm stay small: warming 500 PDFs took 37
+  calls, and each returned a row for every document (73 to 124 KB, about
+  3.7 MB in all). A cached document with no extractable text is still
+  listed, since it needs OCR. `detail=true` returns the full list.
+  `warm_complete`, `unwarmed`, `unprocessed` and `skipped` are unchanged
+  ([#86](https://github.com/jztan/pdf-mcp/issues/86))
+- **Corpus tools take up to 500 PDFs per call, up from 100.**
+  `pdf_corpus_warm`, `pdf_corpus_overview` and `pdf_corpus_search` now
+  accept a folder or list of up to 500 files, so a corpus of a few hundred
+  documents is ranked in one call instead of being split into calls whose
+  scores cannot be compared. A corpus that size warms over several calls
+  (for 500 documents, text took about 90 s and embeddings about 27 minutes); the over-cap error,
+  the tool descriptions and the tool reference now say so, and say to
+  re-issue `pdf_corpus_warm` until `warm_complete` is true rather than
+  until `unprocessed` is empty. Search time grows with corpus size: about
+  0.3 s per hybrid query at 100 documents and about 0.9 s at 500.
+  `pdf-mcp-warm`'s default `--batch-size` follows the cap
+
+### Removed
+
+- **Python 3.10 is no longer supported; pdf-mcp now needs Python 3.11 or
+  later.** 3.10 reached end of life on 2026-10-01 and gets no more
+  security fixes, and the fixes for 44 dependency advisories (Pillow
+  13.0.0, filelock 4.2.1) no longer install on it. The Claude Desktop
+  bundle runs Python 3.11 to 3.13.
+
+### Fixed
+
+- **Installing on an Intel Mac no longer compiles `cryptography` from
+  source.** cryptography stopped shipping Intel-Mac wheels at 49.0.0, so
+  the Claude Desktop bundle (and `pip install` on an Intel Mac) built it
+  from source, which needs a Rust toolchain: it failed on a Mac without
+  one and took about three minutes on a Mac with one. Intel Macs now get
+  cryptography 48.0.1, the last release with those wheels. Its known
+  advisories are in PKCS#7 decryption and certificate path validation,
+  which pdf-mcp does not use. Every other platform gets 50.0.2
+  ([#81](https://github.com/jztan/pdf-mcp/issues/81)).
+- **A cancelled tool call no longer crashes the server.** When a client
+  cancelled a call that was still running (Claude Desktop does this after
+  4 minutes), the call's late result made the MCP SDK fail with
+  `AssertionError: Request already responded to`, and the server process
+  exited, taking every queued call with it. The late result is now
+  dropped ([#82](https://github.com/jztan/pdf-mcp/issues/82), reported
+  by @HillsCloud).
+- **Corpus calls return at `budget_seconds` even when a document is slow
+  to extract.** A long scanned PDF used to hold `pdf_corpus_warm`,
+  `pdf_corpus_overview` or `pdf_corpus_search` past its budget until the
+  extraction finished, and calls queued behind it waited out that time
+  before their own budget started. Now the call returns at the deadline
+  with the slow document in `unprocessed`, the extraction carries on in
+  the background, and the next corpus call picks up its result instead
+  of starting over. Time spent waiting behind another corpus call comes
+  out of the budget, and a call that waits out its whole budget returns
+  an inline error asking to retry
+  ([#82](https://github.com/jztan/pdf-mcp/issues/82)).
+- **A bookmark with no destination no longer breaks section search on its
+  PDF.** Since 3.0.0, one such bookmark made section detection fail for the
+  whole document: `pdf_search(granularity="section")` raised an error
+  instead of returning sections, and corpus warming logged `section
+  detection failed for <file>: -2` and indexed no sections for it.
+  Bookmarks that point outside the document are now skipped, and a PDF
+  whose bookmarks all do falls back to heading detection
+  ([#82](https://github.com/jztan/pdf-mcp/issues/82), reported by
+  @HillsCloud).
+
+### Security
+
+- Bumped dependencies to clear newly published advisories: Pillow 12.3.0
+  to 13.0.0 (41 advisories in its image parsers and encoders), pypdf
+  6.19.0 to 6.21.2 (11), filelock 3.25.2 to 4.2.4 (3, reached via
+  `huggingface-hub`), certifi to 2026.10.23, and one each in fastmcp
+  (3.2.4 to 3.4.11), mcp (1.28.1 to 1.30.0) and opentelemetry-api (1.40.0
+  to 1.45.1). fastembed moves from 0.8.0 to 0.9.1 to allow Pillow 13; it
+  produces byte-identical embeddings, so search results do not change.
+  The Claude Desktop bundle installs the locked versions.
+- Bumped transitive `fsspec` 2026.3.0 → 2026.9.0 (CVE-2026-104851;
+  reached via `huggingface-hub`). Lockfile-only.
+- Bumped transitive `authlib` 1.7.2 to 1.9.1 (8 advisories, reached via
+  `fastmcp`) and `dnspython` 2.8.0 to 2.9.0 (1, reached via
+  `email-validator`), with minimum versions so a fresh resolve cannot fall
+  back to them.
+- Bumped `pypdf` 6.21.2 to 6.21.4 (7 advisories) and transitive `joserfc`
+  1.7.1 to 1.7.7 (2, reached via `fastmcp`), with minimum versions so a
+  fresh resolve cannot fall back to them.
+
+### Contributors
+
+- @HillsCloud: reported the server crash on a cancelled tool call, the corpus calls that ran past their budget, and the bookmark that broke section search ([#82](https://github.com/jztan/pdf-mcp/issues/82))
+- @phinnphace: reported the scanned table whose OCR layer misread decimal marks ([#76](https://github.com/jztan/pdf-mcp/issues/76))
+
 ## [3.5.0] - 2026-10-03
 ### Added
 

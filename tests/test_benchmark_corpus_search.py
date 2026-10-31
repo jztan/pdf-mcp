@@ -56,57 +56,65 @@ class TestGradeRanking:
 
 
 class TestEvaluateDecision:
-    BASE_B = {"needle": 0.8, "spread": 0.7, "trap": 0.5}
+    BASE_B = {"exact_match": 0.8, "multi_doc": 0.7, "lexical_distractor": 0.5}
 
-    def test_temp_fts_wins_on_trap_margin(self):
-        a = {"needle": 0.8, "spread": 0.7, "trap": 0.56}
+    def test_temp_fts_wins_on_distractor_margin(self):
+        a = {"exact_match": 0.8, "multi_doc": 0.7, "lexical_distractor": 0.56}
         out = evaluate_decision(a, self.BASE_B, 0.4)
         assert out["winner"] == "temp-fts"
 
-    def test_rrf_wins_when_trap_margin_too_small(self):
-        a = {"needle": 0.8, "spread": 0.7, "trap": 0.54}
+    def test_rrf_wins_when_distractor_margin_too_small(self):
+        a = {"exact_match": 0.8, "multi_doc": 0.7, "lexical_distractor": 0.54}
         out = evaluate_decision(a, self.BASE_B, 0.4)
         assert out["winner"] == "rrf-fusion"
 
     def test_rrf_wins_when_other_class_regresses(self):
-        a = {"needle": 0.77, "spread": 0.7, "trap": 0.60}
+        a = {"exact_match": 0.77, "multi_doc": 0.7, "lexical_distractor": 0.60}
         out = evaluate_decision(a, self.BASE_B, 0.4)
         assert out["winner"] == "rrf-fusion"
         assert any("regress" in r for r in out["reasons"])
 
+    def test_old_class_keys_are_read_under_current_names(self):
+        a = {"needle": 0.8, "spread": 0.7, "trap": 0.56}
+        b = {"needle": 0.8, "spread": 0.7, "trap": 0.5}
+        out = evaluate_decision(a, b, 0.4)
+        assert out["winner"] == "temp-fts"
+        assert out["reasons"][0].startswith("lexical_distractor-class")
+
     def test_rrf_wins_when_arm_a_too_slow(self):
-        a = {"needle": 0.8, "spread": 0.7, "trap": 0.60}
+        a = {"exact_match": 0.8, "multi_doc": 0.7, "lexical_distractor": 0.60}
         out = evaluate_decision(a, self.BASE_B, 1.2)
         assert out["winner"] == "rrf-fusion"
         assert any("cost" in r or "1.0" in r for r in out["reasons"])
 
     def test_boundary_exact_margin_wins_and_exact_regress_allowed(self):
-        a = {"needle": 0.78, "spread": 0.7, "trap": 0.55}
+        a = {"exact_match": 0.78, "multi_doc": 0.7, "lexical_distractor": 0.55}
         out = evaluate_decision(a, self.BASE_B, 0.4)
-        # trap delta exactly 0.05 (>=) and needle regress exactly 0.02 (<=)
+        # lexical_distractor delta exactly 0.05 (>=) and exact_match
+        # regress exactly 0.02 (<=)
         assert out["winner"] == "temp-fts"
 
     def test_near_threshold_deltas_are_not_rounded_up(self):
-        # True trap delta 0.0497 must NOT win (rounding to 3dp would
+        # True lexical_distractor delta 0.0497 must NOT win (rounding to 3dp would
         # wrongly promote it to 0.050).
-        a = {"needle": 0.8, "spread": 0.7, "trap": 0.5497}
+        a = {"exact_match": 0.8, "multi_doc": 0.7, "lexical_distractor": 0.5497}
         out = evaluate_decision(a, self.BASE_B, 0.4)
         assert out["winner"] == "rrf-fusion"
 
     def test_near_threshold_regression_is_not_rounded_down(self):
-        # True needle regression 0.0201 must trigger the regression gate.
-        a = {"needle": 0.7799, "spread": 0.7, "trap": 0.60}
+        # True exact_match regression 0.0201 must trigger the regression gate.
+        a = {"exact_match": 0.7799, "multi_doc": 0.7, "lexical_distractor": 0.60}
         out = evaluate_decision(a, self.BASE_B, 0.4)
         assert out["winner"] == "rrf-fusion"
         assert any("regress" in r for r in out["reasons"])
 
 
-# Trap fixture: this synthetic corpus proves the two arms are
+# Lexical-distractor fixture: this synthetic corpus proves the two arms are
 # distinguishable, not that either one is "smarter". Arm A ranks
 # cross-doc via corpus-wide BM25 (here dominated by length
 # normalization, not IDF); arm B fuses within-doc ranks, so pages
 # tied at equal within-doc rank tie regardless of content. The real
-# IDF-vs-fusion question is answered by the trap-class queries on the
+# IDF-vs-fusion question is answered by the lexical_distractor-class queries on the
 # real corpus in the benchmark run, not by this fixture.
 #
 # "budget" is boilerplate on every page of alpha and bravo; "shortfall"
@@ -123,7 +131,7 @@ class TestEvaluateDecision:
 # ~0.78 (measured: zulu -1.122 vs alpha/bravo -0.343).
 # Rank-only fusion (arm B) sees all three docs tie at within-doc rank 1,
 # and its tie-break prefers alphabetical doc ids, surfacing alpha first.
-TRAP_PAGES = [
+LEXICAL_DISTRACTOR_PAGES = [
     ("alpha", 1, "annual budget overview for the fiscal year budget budget budget"),
     (
         "alpha",
@@ -158,13 +166,13 @@ def _conn():
 class TestCorpusFtsArm:
     def test_corpus_arm_discriminates_across_docs(self):
         conn = _conn()
-        build_corpus_index(conn, TRAP_PAGES)
+        build_corpus_index(conn, LEXICAL_DISTRACTOR_PAGES)
         ranked = search_corpus(conn, "budget shortfall", top_k=5)
         assert ranked[0] == ("zulu", 2)
 
     def test_cjk_query_routes_to_char_split_table(self):
         conn = _conn()
-        pages = TRAP_PAGES + [("kanji", 1, "厚木基地の周辺整備について")]
+        pages = LEXICAL_DISTRACTOR_PAGES + [("kanji", 1, "厚木基地の周辺整備について")]
         build_corpus_index(conn, pages)
         ranked = search_corpus(conn, "厚木基地", top_k=3)
         assert ranked[0] == ("kanji", 1)
@@ -173,23 +181,23 @@ class TestCorpusFtsArm:
 class TestPerDocRrfArm:
     def test_rrf_arm_cannot_discriminate_across_docs(self):
         conn = _conn()
-        doc_ids = build_per_doc_indexes(conn, TRAP_PAGES)
+        doc_ids = build_per_doc_indexes(conn, LEXICAL_DISTRACTOR_PAGES)
         assert doc_ids == ["alpha", "bravo", "zulu"]
         ranked = search_per_doc_rrf(
             conn, doc_ids, "budget shortfall", per_doc_k=10, top_k=5
         )
         # Every doc's within-doc best hit fuses at the same RRF score;
         # alphabetical tie-break puts a boilerplate page first. This is
-        # the structural limitation of rank-only fusion the trap class
+        # the structural limitation of rank-only fusion the lexical_distractor class
         # measures: it cannot discriminate across docs by content, only
         # by within-doc rank.
         assert ranked[0][0] == "alpha"
         assert ("zulu", 2) in ranked
 
-    def test_needle_query_found_by_both_arms(self):
+    def test_exact_match_query_found_by_both_arms(self):
         conn = _conn()
-        build_corpus_index(conn, TRAP_PAGES)
-        doc_ids = build_per_doc_indexes(conn, TRAP_PAGES)
+        build_corpus_index(conn, LEXICAL_DISTRACTOR_PAGES)
+        doc_ids = build_per_doc_indexes(conn, LEXICAL_DISTRACTOR_PAGES)
         a = search_corpus(conn, "municipal parks", top_k=3)
         b = search_per_doc_rrf(conn, doc_ids, "municipal parks", per_doc_k=10, top_k=3)
         assert a[0] == ("zulu", 1)
@@ -206,7 +214,7 @@ class TestValidation:
             "queries": [
                 {
                     "id": "q1",
-                    "class": "needle",
+                    "class": "exact_match",
                     "query": "anything",
                     "labels": [{"doc": "ghost", "page": 1, "gain": 2, "evidence": "e"}],
                 }
@@ -221,7 +229,7 @@ class TestValidation:
             "queries": [
                 {
                     "id": "q1",
-                    "class": "needle",
+                    "class": "exact_match",
                     "query": "anything",
                     "labels": [
                         {
@@ -267,7 +275,7 @@ def _queries(evidence: str) -> dict:
         "queries": [
             {
                 "id": "q1",
-                "class": "needle",
+                "class": "exact_match",
                 "query": "anything",
                 "labels": [{"doc": "d1", "page": 2, "gain": 2, "evidence": evidence}],
             }
@@ -383,7 +391,7 @@ class TestWriteResultsMdGuard:
 
     def test_refuses_to_clobber_hand_written_sections(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
-        edited = self.GENERATED + "\n## Described queries\n\nhand-written\n"
+        edited = self.GENERATED + "\n## Paraphrase queries\n\nhand-written\n"
         out.write_text(edited, encoding="utf-8")
         write_results_md(self.GENERATED)
         assert (
@@ -393,7 +401,7 @@ class TestWriteResultsMdGuard:
     def test_force_overwrites(self, monkeypatch, tmp_path):
         out = self._patch_out_dir(monkeypatch, tmp_path)
         out.write_text(
-            self.GENERATED + "\n## Described queries\n\nhand-written\n",
+            self.GENERATED + "\n## Paraphrase queries\n\nhand-written\n",
             encoding="utf-8",
         )
         write_results_md(self.GENERATED, force=True)
@@ -404,3 +412,15 @@ class TestWriteResultsMdGuard:
         out.write_text(self.GENERATED, encoding="utf-8")
         write_results_md(self.GENERATED.replace("body", "newer body"))
         assert "newer body" in out.read_text(encoding="utf-8")
+
+
+def test_load_queries_maps_old_class_labels(tmp_path, monkeypatch):
+    """The live query file may predate the 2026-10-05 class rename."""
+    (tmp_path / "queries.json").write_text(
+        json.dumps({"queries": [{"id": "trap-01", "class": "trap"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bcs, "OUT_DIR", tmp_path)
+    assert bcs.load_queries()["queries"] == [
+        {"id": "trap-01", "class": "lexical_distractor"}
+    ]

@@ -7,6 +7,7 @@ TestOcrIntegration: skipped if Tesseract is not installed.
 
 import base64
 import io
+import re
 
 import pytest
 from PIL import Image
@@ -111,3 +112,34 @@ class TestOcrRealSpawnCorrectness:
         assert [p["source"] for p in par["pages"]] == [
             p["source"] for p in seq["pages"]
         ]
+
+
+class TestRaisedDotOcr:
+    pytestmark = pytest.mark.skipif(
+        not _tesseract_available(),
+        reason="Tesseract not installed",
+    )
+
+    # What Tesseract may make of the printed "5·4". Recorded behaviour, not
+    # a target: on Tesseract 5.5.2 (eng) the 300 dpi scan of this fixture
+    # read 5·4 as "5-4" or "5:4" depending on font size, and its
+    # neighbours as "4.9", "4-6" and "3:2", i.e. the raised dot is never
+    # kept and the substitute is not even consistent within one page. That
+    # is the Fisher failure reproduced. A dropped cell fails the test.
+    RAISED_DOT_READINGS = {"5·4", "5.4", "5-4", "5:4", "5,4", "5 4", "54"}
+
+    def test_tesseract_reading_of_raised_dot(
+        self, raised_dot_table_scan_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_scan_pdf, "1", ocr=True)
+        page = result["pages"][0]
+        assert page["source"] == "ocr"
+        found = re.findall(r"5[·.\-:, ]?4", page["text"])
+        assert found, f"5·4 not read at all: {page['text']!r}"
+        assert set(found) <= self.RAISED_DOT_READINGS, found
+
+    def test_force_ocr_on_born_digital_page(
+        self, raised_dot_table_pdf, isolated_server
+    ):
+        result = pdf_read_pages(raised_dot_table_pdf, "1", force_ocr=True)
+        assert result["pages"][0]["source"] == "ocr"

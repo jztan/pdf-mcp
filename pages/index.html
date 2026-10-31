@@ -1100,7 +1100,7 @@ estimated_tokens: 925</pre>
         <span class="step-n">01</span>
         <h3 class="step-label">Install from PyPI.</h3>
         <div class="codebox" data-copy-install role="button" tabindex="0"><pre>uv tool install pdf-mcp</pre><small>copy</small></div>
-        <p>Python 3.10+. Or <code>pipx install pdf-mcp</code>. Scanned pages also need Tesseract. On Claude Desktop, skip steps 01 and 02: <a href="https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb">download pdf-mcp.mcpb</a> and drag it onto Settings &gt; Extensions.</p>
+        <p>Python 3.11+. Or <code>pipx install pdf-mcp</code>. Scanned pages also need Tesseract. On Claude Desktop, skip steps 01 and 02: <a href="https://github.com/jztan/pdf-mcp/releases/latest/download/pdf-mcp.mcpb">download pdf-mcp.mcpb</a> and drag it onto Settings &gt; Extensions.</p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
@@ -1490,7 +1490,7 @@ estimated_tokens: 925</pre>
     }
     const totalBytes = pdfs.reduce((a, f) => a + f.size, 0);
     if (pdfs.length > CORPUS_MAX_FILES || totalBytes > CORPUS_MAX_BYTES) {
-      showToast(`Demo cap: up to ${CORPUS_MAX_FILES} PDFs / 100 MB per drop (the installed server takes up to 100 files).`);
+      showToast(`Demo cap: up to ${CORPUS_MAX_FILES} PDFs / 100 MB per drop (the installed server takes up to 500 files).`);
       return;
     }
     if (pdfs.length === 0) { showToast("No PDFs in that drop."); return; }
@@ -1681,6 +1681,9 @@ estimated_tokens: 925</pre>
         embeddings_cached: false,
         text_coverage: textCoverageLabel(d.pageTexts),
       })),
+      cached_docs: 0,
+      cached_without_embeddings: 0,
+      embedding_in_background: 0,
       unprocessed: [],
       skipped: corpusState.skipped,
       corpus_size: corpusState.docs.length,
@@ -2168,7 +2171,7 @@ estimated_tokens: 925</pre>
       swEl.innerHTML = `
         <div class="callout">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span><strong>Undecodable text layer.</strong> This PDF's fonts carry no Unicode mapping, so its text extracts as glyph-index garbage — not just in this demo, but in any text extractor, including the <strong>pdf-mcp server</strong>. Recovering it requires OCR on the rendered pages (<code>pdf_read_pages(ocr=True)</code>). This is a property of the PDF, not a demo limitation.</span>
+          <span><strong>Undecodable text layer.</strong> This PDF's fonts carry no Unicode mapping, so its text extracts as glyph-index garbage — not just in this demo, but in any text extractor, including the <strong>pdf-mcp server</strong>. Recovering it requires OCR on the rendered pages (<code>pdf_read_pages(force_ocr=True)</code>). This is a property of the PDF, not a demo limitation.</span>
         </div>`;
     } else if (scriptUnsupported) {
       swEl.innerHTML = `

@@ -4,6 +4,8 @@ import subprocess
 import sys
 import time
 
+import pytest
+
 from pdf_mcp.parallel import PageError, resolve_workers, run_pages
 
 
@@ -42,6 +44,12 @@ class TestPageError:
 
 
 class TestResolveWorkers:
+    @pytest.fixture(autouse=True)
+    def _no_worker_env(self, monkeypatch):
+        # conftest pins PDF_MCP_MAX_WORKERS=1 for warm tests; these tests
+        # read the env-free default and set the variable themselves.
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+
     def test_below_gate_returns_one(self):
         # 1 miss page, gate 2 -> sequential
         assert resolve_workers(1, gate=2, cap=8) == 1

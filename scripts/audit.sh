@@ -20,6 +20,12 @@
 # clean. Same failure mode as the ambient-interpreter case above: green for the
 # wrong reason. osv.dev carries both ranges.
 #
+# Blind spot: pip-audit evaluates each exported line's environment marker
+# against the interpreter running it, so a lock entry forked for another
+# Python (`pillow==12.3.0 ; python_full_version < '3.11'`) is skipped, not
+# audited. Measured 2026-10-25: a lock that kept a vulnerable Pillow for 3.10
+# only reported clean. Prefer one version per package over a marker fork.
+#
 # Keep any ignore list here, in one place, so local preflight and CI cannot
 # drift. There are currently no ignored vulnerabilities.
 set -eo pipefail

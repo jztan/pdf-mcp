@@ -410,3 +410,210 @@ def test_a_long_section_backfill_lets_a_queued_call_run_between_documents(
     assert not t1.is_alive()
     assert not t2.is_alive()
     assert events == ["backfill a.pdf", "short call", "backfill b.pdf"]
+
+
+def test_acquire_with_timeout_gives_up_while_the_lock_is_held():
+    lock = FairLock()
+    lock.acquire()
+    result = []
+    t = _start(lambda: result.append(lock.acquire(timeout=0.1)))
+    t.join(timeout=5)
+    assert result == [False]
+    assert lock.waiters() == 0
+    lock.release()
+
+
+def test_an_abandoned_ticket_does_not_block_the_waiter_behind_it():
+    """Issue #82: a corpus call that gives up on the lock must not stall
+    every call queued after it."""
+    lock = FairLock()
+    lock.acquire()
+    gave_up = []
+    quitter = _start(lambda: gave_up.append(lock.acquire(timeout=0.2)))
+    _wait_for_waiters(lock, 1)
+    got = threading.Event()
+
+    def patient():
+        with lock:
+            got.set()
+
+    behind = _start(patient)
+    _wait_for_waiters(lock, 2)
+    quitter.join(timeout=5)
+    assert gave_up == [False]
+    assert lock.waiters() == 1
+    lock.release()
+    assert got.wait(timeout=5)
+    behind.join(timeout=5)
+
+
+def test_yield_skips_an_abandoned_waiter():
+    lock = FairLock()
+    lock.acquire()
+    quitter = _start(lambda: lock.acquire(timeout=0.1))
+    _wait_for_waiters(lock, 1)
+    quitter.join(timeout=5)
+    assert lock.waiters() == 0
+    lock.yield_turn()  # nobody really waits: must return, not hang
+    assert lock.held_by_current_thread()
+    lock.release()
+
+
+def test_pdf_access_within_returns_busy_instead_of_waiting_past_the_budget(
+    monkeypatch,
+):
+    lock = FairLock()
+    monkeypatch.setattr(concurrency, "PDF_ACCESS", lock)
+
+    @concurrency.pdf_access_within("budget_seconds", lambda waited: {"busy": waited})
+    def tool(budget_seconds: int = 45):
+        return {"ran": concurrency.lock_wait_seconds()}
+
+    assert tool.__pdf_access__ is True
+    assert tool(budget_seconds=1)["ran"] < 1
+
+    lock.acquire()
+    result = []
+    t = _start(lambda: result.append(tool(budget_seconds=1)))
+    t.join(timeout=10)
+    lock.release()
+    # Not >= 1: Windows ticks monotonic() at ~15.6 ms.
+    assert "busy" in result[0] and result[0]["busy"] >= 0.9
+
+
+def test_pdf_access_within_reports_the_time_spent_queueing(monkeypatch):
+    lock = FairLock()
+    monkeypatch.setattr(concurrency, "PDF_ACCESS", lock)
+
+    @concurrency.pdf_access_within("budget_seconds", lambda waited: {"busy": waited})
+    def tool(budget_seconds: int = 45):
+        return {"waited": concurrency.lock_wait_seconds()}
+
+    lock.acquire()
+    result = []
+    t = _start(lambda: result.append(tool(5)))
+    _wait_for_waiters(lock, 1)
+    time.sleep(0.3)
+    lock.release()
+    t.join(timeout=10)
+    # Lower bound below the 0.3 s sleep: Windows ticks monotonic() at ~15.6 ms.
+    assert 0.2 <= result[0]["waited"] < 5
+    assert concurrency.lock_wait_seconds() == 0.0
+
+
+def test_a_corpus_call_queued_past_its_budget_returns_busy(tmp_path):
+    """Issue #82: a corpus call behind another one returns an inline error
+    at its own budget instead of hanging until the client cancels it."""
+    import pymupdf
+
+    from pdf_mcp.tools.corpus_tools import pdf_corpus_warm
+
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "queued corpus call")
+    doc.save(str(tmp_path / "a.pdf"))
+    doc.close()
+
+    result = []
+    concurrency.PDF_ACCESS.acquire()
+    try:
+        t = _start(
+            lambda: result.append(pdf_corpus_warm(str(tmp_path), budget_seconds=1))
+        )
+        t.join(timeout=30)
+    finally:
+        concurrency.PDF_ACCESS.release()
+    assert not t.is_alive()
+    assert "error" in result[0] and "hint" in result[0]
+    assert "budget" in result[0]["error"]
+
+
+# Background work (issue #89): a background job takes the lock only when no
+# tool call holds it or waits for it, and gives it up to any call that
+# arrives, so tool calls never queue behind it.
+
+
+def test_background_access_waits_until_the_lock_is_idle():
+    lock = FairLock()
+    stop = threading.Event()
+    events = []
+    lock.acquire()
+
+    def background():
+        assert lock.acquire_when_idle(stop)
+        events.append("background ran")
+        lock.release()
+
+    t = _start(background)
+    time.sleep(0.1)
+    assert events == []  # never queued a ticket: the holder sees no waiter
+    assert lock.waiters() == 0
+    events.append("holder done")
+    lock.release()
+    t.join(timeout=5)
+    assert events == ["holder done", "background ran"]
+
+
+def test_background_access_returns_false_once_stopped():
+    lock = FairLock()
+    stop = threading.Event()
+    result = []
+    lock.acquire()
+    t = _start(lambda: result.append(lock.acquire_when_idle(stop)))
+    time.sleep(0.05)
+    stop.set()
+    t.join(timeout=5)
+    lock.release()
+    assert result == [False]
+    assert not t.is_alive()
+
+
+def test_background_yield_lets_a_tool_call_finish_before_resuming():
+    """A plain yield_turn would hand the lock back after the tool call's
+    first own yield; the background yield waits until the call is done."""
+    lock = FairLock()
+    stop = threading.Event()
+    events = []
+    assert lock.acquire_when_idle(stop)
+
+    def tool_call():
+        with lock:
+            events.append("call start")
+            lock.yield_turn()  # e.g. between pages of pdf_read_all
+            events.append("call end")
+
+    t = _start(tool_call)
+    _wait_for_waiters(lock, 1)
+    lock.yield_to_waiters(stop)
+    events.append("background resumed")
+    assert lock.held_by_current_thread()
+    lock.release()
+    t.join(timeout=5)
+    assert events == ["call start", "call end", "background resumed"]
+
+
+def test_background_yield_raises_without_the_lock_once_stopped():
+    lock = FairLock()
+    stop = threading.Event()
+    assert lock.acquire_when_idle(stop)
+    stop.set()
+    with pytest.raises(concurrency.BackgroundStopped):
+        lock.yield_to_waiters(stop)
+    assert not lock.held_by_current_thread()
+    with lock:  # and the lock is free for everyone else
+        pass
+
+
+def test_module_yield_uses_the_background_rule_inside_background_access(
+    monkeypatch,
+):
+    lock = FairLock()
+    monkeypatch.setattr(concurrency, "PDF_ACCESS", lock)
+    stop = threading.Event()
+    with concurrency.background_access(stop):
+        assert lock.held_by_current_thread()
+        stop.set()
+        with pytest.raises(concurrency.BackgroundStopped):
+            yield_pdf_access()
+    assert not lock.held_by_current_thread()
+    with lock:
+        yield_pdf_access()  # a tool call's yield is unchanged

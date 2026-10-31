@@ -1,11 +1,11 @@
-"""Cross-corpus replication of the spread findings on the 10-K set.
+"""Cross-corpus replication of the multi_doc findings on the 10-K set.
 
-The entire spread story (shape gap, width curve, ordering ceiling) rests
+The entire multi_doc story (shape gap, width curve, ordering ceiling) rests
 on 25 in-sample arXiv queries. This replays the same deterministic
-measurements on 16 independently-authored financial spread queries
+measurements on 16 independently-authored financial multi_doc queries
 (spread_queries.json, 44 verified labels, 19 filings) — new corpus, new
 questions, new authorship. Raw query strings are used: on the arXiv set
-spread routing was measured caller-insensitive (23/25 doc-hit@3 both
+multi_doc routing was measured caller-insensitive (23/25 doc-hit@3 both
 raw and caller-emitted), noted as an assumption here.
 
 Replicated measurements:
@@ -16,7 +16,7 @@ Replicated measurements:
 
 Free and deterministic. Uses the warmed spike cache.
 
-Run:  uv run python scripts/spike_fspread_replication.py
+Run:  uv run python scripts/spike_financial_multi_doc_replication.py
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def main() -> int:
         return sum(r[key] * r["n_gold"] for r in rows) / total
 
     print(f"wrote {out}\n")
-    print(f"FINANCIAL SPREAD REPLICATION (n={n} queries, {total} gold parts)")
+    print(f"FINANCIAL MULTI_DOC REPLICATION (n={n} queries, {total} gold parts)")
     print(f"  {'metric':<38}{'10-K':>8}{'arXiv ref':>10}")
     print(f"  {'dmc coverage (docs identified)':<38}{mean('dmc_cov'):>7.0%}{'93%':>10}")
     print(f"  {'flat top-10 coverage':<38}{mean('flat_cov'):>7.0%}{'75%':>10}")

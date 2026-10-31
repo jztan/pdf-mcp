@@ -114,8 +114,9 @@ def test_cache_size_is_stable_across_repeated_calls(cache, sample_pdf):
     auto-checkpoint timing, so it could fall right after a caller added a
     document. That broke an unrelated server test non-deterministically.
     """
-    for i in range(200):
-        cache.save_page_text(sample_pdf, i, "x" * 4000)
+    # One transaction: 200 single-page commits cost 46 s on Windows CI (one
+    # fsync each) for the same bytes in the WAL.
+    cache.save_pages_text(sample_pdf, {i: "x" * 4000 for i in range(200)})
 
     assert cache.get_stats()["cache_size_bytes"] == (
         cache.get_stats()["cache_size_bytes"]

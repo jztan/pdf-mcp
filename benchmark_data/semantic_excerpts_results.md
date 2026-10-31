@@ -4,7 +4,7 @@ Generated 2026-09-06T05:57:50+00:00 at `ee94871` by `scripts/benchmark_semantic_
 
 ## corpus (metric: span_recall)
 
-| style | all | described | needle | spread | trap | retrieval | s/query |
+| style | all | paraphrase | exact_match | multi_doc | lexical_distractor | retrieval | s/query |
 |---|---|---|---|---|---|---|---|
 | snippet | 0.288 (n=184) | 0.108 (n=83) | 0.387 (n=31) | 0.378 (n=45) | 0.600 (n=25) | doc-NDCG@10 0.765 | 1.88 |
 | paragraph | 0.391 (n=184) | 0.241 (n=83) | 0.548 (n=31) | 0.378 (n=45) | 0.720 (n=25) | doc-NDCG@10 0.765 | 1.39 |
@@ -23,15 +23,15 @@ Current minus baseline, paired bootstrap 95% CI. A class fails only when its CI 
 | arm | style | class | n | baseline | current | current minus baseline |
 |---|---|---|---|---|---|---|
 | corpus | snippet | all | 184 | 0.288 | 0.288 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | snippet | described | 83 | 0.108 | 0.108 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | snippet | needle | 31 | 0.387 | 0.387 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | snippet | spread | 45 | 0.378 | 0.378 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | snippet | trap | 25 | 0.600 | 0.600 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | snippet | paraphrase | 83 | 0.108 | 0.108 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | snippet | exact_match | 31 | 0.387 | 0.387 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | snippet | multi_doc | 45 | 0.378 | 0.378 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | snippet | lexical_distractor | 25 | 0.600 | 0.600 | +0.000 [+0.000, +0.000] (includes zero) |
 | corpus | paragraph | all | 184 | 0.391 | 0.391 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | paragraph | described | 83 | 0.241 | 0.241 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | paragraph | needle | 31 | 0.548 | 0.548 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | paragraph | spread | 45 | 0.378 | 0.378 | +0.000 [+0.000, +0.000] (includes zero) |
-| corpus | paragraph | trap | 25 | 0.720 | 0.720 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | paragraph | paraphrase | 83 | 0.241 | 0.241 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | paragraph | exact_match | 31 | 0.548 | 0.548 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | paragraph | multi_doc | 45 | 0.378 | 0.378 | +0.000 [+0.000, +0.000] (includes zero) |
+| corpus | paragraph | lexical_distractor | 25 | 0.720 | 0.720 | +0.000 [+0.000, +0.000] (includes zero) |
 | single | snippet | all | 82 | 0.537 | 0.537 | +0.000 [+0.000, +0.000] (includes zero) |
 | single | snippet | prose | 21 | 0.809 | 0.809 | +0.000 [+0.000, +0.000] (includes zero) |
 | single | snippet | structured | 9 | 0.667 | 0.667 | +0.000 [+0.000, +0.000] (includes zero) |

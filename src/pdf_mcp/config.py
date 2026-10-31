@@ -8,7 +8,7 @@ Malformed file = ValueError at startup (never silently fall back to permissive).
 from __future__ import annotations
 
 import fnmatch
-import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +17,6 @@ from urllib.parse import urlsplit
 from .embedder import DEFAULT_MODEL
 from .remote_embedder import RemoteSpec, _redact_base_url
 from .url_fetcher import URLFetcher
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".config" / "pdf-mcp" / "config.toml"
 

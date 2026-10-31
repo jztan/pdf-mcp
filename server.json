@@ -6,13 +6,13 @@
     "url": "https://github.com/jztan/pdf-mcp",
     "source": "github"
   },
-  "version": "3.5.0",
+  "version": "3.6.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pdf-mcp",
-      "version": "3.5.0",
+      "version": "3.6.0",
       "transport": {
         "type": "stdio"
       },
@@ -31,8 +31,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jztan/pdf-mcp/releases/download/v3.5.0/pdf-mcp-3.5.0.mcpb",
-      "fileSha256": "75cdeacccf0ad5e035041a2dc15306cecad1f5ff79351852df801d4271cbaba1",
+      "identifier": "https://github.com/jztan/pdf-mcp/releases/download/v3.6.0/pdf-mcp-3.6.0.mcpb",
+      "fileSha256": "c5f440c35e0ab33a5568f4f4a3339974832c66d9e3a1590c067bc79d11650ca9",
       "transport": {
         "type": "stdio"
       }

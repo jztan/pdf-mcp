@@ -41,14 +41,12 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastmcp>=3.0.0",
-    "pydantic>=2.0",
+    "fastmcp>=4.1.4,<5",
+    "pydantic>=2.12",
     # Imported directly (mcp.types) in server.py; arrives transitively via
     # fastmcp today, but declare it explicitly so the direct import can't break
-    # if fastmcp ever drops/renames it. Stay within fastmcp's <2.0 cap; floor at
-    # 1.28.1 to clear CVE-2026-52869/52870 (fixed 1.27.2) and CVE-2026-59950
-    # (fixed 1.28.1).
-    "mcp>=1.28.1,<2.0",
+    # if fastmcp ever drops/renames it. Same SDK major as fastmcp 4 requires.
+    "mcp>=2.3.0,<3",
     # Required at import time by chart_extractor (unconditional `import numpy`),
     # which server.py imports on every startup — so it's a core runtime dep, not
     # optional. Also used by fastembed.
@@ -74,7 +72,7 @@ dependencies = [
     # settle on 48.0.1 for every platform (it did once the 3.10 fork went),
     # which the audit then rightly flags.
     "cryptography>=49; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    # Pulled in transitively via fastmcp -> mcp; floor to clear GHSA-4xgf-cpjx-pc3j.
+    # Pulled in transitively via fastmcp; floor to clear GHSA-4xgf-cpjx-pc3j.
     "pydantic-settings>=2.14.2",
     # Pulled in transitively via fastmcp -> authlib; floor to clear CVE-2026-48990,
     # CVE-2026-119283 and CVE-2026-119284.

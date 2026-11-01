@@ -6,79 +6,11 @@ import subprocess
 import sys
 import textwrap
 import time
-from unittest.mock import AsyncMock, MagicMock
-
-import anyio
-from mcp.shared.session import RequestResponder
-from mcp.types import ErrorData, JSONRPCRequest
-
-from pdf_mcp import cancel_guard
-
-
-def _responder():
-    session = MagicMock()
-    session._send_response = AsyncMock()
-    request = JSONRPCRequest(jsonrpc="2.0", id=1, method="tools/call")
-    responder = RequestResponder(
-        request_id=1,
-        request_meta=None,
-        request=request,
-        session=session,
-        on_complete=lambda r: None,
-    )
-    return responder, session
-
-
-def test_responder_still_tracks_completion():
-    """The guard reads this private flag; an SDK rename must fail here, not
-    silently leave the crash in place."""
-
-    async def run():
-        responder, _ = _responder()
-        assert responder._completed is False
-
-    anyio.run(run)
-
-
-def test_late_respond_after_cancel_is_dropped():
-    cancel_guard.install()
-
-    async def run():
-        responder, session = _responder()
-        with responder:
-            await responder.cancel()
-            await responder.respond(ErrorData(code=0, message="late result"))
-        return session
-
-    session = anyio.run(run)
-    sent = [c.kwargs["response"] for c in session._send_response.await_args_list]
-    assert [r.message for r in sent] == ["Request cancelled"]
-
-
-def test_respond_without_cancel_is_sent():
-    cancel_guard.install()
-
-    async def run():
-        responder, session = _responder()
-        with responder:
-            await responder.respond(ErrorData(code=0, message="result"))
-        return session
-
-    session = anyio.run(run)
-    session._send_response.assert_awaited_once()
-
-
-def test_install_is_idempotent():
-    cancel_guard.install()
-    patched = RequestResponder.respond
-    cancel_guard.install()
-    assert RequestResponder.respond is patched
-
 
 _SLOW_SERVER = textwrap.dedent("""
     import time
     from fastmcp import FastMCP
-    import pdf_mcp.server  # noqa: F401  installs the guard
+    import pdf_mcp.server  # noqa: F401
 
     app = FastMCP("slow")
 
@@ -93,8 +25,9 @@ _SLOW_SERVER = textwrap.dedent("""
 
 def test_server_survives_a_cancelled_slow_tool(tmp_path):
     """End to end over stdio: cancel a sync tool mid-run, let it finish, and
-    the next request still gets an answer. Without the guard the process
-    exits with AssertionError: Request already responded to."""
+    the next request still gets an answer. On SDK v1 the late result raised
+    AssertionError: Request already responded to, and the process exited; SDK
+    v2 answers neither the cancel nor the late result."""
     script = tmp_path / "slow_server.py"
     script.write_text(_SLOW_SERVER, encoding="utf-8")
     env = dict(os.environ, PDF_MCP_CACHE_DIR=str(tmp_path / "cache"))
@@ -147,11 +80,9 @@ def test_server_survives_a_cancelled_slow_tool(tmp_path):
                 "params": {"requestId": 2, "reason": "timeout"},
             }
         )
-        cancelled = recv()
-        assert cancelled["id"] == 2 and "error" in cancelled
         time.sleep(2.0)  # the tool finishes; its late result is dropped
         send({"jsonrpc": "2.0", "id": 3, "method": "tools/list"})
-        listed = recv()
+        listed = recv()  # the first message since the cancel: nothing for id 2
         assert listed is not None and listed["id"] == 3, proc.stderr.read()
         assert proc.poll() is None
     finally:

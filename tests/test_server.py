@@ -3887,7 +3887,7 @@ class TestClipEncodeCascade:
         assert summary["render_recompressed"] == [
             {"page": 1, "codec": "jpeg", "quality": 80, "lossy": True}
         ]
-        assert result[1].mimeType == "image/jpeg"
+        assert result[1].mime_type == "image/jpeg"
 
     def test_small_clip_stays_png(self, isolated_server, big_scan_pdf):
         """A crop that fits losslessly must stay PNG."""
@@ -3899,7 +3899,7 @@ class TestClipEncodeCascade:
         summary = result[0]
 
         assert "render_recompressed" not in summary
-        assert result[1].mimeType == "image/png"
+        assert result[1].mime_type == "image/png"
 
     def test_clip_dpi_is_never_reduced(self, isolated_server, big_scan_pdf):
         """Quality may drop; resolution may not. The caller asked for a
@@ -3963,7 +3963,7 @@ class TestRenderEncodeCascade:
         assert entry["lossy"] is True
         assert entry["file_path_on_disk"].endswith(".png")
         assert Path(entry["file_path_on_disk"]).exists()
-        assert block.mimeType == "image/jpeg"
+        assert block.mime_type == "image/jpeg"
         assert block.meta["dpi"] == 200
         assert block.meta["codec"] == "jpeg"
 
@@ -3973,7 +3973,7 @@ class TestRenderEncodeCascade:
         summary, block = result[0], result[1]
 
         assert "render_recompressed" not in summary
-        assert block.mimeType == "image/png"
+        assert block.mime_type == "image/png"
         assert block.meta["codec"] == "png"
 
     def test_budget_is_measured_in_base64_bytes(self, isolated_server, big_scan_pdf):
@@ -4202,7 +4202,7 @@ class TestDownsampledEntryContract:
         assert "error" not in result[0]
         assert result[0]["pages_rendered"] == [1]
         assert len(result) == 2
-        assert result[1].mimeType in ("image/png", "image/jpeg")
+        assert result[1].mime_type in ("image/png", "image/jpeg")
 
     def test_flag_set_when_far_below_native_resolution(
         self, isolated_server, big_scan_pdf, monkeypatch

@@ -155,13 +155,19 @@ def test_manifest_passes_official_validator(tmp_path):
 def test_launcher_carries_the_pinned_sdk_protocol_versions():
     """Early init answers `initialize` before the Python server exists; its
     version rule must use the same list the real server will."""
-    from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
-    from mcp.types import LATEST_PROTOCOL_VERSION
+    from mcp_types.version import (
+        HANDSHAKE_PROTOCOL_VERSIONS,
+        LATEST_HANDSHAKE_VERSION,
+        MODERN_PROTOCOL_VERSIONS,
+    )
 
     js = build_mcpb.render_files("1.0.0", pins=[])["server/launcher.js"].decode()
-    quoted = ", ".join(f"'{v}'" for v in SUPPORTED_PROTOCOL_VERSIONS)
+    quoted = ", ".join(f"'{v}'" for v in HANDSHAKE_PROTOCOL_VERSIONS)
     assert f"const SUPPORTED_PROTOCOL_VERSIONS = [{quoted}];" in js
-    assert f"const LATEST_PROTOCOL_VERSION = '{LATEST_PROTOCOL_VERSION}';" in js
+    assert f"const LATEST_PROTOCOL_VERSION = '{LATEST_HANDSHAKE_VERSION}';" in js
+    # Sessionless versions have no `initialize`, so the launcher cannot answer
+    # one with them.
+    assert not any(v in js for v in MODERN_PROTOCOL_VERSIONS)
 
 
 def test_render_launcher_rewrites_both_lines():

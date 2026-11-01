@@ -198,7 +198,7 @@ def _render_clip(
         block = ImageContent(
             type="image",
             data=base64.b64encode(png_bytes).decode("ascii"),
-            mimeType="image/png",
+            mime_type="image/png",
         )
         block.meta = {
             "page": page_num + 1,
@@ -235,7 +235,7 @@ def _render_clip(
             block = ImageContent(
                 type="image",
                 data=base64.b64encode(jpeg_bytes).decode("ascii"),
-                mimeType="image/jpeg",
+                mime_type="image/jpeg",
             )
             block.meta = {
                 "page": page_num + 1,

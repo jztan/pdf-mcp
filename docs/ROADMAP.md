@@ -16,13 +16,12 @@ detail lives in [`CHANGELOG.md`](../CHANGELOG.md).
 ## Tracking MCP 2026-07-28
 
 The spec [shipped GA](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
-on 2026-07-28, and FastMCP 4 (built on `mcp` SDK 2) has supported it since
-2026-08-31. pdf-mcp still runs FastMCP 3 and pins `mcp<2`, so the first step is
-that upgrade; nothing below has started. It lands across **v3.x** rather than
-reserving a major of its own.
+on 2026-07-28. pdf-mcp serves it alongside the older versions through FastMCP 4
+(built on `mcp` SDK 2). The rest lands across **v3.x** rather than reserving a
+major of its own.
 
-- [ ] **Stateless transport** (`initialize` and `Mcp-Session-Id` removed, per-request `_meta` replaces them)
-- [ ] **Error-code update** (missing-resource becomes JSON-RPC `-32602`)
+- [x] **Stateless transport** (`initialize` and `Mcp-Session-Id` removed, per-request `_meta` replaces them)
+- [x] **Error-code update** (missing-resource becomes JSON-RPC `-32602`)
 - [ ] **Cacheable read-side responses** (`ttlMs` / `cacheScope` on `pdf_info`, `pdf_get_toc`, `pdf_read_pages`)
 - [ ] **JSON Schema 2020-12** for `pdf_search`'s mode × granularity constraints
 - [ ] **Tasks Extension**, **MCP Apps**, **file transfer** ([SEP-2631](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2631)): later v3.x, gated on host adoption

@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because no expiry ever saw them. Removing a document now also clears its
   layout and Chinese/Japanese/Korean keyword rows, which used to stay behind
   ([#88](https://github.com/jztan/pdf-mcp/issues/88))
+- **pdf-mcp now speaks MCP 2026-07-28 as well as the older protocol versions.**
+  The server moves to FastMCP 4 and MCP SDK 2. Clients on the new sessionless
+  protocol, which has no `initialize` handshake or session id, can connect over
+  STDIO and HTTP; a client on an older version, Claude Desktop included,
+  negotiates as before and gets the same tools and results. The Claude Desktop
+  bundle still answers with handshake versions while it starts. Reading a
+  resource that does not exist now returns error `-32602` instead of `-32002`,
+  and a cancelled tool call now gets no response at all, as the protocol
+  requires, rather than an error
 
 ## [3.6.0] - 2026-10-31
 ### Added

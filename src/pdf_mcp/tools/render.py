@@ -272,7 +272,7 @@ def pdf_render_pages(
             block = ImageContent(
                 type="image",
                 data=base64.b64encode(image_bytes).decode("ascii"),
-                mimeType=f"image/{'jpeg' if used_codec == 'jpeg' else 'png'}",
+                mime_type=f"image/{'jpeg' if used_codec == 'jpeg' else 'png'}",
             )
             block.meta = {"page": page_1idx, "dpi": used_dpi, "codec": used_codec}
             result.append(block)

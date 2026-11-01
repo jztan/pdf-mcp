@@ -71,14 +71,17 @@ def export_pins(root: Path = ROOT, run=subprocess.run) -> list[str]:
 
 
 def protocol_versions() -> tuple[list[str], str]:
-    """The MCP protocol versions of the pinned Python SDK (this build venv
-    installs the same mcp pin as the bundle, both from uv.lock). The
+    """The handshake-era MCP versions of the pinned Python SDK (this build
+    venv installs the same mcp pin as the bundle, both from uv.lock). The
     launcher answers `initialize` early with them, so its answer must match
-    what the real server agrees to at hand-over."""
-    from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
-    from mcp.types import LATEST_PROTOCOL_VERSION
+    what the real server agrees to at hand-over. Handshake only: 2026-07-28
+    has no `initialize`, so it must never be the answer to one."""
+    from mcp_types.version import (
+        HANDSHAKE_PROTOCOL_VERSIONS,
+        LATEST_HANDSHAKE_VERSION,
+    )
 
-    return list(SUPPORTED_PROTOCOL_VERSIONS), str(LATEST_PROTOCOL_VERSION)
+    return list(HANDSHAKE_PROTOCOL_VERSIONS), str(LATEST_HANDSHAKE_VERSION)
 
 
 def render_launcher(source: str, supported: list[str], latest: str) -> str:

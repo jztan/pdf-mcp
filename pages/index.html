@@ -1039,7 +1039,7 @@ estimated_tokens: 925</pre>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
         <h3 class="cap-head">A cache that <b>survives restarts</b></h3>
-        <p class="cap-desc">Every extraction, embedding, and render lands in a local SQLite file keyed on path and modification time. The second question about a document is free.</p>
+        <p class="cap-desc">Every extraction, embedding, and render lands in a local SQLite file keyed on path and modification time. It stays until the PDF changes, so the second question about a document is free.</p>
       </div>
       <div class="cap-card">
         <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1364,6 +1364,9 @@ estimated_tokens: 925</pre>
   const corpusFusion = { CORPUS_RRF_K, corpusQueryTerms, docCoveredTerms, corpusCoverageScores, rrfFuseDocRankings, profileTerms, aboutTerms };
   /* __PDF_MCP_CORPUS_FUSION_END__ */
 
+  // Same pattern as corpus._JUNK_TITLE: tooling residue in the title field.
+  const JUNK_TITLE = /^(?:arxiv:|microsoft (?:word|powerpoint|excel) - |printmgr\b)|^\d{10}-\d{2}-\d{6}$|^\S+ \d+\.\.\d+$|\.(?:docx?|pptx?|xlsx?|indd|qxd|qxp|pmd|dvi|tex|eps|ps|ren|fm|pdf)$/i;
+
   // Port of corpus._clean_title: filters generic/empty PDF titles.
   function cleanTitle(title) {
     if (typeof title !== "string") return null;
@@ -1375,6 +1378,7 @@ estimated_tokens: 925</pre>
     // triple-underscore marker (e.g. "506673___CLEANLPDF_...PDF").
     if (s.startsWith("_") && s.endsWith("_")) return null;
     if (s.includes("___")) return null;
+    if (JUNK_TITLE.test(s) || (s.match(/\p{L}/gu) || []).length < 2) return null;
     return s;
   }
 
@@ -1615,7 +1619,8 @@ estimated_tokens: 925</pre>
           const chars = pageTexts.reduce((a, t) => a + t.length, 0);
           corpusState.docs.push({
             path: file.name, file, pages, pageTexts, sizeBytes: file.size,
-            // Mirrors the server: cleaned metadata title, else filename stem.
+            // Cleaned metadata title, else filename stem. The server tries the
+            // text at the top of page 1 between the two; the demo does not.
             title: cleanTitle(meta && meta.info && meta.info.Title) || file.name.replace(/\.[^.]+$/, ""),
             tocTop: (outline || []).map((o) => (o.title || "").trim()).filter(Boolean).slice(0, 8),
             hasToc: outlineHasNonBlankTitle(outline),

@@ -40,7 +40,7 @@ Ordered by leverage ÷ effort. Evidence, prior attempts and gates for each are i
 ### P0: ship next
 
 - [x] **Check the unconfirmed agent-tryout reports**: closed 2026-10-01. The silent OR fallback and `hidden_text` false positives were real and fixed in v3.5.0; the missing language field and image-cover ranking are listed under P2. `page_match_counts` and the different `warm_complete` from overview and search behave as designed
-- [ ] **Better document titles**: documents with empty metadata fall back to the filename, and some junk titles slip through; fall back to the largest text on page 1 first
+- [x] **Better document titles**: on develop for v3.7.0; documents with empty or junk metadata now use the largest text on page 1 before the filename
 
 ### P1: high-value, well-scoped
 

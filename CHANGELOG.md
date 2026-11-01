@@ -20,9 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Corpus tools name more documents by their real title.** When a PDF's
   embedded title is empty or junk, `pdf_corpus_overview` and
   `pdf_corpus_search` now use the largest text at the top of page 1 if it
-  reads like a title, and only then the filename. arXiv stamps, Word export
-  names, SEC accession numbers, print-driver names and source file names now
-  count as junk. Documents already in the cache get the new title on first
+  reads like a title, and only then the filename. A journal name or section
+  label above the title (`BMC Genetics`, `ARTICLE`) is passed over. arXiv stamps, Word export
+  names, SEC accession numbers, print-driver names, source file names and
+  typesetter page ranges (`gkm094 1..11`) now count as junk. Documents already in the cache get the new title on first
   use, without being warmed again
 
 - **The cache no longer forgets an unchanged PDF after a day.** A

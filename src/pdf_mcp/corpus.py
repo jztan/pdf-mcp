@@ -1676,11 +1676,13 @@ def about_terms(cache: Any, paths: list[str], limit: int = 8) -> dict[str, list[
 _PLACEHOLDER_TITLES = {"pdf document"}
 
 # Tooling residue in the title field, measured on 579 local PDFs: the arXiv
-# stamp, Word's export prefix, SEC accession numbers, a print-driver name, and
-# source file names.
+# stamp, Word's export prefix, SEC accession numbers, a print-driver name,
+# source file names, and a typesetter's "<job id> <first>..<last>" page range
+# (14 of the 120 journal PDFs in DocHop-QA).
 _JUNK_TITLE = re.compile(
     r"^(?:arxiv:|microsoft (?:word|powerpoint|excel) - |printmgr\b)"
     r"|^\d{10}-\d{2}-\d{6}$"
+    r"|^\S+ \d+\.\.\d+$"
     r"|\.(?:docx?|pptx?|xlsx?|indd|qxd|qxp|pmd|dvi|tex|eps|ps|ren|fm|pdf)$",
     re.IGNORECASE,
 )

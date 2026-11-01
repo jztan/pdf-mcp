@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+import pymupdf
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -1160,6 +1161,14 @@ class TestPinnedPdfDigest:
     harness actually scores against. The BGB is fetched live and changes with
     every amendment, which shifts page numbers under the committed labels."""
 
+    @staticmethod
+    def _pdf_bytes(text: str) -> bytes:
+        doc = pymupdf.open()
+        doc.new_page().insert_text((72, 72), text)
+        data = doc.tobytes()
+        doc.close()
+        return data
+
     def _gt(self, tmp_path, pdf_bytes: bytes, pinned: str) -> Path:
         pdf = tmp_path / "doc.pdf"
         pdf.write_bytes(pdf_bytes)
@@ -1185,25 +1194,25 @@ class TestPinnedPdfDigest:
     def test_mismatch_lists_the_pdf(self, tmp_path):
         import hashlib
 
-        gt = json.loads(
-            self._gt(tmp_path, b"%PDF-1.4 new", "0" * 64).read_text("utf-8")
-        )
+        data = self._pdf_bytes("new")
+        gt = json.loads(self._gt(tmp_path, data, "0" * 64).read_text("utf-8"))
         mismatches = bem.pinned_pdf_mismatches(gt)
         assert len(mismatches) == 1
         assert mismatches[0][0] == "bgb"
-        assert mismatches[0][2] == hashlib.sha256(b"%PDF-1.4 new").hexdigest()
+        assert mismatches[0][2] == hashlib.sha256(data).hexdigest()
 
     def test_match_and_unpinned_pass(self, tmp_path):
         import hashlib
 
-        digest = hashlib.sha256(b"%PDF-1.4 same").hexdigest()
-        gt = json.loads(self._gt(tmp_path, b"%PDF-1.4 same", digest).read_text("utf-8"))
+        data = self._pdf_bytes("same")
+        digest = hashlib.sha256(data).hexdigest()
+        gt = json.loads(self._gt(tmp_path, data, digest).read_text("utf-8"))
         assert bem.pinned_pdf_mismatches(gt) == []
         del gt["pdfs"]["bgb"]["sha256"]
         assert bem.pinned_pdf_mismatches(gt) == []
 
     def test_main_exits_2_before_running_any_model(self, monkeypatch, tmp_path):
-        gt_path = self._gt(tmp_path, b"%PDF-1.4 new", "0" * 64)
+        gt_path = self._gt(tmp_path, self._pdf_bytes("new"), "0" * 64)
         ran = []
         monkeypatch.setattr(bem, "run_model", lambda *a, **k: ran.append(a))
         monkeypatch.setattr(

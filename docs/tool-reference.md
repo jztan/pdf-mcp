@@ -70,6 +70,10 @@ pdf-mcp does not accept passwords. A PDF that needs a password to open returns a
 
 Corpus tools skip such a file with `{"path": ..., "reason": "password_required"}` and process the rest. Owner-password-only PDFs (restricted permissions, no password needed to open) are read normally.
 
+### Unreadable files
+
+A file that is damaged, truncated or not a PDF returns an inline error the same way, with `"error_code": "pdf_unreadable"` and a `hint`. Corpus tools list such a file in `skipped` and process the rest.
+
 ---
 
 ## Document Introspection

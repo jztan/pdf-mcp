@@ -42,6 +42,17 @@ class PDFValidationError(ValueError):
     """Downloaded content is not a valid/readable PDF."""
 
 
+def _validation_error(exc: Exception) -> PDFValidationError:
+    """Name the file as corrupt only when the PDF engine rejected it."""
+    from .backend import bytesopen
+
+    if bytesopen.is_engine_rejection(exc):
+        return PDFValidationError(
+            f"Downloaded PDF is corrupt and cannot be opened: {exc}"
+        )
+    return PDFValidationError(f"Could not check the downloaded PDF: {exc}")
+
+
 def _validate_pdf_content(content: bytes, url: str) -> None:
     """Verify content is a readable PDF by opening it with PyMuPDF.
 
@@ -55,14 +66,12 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
     without authentication, and PDF 1.5+ object-stream layouts report
     zero pages until unlocked (issue #19).
     """
-    from .backend.bytesopen import open_pdf_bytes
+    from .backend import bytesopen
 
     try:
-        doc, needs_pass = open_pdf_bytes(content)
+        doc, needs_pass = bytesopen.open_pdf_bytes(content)
     except Exception as exc:
-        raise PDFValidationError(
-            f"Downloaded PDF is corrupt and cannot be opened: {exc}"
-        ) from exc
+        raise _validation_error(exc) from exc
     if needs_pass:
         return
     try:
@@ -82,9 +91,7 @@ def _validate_pdf_content(content: bytes, url: str) -> None:
     except PDFValidationError:
         raise
     except Exception as exc:
-        raise PDFValidationError(
-            f"Downloaded PDF is corrupt and cannot be opened: {exc}"
-        ) from exc
+        raise _validation_error(exc) from exc
     finally:
         doc.close()
 

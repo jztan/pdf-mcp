@@ -57,8 +57,10 @@ in [docs/clients.md](docs/clients.md).
 
 ### Claude Code and other MCP clients
 
-Needs Python 3.11 or later. Install the `pdf-mcp` command with
-[uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
+Needs Python 3.11 to 3.14. On 3.15 the installer falls back to a very old
+release, because a dependency has no 3.15 build yet. Install the `pdf-mcp`
+command with [uv](https://docs.astral.sh/uv/) or
+[pipx](https://pipx.pypa.io/):
 
 ```bash
 uv tool install pdf-mcp     # or: pipx install pdf-mcp

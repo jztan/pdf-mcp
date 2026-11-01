@@ -146,6 +146,23 @@ class TestMainEndToEnd:
         rc = warm_cli.main([str(empty_dir)])
         assert rc == 1
 
+    def test_all_files_rejected_reports_each_reason(
+        self, corpus_dir, tmp_path, monkeypatch, capsys
+    ):
+        """A batch with no usable file says why, file by file."""
+        monkeypatch.setenv("PDF_MCP_CACHE_DIR", str(tmp_path / "cache"))
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\nallow = ["/nonexistent-allowed-root/**"]\n')
+        real_config = warm_cli.PDFConfig
+        monkeypatch.setattr(warm_cli, "PDFConfig", lambda: real_config(cfg))
+        path = str(corpus_dir / "alpha.pdf")
+        rc = warm_cli.main([path, "--no-embeddings"])
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "No PDF files found in corpus" in err
+        assert f"skip: {path}: " in err
+        assert "not in allowed list" in err.lower()
+
     def test_batches_split_across_multiple_warm_docs_calls(
         self, corpus_dir, tmp_path, monkeypatch, capsys
     ):

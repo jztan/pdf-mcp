@@ -314,12 +314,12 @@ def main(argv: "list[str] | None" = None) -> int:
             batch, recursive=False, check_path=pdf_config.check_path
         )
         if "error" in res:
-            # Cannot happen at len(batch) <= CORPUS_MAX_FILES from an
-            # explicit list (the only error case left is "no files",
-            # already excluded by the batch being non-empty) now that
-            # batch_size is clamped above; treat it like any other
-            # unusable batch rather than assume.
+            # Every file in the batch failed validation (allow or deny
+            # rule, or gone since discovery). `skipped` says why, file by
+            # file, and is the only clue the user gets.
             print(f"batch {i}/{len(batches)}: {res['error']}", file=sys.stderr)
+            for s in res.get("skipped", []):
+                print(f"skip: {s['path']}: {s['reason']}", file=sys.stderr)
             total_skipped += len(batch)
             continue
         for s in res["skipped"]:

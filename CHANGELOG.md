@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with raw engine text. They now return the usual inline `error`, with
   `error_code: "pdf_unreadable"` and a `hint`. A failed check on a downloaded
   PDF is called corrupt only when the PDF engine rejected the file
+- **`pdf-mcp-warm` now says why it rejected a whole batch.** When no file in a
+  batch could be used, for example because a `[paths]` rule refused them all,
+  it printed only `No PDF files found in corpus`. It now also prints the reason
+  for each file
 
 ### Changed
 

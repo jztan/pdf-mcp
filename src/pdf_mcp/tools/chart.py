@@ -43,7 +43,7 @@ def _chart_image_block(
     block = ImageContent(
         type="image",
         data=base64.b64encode(png_bytes).decode("ascii"),
-        mimeType="image/png",
+        mime_type="image/png",
     )
     block.meta = {"kind": kind, **meta}
     return block, False, False

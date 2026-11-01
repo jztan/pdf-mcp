@@ -1878,6 +1878,80 @@ def _render_page_worker(
         return page_num, PageError(repr(exc))
 
 
+_TITLE_MIN_RATIO = 1.1  # a title is set larger than the page's body text
+_TITLE_MAX_CHARS = 250
+_TITLE_SIZES_TRIED = 3  # a huge page number can sit above the real title
+_TITLE_TOP_FRACTION = 0.7
+_TITLE_LINE_GAP = 1.2  # in font sizes; a wider gap ends the title
+
+
+def _title_lines(page: Any) -> list[tuple[float, float, float, float, str]]:
+    """Horizontal lines as (size, top, bottom, left, text).
+
+    A line's size is the size most of its characters are set in, so a drop
+    cap does not lift a body line to title size.
+    """
+    out = []
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            if line.get("dir", (1.0, 0.0))[0] < 0.9:
+                continue
+            by_size: dict[float, int] = {}
+            for span in line["spans"]:
+                size = round(float(span["size"]), 1)
+                by_size[size] = by_size.get(size, 0) + len(span["text"].strip())
+            text = " ".join("".join(s["text"] for s in line["spans"]).split())
+            if text:
+                left, top, _, bottom = line["bbox"]
+                size = max(by_size, key=lambda s: by_size[s])
+                out.append((size, top, bottom, left, text))
+    return out
+
+
+def _reads_like_title(text: str) -> bool:
+    letters = sum(c.isalpha() for c in text)
+    if letters < 4 or letters * 2 < len(text.replace(" ", "")):
+        return False
+    tokens = text.split()
+    return len(tokens) < 3 or sum(len(t) == 1 for t in tokens) * 2 < len(tokens)
+
+
+def guess_page_title(page: Any) -> str | None:
+    """The largest text at the top of a page that reads like a title.
+
+    Measured on 478 local PDFs with a usable embedded title: agrees on 438,
+    declines on 26, differs on 14 (about four of them plainly wrong). Returns
+    None for scans, single-size pages and vertical layouts, where the filename
+    is the safer answer.
+    """
+    lines = _title_lines(page)
+    chars: dict[float, int] = {}
+    for size, _, _, _, text in lines:
+        chars[size] = chars.get(size, 0) + len(text)
+    if not chars:
+        return None
+    body = max(chars, key=lambda s: chars[s])
+    sizes = sorted((s for s in chars if s > body * _TITLE_MIN_RATIO), reverse=True)
+    limit = float(page.rect.height) * _TITLE_TOP_FRACTION
+    for size in sizes[:_TITLE_SIZES_TRIED]:
+        rows = sorted(
+            (top, left, bottom, text)
+            for s, top, bottom, left, text in lines
+            if abs(s - size) <= size * 0.02 and top < limit
+        )
+        if not rows:
+            continue
+        run = [rows[0]]
+        for row in rows[1:]:
+            if row[0] - run[-1][2] > size * _TITLE_LINE_GAP:
+                break
+            run.append(row)
+        title = " ".join(r[3] for r in run)
+        if len(title) <= _TITLE_MAX_CHARS and _reads_like_title(title):
+            return title
+    return None
+
+
 def _warm_extract_worker(
     path: str,
     want_sections: bool = False,

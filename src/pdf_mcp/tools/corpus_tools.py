@@ -3,7 +3,6 @@
 import logging
 import math
 import os
-from pathlib import Path
 from typing import Any, Callable
 from ..concurrency import lock_wait_seconds, pdf_access_within
 from ..docopen import open_pdf
@@ -312,10 +311,13 @@ def pdf_corpus_overview(
           this tool itself calls) leaves it `[]`
         - unprocessed, skipped, corpus_size, warmed_this_call,
           budget_exhausted, warm_complete, unwarmed (same envelope as
-          pdf_corpus_warm; `warm_complete` is the signal to loop on)
+          pdf_corpus_warm; `warm_complete` is the signal to loop on). It
+          covers text only, so it can read false on a later
+          pdf_corpus_search that also needs embeddings
 
-    Note: `title` is untrusted metadata from the PDF, falling back to
-    the filename stem when metadata has no usable title. For per-page
+    Note: `title` is untrusted content from the PDF: its metadata, or
+    the largest text on page 1 when metadata has no usable title, then
+    the filename stem. For per-page
     detail on one doc, follow up with pdf_info(path, detail=True).
 
     Error contract: call-level failures return an inline
@@ -1228,10 +1230,7 @@ def pdf_corpus_search(
     def _title_for(path: str) -> str:
         if path not in titles:
             meta = _core.cache.get_metadata(path)
-            title = None
-            if meta is not None:
-                title = corpus._clean_title((meta.get("metadata") or {}).get("title"))
-            titles[path] = title or Path(path).stem
+            titles[path] = corpus.doc_title(path, meta, _core.cache)
         return titles[path]
 
     content_warning = (

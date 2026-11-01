@@ -1042,6 +1042,15 @@ class PDFCache:
                     " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
                 )
 
+            # pdf_metadata: title read from page 1 when the embedded title is
+            # unusable. NULL = not read yet, "" = read and nothing usable.
+            # Filled on first use, so old caches keep every row.
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "title_guess" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata ADD COLUMN title_guess TEXT DEFAULT NULL"
+                )
+
             # page_text: per-page hidden-text flag (NULL = not yet computed)
             cols = _get_columns(conn, "page_text")
             if cols and "has_hidden_text" not in cols:
@@ -1400,7 +1409,8 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc, text_coverage_json, content_trust_json
+                   metadata, toc, text_coverage_json, content_trust_json,
+                   title_guess
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -1436,6 +1446,7 @@ class PDFCache:
                     if row["content_trust_json"]
                     else None
                 ),
+                "title_guess": row["title_guess"],
             }
 
     def touch(self, path: str) -> None:
@@ -1522,6 +1533,18 @@ class PDFCache:
                     json.dumps(toc),
                     json.dumps(text_coverage) if text_coverage is not None else None,
                 ),
+            )
+
+    def save_title_guess(self, path: str, title: str) -> None:
+        """Persist the page-1 title; "" records that none was usable.
+
+        ``save_metadata`` replaces the row, so a changed file reads page 1
+        again.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET title_guess = ? WHERE file_path = ?",
+                (title, path),
             )
 
     def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:

@@ -75,6 +75,72 @@ class TestGuessPageTitle:
         )
         assert _guess(pdf) == "The Real Title"
 
+    @pytest.mark.parametrize(
+        "banner, size",
+        [("BMC Genetics", 24), ("ARTICLE", 16), ("Clinical research", 14)],
+    )
+    def test_a_journal_banner_gives_way_to_the_title(self, tmp_path, banner, size):
+        pdf = _make_pdf(
+            tmp_path / "a.pdf",
+            "",
+            [
+                (50, size, banner),
+                (130, 16, "Screening the genome to detect an association"),
+                (180, 10, BODY),
+                (195, 10, BODY),
+            ],
+        )
+        assert _guess(pdf) == "Screening the genome to detect an association"
+
+    @pytest.mark.parametrize(
+        "short, below",
+        [
+            ("Random valuations", "Andrii Ilienko1,2 and Ilya Molchanov1"),
+            ("Exchangeable graphs", "Stefan Weber * Leibniz University Hannover"),
+            ("Foot Locker, Inc.", "330 West 34th Street, New York, New York"),
+            ("NIKE, Inc.", "(Exact name of Registrant as specified in its charter)"),
+            ("FORM 10-K", "ANNUAL REPORT PURSUANT TO SECTION 13 OR 15(d) OF THE ACT"),
+        ],
+    )
+    def test_a_short_title_keeps_its_place(self, tmp_path, short, below):
+        pdf = _make_pdf(
+            tmp_path / "a.pdf",
+            "",
+            [
+                (70, 20, short),
+                (110, 14, below),
+                (180, 10, BODY),
+                (195, 10, BODY),
+            ],
+        )
+        assert _guess(pdf) == short
+
+    def test_a_longer_line_above_a_short_title_is_ignored(self, tmp_path):
+        pdf = _make_pdf(
+            tmp_path / "a.pdf",
+            "",
+            [
+                (50, 14, "UNITED STATES SECURITIES AND EXCHANGE COMMISSION"),
+                (110, 20, "Apple Inc."),
+                (180, 10, BODY),
+                (195, 10, BODY),
+            ],
+        )
+        assert _guess(pdf) == "Apple Inc."
+
+    def test_a_long_line_low_on_the_page_is_not_a_title(self, tmp_path):
+        pdf = _make_pdf(
+            tmp_path / "a.pdf",
+            "",
+            [
+                (70, 20, "Deep Learning"),
+                (120, 10, BODY),
+                (135, 10, BODY),
+                (500, 14, "A heading much further down the first page"),
+            ],
+        )
+        assert _guess(pdf) == "Deep Learning"
+
     def test_page_of_one_size_has_no_title(self, tmp_path):
         pdf = _make_pdf(tmp_path / "a.pdf", "", [(90, 10, BODY), (105, 10, BODY)])
         assert _guess(pdf) is None
@@ -127,6 +193,8 @@ class TestCleanTitle:
             "s2_2502kiji_01-13_20.indd",
             "104.ren",
             "fig10.eps",
+            "gkm094 1..11",
+            "plme-03-06-08 845..855",
             "1",
             "",
         ],

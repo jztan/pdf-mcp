@@ -1770,3 +1770,504 @@ def test_two_processes_starting_on_one_expired_cache_both_start(tmp_path):
         p.join(timeout=60)
     assert [results.get(timeout=5) for _ in procs] == ["ok", "ok"]
     assert not list(images.glob("*.png"))
+
+
+def _file_path_tables(conn: sqlite3.Connection) -> list[str]:
+    """Every table in the cache that holds per-document rows."""
+    names = [
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    ]
+    return [n for n in names if "file_path" in _get_columns(conn, n)]
+
+
+def _populate_every_table(cache: PDFCache, path: str) -> None:
+    from pdf_mcp.section_detector import Section
+
+    cache.save_metadata(path, 2, {}, [])
+    cache.save_pages_text(path, {0: "alpha beta", 1: "中文测试 text"})
+    cache.save_page_embeddings(path, {0: [b"\x00\x01"], 1: [b"\x02"]}, "m")
+    cache.save_page_blocks(path, {0: ([[0, 0, 10, 10, "alpha beta"]], (612, 792))})
+    cache.save_page_tables(path, 0, [{"rows": [["a"]]}])
+    cache.save_doc_profile(path, 10, b"\x00", {"alpha": 1}, "m")
+    cache.save_section_embeddings(path, {0: b"\x00"}, {0: "k"}, "m")
+    cache.index_sections(path, [Section("Intro", 1, 2, "alpha 中文 body")])
+
+
+def _rows_left(cache: PDFCache, path: str) -> dict[str, int]:
+    with sqlite3.connect(cache.db_path) as conn:
+        left = {
+            t: conn.execute(
+                f"SELECT COUNT(*) FROM {t} WHERE file_path = ?", (path,)
+            ).fetchone()[0]
+            for t in _file_path_tables(conn)
+        }
+    return {t: n for t, n in left.items() if n}
+
+
+_KEPT_WHEN_CHANGED = {
+    "pdf_section_fts",
+    "pdf_section_fts_cjk",
+    "pdf_section_fts_de",
+    "doc_usage",
+}
+
+
+class TestPurgeCompleteness:
+    """A purge leaves no row for the path in any per-document table (#88)."""
+
+    @pytest.fixture
+    def full_cache(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1, fts_language="de")
+        if not cache.fts_available:
+            pytest.skip("FTS5 not available")
+        _populate_every_table(cache, sample_pdf)
+        assert _rows_left(cache, sample_pdf), "fixture wrote nothing"
+        return cache
+
+    def test_invalidate_file_keeps_only_the_section_index(self, full_cache, sample_pdf):
+        """A changed file keeps its section index (no mtime; a failed
+        re-detection must not wipe it, see TestSectionWarm) and nothing else."""
+        full_cache._invalidate_file(sample_pdf)
+        assert set(_rows_left(full_cache, sample_pdf)) <= _KEPT_WHEN_CHANGED
+        assert "pdf_section_fts" in _rows_left(full_cache, sample_pdf)
+
+    def test_sweep_of_changed_file_keeps_only_the_section_index(
+        self, full_cache, sample_pdf
+    ):
+        st = os.stat(sample_pdf)
+        os.utime(sample_pdf, (st.st_atime, st.st_mtime + 10))
+        assert full_cache.clear_expired() == 1
+        assert set(_rows_left(full_cache, sample_pdf)) <= _KEPT_WHEN_CHANGED
+        assert "pdf_section_fts" in _rows_left(full_cache, sample_pdf)
+
+    def test_clear_expired_leaves_no_rows(self, full_cache, sample_pdf):
+        with sqlite3.connect(full_cache.db_path) as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET accessed_at = datetime('now', '-2 hours')"
+            )
+        assert full_cache.clear_expired() == 1
+        assert _rows_left(full_cache, sample_pdf) == {}
+
+    def test_clear_all_leaves_no_rows(self, full_cache, sample_pdf):
+        full_cache.clear_all()
+        assert _rows_left(full_cache, sample_pdf) == {}
+
+
+def _missing_since(cache: PDFCache, path: str):
+    with sqlite3.connect(cache.db_path) as conn:
+        row = conn.execute(
+            "SELECT missing_since FROM doc_usage WHERE file_path = ?", (path,)
+        ).fetchone()
+    return row[0] if row else "no row"
+
+
+def _set_meta(cache: PDFCache, column: str, sql_value: str) -> None:
+    """Set a per-document column for every document.
+
+    ``accessed_at`` is set on both pdf_metadata and doc_usage (last use is
+    the later of the two); ``missing_since`` lives in doc_usage only.
+    """
+    with sqlite3.connect(cache.db_path) as conn:
+        if column == "accessed_at":
+            conn.execute(f"UPDATE pdf_metadata SET accessed_at = {sql_value}")
+        conn.execute(f"UPDATE doc_usage SET {column} = {sql_value}")
+
+
+class TestExistenceSweep:
+    """Rows live while the PDF exists; 7 days missing purges them (#88)."""
+
+    @pytest.fixture
+    def cached(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.save_page_text(sample_pdf, 0, "page one")
+        return cache, sample_pdf
+
+    def test_ttl_is_off_by_default(self, tmp_path):
+        assert PDFCache(cache_dir=tmp_path).ttl_hours is None
+
+    def test_unchanged_pdf_survives_idle_days_without_ttl(self, cached):
+        cache, pdf = cached
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        assert cache.clear_expired() == 0
+        assert cache.get_metadata(pdf) is not None
+
+    def test_missing_pdf_kept_within_grace_and_marked(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is not None
+        with sqlite3.connect(cache.db_path) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM page_text").fetchone()[0] == 1
+
+    def test_missing_pdf_purged_after_grace(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        cache.clear_expired()
+        _set_meta(cache, "missing_since", "datetime('now', '-8 days')")
+        assert cache.clear_expired() == 1
+        assert _rows_left(cache, pdf) == {}
+
+    def test_missing_pdf_not_purged_at_six_days(self, cached, tmp_path):
+        cache, pdf = cached
+        os.replace(pdf, tmp_path / "away.pdf")
+        cache.clear_expired()
+        _set_meta(cache, "missing_since", "datetime('now', '-6 days')")
+        assert cache.clear_expired() == 0
+
+    def test_returning_pdf_clears_missing_since(self, cached, tmp_path):
+        cache, pdf = cached
+        away = tmp_path / "away.pdf"
+        os.replace(pdf, away)
+        cache.clear_expired()
+        assert _missing_since(cache, pdf) is not None
+        os.replace(away, pdf)  # rename keeps the mtime
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is None
+        assert cache.get_metadata(pdf) is not None
+
+    def test_changed_pdf_purged_on_sweep(self, cached):
+        cache, pdf = cached
+        st = os.stat(pdf)
+        os.utime(pdf, (st.st_atime, st.st_mtime + 10))
+        assert cache.clear_expired() == 1
+        assert set(_rows_left(cache, pdf)) <= _KEPT_WHEN_CHANGED
+
+    def test_stat_error_treated_as_missing(self, cached, monkeypatch):
+        cache, pdf = cached
+        real_stat = os.stat
+
+        def flaky_stat(p, *a, **kw):
+            if str(p) == pdf:
+                raise PermissionError(13, "denied", p)
+            return real_stat(p, *a, **kw)
+
+        monkeypatch.setattr(os, "stat", flaky_stat)
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is not None
+
+    def test_ttl_still_applies_when_set(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path, ttl_hours=1)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        _set_meta(cache, "accessed_at", "datetime('now', '-2 hours')")
+        assert cache.clear_expired() == 1
+
+    def test_old_db_gains_doc_usage_table(self, tmp_path):
+        with sqlite3.connect(tmp_path / "cache.db") as conn:
+            conn.execute("""CREATE TABLE pdf_metadata (
+                file_path TEXT PRIMARY KEY, file_mtime REAL NOT NULL,
+                file_size INTEGER NOT NULL, page_count INTEGER NOT NULL,
+                metadata JSON, toc JSON,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        cache = PDFCache(cache_dir=tmp_path)
+        with sqlite3.connect(cache.db_path) as conn:
+            assert {"file_path", "accessed_at", "missing_since"} <= _get_columns(
+                conn, "doc_usage"
+            )
+
+
+class TestSizeCap:
+    """Over max_bytes the sweep evicts least recently used documents (#88)."""
+
+    BLOB = 300_000
+
+    @pytest.fixture
+    def three_docs(self, tmp_path, sample_pdf):
+        import shutil
+
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        paths = []
+        for i, age in enumerate((3, 2, 1)):  # days since last access
+            p = str(tmp_path / f"d{i}.pdf")
+            shutil.copy2(sample_pdf, p)
+            cache.save_metadata(p, 1, {}, [])
+            cache.save_page_text(p, 0, f"doc {i}")
+            cache.save_page_embeddings(p, {0: [os.urandom(self.BLOB)]}, "m")
+            with sqlite3.connect(cache.db_path) as conn:
+                conn.execute(
+                    "UPDATE pdf_metadata SET accessed_at = datetime('now', ?)"
+                    " WHERE file_path = ?",
+                    (f"-{age} days", p),
+                )
+            paths.append(p)
+        return cache, paths
+
+    @staticmethod
+    def _cap_fitting_all_but_oldest(cache, paths):
+        from pdf_mcp.cache import _ESTIMATE_TO_DISK
+
+        with sqlite3.connect(cache.db_path) as conn:
+            est = cache._doc_size_estimates(conn)
+            live = cache._live_bytes(conn)
+        total = sum(est.values())
+        cap = int((total - est[paths[0]]) * _ESTIMATE_TO_DISK) + 1
+        assert total * _ESTIMATE_TO_DISK > cap and live > cap, (total, live, cap)
+        return cap
+
+    def test_under_cap_evicts_nothing(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = 100 * 1024 * 1024
+        assert cache.clear_expired() == 0
+
+    def test_over_cap_evicts_least_recently_used_first(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = self._cap_fitting_all_but_oldest(cache, paths)
+        assert cache.clear_expired() == 1
+        assert cache.get_metadata(paths[0]) is None
+        assert cache.get_metadata(paths[1]) is not None
+        assert cache.get_metadata(paths[2]) is not None
+
+    def test_eviction_does_not_cascade_past_cap(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = self._cap_fitting_all_but_oldest(cache, paths)
+        assert cache.clear_expired() == 1
+        assert cache.clear_expired() == 0
+        assert cache.get_metadata(paths[1]) is not None
+        assert cache.get_metadata(paths[2]) is not None
+
+    def test_single_doc_over_cap_is_evicted(self, three_docs):
+        cache, paths = three_docs
+        cache.max_bytes = 1
+        assert cache.clear_expired() == 3
+        assert cache.get_stats()["total_files"] == 0
+
+    def test_max_bytes_none_never_evicts(self, three_docs):
+        cache, paths = three_docs
+        assert cache.max_bytes is None
+        assert cache.clear_expired() == 0
+
+    def test_estimate_counts_blocks_tables_and_files(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 1, {}, [])
+        cache.save_page_text(sample_pdf, 0, "x" * 1000)
+        with sqlite3.connect(cache.db_path) as conn:
+            base = cache._doc_size_estimates(conn)[sample_pdf]
+        assert base == 3000
+        cache.save_page_blocks(sample_pdf, {0: ([["b" * 500]], (1, 1))})
+        cache.save_page_tables(sample_pdf, 0, [{"c": "t" * 200}])
+        with sqlite3.connect(cache.db_path) as conn:
+            grown = cache._doc_size_estimates(conn)[sample_pdf]
+        assert grown >= base + 700
+
+
+class TestSweepReviewFixes:
+    """Final-review findings on the #88 sweep."""
+
+    def _with_render(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        png = cache.renders_dir / "r.png"
+        png.write_bytes(b"png")
+        cache.save_page_render(
+            sample_pdf,
+            0,
+            os.stat(sample_pdf).st_mtime,
+            72,
+            {"file_path_on_disk": str(png), "size_bytes": 3, "width": 1, "height": 1},
+        )
+        return cache, png
+
+    def _render_rows(self, cache):
+        with sqlite3.connect(cache.db_path) as conn:
+            return conn.execute("SELECT COUNT(*) FROM page_renders").fetchone()[0]
+
+    def test_missing_pdf_keeps_renders_within_grace(self, tmp_path, sample_pdf):
+        cache, png = self._with_render(tmp_path, sample_pdf)
+        away = tmp_path / "away.pdf"
+        os.replace(sample_pdf, away)
+        assert cache.clear_expired() == 0
+        assert self._render_rows(cache) == 1 and png.exists()
+        os.replace(away, sample_pdf)
+        assert cache.clear_expired() == 0
+        assert self._render_rows(cache) == 1 and png.exists()
+
+    def test_changed_pdf_still_drops_renders(self, tmp_path, sample_pdf):
+        cache, png = self._with_render(tmp_path, sample_pdf)
+        st = os.stat(sample_pdf)
+        os.utime(sample_pdf, (st.st_atime, st.st_mtime + 10))
+        cache.clear_expired()
+        assert self._render_rows(cache) == 0 and not png.exists()
+
+    def test_hung_stat_does_not_block_the_sweep(
+        self, tmp_path, sample_pdf, monkeypatch
+    ):
+        """A stat that never returns (dead hard-mounted share) is abandoned
+        at the deadline; its document is left as it was."""
+        import threading
+
+        import pdf_mcp.cache as cache_mod
+
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        release = threading.Event()
+        real_stat = os.stat
+
+        def hanging_stat(p, *a, **kw):
+            if str(p) == sample_pdf:
+                release.wait(30)
+            return real_stat(p, *a, **kw)
+
+        monkeypatch.setattr(cache_mod, "_STAT_DEADLINE_S", 0.2)
+        monkeypatch.setattr(os, "stat", hanging_stat)
+        try:
+            start = time.monotonic()
+            assert cache.clear_expired() == 0
+            assert time.monotonic() - start < 5
+            assert _missing_since(cache, sample_pdf) is None
+        finally:
+            release.set()
+        assert cache.get_metadata(sample_pdf) is not None
+
+
+def _accessed_age_hours(cache: PDFCache, path: str) -> float:
+    """Hours since last use: the later of pdf_metadata and doc_usage."""
+    with sqlite3.connect(cache.db_path) as conn:
+        stamps = [
+            r[0]
+            for t in ("pdf_metadata", "doc_usage")
+            for r in conn.execute(
+                f"SELECT accessed_at FROM {t} WHERE file_path = ?", (path,)
+            ).fetchall()
+            if r[0]
+        ]
+        return conn.execute(
+            "SELECT (julianday('now') - julianday(?)) * 24", (max(stamps),)
+        ).fetchone()[0]
+
+
+class TestTouch:
+    """Reads that skip get_metadata still mark a document as used (#88)."""
+
+    def test_touch_refreshes_accessed_at(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        cache.touch(sample_pdf)
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1
+
+    def test_touch_is_throttled_per_process(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        cache.touch(sample_pdf)
+        _set_meta(cache, "accessed_at", "datetime('now', '-2 days')")
+        cache.touch(sample_pdf)  # within the hour: no write
+        assert _accessed_age_hours(cache, sample_pdf) > 47
+
+    def test_touch_of_uncached_path_is_harmless(self, tmp_path):
+        PDFCache(cache_dir=tmp_path).touch("/no/such.pdf")
+
+    def test_touch_never_raises_on_a_locked_db(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path)
+        cache.save_metadata(sample_pdf, 5, {}, [])
+        locker = sqlite3.connect(cache.db_path, timeout=0)
+        locker.execute("BEGIN EXCLUSIVE")
+        try:
+            import pdf_mcp.cache as cache_mod
+
+            orig = cache_mod._BUSY_TIMEOUT_MS
+            cache_mod._BUSY_TIMEOUT_MS = 10
+            try:
+                cache.touch(sample_pdf)
+            finally:
+                cache_mod._BUSY_TIMEOUT_MS = orig
+        finally:
+            locker.rollback()
+            locker.close()
+
+    def test_read_pages_marks_the_document_used(self, isolated_server, sample_pdf):
+        from pdf_mcp.server import pdf_info, pdf_read_pages
+
+        cache, _ = isolated_server
+        pdf_info(sample_pdf)  # writes the pdf_metadata row
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        cache._touched.clear()  # a new server process
+        pdf_read_pages(sample_pdf, "1")
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1
+
+
+class TestDocsWithoutMetadata:
+    """pdf_read_pages, pdf_search and pdf_render_pages cache page rows with no
+    pdf_metadata row; the cleanup and the cap must still see them (#88)."""
+
+    @pytest.fixture
+    def text_only(self, tmp_path, sample_pdf):
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        cache.save_pages_text(sample_pdf, {0: "alpha", 1: "beta"})
+        cache.touch(sample_pdf)
+        return cache, sample_pdf
+
+    def test_touch_records_a_document_without_metadata(self, text_only):
+        cache, pdf = text_only
+        assert _missing_since(cache, pdf) is None  # row exists, not missing
+
+    def test_missing_text_only_doc_waits_out_grace_then_goes(self, text_only, tmp_path):
+        cache, pdf = text_only
+        os.replace(pdf, tmp_path / "away.pdf")
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, pdf) is not None
+        _set_meta(cache, "missing_since", "datetime('now', '-8 days')")
+        assert cache.clear_expired() == 1
+        assert _rows_left(cache, pdf) == {}
+
+    def test_changed_text_only_doc_is_purged(self, text_only):
+        cache, pdf = text_only
+        st = os.stat(pdf)
+        os.utime(pdf, (st.st_atime, st.st_mtime + 10))
+        assert cache.clear_expired() == 1
+        assert set(_rows_left(cache, pdf)) <= _KEPT_WHEN_CHANGED
+
+    def test_untracked_legacy_rows_are_adopted_not_purged(self, tmp_path, sample_pdf):
+        """Rows cached before doc_usage existed get a usage row at the first
+        sweep instead of being treated as never used."""
+        cache = PDFCache(cache_dir=tmp_path / "c", ttl_hours=1)
+        cache.save_pages_text(sample_pdf, {0: "alpha"})
+        assert _missing_since(cache, sample_pdf) == "no row"
+        assert cache.clear_expired() == 0
+        assert _missing_since(cache, sample_pdf) is None
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1
+
+    def test_cap_evicts_least_recently_used_doc_without_metadata(
+        self, tmp_path, sample_pdf
+    ):
+        import shutil
+
+        from pdf_mcp.cache import _ESTIMATE_TO_DISK
+
+        cache = PDFCache(cache_dir=tmp_path / "c")
+        paths = []
+        for i, age in enumerate((3, 2, 1)):
+            p = str(tmp_path / f"d{i}.pdf")
+            shutil.copy2(sample_pdf, p)
+            cache.save_pages_text(p, {0: f"doc {i}"})
+            cache.save_page_embeddings(p, {0: [os.urandom(300_000)]}, "m")
+            cache.touch(p)
+            with sqlite3.connect(cache.db_path) as conn:
+                conn.execute(
+                    "UPDATE doc_usage SET accessed_at = datetime('now', ?)"
+                    " WHERE file_path = ?",
+                    (f"-{age} days", p),
+                )
+            paths.append(p)
+        with sqlite3.connect(cache.db_path) as conn:
+            est = cache._doc_size_estimates(conn)
+        total = sum(est[p] for p in paths)
+        cache.max_bytes = int((total - est[paths[0]]) * _ESTIMATE_TO_DISK) + 1
+        assert cache.clear_expired() == 1
+        assert _rows_left(cache, paths[0]) == {}
+        assert _rows_left(cache, paths[1]) and _rows_left(cache, paths[2])
+
+    def test_read_pages_alone_marks_the_document_used(
+        self, isolated_server, sample_pdf
+    ):
+        from pdf_mcp.server import pdf_read_pages
+
+        cache, _ = isolated_server
+        pdf_read_pages(sample_pdf, "1")
+        _set_meta(cache, "accessed_at", "datetime('now', '-30 days')")
+        cache._touched.clear()  # a new server process
+        pdf_read_pages(sample_pdf, "1")
+        assert _accessed_age_hours(cache, sample_pdf) < 0.1

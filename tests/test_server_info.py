@@ -106,6 +106,9 @@ class TestServerInfo:
         assert isinstance(cfg["max_workers"], int) and cfg["max_workers"] >= 1
         assert cfg["max_response_bytes"] == _core.pdf_config.max_response_bytes
         assert cfg["cache_ttl_hours"] == _core.cache.ttl_hours
+        max_bytes = _core.cache.max_bytes
+        expected_mb = None if max_bytes is None else max_bytes // (1024 * 1024)
+        assert cfg["cache_max_mb"] == expected_mb
         assert cfg["cache_dir"] == str(_core.cache.cache_dir)
 
     def test_server_info_corpus_block(self):

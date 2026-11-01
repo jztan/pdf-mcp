@@ -83,9 +83,22 @@ class TestCacheEnvHelpers:
         # not "/".
         assert warm_cli._cache_dir_from_env() == Path.home() / "x"
 
-    def test_ttl_default_when_unset(self, monkeypatch):
+    def test_ttl_none_when_unset(self, monkeypatch):
         monkeypatch.delenv("PDF_MCP_CACHE_TTL", raising=False)
-        assert warm_cli._ttl_hours_from_env() == 24
+        assert warm_cli._ttl_hours_from_env() is None
+
+    def test_max_mb_default_when_unset(self, monkeypatch):
+        monkeypatch.delenv("PDF_MCP_CACHE_MAX_MB", raising=False)
+        assert warm_cli._max_bytes_from_env() == 2048 * 1024 * 1024
+
+    def test_max_mb_zero_means_no_cap(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "0")
+        assert warm_cli._max_bytes_from_env() is None
+
+    def test_max_mb_rejects_negative(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "-5")
+        with pytest.raises(ValueError, match="0 or more"):
+            warm_cli._max_bytes_from_env()
 
     def test_ttl_reads_valid_int(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_CACHE_TTL", "48")

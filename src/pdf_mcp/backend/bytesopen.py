@@ -32,12 +32,16 @@ def open_pdf_bytes(content: bytes) -> tuple[Any, bool]:
         raise
 
 
+def is_engine_rejection(exc: Exception) -> bool:
+    """True when PDFium itself refused the document."""
+    return isinstance(exc, pdfium.PdfiumError)
+
+
 #: Per-process memo of files known NOT to need a password, keyed on file
 #: identity (abspath, mtime_ns, size). Every single-file tool call and every
 #: corpus resolution runs the check, so a repeat call on a known file must not
-#: reopen it. Locked and failed verdicts are never stored: a locked file is
-#: re-checked on each call, and a corrupt file falls through to the normal
-#: open path, which produces its own error.
+#: reopen it. Locked and failed verdicts are never stored, so both are
+#: re-checked on each call and a repaired file reads at once.
 _LOCK_MEMO_MAX = 256
 _NOT_LOCKED_MEMO: "OrderedDict[tuple[str, int, int], None]" = OrderedDict()
 _LOCK_MEMO_LOCK = threading.Lock()
@@ -51,29 +55,35 @@ def clear_lock_memo() -> None:
 def is_password_locked(path: str) -> bool:
     """True when the PDF at `path` cannot be opened without a user password.
 
-    Owner-password-only PDFs open without one and return False. Any other
-    open failure (missing, corrupt) also returns False, so the caller's
-    normal path reports it unchanged.
+    Owner-password-only PDFs open without one and return False.
+    """
+    return pdf_open_problem(path) == "password"
+
+
+def pdf_open_problem(path: str) -> str | None:
+    """Why PDFium cannot open `path`: "password", "unreadable", or None.
+
+    A missing file is None: path resolution reports that with its own error.
     """
     try:
         st = os.stat(path)
     except OSError:
-        return False
+        return None
     key = (os.path.abspath(path), st.st_mtime_ns, st.st_size)
     with _LOCK_MEMO_LOCK:
         if key in _NOT_LOCKED_MEMO:
             _NOT_LOCKED_MEMO.move_to_end(key)
-            return False
+            return None
     try:
         doc = pdfium.PdfDocument(path)
     except pdfium.PdfiumError as exc:
-        return "password" in str(exc).lower()
+        return "password" if "password" in str(exc).lower() else "unreadable"
     except Exception:
-        return False
+        return None
     doc.close()
     with _LOCK_MEMO_LOCK:
         _NOT_LOCKED_MEMO[key] = None
         _NOT_LOCKED_MEMO.move_to_end(key)
         while len(_NOT_LOCKED_MEMO) > _LOCK_MEMO_MAX:
             _NOT_LOCKED_MEMO.popitem(last=False)
-    return False
+    return None

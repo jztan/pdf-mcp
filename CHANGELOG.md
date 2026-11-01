@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A file that isn't a readable PDF now gets a normal error back.** A damaged,
+  truncated or fake `.pdf` made the single-document tools fail the whole call
+  with raw engine text. They now return the usual inline `error`, with
+  `error_code: "pdf_unreadable"` and a `hint`. A failed check on a downloaded
+  PDF is called corrupt only when the PDF engine rejected the file
+
 ### Changed
 
 - **The cache no longer forgets an unchanged PDF after a day.** A

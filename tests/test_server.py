@@ -1240,8 +1240,7 @@ class TestErrorCases:
             corrupt_path = f.name
 
         try:
-            with pytest.raises(Exception):  # PyMuPDF raises various errors
-                pdf_info(corrupt_path)
+            assert pdf_info(corrupt_path)["error_code"] == "pdf_unreadable"
         finally:
             unlink_quietly(corrupt_path)
 

@@ -100,7 +100,7 @@ def test_corrupt_pdf_is_not_reported_as_locked(tmp_path, isolated_server):
     bad.write_bytes(b"%PDF-1.7\nnot really a pdf")
     result = pdf_extract_chart(str(bad), page=1)[0]
     assert "error" in result
-    assert "error_code" not in result
+    assert result["error_code"] != "password_required"
 
 
 @pytest.fixture

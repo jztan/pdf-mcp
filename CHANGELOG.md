@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with raw engine text. They now return the usual inline `error`, with
   `error_code: "pdf_unreadable"` and a `hint`. A failed check on a downloaded
   PDF is called corrupt only when the PDF engine rejected the file
+  ([#95](https://github.com/jztan/pdf-mcp/issues/95))
 - **`pdf-mcp-warm` now says why it rejected a whole batch.** When no file in a
   batch could be used, for example because a `[paths]` rule refused them all,
   it printed only `No PDF files found in corpus`. It now also prints the reason
@@ -28,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label above the title (`BMC Genetics`, `ARTICLE`) is passed over. arXiv stamps, Word export
   names, SEC accession numbers, print-driver names, source file names and
   typesetter page ranges (`gkm094 1..11`) now count as junk. Documents already in the cache get the new title on first
-  use, without being warmed again
+  use, without being warmed again ([#94](https://github.com/jztan/pdf-mcp/issues/94), [#98](https://github.com/jztan/pdf-mcp/issues/98))
 
 - **The cache no longer forgets an unchanged PDF after a day.** A
   document used to drop out of the cache 24 hours after its last use, so
@@ -54,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bundle still answers with handshake versions while it starts. Reading a
   resource that does not exist now returns error `-32602` instead of `-32002`,
   and a cancelled tool call now gets no response at all, as the protocol
-  requires, rather than an error
+  requires, rather than an error ([#92](https://github.com/jztan/pdf-mcp/issues/92))
 
 ## [3.6.0] - 2026-10-31
 ### Added

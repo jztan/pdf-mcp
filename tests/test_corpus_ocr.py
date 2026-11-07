@@ -452,3 +452,129 @@ class TestWarmOcrParameter:
         )
         res = pdf_corpus_warm([sample_pdf_synthetic_scan], detail=True)
         assert [d["ocr_pages_pending"] for d in res["docs"]] == [1]
+
+
+class TestReviewFixes:
+    """Final-review findings on the #103 branch, each pinned before its fix."""
+
+    def test_inprocess_ocr_holds_pdf_lock(self, cache, scan2, ocr_thread_on):
+        # Critical 1: with one worker, OCR runs in the server process and
+        # drives pdfium, so it must hold PDF_ACCESS like any tool call.
+        from pdf_mcp.concurrency import PDF_ACCESS
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        held: list[bool] = []
+
+        def worker(args):
+            held.append(PDF_ACCESS.held_by_current_thread())
+            return args[1], "x"
+
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=worker)
+        assert bg.join(10)
+        assert held == [True, True]
+
+    def test_single_page_batch_uses_the_pool_when_workers_allowed(self, monkeypatch):
+        # Critical 1: worker count comes from the batch cap, not the batch
+        # size, so a one-page batch never falls back to in-process OCR.
+        from pdf_mcp.corpus_ocr import ocr_worker_count
+
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        monkeypatch.setattr("os.cpu_count", lambda: 8)
+        assert ocr_worker_count() == 4
+        monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
+        assert ocr_worker_count() == 1
+
+    def test_bare_page_error_is_recorded(self, cache, scan2, ocr_thread_on):
+        # Important 3: run_pages' bounded fallback returns a bare PageError.
+        from pdf_mcp.corpus_ocr import BackgroundOCR, ocr_progress
+        from pdf_mcp.parallel import PageError
+
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=lambda a: PageError("t"))
+        assert bg.join(10)
+        assert ocr_progress(scan2, cache, "eng")["no_text"] == 2
+
+    def test_ocr_lengths_stat_the_file_once(self, cache, scan2, monkeypatch):
+        # Important 4: one stat per call, not one per row.
+        cache.save_page_text(scan2, 0, "abc", source="ocr", ocr_lang="eng")
+        cache.save_page_text(scan2, 1, "", source="ocr", ocr_lang="eng")
+        calls = []
+        real = cache._get_file_info
+        monkeypatch.setattr(
+            cache, "_get_file_info", lambda p: calls.append(p) or real(p)
+        )
+        assert cache.get_ocr_text_lengths(scan2, [0, 1], "eng") == {0: 3, 1: 0}
+        assert len(calls) == 1
+
+    def test_new_jobs_join_the_running_thread(
+        self, cache, scan2, tmp_path, ocr_thread_on
+    ):
+        # Important 5: a second corpus is queued, not starved or restarted.
+        import threading
+
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        other = _blank_pdf(tmp_path / "other.pdf", 1)
+        cache.save_metadata(other, 1, {}, [], text_coverage=_cov((0, 1)))
+        release = threading.Event()
+        seen: list = []
+
+        def worker(args):
+            seen.append((args[0], args[1]))
+            release.wait(10)
+            return args[1], "t"
+
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=worker)
+        assert bg.start([(other, [0]), (scan2, [0, 1])], cache, "ENG", None) == 1
+        release.set()
+        assert bg.join(10)
+        assert sorted(seen) == sorted([(scan2, 0), (scan2, 1), (other, 0)])
+        assert cache.get_ocr_rows(other, [0], "eng") == {0: "t"}
+
+    def test_stop_shuts_down_the_pool(self):
+        # Important 6: exit must not wait for an in-flight batch.
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        calls = []
+
+        class FakePool:
+            _processes: dict = {}
+
+            def shutdown(self, wait=True, cancel_futures=False):
+                calls.append((wait, cancel_futures))
+
+        bg = BackgroundOCR()
+        bg._pool = FakePool()
+        bg.stop()
+        assert calls == [(False, True)]
+        assert bg._pool is None
+
+    def test_no_write_after_stop_mid_batch(self, cache, scan2, ocr_thread_on):
+        # Important 7: a stop (cache clear) between pages ends the writes.
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        bg = BackgroundOCR()
+
+        def worker(args):
+            if args[1] == 1:
+                bg.stop()
+            return args[1], f"t{args[1]}"
+
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=worker)
+        assert bg.join(10)
+        assert cache.get_ocr_rows(scan2, [0, 1], "eng") == {0: "t0"}
+
+    def test_disabled_thread_does_not_hold_warm_open(
+        self, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        # Important 2: PDF_MCP_BACKGROUND_OCR=0 must not loop agents forever.
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(corpus_tools, "_ocr_unavailable", lambda lang: None)
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "0")
+        res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert res["ocr"]["status"] == "unavailable"
+        assert "PDF_MCP_BACKGROUND_OCR" in res["ocr"]["hint"]
+        assert res["warm_complete"] is True

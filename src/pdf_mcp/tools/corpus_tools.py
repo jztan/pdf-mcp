@@ -100,15 +100,13 @@ def _ocr_block(
     pending = done = no_text = 0
     jobs: list[tuple[str, list[int]]] = []
     for path in files:
-        progress = corpus_ocr.ocr_progress(path, _core.cache, ocr_lang)
+        progress, pages = corpus_ocr.ocr_status(path, _core.cache, ocr_lang)
         per_doc[path] = progress["pending"]
         pending += progress["pending"]
         done += progress["done"]
         no_text += progress["no_text"]
-        if progress["pending"]:
-            jobs.append(
-                (path, corpus_ocr.ocr_pending_pages(path, _core.cache, ocr_lang))
-            )
+        if pages:
+            jobs.append((path, pages))
     block: dict[str, Any] = {
         "lang": ocr_lang,
         "pages_pending": pending,
@@ -129,14 +127,22 @@ def _ocr_block(
                 str(missing[k]) for k in ("error", "install_hint") if missing.get(k)
             )
         return block, per_doc
+    if not corpus_ocr.BackgroundOCR.enabled():
+        block["status"] = "unavailable"
+        block["hint"] = (
+            "Background OCR is turned off (PDF_MCP_BACKGROUND_OCR=0); use"
+            " pdf_read_pages(ocr=True) on the pages that need it."
+        )
+        return block, per_doc
+    from .. import extractor as _extractor
+
+    # Joins a running thread for this language (a new doc or corpus is
+    # queued, nothing restarts) or starts one.
+    corpus_ocr.BACKGROUND_OCR.start(
+        jobs, _core.cache, ocr_lang, _extractor._TESSDATA_PATH
+    )
     block["status"] = "running"
     block["hint"] = _OCR_RUNNING_HINT
-    if not corpus_ocr.BACKGROUND_OCR.running(ocr_lang):
-        from .. import extractor as _extractor
-
-        corpus_ocr.BACKGROUND_OCR.start(
-            jobs, _core.cache, ocr_lang, _extractor._TESSDATA_PATH
-        )
     return block, per_doc
 
 

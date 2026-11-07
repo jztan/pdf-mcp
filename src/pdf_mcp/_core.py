@@ -446,11 +446,15 @@ def _encoded_len(png_bytes: bytes) -> int:
 
 
 # Cosine-similarity threshold below which a semantic match is flagged as
-# low confidence. Below ~0.5 on a normalised embedding (the default
-# fastembed pipeline normalises) typically corresponds to "topically
-# unrelated" — useful for letting an agent decide whether to trust the
-# top-k results or report "no real match."
-_SEMANTIC_CONFIDENCE_THRESHOLD = 0.5
+# low confidence. Measured for BAAI/bge-small-en-v1.5 (issue #101) on 100
+# arXiv papers and 24 10-K filings: answerable queries' top hit never
+# scored below 0.65 in corpus search (at most 1% of single-document
+# searches did), while off-topic, gibberish and wrong-folder queries
+# mostly fall under it. At 0.5 the flag almost never fired. It separates
+# "nothing here matches" well (AUC 0.93 to 1.00) but not a right hit from
+# a wrong one within an answerable query (AUC about 0.65). Another
+# embedding model needs its own value.
+_SEMANTIC_CONFIDENCE_THRESHOLD = 0.65
 
 
 def _pdf_hash(path: str) -> str:

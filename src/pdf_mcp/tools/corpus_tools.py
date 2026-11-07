@@ -1100,7 +1100,9 @@ def pdf_corpus_search(
         - doc_score: (hybrid matches only) head-vector cosine of the
           match's document, 4 dp, null when the doc has no profile
         - all_results_low_confidence, confidence_threshold: semantic
-          and hybrid modes
+          and hybrid modes. all_results_low_confidence true usually
+          means no document here covers the query; the per-hit flag
+          cannot tell a right hit from a wrong one
         - model_name: semantic mode only
         - semantic_unavailable, semantic_unavailable_reason: auto mode
           only, present when embeddings are unavailable and the search

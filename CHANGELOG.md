@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+
+- **`low_confidence` now fires when nothing matches.** The semantic cosine
+  floor behind `low_confidence` and `all_results_low_confidence` rises from
+  0.5 to 0.65, measured for the default `BAAI/bge-small-en-v1.5`. At 0.5
+  almost every hit scored above it, gibberish included. At 0.65 off-topic,
+  gibberish and wrong-folder queries are mostly flagged while answerable ones
+  almost never are. `all_results_low_confidence: true` usually means the
+  documents do not cover the query; the per-hit flag still cannot tell a
+  right hit from a wrong one
+  ([#101](https://github.com/jztan/pdf-mcp/issues/101))
+
+### Fixed
+
+- **`pdf_search` auto mode no longer trusts a page for holding one common
+  word.** When no page held every query term, pages found by the any-term
+  retry counted as keyword hits and were never flagged `low_confidence`, so
+  an off-topic question nearly always looked confident. They now count as no
+  match, as they already did in `pdf_corpus_search`. Ranking is unchanged
+  ([#101](https://github.com/jztan/pdf-mcp/issues/101))
+
 ## [3.7.0] - 2026-11-07
 ### Fixed
 

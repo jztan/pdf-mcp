@@ -9,6 +9,7 @@ import pytest
 
 from pdf_mcp import corpus
 from pdf_mcp.cache import PDFCache
+from pdf_mcp.tools import corpus_tools
 
 
 def _blank_pdf(path: Path, pages: int) -> str:
@@ -300,3 +301,154 @@ class TestBackgroundOCR:
         )
         pdf_cache_clear(expired_only=False)
         assert stopped == [True]
+
+
+@pytest.fixture
+def ocr_ok(monkeypatch):
+    """Tesseract usable; the pool worker is a fake that reads a fixed phrase."""
+    from pdf_mcp import corpus_ocr
+
+    monkeypatch.setattr(corpus_tools, "_ocr_unavailable", lambda lang: None)
+    monkeypatch.setattr(
+        corpus_ocr, "_ocr_page_worker", lambda args: (args[1], "zebra phrase")
+    )
+
+
+class TestWarmOcrParameter:
+    def test_off_is_byte_identical(self, corpus_dir, isolated_server):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        res = pdf_corpus_warm(str(corpus_dir), ocr="off")
+        # The response keys of v3.7.0, unchanged by issue #103.
+        assert set(res) == {
+            "budget_exhausted",
+            "cached_docs",
+            "cached_without_embeddings",
+            "corpus_size",
+            "docs",
+            "embedding_in_background",
+            "skipped",
+            "unprocessed",
+            "unwarmed",
+            "warm_complete",
+            "warmed_this_call",
+        }
+        assert all("ocr_pages_pending" not in d for d in res["docs"])
+
+    def test_born_digital_auto_not_needed(self, corpus_dir, isolated_server, ocr_ok):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        res = pdf_corpus_warm(str(corpus_dir))
+        assert res["ocr"]["status"] == "not_needed"
+        assert res["ocr"]["pages_pending"] == 0
+        assert res["warm_complete"] is True
+
+    def test_scan_auto_running_then_done(
+        self, sample_pdf_synthetic_scan, ocr_ok, ocr_thread_on
+    ):
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
+
+        first = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert first["ocr"]["status"] == "running"
+        assert first["ocr"]["pages_pending"] == 1
+        assert first["ocr"]["hint"]
+        assert first["warm_complete"] is False
+        assert corpus_ocr.BACKGROUND_OCR.join(10)
+
+        again = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert again["ocr"]["status"] == "done"
+        assert again["ocr"]["pages_done"] == 1
+        assert again["warm_complete"] is True
+        hits = pdf_corpus_search([sample_pdf_synthetic_scan], "zebra", mode="keyword")
+        assert [m["page"] for m in hits["matches"]] == [1]
+
+    def test_on_without_tesseract_is_inline_error(
+        self, sample_pdf_synthetic_scan, monkeypatch, ocr_thread_on
+    ):
+        from pdf_mcp import _core, corpus_ocr
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(
+            corpus_tools, "_ocr_unavailable", lambda lang: {"error": "no tesseract"}
+        )
+        res = pdf_corpus_warm([sample_pdf_synthetic_scan], ocr="on")
+        assert res == {"error": "no tesseract"}
+        assert not corpus_ocr.BACKGROUND_OCR.running("eng")
+        assert _core.cache.get_metadata(sample_pdf_synthetic_scan) is None
+
+    def test_auto_without_tesseract_reports_unavailable_and_completes(
+        self, sample_pdf_synthetic_scan, monkeypatch, ocr_thread_on
+    ):
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(
+            corpus_tools,
+            "_ocr_unavailable",
+            lambda lang: {"error": "no tesseract", "install_hint": "brew install"},
+        )
+        res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert res["ocr"]["status"] == "unavailable"
+        assert "brew install" in res["ocr"]["hint"]
+        assert res["warm_complete"] is True
+        assert not corpus_ocr.BACKGROUND_OCR.running("eng")
+
+    def test_setting_up_keeps_warm_incomplete(
+        self, sample_pdf_synthetic_scan, monkeypatch, ocr_thread_on
+    ):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(
+            corpus_tools,
+            "_ocr_unavailable",
+            lambda lang: {"error": "Setting up OCR (a one-time download)."},
+        )
+        res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert res["ocr"]["status"] == "setting_up"
+        assert res["warm_complete"] is False
+
+    def test_warm_calls_do_not_restart_running_ocr(
+        self, sample_pdf_synthetic_scan, monkeypatch, ocr_thread_on
+    ):
+        import threading
+
+        from pdf_mcp import _core, corpus_ocr
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(corpus_tools, "_ocr_unavailable", lambda lang: None)
+        release = threading.Event()
+        calls: list = []
+
+        def blocking(args):
+            calls.append(args[1])
+            release.wait(10)
+            return args[1], "zebra"
+
+        monkeypatch.setattr(corpus_ocr, "_ocr_page_worker", blocking)
+        for _ in range(3):
+            res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+            assert res["ocr"]["status"] == "running"
+        release.set()
+        assert corpus_ocr.BACKGROUND_OCR.join(10)
+        assert calls == [0]
+        assert _core.cache.get_ocr_rows(sample_pdf_synthetic_scan, [0], "eng") == {
+            0: "zebra"
+        }
+
+    def test_invalid_ocr_value_is_inline_error(self, corpus_dir, isolated_server):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        res = pdf_corpus_warm(str(corpus_dir), ocr="maybe")
+        assert "error" in res and "hint" in res
+
+    def test_detail_rows_carry_pending(
+        self, sample_pdf_synthetic_scan, monkeypatch, ocr_thread_on
+    ):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setattr(
+            corpus_tools, "_ocr_unavailable", lambda lang: {"error": "no tesseract"}
+        )
+        res = pdf_corpus_warm([sample_pdf_synthetic_scan], detail=True)
+        assert [d["ocr_pages_pending"] for d in res["docs"]] == [1]

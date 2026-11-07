@@ -106,7 +106,7 @@ class BackgroundOCR:
         cache: Any,
         ocr_lang: str,
         tessdata: str | None,
-        worker: Callable[[Any], Any] = _ocr_page_worker,
+        worker: Callable[[Any], Any] | None = None,
     ) -> int:
         """OCR ``jobs`` ((path, 0-indexed pages) pairs) in the background,
         documents with the fewest pages first; returns the pages handed over
@@ -117,6 +117,8 @@ class BackgroundOCR:
         if not total or not self.enabled():
             return 0
         jobs.sort(key=lambda j: (len(j[1]), j[0]))
+        # Looked up at call time, so a test can swap the module's worker.
+        worker = worker or _ocr_page_worker
         stop = threading.Event()
         thread = threading.Thread(
             target=self._run,

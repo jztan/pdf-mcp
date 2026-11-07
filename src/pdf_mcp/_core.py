@@ -528,11 +528,12 @@ def _detect_features() -> dict[str, Any]:
             "ocr": {
                 "available": ocr_available,
                 "description": (
-                    "Opt-in: pages with no extractable text are OCR'd via "
-                    "Tesseract only when pdf_read_pages is called with "
-                    "ocr=true. pdf_info lists scanned pages in "
-                    "text_coverage.summary.ocr_candidate_pages. Search and "
-                    "corpus warm never run OCR."
+                    "Pages with no extractable text are OCR'd via Tesseract "
+                    "in two places: opt-in in pdf_read_pages with ocr=true, "
+                    "and in pdf_corpus_warm, which OCRs image-only pages "
+                    "between calls by default (ocr='auto'). pdf_info lists "
+                    "scanned pages in text_coverage.summary.ocr_candidate_pages. "
+                    "Search never runs OCR."
                 ),
             },
         },

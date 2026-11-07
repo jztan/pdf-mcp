@@ -71,6 +71,55 @@ class TestOcrIntegration:
         assert result["matches"][0]["source"] == "ocr"
 
 
+class TestCorpusWarmOcrIntegration:
+    """Issue #103 end to end with the real Tesseract and background thread."""
+
+    pytestmark = pytest.mark.skipif(
+        not _tesseract_available(),
+        reason="Tesseract not installed",
+    )
+
+    def test_corpus_warm_ocr_makes_scan_searchable(
+        self, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "1")
+        res: dict = {}
+        for _ in range(20):
+            res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+            if res["warm_complete"]:
+                break
+            assert res["ocr"]["status"] == "running"
+            assert corpus_ocr.BACKGROUND_OCR.join(30)
+        assert res["warm_complete"] is True
+        assert res["ocr"]["status"] == "done"
+        hits = pdf_corpus_search(
+            [sample_pdf_synthetic_scan], "integration", mode="keyword"
+        )
+        assert [m["page"] for m in hits["matches"]] == [1]
+
+    def test_one_page_scan_ocrs_in_a_child_process(
+        self, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        # Review finding: a one-page batch must not OCR in the server
+        # process without the PDF lock; with workers allowed it uses the pool.
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_corpus_warm
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "1")
+        monkeypatch.delenv("PDF_MCP_MAX_WORKERS", raising=False)
+        monkeypatch.setattr("os.cpu_count", lambda: 4)
+        assert corpus_ocr.ocr_worker_count() > 1
+        first = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert first["ocr"]["status"] == "running"
+        assert corpus_ocr.BACKGROUND_OCR.join(120)
+        again = pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert again["ocr"]["status"] == "done"
+        assert again["warm_complete"] is True
+
+
 class TestOcrRealSpawnCorrectness:
     pytestmark = pytest.mark.skipif(
         not _tesseract_available(),

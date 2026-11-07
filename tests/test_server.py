@@ -6830,6 +6830,9 @@ class TestScannedDocSignals:
         assert "auto-detected" not in desc
         assert "opt-in" in desc.lower()
         assert "ocr=true" in desc.lower()
+        # Issue #103: corpus warm OCRs image-only pages by default.
+        assert "pdf_corpus_warm" in desc
+        assert "never run ocr" not in desc.lower()
 
     def test_warm_rows_carry_text_coverage(
         self, corpus_dir, sample_pdf_scanned, isolated_server

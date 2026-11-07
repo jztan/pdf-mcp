@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **`pdf_corpus_warm` OCRs scanned folders.** Pages with no text but an
+  image are OCR'd in the server between calls (`ocr="auto"`, the default,
+  when Tesseract is available; `ocr_lang` picks the language), and
+  `warm_complete` stays false until they are done. Before, a folder of
+  scans warmed to zero characters, reported `warm_complete: true`, and
+  every corpus search came back empty. A new `ocr` field reports
+  progress, or why OCR could not run; `ocr="on"` makes missing Tesseract
+  an error and `ocr="off"` keeps the old behaviour
+  ([#103](https://github.com/jztan/pdf-mcp/issues/103))
+
 ### Changed
 
 - **`low_confidence` now fires when nothing matches.** The semantic cosine

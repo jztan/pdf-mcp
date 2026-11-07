@@ -685,3 +685,78 @@ def test_notice_removal_is_staged():
 
     src = inspect.getsource(release.commit_version_bump)
     assert '"docs/clients.md"' in src and '"README.md"' in src
+
+
+# The MCP Registry entry is published by publish-registry.yml over OIDC;
+# release.py only waits for it and never needs a local mcp-publisher.
+
+
+def test_registry_version_url_encodes_the_server_name():
+    assert release.registry_version_url("3.7.0") == (
+        "https://registry.modelcontextprotocol.io"
+        "/v0/servers/io.github.jztan%2Fpdf-mcp/versions/3.7.0"
+    )
+
+
+def test_registry_name_matches_server_json():
+    server = json.loads((REPO_ROOT / "server.json").read_text(encoding="utf-8"))
+    assert server["name"] == release.REGISTRY_NAME
+
+
+class _Resp:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _cfg(tmp_path, dry_run=False):
+    return release.ReleaseConfig("patch", dry_run=dry_run, project_root=tmp_path)
+
+
+def test_check_mcp_registry_waits_through_404s(tmp_path):
+    import urllib.error
+
+    calls = []
+
+    def fake_urlopen(url, timeout):
+        calls.append(url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(url, 404, "nf", {}, None)
+        return _Resp()
+
+    with (
+        patch("urllib.request.urlopen", fake_urlopen),
+        patch.object(release.time, "sleep"),
+    ):
+        assert release.check_mcp_registry(_cfg(tmp_path), "3.7.1") is True
+    assert len(calls) == 3
+    assert calls[0] == release.registry_version_url("3.7.1")
+
+
+def test_check_mcp_registry_gives_up_without_failing_the_release(tmp_path, capsys):
+    import urllib.error
+
+    def never(url, timeout):
+        raise urllib.error.HTTPError(url, 404, "nf", {}, None)
+
+    with patch("urllib.request.urlopen", never), patch.object(release.time, "sleep"):
+        assert release.check_mcp_registry(_cfg(tmp_path), "3.7.1", max_wait=0) is False
+    assert (
+        "gh workflow run publish-registry.yml -f tag=v3.7.1" in capsys.readouterr().out
+    )
+
+
+def test_check_mcp_registry_dry_run_makes_no_request(tmp_path):
+    with patch("urllib.request.urlopen") as urlopen:
+        assert release.check_mcp_registry(_cfg(tmp_path, dry_run=True), "3.7.1")
+    urlopen.assert_not_called()
+
+
+def test_release_no_longer_logs_in_to_the_registry_locally():
+    source = (REPO_ROOT / "scripts" / "release.py").read_text(encoding="utf-8")
+    assert '["mcp-publisher", "login"' not in source
+    assert '["mcp-publisher", "publish"]' not in source

@@ -1,0 +1,89 @@
+# Publishes server.json to the MCP Registry, logged in over GitHub OIDC, so a
+# release needs no local mcp-publisher and no device-flow login.
+#
+# It runs on `release: published`, not on the tag push, because server.json
+# lists the .mcpb bundle by its GitHub release download URL and release.py
+# uploads that asset only when it creates the release, after PyPI has the
+# package. A release created with GITHUB_TOKEN would not fire this event;
+# release.py creates it with the maintainer's gh login, which does.
+#
+# scripts/release.py polls the registry for the new version afterwards and
+# prints the manual fallback if it never appears. To re-publish a release
+# by hand: gh workflow run publish-registry.yml -f tag=vX.Y.Z
+name: MCP Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v3.7.0)
+        required: true
+
+concurrency:
+  group: registry-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-registry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write  # MCP Registry login over OIDC
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      PUBLISHER_VERSION: "1.8.7"
+      PUBLISHER_SHA256: 00b21004149a4ce66f0782508ae4a2bce67d1bea395a8da0bd8028159fb59579
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: server.json matches the tag
+        run: |
+          want="${TAG#v}"
+          for have in $(jq -r '.version, (.packages[] | select(.version) | .version)' server.json); do
+            [ "$have" = "$want" ] \
+              || { echo "::error::server.json has $have, tag is $TAG"; exit 1; }
+          done
+
+      # The registry entry advertises fileSha256; check the uploaded asset
+      # really has it before telling every client to trust that hash.
+      - name: The released .mcpb matches server.json
+        run: |
+          url="$(jq -r '.packages[] | select(.registryType == "mcpb") | .identifier' server.json)"
+          want="$(jq -r '.packages[] | select(.registryType == "mcpb") | .fileSha256' server.json)"
+          [ -n "$url" ] || { echo "No mcpb package in server.json"; exit 0; }
+          case "$url" in
+            */download/$TAG/*) ;;
+            *) echo "::error::$url is not an asset of $TAG"; exit 1 ;;
+          esac
+          curl -fsSL --retry 5 --retry-all-errors -o bundle.mcpb "$url"
+          have="$(sha256sum bundle.mcpb | cut -d ' ' -f1)"
+          [ "$have" = "$want" ] \
+            || { echo "::error::$url hashes to $have, server.json says $want"; exit 1; }
+          rm bundle.mcpb
+
+      - name: Install mcp-publisher
+        run: |
+          base="https://github.com/modelcontextprotocol/registry/releases/download"
+          file="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o "$file" "$base/v$PUBLISHER_VERSION/$file"
+          echo "$PUBLISHER_SHA256  $file" | sha256sum --check
+          tar -xzf "$file" mcp-publisher
+
+      - run: ./mcp-publisher login github-oidc
+
+      # The registry validates the PyPI version, whose JSON API can lag.
+      - name: Publish server.json
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            ./mcp-publisher publish && exit 0
+            sleep 30
+          done
+          exit 1

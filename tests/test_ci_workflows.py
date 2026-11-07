@@ -127,3 +127,26 @@ def test_pytest_runs_only_under_a_frozen_uv_sync() -> None:
                 ):
                     offenders.append(f"{wf}:{job}: {line.strip()}")
     assert not offenders, offenders
+
+
+# 3. publish-registry.yml publishes the MCP Registry entry over OIDC. It must
+# run on `release: published` (the .mcpb that server.json lists is uploaded
+# only when release.py creates the GitHub release), must be able to mint an
+# OIDC token, and must pin the mcp-publisher binary by digest.
+
+
+def test_registry_workflow_runs_when_the_release_is_published() -> None:
+    triggers = _triggers("publish-registry.yml")
+    assert triggers["release"]["types"] == ["published"]
+    assert "push" not in triggers
+
+
+def test_registry_workflow_logs_in_over_oidc_with_a_pinned_publisher() -> None:
+    with (WORKFLOWS / "publish-registry.yml").open(encoding="utf-8") as fh:
+        doc = yaml.safe_load(fh)
+    job = doc["jobs"]["publish-registry"]
+    assert job["permissions"]["id-token"] == "write"
+    assert re.fullmatch(r"[0-9a-f]{64}", job["env"]["PUBLISHER_SHA256"])
+    runs = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "sha256sum --check" in runs
+    assert "./mcp-publisher login github-oidc" in runs

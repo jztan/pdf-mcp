@@ -70,6 +70,10 @@ pdf-mcp does not accept passwords. A PDF that needs a password to open returns a
 
 Corpus tools skip such a file with `{"path": ..., "reason": "password_required"}` and process the rest. Owner-password-only PDFs (restricted permissions, no password needed to open) are read normally.
 
+### Unreadable files
+
+A file that is damaged, truncated or not a PDF returns an inline error the same way, with `"error_code": "pdf_unreadable"` and a `hint`. Corpus tools list such a file in `skipped` and process the rest.
+
 ---
 
 ## Document Introspection
@@ -794,7 +798,7 @@ Shared envelope (all three tools; `pdf_corpus_search` narrows `unprocessed`, see
 - `corpus_size` (int): number of files that passed resolution into the corpus (skipped entries are excluded).
 - `warmed_this_call` (int): count of docs actually extracted this call and verified present in the cache (cache hits don't count).
 - `budget_exhausted` (bool): `true` when `unprocessed` is non-empty because the budget ran out.
-- `warm_complete` (bool): `true` only when every file in the corpus is verified warm in the cache. This is the signal to loop on. Each row is re-read from the cache before it is reported, so a `docs` row means the cache holds that document, not merely that a write was attempted.
+- `warm_complete` (bool): `true` only when every file in the corpus is verified warm in the cache for what that tool needs. `pdf_corpus_overview` needs text only, so it can report `true` and a later `pdf_corpus_search` that also needs embeddings `false`. This is the signal to loop on. Each row is re-read from the cache before it is reported, so a `docs` row means the cache holds that document, not merely that a write was attempted.
 - `unwarmed` (int): how many files are not warm (`unprocessed` + `skipped`). `0` exactly when `warm_complete` is `true`.
 
 **Error contract:** call-level failures (missing directory, empty corpus, corpus above the file cap, embeddings requested with an unavailable embedding model) return an inline `{"error": "...", "hint": "..."}` payload instead of raising. Check for an `error` key before reading other fields.
@@ -868,8 +872,8 @@ Returns a per-document triage card for every PDF in a folder or list: title, pag
 - `recursive` (bool, optional, default `false`): Directory mode only: recurse into subdirectories.
 
 **Returns:**
-- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, about, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder titles ("Pdf Document", "Untitled...", scanner artifacts carrying a `___` marker) fall back to the filename stem, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
-  - `title`: PDF metadata title, falling back to the filename stem when absent or a known placeholder — never `null` (same contract as `pdf_corpus_search`'s `doc_title`). **Untrusted content from the PDF** when it comes from metadata.
+- `docs` (array, sorted by path): triage cards: `{path, title, pages, toc_top, has_toc, text_coverage, about, size_bytes, from_cache}`. Junk metadata is filtered: whitespace-only TOC entries are dropped from `toc_top`, placeholder and tooling titles ("Pdf Document", "Untitled...", scanner artifacts carrying a `___` marker, arXiv stamps, Word export names, SEC accession numbers, source file names, typesetter page ranges such as `gkm094 1..11`) are ignored, and `has_toc` is `false` when every TOC title is whitespace (post-filter reality, so `has_toc: true` with an empty `toc_top` only occurs when real titles exist below level 1).
+  - `title`: PDF metadata title; when that is absent or junk, the largest text at the top of page 1 if it reads like a title (a journal name or section label above the title is passed over), then the filename stem. Never `null` (same contract as `pdf_corpus_search`'s `doc_title`). **Untrusted content from the PDF** unless it is the filename.
   - `toc_top`: depth-1 TOC entry titles, capped at 8.
   - `text_coverage`: `"full"`, `"partial"`, or `"none"`, derived from per-page text character counts.
   - `about` (array): up to 8 of the document's most distinctive terms relative to the corpus, by tf-idf over cached term lists; `[]` until the document has a profile. A profile is written by `pdf_corpus_warm(paths, embeddings=True)` or by a hybrid `pdf_corpus_search`; a text-only warm, including the one this tool runs by default, leaves it `[]`.
@@ -927,7 +931,7 @@ Benchmark figures in this section use four query classes: **paraphrase** (the qu
 
 **Returns:**
 - `matches` (array): cross-document hits in fused order, each `{path, doc_title, page, excerpt, position, source, hidden_text}`, plus `section_path` and `lead_in` when they apply (same rules as `pdf_search`), plus `bbox`/`page_rect`/`clip` when `excerpt_style` is `"paragraph"` or `"window"` (`"window"` also carries `window_blocks` and `anchor`).
-  - `doc_title`: the PDF's metadata title (placeholder titles like "Untitled..." and scanner artifacts carrying a `___` marker filtered out), falling back to the filename stem when no usable title exists — never `null`. Metadata titles are **untrusted content from the PDF.**
+  - `doc_title`: the same title as the overview card's `title`: metadata, then page 1, then the filename stem. Never `null`. **Untrusted content from the PDF** unless it is the filename.
   - Keyword-mode hits also carry `score` (BM25 over the corpus, comparable across documents; keyword mode orders by it). For CJK queries and German FTS mode the keyword arm falls back to per-document BM25 fused by RRF, and there `score` is comparable only within that hit's own document.
   - Semantic-mode hits carry `score` (cosine, rounded to 4dp) and `low_confidence` (cosine below `confidence_threshold`), matching single-doc `pdf_search(mode="semantic")`.
   - Hybrid (`auto` with embeddings available) hits carry `score` (fused RRF score, rounded to 4dp), `semantic_score` (cosine, rounded to 4dp; `0.0` when the page had no cached embedding), and `low_confidence` (page holds no match of every keyword term AND `semantic_score` below `confidence_threshold`; a page the keyword arm ranked on partial matches alone counts as having none), matching single-doc `pdf_search(mode="auto")`'s hybrid hits, and `doc_score` (head-vector cosine of the match's document, 4 dp; `null` when the document has no profile).
@@ -1037,7 +1041,7 @@ pdf_cache_stats()
 Removes expired or all cache entries. Use when cached content is stale or to free disk space.
 
 **Parameters:**
-- `expired_only` (bool, optional, default `true`) — When `true`, clear only entries past the TTL. When `false`, clear everything **including** the URL download cache.
+- `expired_only` (bool, optional, default `true`): When `true`, clear only expired entries: documents whose PDF changed or has been missing for 7 days, documents past `PDF_MCP_CACHE_TTL` when it is set, and the least recently used documents while the cache is over `PDF_MCP_CACHE_MAX_MB`. When `false`, clear everything **including** the URL download cache.
 
 **Returns:**
 - `expired_only` (bool) — Echoes the input.
@@ -1095,7 +1099,8 @@ Reports which optional features are installed and which configuration values are
 - `config` (object):
   - `max_workers` (int) — resolved OCR/render worker cap (`PDF_MCP_MAX_WORKERS` override, or `min(cpu_count, 16)`).
   - `max_response_bytes` (int) — effective `[limits].max_response_bytes`.
-  - `cache_ttl_hours` (int) — effective `PDF_MCP_CACHE_TTL`, or the default.
+  - `cache_ttl_hours` (int or null): effective `PDF_MCP_CACHE_TTL`; `null` when unset (no time expiry).
+  - `cache_max_mb` (int or null): effective `PDF_MCP_CACHE_MAX_MB` size cap; `null` when set to `0` (no cap).
   - `cache_dir` (string) — resolved cache directory. A local filesystem path (single-user STDIO deployment, per the `pdf_cache_stats` precedent).
 
 This tool does **not** return PDF-derived content; the untrusted-content preamble does not apply.
@@ -1138,7 +1143,8 @@ server_info()
 #   "config": {
 #     "max_workers": 8,
 #     "max_response_bytes": 200000,
-#     "cache_ttl_hours": 24,
+#     "cache_ttl_hours": null,
+#     "cache_max_mb": 2048,
 #     "cache_dir": "/home/user/.cache/pdf-mcp"
 #   }
 # }
@@ -1179,7 +1185,8 @@ Environment variables:
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `PDF_MCP_CACHE_DIR` | `~/.cache/pdf-mcp` | SQLite cache directory. `~` is expanded. Symlinks are not resolved. The directory is created if missing and `chmod`'d to `0o700`. |
-| `PDF_MCP_CACHE_TTL` | `24` | Cache time-to-live in hours. Must parse as an integer in `[0, 8760]`. Bad values (`"24h"`, negative, over-range) fail loud at startup rather than silently falling back. |
+| `PDF_MCP_CACHE_TTL` | unset | Optional time expiry in hours: documents not used for this long are removed at the next cleanup. Unset, a document stays while its PDF exists. Must parse as an integer in `[0, 8760]`. Bad values (`"24h"`, negative, over-range) fail loud at startup rather than silently falling back. |
+| `PDF_MCP_CACHE_MAX_MB` | `2048` | Cache size cap in MB. Over it, the cleanup at server start (or on `pdf_cache_clear()`) removes the least recently used documents first. `0` turns the cap off. Non-integer or negative values fail loud at startup. |
 | `PDF_MCP_MAX_WORKERS` | `min(cpu_count, 16)` for OCR/render; corpus warm caps at 8 (text) / 4 (embeddings) | Worker cap for parallel per-page OCR/render in `pdf_read_pages` and for corpus warm extraction. A value `<= 1` forces sequential (for corpus warm, in-process extraction that cannot stop mid-document at `budget_seconds`); a positive int caps the pool (cannot raise it above the computed default). Surfaced as `config.max_workers` by `server_info`. |
 
 For embedding model selection (validated models, MTEB scores, and BYOM gotchas), see [docs/embedding-models.md](embedding-models.md).

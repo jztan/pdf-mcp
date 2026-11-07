@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 import httpx
-from .backend.bytesopen import is_password_locked
+from .backend.bytesopen import pdf_open_problem
 from fastmcp import FastMCP
 from . import __version__
 from . import content_trust
@@ -110,7 +110,7 @@ mcp = FastMCP(
     ),
 )
 
-_DEFAULT_CACHE_TTL_HOURS = 24
+_DEFAULT_CACHE_MAX_MB = 2048
 _MAX_CACHE_TTL_HOURS = 8760  # one year
 
 
@@ -126,8 +126,10 @@ def _cache_dir_from_env() -> Path | None:
     return Path(raw).expanduser()
 
 
-def _ttl_hours_from_env() -> int:
-    """Return PDF_MCP_CACHE_TTL as a clamped integer, or the default.
+def _ttl_hours_from_env() -> int | None:
+    """Return PDF_MCP_CACHE_TTL as a clamped integer, or None when unset.
+
+    Time expiry is opt-in: unset keeps a document while its PDF exists (#88).
 
     Fails loud (ValueError at startup) on non-integer or out-of-range
     input rather than silently falling back, so a typo in the user's
@@ -135,7 +137,7 @@ def _ttl_hours_from_env() -> int:
     """
     raw = os.environ.get("PDF_MCP_CACHE_TTL")
     if raw is None or raw.strip() == "":
-        return _DEFAULT_CACHE_TTL_HOURS
+        return None
     try:
         value = int(raw)
     except ValueError as exc:
@@ -148,6 +150,29 @@ def _ttl_hours_from_env() -> int:
     return value
 
 
+def _max_bytes_from_env() -> int | None:
+    """Return PDF_MCP_CACHE_MAX_MB in bytes, None for 0 (no cap).
+
+    Unset or empty means the 2048 MB default. Fails loud like
+    PDF_MCP_CACHE_TTL on a non-integer or negative value.
+    """
+    raw = os.environ.get("PDF_MCP_CACHE_MAX_MB")
+    if raw is None or raw.strip() == "":
+        value = _DEFAULT_CACHE_MAX_MB
+    else:
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"PDF_MCP_CACHE_MAX_MB must be an integer (got {raw!r})"
+            ) from exc
+        if value < 0:
+            raise ValueError(
+                f"PDF_MCP_CACHE_MAX_MB must be 0 or more megabytes (got {value})"
+            )
+    return value * 1024 * 1024 if value else None
+
+
 # Initialize config, cache, and URL fetcher. Config first: the cache's FTS
 # language mirror ([fts] language = "de") is a startup-time cache setting,
 # not a per-call one, so it has to be known before PDFCache is constructed.
@@ -155,6 +180,7 @@ pdf_config = PDFConfig()
 cache = PDFCache(
     cache_dir=_cache_dir_from_env(),
     ttl_hours=_ttl_hours_from_env(),
+    max_bytes=_max_bytes_from_env(),
     fts_language=pdf_config.fts_language,
 )
 url_fetcher = URLFetcher(cache_dir=cache.cache_dir / "downloads", config=pdf_config)
@@ -239,6 +265,20 @@ def _password_required_payload(source: str) -> dict[str, str]:
     }
 
 
+PDF_UNREADABLE_CODE = "pdf_unreadable"
+
+
+def _pdf_unreadable_payload(source: str) -> dict[str, str]:
+    return {
+        "error": f"Cannot open {source}: not a readable PDF.",
+        "error_code": PDF_UNREADABLE_CODE,
+        "hint": (
+            "The file is damaged, incomplete or not a PDF. If it was just "
+            "downloaded or copied, fetch it again."
+        ),
+    }
+
+
 def _resolve_path(
     source: str,
 ) -> tuple[str, None] | tuple[None, dict[str, str]]:
@@ -246,16 +286,23 @@ def _resolve_path(
     Resolve source to a local, openable file path.
 
     Wraps `_resolve_source` so both of its exits (URL download and local
-    path) get the password check: a PDF that needs an open password returns
-    a `password_required` payload instead of failing later with raw PDFium
-    text.
+    path) get the open check: a PDF that needs a password or that PDFium
+    cannot open returns an inline payload instead of failing later with raw
+    PDFium text.
     """
     local_path, error = _resolve_source(source)
     if error is not None:
         return None, error
     assert local_path is not None
-    if is_password_locked(local_path):
+    problem = pdf_open_problem(local_path)
+    if problem == "password":
         return None, _password_required_payload(source)
+    if problem == "unreadable":
+        return None, _pdf_unreadable_payload(source)
+    # Every single-document tool resolves its path here, including the ones
+    # that read pages without get_metadata: mark the document used so the
+    # size cap and the TTL see it (#88). Throttled and best-effort.
+    cache.touch(local_path)
     return local_path, None
 
 

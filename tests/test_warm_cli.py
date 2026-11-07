@@ -83,9 +83,22 @@ class TestCacheEnvHelpers:
         # not "/".
         assert warm_cli._cache_dir_from_env() == Path.home() / "x"
 
-    def test_ttl_default_when_unset(self, monkeypatch):
+    def test_ttl_none_when_unset(self, monkeypatch):
         monkeypatch.delenv("PDF_MCP_CACHE_TTL", raising=False)
-        assert warm_cli._ttl_hours_from_env() == 24
+        assert warm_cli._ttl_hours_from_env() is None
+
+    def test_max_mb_default_when_unset(self, monkeypatch):
+        monkeypatch.delenv("PDF_MCP_CACHE_MAX_MB", raising=False)
+        assert warm_cli._max_bytes_from_env() == 2048 * 1024 * 1024
+
+    def test_max_mb_zero_means_no_cap(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "0")
+        assert warm_cli._max_bytes_from_env() is None
+
+    def test_max_mb_rejects_negative(self, monkeypatch):
+        monkeypatch.setenv("PDF_MCP_CACHE_MAX_MB", "-5")
+        with pytest.raises(ValueError, match="0 or more"):
+            warm_cli._max_bytes_from_env()
 
     def test_ttl_reads_valid_int(self, monkeypatch):
         monkeypatch.setenv("PDF_MCP_CACHE_TTL", "48")
@@ -132,6 +145,23 @@ class TestMainEndToEnd:
         empty_dir.mkdir()
         rc = warm_cli.main([str(empty_dir)])
         assert rc == 1
+
+    def test_all_files_rejected_reports_each_reason(
+        self, corpus_dir, tmp_path, monkeypatch, capsys
+    ):
+        """A batch with no usable file says why, file by file."""
+        monkeypatch.setenv("PDF_MCP_CACHE_DIR", str(tmp_path / "cache"))
+        cfg = tmp_path / "config.toml"
+        cfg.write_text('[paths]\nallow = ["/nonexistent-allowed-root/**"]\n')
+        real_config = warm_cli.PDFConfig
+        monkeypatch.setattr(warm_cli, "PDFConfig", lambda: real_config(cfg))
+        path = str(corpus_dir / "alpha.pdf")
+        rc = warm_cli.main([path, "--no-embeddings"])
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "No PDF files found in corpus" in err
+        assert f"skip: {path}: " in err
+        assert "not in allowed list" in err.lower()
 
     def test_batches_split_across_multiple_warm_docs_calls(
         self, corpus_dir, tmp_path, monkeypatch, capsys

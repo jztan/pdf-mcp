@@ -305,7 +305,7 @@ class TestCachedLookup:
         assert lookup("d1", 1) is None
 
     def test_opening_the_cache_does_not_purge_old_rows(self, tmp_path):
-        # PDFCache purges rows older than its TTL (24 h by default) on open.
+        # PDFCache purges rows older than its TTL on open when one is set.
         # Validating a warm cache from an earlier day must not empty it.
         pdf, cache_dir = self._warm(tmp_path)
         with sqlite3.connect(cache_dir / "cache.db") as conn:

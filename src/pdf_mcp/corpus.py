@@ -26,7 +26,12 @@ from .backend.bytesopen import is_password_locked
 from .concurrency import BackgroundStopped, background_access, yield_pdf_access
 from .docopen import open_pdf
 
-from .extractor import _warm_extract_worker, page_embedding_units, stale_layout_pages
+from .extractor import (
+    _warm_extract_worker,
+    guess_page_title,
+    page_embedding_units,
+    stale_layout_pages,
+)
 from .parallel import resolve_workers
 from .warm_pool import WarmPool
 
@@ -1670,6 +1675,18 @@ def about_terms(cache: Any, paths: list[str], limit: int = 8) -> dict[str, list[
 # exports produce e.g. "Untitled 3.pages").
 _PLACEHOLDER_TITLES = {"pdf document"}
 
+# Tooling residue in the title field, measured on 579 local PDFs: the arXiv
+# stamp, Word's export prefix, SEC accession numbers, a print-driver name,
+# source file names, and a typesetter's "<job id> <first>..<last>" page range
+# (14 of the 120 journal PDFs in DocHop-QA).
+_JUNK_TITLE = re.compile(
+    r"^(?:arxiv:|microsoft (?:word|powerpoint|excel) - |printmgr\b)"
+    r"|^\d{10}-\d{2}-\d{6}$"
+    r"|^\S+ \d+\.\.\d+$"
+    r"|\.(?:docx?|pptx?|xlsx?|indd|qxd|qxp|pmd|dvi|tex|eps|ps|ren|fm|pdf)$",
+    re.IGNORECASE,
+)
+
 
 def _clean_title(title: Any) -> str | None:
     """Null out empty/whitespace and known-placeholder titles."""
@@ -1689,7 +1706,38 @@ def _clean_title(title: Any) -> str | None:
         return None
     if "___" in stripped:
         return None
+    if _JUNK_TITLE.search(stripped) or sum(c.isalpha() for c in stripped) < 2:
+        return None
     return stripped
+
+
+def doc_title(path: str, meta: dict[str, Any] | None, cache: Any) -> str:
+    """The never-null title: clean metadata, then page 1, then the filename.
+
+    Page 1 is read on first use, not at warm, so documents already in a cache
+    get a title without being warmed again. Callers hold the PDF lock. A read
+    that fails is not recorded, so the next call tries again.
+    """
+    stem = Path(path).stem
+    if meta is None:
+        return stem
+    title = _clean_title((meta.get("metadata") or {}).get("title"))
+    if title:
+        return title
+    guess = meta.get("title_guess")
+    if guess is None:
+        try:
+            doc = open_pdf(path)
+            try:
+                guess = guess_page_title(doc[0]) if len(doc) else None
+            finally:
+                doc.close()
+        except Exception as exc:  # noqa: BLE001 - a title is never worth failing
+            logger.debug("no page 1 title for %s: %s", path, exc)
+            return stem
+        guess = guess or ""
+        cache.save_title_guess(path, guess)
+    return str(guess) or stem
 
 
 def build_overview_card(
@@ -1702,11 +1750,11 @@ def build_overview_card(
 
     Junk metadata is filtered rather than passed through: whitespace-only
     TOC entries are dropped and placeholder titles fall back to the
-    filename stem (never null, unified with search's doc_title), since
-    the cards exist for orientation."""
+    page 1 and then the filename stem (never null, unified with search's
+    doc_title), since the cards exist for orientation."""
     meta = cache.get_metadata(path)
     toc = meta.get("toc") or []
-    title = _clean_title((meta.get("metadata") or {}).get("title")) or Path(path).stem
+    title = doc_title(path, meta, cache)
     toc_top = [
         (e.get("title") or "").strip()
         for e in toc

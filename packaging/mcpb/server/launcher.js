@@ -26,9 +26,11 @@ const UV_BASE = 'https://github.com/astral-sh/uv/releases/download/';
 // while a first start downloads uv, Python and ~250 MB of dependencies.
 const EARLY_INIT = true;
 
-// The protocol versions of the pinned Python MCP SDK, which is the server
-// this launcher hands over to. scripts/build_mcpb.py rewrites both lines
-// from that SDK at build time; the values here are mcp 1.28.1's.
+// The handshake-era protocol versions of the pinned Python MCP SDK, which is
+// the server this launcher hands over to. scripts/build_mcpb.py rewrites both
+// lines from that SDK at build time; the values here are mcp 2.3.0's. A client
+// probing `server/discover` gets an error here and falls back to `initialize`,
+// the only way into the hand-over.
 const SUPPORTED_PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
 const LATEST_PROTOCOL_VERSION = '2025-11-25';
 

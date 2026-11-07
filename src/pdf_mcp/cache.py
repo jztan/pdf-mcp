@@ -9,6 +9,8 @@ import os
 import re
 import shutil
 import sqlite3
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -153,6 +155,57 @@ _CJK_RANGES: tuple[tuple[int, int], ...] = (
     (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
     (0xFF00, 0xFFEF),  # Halfwidth/Fullwidth Forms
 )
+
+
+# Every table that holds rows for one document, keyed by file_path. A purge
+# (file changed, file gone, TTL, size cap, invalidation) deletes from all of
+# them; a table missing here leaks rows past every purge.
+_PER_DOC_TABLES = (
+    "pdf_metadata",
+    "doc_usage",
+    "page_text",
+    "page_images",
+    "page_tables",
+    "page_embeddings",
+    "page_blocks",
+    "page_renders",
+    "page_charts",
+    "doc_profiles",
+    "section_embeddings",
+    "pdf_search_fts",
+    "pdf_search_fts_cjk",
+    "pdf_search_fts_de",
+    "pdf_section_fts",
+    "pdf_section_fts_cjk",
+    "pdf_section_fts_de",
+)
+# Days a cached PDF may be missing before its rows are purged. Long enough
+# that an external or network drive unplugged over a week keeps its cache.
+_MISSING_GRACE_DAYS = 7
+# Kept when a PDF changed on disk (see _purge_paths): the section index,
+# and the document's usage record, which tracks use rather than content.
+_KEPT_WHEN_CHANGED = frozenset(
+    ("pdf_section_fts", "pdf_section_fts_cjk", "pdf_section_fts_de", "doc_usage")
+)
+# Last use of a document: the later of the two access stamps. Used by the
+# TTL and the size cap over doc_usage u LEFT JOIN pdf_metadata m.
+_LAST_USED_SQL = "MAX(u.accessed_at, COALESCE(m.accessed_at, u.accessed_at))"
+# On-disk bytes per byte of _doc_size_estimates content: B-tree pages,
+# indexes and FTS5 structure. Measured 1.27 on a 500-document warm cache
+# (estimate 240.6 MB, file 305.2 MB). A constant, not a live ratio: FTS5
+# deletes free almost no pages, so a ratio read from the file would grow
+# after every eviction and evict more on every restart.
+_ESTIMATE_TO_DISK = 1.3
+# Wall-clock limit for stat-ing every cached path at startup. A stat on a
+# dead hard-mounted network share can block for minutes, and the sweep runs
+# before the server answers initialize; paths not stat-ed in time are left
+# exactly as they are until the next sweep.
+_STAT_DEADLINE_S = 5.0
+# Seconds between touch() writes for one path: least-recently-used order
+# only needs hour resolution, and a write per read would contend with warms.
+_TOUCH_INTERVAL_S = 3600.0
+# Paths per DELETE ... IN (...): under the 999-variable limit of old SQLite.
+_PURGE_CHUNK = 500
 
 
 def _is_cjk_char(ch: str) -> bool:
@@ -594,7 +647,8 @@ class PDFCache:
     def __init__(
         self,
         cache_dir: Path | None = None,
-        ttl_hours: int = 24,
+        ttl_hours: int | None = None,
+        max_bytes: int | None = None,
         images_dir: Path | None = None,
         fts_language: str | None = None,
     ):
@@ -603,7 +657,10 @@ class PDFCache:
 
         Args:
             cache_dir: Directory to store cache database. Defaults to ~/.cache/pdf-mcp
-            ttl_hours: Time-to-live for cache entries in hours
+            ttl_hours: Opt-in time expiry: drop a document not accessed for
+                this many hours. None (default) keeps it while its PDF exists.
+            max_bytes: Size cap; over it the sweep evicts least recently
+                used documents. None (default) means no cap.
             images_dir: Directory to store extracted images.
                 Defaults to cache_dir/images
             fts_language: None (default porter/English FTS) or "de" to
@@ -624,6 +681,9 @@ class PDFCache:
         os.chmod(str(self.cache_dir), 0o700)
         self.db_path = self.cache_dir / "cache.db"
         self.ttl_hours = ttl_hours
+        self.max_bytes = max_bytes
+        # path -> monotonic time of this process's last touch() write.
+        self._touched: dict[str, float] = {}
         self.images_dir = images_dir or (self.cache_dir / "images")
         self.images_dir.mkdir(parents=True, exist_ok=True)
         os.chmod(str(self.images_dir), 0o700)
@@ -775,6 +835,18 @@ class PDFCache:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     content_trust_json TEXT DEFAULT NULL
+                );
+
+                -- One row per cached document, whichever tool cached it:
+                -- pdf_read_pages, pdf_search and pdf_render_pages cache page
+                -- rows without a pdf_metadata row. accessed_at is the last
+                -- use (with pdf_metadata.accessed_at, the later wins);
+                -- missing_since is when the cleanup first found the PDF
+                -- gone (#88).
+                CREATE TABLE IF NOT EXISTS doc_usage (
+                    file_path TEXT PRIMARY KEY,
+                    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    missing_since TIMESTAMP DEFAULT NULL
                 );
 
                 -- Global content-trust version stamp (single row, id=0).
@@ -968,6 +1040,15 @@ class PDFCache:
                 conn.execute(
                     "ALTER TABLE pdf_metadata"
                     " ADD COLUMN content_trust_json TEXT DEFAULT NULL"
+                )
+
+            # pdf_metadata: title read from page 1 when the embedded title is
+            # unusable. NULL = not read yet, "" = read and nothing usable.
+            # Filled on first use, so old caches keep every row.
+            cols = _get_columns(conn, "pdf_metadata")
+            if cols and "title_guess" not in cols:
+                conn.execute(
+                    "ALTER TABLE pdf_metadata ADD COLUMN title_guess TEXT DEFAULT NULL"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -1269,6 +1350,36 @@ class PDFCache:
                     sec_inserts,
                 )
 
+    def _stat_mtimes(self, paths: list[str]) -> dict[str, float | None]:
+        """mtime per path, None when the stat failed (missing or unreadable).
+
+        Stats run in a daemon thread joined for ``_STAT_DEADLINE_S``; a path
+        whose stat has not returned by then is absent from the result
+        (unknown). A daemon thread stuck in a stat does not block exit.
+        """
+        found: dict[str, float | None] = {}
+
+        def run() -> None:
+            for path in paths:
+                try:
+                    found[path] = self._get_file_info(path)[0]
+                except OSError:
+                    found[path] = None
+
+        worker = threading.Thread(target=run, name="pdf-mcp-stat", daemon=True)
+        worker.start()
+        worker.join(_STAT_DEADLINE_S)
+        snapshot = dict(found)
+        if worker.is_alive():
+            logger.warning(
+                "cache sweep: %d of %d cached paths did not answer a stat"
+                " within %.0f s (unresponsive mount?); left as they are",
+                len(paths) - len(snapshot),
+                len(paths),
+                _STAT_DEADLINE_S,
+            )
+        return snapshot
+
     def _get_file_info(self, path: str) -> tuple[float, int]:
         """Get file modification time and size."""
         stat = os.stat(path)
@@ -1298,7 +1409,8 @@ class PDFCache:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """SELECT file_mtime, file_size, page_count,
-                   metadata, toc, text_coverage_json, content_trust_json
+                   metadata, toc, text_coverage_json, content_trust_json,
+                   title_guess
                    FROM pdf_metadata WHERE file_path = ?""",
                 (path,),
             ).fetchone()
@@ -1334,7 +1446,36 @@ class PDFCache:
                     if row["content_trust_json"]
                     else None
                 ),
+                "title_guess": row["title_guess"],
             }
+
+    def touch(self, path: str) -> None:
+        """Mark a cached document as used, for the size cap and the TTL.
+
+        ``get_metadata`` stamps ``pdf_metadata``; this stamps ``doc_usage``,
+        which also covers documents cached without a metadata row. Tools
+        call it once per call through ``_resolve_path``. Throttled to one write
+        per path per ``_TOUCH_INTERVAL_S`` in this process, and best-effort:
+        a locked database never fails the caller's tool call.
+        """
+        now = time.monotonic()
+        last = self._touched.get(path)
+        if last is not None and now - last < _TOUCH_INTERVAL_S:
+            return
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO doc_usage (file_path) VALUES (?)", (path,)
+                )
+                conn.execute(
+                    "UPDATE doc_usage SET accessed_at = CURRENT_TIMESTAMP"
+                    " WHERE file_path = ?",
+                    (path,),
+                )
+        except sqlite3.OperationalError:
+            logger.debug("touch(%s) skipped: database busy", path)
+            return
+        self._touched[path] = now
 
     @contextlib.contextmanager
     def write_transaction(self) -> Any:
@@ -1392,6 +1533,18 @@ class PDFCache:
                     json.dumps(toc),
                     json.dumps(text_coverage) if text_coverage is not None else None,
                 ),
+            )
+
+    def save_title_guess(self, path: str, title: str) -> None:
+        """Persist the page-1 title; "" records that none was usable.
+
+        ``save_metadata`` replaces the row, so a changed file reads page 1
+        again.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE pdf_metadata SET title_guess = ? WHERE file_path = ?",
+                (title, path),
             )
 
     def save_content_trust(self, path: str, scan: dict[str, Any]) -> None:
@@ -2370,161 +2523,287 @@ class PDFCache:
 
     # ==================== Cache Management ====================
 
+    def _purge_paths(
+        self, conn: sqlite3.Connection, paths: list[str], changed: bool = False
+    ) -> None:
+        """Delete every cached row and file for ``paths``.
+
+        The one place a document leaves the cache, so a table added later
+        only has to be listed in ``_PER_DOC_TABLES``. Tables that a cache
+        may not have (FTS5 missing, ``page_blocks`` created on first write,
+        the German pair) are skipped.
+
+        ``changed=True`` is for a PDF that still exists but changed on disk:
+        its section index is kept, because those tables carry no mtime and
+        the next warm replaces them only when re-detection succeeds (a failed
+        detection must not wipe a good index). Its ``doc_usage`` row is kept
+        too, so the document stays tracked.
+        """
+        if not paths:
+            return
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        for start in range(0, len(paths), _PURGE_CHUNK):
+            chunk = paths[start : start + _PURGE_CHUNK]
+            placeholders = ",".join("?" * len(chunk))
+            # Files on disk first: once the rows are gone nothing points at them.
+            for table in ("page_images", "page_renders"):
+                for (on_disk,) in conn.execute(
+                    f"SELECT file_path_on_disk FROM {table}"
+                    f" WHERE file_path IN ({placeholders})",
+                    chunk,
+                ).fetchall():
+                    _unlink_quietly(on_disk)
+            for table in _PER_DOC_TABLES:
+                if changed and table in _KEPT_WHEN_CHANGED:
+                    continue
+                if table in present:
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE file_path IN ({placeholders})",
+                        chunk,
+                    )
+
     def _invalidate_file(self, path: str) -> None:
         """Remove all cache entries for a file."""
         with self._connect() as conn:
-            # Delete image files from disk before removing DB rows
-            rows = conn.execute(
-                "SELECT file_path_on_disk FROM page_images WHERE file_path = ?",
-                (path,),
-            ).fetchall()
-            for row in rows:
-                _unlink_quietly(row[0])
-
-            # Delete render PNG files before removing DB rows
-            render_rows = conn.execute(
-                "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
-                (path,),
-            ).fetchall()
-            for (render_path,) in render_rows:
-                _unlink_quietly(render_path)
-            conn.execute("DELETE FROM page_renders WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_charts WHERE file_path = ?", (path,))
-
-            conn.execute("DELETE FROM pdf_metadata WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_text WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_images WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_tables WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM page_embeddings WHERE file_path = ?", (path,))
-            conn.execute("DELETE FROM doc_profiles WHERE file_path = ?", (path,))
-            conn.execute(
-                "DELETE FROM section_embeddings WHERE file_path = ?",
-                (path,),
-            )
-            if self.fts_available:
-                conn.execute("DELETE FROM pdf_search_fts WHERE file_path = ?", (path,))
-            if self._de_tables_exist:
-                conn.execute(
-                    "DELETE FROM pdf_search_fts_de WHERE file_path = ?", (path,)
-                )
+            self._purge_paths(conn, [path], changed=True)
 
     def clear_expired(self) -> int:
         """
-        Remove expired cache entries.
+        Remove cache entries that can no longer be served or are not wanted.
+
+        A document's rows stay while its PDF exists unchanged. The sweep
+        drops a document whose PDF changed on disk, or has been missing for
+        ``_MISSING_GRACE_DAYS`` (the wait spares an unmounted drive), or was
+        not accessed within ``ttl_hours`` when that is set. Then, over
+        ``max_bytes``, it evicts least recently used documents.
 
         Returns:
             Number of files cleared
         """
         with self._connect() as conn:
-            # Get expired file paths. Compute the cutoff with SQLite's own
-            # clock — accessed_at is written via CURRENT_TIMESTAMP (UTC,
-            # "YYYY-MM-DD HH:MM:SS"), so comparing it against a Python
-            # datetime.now().isoformat() (local timezone, "T" separator)
-            # mis-sorts fresh rows as expired. datetime('now', ?) keeps both
-            # sides in the same clock and format.
-            expired = conn.execute(
-                "SELECT file_path FROM pdf_metadata"
-                " WHERE accessed_at < datetime('now', ?)",
-                (f"-{self.ttl_hours} hours",),
+            purged: list[str] = []
+            changed: list[str] = []
+            present: list[str] = []
+            missing: list[str] = []
+            docs, cached_mtimes = self._cached_docs(conn)
+            render_rows = conn.execute(
+                "SELECT file_path, MIN(file_mtime) FROM page_renders"
+                " GROUP BY file_path"
             ).fetchall()
-
-            expired_paths = [row[0] for row in expired]
-
-            if expired_paths:
-                placeholders = ",".join("?" * len(expired_paths))
-
-                # Delete image files from disk
-                img_rows = conn.execute(
-                    f"SELECT file_path_on_disk FROM page_images"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                ).fetchall()
-                for row in img_rows:
-                    _unlink_quietly(row[0])
-
+            mtimes = self._stat_mtimes(
+                list(dict.fromkeys(docs + [r[0] for r in render_rows]))
+            )
+            for path in docs:
+                if path not in mtimes:
+                    continue  # stat did not answer in time: leave it be
+                mtime = mtimes[path]
+                if mtime is None:
+                    # Not found, or unreadable for now (permissions, a
+                    # flaky network share): both wait out the grace period.
+                    missing.append(path)
+                    continue
+                cached_mtime = cached_mtimes.get(path)
+                if cached_mtime is None or mtime == cached_mtime:
+                    present.append(path)
+                else:
+                    changed.append(path)  # rows can never be served
+            for start in range(0, len(missing), _PURGE_CHUNK):
+                chunk = missing[start : start + _PURGE_CHUNK]
+                marks = ",".join("?" * len(chunk))
                 conn.execute(
-                    f"DELETE FROM pdf_metadata WHERE file_path IN ({placeholders})",
-                    expired_paths,
+                    "UPDATE doc_usage SET missing_since = CURRENT_TIMESTAMP"
+                    f" WHERE missing_since IS NULL AND file_path IN ({marks})",
+                    chunk,
                 )
-                conn.execute(
-                    f"DELETE FROM page_text WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_images WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_tables WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_embeddings"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM doc_profiles WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM section_embeddings"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                if self.fts_available:
-                    conn.execute(
-                        f"DELETE FROM pdf_search_fts"
-                        f" WHERE file_path IN ({placeholders})",
-                        expired_paths,
-                    )
-                if self._de_tables_exist:
-                    conn.execute(
-                        f"DELETE FROM pdf_search_fts_de"
-                        f" WHERE file_path IN ({placeholders})",
-                        expired_paths,
-                    )
-
-                # Delete render PNG files for expired paths
-                render_rows = conn.execute(
-                    f"SELECT file_path_on_disk FROM page_renders"
-                    f" WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                ).fetchall()
-                for (render_path,) in render_rows:
-                    _unlink_quietly(render_path)
-                conn.execute(
-                    f"DELETE FROM page_renders WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-                conn.execute(
-                    f"DELETE FROM page_charts WHERE file_path IN ({placeholders})",
-                    expired_paths,
-                )
-
-        # Sweep page_renders for stale-mtime entries (PDF file changed)
-        with self._connect() as conn2:
-            stale_paths = conn2.execute(
-                "SELECT DISTINCT file_path FROM page_renders"
-            ).fetchall()
-            for (rpath,) in stale_paths:
-                sample_row = conn2.execute(
-                    "SELECT file_mtime FROM page_renders WHERE file_path = ? LIMIT 1",
-                    (rpath,),
-                ).fetchone()
-                if sample_row and not self._is_cache_valid(rpath, sample_row[0]):
-                    stale_render_rows = conn2.execute(
-                        "SELECT file_path_on_disk FROM page_renders"
-                        " WHERE file_path = ?",
-                        (rpath,),
+                # Same clock and format as CURRENT_TIMESTAMP (see TTL below).
+                purged.extend(
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT file_path FROM doc_usage"
+                        " WHERE missing_since < datetime('now', ?)"
+                        f" AND file_path IN ({marks})",
+                        [f"-{_MISSING_GRACE_DAYS} days", *chunk],
                     ).fetchall()
-                    for (fp,) in stale_render_rows:
-                        _unlink_quietly(fp)
-                    conn2.execute(
-                        "DELETE FROM page_renders WHERE file_path = ?", (rpath,)
-                    )
+                )
+            for start in range(0, len(present), _PURGE_CHUNK):
+                chunk = present[start : start + _PURGE_CHUNK]
+                marks = ",".join("?" * len(chunk))
+                conn.execute(
+                    "UPDATE doc_usage SET missing_since = NULL"
+                    f" WHERE missing_since IS NOT NULL AND file_path IN ({marks})",
+                    chunk,
+                )
+
+            if self.ttl_hours is not None:
+                # Compute the cutoff with SQLite's own clock: accessed_at is
+                # written via CURRENT_TIMESTAMP (UTC, "YYYY-MM-DD HH:MM:SS"),
+                # so comparing it against a Python datetime.now().isoformat()
+                # (local timezone, "T" separator) mis-sorts fresh rows as
+                # expired. datetime('now', ?) keeps both sides in the same
+                # clock and format.
+                purged.extend(
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT u.file_path FROM doc_usage u"
+                        " LEFT JOIN pdf_metadata m USING (file_path)"
+                        f" WHERE {_LAST_USED_SQL} < datetime('now', ?)",
+                        (f"-{self.ttl_hours} hours",),
+                    ).fetchall()
+                )
+
+            removed = set(purged)
+            self._purge_paths(conn, list(removed))
+            changed = [p for p in changed if p not in removed]
+            self._purge_paths(conn, changed, changed=True)
+            evicted = self._evict_over_cap(conn)
+            expired_paths = [*removed, *changed, *evicted]
+
+        # Renders of a PDF that changed on disk, including renders of a
+        # document with no metadata row. A missing PDF keeps its renders:
+        # they follow the document's grace period above.
+        with self._connect() as conn2:
+            for rpath, rmtime in render_rows:
+                current = mtimes.get(rpath)
+                if current is None or current == rmtime:
+                    continue
+                for (fp,) in conn2.execute(
+                    "SELECT file_path_on_disk FROM page_renders WHERE file_path = ?",
+                    (rpath,),
+                ).fetchall():
+                    _unlink_quietly(fp)
+                conn2.execute("DELETE FROM page_renders WHERE file_path = ?", (rpath,))
 
         return len(expired_paths)
+
+    def _cached_docs(
+        self, conn: sqlite3.Connection
+    ) -> tuple[list[str], dict[str, float]]:
+        """Every document with cached rows, and the mtime they were cached at.
+
+        A document is any path in any per-document table, so one cached only
+        by pdf_read_pages, pdf_search or pdf_render_pages counts too. Each
+        gets a ``doc_usage`` row if it has none: from its metadata's last use
+        when it has metadata, else starting now (rows cached before the table
+        existed must not read as never used). The mtime comes from
+        ``pdf_metadata``, else the newest ``page_text`` or ``page_embeddings``
+        row; a document with neither is tracked by existence alone.
+        """
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        union = " UNION ".join(
+            f"SELECT file_path FROM {t}" for t in _PER_DOC_TABLES if t in present
+        )
+        docs = sorted(row[0] for row in conn.execute(union).fetchall())
+        # A document with metadata starts from its last recorded use.
+        conn.execute(
+            "INSERT OR IGNORE INTO doc_usage (file_path, accessed_at)"
+            " SELECT file_path, accessed_at FROM pdf_metadata"
+        )
+        conn.executemany(
+            "INSERT OR IGNORE INTO doc_usage (file_path) VALUES (?)",
+            [(path,) for path in docs],
+        )
+        cached: dict[str, float] = {}
+        for sql in (
+            "SELECT file_path, MAX(file_mtime) FROM page_embeddings"
+            " GROUP BY file_path",
+            "SELECT file_path, MAX(file_mtime) FROM page_text GROUP BY file_path",
+            "SELECT file_path, file_mtime FROM pdf_metadata",
+        ):
+            # Later queries win: metadata over text over embeddings.
+            cached.update(conn.execute(sql).fetchall())
+        return docs, cached
+
+    def _evict_over_cap(self, conn: sqlite3.Connection) -> list[str]:
+        """Evict least recently used documents until under ``max_bytes``.
+
+        One pass driven by the content estimate, never by re-measuring the
+        file (see ``_ESTIMATE_TO_DISK``). Live bytes only gate the pass: they
+        never read below the content, so under the cap means nothing to do.
+        """
+        if self.max_bytes is None or self._live_bytes(conn) <= self.max_bytes:
+            return []
+        order = [
+            row[0]
+            for row in conn.execute(
+                "SELECT u.file_path FROM doc_usage u"
+                " LEFT JOIN pdf_metadata m USING (file_path)"
+                f" ORDER BY {_LAST_USED_SQL}, u.file_path"
+            ).fetchall()
+        ]
+        est = self._doc_size_estimates(conn)
+        total = sum(est.get(path, 0) for path in order)
+        victims: list[str] = []
+        for path in order:
+            if total * _ESTIMATE_TO_DISK <= self.max_bytes:
+                break
+            victims.append(path)
+            total -= est.get(path, 0)
+        self._purge_paths(conn, victims)
+        return victims
+
+    def _live_bytes(self, conn: sqlite3.Connection) -> int:
+        """Bytes in use: SQLite pages holding data plus image/render files."""
+        page_count = conn.execute("PRAGMA page_count").fetchone()[0]
+        free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+        return int((page_count - free) * page_size) + self._files_bytes()
+
+    def _files_bytes(self) -> int:
+        """Bytes of extracted images and renders on disk."""
+        try:
+            images = sum(f.stat().st_size for f in self.images_dir.glob("*.png"))
+        except FileNotFoundError:
+            images = 0
+        try:
+            # "*" not "*.png": render_pages also writes ".jpg" files
+            # (the JPEG fallback ladder), which "*.png" silently missed.
+            renders = sum(
+                f.stat().st_size for f in self.renders_dir.glob("*") if f.is_file()
+            )
+        except FileNotFoundError:
+            renders = 0
+        return images + renders
+
+    def _doc_size_estimates(self, conn: sqlite3.Connection) -> dict[str, int]:
+        """Estimated content bytes per cached document.
+
+        Text counts three times (the row plus the porter and CJK indexes);
+        everything else once. ``_ESTIMATE_TO_DISK`` turns this into file size.
+        """
+        queries = [
+            "SELECT file_path, 3 * SUM(length(CAST(text AS BLOB)))"
+            " FROM page_text GROUP BY file_path",
+            "SELECT file_path, SUM(length(embedding))"
+            " FROM page_embeddings GROUP BY file_path",
+            "SELECT file_path, SUM(length(embedding))"
+            " FROM section_embeddings GROUP BY file_path",
+            "SELECT file_path, SUM(length(CAST(data AS BLOB)))"
+            " FROM page_tables GROUP BY file_path",
+            "SELECT file_path, SUM(size_bytes) FROM page_images GROUP BY file_path",
+            "SELECT file_path, SUM(size_bytes) FROM page_renders GROUP BY file_path",
+        ]
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'page_blocks'"
+        ).fetchone():
+            queries.append(
+                "SELECT file_path, SUM(length(CAST(blocks AS BLOB)))"
+                " FROM page_blocks GROUP BY file_path"
+            )
+        est: dict[str, int] = {}
+        for sql in queries:
+            for path, size in conn.execute(sql).fetchall():
+                est[path] = est.get(path, 0) + int(size or 0)
+        return est
 
     def clear_all(self) -> int:
         """Clear entire cache. Returns number of files cleared."""
@@ -2547,6 +2826,12 @@ class PDFCache:
             conn.execute("DELETE FROM section_embeddings")
             conn.execute("DELETE FROM page_renders")
             conn.execute("DELETE FROM page_charts")
+            # page_blocks is created on first write, so it may not exist yet.
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master"
+                " WHERE type = 'table' AND name = 'page_blocks'"
+            ).fetchone():
+                conn.execute("DELETE FROM page_blocks")
             if self.fts_available:
                 conn.execute("DELETE FROM pdf_search_fts")
                 conn.execute("DELETE FROM pdf_search_fts_cjk")
@@ -2627,20 +2912,7 @@ class PDFCache:
             stats["total_text_chars"] = row[0] or 0
 
             # Database file size + image directory size + renders directory size
-            try:
-                images_size = sum(
-                    f.stat().st_size for f in self.images_dir.glob("*.png")
-                )
-            except FileNotFoundError:
-                images_size = 0
-            try:
-                # "*" not "*.png": render_pages also writes ".jpg" files
-                # (the JPEG fallback ladder), which "*.png" silently missed.
-                renders_size = sum(
-                    f.stat().st_size for f in self.renders_dir.glob("*") if f.is_file()
-                )
-            except FileNotFoundError:
-                renders_size = 0
+            files_size = self._files_bytes()
             # Fold the WAL back into the main database before sizing it.
             # Summing cache.db* instead would report a number that moves with
             # checkpoint timing: the -wal sidecar grows as pages are written
@@ -2657,7 +2929,7 @@ class PDFCache:
                 for f in self.cache_dir.glob(self.db_path.name + "*")
                 if f.is_file()
             )
-            stats["cache_size_bytes"] = db_size + images_size + renders_size
+            stats["cache_size_bytes"] = db_size + files_size
             stats["cache_size_mb"] = round(stats["cache_size_bytes"] / (1024 * 1024), 2)
 
             return stats

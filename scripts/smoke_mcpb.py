@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     descriptions = [t.description or "" for t in tools]
     if args.expect_fallback:
         ok = all(d.startswith(_UNAVAILABLE) for d in descriptions)
-        if not ok or not call.isError:
+        if not ok or not call.is_error:
             print("fallback responder did not report the failure", file=sys.stderr)
             return 1
         print(f"fallback_message={call.content[0].text}")
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(d.startswith((_STARTING, _UNAVAILABLE)) for d in descriptions):
         print("real server never took over from the launcher", file=sys.stderr)
         return 1
-    if call.isError:
+    if call.is_error:
         print(f"server_info failed: {call.content}", file=sys.stderr)
         return 1
     if first:
@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             f"first_search_seconds={first['search'][0]:.1f}"
         )
         for label, (_, result) in first.items():
-            if getattr(result, "isError", False):
+            if result.is_error:
                 print(f"{label} failed: {result.content}", file=sys.stderr)
                 return 1
     if ocr is not None:

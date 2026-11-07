@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-11-07
+### Fixed
+
+- **A file that isn't a readable PDF now gets a normal error back.** A damaged,
+  truncated or fake `.pdf` made the single-document tools fail the whole call
+  with raw engine text. They now return the usual inline `error`, with
+  `error_code: "pdf_unreadable"` and a `hint`. A failed check on a downloaded
+  PDF is called corrupt only when the PDF engine rejected the file
+  ([#95](https://github.com/jztan/pdf-mcp/issues/95))
+- **`pdf-mcp-warm` now says why it rejected a whole batch.** When no file in a
+  batch could be used, for example because a `[paths]` rule refused them all,
+  it printed only `No PDF files found in corpus`. It now also prints the reason
+  for each file
+
+### Changed
+
+- **Corpus tools name more documents by their real title.** When a PDF's
+  embedded title is empty or junk, `pdf_corpus_overview` and
+  `pdf_corpus_search` now use the largest text at the top of page 1 if it
+  reads like a title, and only then the filename. A journal name or section
+  label above the title (`BMC Genetics`, `ARTICLE`) is passed over. arXiv stamps, Word export
+  names, SEC accession numbers, print-driver names, source file names and
+  typesetter page ranges (`gkm094 1..11`) now count as junk. Documents already in the cache get the new title on first
+  use, without being warmed again ([#94](https://github.com/jztan/pdf-mcp/issues/94), [#98](https://github.com/jztan/pdf-mcp/issues/98))
+
+- **The cache no longer forgets an unchanged PDF after a day.** A
+  document used to drop out of the cache 24 hours after its last use, so
+  a 500-PDF folder warmed with embeddings (about 27 minutes) had to be
+  warmed again after any idle day. A document now stays cached while its
+  PDF exists unchanged. It is removed when the PDF changes, once the PDF
+  has been missing for 7 days (an unplugged external or network drive
+  keeps its cache for a week), or, with the cache over
+  `PDF_MCP_CACHE_MAX_MB` (2048 by default, `0` for no cap), least recently
+  used first. `PDF_MCP_CACHE_TTL` still sets a time expiry, but only when
+  it is set. `server_info` reports the cap as `config.cache_max_mb`, and
+  `config.cache_ttl_hours` is `null` unless a TTL is set. These rules also
+  cover documents cached only by `pdf_read_pages`, `pdf_search` or
+  `pdf_render_pages`, whose rows used to stay in the cache indefinitely
+  because no expiry ever saw them. Removing a document now also clears its
+  layout and Chinese/Japanese/Korean keyword rows, which used to stay behind
+  ([#88](https://github.com/jztan/pdf-mcp/issues/88))
+- **pdf-mcp now speaks MCP 2026-07-28 as well as the older protocol versions.**
+  The server moves to FastMCP 4 and MCP SDK 2. Clients on the new sessionless
+  protocol, which has no `initialize` handshake or session id, can connect over
+  STDIO and HTTP; a client on an older version, Claude Desktop included,
+  negotiates as before and gets the same tools and results. The Claude Desktop
+  bundle still answers with handshake versions while it starts. Reading a
+  resource that does not exist now returns error `-32602` instead of `-32002`,
+  and a cancelled tool call now gets no response at all, as the protocol
+  requires, rather than an error ([#92](https://github.com/jztan/pdf-mcp/issues/92))
+
 ## [3.6.0] - 2026-10-31
 ### Added
 

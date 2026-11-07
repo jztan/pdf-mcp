@@ -1,7 +1,7 @@
 # pdf-mcp
 
 [![PyPI version](https://img.shields.io/pypi/v/pdf-mcp)](https://pypi.org/project/pdf-mcp/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11 to 3.14](https://img.shields.io/badge/python-3.11--3.14-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Issues](https://img.shields.io/github/issues/jztan/pdf-mcp)](https://github.com/jztan/pdf-mcp/issues)
 [![CI](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jztan/pdf-mcp/actions/workflows/ci.yml)
@@ -57,8 +57,10 @@ in [docs/clients.md](docs/clients.md).
 
 ### Claude Code and other MCP clients
 
-Needs Python 3.11 or later. Install the `pdf-mcp` command with
-[uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
+Needs Python 3.11 to 3.14. On 3.15 the installer falls back to a very old
+release, because a dependency has no 3.15 build yet. Install the `pdf-mcp`
+command with [uv](https://docs.astral.sh/uv/) or
+[pipx](https://pipx.pypa.io/):
 
 ```bash
 uv tool install pdf-mcp     # or: pipx install pdf-mcp
@@ -253,6 +255,7 @@ Background, benchmarks, and design notes from building pdf-mcp:
 - [A Knowledge Base Is Just a Folder](https://blog.jztan.com/ai-agent-pdf-knowledge-base/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-ai-agent-pdf-knowledge-base): Turning a folder of PDFs into an agent knowledge base with the corpus tools, no ingestion pipeline or vector store
 - [Cross-Document Retrieval for AI Agents Without a Vector Database](https://blog.jztan.com/rag-without-vector-database/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-rag-without-vector-database): Why BM25 scores don't merge across per-document indexes but ranks do, and how two-stage RRF puts a gold document in the top 3 on 84.8% of 184 graded queries over a 100-PDF corpus
 - [How Amazon Bedrock Helped Me Make My RAG Better](https://blog.jztan.com/how-bedrock-improved-my-rag/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-how-bedrock-improved-my-rag): Benchmarking pdf_corpus_search against Bedrock Knowledge Bases at an equal 2,000-token budget for four cents surfaced two bugs eight months of self-testing missed: an excerpt picker discarding answers from pages it had already retrieved, and one embedding per page hiding short answers
+- [Does a PDF Search Tool Still Matter for AI Agents?](https://blog.jztan.com/pdf-mcp-vs-builtin-pdf-reading-benchmark/?utm_source=github&utm_medium=referral&utm_campaign=pdf-mcp&utm_content=list-pdf-mcp-vs-builtin-pdf-reading-benchmark): Claude Code with and without pdf-mcp on 53 multi-paper questions over 120 papers: answer quality tied, but the search tool read 7.5 pages per question instead of 187 and answered in 25 seconds instead of 92
 
 **Search & retrieval**
 

@@ -4,7 +4,7 @@ Contributions are welcome — bug fixes, new features, documentation improvement
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.11 to 3.14
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - System Tesseract if working on OCR features (`brew install tesseract` / `apt install tesseract-ocr`)
 

@@ -1067,7 +1067,7 @@ estimated_tokens: 925</pre>
           </tr>
           <tr>
             <th>Finding the page</th>
-            <td>Claude Code reads a PDF natively, but in windows of up to 20 pages per call, with no way to know which window holds the answer. Other clients silently truncate.</td>
+            <td>Claude Code reads a PDF natively, but with no index it reads blind: it opens documents until the answer turns up. Measured over a folder of 120 papers, that was 187 pages read per question against 7.5 with pdf-mcp.</td>
             <td class="ours">Search names the pages before anything is read, so the range is a result rather than a guess. Every response is bounded too: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
           </tr>
           <tr>
@@ -1130,7 +1130,7 @@ estimated_tokens: 925</pre>
     <h2 class="section-title md" style="margin-bottom:34px">Questions people ask first.</h2>
     <details class="qa" open>
       <summary>How is this different from the PDF support built into my client?</summary>
-      <p>Built-in support reads the file for you, but it reads blind: Claude Code takes a page range and returns up to 20 pages a call, so a 216-page contract is eleven guesses unless something narrows the range first. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
+      <p>Built-in support reads the file for you, but it reads blind: nothing tells the agent which pages hold the answer, so it keeps opening pages until it finds them. On 53 questions over a folder of 120 papers, Claude Code&#8217;s built-in tools read 187 pages and took 92 seconds per question; with pdf-mcp it read 7.5 pages in 25 seconds, with the same answer quality. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
     </details>
     <details class="qa">
       <summary>Does my document leave my machine?</summary>
@@ -1180,7 +1180,7 @@ estimated_tokens: 925</pre>
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still, because there is no native way to ask which of forty documents even mentions the thing you are looking for. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, reads PDFs natively, but nothing tells it where the answer sits, so it reads until it finds it. Measured on 53 questions over a folder of 120 papers, the built-in tools read 187 pages per question and took 92 seconds; pdf-mcp read 7.5 pages in 25 seconds, and the answers were just as good. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still, because there is no native way to ask which of forty documents even mentions the thing you are looking for. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>

@@ -71,6 +71,36 @@ class TestOcrIntegration:
         assert result["matches"][0]["source"] == "ocr"
 
 
+class TestCorpusWarmOcrIntegration:
+    """Issue #103 end to end with the real Tesseract and background thread."""
+
+    pytestmark = pytest.mark.skipif(
+        not _tesseract_available(),
+        reason="Tesseract not installed",
+    )
+
+    def test_corpus_warm_ocr_makes_scan_searchable(
+        self, sample_pdf_synthetic_scan, monkeypatch
+    ):
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_corpus_search, pdf_corpus_warm
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "1")
+        res: dict = {}
+        for _ in range(20):
+            res = pdf_corpus_warm([sample_pdf_synthetic_scan])
+            if res["warm_complete"]:
+                break
+            assert res["ocr"]["status"] == "running"
+            assert corpus_ocr.BACKGROUND_OCR.join(30)
+        assert res["warm_complete"] is True
+        assert res["ocr"]["status"] == "done"
+        hits = pdf_corpus_search(
+            [sample_pdf_synthetic_scan], "integration", mode="keyword"
+        )
+        assert [m["page"] for m in hits["matches"]] == [1]
+
+
 class TestOcrRealSpawnCorrectness:
     pytestmark = pytest.mark.skipif(
         not _tesseract_available(),

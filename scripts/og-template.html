@@ -79,7 +79,7 @@
     border: 1px solid rgba(107,149,255,0.5); border-radius: 6px; padding: 2px 8px; box-shadow: 0 0 10px rgba(107,149,255,0.35); }
   .hits em { font-style: normal; font-size: 12px; color: #3b4458; }
   .tally { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);
-    font-size: 14px; color: var(--soft); display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
+    font-size: 15px; color: var(--soft); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; white-space: nowrap; }
   .tally b { color: var(--accent); font-weight: 500; }
   .hit-line { width: 480px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
     font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 14px; color: var(--soft); }
@@ -98,12 +98,10 @@
       <h1>Your agent doesn&#8217;t need the whole corpus. It needs the right pages.</h1>
       <p class="sub">
         Agentic RAG over your PDFs, with the <b>evidence to check every answer</b>.
-        An MCP server for <b>Claude Code</b> and other agents.
+        Made for <b>Claude Code</b>.
       </p>
       <div class="foot">
         <div class="cmd"><span class="p">$</span> uv tool install pdf-mcp</div>
-        <span class="pill">MIT</span>
-        <span class="pill">13 tools</span>
       </div>
     </div>
 
@@ -120,12 +118,8 @@
           <div class="row"><span class="name">nist-router-security.pdf</span><span class="pp">40 pp</span><span class="hits"><i>p.10</i><i>p.17</i></span></div>
           <div class="row"><span class="name">nist-zero-trust.pdf</span><span class="pp">59 pp</span><span class="hits"><i>p.39</i></span></div>
           <div class="row"><span class="name">usda-agri-policy.pdf</span><span class="pp">42 pp</span><span class="hits"><i>p.31</i><i>p.38</i></span></div>
-          <div class="tally"><span>6 documents &middot; 189 pages</span><span><b>5 hits &middot; 3 documents</b></span></div>
+          <div class="tally"><span>6 documents &middot; 189 pages</span><span><b>5 hits &middot; 3 documents &middot; page + bbox on every hit</b></span></div>
         </div>
-      </div>
-      <div class="hit-line">
-        <span class="chip">nist-router-security.pdf&nbsp;&middot;&nbsp;p.10&nbsp;&middot;&nbsp;bbox</span>
-        <span>Every hit names its page. Render it to check.</span>
       </div>
     </div>
   </div>

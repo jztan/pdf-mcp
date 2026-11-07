@@ -117,3 +117,43 @@ class TestCoverage:
         cache.save_page_text(scan2, 1, "two", source="ocr", ocr_lang="eng")
         card = corpus.build_overview_card(scan2, cache, from_cache=True)
         assert card["text_coverage"] == "full"
+
+
+class TestOcrRowsInCorpusSearch:
+    """The spec's #71 claim, proven before anything is built on it: an OCR
+    row written by save_page_text is what corpus keyword search reads."""
+
+    def _ocr_scan(self, path):
+        from pdf_mcp import _core
+        from pdf_mcp.server import pdf_corpus_warm
+
+        warm = pdf_corpus_warm([path])
+        assert "error" not in warm
+        _core.cache.save_page_text(
+            path, 0, "quarterly zebra revenue", source="ocr", ocr_lang="eng"
+        )
+        return _core.cache
+
+    def test_ocr_row_found_by_corpus_keyword_search(self, sample_pdf_synthetic_scan):
+        from pdf_mcp.server import pdf_corpus_search
+
+        self._ocr_scan(sample_pdf_synthetic_scan)
+        res = pdf_corpus_search([sample_pdf_synthetic_scan], "zebra", mode="keyword")
+        assert [m["page"] for m in res["matches"]] == [1]
+        assert res["matches"][0]["path"] == sample_pdf_synthetic_scan
+
+    def test_rewarm_keeps_ocr_row(self, sample_pdf_synthetic_scan):
+        from pdf_mcp.server import pdf_corpus_warm
+
+        cache = self._ocr_scan(sample_pdf_synthetic_scan)
+        pdf_corpus_warm([sample_pdf_synthetic_scan])
+        assert cache.get_ocr_rows(sample_pdf_synthetic_scan, [0], "eng") == {
+            0: "quarterly zebra revenue"
+        }
+
+    def test_low_text_coverage_clears_after_ocr(self, sample_pdf_synthetic_scan):
+        from pdf_mcp.server import pdf_corpus_search
+
+        self._ocr_scan(sample_pdf_synthetic_scan)
+        res = pdf_corpus_search([sample_pdf_synthetic_scan], "zebra", mode="keyword")
+        assert sample_pdf_synthetic_scan not in (res.get("low_text_coverage") or {})

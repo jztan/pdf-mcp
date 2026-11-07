@@ -12,6 +12,7 @@ import os
 from typing import Any
 from . import __version__
 from . import corpus
+from . import corpus_ocr
 from . import updates
 from . import _core
 from ._core import mcp
@@ -109,6 +110,7 @@ def main() -> None:
         # it must not keep the exiting server alive. Background embedding
         # (issue #89) stops before its next write.
         corpus.BACKGROUND_EMBED.stop()
+        corpus_ocr.BACKGROUND_OCR.stop()
         corpus.WARM_POOL.shutdown_now()
 
 
@@ -180,6 +182,7 @@ def main_http() -> None:
         mcp.run(transport="http", host=host, port=port, path=path, show_banner=False)
     finally:
         corpus.BACKGROUND_EMBED.stop()
+        corpus_ocr.BACKGROUND_OCR.stop()
         corpus.WARM_POOL.shutdown_now()
 
 

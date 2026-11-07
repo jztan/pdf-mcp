@@ -82,15 +82,20 @@ def _warm_in_process(monkeypatch):
     call ``monkeypatch.delenv("PDF_MCP_MAX_WORKERS")``. Jobs outlive the
     call that started them, so the pool is reset after every test.
     """
-    from pdf_mcp import corpus
+    from pdf_mcp import corpus, corpus_ocr
 
     monkeypatch.setenv("PDF_MCP_MAX_WORKERS", "1")
     # Background embedding (issue #89) races the assertions that follow a
     # call; tests that exercise it set PDF_MCP_BACKGROUND_EMBED=1.
     monkeypatch.setenv("PDF_MCP_BACKGROUND_EMBED", "0")
+    # Background OCR (issue #103) likewise; its tests set
+    # PDF_MCP_BACKGROUND_OCR=1.
+    monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "0")
     yield
     corpus.BACKGROUND_EMBED.stop()
     corpus.BACKGROUND_EMBED.join(5)
+    corpus_ocr.BACKGROUND_OCR.stop()
+    corpus_ocr.BACKGROUND_OCR.join(5)
     corpus.WARM_POOL.shutdown_now()
 
 

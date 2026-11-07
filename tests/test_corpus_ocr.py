@@ -157,3 +157,146 @@ class TestOcrRowsInCorpusSearch:
         self._ocr_scan(sample_pdf_synthetic_scan)
         res = pdf_corpus_search([sample_pdf_synthetic_scan], "zebra", mode="keyword")
         assert sample_pdf_synthetic_scan not in (res.get("low_text_coverage") or {})
+
+
+@pytest.fixture
+def ocr_thread_on(monkeypatch):
+    monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "1")
+
+
+def _fake_worker(calls=None, result=None):
+    def worker(args):
+        _path, pn = args[0], args[1]
+        if calls is not None:
+            calls.append((_path, pn))
+        if result is not None:
+            return pn, result
+        return pn, f"text {pn}"
+
+    return worker
+
+
+class TestBackgroundOCR:
+    def test_ocr_writes_rows_then_nothing_pending(self, cache, scan2, ocr_thread_on):
+        from pdf_mcp.corpus_ocr import BackgroundOCR, ocr_pending_pages
+
+        bg = BackgroundOCR()
+        jobs = [(scan2, ocr_pending_pages(scan2, cache, "eng"))]
+        assert bg.start(jobs, cache, "eng", None, worker=_fake_worker()) == 2
+        assert bg.join(10)
+        assert ocr_pending_pages(scan2, cache, "eng") == []
+        assert cache.get_ocr_rows(scan2, [0, 1], "eng") == {0: "text 0", 1: "text 1"}
+
+    def test_empty_result_is_recorded_once(self, cache, scan2, ocr_thread_on):
+        from pdf_mcp.corpus_ocr import BackgroundOCR, ocr_pending_pages, ocr_progress
+        from pdf_mcp.parallel import PageError
+
+        bg = BackgroundOCR()
+        jobs = [(scan2, ocr_pending_pages(scan2, cache, "eng"))]
+        bg.start(jobs, cache, "eng", None, worker=_fake_worker(result=PageError("x")))
+        assert bg.join(10)
+        assert ocr_progress(scan2, cache, "eng") == {
+            "pending": 0,
+            "done": 0,
+            "no_text": 2,
+        }
+        jobs = [(scan2, ocr_pending_pages(scan2, cache, "eng"))]
+        assert BackgroundOCR().start(jobs, cache, "eng", None) == 0
+
+    def test_stop_drops_inflight_batch(self, cache, scan2, ocr_thread_on):
+        import threading
+
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        entered, release = threading.Event(), threading.Event()
+
+        def blocking(args):
+            entered.set()
+            release.wait(10)
+            return args[1], "late"
+
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=blocking)
+        assert entered.wait(10)
+        bg.stop()
+        release.set()
+        assert bg.join(10)
+        assert cache.get_ocr_rows(scan2, [0, 1], None) == {}
+
+    def test_restart_resumes_from_cache(self, cache, scan2, ocr_thread_on):
+        from pdf_mcp.corpus_ocr import BackgroundOCR, ocr_pending_pages
+
+        cache.save_page_text(scan2, 0, "already", source="ocr", ocr_lang="eng")
+        calls: list = []
+        bg = BackgroundOCR()
+        jobs = [(scan2, ocr_pending_pages(scan2, cache, "eng"))]
+        bg.start(jobs, cache, "eng", None, worker=_fake_worker(calls))
+        assert bg.join(10)
+        assert calls == [(scan2, 1)]
+
+    def test_skips_pages_written_meanwhile(self, cache, scan2, ocr_thread_on):
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        cache.save_page_text(scan2, 1, "by read_pages", source="ocr", ocr_lang="eng")
+        calls: list = []
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=_fake_worker(calls))
+        assert bg.join(10)
+        assert calls == [(scan2, 0)]
+        assert cache.get_ocr_rows(scan2, [1], "eng") == {1: "by read_pages"}
+
+    def test_fewest_pending_first(self, cache, tmp_path, ocr_thread_on):
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        big = _blank_pdf(tmp_path / "a_big.pdf", 3)
+        cache.save_metadata(big, 3, {}, [], text_coverage=_cov((0, 1), (0, 1), (0, 1)))
+        small = _blank_pdf(tmp_path / "z_small.pdf", 1)
+        cache.save_metadata(small, 1, {}, [], text_coverage=_cov((0, 1)))
+        calls: list = []
+        bg = BackgroundOCR()
+        bg.start(
+            [(big, [0, 1, 2]), (small, [0])],
+            cache,
+            "eng",
+            None,
+            worker=_fake_worker(calls),
+        )
+        assert bg.join(10)
+        assert calls[0] == (small, 0)
+
+    def test_disabled_by_env(self, cache, scan2, monkeypatch):
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        monkeypatch.setenv("PDF_MCP_BACKGROUND_OCR", "0")
+        bg = BackgroundOCR()
+        assert bg.start([(scan2, [0, 1])], cache, "eng", None) == 0
+        assert not bg.running("eng")
+
+    def test_running_is_per_language(self, cache, scan2, ocr_thread_on):
+        import threading
+
+        from pdf_mcp.corpus_ocr import BackgroundOCR
+
+        release = threading.Event()
+
+        def blocking(args):
+            release.wait(10)
+            return args[1], "x"
+
+        bg = BackgroundOCR()
+        bg.start([(scan2, [0, 1])], cache, "eng", None, worker=blocking)
+        assert bg.running("eng") and not bg.running("deu")
+        bg.stop()
+        release.set()
+        assert bg.join(10)
+
+    def test_cache_clear_stops_it(self, isolated_server, monkeypatch):
+        from pdf_mcp import corpus_ocr
+        from pdf_mcp.server import pdf_cache_clear
+
+        stopped = []
+        monkeypatch.setattr(
+            corpus_ocr.BACKGROUND_OCR, "stop", lambda: stopped.append(True)
+        )
+        pdf_cache_clear(expired_only=False)
+        assert stopped == [True]

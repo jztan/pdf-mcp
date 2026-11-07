@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from .. import __version__
 from .. import corpus
+from .. import corpus_ocr
 from .. import portable_tesseract
 from .. import updates
 from ..extractor import find_tesseract
@@ -270,9 +271,10 @@ def pdf_cache_clear(expired_only: bool = True) -> dict[str, Any]:
         - cleared_files: Number of files cleared from metadata cache
         - cleared_urls: Number of downloaded URLs cleared
     """
-    # Background embedding (issue #89) must not write into a cache being
-    # cleared; the next embedding warm call starts it again.
+    # Background embedding (issue #89) and OCR (issue #103) must not write
+    # into a cache being cleared; the next warm call starts them again.
     corpus.BACKGROUND_EMBED.stop()
+    corpus_ocr.BACKGROUND_OCR.stop()
     if expired_only:
         cleared = _core.cache.clear_expired()
         corpus.clear_warm_memo()

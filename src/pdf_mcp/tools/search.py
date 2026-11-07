@@ -272,8 +272,9 @@ def pdf_search(
               not 'full' and matches are empty, read the result as
               "unknown", not "no matches": the missing pages are likely
               scanned and are invisible to both keyword and semantic
-              search until OCR'd via pdf_read_pages(ocr=True) (or
-              inspected with pdf_render_pages).
+              search until OCR'd via pdf_read_pages(ocr=True) or
+              pdf_corpus_warm (which OCRs image-only pages by default),
+              or inspected with pdf_render_pages.
             - Per-match `section_path` (list of str, root to leaf, at most
               3) — the PDF's own outline entries enclosing the hit. Absent
               when the document has no outline or the page falls outside

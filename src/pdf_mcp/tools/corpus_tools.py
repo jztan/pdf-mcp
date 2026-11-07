@@ -1171,7 +1171,9 @@ def pdf_corpus_search(
           object when all are). If a doc here shows 'none' (or
           'partial'), zero hits from it mean "unknown", not "absent":
           its scanned pages are invisible to keyword and semantic
-          search alike until OCR'd via pdf_read_pages(ocr=True).
+          search alike until OCR'd, by pdf_corpus_warm (ocr='auto', the
+          default, OCRs image-only pages between calls) or
+          pdf_read_pages(ocr=True).
         - hidden_text_detected: True if any returned hit's page
           carries text invisible to a human reader
         - unprocessed, skipped, corpus_size, warmed_this_call,

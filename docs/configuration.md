@@ -113,7 +113,8 @@ PDF_MCP_CACHE_MAX_MB=2048
 # Max worker processes for parallel OCR / rendering in pdf_read_pages and
 # for corpus warm extraction. Default: auto = min(cpu_count, pages, 16) for
 # OCR / rendering; corpus warm extracts at most 8 docs at a time for text and
-# 4 with embeddings (also bounded by cpu_count). A value can lower these caps
+# 4 with embeddings, and background OCR on corpus warm uses at most 4
+# processes (all also bounded by cpu_count). A value can lower these caps
 # but not raise them. Set to 1 to force sequential; corpus warm then extracts
 # in-process and cannot stop mid-document at its time budget.
 PDF_MCP_MAX_WORKERS=8
@@ -129,6 +130,12 @@ PDF_MCP_VECTOR_CACHE_MB=256
 # them between calls, only while no tool call is running. 0 turns it off, so
 # embeddings progress only during calls.
 PDF_MCP_BACKGROUND_EMBED=1
+
+# Background OCR on corpus warm (default: on). pdf_corpus_warm with
+# ocr="auto" (the default) or "on" OCRs pages that have no text but carry an
+# image, in the server between calls. 0 turns it off: the warm stays
+# text-only, ocr.status reads "unavailable" and warm_complete does not wait.
+PDF_MCP_BACKGROUND_OCR=1
 
 # Embedding device. 1 = use the GPU and warn if it is not available;
 # 0 = always CPU; unset = fastembed auto-detects (CPU on a plain install).

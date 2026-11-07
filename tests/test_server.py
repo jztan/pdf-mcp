@@ -281,6 +281,82 @@ class TestPdfSearchModes:
         # Returned, not dropped — agent decides what to do
         assert len(none_result["matches"]) > 0
 
+    def _make_unrelated_encode(self, dim: int = 384):
+        """Every page unit is orthogonal to the query, so every cosine is 0."""
+
+        def encode(texts, model_name="BAAI/bge-small-en-v1.5"):
+            result = np.zeros((len(texts), dim), dtype=np.float32)
+            for i in range(len(texts)):
+                result[i, i % (dim - 1)] = 1.0
+            return result
+
+        def encode_query(text, model_name="BAAI/bge-small-en-v1.5"):
+            v = np.zeros(dim, dtype=np.float32)
+            v[dim - 1] = 1.0
+            return v
+
+        return encode, encode_query
+
+    def test_hybrid_partial_keyword_hits_do_not_count_as_confident(
+        self, sample_pdf, isolated_server
+    ):
+        """Pages found only by the any-term keyword retry hold some query
+        terms, not all, so they must not make a low-cosine hit confident
+        (issue #101). Corpus search already leaves them out."""
+        encode, encode_query = self._make_unrelated_encode()
+        query = "content zebra xylophone"  # only "content" is in the PDF
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            kw = pdf_search(sample_pdf, query, mode="keyword")
+            result = pdf_search(sample_pdf, query, mode="auto")
+
+        assert kw["keyword_match"] == "partial"  # premise: the OR retry fired
+        assert result["search_mode"] == "hybrid"
+        assert result["matches"]
+        assert all(m["low_confidence"] for m in result["matches"])
+        assert result["all_results_low_confidence"] is True
+
+    def test_hybrid_full_keyword_hits_stay_confident(self, sample_pdf, isolated_server):
+        """A page holding every query term is confident even at cosine 0."""
+        encode, encode_query = self._make_unrelated_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            kw = pdf_search(sample_pdf, "sample text", mode="keyword")
+            result = pdf_search(sample_pdf, "sample text", mode="auto")
+
+        assert kw["keyword_match"] == "full"
+        kw_pages = {m["page"] for m in kw["matches"]}
+        hits = [m for m in result["matches"] if m["page"] in kw_pages]
+        assert hits
+        assert not any(m["low_confidence"] for m in hits)
+        assert result["all_results_low_confidence"] is False
+
+    def test_confidence_threshold_is_calibrated_for_bge_small(
+        self, sample_pdf, isolated_server
+    ):
+        """0.65 is the measured bge-small floor (issue #101): below every
+        answerable top hit in corpus search, at most 1% single-document."""
+        encode, encode_query = self._make_encode()
+
+        with (
+            patch("pdf_mcp.embedder.check_available"),
+            patch("pdf_mcp.embedder.encode", encode),
+            patch("pdf_mcp.embedder.encode_query", encode_query),
+        ):
+            sem = pdf_search(sample_pdf, "unrelated", mode="semantic")
+            hyb = pdf_search(sample_pdf, "unrelated", mode="auto")
+
+        assert sem["confidence_threshold"] == 0.65
+        assert hyb["confidence_threshold"] == 0.65
+
     def test_semantic_mode_matches_shape(self, sample_pdf, isolated_server):
         """mode='semantic' matches have page, excerpt, score, position."""
         encode, encode_query = self._make_encode()
@@ -4886,7 +4962,7 @@ class TestPdfCorpusSearchSemanticAuto:
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="semantic")
         assert "error" not in result
         assert result["search_mode"] == "semantic"
-        assert result["confidence_threshold"] == 0.5
+        assert result["confidence_threshold"] == 0.65
         assert all("low_confidence" in m for m in result["matches"])
         assert all("score" in m for m in result["matches"])
         assert not any("semantic_score" in m for m in result["matches"])
@@ -4922,7 +4998,7 @@ class TestPdfCorpusSearchSemanticAuto:
             assert "semantic_score" in m
             assert "low_confidence" in m
         assert "all_results_low_confidence" in result
-        assert result["confidence_threshold"] == 0.5
+        assert result["confidence_threshold"] == 0.65
 
     def test_auto_degrades_without_fastembed(
         self, corpus_dir, isolated_server, monkeypatch

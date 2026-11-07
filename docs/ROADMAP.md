@@ -48,7 +48,7 @@ Ordered by leverage ÷ effort. Evidence, prior attempts and gates for each are i
 - [x] **Portable Tesseract for zero-install OCR**: shipped in v3.3.0 with the one-click bundle (English only; other OCR languages still need a Tesseract install)
 - [x] **Raise `CORPUS_MAX_FILES` to 500**, measured with the document arm (500 docs: paraphrase doc-hit@3 0.68, exact_match 1.000, lexical_distractor 0.985; hybrid 0.87 s/query re-measured 2026-10-27 on the 184-query set; a warm of all 500 with embeddings took about 27 minutes). Shipped in v3.6.0; 1,000 waits on the 900-distractor rung
 - [ ] **Teach mode choice in the tool descriptions** (when to use keyword vs semantic); AND-matching and the OR retry on zero hits are already described
-- [ ] **Calibrate the semantic confidence threshold**; 0.5 is a guess and gibberish scores 0.54
+- [x] **Calibrate the semantic confidence threshold**: on develop; 0.65 for bge-small, measured on arXiv and 10-K corpora, single-document and corpus search (#101)
 
 ### P2: investigate before committing
 

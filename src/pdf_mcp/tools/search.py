@@ -253,12 +253,14 @@ def pdf_search(
               Semantic mode matches also carry `low_confidence` (cosine
               below the confidence threshold). Hybrid mode matches
               additionally carry `semantic_score` and `low_confidence`
-              (true only when there's no keyword hit on the page AND
-              the semantic cosine is below threshold — pages with
-              literal-term hits stay confident regardless of cosine).
+              (true only when the page holds no match of every query
+              term AND the semantic cosine is below threshold; a page
+              found by the any-term retry alone counts as no match).
               Response-level `all_results_low_confidence` +
               `confidence_threshold` are present in both semantic and
-              hybrid modes.
+              hybrid modes. `all_results_low_confidence` true usually
+              means this document does not cover the query; the
+              per-hit flag cannot tell a right hit from a wrong one.
             - total_matches, page_match_counts, search_mode, searched_pages
             - keyword_match ('full' | 'partial' | 'none'): keyword mode
               only (search_mode='keyword'). 'partial' means no page held
@@ -837,7 +839,13 @@ def pdf_search(
 
         keyword_pages_0idx = [m["page"] - 1 for m in kw_matches]
         keyword_excerpts = {m["page"] - 1: m.get("excerpt", "") for m in kw_matches}
-        keyword_pages_set = set(keyword_pages_0idx)
+        # Only pages holding every query term make a hit confident. Pages
+        # from the any-term retry (keyword_match "partial") may hold one
+        # common word ("long" for "how long to boil an egg"), the same rule
+        # corpus search applies (issue #101).
+        keyword_pages_set = (
+            set() if keyword_match == "partial" else set(keyword_pages_0idx)
+        )
 
         fused = _rrf_fuse(keyword_pages_0idx, semantic_pages_0idx, max_results)
 
@@ -866,8 +874,8 @@ def pdf_search(
                 )
             # A hybrid match is low-confidence when (a) it has no keyword
             # hit on the page AND (b) the underlying semantic cosine is
-            # below the confidence threshold. Keyword-hit pages always
-            # count as confident: the query terms literally appear.
+            # below the confidence threshold. Pages holding every query
+            # term always count as confident (see keyword_pages_set).
             sem_score = page_sem_score.get(page_num, 0.0)
             low_confidence = (
                 page_num not in keyword_pages_set

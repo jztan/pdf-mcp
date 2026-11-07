@@ -60,7 +60,8 @@ JPEG_QUALITY = 75
 TOP_K = 10
 MAX_PAGES = 400
 WARM_BUDGET = 300
-MAX_WARM_CALLS = 200
+MAX_WARM_CALLS = 2000
+OCR_POLL_SECONDS = 5
 
 
 def sha256(path: Path) -> str:
@@ -211,16 +212,27 @@ def warm_until_complete(
         calls += 1
         if "error" in last:
             raise SystemExit(f"warm error: {last['error']}")
-        print(
-            f"    warm call {calls}: warm_complete={last.get('warm_complete')}"
-            f" unwarmed={last.get('unwarmed')}"
-        )
+        ocr = last.get("ocr") or {}
+        if calls == 1 or ocr.get("status") != "running" or calls % 12 == 0:
+            print(
+                f"    warm call {calls}: warm_complete={last.get('warm_complete')}"
+                f" unwarmed={last.get('unwarmed')} ocr={ocr.get('status')}"
+                f" pending={ocr.get('pages_pending')} done={ocr.get('pages_done')}"
+                f" no_text={ocr.get('pages_no_text')}"
+                f" t={time.monotonic() - t0:.0f}s",
+                flush=True,
+            )
         if last.get("warm_complete"):
             break
+        if ocr.get("status") in ("running", "setting_up"):
+            # OCR runs between calls (issue #103): give it time, as an
+            # agent looping on warm_complete would.
+            time.sleep(OCR_POLL_SECONDS)
     return {
         "calls": calls,
         "seconds": round(time.monotonic() - t0, 1),
         "warm_complete": bool(last.get("warm_complete")),
+        "ocr": last.get("ocr"),
         "last_response_keys": sorted(last),
     }
 
@@ -259,7 +271,14 @@ def cmd_score(args: argparse.Namespace) -> int:
 
     print("warming born-digital originals (gold pages)")
     _core.cache = gold_cache
-    born_warm = warm_until_complete(list(born.values()), args.embeddings, {})
+    # ocr="off": gold pages come from the text layer only, so OCR on the
+    # MSFT cover pages (issue #103) cannot move them between runs.
+    if label == "born" and warm_extra:
+        print("ERROR: --warm-args needs a --label of its own (born is gold)")
+        return 2
+    born_warm = warm_until_complete(
+        list(born.values()), args.embeddings, {"ocr": "off"}
+    )
 
     if label == "born":
         cache, arm_warm = gold_cache, born_warm

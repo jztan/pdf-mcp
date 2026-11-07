@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>og</title>
+<!--
+  Source for the GitHub social preview card (and a candidate pages/og-image.png).
+  Regenerate at 1200x630, device pixel ratio 1:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+      --window-size=1200,630 --screenshot=docs/images/social-preview.png \
+      "file://$PWD/scripts/og-template.html"
+
+  Fonts load from Google Fonts, so the render needs network access.
+  Upload the PNG at Settings > General > Social preview on GitHub. If it also
+  replaces pages/og-image.png, bump the ?v= on the og:image tags in
+  pages/index.html so the platforms drop their cached card.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0f18; --ink: #f2f4f8; --soft: #a3adbf; --dim: #5e6880;
+    --accent: #6b95ff; --accent-deep: #1f5eff; --line: rgba(255,255,255,0.12);
+    --card: #121827; --cell: #1b2232;
+  }
+  body {
+    width: 1200px; height: 630px; overflow: hidden; position: relative;
+    background: var(--bg); color: var(--ink);
+    font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Two glows, like the sibling cards: brand blue top-right, cool bottom-left. */
+  .glow-a { position: absolute; top: -220px; right: -140px; width: 820px; height: 680px;
+    background: radial-gradient(ellipse at center, rgba(31,94,255,0.26) 0%, rgba(31,94,255,0) 66%); }
+  .glow-b { position: absolute; bottom: -260px; left: -180px; width: 720px; height: 620px;
+    background: radial-gradient(ellipse at center, rgba(107,149,255,0.14) 0%, rgba(107,149,255,0) 68%); }
+  .grid-dots { position: absolute; inset: 0;
+    background: radial-gradient(1px 1px at 1px 1px, rgba(163,173,191,0.10) 1px, transparent 0) 0 0 / 28px 28px; }
+
+  .card { position: relative; height: 100%; display: flex; align-items: center; gap: 36px; padding: 0 56px 0 64px; }
+
+  .left { width: 560px; flex-shrink: 0; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 26px;
+    font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 21px; color: var(--soft); }
+  .brand .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent-deep);
+    box-shadow: 0 0 0 4px rgba(31,94,255,0.22); }
+  .brand b { color: var(--ink); font-weight: 500; }
+
+  h1 { font-size: 56px; line-height: 1.06; letter-spacing: -0.035em; font-weight: 700; color: #fff; margin: 0 0 22px; }
+  .sub { font-size: 22px; line-height: 1.42; color: var(--soft); margin: 0 0 30px; max-width: 540px; }
+  .sub b { color: var(--ink); font-weight: 600; }
+
+  .foot { display: flex; align-items: center; gap: 10px; }
+  .cmd { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px;
+    border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.05);
+    font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 19px; color: var(--ink); }
+  .cmd .p { color: var(--dim); }
+  .pill { font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 15px; color: var(--soft);
+    border: 1px solid var(--line); background: rgba(255,255,255,0.04); border-radius: 999px; padding: 8px 14px; }
+
+  /* Right: the corpus the agent did not read, with the pages it did. */
+  .right { flex: 1; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 16px; }
+  .panel { width: 480px; border-radius: 16px; border: 1px solid var(--line); background: var(--card);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55); overflow: hidden;
+    font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; }
+  .panel-bar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: var(--dim); font-size: 13px; }
+  .panel-bar i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .panel-bar .t { margin-left: 6px; }
+  .panel-body { padding: 18px 20px 16px; }
+  .row { display: grid; grid-template-columns: 196px 46px 1fr; align-items: center; gap: 12px; margin: 0 0 9px; }
+  .row .name { text-align: right; font-size: 13px; color: var(--soft); white-space: nowrap; }
+  .row .pp { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .hits { display: flex; gap: 6px; align-items: center; }
+  .hits i { font-style: normal; font-size: 12.5px; color: #cfe0ff; background: rgba(31,94,255,0.22);
+    border: 1px solid rgba(107,149,255,0.5); border-radius: 6px; padding: 2px 8px; box-shadow: 0 0 10px rgba(107,149,255,0.35); }
+  .hits em { font-style: normal; font-size: 12px; color: #3b4458; }
+  .tally { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px; color: var(--soft); display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
+  .tally b { color: var(--accent); font-weight: 500; }
+  .hit-line { width: 480px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 14px; color: var(--soft); }
+  .hit-line .chip { color: #cfe0ff; border: 1px solid rgba(107,149,255,0.45); background: rgba(31,94,255,0.16);
+    border-radius: 999px; padding: 5px 11px; font-size: 13px; white-space: nowrap; flex: none; }
+</style>
+</head>
+<body>
+  <div class="glow-a"></div>
+  <div class="glow-b"></div>
+  <div class="grid-dots"></div>
+
+  <div class="card">
+    <div class="left">
+      <div class="brand"><span class="dot"></span><span>jztan/<b>pdf-mcp</b></span></div>
+      <h1>Your agent doesn&#8217;t need the whole corpus. It needs the right pages.</h1>
+      <p class="sub">
+        Agentic RAG over your PDFs, with the <b>evidence to check every answer</b>.
+        An MCP server for <b>Claude Code</b> and other agents.
+      </p>
+      <div class="foot">
+        <div class="cmd"><span class="p">$</span> uv tool install pdf-mcp</div>
+        <span class="pill">MIT</span>
+        <span class="pill">13 tools</span>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="panel-bar">
+          <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
+          <span class="t">pdf_corpus_search &middot; "supply chain risk"</span>
+        </div>
+        <div class="panel-body">
+          <div class="row"><span class="name">fed-consumer-context.pdf</span><span class="pp">27 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">gao-cloud.pdf</span><span class="pp">12 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">nasa-artemis.pdf</span><span class="pp">9 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">nist-router-security.pdf</span><span class="pp">40 pp</span><span class="hits"><i>p.10</i><i>p.17</i></span></div>
+          <div class="row"><span class="name">nist-zero-trust.pdf</span><span class="pp">59 pp</span><span class="hits"><i>p.39</i></span></div>
+          <div class="row"><span class="name">usda-agri-policy.pdf</span><span class="pp">42 pp</span><span class="hits"><i>p.31</i><i>p.38</i></span></div>
+          <div class="tally"><span>6 documents &middot; 189 pages</span><span><b>5 hits &middot; 3 documents</b></span></div>
+        </div>
+      </div>
+      <div class="hit-line">
+        <span class="chip">nist-router-security.pdf&nbsp;&middot;&nbsp;p.10&nbsp;&middot;&nbsp;bbox</span>
+        <span>Every hit names its page. Render it to check.</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

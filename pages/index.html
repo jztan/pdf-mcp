@@ -1062,8 +1062,8 @@ estimated_tokens: 925</pre>
         <tbody>
           <tr>
             <th>Context cost</th>
-            <td>The whole document lands in the window. The 216-page sample contract is about 86,000 tokens of extracted text before the first question.</td>
-            <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens.</td>
+            <td>The whole document lands in the window. The 216-page sample contract above extracts to 344,000 characters of text, about 86,000 tokens, before the first question.</td>
+            <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens in the demo above.</td>
           </tr>
           <tr>
             <th>Finding the page</th>
@@ -1072,17 +1072,17 @@ estimated_tokens: 925</pre>
           </tr>
           <tr>
             <th>Layout</th>
-            <td>Two-column papers interleave, tables flatten into word soup, and a scanned page is a blank.</td>
+            <td>Two-column papers interleave, table cells arrive as runs of numbers with no column labels, and a scanned page is a blank: four pages of the sample contract have no text layer at all.</td>
             <td class="ours">Column-aware reading order out of the box, tables as rows, OCR for image-only pages, and a render when the model needs to look.</td>
           </tr>
           <tr>
             <th>Untrusted text</th>
-            <td>A PDF&#8217;s text, including white-on-white instructions, arrives as prose indistinguishable from yours.</td>
-            <td class="ours">Hidden text is detected and flagged, and every response carries a <code>content_warning</code> so the model reads extracted text as data.</td>
+            <td>Extracted text carries no mark of whether a reader could see it. Across 27 real PDFs we found 19 pages of text that never shows on the page, including a white-on-white label.</td>
+            <td class="ours">Hidden text is detected and flagged per page, and the info, read, search, render and corpus responses carry a <code>content_warning</code> so the model reads extracted text as data.</td>
           </tr>
           <tr>
             <th>Many documents</th>
-            <td>One file at a time, re-uploaded every conversation.</td>
+            <td>No index. On the 120-paper benchmark, the built-in tools opened 84 papers per question, across four subagents on average, to answer each one.</td>
             <td class="ours">Point it at a folder. One query returns a ranked list across every PDF, and the cache persists between sessions.</td>
           </tr>
         </tbody>
@@ -1180,7 +1180,7 @@ estimated_tokens: 925</pre>
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, reads PDFs natively, but nothing tells it where the answer sits, so it reads until it finds it. Measured on 53 questions over a folder of 120 papers, the built-in tools read 187 pages per question and took 92 seconds; pdf-mcp read 7.5 pages in 25 seconds, and the answers were just as good. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still, because there is no native way to ask which of forty documents even mentions the thing you are looking for. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, reads PDFs natively, but nothing tells it where the answer sits, so it reads until it finds it. Measured on 53 questions over a folder of 120 papers, the built-in tools read 187 pages per question and took 92 seconds; pdf-mcp read 7.5 pages in 25 seconds, and the answers were just as good. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still: with no index, the built-in tools on that benchmark opened 84 papers per question to find the ones that mattered. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>

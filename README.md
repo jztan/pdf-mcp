@@ -31,8 +31,8 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 | Large PDFs | Context overflow | Read only the pages you need |
 | Hidden text, including injected instructions | Silently ingested | Flagged as untrusted, nothing stripped |
 | Checking extracted text | Trust it blindly | Render the page and compare against what's printed |
-| Finding content | Load everything | Hybrid search: BM25 keyword + semantic |
-| Folders of PDFs | One document at a time | Warm, triage, and search a whole folder |
+| Finding content | Read page after page until it turns up | Hybrid search: BM25 keyword + semantic |
+| Folders of PDFs | No index: open documents until one matches | Warm, triage, and search a whole folder |
 | Warming a big folder | Minutes of CPU embedding | Length-sorted small-batch CPU encode; optional CUDA embedding, one to two orders of magnitude faster on an NVIDIA card |
 | Tables and charts | Lost in raw text | Structured rows, and `(x, y)` data from vector charts |
 | Multi-column and vertical layouts | Columns interleaved | Correct reading order, including Japanese tategaki |

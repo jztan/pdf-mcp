@@ -133,3 +133,5 @@ benchmark_data/hit_context
 
 # CDK synth output (multi-megabyte, regenerable via `cdk synth`)
 infra/bedrock_kb/cdk.out/
+benchmark_data/.scanned_corpus_cache
+benchmark_data/.scanned_pdfs

@@ -1621,11 +1621,13 @@ def warm_docs(
 def _doc_coverage_label(path: str, cache: Any) -> str:
     """text_coverage_label for a doc already in cache (any warm row site).
 
-    Reads the metadata row's coverage map; a missing row reads "none"
-    (defensive: every caller runs after a successful warm or cache hit).
+    Reads the metadata row's coverage map, counting OCR text as text
+    (issue #103); a missing row reads "none" (defensive: every caller runs
+    after a successful warm or cache hit).
     """
-    meta = cache.get_metadata(path) or {}
-    return text_coverage_label(meta.get("text_coverage") or [])
+    from .corpus_ocr import effective_coverage
+
+    return text_coverage_label(effective_coverage(path, cache))
 
 
 def text_coverage_label(coverage: list[dict[str, int]]) -> str:
@@ -1769,7 +1771,7 @@ def build_overview_card(
         # junk for orientation and section titling alike, so it reads
         # as no TOC. Any level counts, not just the level-1 preview.
         "has_toc": any((e.get("title") or "").strip() for e in toc),
-        "text_coverage": text_coverage_label(meta.get("text_coverage") or []),
+        "text_coverage": _doc_coverage_label(path, cache),
         "about": list(about or []),
         "size_bytes": meta["file_size"],
         "from_cache": from_cache,

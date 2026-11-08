@@ -55,7 +55,7 @@ Ordered by leverage ÷ effort. Evidence, prior attempts and gates for each are i
 - [ ] **Markdown output mode**, now needing a native generator rather than a dependency
 - [ ] **Rank quality on repetitive corpora**: bibliography pages and near-duplicate filings crowd the page list
 - [ ] **Layout-aware section-detector escalation**, for OCR'd scans and irregular preprints
-- [ ] **OCR on corpus warm**: a folder of scans is unsearchable today without OCRing each document by hand
+- [x] **OCR on corpus warm**: `pdf_corpus_warm` OCRs image-only pages between calls by default, so a folder of scans becomes searchable (#103)
 - [ ] **Language on overview cards**, so an agent can query a document in its own language
 - [ ] **Document ranking for image-cover PDFs**: a document with no text on page 1 gets no document-level score
 - [ ] **Raise `CORPUS_MAX_FILES` to 1,000**, once the 900-distractor rung is measured

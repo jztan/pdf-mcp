@@ -118,7 +118,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | `pdf_get_toc` | Full table of contents for documents with many bookmarks |
 | `pdf_render_pages` | Render pages as PNG for vision models: diagrams, handwriting, scans |
 | `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
-| `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
+| `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget; OCRs scanned pages between calls (`ocr`) |
 | `pdf_corpus_overview` | Per-document triage cards for a folder |
 | `pdf_corpus_search` | Search across a folder; hits carry document and page provenance |
 | `pdf_cache_stats` | Per-document cache breakdown and total size |

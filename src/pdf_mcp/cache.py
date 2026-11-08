@@ -1863,6 +1863,71 @@ class PDFCache:
             if self._is_cache_valid(path, mtime)
         }
 
+    def get_ocr_rows(
+        self, path: str, page_nums: list[int], ocr_lang: str | None
+    ) -> dict[int, str]:
+        """Text of the OCR rows (source 'ocr') for these 0-indexed pages.
+
+        With ``ocr_lang``, only that language's row counts, empty or not:
+        an empty row means OCR ran and found nothing (issue #103). With
+        None, any language counts and a non-empty row wins over an empty
+        one. Missing and stale pages are omitted.
+        """
+        if not page_nums:
+            return {}
+        sql = (
+            "SELECT page_num, text, file_mtime FROM page_text"
+            " WHERE file_path = ? AND source = 'ocr'"
+            f" AND page_num IN ({','.join('?' * len(page_nums))})"
+        )
+        params: tuple[object, ...] = (path, *page_nums)
+        if ocr_lang is not None:
+            sql += " AND ocr_lang = ?"
+            params = (*params, normalize_ocr_lang(ocr_lang))
+        sql += " ORDER BY (text = '') DESC, rowid"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        out: dict[int, str] = {}
+        # Empty rows first, so a non-empty row for the same page overwrites.
+        for page_num, text, mtime in rows:
+            if self._is_cache_valid(path, mtime):
+                out[int(page_num)] = text or ""
+        return out
+
+    def get_ocr_text_lengths(
+        self, path: str, page_nums: list[int], ocr_lang: str | None
+    ) -> dict[int, int]:
+        """Trimmed text length of the OCR rows for these 0-indexed pages.
+
+        Same row rules as ``get_ocr_rows`` (with ``ocr_lang`` that language
+        only, a 0 meaning OCR ran and found nothing; with None any language,
+        longest wins), but reads lengths, not text, and stats the file once:
+        it runs for every page of every scanned doc on every corpus call.
+        """
+        if not page_nums:
+            return {}
+        try:
+            current_mtime, _ = self._get_file_info(path)
+        except OSError:
+            return {}
+        sql = (
+            "SELECT page_num, LENGTH(TRIM(text)), file_mtime FROM page_text"
+            " WHERE file_path = ? AND source = 'ocr'"
+            f" AND page_num IN ({','.join('?' * len(page_nums))})"
+        )
+        params: tuple[object, ...] = (path, *page_nums)
+        if ocr_lang is not None:
+            sql += " AND ocr_lang = ?"
+            params = (*params, normalize_ocr_lang(ocr_lang))
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        out: dict[int, int] = {}
+        for page_num, length, mtime in rows:
+            if mtime == current_mtime:
+                pn = int(page_num)
+                out[pn] = max(out.get(pn, 0), int(length or 0))
+        return out
+
     def save_pages_text(
         self,
         path: str,

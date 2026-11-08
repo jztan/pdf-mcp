@@ -1696,7 +1696,28 @@ estimated_tokens: 925</pre>
       budget_exhausted: false,
       warm_complete: corpusState.skipped.length === 0,
       unwarmed: corpusState.skipped.length,
+      // The server OCRs image-only pages between calls (ocr="auto");
+      // this browser demo runs no OCR, so it says so instead.
+      ocr: corpusOcrBlock(),
     };
+  }
+
+  function corpusOcrBlock() {
+    const textless = corpusState.docs.some((d) =>
+      d.pageTexts.some((t) => !t || !t.trim())
+    );
+    const block = {
+      status: textless ? "unavailable" : "not_needed",
+      lang: "eng",
+      pages_pending: 0,
+      pages_done: 0,
+      pages_no_text: 0,
+    };
+    if (textless) {
+      block.hint =
+        "This browser demo runs no OCR; the server OCRs image-only pages between calls.";
+    }
+    return block;
   }
 
   function textCoverageLabel(pageTexts) {

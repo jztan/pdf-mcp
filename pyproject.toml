@@ -1,7 +1,7 @@
 [project]
 name = "pdf-mcp"
 version = "3.7.0"
-description = "Gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic + keyword search, selective page reads, tables, images, TOC, OCR, chart data, and CJK/vertical-script support, with SQLite caching."
+description = "Agentic RAG over one PDF or a whole folder, with page-level evidence to check every answer: hybrid search, selective page reads, tables, OCR, charts, and CJK layouts."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"

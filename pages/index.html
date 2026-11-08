@@ -8,8 +8,8 @@
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <meta name="theme-color" content="#1f5eff" />
 
-<title>pdf-mcp · Agentic RAG over one PDF or a whole folder | Browser demo</title>
-<meta name="description" content="An MCP server that gives your AI agent agentic RAG over your PDFs, one file or a whole folder. Drop some in and watch it search across every document and read only the pages that matter." />
+<title>pdf-mcp · Agentic RAG over your PDFs, with the evidence to check every answer | Browser demo</title>
+<meta name="description" content="An MCP server that gives your AI agent agentic RAG over your PDFs, one file or a whole folder, with page-level evidence to check every answer. Drop some in and watch it search across every document and read only the pages that matter." />
 
 <link rel="canonical" href="https://pdf-mcp.jztan.com/" />
 
@@ -18,7 +18,7 @@
 <meta property="og:title" content="pdf-mcp · Your agent doesn’t need the whole corpus" />
 <meta property="og:description" content="Drop in a PDF, or a whole folder of them, and watch an AI agent search across every document and read only the pages that matter. Try it in your browser, no install required, 100% client-side." />
 <meta property="og:url" content="https://pdf-mcp.jztan.com/" />
-<meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png" />
+<meta property="og:image" content="https://pdf-mcp.jztan.com/og-image.png?v=2" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:site_name" content="pdf-mcp" />
@@ -27,7 +27,7 @@
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="pdf-mcp · Your agent doesn’t need the whole corpus" />
 <meta name="twitter:description" content="Watch an AI agent search a PDF, or a whole folder of them, and read only the pages that matter, in your browser. No install." />
-<meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png" />
+<meta name="twitter:image" content="https://pdf-mcp.jztan.com/og-image.png?v=2" />
 
 <!-- Structured data: SoftwareApplication -->
 <script type="application/ld+json">
@@ -35,7 +35,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "pdf-mcp",
-  "description": "An open-source MCP server that gives AI agents agentic RAG over one PDF or a whole folder of them: hybrid semantic and keyword search, selective page reads, tables, images, OCR, and chart data. Works with agents like Claude, Cursor, and Codex.",
+  "description": "An open-source MCP server that gives AI agents agentic RAG over one PDF or a whole folder, with page-level evidence to check every answer: hybrid semantic and keyword search, selective page reads, tables, images, OCR, chart data, and hidden-text flagging. Works with agents like Claude, Cursor, and Codex.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Linux, macOS, Windows",
   "offers": {
@@ -708,7 +708,7 @@
 <section class="hero">
   <div class="inner">
     <h1 class="hero-title">Your agent doesn&#8217;t need the whole corpus. It needs the right pages.</h1>
-    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents agentic RAG over your PDFs, one file or a whole folder: search across every document, then read only the pages that matter. 13 tools, one MCP server.</p>
+    <p class="hero-sub"><code>pdf-mcp</code> gives AI agents agentic RAG over your PDFs, one file or a whole folder: search across every document, read only the pages that matter, and get every excerpt with the page it came from. 13 tools, one MCP server.</p>
     <div class="hero-ctas">
       <div class="install-pill">
         <span class="dollar">$</span><span class="install-cmd-text" id="installCmd">uv tool install pdf-mcp</span>
@@ -1062,27 +1062,27 @@ estimated_tokens: 925</pre>
         <tbody>
           <tr>
             <th>Context cost</th>
-            <td>The whole document lands in the window. The 216-page sample contract is about 86,000 tokens of extracted text before the first question.</td>
-            <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens.</td>
+            <td>The whole document lands in the window. The 216-page sample contract above extracts to 344,000 characters of text, about 86,000 tokens, before the first question.</td>
+            <td class="ours">The agent reads structure first, searches, then reads pages. Inspecting the sample contract, searching it, and reading the two pages that matter costs about 1,300 tokens in the demo above.</td>
           </tr>
           <tr>
             <th>Finding the page</th>
-            <td>Claude Code reads a PDF natively, but in windows of up to 20 pages per call, with no way to know which window holds the answer. Other clients silently truncate.</td>
+            <td>Claude Code reads a PDF natively, but with no index it reads blind: it opens documents until the answer turns up. Measured over a folder of 120 papers, that was 187 pages read per question against 7.5 with pdf-mcp.</td>
             <td class="ours">Search names the pages before anything is read, so the range is a result rather than a guess. Every response is bounded too: lists paginate and <code>pdf_info</code> ships a constant-size summary by default.</td>
           </tr>
           <tr>
             <th>Layout</th>
-            <td>Two-column papers interleave, tables flatten into word soup, and a scanned page is a blank.</td>
+            <td>Two-column papers interleave, table cells arrive as runs of numbers with no column labels, and a scanned page is a blank: four pages of the sample contract have no text layer at all.</td>
             <td class="ours">Column-aware reading order out of the box, tables as rows, OCR for image-only pages, and a render when the model needs to look.</td>
           </tr>
           <tr>
             <th>Untrusted text</th>
-            <td>A PDF&#8217;s text, including white-on-white instructions, arrives as prose indistinguishable from yours.</td>
-            <td class="ours">Hidden text is detected and flagged, and every response carries a <code>content_warning</code> so the model reads extracted text as data.</td>
+            <td>Extracted text carries no mark of whether a reader could see it. Across 27 real PDFs we found 19 pages of text that never shows on the page, including a white-on-white label.</td>
+            <td class="ours">Hidden text is detected and flagged per page, and the info, read, search, render and corpus responses carry a <code>content_warning</code> so the model reads extracted text as data.</td>
           </tr>
           <tr>
             <th>Many documents</th>
-            <td>One file at a time, re-uploaded every conversation.</td>
+            <td>No index. On the 120-paper benchmark, the built-in tools opened 84 papers per question, across four subagents on average, to answer each one.</td>
             <td class="ours">Point it at a folder. One query returns a ranked list across every PDF, and the cache persists between sessions.</td>
           </tr>
         </tbody>
@@ -1130,7 +1130,7 @@ estimated_tokens: 925</pre>
     <h2 class="section-title md" style="margin-bottom:34px">Questions people ask first.</h2>
     <details class="qa" open>
       <summary>How is this different from the PDF support built into my client?</summary>
-      <p>Built-in support reads the file for you, but it reads blind: Claude Code takes a page range and returns up to 20 pages a call, so a 216-page contract is eleven guesses unless something narrows the range first. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
+      <p>Built-in support reads the file for you, but it reads blind: nothing tells the agent which pages hold the answer, so it keeps opening pages until it finds them. On 53 questions over a folder of 120 papers, Claude Code&#8217;s built-in tools read 187 pages and took 92 seconds per question; with pdf-mcp it read 7.5 pages in 25 seconds, with the same answer quality. pdf-mcp gives the agent tools instead of a blob: it inspects the document, searches it, and reads only the pages that matched, with a persistent cache so the second conversation costs nothing to set up.</p>
     </details>
     <details class="qa">
       <summary>Does my document leave my machine?</summary>
@@ -1174,13 +1174,13 @@ estimated_tokens: 925</pre>
 <details class="seo-content">
   <summary>About pdf-mcp</summary>
   <div class="seo-content-body">
-  <h2 class="seo-h1">pdf-mcp: Agentic RAG over your PDFs, one file or a whole folder</h2>
+  <h2 class="seo-h1">pdf-mcp: Agentic RAG over your PDFs, with the evidence to check every answer</h2>
   <p class="seo-lede">
-    pdf-mcp is an open-source MCP (Model Context Protocol) server that gives AI agents agentic RAG over your PDFs, one file or a whole folder of them. The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts rather than whole documents. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
+    pdf-mcp is an open-source MCP (Model Context Protocol) server that gives AI agents agentic RAG over your PDFs, one file or a whole folder of them. The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts, each with the page it came from. When the extracted text might be wrong, the agent can render that page and check it against what&#8217;s actually printed. Hidden text, including injected instructions, is flagged, not silently passed on. It ships as a Python package and connects to Claude Desktop, Claude Code, Cursor, VS Code Copilot, Codex CLI, Kiro, and any MCP-compatible client with a single command.
   </p>
   <h2>What pdf-mcp solves</h2>
   <p>
-    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, now reads PDFs natively, but a read returns a window of up to 20 pages, so a 300-page standard is fifteen blind reads when you do not already know where the answer sits. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still, because there is no native way to ask which of forty documents even mentions the thing you are looking for. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
+    Large PDFs are hard for AI coding assistants to use well. Claude Code, for example, reads PDFs natively, but nothing tells it where the answer sits, so it reads until it finds it. Measured on 53 questions over a folder of 120 papers, the built-in tools read 187 pages per question and took 92 seconds; pdf-mcp read 7.5 pages in 25 seconds, and the answers were just as good. Reading pages you did not need is also wasteful: the agent spends its limited attention on pages it will never use. A folder of PDFs is harder still: with no index, the built-in tools on that benchmark opened 84 papers per question to find the ones that mattered. pdf-mcp replaces the all-at-once approach with retrieval: the agent inspects structure, searches one document or the whole folder, and reads only the pages that matter. There is no vector database to run and nothing is shipped to a hosted index; the index is a local SQLite cache, built the first time a document is read or warmed up front with <code>pdf_corpus_warm</code>.
   </p>
   <h2>How agents use pdf-mcp</h2>
   <p>

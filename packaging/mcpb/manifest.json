@@ -3,7 +3,7 @@
   "name": "pdf-mcp",
   "display_name": "PDF MCP",
   "version": "0.0.0",
-  "description": "Read, search, and pull tables out of PDFs, one file or a whole folder, without hitting Claude's page limit.",
+  "description": "Search big PDFs or whole folders in Claude, and check any answer against the page it came from.",
   "long_description": "pdf-mcp gives Claude 13 tools for PDFs: page-level reads, hybrid keyword and semantic search, tables, table of contents, page renders, chart data, and search across a folder of PDFs. Everything runs on your computer. Works in Claude Desktop's Chat. The first start downloads its components and needs an internet connection. Scanned PDFs need Tesseract for OCR; see the OCR setup link in the documentation.",
   "author": {
     "name": "Kevin Tan",

@@ -542,6 +542,15 @@
   .cap-desc code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px; color: var(--text); }
   @media (prefers-reduced-motion: reduce) { .cap-card { transition: none; } }
 
+  /* Reader quote */
+  section.voice { padding: 130px 24px 0; }
+  section.voice figure { max-width: 720px; margin: 0 auto; text-align: center; }
+  section.voice blockquote { font-family: var(--font-display); font-size: clamp(21px, 2.8vw, 30px); font-weight: 500; letter-spacing: -0.02em; line-height: 1.32; color: var(--text); margin: 0 0 20px; text-wrap: balance; }
+  section.voice figcaption { font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); text-wrap: balance; }
+  section.voice figcaption a { color: var(--accent); font-weight: 500; text-decoration: none; }
+  section.voice figcaption a:hover { text-decoration: underline; }
+  @media (max-width: 640px) { section.voice .voice-sep { display: none; } section.voice .voice-note { display: block; } }
+
   /* Versus */
   section.versus { padding: 130px 24px 0; }
   section.versus .inner { max-width: 980px; margin: 0 auto; }
@@ -1048,6 +1057,14 @@ estimated_tokens: 925</pre>
       </div>
     </div>
   </div>
+</section>
+
+<section class="voice">
+  <figure>
+    <p class="act-label" style="margin-bottom:18px">From a researcher using pdf-mcp</p>
+    <blockquote>&#8220;This MCP is genuinely useful, and useful in a way that is unique because it holds through real scientific validation.&#8221;</blockquote>
+    <figcaption><a href="https://go.dataacorns.com/the-record" rel="noopener">(Markson, P 2026)</a><span class="voice-sep">, </span><span class="voice-note">on <span style="white-space:nowrap">re-checking</span> Fisher&#8217;s 1936 iris table</span></figcaption>
+  </figure>
 </section>
 
 <section class="versus">

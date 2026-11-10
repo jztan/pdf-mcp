@@ -87,6 +87,7 @@ benchmark_data/.scanned_pdfs/
 benchmark_data/.scanned_corpus_cache/
 benchmark_data/.spike_confidence_cache/
 benchmark_data/.tiebreak_probe_cache/
+benchmark_data/.mode_choice_cache/
 benchmark_data/.render_legibility_pdfs/
 
 # Content-trust corpus PDFs (synthetic ones are regenerable via

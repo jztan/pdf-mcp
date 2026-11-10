@@ -39,6 +39,12 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 | Scanned PDFs | No text at all | OCR via Tesseract, parallel across pages |
 | Repeated access | Re-parse every time | SQLite cache that survives restarts |
 
+### From a researcher using pdf-mcp
+
+> "This MCP is genuinely useful, and useful in a way that is unique because it holds through real scientific validation."
+>
+> [(Markson, P 2026)](https://go.dataacorns.com/the-record), on re-checking Fisher's 1936 iris table
+
 ## Installation
 
 ### Claude Desktop: nothing to install first

@@ -8,9 +8,9 @@
 [![codecov](https://codecov.io/gh/jztan/pdf-mcp/graph/badge.svg)](https://codecov.io/gh/jztan/pdf-mcp)
 [![Downloads](https://pepy.tech/badge/pdf-mcp)](https://pepy.tech/project/pdf-mcp)
 
-**Agentic RAG over your PDFs, one file or a whole folder, as a single MCP tool.**
+**Agentic RAG over your PDFs, with the evidence to check every answer.**
 
-The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts. It is an [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search one PDF or a whole folder by meaning or keyword, read only the pages that matter, and cleanly pull out tables, images, and scanned text, even from multi-column and Japanese layouts, with optional CUDA acceleration for warming large corpora.
+The agent decides when to search; pdf-mcp does the retrieval and hands back excerpts, each with the page it came from. When the extracted text might be wrong, the agent can render that page and check it against what's actually printed. Hidden text, including injected instructions, is flagged, not silently passed on. It's an [MCP](https://modelcontextprotocol.io/) server that lets Claude Code and other AI agents search one PDF or a whole folder, read only the pages that matter, and pull out tables, images, and scanned text, even from multi-column and Japanese layouts.
 
 **mcp-name: io.github.jztan/pdf-mcp**
 
@@ -29,14 +29,21 @@ Drop in any PDF, or a whole folder of them, and watch an agent triage the corpus
 | | Without pdf-mcp | With pdf-mcp |
 |---|---|---|
 | Large PDFs | Context overflow | Read only the pages you need |
-| Finding content | Load everything | Hybrid search: BM25 keyword + semantic |
-| Folders of PDFs | One document at a time | Warm, triage, and search a whole folder |
+| Hidden text, including injected instructions | Silently ingested | Flagged as untrusted, nothing stripped |
+| Checking extracted text | Trust it blindly | Render the page and compare against what's printed |
+| Finding content | Read page after page until it turns up | Hybrid search: BM25 keyword + semantic |
+| Folders of PDFs | No index: open documents until one matches | Warm, triage, and search a whole folder |
 | Warming a big folder | Minutes of CPU embedding | Length-sorted small-batch CPU encode; optional CUDA embedding, one to two orders of magnitude faster on an NVIDIA card |
 | Tables and charts | Lost in raw text | Structured rows, and `(x, y)` data from vector charts |
 | Multi-column and vertical layouts | Columns interleaved | Correct reading order, including Japanese tategaki |
 | Scanned PDFs | No text at all | OCR via Tesseract, parallel across pages |
 | Repeated access | Re-parse every time | SQLite cache that survives restarts |
-| Hidden or injected text | Silently ingested | Flagged as untrusted, nothing stripped |
+
+### From a researcher using pdf-mcp
+
+> "This MCP is genuinely useful, and useful in a way that is unique because it holds through real scientific validation."
+>
+> [(Markson, P 2026)](https://go.dataacorns.com/the-record), on re-checking Fisher's 1936 iris table
 
 ## Installation
 
@@ -117,7 +124,7 @@ folder, `pdf_corpus_overview` to triage, then `pdf_corpus_search`.
 | `pdf_get_toc` | Full table of contents for documents with many bookmarks |
 | `pdf_render_pages` | Render pages as PNG for vision models: diagrams, handwriting, scans |
 | `pdf_extract_chart` | Chart data as exact `(x, y)` tables, read from plot geometry |
-| `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget |
+| `pdf_corpus_warm` | Warm a folder of PDFs into the cache within a time budget; OCRs scanned pages between calls (`ocr`) |
 | `pdf_corpus_overview` | Per-document triage cards for a folder |
 | `pdf_corpus_search` | Search across a folder; hits carry document and page provenance |
 | `pdf_cache_stats` | Per-document cache breakdown and total size |

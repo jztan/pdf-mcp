@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>og light</title>
+<!--
+  Source for pages/og-image.png, the light Open Graph card the demo site
+  shares (the GitHub social preview is the dark sibling, og-template.html).
+  Regenerate at 1200x630, device pixel ratio 1:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+      --window-size=1200,630 --screenshot=pages/og-image.png \
+      "file://$PWD/scripts/og-template-light.html"
+
+  Fonts load from Google Fonts, so the render needs network access. Bump the
+  ?v= on the og:image and twitter:image tags in pages/index.html afterwards,
+  or the social platforms keep serving the cached previous card.
+
+  The search panel shows a real run: pdf_corpus_search over pages/corpus for
+  "supply chain risk" (auto mode, top_k 5) and the page counts pdf_info
+  reports. Re-run it before changing the numbers.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f9fb; --ink: #1d1d1f; --soft: #515661; --dim: #8a8f9c;
+    --accent: #1f5eff; --line: rgba(29,29,31,0.22); --card: #ffffff; --cell: #e7e9ee;
+  }
+  body {
+    width: 1200px; height: 630px; overflow: hidden; position: relative;
+    background: var(--bg); color: var(--ink);
+    font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .bar { position: absolute; left: 0; right: 0; height: 8px; background: var(--accent); }
+  .bar.top { top: 0; } .bar.bottom { bottom: 0; }
+  .glow { position: absolute; top: -200px; right: -160px; width: 760px; height: 620px;
+    background: radial-gradient(ellipse at center, rgba(31,94,255,0.10) 0%, rgba(31,94,255,0) 66%); }
+
+  .card { position: relative; height: 100%; display: flex; align-items: center; gap: 36px; padding: 0 56px 0 72px; }
+
+  .left { width: 560px; flex-shrink: 0; display: flex; flex-direction: column; }
+  .brand { margin-bottom: 30px; font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 21px; color: var(--dim); }
+  .brand b { color: var(--ink); font-weight: 600; }
+  h1 { font-size: 60px; line-height: 1.04; letter-spacing: -0.04em; font-weight: 700; color: var(--ink); margin: 0 0 24px; }
+  .sub { font-size: 22px; line-height: 1.42; color: var(--soft); margin: 0 0 32px; max-width: 540px; }
+  .sub b { color: var(--ink); font-weight: 600; }
+  .foot { font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 17px; color: var(--dim); }
+
+  .right { flex: 1; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 16px; }
+  .panel { width: 480px; border-radius: 16px; border: 1px solid var(--line); background: var(--card);
+    box-shadow: 0 24px 60px rgba(29,29,31,0.18), 0 0 0 1px rgba(29,29,31,0.06); overflow: hidden;
+    font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; }
+  .panel-bar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line);
+    background: #eef0f4; color: var(--dim); font-size: 13px; }
+  .panel-bar i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .panel-bar .t { margin-left: 6px; }
+  .panel-body { padding: 18px 20px 16px; }
+  .row { display: grid; grid-template-columns: 196px 46px 1fr; align-items: center; gap: 12px; margin: 0 0 9px; }
+  .row .name { text-align: right; font-size: 13px; color: var(--soft); white-space: nowrap; }
+  .row .pp { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .hits { display: flex; gap: 6px; align-items: center; }
+  .hits i { font-style: normal; font-size: 12.5px; color: #fff; background: var(--accent);
+    border-radius: 6px; padding: 3px 9px; }
+  .hits em { font-style: normal; font-size: 12px; color: #b4b8c2; }
+  .tally { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+    font-size: 14px; color: var(--soft); display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
+  .tally b { color: var(--accent); font-weight: 500; }
+  .pill { font-family: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace; font-size: 15px; color: var(--soft);
+    border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 9px 16px; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <div class="bar top"></div>
+  <div class="bar bottom"></div>
+  <div class="glow"></div>
+
+  <div class="card">
+    <div class="left">
+      <div class="brand">jztan/<b>pdf-mcp</b></div>
+      <h1>Your agent doesn&#8217;t need the whole corpus.</h1>
+      <p class="sub">
+        Agentic RAG over your PDFs, with the <b>evidence to check every answer</b>:
+        every hit names its page.
+      </p>
+      <div class="foot">See what your AI agent sees.</div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="panel-bar">
+          <i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>
+          <span class="t">pdf_corpus_search &middot; "supply chain risk"</span>
+        </div>
+        <div class="panel-body">
+          <div class="row"><span class="name">fed-consumer-context.pdf</span><span class="pp">27 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">gao-cloud.pdf</span><span class="pp">12 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">nasa-artemis.pdf</span><span class="pp">9 pp</span><span class="hits"><em>no match</em></span></div>
+          <div class="row"><span class="name">nist-router-security.pdf</span><span class="pp">40 pp</span><span class="hits"><i>p.10</i><i>p.17</i></span></div>
+          <div class="row"><span class="name">nist-zero-trust.pdf</span><span class="pp">59 pp</span><span class="hits"><i>p.39</i></span></div>
+          <div class="row"><span class="name">usda-agri-policy.pdf</span><span class="pp">42 pp</span><span class="hits"><i>p.31</i><i>p.38</i></span></div>
+          <div class="tally"><span>6 documents &middot; 189 pages</span><span><b>5 hits &middot; 3 documents</b></span></div>
+        </div>
+      </div>
+      <span class="pill">100% client-side &middot; MIT licensed</span>
+    </div>
+  </div>
+</body>
+</html>

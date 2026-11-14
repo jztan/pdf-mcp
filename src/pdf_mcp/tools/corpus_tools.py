@@ -7,10 +7,12 @@ from typing import Any, Callable
 from ..concurrency import lock_wait_seconds, pdf_access_within
 from ..docopen import open_pdf
 from .. import corpus
+from .. import corpus_ocr
 from .. import _core
 from .._core import (
     _SEMANTIC_CONFIDENCE_THRESHOLD,
     _clamp,
+    _ocr_unavailable,
     _resolve_hidden_flags,
     _tool_description,
     mcp,
@@ -81,6 +83,69 @@ def _embed_in_background(
     return corpus.BACKGROUND_EMBED.start(docs, _core.cache, model_name, embed)
 
 
+_OCR_MODES = ("auto", "on", "off")
+_OCR_RUNNING_HINT = (
+    "OCR runs between calls; re-issue this call until warm_complete is true."
+)
+
+
+def _ocr_block(
+    files: list[str], ocr: str, ocr_lang: str
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Issue #103: the `ocr` response block for a warmed corpus, starting
+    background OCR when pages need it. Completion is read from the cache,
+    so a restarted server reports the truth. Returns the block and the
+    pending page count per doc (for detail rows)."""
+    per_doc: dict[str, int] = {}
+    pending = done = no_text = 0
+    jobs: list[tuple[str, list[int]]] = []
+    for path in files:
+        progress, pages = corpus_ocr.ocr_status(path, _core.cache, ocr_lang)
+        per_doc[path] = progress["pending"]
+        pending += progress["pending"]
+        done += progress["done"]
+        no_text += progress["no_text"]
+        if pages:
+            jobs.append((path, pages))
+    block: dict[str, Any] = {
+        "lang": ocr_lang,
+        "pages_pending": pending,
+        "pages_done": done,
+        "pages_no_text": no_text,
+    }
+    if not pending:
+        block["status"] = "done" if done + no_text else "not_needed"
+        return block, per_doc
+    missing = _ocr_unavailable(ocr_lang)
+    if missing is not None:
+        if "Setting up OCR" in str(missing.get("error", "")):
+            block["status"] = "setting_up"
+            block["hint"] = str(missing["error"])
+        else:
+            block["status"] = "unavailable"
+            block["hint"] = " ".join(
+                str(missing[k]) for k in ("error", "install_hint") if missing.get(k)
+            )
+        return block, per_doc
+    if not corpus_ocr.BackgroundOCR.enabled():
+        block["status"] = "unavailable"
+        block["hint"] = (
+            "Background OCR is turned off (PDF_MCP_BACKGROUND_OCR=0); use"
+            " pdf_read_pages(ocr=True) on the pages that need it."
+        )
+        return block, per_doc
+    from .. import extractor as _extractor
+
+    # Joins a running thread for this language (a new doc or corpus is
+    # queued, nothing restarts) or starts one.
+    corpus_ocr.BACKGROUND_OCR.start(
+        jobs, _core.cache, ocr_lang, _extractor._TESSDATA_PATH
+    )
+    block["status"] = "running"
+    block["hint"] = _OCR_RUNNING_HINT
+    return block, per_doc
+
+
 # ============================================================================
 # Tool: pdf_corpus_warm - warm a folder of PDFs into the cache
 # ============================================================================
@@ -101,6 +166,8 @@ def _embed_in_background(
         " about 27 minutes): loop on `warm_complete`, not on `unprocessed`."
         " With embeddings=True, embedding continues in the server between"
         " calls, so one call starts it and a later call finds it done."
+        " Scanned pages are OCR'd between calls when Tesseract is available"
+        " (ocr='auto'); keep re-issuing the call until warm_complete is true."
     )
 )
 @pdf_access_within("budget_seconds", _corpus_busy)
@@ -111,6 +178,8 @@ def pdf_corpus_warm(
     recursive: bool = False,
     sections: bool = False,
     detail: bool = False,
+    ocr: str = "auto",
+    ocr_lang: str = "eng",
 ) -> dict[str, Any]:
     """
     Warm a corpus of local PDFs into the cache within a time budget.
@@ -142,6 +211,14 @@ def pdf_corpus_warm(
         detail: Also list a row for every already-cached doc. Off by
             default: on a large corpus each resume call would repeat
             hundreds of unchanged "cached" rows.
+        ocr: 'auto' (default) OCRs pages that have no text but carry an
+            image, in the server between calls, when Tesseract is
+            available; without it the warm runs text-only and `ocr` says
+            why. 'on' requires OCR and returns an inline error when
+            Tesseract or ocr_lang is missing. 'off' never OCRs. Pages
+            with any text, and blank pages, are never OCR'd.
+        ocr_lang: Tesseract language code (default 'eng'), e.g. 'deu' or
+            'khm+eng'.
 
     Returns:
         - docs: per-doc rows {path, status:
@@ -165,11 +242,12 @@ def pdf_corpus_warm(
           embeddings pass is needed before semantic search.
           text_coverage ('full' | 'partial' | 'none') reports how many
           pages yielded extractable text: 'none' means the doc warmed
-          to zero searchable characters (typically a scan — warming
-          never runs OCR; use pdf_read_pages(ocr=True) to make it
-          searchable). For such a doc embeddings_cached: true means
-          only that everything embeddable was embedded, which for a
-          'none' doc is nothing.
+          to zero searchable characters (typically a scan: with
+          ocr='auto' or 'on' its image pages are OCR'd between calls and
+          the label then counts the OCR text; with ocr='off', use
+          pdf_read_pages(ocr=True) to make it searchable). For such a
+          doc embeddings_cached: true means only that everything
+          embeddable was embedded, which for a 'none' doc is nothing.
         - unprocessed: resolved paths not warmed (budget ran out, or
           a cached doc was invalidated mid-call); re-issue to continue
         - skipped: [{path, reason}] for invalid/corrupt/denied files
@@ -190,10 +268,31 @@ def pdf_corpus_warm(
           cached. It runs only while no tool call does.
         - corpus_size, warmed_this_call, budget_exhausted
 
+        - ocr (absent when ocr='off'): {status, lang, pages_pending,
+          pages_done, pages_no_text, hint}. status is 'not_needed' (no
+          page needs OCR), 'running' (OCR continues between calls;
+          warm_complete stays false), 'done', 'unavailable' (no
+          Tesseract with ocr='auto': the warm is text-only and hint says
+          how to install it) or 'setting_up' (one-time Tesseract
+          download; warm_complete stays false). pages_no_text counts
+          pages OCR read no text from; they are not retried until the
+          file changes or the cache is cleared. With detail=True each
+          doc row carries ocr_pages_pending.
+
     Error contract: call-level failures (missing directory, empty
-    corpus, cap exceeded, unavailable embedding model) return an
-    inline {"error", "hint"} payload; check for an `error` key first.
+    corpus, cap exceeded, unavailable embedding model, ocr='on' without
+    Tesseract) return an inline {"error", "hint"} payload; check for an
+    `error` key first.
     """
+    if ocr not in _OCR_MODES:
+        return {
+            "error": f"ocr must be one of {', '.join(_OCR_MODES)}, got {ocr!r}.",
+            "hint": "Use ocr='auto' (default), 'on' or 'off'.",
+        }
+    if ocr == "on":
+        missing = _ocr_unavailable(ocr_lang)
+        if missing is not None:
+            return missing
     # Time spent queueing for the PDF lock comes out of the budget.
     budget = max(1.0, _clamp(budget_seconds, 1, 300) - lock_wait_seconds())
     res = corpus.resolve_corpus(
@@ -243,6 +342,12 @@ def pdf_corpus_warm(
     # each (73 to 124 KB a call, 3.7 MB in all). Cached rows carry nothing
     # new after the first call, so they are counted, except a doc with no
     # extractable text, which the caller must OCR.
+    ocr_status: dict[str, Any] | None = None
+    if ocr != "off":
+        ocr_status, ocr_per_doc = _ocr_block(res["files"], ocr, ocr_lang)
+        if detail:
+            for d in warm["docs"]:
+                d["ocr_pages_pending"] = ocr_per_doc.get(str(d["path"]), 0)
     cached = [d for d in warm["docs"] if d["status"] == "cached"]
     docs = warm["docs"]
     if not detail:
@@ -251,7 +356,7 @@ def pdf_corpus_warm(
             for d in docs
             if d["status"] != "cached" or d.get("text_coverage") == "none"
         ]
-    return {
+    out: dict[str, Any] = {
         "docs": docs,
         "cached_docs": len(cached),
         "cached_without_embeddings": sum(
@@ -265,6 +370,11 @@ def pdf_corpus_warm(
         "embedding_in_background": in_background,
         **_corpus_completeness(warm["unprocessed"], res["skipped"] + warm["skipped"]),
     }
+    if ocr_status is not None:
+        out["ocr"] = ocr_status
+        if ocr_status["status"] in ("running", "setting_up"):
+            out["warm_complete"] = False
+    return out
 
 
 # ============================================================================
@@ -1061,7 +1171,9 @@ def pdf_corpus_search(
           object when all are). If a doc here shows 'none' (or
           'partial'), zero hits from it mean "unknown", not "absent":
           its scanned pages are invisible to keyword and semantic
-          search alike until OCR'd via pdf_read_pages(ocr=True).
+          search alike until OCR'd, by pdf_corpus_warm (ocr='auto', the
+          default, OCRs image-only pages between calls) or
+          pdf_read_pages(ocr=True).
         - hidden_text_detected: True if any returned hit's page
           carries text invisible to a human reader
         - unprocessed, skipped, corpus_size, warmed_this_call,
@@ -1100,7 +1212,9 @@ def pdf_corpus_search(
         - doc_score: (hybrid matches only) head-vector cosine of the
           match's document, 4 dp, null when the doc has no profile
         - all_results_low_confidence, confidence_threshold: semantic
-          and hybrid modes
+          and hybrid modes. all_results_low_confidence true usually
+          means no document here covers the query; the per-hit flag
+          cannot tell a right hit from a wrong one
         - model_name: semantic mode only
         - semantic_unavailable, semantic_unavailable_reason: auto mode
           only, present when embeddings are unavailable and the search

@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match, as they already did in `pdf_corpus_search`. Ranking is unchanged
   ([#101](https://github.com/jztan/pdf-mcp/issues/101))
 
+### Security
+
+- Bumped transitive `dnspython` 2.9.0 → 2.9.2 (CVE-2026-128089; reached
+  via `pydantic[email]`) and `opentelemetry-api` 1.45.1 → 1.45.2
+  (CVE-2026-126360; reached via `mcp` and `fastmcp`). Lockfile-only; the
+  Claude Desktop bundle installs the locked versions.
+
 ## [3.7.0] - 2026-11-07
 ### Fixed
 

@@ -1,6 +1,6 @@
 [project]
 name = "pdf-mcp"
-version = "3.7.0"
+version = "3.8.0"
 description = "Agentic RAG over one PDF or a whole folder, with page-level evidence to check every answer: hybrid search, selective page reads, tables, OCR, charts, and CJK layouts."
 readme = "README.md"
 license = { text = "MIT" }

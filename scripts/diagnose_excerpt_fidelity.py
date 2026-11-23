@@ -196,7 +196,7 @@ def route_docs(info: dict[str, Any]) -> list[str]:
     return seen
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", default="auto", choices=["auto", "keyword", "semantic"])
     ap.add_argument("--ids", help="comma-separated question ids (default: all)")
@@ -245,7 +245,17 @@ def main(argv: list[str] | None = None) -> int:
             " BM25 scores)"
         ),
     )
-    args = ap.parse_args(argv)
+    ap.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="cache directory to use instead of the module default CACHE_DIR",
+    )
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
     from pdf_mcp import _core
@@ -253,7 +263,11 @@ def main(argv: list[str] | None = None) -> int:
     from pdf_mcp.cache import PDFCache
     from pdf_mcp.server import pdf_corpus_search, pdf_search
 
-    cache = PDFCache(cache_dir=CACHE_DIR, ttl_hours=24 * 30)
+    # An explicit cache is a kept benchmark cache: never let the TTL purge it.
+    cache = PDFCache(
+        cache_dir=args.cache_dir or CACHE_DIR,
+        ttl_hours=100 * 8760 if args.cache_dir else 24 * 30,
+    )
     _core.cache = cache
 
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))

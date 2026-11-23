@@ -24,6 +24,7 @@ Writes benchmark_data/corpus_search/modes_results.{json,md}. Exits 0
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -434,7 +435,7 @@ def _run_validate(data: Path, manifest: dict, queries: dict, lookup) -> int:
     return 1 if errors else 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--data-dir",
@@ -464,7 +465,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="cap the total corpus (gold + distractors) to this many docs",
     )
-    args = ap.parse_args(argv)
+    ap.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="use and keep this directory as the cache instead of a temp dir",
+    )
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     data = args.data_dir if args.data_dir.is_absolute() else REPO / args.data_dir
 
     manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
@@ -535,9 +546,19 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     single: dict[str, dict] = {}
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    if args.cache_dir is not None:
+        args.cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_scope: contextlib.AbstractContextManager = contextlib.nullcontext(
+            str(args.cache_dir)
+        )
+        # A kept cache must survive a later open: a 24 h TTL purges it.
+        cache_ttl = 100 * 8760
+    else:
+        cache_scope = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cache_ttl = 24
+    with cache_scope as tmp:
         prev_cache = _core.cache
-        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=24)
+        _core.cache = PDFCache(cache_dir=Path(tmp), ttl_hours=cache_ttl)
         try:
             t0 = time.perf_counter()
             warm = warm_corpus(paths, budget_seconds=300)

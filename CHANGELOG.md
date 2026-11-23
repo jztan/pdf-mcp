@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Hybrid mode (`mode="auto"`) profiled each PDF from page 1 only, so a
   PDF whose first page has no text (a scanned or image cover) got no
   `doc_score` and lost the document-level boost. It now profiles from the
-  first page with text, and `doc_score` is `null` only when the document
-  has no text on any page. A cached profile is rebuilt on the next hybrid
+  first page with text, and `doc_score` is `null` when the document has
+  no text on any page or has not been profiled yet. A cached profile is rebuilt on the next hybrid
   search or embedding warm when OCR later adds text to an earlier page;
   existing caches upgrade in place with no re-extraction.
 

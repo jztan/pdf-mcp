@@ -480,14 +480,27 @@ def backfill_doc_profiles(
 ) -> int:
     """Write profiles for warm docs that lack a valid one, from cached text.
 
-    Covers caches warmed before profiles existed, and model changes. Reads
-    only page_text (no PDF open, no page re-embed); one encode per doc
-    (batching measured no faster); all new rows in one transaction.
+    Covers caches warmed before profiles existed, and model changes. Also
+    rebuilds a row whose stored head_page is no longer the document's first
+    page with text (OCR added text to an earlier page, a later empty OCR
+    row hid it, or a writer raced an OCR write), and heals legacy rows with
+    no head_page. A row with head 0 is checked only when page 0 holds more
+    than one page_text row, so the common case costs one small query.
+    Reads only page_text (no PDF open, no page re-embed); one encode per
+    doc (batching measured no faster); all new rows in one transaction.
     Returns how many rows were written. A doc whose encode raises is
     logged and skipped so the rest still land.
     """
-    have = cache.get_doc_profiles(paths, model_name)
-    pending = [p for p in paths if p not in have]
+    heads = cache.get_doc_profile_heads(paths, model_name)
+    check = [p for p, h in heads.items() if h is None or h != 0]
+    head0 = [p for p, h in heads.items() if h == 0]
+    if head0:
+        check += sorted(cache.multi_row_pages(head0, 0))
+    stale: set[str] = set()
+    if check:
+        first = cache.first_text_pages(check)
+        stale = {p for p in check if p in first and first[p] != heads[p]}
+    pending = [p for p in paths if p not in heads or p in stale]
     if not pending:
         return 0
     built: list[tuple[str, DocProfile]] = []

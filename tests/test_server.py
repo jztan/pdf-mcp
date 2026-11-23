@@ -5098,9 +5098,16 @@ class TestPdfCorpusSearchSemanticAuto:
         cache, _ = isolated_server
         pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
         alpha = str(corpus_dir / "alpha.pdf")
-        # A valid row with a NULL vector means "page 1 had no text": the
-        # backfill must not re-encode it, and its matches score null.
-        cache.save_doc_profile(alpha, 1500, None, {}, _core.pdf_config.embedding_model)
+        # A valid row with a NULL vector means "no page had text": the
+        # backfill must not re-encode it, and its matches score null. The
+        # fixture doc does have text, so the backfill's staleness check is
+        # told it has none (otherwise it rightly rebuilds the row).
+        cache.save_doc_profile(
+            alpha, 1500, None, {}, _core.pdf_config.embedding_model, head_page=-1
+        )
+        monkeypatch.setattr(
+            cache, "first_text_pages", lambda paths: {p: -1 for p in paths}
+        )
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
         assert result["doc_profile_coverage"] == {"profiled": 2, "searched": 3}
         alpha_hits = [m for m in result["matches"] if m["path"] == alpha]

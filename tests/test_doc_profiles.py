@@ -240,7 +240,9 @@ class TestBackfill:
         _make_pdf(b, ["bravo budget"])
         paths = [str(a), str(b)]
         self._warm_text_only(cache, paths)
-        cache.save_doc_profile(str(a), 1500, b"\x01" * 8, {"alpha": 1}, "m1")
+        cache.save_doc_profile(
+            str(a), 1500, b"\x01" * 8, {"alpha": 1}, "m1", head_page=0
+        )
         seen = []
 
         def spy(texts):
@@ -357,3 +359,133 @@ def test_census_blank_chars_match_cache():
     from scripts import doc_profile_census
 
     assert doc_profile_census.TEXT_BLANK_CHARS == cache_mod.TEXT_BLANK_CHARS
+
+
+def _seed(cache, tmp_path, texts, name="doc.pdf"):
+    """A PDF with len(texts) pages whose cached page_text is exactly
+    ``texts`` (written directly, no extraction)."""
+    p = tmp_path / name
+    _make_pdf(p, [""] * len(texts))
+    path = str(p)
+    cache.save_metadata(path, len(texts), {}, [])
+    cache.save_pages_text(path, dict(enumerate(texts)))
+    return path
+
+
+def _spy():
+    seen: list[str] = []
+
+    def embed(texts):
+        seen.extend(texts)
+        return _embed_len(texts)
+
+    return seen, embed
+
+
+class TestProfileStaleness:
+    def test_legacy_null_row_heals_once(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_doc_profile(p, 1500, None, {}, "m1", head_page=None)
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+        assert cache.get_doc_profiles([p], "m1")[p] is not None
+        assert len(seen) == 1
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert len(seen) == 1
+
+    def test_no_text_doc_never_reencodes(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", ""])
+        seen, embed = _spy()
+        for _ in range(3):
+            corpus.backfill_doc_profiles([p], cache, "m1", embed)
+        assert seen == []
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+    def test_formfeed_only_doc_is_stable(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["\f", "\n\t"])
+        seen, embed = _spy()
+        written = [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        written += [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        written += [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        assert seen == []
+        assert written == [1, 0, 0]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+    def test_ocr_on_earlier_page_moves_head(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 2}
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["cover title text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+        # page 0 now holds two rows, so it is checked, but nothing moved
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert len(seen) == 1
+
+    def test_empty_ocr_row_hides_page0_text(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_page_text(p, 0, "deutscher titel", source="ocr", ocr_lang="deu")
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+        # A later empty OCR row is now the latest row for page 0, which is
+        # what get_pages_text (no language) reads.
+        cache.save_page_text(p, 0, "", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["budget on page two"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+    def test_single_row_page0_is_never_checked(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["budget on page one", "more"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+
+        def boom(paths):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_stale_writer_after_ocr_is_corrected(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        # An embed pass that read the text before the OCR write lands last.
+        cache.save_doc_profile(p, 1500, b"\x01" * 8, {}, "m1", head_page=2)
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["cover title text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+
+    def test_about_terms_survive_ocr_write(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_doc_profile(p, 1500, None, {"budget": 3}, "m1", head_page=1)
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        assert cache.get_doc_terms([p]) == {p: {"budget": 3}}
+
+
+class TestFirstTextPages:
+    def test_lowest_nonblank_latest_row(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["\f", " \t", "text"], name="a.pdf")
+        b = _seed(cache, tmp_path, ["\n", ""], name="b.pdf")
+        c = tmp_path / "c.pdf"
+        _make_pdf(c, ["x"])
+        assert cache.first_text_pages([a, b, str(c)]) == {a: 2, b: -1}
+
+    def test_embedded_nul_is_text(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["\x00abc", "text"])
+        assert cache.first_text_pages([p]) == {p: 0}
+
+    def test_stale_mtime_rows_are_ignored(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["text"])
+        future = time.time() + 5
+        os.utime(p, (future, future))
+        assert cache.first_text_pages([p]) == {}
+
+    def test_multi_row_pages(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["one"], name="a.pdf")
+        b = _seed(cache, tmp_path, ["one"], name="b.pdf")
+        cache.save_page_text(a, 0, "ocr", source="ocr", ocr_lang="eng")
+        assert cache.multi_row_pages([a, b], 0) == {a}

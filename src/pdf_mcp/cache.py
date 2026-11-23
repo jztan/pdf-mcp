@@ -2412,8 +2412,8 @@ class PDFCache:
     ) -> "dict[str, bytes | None]":
         """{path: head-vector blob or None} for valid (mtime, model) rows.
 
-        None means "profiled, but page 1 had no text": the document has no
-        vector and the caller should neither score nor re-encode it.
+        None means "profiled, but no page had text": the document has no
+        vector and the caller should not score it.
         """
         return {r[0]: r[3] for r in self._doc_profile_rows(paths) if r[2] == model_name}
 
@@ -2423,6 +2423,69 @@ class PDFCache:
         """{path: head page (0-based, -1 none, None unrecorded)} for the
         same valid rows get_doc_profiles returns."""
         return {r[0]: r[5] for r in self._doc_profile_rows(paths) if r[2] == model_name}
+
+    def first_text_pages(self, paths: list[str]) -> dict[str, int]:
+        """{path: lowest page with text, -1 when none} as get_pages_text
+        (no language) would read it.
+
+        Same order of operations as get_pages_text: pick the latest row per
+        page (_PICK_LATEST's ordering, any ocr_lang), then keep only rows
+        whose file_mtime is the file's current mtime. Blank means only
+        TEXT_BLANK_CHARS (see has_text); trim(), not LENGTH(), so an
+        embedded NUL still counts as text. Paths with no mtime-valid row,
+        or whose file is gone, are omitted: there is nothing to build from.
+        One query per 500-path chunk.
+        """
+        current: dict[str, float] = {}
+        for p in paths:
+            try:
+                current[p] = self._get_file_info(p)[0]
+            except OSError:
+                continue
+        out: dict[str, int] = {}
+        keys = list(current)
+        with self._connect() as conn:
+            for i in range(0, len(keys), 500):
+                chunk = keys[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT file_path, file_mtime, MIN(CASE WHEN text IS NOT NULL"
+                    "   AND trim(text, ' ' || char(9, 10, 13, 12, 11)) != ''"
+                    "   THEN page_num END)"
+                    " FROM ("
+                    "   SELECT file_path, page_num, file_mtime, text,"
+                    "     ROW_NUMBER() OVER ("
+                    "       PARTITION BY file_path, page_num"
+                    "       ORDER BY created_at DESC, rowid DESC"
+                    "     ) AS rn"
+                    "   FROM page_text"
+                    f"  WHERE file_path IN ({placeholders})"
+                    " ) WHERE rn = 1"
+                    " GROUP BY file_path, file_mtime",
+                    chunk,
+                ).fetchall()
+                for path, mtime, first in rows:
+                    if mtime == current[path]:
+                        out[path] = -1 if first is None else int(first)
+        return out
+
+    def multi_row_pages(self, paths: list[str], page_num: int) -> set[str]:
+        """Paths holding more than one page_text row for ``page_num`` (any
+        mtime, any ocr_lang): the only way that page's latest row can differ
+        from the one a profile was built from."""
+        out: set[str] = set()
+        with self._connect() as conn:
+            for i in range(0, len(paths), 500):
+                chunk = paths[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT file_path FROM page_text"
+                    f" WHERE page_num = ? AND file_path IN ({placeholders})"
+                    " GROUP BY file_path HAVING COUNT(*) > 1",
+                    (page_num, *chunk),
+                ).fetchall()
+                out.update(r[0] for r in rows)
+        return out
 
     def get_doc_terms(self, paths: list[str]) -> dict[str, dict[str, int]]:
         """{path: {term: count}} for mtime-valid rows, any model."""

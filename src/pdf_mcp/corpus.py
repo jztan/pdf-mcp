@@ -19,10 +19,11 @@ import time
 from concurrent.futures import FIRST_COMPLETED, Future, wait
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 
 from .backend.bytesopen import is_password_locked
+from .cache import has_text
 from .concurrency import BackgroundStopped, background_access, yield_pdf_access
 from .docopen import open_pdf
 
@@ -54,6 +55,7 @@ __all__ = [
     "rrf_fuse_two_rankings",
     "rrf_fuse_two_rankings_scored",
     "profile_terms",
+    "DocProfile",
     "build_doc_profile",
     "backfill_doc_profiles",
     "backfill_sections",
@@ -441,22 +443,33 @@ def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     return dict(top[:PROFILE_TERM_LIMIT])
 
 
+class DocProfile(NamedTuple):
+    """A document's profile: head vector (None when no page has text), term
+    counts, and the 0-based page the head came from (-1 when none)."""
+
+    vector: "bytes | None"
+    terms: dict[str, int]
+    head_page: int
+
+
 def build_doc_profile(
     texts: dict[int, str],
     embed: Callable[[list[str]], list[bytes]],
-) -> "tuple[bytes | None, dict[str, int]]":
-    """The per-document profile: (head vector or None, term counts).
+) -> DocProfile:
+    """The per-document profile.
 
-    The head vector embeds page 1's first PROFILE_HEAD_CHARS characters
-    with the same callable used for pages, so it lives in the same space
-    as the page embeddings and the query. No text on page 1 means no
-    vector (None), never a vector of an empty string.
+    The head vector embeds the first PROFILE_HEAD_CHARS characters of the
+    first page with text (a scanned cover or blank page 1 is skipped), with
+    the same callable used for pages, so it lives in the same space as the
+    page embeddings and the query. No text anywhere means no vector (None),
+    never a vector of an empty string.
     """
-    head = (texts.get(0) or "")[:PROFILE_HEAD_CHARS]
+    head_page = next((pn for pn in sorted(texts) if has_text(texts[pn])), -1)
+    head = texts[head_page][:PROFILE_HEAD_CHARS] if head_page >= 0 else ""
     vec: bytes | None = None
-    if head.strip():
+    if has_text(head):
         vec = embed([head])[0]
-    return vec, profile_terms(texts)
+    return DocProfile(vec, profile_terms(texts), head_page)
 
 
 def backfill_doc_profiles(
@@ -477,7 +490,7 @@ def backfill_doc_profiles(
     pending = [p for p in paths if p not in have]
     if not pending:
         return 0
-    built: list[tuple[str, "bytes | None", dict[str, int]]] = []
+    built: list[tuple[str, DocProfile]] = []
     for path in pending:
         meta = cache.get_metadata(path)
         if meta is None:
@@ -486,17 +499,23 @@ def backfill_doc_profiles(
         if not texts:
             continue
         try:
-            vec, terms = build_doc_profile(texts, embed)
+            profile = build_doc_profile(texts, embed)
         except Exception as exc:  # noqa: BLE001 - never a search/warm error
             logger.warning("doc profile backfill skipped %s: %s", path, exc)
             continue
-        built.append((path, vec, terms))
+        built.append((path, profile))
     if not built:
         return 0
     with cache.write_transaction() as conn:
-        for path, vec, terms in built:
+        for path, prof in built:
             cache.save_doc_profile(
-                path, PROFILE_HEAD_CHARS, vec, terms, model_name, conn=conn
+                path,
+                PROFILE_HEAD_CHARS,
+                prof.vector,
+                prof.terms,
+                model_name,
+                conn=conn,
+                head_page=prof.head_page,
             )
     return len(built)
 
@@ -611,7 +630,7 @@ def _embed_doc_batched(
             cache.save_page_embeddings(path, blobs, model_name, conn=conn)
         done += len(batch)
         idx += len(batch)
-    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    profile: "DocProfile | None" = None
     try:
         profile = build_doc_profile(texts, embed)
     except Exception as exc:  # noqa: BLE001 - profile is optional
@@ -621,10 +640,11 @@ def _embed_doc_batched(
             cache.save_doc_profile(
                 path,
                 PROFILE_HEAD_CHARS,
-                profile[0],
-                profile[1],
+                profile.vector,
+                profile.terms,
                 model_name,
                 conn=conn,
+                head_page=profile.head_page,
             )
     return True, done
 

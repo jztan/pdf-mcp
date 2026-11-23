@@ -133,7 +133,7 @@ class TestBuildDocProfile:
             return _embed_len(texts)
 
         texts = {0: "x" * 2000, 1: "ignored"}
-        vec, _terms = corpus.build_doc_profile(texts, spy)
+        vec, _terms, _head_page = corpus.build_doc_profile(texts, spy)
         assert seen == ["x" * 1500]
         assert vec is not None
 
@@ -141,16 +141,55 @@ class TestBuildDocProfile:
         def boom(texts):
             raise AssertionError("must not encode an empty head")
 
-        vec, terms = corpus.build_doc_profile({0: "   ", 1: "budget budget"}, boom)
+        vec, terms, _head_page = corpus.build_doc_profile({0: "   "}, boom)
         assert vec is None
-        assert terms == {"budget": 2}
+        assert terms == {}
+
+    def test_empty_page1_uses_first_page_with_text(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: "", 1: "\f\n", 2: "y" * 2000}, spy)
+        assert seen == ["y" * 1500]
+        assert profile.vector is not None
+        assert profile.head_page == 2
+
+    def test_page1_text_is_unchanged(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: "x" * 2000}, spy)
+        assert seen == ["x" * 1500]
+        assert profile.head_page == 0
+
+    def test_no_text_anywhere(self):
+        def boom(texts):
+            raise AssertionError("must not encode")
+
+        profile = corpus.build_doc_profile({0: "", 1: "  "}, boom)
+        assert profile.vector is None
+        assert profile.head_page == -1
+
+    def test_whitespace_only_pages_are_blank(self):
+        def boom(texts):
+            raise AssertionError("must not encode")
+
+        profile = corpus.build_doc_profile({0: " \t\n\r\f\v"}, boom)
+        assert profile.vector is None
+        assert profile.head_page == -1
 
     def test_terms_are_4plus_chars_across_all_pages_capped(self):
         texts = {0: "the cat budget", 1: "Budget REPORT report a"}
-        _vec, terms = corpus.build_doc_profile(texts, _embed_len)
+        terms = corpus.build_doc_profile(texts, _embed_len).terms
         assert terms == {"budget": 2, "report": 2}
         many = {0: " ".join(f"term{i:04d}" for i in range(500))}
-        _vec, terms = corpus.build_doc_profile(many, _embed_len)
+        terms = corpus.build_doc_profile(many, _embed_len).terms
         assert len(terms) == corpus.PROFILE_TERM_LIMIT
 
     def test_constants(self):
@@ -223,12 +262,13 @@ class TestBackfill:
 
         assert corpus.backfill_doc_profiles([pdf], cache, "m1", boom) == 0
 
-    def test_empty_page1_row_is_written_once(self, cache, tmp_path):
+    def test_empty_page1_is_profiled_from_page_two(self, cache, tmp_path):
         p = tmp_path / "blank.pdf"
         _make_pdf(p, ["", "budget on page two"])
         self._warm_text_only(cache, [str(p)])
         assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 1
-        assert cache.get_doc_profiles([str(p)], "m1") == {str(p): None}
+        assert cache.get_doc_profiles([str(p)], "m1")[str(p)] is not None
+        assert cache.get_doc_profile_heads([str(p)], "m1") == {str(p): 1}
         assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 0
 
     def test_model_change_rewrites(self, cache, pdf):
@@ -310,3 +350,10 @@ class TestAboutTerms:
         assert "budget" in card["about"]
         bare = corpus.build_overview_card(pdf, cache, from_cache=True)
         assert bare["about"] == []
+
+
+def test_census_blank_chars_match_cache():
+    from pdf_mcp import cache as cache_mod
+    from scripts import doc_profile_census
+
+    assert doc_profile_census.TEXT_BLANK_CHARS == cache_mod.TEXT_BLANK_CHARS

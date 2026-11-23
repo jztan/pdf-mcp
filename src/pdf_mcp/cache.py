@@ -522,6 +522,17 @@ _PICK_BY_LANG = """
     ) WHERE rn = 1
 """
 
+# Characters that make a page "blank" for the document profile. Not
+# str.strip()'s default set: that also strips non-breaking space, which is
+# content. scripts/doc_profile_census.py keeps a copy; a test pins them equal.
+TEXT_BLANK_CHARS = " \t\n\r\f\v"
+
+
+def has_text(text: "str | None") -> bool:
+    """True when ``text`` holds anything beyond TEXT_BLANK_CHARS."""
+    return bool(text and text.strip(TEXT_BLANK_CHARS))
+
+
 _PICK_LATEST = """
     SELECT {columns} FROM (
         SELECT {columns}, ROW_NUMBER() OVER (
@@ -927,11 +938,13 @@ class PDFCache:
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
 
-                -- Per-document profile: head vector (page 1, first
-                -- PROFILE_HEAD_CHARS chars) for the corpus search's document
+                -- Per-document profile: head vector (first page with text,
+                -- first PROFILE_HEAD_CHARS chars) for the corpus search's document
                 -- arm, plus term counts for overview `about`. One row per
                 -- document; mtime + model validated on read like
-                -- page_embeddings. embedding is NULL when page 1 had no text.
+                -- page_embeddings. embedding is NULL when no page had text.
+                -- head_page: 0-based page the head came from, -1 when none,
+                -- NULL when not recorded.
                 CREATE TABLE IF NOT EXISTS doc_profiles (
                     file_path   TEXT    NOT NULL,
                     file_mtime  REAL    NOT NULL,
@@ -940,6 +953,7 @@ class PDFCache:
                     embedding   BLOB,
                     terms       TEXT    NOT NULL,
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    head_page   INTEGER,
                     PRIMARY KEY (file_path)
                 );
 
@@ -1049,6 +1063,17 @@ class PDFCache:
             if cols and "title_guess" not in cols:
                 conn.execute(
                     "ALTER TABLE pdf_metadata ADD COLUMN title_guess TEXT DEFAULT NULL"
+                )
+
+            # doc_profiles: which page the head vector came from. Develop only
+            # ever encoded page 0, so rows that hold a vector are exactly
+            # page 0 and must not be re-encoded; NULL-vector rows stay NULL
+            # and get re-checked. Runs only in the branch that adds the column.
+            cols = _get_columns(conn, "doc_profiles")
+            if cols and "head_page" not in cols:
+                conn.execute("ALTER TABLE doc_profiles ADD COLUMN head_page INTEGER")
+                conn.execute(
+                    "UPDATE doc_profiles SET head_page = 0 WHERE embedding IS NOT NULL"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -2330,10 +2355,11 @@ class PDFCache:
         terms: dict[str, int],
         model_name: str,
         conn: "sqlite3.Connection | None" = None,
+        head_page: "int | None" = None,
     ) -> None:
         """Persist one document's profile (see corpus.build_doc_profile).
 
-        ``embedding`` is None when page 1 carried no text; the row is
+        ``embedding`` is None when no page carried text; the row is
         still written so a backfill does not retry it forever. Keyed on
         file_path alone: a new model or mtime simply replaces the row.
         """
@@ -2341,9 +2367,17 @@ class PDFCache:
         with self._write_conn(conn) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO doc_profiles"
-                " (file_path, file_mtime, model, head_chars, embedding, terms)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (path, mtime, model_name, head_chars, embedding, json.dumps(terms)),
+                " (file_path, file_mtime, model, head_chars, embedding, terms,"
+                " head_page) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    path,
+                    mtime,
+                    model_name,
+                    head_chars,
+                    embedding,
+                    json.dumps(terms),
+                    head_page,
+                ),
             )
 
     def _doc_profile_rows(self, paths: list[str]) -> list[tuple[Any, ...]]:
@@ -2366,8 +2400,8 @@ class PDFCache:
                 chunk = keys[i : i + 500]
                 placeholders = ",".join("?" * len(chunk))
                 rows = conn.execute(
-                    "SELECT file_path, file_mtime, model, embedding, terms"
-                    f" FROM doc_profiles WHERE file_path IN ({placeholders})",
+                    "SELECT file_path, file_mtime, model, embedding, terms,"
+                    f" head_page FROM doc_profiles WHERE file_path IN ({placeholders})",
                     chunk,
                 ).fetchall()
                 out.extend(r for r in rows if r[1] == current[r[0]])
@@ -2382,6 +2416,13 @@ class PDFCache:
         vector and the caller should neither score nor re-encode it.
         """
         return {r[0]: r[3] for r in self._doc_profile_rows(paths) if r[2] == model_name}
+
+    def get_doc_profile_heads(
+        self, paths: list[str], model_name: str
+    ) -> "dict[str, int | None]":
+        """{path: head page (0-based, -1 none, None unrecorded)} for the
+        same valid rows get_doc_profiles returns."""
+        return {r[0]: r[5] for r in self._doc_profile_rows(paths) if r[2] == model_name}
 
     def get_doc_terms(self, paths: list[str]) -> dict[str, dict[str, int]]:
         """{path: {term: count}} for mtime-valid rows, any model."""

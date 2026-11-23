@@ -485,7 +485,8 @@ def backfill_doc_profiles(
     page with text (OCR added text to an earlier page, a later empty OCR
     row hid it, or a writer raced an OCR write), and heals legacy rows with
     no head_page. A row with head 0 is checked only when page 0 holds more
-    than one page_text row, so the common case costs one small query.
+    than one page_text row, so the common case costs one small query, and
+    a checked row with head k reads only pages 0..k.
     Reads only page_text (no PDF open, no page re-embed); one encode per
     doc (batching measured no faster); all new rows in one transaction.
     Returns how many rows were written. A doc whose encode raises is
@@ -498,7 +499,10 @@ def backfill_doc_profiles(
         check += sorted(cache.multi_row_pages(head0, 0))
     stale: set[str] = set()
     if check:
-        first = cache.first_text_pages(check)
+        # A head can only move earlier, so a row with head k needs pages
+        # 0..k only; -1 and unrecorded heads scan the whole document.
+        bound = {p: h for p in check if (h := heads[p]) is not None and h >= 0}
+        first = cache.first_text_pages(check, max_page=bound)
         stale = {p for p in check if p in first and first[p] != heads[p]}
     pending = [p for p in paths if p not in heads or p in stale]
     if not pending:

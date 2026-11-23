@@ -489,3 +489,44 @@ class TestFirstTextPages:
         b = _seed(cache, tmp_path, ["one"], name="b.pdf")
         cache.save_page_text(a, 0, "ocr", source="ocr", ocr_lang="eng")
         assert cache.multi_row_pages([a, b], 0) == {a}
+
+
+class TestBoundedStalenessScan:
+    def test_bound_hides_later_pages(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "text on page two"])
+        assert cache.first_text_pages([p], max_page={p: 0}) == {p: -1}
+        assert cache.first_text_pages([p], max_page={p: 1}) == {p: 1}
+        assert cache.first_text_pages([p]) == {p: 1}
+
+    def test_head0_ocr_doc_scans_only_page0(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["cover", "body text"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 0, "cover ocr", source="ocr", ocr_lang="eng")
+        calls = []
+        real = cache.first_text_pages
+
+        def spy(paths, max_page=None):
+            calls.append((list(paths), max_page))
+            return real(paths, max_page=max_page)
+
+        monkeypatch.setattr(cache, "first_text_pages", spy)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+        assert calls == [([p], {p: 0})]
+
+    def test_text_before_head_is_detected(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 1, "new ocr text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["new ocr text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+    def test_text_after_head_is_not_pending(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two", ""])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 2, "late ocr text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert seen == []
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}

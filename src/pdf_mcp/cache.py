@@ -2424,7 +2424,9 @@ class PDFCache:
         same valid rows get_doc_profiles returns."""
         return {r[0]: r[5] for r in self._doc_profile_rows(paths) if r[2] == model_name}
 
-    def first_text_pages(self, paths: list[str]) -> dict[str, int]:
+    def first_text_pages(
+        self, paths: list[str], max_page: "dict[str, int] | None" = None
+    ) -> dict[str, int]:
         """{path: lowest page with text, -1 when none} as get_pages_text
         (no language) would read it.
 
@@ -2432,10 +2434,17 @@ class PDFCache:
         page (_PICK_LATEST's ordering, any ocr_lang), then keep only rows
         whose file_mtime is the file's current mtime. Blank means only
         TEXT_BLANK_CHARS (see has_text); trim(), not LENGTH(), so an
-        embedded NUL still counts as text. Paths with no mtime-valid row,
-        or whose file is gone, are omitted: there is nothing to build from.
-        One query per 500-path chunk.
+        embedded NUL still counts as text. Paths with no mtime-valid row
+        in range, or whose file is gone, are omitted: there is nothing to
+        build from.
+
+        ``max_page`` bounds a path's scan to pages ``0..max_page[path]``
+        (paths not in it scan every page), so a profile check reads only
+        the pages at or before its head instead of the whole document.
+        One query per 400-path chunk (two parameters per path, under
+        SQLite's old 999-parameter limit).
         """
+        bounds = max_page or {}
         current: dict[str, float] = {}
         for p in paths:
             try:
@@ -2445,24 +2454,28 @@ class PDFCache:
         out: dict[str, int] = {}
         keys = list(current)
         with self._connect() as conn:
-            for i in range(0, len(keys), 500):
-                chunk = keys[i : i + 500]
-                placeholders = ",".join("?" * len(chunk))
+            for i in range(0, len(keys), 400):
+                chunk = keys[i : i + 400]
+                values = ",".join("(?, ?)" for _ in chunk)
+                params: list[object] = []
+                for p in chunk:
+                    params += [p, bounds.get(p)]
                 rows = conn.execute(
-                    "SELECT file_path, file_mtime, MIN(CASE WHEN text IS NOT NULL"
+                    f"WITH b(p, k) AS (VALUES {values})"
+                    " SELECT file_path, file_mtime, MIN(CASE WHEN text IS NOT NULL"
                     "   AND trim(text, ' ' || char(9, 10, 13, 12, 11)) != ''"
                     "   THEN page_num END)"
                     " FROM ("
-                    "   SELECT file_path, page_num, file_mtime, text,"
+                    "   SELECT pt.file_path, pt.page_num, pt.file_mtime, pt.text,"
                     "     ROW_NUMBER() OVER ("
-                    "       PARTITION BY file_path, page_num"
-                    "       ORDER BY created_at DESC, rowid DESC"
+                    "       PARTITION BY pt.file_path, pt.page_num"
+                    "       ORDER BY pt.created_at DESC, pt.rowid DESC"
                     "     ) AS rn"
-                    "   FROM page_text"
-                    f"  WHERE file_path IN ({placeholders})"
+                    "   FROM b JOIN page_text pt ON pt.file_path = b.p"
+                    "     AND (b.k IS NULL OR pt.page_num <= b.k)"
                     " ) WHERE rn = 1"
                     " GROUP BY file_path, file_mtime",
-                    chunk,
+                    params,
                 ).fetchall()
                 for path, mtime, first in rows:
                     if mtime == current[path]:

@@ -168,6 +168,28 @@ class TestBuildDocProfile:
         assert seen == ["x" * 1500]
         assert profile.head_page == 0
 
+    def test_long_leading_whitespace_still_gets_a_vector(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: " " * 2000 + "budget"}, spy)
+        assert seen == ["budget"]
+        assert profile.vector is not None
+        assert profile.head_page == 0
+
+    def test_short_leading_whitespace_keeps_raw_slice(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        corpus.build_doc_profile({0: "\n  budget " + "y" * 2000}, spy)
+        assert seen == [("\n  budget " + "y" * 2000)[:1500]]
+
     def test_no_text_anywhere(self):
         def boom(texts):
             raise AssertionError("must not encode")
@@ -530,3 +552,67 @@ class TestBoundedStalenessScan:
         assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
         assert seen == []
         assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+
+def _backdate_page_text(cache, path):
+    """Move every page_text row of ``path`` a minute into the past, so the
+    profile written next is strictly newer (created_at has 1 s resolution)."""
+    import sqlite3
+
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute(
+            "UPDATE page_text SET created_at = datetime('now', '-60 seconds')"
+            " WHERE file_path = ?",
+            (path,),
+        )
+
+
+class TestNoTextRowRecheck:
+    def test_no_newer_rows_skips_the_scan(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["", "\f", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+        def boom(paths, max_page=None):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_newer_blank_row_skips_the_scan(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        # An OCR pass that found nothing cannot give the doc text.
+        cache.save_page_text(p, 0, " \n", source="ocr", ocr_lang="eng")
+
+        def boom(paths, max_page=None):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_newer_ocr_text_rebuilds(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+        cache.save_page_text(p, 1, "scanned budget page", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["scanned budget page"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+        assert cache.get_doc_profiles([p], "m1")[p] is not None
+
+    def test_paths_with_text_rows_since_profile(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["", ""], name="a.pdf")
+        b = _seed(cache, tmp_path, ["", ""], name="b.pdf")
+        c = _seed(cache, tmp_path, ["", ""], name="c.pdf")
+        for p in (a, b, c):
+            _backdate_page_text(cache, p)
+            cache.save_doc_profile(p, 1500, None, {}, "m1", head_page=-1)
+        cache.save_page_text(a, 1, "text", source="ocr", ocr_lang="eng")
+        cache.save_page_text(b, 1, "\t", source="ocr", ocr_lang="eng")
+        assert cache.paths_with_text_rows_since_profile([a, b, c]) == {a}
+        assert cache.paths_with_text_rows_since_profile([]) == set()

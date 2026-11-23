@@ -2362,6 +2362,9 @@ class PDFCache:
         ``embedding`` is None when no page carried text; the row is
         still written so a backfill does not retry it forever. Keyed on
         file_path alone: a new model or mtime simply replaces the row.
+        ``head_page=None`` marks the row legacy (head unrecorded), so the
+        next backfill re-checks and rewrites it; callers that know the
+        head must pass it.
         """
         mtime, _ = self._get_file_info(path)
         with self._write_conn(conn) as conn:
@@ -2496,6 +2499,30 @@ class PDFCache:
                     f" WHERE page_num = ? AND file_path IN ({placeholders})"
                     " GROUP BY file_path HAVING COUNT(*) > 1",
                     (page_num, *chunk),
+                ).fetchall()
+                out.update(r[0] for r in rows)
+        return out
+
+    def paths_with_text_rows_since_profile(self, paths: list[str]) -> set[str]:
+        """Paths holding a page_text row with text (any page, mtime or
+        ocr_lang) written at or after their doc_profiles row.
+
+        A profile with no text can only go stale through such a row.
+        created_at has one-second resolution on both tables, so ``>=``
+        also catches a same-second write (a harmless extra check).
+        """
+        out: set[str] = set()
+        with self._connect() as conn:
+            for i in range(0, len(paths), 500):
+                chunk = paths[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT DISTINCT dp.file_path FROM doc_profiles dp"
+                    " JOIN page_text pt ON pt.file_path = dp.file_path"
+                    f" WHERE dp.file_path IN ({placeholders})"
+                    "   AND pt.created_at >= dp.created_at"
+                    "   AND trim(pt.text, ' ' || char(9, 10, 13, 12, 11)) != ''",
+                    chunk,
                 ).fetchall()
                 out.update(r[0] for r in rows)
         return out

@@ -23,7 +23,7 @@ from typing import Any, Callable, NamedTuple
 
 
 from .backend.bytesopen import is_password_locked
-from .cache import has_text
+from .cache import TEXT_BLANK_CHARS, has_text
 from .concurrency import BackgroundStopped, background_access, yield_pdf_access
 from .docopen import open_pdf
 
@@ -462,10 +462,14 @@ def build_doc_profile(
     first page with text (a scanned cover or blank page 1 is skipped), with
     the same callable used for pages, so it lives in the same space as the
     page embeddings and the query. No text anywhere means no vector (None),
-    never a vector of an empty string.
+    never a vector of an empty string. Only when that slice is all blank
+    (leading whitespace longer than PROFILE_HEAD_CHARS) is the page's
+    leading blank run skipped first.
     """
     head_page = next((pn for pn in sorted(texts) if has_text(texts[pn])), -1)
     head = texts[head_page][:PROFILE_HEAD_CHARS] if head_page >= 0 else ""
+    if head_page >= 0 and not has_text(head):
+        head = texts[head_page].lstrip(TEXT_BLANK_CHARS)[:PROFILE_HEAD_CHARS]
     vec: bytes | None = None
     if has_text(head):
         vec = embed([head])[0]
@@ -485,22 +489,31 @@ def backfill_doc_profiles(
     page with text (OCR added text to an earlier page, a later empty OCR
     row hid it, or a writer raced an OCR write), and heals legacy rows with
     no head_page. A row with head 0 is checked only when page 0 holds more
-    than one page_text row, so the common case costs one small query, and
-    a checked row with head k reads only pages 0..k.
+    than one page_text row, and a row with head -1 (no text) only when a
+    page_text row with text was written at or after the profile, so the
+    common case costs one small query each; a checked row with head k
+    reads only pages 0..k.
     Reads only page_text (no PDF open, no page re-embed); one encode per
     doc (batching measured no faster); all new rows in one transaction.
     Returns how many rows were written. A doc whose encode raises is
     logged and skipped so the rest still land.
     """
     heads = cache.get_doc_profile_heads(paths, model_name)
-    check = [p for p, h in heads.items() if h is None or h != 0]
+    check = [p for p, h in heads.items() if h is None or h > 0]
     head0 = [p for p, h in heads.items() if h == 0]
     if head0:
         check += sorted(cache.multi_row_pages(head0, 0))
+    # A no-text doc can gain text only through a newer page_text row.
+    no_text = [p for p, h in heads.items() if h == -1]
+    if no_text:
+        check += sorted(cache.paths_with_text_rows_since_profile(no_text))
     stale: set[str] = set()
     if check:
-        # A head can only move earlier, so a row with head k needs pages
-        # 0..k only; -1 and unrecorded heads scan the whole document.
+        # Pages 0..k decide whether head k is stale: text added before k
+        # shows as a lower first page, and text lost from page k (a newer
+        # empty OCR row) shows as -1 or a lower page, never k. Either way
+        # the row is rebuilt from every page, which finds a later head.
+        # -1 and unrecorded heads scan the whole document.
         bound = {p: h for p in check if (h := heads[p]) is not None and h >= 0}
         first = cache.first_text_pages(check, max_page=bound)
         stale = {p for p in check if p in first and first[p] != heads[p]}

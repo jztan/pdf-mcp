@@ -5092,26 +5092,48 @@ class TestPdfCorpusSearchSemanticAuto:
         assert result["doc_profile_coverage"]["profiled"] == 3
 
     def test_doc_score_is_null_for_an_unprofiled_doc(
-        self, corpus_dir, isolated_server, monkeypatch
+        self, corpus_dir, isolated_server, monkeypatch, caplog
     ):
+        import sqlite3
+
+        import pdf_mcp.embedder as emb
+
         self._fake_embedder(monkeypatch)
         cache, _ = isolated_server
+        # A document with no text on any page: a drawn rectangle only.
+        blank = str(corpus_dir / "delta.pdf")
+        doc = pymupdf.open()
+        for _ in range(2):
+            doc.new_page().draw_rect(pymupdf.Rect(50, 50, 200, 200))
+        doc.save(blank)
+        doc.close()
+        model = _core.pdf_config.embedding_model
         pdf_corpus_search(str(corpus_dir), "budget", mode="auto")
-        alpha = str(corpus_dir / "alpha.pdf")
-        # A valid row with a NULL vector means "no page had text": the
-        # backfill must not re-encode it, and its matches score null. The
-        # fixture doc does have text, so the backfill's staleness check is
-        # told it has none (otherwise it rightly rebuilds the row).
-        cache.save_doc_profile(
-            alpha, 1500, None, {}, _core.pdf_config.embedding_model, head_page=-1
-        )
-        monkeypatch.setattr(
-            cache, "first_text_pages", lambda paths: {p: -1 for p in paths}
-        )
+        # Drop the rows the warm wrote, so the search's real backfill
+        # builds them from cached text.
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute("DELETE FROM doc_profiles")
         result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
-        assert result["doc_profile_coverage"] == {"profiled": 2, "searched": 3}
-        alpha_hits = [m for m in result["matches"] if m["path"] == alpha]
-        assert alpha_hits and all(m["doc_score"] is None for m in alpha_hits)
+        assert "doc profile backfill failed" not in caplog.text
+        # A valid row with a NULL vector means "no page had text".
+        assert cache.get_doc_profile_heads([blank], model) == {blank: -1}
+        assert cache.get_doc_profiles([blank], model) == {blank: None}
+        assert result["doc_profile_coverage"] == {"profiled": 3, "searched": 4}
+        assert not any(m["path"] == blank for m in result["matches"])
+        assert all(m["doc_score"] is not None for m in result["matches"])
+        # A second search does not re-encode it.
+        encoded: list[str] = []
+        real_encode = emb.encode
+
+        def spy(texts, model):
+            encoded.extend(texts)
+            return real_encode(texts, model)
+
+        monkeypatch.setattr(emb, "encode", spy)
+        result = pdf_corpus_search(str(corpus_dir), "budget", mode="auto", top_k=20)
+        assert encoded == []
+        assert result["doc_profile_coverage"] == {"profiled": 3, "searched": 4}
+        assert "doc profile backfill failed" not in caplog.text
 
     def test_doc_arm_docs_appear_in_doc_match_counts(
         self, corpus_dir, isolated_server, monkeypatch

@@ -522,6 +522,17 @@ _PICK_BY_LANG = """
     ) WHERE rn = 1
 """
 
+# Characters that make a page "blank" for the document profile. Not
+# str.strip()'s default set: that also strips non-breaking space, which is
+# content. scripts/doc_profile_census.py keeps a copy; a test pins them equal.
+TEXT_BLANK_CHARS = " \t\n\r\f\v"
+
+
+def has_text(text: "str | None") -> bool:
+    """True when ``text`` holds anything beyond TEXT_BLANK_CHARS."""
+    return bool(text and text.strip(TEXT_BLANK_CHARS))
+
+
 _PICK_LATEST = """
     SELECT {columns} FROM (
         SELECT {columns}, ROW_NUMBER() OVER (
@@ -927,11 +938,13 @@ class PDFCache:
                 CREATE INDEX IF NOT EXISTS idx_page_embeddings_path
                     ON page_embeddings(file_path);
 
-                -- Per-document profile: head vector (page 1, first
-                -- PROFILE_HEAD_CHARS chars) for the corpus search's document
+                -- Per-document profile: head vector (first page with text,
+                -- first PROFILE_HEAD_CHARS chars) for the corpus search's document
                 -- arm, plus term counts for overview `about`. One row per
                 -- document; mtime + model validated on read like
-                -- page_embeddings. embedding is NULL when page 1 had no text.
+                -- page_embeddings. embedding is NULL when no page had text.
+                -- head_page: 0-based page the head came from, -1 when none,
+                -- NULL when not recorded.
                 CREATE TABLE IF NOT EXISTS doc_profiles (
                     file_path   TEXT    NOT NULL,
                     file_mtime  REAL    NOT NULL,
@@ -940,6 +953,7 @@ class PDFCache:
                     embedding   BLOB,
                     terms       TEXT    NOT NULL,
                     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    head_page   INTEGER,
                     PRIMARY KEY (file_path)
                 );
 
@@ -1049,6 +1063,17 @@ class PDFCache:
             if cols and "title_guess" not in cols:
                 conn.execute(
                     "ALTER TABLE pdf_metadata ADD COLUMN title_guess TEXT DEFAULT NULL"
+                )
+
+            # doc_profiles: which page the head vector came from. Develop only
+            # ever encoded page 0, so rows that hold a vector are exactly
+            # page 0 and must not be re-encoded; NULL-vector rows stay NULL
+            # and get re-checked. Runs only in the branch that adds the column.
+            cols = _get_columns(conn, "doc_profiles")
+            if cols and "head_page" not in cols:
+                conn.execute("ALTER TABLE doc_profiles ADD COLUMN head_page INTEGER")
+                conn.execute(
+                    "UPDATE doc_profiles SET head_page = 0 WHERE embedding IS NOT NULL"
                 )
 
             # page_text: per-page hidden-text flag (NULL = not yet computed)
@@ -2330,20 +2355,32 @@ class PDFCache:
         terms: dict[str, int],
         model_name: str,
         conn: "sqlite3.Connection | None" = None,
+        head_page: "int | None" = None,
     ) -> None:
         """Persist one document's profile (see corpus.build_doc_profile).
 
-        ``embedding`` is None when page 1 carried no text; the row is
+        ``embedding`` is None when no page carried text; the row is
         still written so a backfill does not retry it forever. Keyed on
         file_path alone: a new model or mtime simply replaces the row.
+        ``head_page=None`` marks the row legacy (head unrecorded), so the
+        next backfill re-checks and rewrites it; callers that know the
+        head must pass it.
         """
         mtime, _ = self._get_file_info(path)
         with self._write_conn(conn) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO doc_profiles"
-                " (file_path, file_mtime, model, head_chars, embedding, terms)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (path, mtime, model_name, head_chars, embedding, json.dumps(terms)),
+                " (file_path, file_mtime, model, head_chars, embedding, terms,"
+                " head_page) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    path,
+                    mtime,
+                    model_name,
+                    head_chars,
+                    embedding,
+                    json.dumps(terms),
+                    head_page,
+                ),
             )
 
     def _doc_profile_rows(self, paths: list[str]) -> list[tuple[Any, ...]]:
@@ -2366,8 +2403,8 @@ class PDFCache:
                 chunk = keys[i : i + 500]
                 placeholders = ",".join("?" * len(chunk))
                 rows = conn.execute(
-                    "SELECT file_path, file_mtime, model, embedding, terms"
-                    f" FROM doc_profiles WHERE file_path IN ({placeholders})",
+                    "SELECT file_path, file_mtime, model, embedding, terms,"
+                    f" head_page FROM doc_profiles WHERE file_path IN ({placeholders})",
                     chunk,
                 ).fetchall()
                 out.extend(r for r in rows if r[1] == current[r[0]])
@@ -2378,10 +2415,117 @@ class PDFCache:
     ) -> "dict[str, bytes | None]":
         """{path: head-vector blob or None} for valid (mtime, model) rows.
 
-        None means "profiled, but page 1 had no text": the document has no
-        vector and the caller should neither score nor re-encode it.
+        None means "profiled, but no page had text": the document has no
+        vector and the caller should not score it.
         """
         return {r[0]: r[3] for r in self._doc_profile_rows(paths) if r[2] == model_name}
+
+    def get_doc_profile_heads(
+        self, paths: list[str], model_name: str
+    ) -> "dict[str, int | None]":
+        """{path: head page (0-based, -1 none, None unrecorded)} for the
+        same valid rows get_doc_profiles returns."""
+        return {r[0]: r[5] for r in self._doc_profile_rows(paths) if r[2] == model_name}
+
+    def first_text_pages(
+        self, paths: list[str], max_page: "dict[str, int] | None" = None
+    ) -> dict[str, int]:
+        """{path: lowest page with text, -1 when none} as get_pages_text
+        (no language) would read it.
+
+        Same order of operations as get_pages_text: pick the latest row per
+        page (_PICK_LATEST's ordering, any ocr_lang), then keep only rows
+        whose file_mtime is the file's current mtime. Blank means only
+        TEXT_BLANK_CHARS (see has_text); trim(), not LENGTH(), so an
+        embedded NUL still counts as text. Paths with no mtime-valid row
+        in range, or whose file is gone, are omitted: there is nothing to
+        build from.
+
+        ``max_page`` bounds a path's scan to pages ``0..max_page[path]``
+        (paths not in it scan every page), so a profile check reads only
+        the pages at or before its head instead of the whole document.
+        One query per 400-path chunk (two parameters per path, under
+        SQLite's old 999-parameter limit).
+        """
+        bounds = max_page or {}
+        current: dict[str, float] = {}
+        for p in paths:
+            try:
+                current[p] = self._get_file_info(p)[0]
+            except OSError:
+                continue
+        out: dict[str, int] = {}
+        keys = list(current)
+        with self._connect() as conn:
+            for i in range(0, len(keys), 400):
+                chunk = keys[i : i + 400]
+                values = ",".join("(?, ?)" for _ in chunk)
+                params: list[object] = []
+                for p in chunk:
+                    params += [p, bounds.get(p)]
+                rows = conn.execute(
+                    f"WITH b(p, k) AS (VALUES {values})"
+                    " SELECT file_path, file_mtime, MIN(CASE WHEN text IS NOT NULL"
+                    "   AND trim(text, ' ' || char(9, 10, 13, 12, 11)) != ''"
+                    "   THEN page_num END)"
+                    " FROM ("
+                    "   SELECT pt.file_path, pt.page_num, pt.file_mtime, pt.text,"
+                    "     ROW_NUMBER() OVER ("
+                    "       PARTITION BY pt.file_path, pt.page_num"
+                    "       ORDER BY pt.created_at DESC, pt.rowid DESC"
+                    "     ) AS rn"
+                    "   FROM b JOIN page_text pt ON pt.file_path = b.p"
+                    "     AND (b.k IS NULL OR pt.page_num <= b.k)"
+                    " ) WHERE rn = 1"
+                    " GROUP BY file_path, file_mtime",
+                    params,
+                ).fetchall()
+                for path, mtime, first in rows:
+                    if mtime == current[path]:
+                        out[path] = -1 if first is None else int(first)
+        return out
+
+    def multi_row_pages(self, paths: list[str], page_num: int) -> set[str]:
+        """Paths holding more than one page_text row for ``page_num`` (any
+        mtime, any ocr_lang): the only way that page's latest row can differ
+        from the one a profile was built from."""
+        out: set[str] = set()
+        with self._connect() as conn:
+            for i in range(0, len(paths), 500):
+                chunk = paths[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT file_path FROM page_text"
+                    f" WHERE page_num = ? AND file_path IN ({placeholders})"
+                    " GROUP BY file_path HAVING COUNT(*) > 1",
+                    (page_num, *chunk),
+                ).fetchall()
+                out.update(r[0] for r in rows)
+        return out
+
+    def paths_with_text_rows_since_profile(self, paths: list[str]) -> set[str]:
+        """Paths holding a page_text row with text (any page, mtime or
+        ocr_lang) written at or after their doc_profiles row.
+
+        A profile with no text can only go stale through such a row.
+        created_at has one-second resolution on both tables, so ``>=``
+        also catches a same-second write (a harmless extra check).
+        """
+        out: set[str] = set()
+        with self._connect() as conn:
+            for i in range(0, len(paths), 500):
+                chunk = paths[i : i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT DISTINCT dp.file_path FROM doc_profiles dp"
+                    " JOIN page_text pt ON pt.file_path = dp.file_path"
+                    f" WHERE dp.file_path IN ({placeholders})"
+                    "   AND pt.created_at >= dp.created_at"
+                    "   AND trim(pt.text, ' ' || char(9, 10, 13, 12, 11)) != ''",
+                    chunk,
+                ).fetchall()
+                out.update(r[0] for r in rows)
+        return out
 
     def get_doc_terms(self, paths: list[str]) -> dict[str, dict[str, int]]:
         """{path: {term: count}} for mtime-valid rows, any model."""

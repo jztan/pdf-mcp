@@ -132,6 +132,7 @@ documents/
 benchmark_data/corpus_search
 benchmark_data/financial_reports
 benchmark_data/bedrock_kb
+benchmark_data/corpus_covers
 benchmark_data/hit_context
 
 # CDK synth output (multi-megabyte, regenerable via `cdk synth`)

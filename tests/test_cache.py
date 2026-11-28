@@ -2271,3 +2271,67 @@ class TestDocsWithoutMetadata:
         cache._touched.clear()  # a new server process
         pdf_read_pages(sample_pdf, "1")
         assert _accessed_age_hours(cache, sample_pdf) < 0.1
+
+
+class TestDocProfileHeadPage:
+    def test_doc_profiles_gains_head_page_column(self, tmp_path):
+        db_dir = tmp_path / "c"
+        db_dir.mkdir()
+        db = db_dir / "cache.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute(
+                "CREATE TABLE doc_profiles ("
+                " file_path TEXT NOT NULL, file_mtime REAL NOT NULL,"
+                " model TEXT NOT NULL, head_chars INTEGER NOT NULL,"
+                " embedding BLOB, terms TEXT NOT NULL,"
+                " created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                " PRIMARY KEY (file_path))"
+            )
+            conn.execute(
+                "INSERT INTO doc_profiles"
+                " (file_path, file_mtime, model, head_chars, embedding, terms)"
+                " VALUES ('/a.pdf', 1.0, 'm', 1500, x'0001', '{}')"
+            )
+            conn.execute(
+                "INSERT INTO doc_profiles"
+                " (file_path, file_mtime, model, head_chars, embedding, terms)"
+                " VALUES ('/b.pdf', 1.0, 'm', 1500, NULL, '{}')"
+            )
+        PDFCache(cache_dir=db_dir, ttl_hours=1)
+        with sqlite3.connect(db) as conn:
+            assert "head_page" in _get_columns(conn, "doc_profiles")
+            rows = dict(conn.execute("SELECT file_path, head_page FROM doc_profiles"))
+        assert rows == {"/a.pdf": 0, "/b.pdf": None}
+
+    def test_migration_runs_once(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path / "c", ttl_hours=1)
+        with sqlite3.connect(cache.db_path) as conn:
+            conn.execute(
+                "INSERT INTO doc_profiles"
+                " (file_path, file_mtime, model, head_chars, embedding, terms,"
+                " head_page) VALUES ('/a.pdf', 1.0, 'm', 1500, x'00', '{}', 3)"
+            )
+        PDFCache(cache_dir=tmp_path / "c", ttl_hours=1)
+        with sqlite3.connect(cache.db_path) as conn:
+            (hp,) = conn.execute("SELECT head_page FROM doc_profiles").fetchone()
+        assert hp == 3
+
+    def test_save_and_read_head_page(self, tmp_path):
+        cache = PDFCache(cache_dir=tmp_path / "c", ttl_hours=1)
+        pdf = tmp_path / "d.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        p = str(pdf)
+        cache.save_doc_profile(p, 1500, b"\x00", {}, "m", head_page=4)
+        assert cache.get_doc_profile_heads([p], "m") == {p: 4}
+        assert cache.get_doc_profile_heads([p], "other") == {}
+        cache.save_doc_profile(p, 1500, None, {}, "m")
+        assert cache.get_doc_profile_heads([p], "m") == {p: None}
+
+    def test_has_text(self):
+        from pdf_mcp.cache import TEXT_BLANK_CHARS, has_text
+
+        assert TEXT_BLANK_CHARS == " \t\n\r\f\v"
+        assert not has_text(None)
+        assert not has_text(" \t\n\r\f\v")
+        assert has_text("\xa0")
+        assert has_text(" a ")

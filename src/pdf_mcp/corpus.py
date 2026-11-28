@@ -19,10 +19,11 @@ import time
 from concurrent.futures import FIRST_COMPLETED, Future, wait
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 
 from .backend.bytesopen import is_password_locked
+from .cache import TEXT_BLANK_CHARS, has_text
 from .concurrency import BackgroundStopped, background_access, yield_pdf_access
 from .docopen import open_pdf
 
@@ -54,6 +55,7 @@ __all__ = [
     "rrf_fuse_two_rankings",
     "rrf_fuse_two_rankings_scored",
     "profile_terms",
+    "DocProfile",
     "build_doc_profile",
     "backfill_doc_profiles",
     "backfill_sections",
@@ -441,22 +443,37 @@ def profile_terms(texts: dict[int, str]) -> dict[str, int]:
     return dict(top[:PROFILE_TERM_LIMIT])
 
 
+class DocProfile(NamedTuple):
+    """A document's profile: head vector (None when no page has text), term
+    counts, and the 0-based page the head came from (-1 when none)."""
+
+    vector: "bytes | None"
+    terms: dict[str, int]
+    head_page: int
+
+
 def build_doc_profile(
     texts: dict[int, str],
     embed: Callable[[list[str]], list[bytes]],
-) -> "tuple[bytes | None, dict[str, int]]":
-    """The per-document profile: (head vector or None, term counts).
+) -> DocProfile:
+    """The per-document profile.
 
-    The head vector embeds page 1's first PROFILE_HEAD_CHARS characters
-    with the same callable used for pages, so it lives in the same space
-    as the page embeddings and the query. No text on page 1 means no
-    vector (None), never a vector of an empty string.
+    The head vector embeds the first PROFILE_HEAD_CHARS characters of the
+    first page with text (a scanned cover or blank page 1 is skipped), with
+    the same callable used for pages, so it lives in the same space as the
+    page embeddings and the query. No text anywhere means no vector (None),
+    never a vector of an empty string. Only when that slice is all blank
+    (leading whitespace longer than PROFILE_HEAD_CHARS) is the page's
+    leading blank run skipped first.
     """
-    head = (texts.get(0) or "")[:PROFILE_HEAD_CHARS]
+    head_page = next((pn for pn in sorted(texts) if has_text(texts[pn])), -1)
+    head = texts[head_page][:PROFILE_HEAD_CHARS] if head_page >= 0 else ""
+    if head_page >= 0 and not has_text(head):
+        head = texts[head_page].lstrip(TEXT_BLANK_CHARS)[:PROFILE_HEAD_CHARS]
     vec: bytes | None = None
-    if head.strip():
+    if has_text(head):
         vec = embed([head])[0]
-    return vec, profile_terms(texts)
+    return DocProfile(vec, profile_terms(texts), head_page)
 
 
 def backfill_doc_profiles(
@@ -467,17 +484,43 @@ def backfill_doc_profiles(
 ) -> int:
     """Write profiles for warm docs that lack a valid one, from cached text.
 
-    Covers caches warmed before profiles existed, and model changes. Reads
-    only page_text (no PDF open, no page re-embed); one encode per doc
-    (batching measured no faster); all new rows in one transaction.
+    Covers caches warmed before profiles existed, and model changes. Also
+    rebuilds a row whose stored head_page is no longer the document's first
+    page with text (OCR added text to an earlier page, a later empty OCR
+    row hid it, or a writer raced an OCR write), and heals legacy rows with
+    no head_page. A row with head 0 is checked only when page 0 holds more
+    than one page_text row, and a row with head -1 (no text) only when a
+    page_text row with text was written at or after the profile, so the
+    common case costs one small query each; a checked row with head k
+    reads only pages 0..k.
+    Reads only page_text (no PDF open, no page re-embed); one encode per
+    doc (batching measured no faster); all new rows in one transaction.
     Returns how many rows were written. A doc whose encode raises is
     logged and skipped so the rest still land.
     """
-    have = cache.get_doc_profiles(paths, model_name)
-    pending = [p for p in paths if p not in have]
+    heads = cache.get_doc_profile_heads(paths, model_name)
+    check = [p for p, h in heads.items() if h is None or h > 0]
+    head0 = [p for p, h in heads.items() if h == 0]
+    if head0:
+        check += sorted(cache.multi_row_pages(head0, 0))
+    # A no-text doc can gain text only through a newer page_text row.
+    no_text = [p for p, h in heads.items() if h == -1]
+    if no_text:
+        check += sorted(cache.paths_with_text_rows_since_profile(no_text))
+    stale: set[str] = set()
+    if check:
+        # Pages 0..k decide whether head k is stale: text added before k
+        # shows as a lower first page, and text lost from page k (a newer
+        # empty OCR row) shows as -1 or a lower page, never k. Either way
+        # the row is rebuilt from every page, which finds a later head.
+        # -1 and unrecorded heads scan the whole document.
+        bound = {p: h for p in check if (h := heads[p]) is not None and h >= 0}
+        first = cache.first_text_pages(check, max_page=bound)
+        stale = {p for p in check if p in first and first[p] != heads[p]}
+    pending = [p for p in paths if p not in heads or p in stale]
     if not pending:
         return 0
-    built: list[tuple[str, "bytes | None", dict[str, int]]] = []
+    built: list[tuple[str, DocProfile]] = []
     for path in pending:
         meta = cache.get_metadata(path)
         if meta is None:
@@ -486,17 +529,23 @@ def backfill_doc_profiles(
         if not texts:
             continue
         try:
-            vec, terms = build_doc_profile(texts, embed)
+            profile = build_doc_profile(texts, embed)
         except Exception as exc:  # noqa: BLE001 - never a search/warm error
             logger.warning("doc profile backfill skipped %s: %s", path, exc)
             continue
-        built.append((path, vec, terms))
+        built.append((path, profile))
     if not built:
         return 0
     with cache.write_transaction() as conn:
-        for path, vec, terms in built:
+        for path, prof in built:
             cache.save_doc_profile(
-                path, PROFILE_HEAD_CHARS, vec, terms, model_name, conn=conn
+                path,
+                PROFILE_HEAD_CHARS,
+                prof.vector,
+                prof.terms,
+                model_name,
+                conn=conn,
+                head_page=prof.head_page,
             )
     return len(built)
 
@@ -611,7 +660,7 @@ def _embed_doc_batched(
             cache.save_page_embeddings(path, blobs, model_name, conn=conn)
         done += len(batch)
         idx += len(batch)
-    profile: "tuple[bytes | None, dict[str, int]] | None" = None
+    profile: "DocProfile | None" = None
     try:
         profile = build_doc_profile(texts, embed)
     except Exception as exc:  # noqa: BLE001 - profile is optional
@@ -621,10 +670,11 @@ def _embed_doc_batched(
             cache.save_doc_profile(
                 path,
                 PROFILE_HEAD_CHARS,
-                profile[0],
-                profile[1],
+                profile.vector,
+                profile.terms,
                 model_name,
                 conn=conn,
+                head_page=profile.head_page,
             )
     return True, done
 

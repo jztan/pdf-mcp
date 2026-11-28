@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2026-11-28
+### Fixed
+
+- **`pdf_corpus_search` ranks image-cover PDFs at the document level.**
+  Hybrid mode (`mode="auto"`) profiled each PDF from page 1 only, so a
+  PDF whose first page has no text (a scanned or image cover) got no
+  `doc_score` and lost the document-level boost. It now profiles from the
+  first page with text, and `doc_score` is `null` when the document has
+  no text on any page or has not been profiled yet. A cached profile is rebuilt on the next hybrid
+  search or embedding warm when OCR later adds text to an earlier page;
+  existing caches upgrade in place with no re-extraction.
+
 ## [3.8.0] - 2026-11-14
 ### Added
 

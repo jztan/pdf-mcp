@@ -133,7 +133,7 @@ class TestBuildDocProfile:
             return _embed_len(texts)
 
         texts = {0: "x" * 2000, 1: "ignored"}
-        vec, _terms = corpus.build_doc_profile(texts, spy)
+        vec, _terms, _head_page = corpus.build_doc_profile(texts, spy)
         assert seen == ["x" * 1500]
         assert vec is not None
 
@@ -141,16 +141,77 @@ class TestBuildDocProfile:
         def boom(texts):
             raise AssertionError("must not encode an empty head")
 
-        vec, terms = corpus.build_doc_profile({0: "   ", 1: "budget budget"}, boom)
+        vec, terms, _head_page = corpus.build_doc_profile({0: "   "}, boom)
         assert vec is None
-        assert terms == {"budget": 2}
+        assert terms == {}
+
+    def test_empty_page1_uses_first_page_with_text(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: "", 1: "\f\n", 2: "y" * 2000}, spy)
+        assert seen == ["y" * 1500]
+        assert profile.vector is not None
+        assert profile.head_page == 2
+
+    def test_page1_text_is_unchanged(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: "x" * 2000}, spy)
+        assert seen == ["x" * 1500]
+        assert profile.head_page == 0
+
+    def test_long_leading_whitespace_still_gets_a_vector(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        profile = corpus.build_doc_profile({0: " " * 2000 + "budget"}, spy)
+        assert seen == ["budget"]
+        assert profile.vector is not None
+        assert profile.head_page == 0
+
+    def test_short_leading_whitespace_keeps_raw_slice(self):
+        seen = []
+
+        def spy(texts):
+            seen.extend(texts)
+            return _embed_len(texts)
+
+        corpus.build_doc_profile({0: "\n  budget " + "y" * 2000}, spy)
+        assert seen == [("\n  budget " + "y" * 2000)[:1500]]
+
+    def test_no_text_anywhere(self):
+        def boom(texts):
+            raise AssertionError("must not encode")
+
+        profile = corpus.build_doc_profile({0: "", 1: "  "}, boom)
+        assert profile.vector is None
+        assert profile.head_page == -1
+
+    def test_whitespace_only_pages_are_blank(self):
+        def boom(texts):
+            raise AssertionError("must not encode")
+
+        profile = corpus.build_doc_profile({0: " \t\n\r\f\v"}, boom)
+        assert profile.vector is None
+        assert profile.head_page == -1
 
     def test_terms_are_4plus_chars_across_all_pages_capped(self):
         texts = {0: "the cat budget", 1: "Budget REPORT report a"}
-        _vec, terms = corpus.build_doc_profile(texts, _embed_len)
+        terms = corpus.build_doc_profile(texts, _embed_len).terms
         assert terms == {"budget": 2, "report": 2}
         many = {0: " ".join(f"term{i:04d}" for i in range(500))}
-        _vec, terms = corpus.build_doc_profile(many, _embed_len)
+        terms = corpus.build_doc_profile(many, _embed_len).terms
         assert len(terms) == corpus.PROFILE_TERM_LIMIT
 
     def test_constants(self):
@@ -201,7 +262,9 @@ class TestBackfill:
         _make_pdf(b, ["bravo budget"])
         paths = [str(a), str(b)]
         self._warm_text_only(cache, paths)
-        cache.save_doc_profile(str(a), 1500, b"\x01" * 8, {"alpha": 1}, "m1")
+        cache.save_doc_profile(
+            str(a), 1500, b"\x01" * 8, {"alpha": 1}, "m1", head_page=0
+        )
         seen = []
 
         def spy(texts):
@@ -223,12 +286,13 @@ class TestBackfill:
 
         assert corpus.backfill_doc_profiles([pdf], cache, "m1", boom) == 0
 
-    def test_empty_page1_row_is_written_once(self, cache, tmp_path):
+    def test_empty_page1_is_profiled_from_page_two(self, cache, tmp_path):
         p = tmp_path / "blank.pdf"
         _make_pdf(p, ["", "budget on page two"])
         self._warm_text_only(cache, [str(p)])
         assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 1
-        assert cache.get_doc_profiles([str(p)], "m1") == {str(p): None}
+        assert cache.get_doc_profiles([str(p)], "m1")[str(p)] is not None
+        assert cache.get_doc_profile_heads([str(p)], "m1") == {str(p): 1}
         assert corpus.backfill_doc_profiles([str(p)], cache, "m1", _embed_len) == 0
 
     def test_model_change_rewrites(self, cache, pdf):
@@ -310,3 +374,245 @@ class TestAboutTerms:
         assert "budget" in card["about"]
         bare = corpus.build_overview_card(pdf, cache, from_cache=True)
         assert bare["about"] == []
+
+
+def test_census_blank_chars_match_cache():
+    from pdf_mcp import cache as cache_mod
+    from scripts import doc_profile_census
+
+    assert doc_profile_census.TEXT_BLANK_CHARS == cache_mod.TEXT_BLANK_CHARS
+
+
+def _seed(cache, tmp_path, texts, name="doc.pdf"):
+    """A PDF with len(texts) pages whose cached page_text is exactly
+    ``texts`` (written directly, no extraction)."""
+    p = tmp_path / name
+    _make_pdf(p, [""] * len(texts))
+    path = str(p)
+    cache.save_metadata(path, len(texts), {}, [])
+    cache.save_pages_text(path, dict(enumerate(texts)))
+    return path
+
+
+def _spy():
+    seen: list[str] = []
+
+    def embed(texts):
+        seen.extend(texts)
+        return _embed_len(texts)
+
+    return seen, embed
+
+
+class TestProfileStaleness:
+    def test_legacy_null_row_heals_once(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_doc_profile(p, 1500, None, {}, "m1", head_page=None)
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+        assert cache.get_doc_profiles([p], "m1")[p] is not None
+        assert len(seen) == 1
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert len(seen) == 1
+
+    def test_no_text_doc_never_reencodes(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", ""])
+        seen, embed = _spy()
+        for _ in range(3):
+            corpus.backfill_doc_profiles([p], cache, "m1", embed)
+        assert seen == []
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+    def test_formfeed_only_doc_is_stable(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["\f", "\n\t"])
+        seen, embed = _spy()
+        written = [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        written += [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        written += [corpus.backfill_doc_profiles([p], cache, "m1", embed)]
+        assert seen == []
+        assert written == [1, 0, 0]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+    def test_ocr_on_earlier_page_moves_head(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 2}
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["cover title text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+        # page 0 now holds two rows, so it is checked, but nothing moved
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert len(seen) == 1
+
+    def test_empty_ocr_row_hides_page0_text(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_page_text(p, 0, "deutscher titel", source="ocr", ocr_lang="deu")
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+        # A later empty OCR row is now the latest row for page 0, which is
+        # what get_pages_text (no language) reads.
+        cache.save_page_text(p, 0, "", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["budget on page two"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+    def test_single_row_page0_is_never_checked(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["budget on page one", "more"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+
+        def boom(paths):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_stale_writer_after_ocr_is_corrected(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        # An embed pass that read the text before the OCR write lands last.
+        cache.save_doc_profile(p, 1500, b"\x01" * 8, {}, "m1", head_page=2)
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["cover title text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 0}
+
+    def test_about_terms_survive_ocr_write(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two"])
+        cache.save_doc_profile(p, 1500, None, {"budget": 3}, "m1", head_page=1)
+        cache.save_page_text(p, 0, "cover title text", source="ocr", ocr_lang="eng")
+        assert cache.get_doc_terms([p]) == {p: {"budget": 3}}
+
+
+class TestFirstTextPages:
+    def test_lowest_nonblank_latest_row(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["\f", " \t", "text"], name="a.pdf")
+        b = _seed(cache, tmp_path, ["\n", ""], name="b.pdf")
+        c = tmp_path / "c.pdf"
+        _make_pdf(c, ["x"])
+        assert cache.first_text_pages([a, b, str(c)]) == {a: 2, b: -1}
+
+    def test_embedded_nul_is_text(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["\x00abc", "text"])
+        assert cache.first_text_pages([p]) == {p: 0}
+
+    def test_stale_mtime_rows_are_ignored(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["text"])
+        future = time.time() + 5
+        os.utime(p, (future, future))
+        assert cache.first_text_pages([p]) == {}
+
+    def test_multi_row_pages(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["one"], name="a.pdf")
+        b = _seed(cache, tmp_path, ["one"], name="b.pdf")
+        cache.save_page_text(a, 0, "ocr", source="ocr", ocr_lang="eng")
+        assert cache.multi_row_pages([a, b], 0) == {a}
+
+
+class TestBoundedStalenessScan:
+    def test_bound_hides_later_pages(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "text on page two"])
+        assert cache.first_text_pages([p], max_page={p: 0}) == {p: -1}
+        assert cache.first_text_pages([p], max_page={p: 1}) == {p: 1}
+        assert cache.first_text_pages([p]) == {p: 1}
+
+    def test_head0_ocr_doc_scans_only_page0(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["cover", "body text"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 0, "cover ocr", source="ocr", ocr_lang="eng")
+        calls = []
+        real = cache.first_text_pages
+
+        def spy(paths, max_page=None):
+            calls.append((list(paths), max_page))
+            return real(paths, max_page=max_page)
+
+        monkeypatch.setattr(cache, "first_text_pages", spy)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+        assert calls == [([p], {p: 0})]
+
+    def test_text_before_head_is_detected(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", "budget on page three"])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 1, "new ocr text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["new ocr text"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+    def test_text_after_head_is_not_pending(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "budget on page two", ""])
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        cache.save_page_text(p, 2, "late ocr text", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 0
+        assert seen == []
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+
+
+def _backdate_page_text(cache, path):
+    """Move every page_text row of ``path`` a minute into the past, so the
+    profile written next is strictly newer (created_at has 1 s resolution)."""
+    import sqlite3
+
+    with sqlite3.connect(cache.db_path) as conn:
+        conn.execute(
+            "UPDATE page_text SET created_at = datetime('now', '-60 seconds')"
+            " WHERE file_path = ?",
+            (path,),
+        )
+
+
+class TestNoTextRowRecheck:
+    def test_no_newer_rows_skips_the_scan(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["", "\f", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+
+        def boom(paths, max_page=None):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_newer_blank_row_skips_the_scan(self, cache, tmp_path, monkeypatch):
+        p = _seed(cache, tmp_path, ["", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        # An OCR pass that found nothing cannot give the doc text.
+        cache.save_page_text(p, 0, " \n", source="ocr", ocr_lang="eng")
+
+        def boom(paths, max_page=None):
+            raise AssertionError("first_text_pages must not run")
+
+        monkeypatch.setattr(cache, "first_text_pages", boom)
+        assert corpus.backfill_doc_profiles([p], cache, "m1", _embed_len) == 0
+
+    def test_newer_ocr_text_rebuilds(self, cache, tmp_path):
+        p = _seed(cache, tmp_path, ["", "", ""])
+        _backdate_page_text(cache, p)
+        corpus.backfill_doc_profiles([p], cache, "m1", _embed_len)
+        assert cache.get_doc_profile_heads([p], "m1") == {p: -1}
+        cache.save_page_text(p, 1, "scanned budget page", source="ocr", ocr_lang="eng")
+        seen, embed = _spy()
+        assert corpus.backfill_doc_profiles([p], cache, "m1", embed) == 1
+        assert seen == ["scanned budget page"]
+        assert cache.get_doc_profile_heads([p], "m1") == {p: 1}
+        assert cache.get_doc_profiles([p], "m1")[p] is not None
+
+    def test_paths_with_text_rows_since_profile(self, cache, tmp_path):
+        a = _seed(cache, tmp_path, ["", ""], name="a.pdf")
+        b = _seed(cache, tmp_path, ["", ""], name="b.pdf")
+        c = _seed(cache, tmp_path, ["", ""], name="c.pdf")
+        for p in (a, b, c):
+            _backdate_page_text(cache, p)
+            cache.save_doc_profile(p, 1500, None, {}, "m1", head_page=-1)
+        cache.save_page_text(a, 1, "text", source="ocr", ocr_lang="eng")
+        cache.save_page_text(b, 1, "\t", source="ocr", ocr_lang="eng")
+        assert cache.paths_with_text_rows_since_profile([a, b, c]) == {a}
+        assert cache.paths_with_text_rows_since_profile([]) == set()
